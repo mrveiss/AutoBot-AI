@@ -4,378 +4,1131 @@
 // Author: mrveiss
 
 /**
- * OrchestrationView - Fleet-wide service orchestration management (Issue #838)
+ * Unified OrchestrationView - Complete orchestration management (Issue #850 Phase 4)
  *
- * Service definitions, fleet status, start/stop/restart, migration, bulk actions.
- * Consumes all 11 /api/orchestration/* endpoints.
+ * Consolidates 4 pages into single 5-tab view:
+ * 1. Per-Node Control (from ServicesView)
+ * 2. Fleet Operations (from OrchestrationView)
+ * 3. Roles & Deployment (from RolesView)
+ * 4. Migration & Advanced (from OrchestrationView)
+ * 5. Infrastructure Overview (from InfrastructureSettings)
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useOrchestration } from '@/composables/useOrchestration'
-import { useFleetStore } from '@/stores/fleet'
+import { useOrchestrationManagement } from '@/composables/useOrchestrationManagement'
+import { useRoles } from '@/composables/useRoles'
 import { createLogger } from '@/utils/debugUtils'
-import type {
-  ServiceDefinition,
-  FleetServiceEntry,
-  ServiceActionResponse,
-  BulkActionResponse,
-} from '@/composables/useOrchestration'
+import ServiceStatusBadge from '@/components/orchestration/ServiceStatusBadge.vue'
+import ServiceActionButtons from '@/components/orchestration/ServiceActionButtons.vue'
+import NodeHealthCard from '@/components/orchestration/NodeHealthCard.vue'
+import RestartConfirmDialog from '@/components/orchestration/RestartConfirmDialog.vue'
 
 const logger = createLogger('OrchestrationView')
-const orch = useOrchestration()
-const fleetStore = useFleetStore()
 
-// UI state
-const activeTab = ref<'definitions' | 'status'>('definitions')
-const showMigrateDialog = ref(false)
-const migrateService = ref<string | null>(null)
-const migrateSourceNode = ref('')
-const migrateTargetNode = ref('')
-const isMigrating = ref(false)
-const actionInProgress = ref<string | null>(null)
-const bulkInProgress = ref(false)
-const successMessage = ref<string | null>(null)
+// Initialize composables
+const orchestration = useOrchestrationManagement()
+const roles = useRoles()
+
+// =============================================================================
+// Tab Management
+// =============================================================================
+
+type Tab = 'per-node' | 'fleet' | 'roles' | 'migration' | 'infrastructure'
+const activeTab = ref<Tab>('per-node')
+
+const tabs = [
+  { id: 'per-node', label: 'Per-Node Control', icon: 'server' },
+  { id: 'fleet', label: 'Fleet Operations', icon: 'globe' },
+  { id: 'roles', label: 'Roles & Deployment', icon: 'cog' },
+  { id: 'migration', label: 'Migration', icon: 'arrows' },
+  { id: 'infrastructure', label: 'Overview', icon: 'chart' },
+] as const
+
+// =============================================================================
+// Tab 1: Per-Node Control State
+// =============================================================================
+
+const searchQuery = ref('')
+const categoryFilter = ref<'autobot' | 'system' | 'all'>('autobot')
+const statusFilter = ref<string>('all')
+const expandedNodes = ref<Set<string>>(new Set())
 const autoRefresh = ref(true)
-let refreshTimer: ReturnType<typeof setInterval> | null = null
+let refreshInterval: ReturnType<typeof setInterval> | null = null
 
-// Computed
-const nodes = computed(() => fleetStore.nodeList)
+// Group services by node
+interface NodeServiceGroup {
+  nodeId: string
+  hostname: string
+  ipAddress: string
+  status: string
+  services: Array<{
+    service_name: string
+    category: string
+    status: string
+  }>
+  runningCount: number
+  stoppedCount: number
+  failedCount: number
+}
 
-const fleetServices = computed(() => {
-  if (!orch.fleetStatus.value?.services) return []
-  return Object.entries(orch.fleetStatus.value.services).map(
-    ([name, entry]: [string, FleetServiceEntry]) => ({ name, ...entry })
-  )
+const servicesByNode = computed<NodeServiceGroup[]>(() => {
+  const nodeMap = new Map<string, NodeServiceGroup>()
+
+  // Initialize from nodes
+  for (const node of orchestration.fleetStore.nodeList) {
+    nodeMap.set(node.node_id, {
+      nodeId: node.node_id,
+      hostname: node.hostname,
+      ipAddress: node.ip_address,
+      status: node.status,
+      services: [],
+      runningCount: 0,
+      stoppedCount: 0,
+      failedCount: 0,
+    })
+  }
+
+  // Populate with services
+  for (const fleetService of orchestration.fleetServices) {
+    // Apply category filter
+    if (categoryFilter.value !== 'all' && fleetService.category !== categoryFilter.value) {
+      continue
+    }
+
+    // Apply search filter
+    if (
+      searchQuery.value &&
+      !fleetService.service_name.toLowerCase().includes(searchQuery.value.toLowerCase())
+    ) {
+      continue
+    }
+
+    for (const nodeStatus of fleetService.nodes) {
+      const nodeGroup = nodeMap.get(nodeStatus.node_id)
+      if (!nodeGroup) continue
+
+      // Apply status filter
+      if (statusFilter.value !== 'all' && nodeStatus.status !== statusFilter.value) {
+        continue
+      }
+
+      nodeGroup.services.push({
+        service_name: fleetService.service_name,
+        category: fleetService.category,
+        status: nodeStatus.status,
+      })
+
+      // Update counts
+      if (nodeStatus.status === 'running') nodeGroup.runningCount++
+      else if (nodeStatus.status === 'stopped') nodeGroup.stoppedCount++
+      else if (nodeStatus.status === 'failed') nodeGroup.failedCount++
+    }
+  }
+
+  // Filter out nodes with no services (after filtering)
+  return Array.from(nodeMap.values()).filter((node) => node.services.length > 0)
 })
 
-const healthySummary = computed(() => ({
-  healthy: orch.healthyCount.value,
-  unhealthy: orch.unhealthyCount.value,
-  total: orch.totalFleetServices.value,
-}))
-
-// Lifecycle
-onMounted(async () => {
-  await Promise.all([orch.fetchServices(), orch.fetchFleetStatus()])
-  startAutoRefresh()
+const categoryCounts = computed(() => {
+  const counts = { autobot: 0, system: 0, all: 0 }
+  for (const svc of orchestration.fleetServices) {
+    counts[svc.category as 'autobot' | 'system']++
+    counts.all++
+  }
+  return counts
 })
 
-onUnmounted(() => stopAutoRefresh())
+// =============================================================================
+// Tab 2: Fleet Operations State
+// =============================================================================
 
-// Auto-refresh
-function startAutoRefresh(): void {
-  stopAutoRefresh()
-  if (autoRefresh.value) {
-    refreshTimer = setInterval(() => orch.fetchFleetStatus(), 30000)
+const fleetSearchQuery = ref('')
+const fleetCategoryFilter = ref<'autobot' | 'system' | 'all'>('all')
+
+const filteredFleetServices = computed(() => {
+  return orchestration.fleetServices.filter((svc) => {
+    // Category filter
+    if (fleetCategoryFilter.value !== 'all' && svc.category !== fleetCategoryFilter.value) {
+      return false
+    }
+    // Search filter
+    if (
+      fleetSearchQuery.value &&
+      !svc.service_name.toLowerCase().includes(fleetSearchQuery.value.toLowerCase())
+    ) {
+      return false
+    }
+    return true
+  })
+})
+
+// =============================================================================
+// Tab 3: Roles & Deployment State
+// =============================================================================
+
+const showRoleForm = ref(false)
+const editingRole = ref<string | null>(null)
+const roleFormData = ref({
+  name: '',
+  display_name: '',
+  sync_type: 'component',
+  source_paths: '',
+  target_path: '/opt/autobot',
+  systemd_service: '',
+  auto_restart: false,
+  health_check_port: '',
+  health_check_path: '',
+  pre_sync_cmd: '',
+  post_sync_cmd: '',
+})
+
+// =============================================================================
+// Tab 4: Migration State
+// =============================================================================
+
+const showMigrationWizard = ref(false)
+const migrationService = ref('')
+const migrationSourceNode = ref('')
+const migrationTargetNode = ref('')
+
+// =============================================================================
+// Tab 5: Infrastructure Overview State
+// =============================================================================
+
+const infrastructureStats = computed(() => {
+  const nodes = orchestration.fleetStore.nodeList
+  return {
+    totalNodes: nodes.length,
+    onlineNodes: nodes.filter((n) => n.status === 'online').length,
+    offlineNodes: nodes.filter((n) => n.status === 'offline').length,
+    totalServices: orchestration.totalFleetServices,
+    runningServices: orchestration.totalRunning,
+    stoppedServices: orchestration.totalStopped,
+    failedServices: orchestration.totalFailed,
+  }
+})
+
+// =============================================================================
+// Actions: Per-Node Control
+// =============================================================================
+
+async function handleServiceAction(
+  nodeId: string,
+  serviceName: string,
+  action: 'start' | 'stop' | 'restart'
+): Promise<void> {
+  orchestration.setActiveAction(nodeId, serviceName, action)
+
+  try {
+    let result
+    if (action === 'start') {
+      result = await orchestration.startService(serviceName, { node_id: nodeId })
+    } else if (action === 'stop') {
+      result = await orchestration.stopService(serviceName, { node_id: nodeId })
+    } else {
+      result = await orchestration.restartService(serviceName, { node_id: nodeId })
+    }
+
+    if (result?.success) {
+      logger.info(`${action} ${serviceName} on ${nodeId}: ${result.message}`)
+      await orchestration.fetchFleetServices()
+    }
+  } catch (error) {
+    logger.error(`Failed to ${action} ${serviceName}:`, error)
+  } finally {
+    orchestration.clearActiveAction()
   }
 }
 
-function stopAutoRefresh(): void {
-  if (refreshTimer) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
+// Restart All Services on Node
+const restartAllNodeId = ref<string | null>(null)
+const restartAllHostname = ref<string | null>(null)
+const showRestartAllConfirm = ref(false)
+
+async function handleRestartAllServices(nodeId: string, hostname: string): Promise<void> {
+  restartAllNodeId.value = nodeId
+  restartAllHostname.value = hostname
+  showRestartAllConfirm.value = true
+}
+
+async function confirmRestartAll(): Promise<void> {
+  if (!restartAllNodeId.value) return
+  showRestartAllConfirm.value = false
+
+  // Note: This would call a per-node restart-all endpoint
+  // For now, we'll restart each service individually
+  const nodeGroup = servicesByNode.value.find((n) => n.nodeId === restartAllNodeId.value)
+  if (nodeGroup) {
+    for (const service of nodeGroup.services) {
+      await handleServiceAction(restartAllNodeId.value, service.service_name, 'restart')
+    }
   }
+
+  restartAllNodeId.value = null
+  restartAllHostname.value = null
+}
+
+function toggleNode(nodeId: string): void {
+  if (expandedNodes.value.has(nodeId)) {
+    expandedNodes.value.delete(nodeId)
+  } else {
+    expandedNodes.value.add(nodeId)
+  }
+}
+
+function expandAll(): void {
+  for (const node of servicesByNode.value) {
+    expandedNodes.value.add(node.nodeId)
+  }
+}
+
+function collapseAll(): void {
+  expandedNodes.value.clear()
+}
+
+// =============================================================================
+// Actions: Fleet Operations
+// =============================================================================
+
+async function handleFleetAction(
+  serviceName: string,
+  action: 'start' | 'stop' | 'restart'
+): Promise<void> {
+  try {
+    let result
+    if (action === 'start') {
+      result = await orchestration.startFleetService(serviceName)
+    } else if (action === 'stop') {
+      result = await orchestration.stopFleetService(serviceName)
+    } else {
+      result = await orchestration.restartFleetService(serviceName)
+    }
+
+    if (result?.success) {
+      logger.info(`Fleet ${action} ${serviceName}: ${result.message}`)
+      await orchestration.fetchFleetServices()
+    }
+  } catch (error) {
+    logger.error(`Failed to ${action} ${serviceName} fleet-wide:`, error)
+  }
+}
+
+async function handleBulkAction(action: 'start' | 'stop' | 'restart'): Promise<void> {
+  const confirmMsg = `Are you sure you want to ${action} ALL services across the entire fleet?`
+  if (!confirm(confirmMsg)) return
+
+  try {
+    let result
+    if (action === 'start') {
+      result = await orchestration.startAllServices()
+    } else if (action === 'stop') {
+      result = await orchestration.stopAllServices()
+    } else {
+      result = await orchestration.restartAllServices()
+    }
+
+    if (result) {
+      logger.info(`Bulk ${action}: ${result.success_count} succeeded, ${result.failure_count} failed`)
+      await orchestration.fetchFleetServices()
+      await orchestration.fetchFleetStatus()
+    }
+  } catch (error) {
+    logger.error(`Failed bulk ${action}:`, error)
+  }
+}
+
+// =============================================================================
+// Actions: Roles & Deployment
+// =============================================================================
+
+function openCreateRoleForm(): void {
+  editingRole.value = null
+  roleFormData.value = {
+    name: '',
+    display_name: '',
+    sync_type: 'component',
+    source_paths: '',
+    target_path: '/opt/autobot',
+    systemd_service: '',
+    auto_restart: false,
+    health_check_port: '',
+    health_check_path: '',
+    pre_sync_cmd: '',
+    post_sync_cmd: '',
+  }
+  showRoleForm.value = true
+}
+
+function openEditRoleForm(role: any): void {
+  editingRole.value = role.name
+  roleFormData.value = {
+    name: role.name,
+    display_name: role.display_name || '',
+    sync_type: role.sync_type || 'component',
+    source_paths: (role.source_paths || []).join(', '),
+    target_path: role.target_path,
+    systemd_service: role.systemd_service || '',
+    auto_restart: role.auto_restart,
+    health_check_port: role.health_check_port?.toString() || '',
+    health_check_path: role.health_check_path || '',
+    pre_sync_cmd: role.pre_sync_cmd || '',
+    post_sync_cmd: role.post_sync_cmd || '',
+  }
+  showRoleForm.value = true
+}
+
+async function saveRole(): Promise<void> {
+  const payload = {
+    name: roleFormData.value.name,
+    display_name: roleFormData.value.display_name || null,
+    sync_type: roleFormData.value.sync_type,
+    source_paths: roleFormData.value.source_paths
+      ? roleFormData.value.source_paths.split(',').map((s) => s.trim()).filter(Boolean)
+      : [],
+    target_path: roleFormData.value.target_path,
+    systemd_service: roleFormData.value.systemd_service || null,
+    auto_restart: roleFormData.value.auto_restart,
+    health_check_port: roleFormData.value.health_check_port
+      ? parseInt(roleFormData.value.health_check_port)
+      : null,
+    health_check_path: roleFormData.value.health_check_path || null,
+    pre_sync_cmd: roleFormData.value.pre_sync_cmd || null,
+    post_sync_cmd: roleFormData.value.post_sync_cmd || null,
+  }
+
+  if (editingRole.value) {
+    await roles.updateRole(editingRole.value, payload)
+  } else {
+    await roles.createRole(payload)
+  }
+
+  showRoleForm.value = false
+  await roles.fetchRoles()
+}
+
+async function deleteRole(roleName: string): Promise<void> {
+  if (!confirm(`Delete role "${roleName}"? This cannot be undone.`)) return
+  await roles.deleteRole(roleName)
+  await roles.fetchRoles()
+}
+
+// =============================================================================
+// Actions: Migration
+// =============================================================================
+
+function openMigrationWizard(serviceName?: string): void {
+  migrationService.value = serviceName || ''
+  migrationSourceNode.value = ''
+  migrationTargetNode.value = ''
+  showMigrationWizard.value = true
+}
+
+async function executeMigration(): Promise<void> {
+  if (!migrationService.value || !migrationSourceNode.value || !migrationTargetNode.value) {
+    alert('Please fill all migration fields')
+    return
+  }
+
+  const result = await orchestration.migrateService(migrationService.value, {
+    source_node_id: migrationSourceNode.value,
+    target_node_id: migrationTargetNode.value,
+  })
+
+  if (result?.success) {
+    logger.info(`Migrated ${migrationService.value}: ${result.message}`)
+    showMigrationWizard.value = false
+    await orchestration.fetchFleetServices()
+  }
+}
+
+// =============================================================================
+// Lifecycle
+// =============================================================================
+
+async function refresh(): Promise<void> {
+  await Promise.all([
+    orchestration.fetchFleetServices(),
+    orchestration.fetchFleetStatus(),
+    orchestration.fetchServiceDefinitions(),
+    orchestration.fleetStore.fetchNodes(),
+    roles.fetchRoles(),
+  ])
 }
 
 function toggleAutoRefresh(): void {
   autoRefresh.value = !autoRefresh.value
-  startAutoRefresh()
-}
-
-// Service actions
-async function handleServiceAction(
-  serviceName: string,
-  action: 'start' | 'stop' | 'restart'
-): Promise<void> {
-  actionInProgress.value = `${action}-${serviceName}`
-  const handlers: Record<string, () => Promise<ServiceActionResponse | null>> = {
-    start: () => orch.startService(serviceName),
-    stop: () => orch.stopService(serviceName),
-    restart: () => orch.restartService(serviceName),
-  }
-  const result = await handlers[action]()
-  actionInProgress.value = null
-  if (result?.success) {
-    successMessage.value = `${action} ${serviceName}: ${result.message}`
-    await orch.fetchFleetStatus()
-    setTimeout(() => { successMessage.value = null }, 3000)
+  if (autoRefresh.value) {
+    refreshInterval = setInterval(refresh, 15000)
+  } else if (refreshInterval) {
+    clearInterval(refreshInterval)
+    refreshInterval = null
   }
 }
 
-// Migration
-function openMigrateDialog(serviceName: string): void {
-  migrateService.value = serviceName
-  migrateSourceNode.value = ''
-  migrateTargetNode.value = ''
-  showMigrateDialog.value = true
-}
-
-async function executeMigration(): Promise<void> {
-  if (!migrateService.value || !migrateSourceNode.value || !migrateTargetNode.value) return
-  isMigrating.value = true
-  const result = await orch.migrateService(migrateService.value, {
-    source_node_id: migrateSourceNode.value,
-    target_node_id: migrateTargetNode.value,
+onMounted(async () => {
+  await refresh()
+  orchestration.initializeWebSocket((nodeId, data) => {
+    logger.debug('Service status update:', nodeId, data.service_name, data.status)
+    // Status updates are reflected via reactive state
   })
-  isMigrating.value = false
-  showMigrateDialog.value = false
-  if (result?.success) {
-    successMessage.value = `Migrated ${migrateService.value}: ${result.message}`
-    await orch.fetchFleetStatus()
-    setTimeout(() => { successMessage.value = null }, 3000)
-  }
-}
 
-// Bulk actions
-async function handleBulkAction(action: 'start' | 'stop' | 'restart'): Promise<void> {
-  if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} ALL services?`)) return
-  bulkInProgress.value = true
-  const handlers: Record<string, () => Promise<BulkActionResponse | null>> = {
-    start: () => orch.startAllServices(),
-    stop: () => orch.stopAllServices(),
-    restart: () => orch.restartAllServices(),
+  if (autoRefresh.value) {
+    refreshInterval = setInterval(refresh, 15000)
   }
-  const result = await handlers[action]()
-  bulkInProgress.value = false
-  if (result) {
-    successMessage.value = `Bulk ${action}: ${result.success_count} ok, ${result.failure_count} failed`
-    setTimeout(() => { successMessage.value = null }, 5000)
+})
+
+onUnmounted(() => {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
   }
-}
-
-function getStatusColor(s: string): string {
-  if (s === 'running' || s === 'healthy') return 'text-green-600'
-  if (s === 'stopped' || s === 'unhealthy') return 'text-red-600'
-  return 'text-yellow-600'
-}
-
-function getStatusBg(s: string): string {
-  if (s === 'running' || s === 'healthy') return 'bg-green-100 text-green-800'
-  if (s === 'stopped' || s === 'unhealthy') return 'bg-red-100 text-red-800'
-  return 'bg-yellow-100 text-yellow-800'
-}
+})
 </script>
 
 <template>
-  <div class="p-6 max-w-7xl mx-auto">
+  <div class="p-6">
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Service Orchestration</h1>
+        <h1 class="text-2xl font-bold text-gray-900">Orchestration</h1>
         <p class="text-sm text-gray-500 mt-1">
-          Manage service definitions, fleet-wide actions, and cross-node migration
+          Unified service lifecycle management across the fleet
         </p>
       </div>
       <div class="flex items-center gap-3">
+        <div class="flex items-center gap-1.5 text-sm">
+          <span
+            :class="[
+              'w-2 h-2 rounded-full',
+              orchestration.connected ? 'bg-green-500' : 'bg-gray-400'
+            ]"
+          ></span>
+          <span :class="orchestration.connected ? 'text-green-600' : 'text-gray-500'">
+            {{ orchestration.connected ? 'Live' : 'Offline' }}
+          </span>
+        </div>
+        <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+          <input
+            type="checkbox"
+            :checked="autoRefresh"
+            @change="toggleAutoRefresh"
+            class="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+          />
+          Auto-refresh
+        </label>
         <button
-          @click="toggleAutoRefresh"
-          :class="['px-3 py-1.5 text-sm rounded-lg border', autoRefresh ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-50 border-gray-200 text-gray-600']"
+          @click="refresh"
+          :disabled="orchestration.loading"
+          class="btn btn-secondary flex items-center gap-2"
         >
-          Auto-refresh: {{ autoRefresh ? 'ON' : 'OFF' }}
-        </button>
-        <button
-          @click="Promise.all([orch.fetchServices(), orch.fetchFleetStatus()])"
-          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          :disabled="orch.loading.value"
-        >
+          <svg
+            :class="['w-4 h-4', orchestration.loading ? 'animate-spin' : '']"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
           Refresh
         </button>
       </div>
     </div>
 
-    <!-- Alerts -->
-    <div v-if="orch.error.value" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-      {{ orch.error.value }}
-      <button @click="orch.clearError()" class="ml-2 underline">Dismiss</button>
-    </div>
-    <div v-if="successMessage" class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-      {{ successMessage }}
-    </div>
-
-    <!-- Fleet Summary -->
-    <div class="grid grid-cols-3 gap-4 mb-6">
-      <div class="bg-white rounded-lg border p-4">
-        <p class="text-sm text-gray-500">Service Definitions</p>
-        <p class="text-2xl font-bold">{{ orch.serviceCount.value }}</p>
-      </div>
-      <div class="bg-white rounded-lg border p-4">
-        <p class="text-sm text-gray-500">Fleet Healthy</p>
-        <p class="text-2xl font-bold text-green-600">{{ healthySummary.healthy }}</p>
-      </div>
-      <div class="bg-white rounded-lg border p-4">
-        <p class="text-sm text-gray-500">Fleet Unhealthy</p>
-        <p class="text-2xl font-bold text-red-600">{{ healthySummary.unhealthy }}</p>
-      </div>
-    </div>
-
-    <!-- Bulk Actions -->
-    <div class="mb-6 flex gap-3">
-      <button
-        @click="handleBulkAction('start')" :disabled="bulkInProgress"
-        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-      >Start All</button>
-      <button
-        @click="handleBulkAction('stop')" :disabled="bulkInProgress"
-        class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-      >Stop All</button>
-      <button
-        @click="handleBulkAction('restart')" :disabled="bulkInProgress"
-        class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50"
-      >Restart All</button>
-      <span v-if="bulkInProgress" class="text-sm text-gray-500 self-center">Processing...</span>
-    </div>
-
     <!-- Tabs -->
-    <div class="border-b mb-6">
-      <nav class="flex gap-6">
+    <div class="border-b border-gray-200 mb-6">
+      <nav class="-mb-px flex gap-6">
         <button
-          v-for="tab in [{ key: 'definitions', label: 'Service Definitions' }, { key: 'status', label: 'Fleet Status' }]"
-          :key="tab.key"
-          @click="activeTab = tab.key as 'definitions' | 'status'"
-          :class="['pb-3 text-sm font-medium border-b-2 -mb-px', activeTab === tab.key ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700']"
-        >{{ tab.label }}</button>
+          v-for="tab in tabs"
+          :key="tab.id"
+          @click="activeTab = tab.id as Tab"
+          :class="[
+            'py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap',
+            activeTab === tab.id
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+          ]"
+        >
+          {{ tab.label }}
+        </button>
       </nav>
     </div>
 
-    <!-- Loading -->
-    <div v-if="orch.loading.value && !orch.services.value.length" class="text-center py-12 text-gray-500">
-      Loading...
-    </div>
+    <!-- Tab Content -->
+    <div>
+      <!-- Tab 1: Per-Node Control -->
+      <div v-if="activeTab === 'per-node'">
+        <!-- Filters -->
+        <div class="card p-4 mb-4">
+          <div class="flex flex-wrap items-center gap-4">
+            <!-- Search -->
+            <div class="flex-1 min-w-64">
+              <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="Search services..."
+                class="w-full px-3 py-2 border rounded-lg text-sm"
+              />
+            </div>
 
-    <!-- Service Definitions Tab -->
-    <div v-else-if="activeTab === 'definitions'">
-      <div class="bg-white rounded-lg border overflow-hidden">
-        <table class="w-full">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Default Host</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Port</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Health Check</th>
-              <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200">
-            <tr v-for="svc in orch.services.value" :key="svc.name" class="hover:bg-gray-50">
-              <td class="px-4 py-3">
-                <p class="font-medium text-gray-900">{{ svc.name }}</p>
-                <p class="text-xs text-gray-500">{{ svc.description }}</p>
-              </td>
-              <td class="px-4 py-3 text-sm text-gray-600">{{ svc.service_type }}</td>
-              <td class="px-4 py-3 text-sm font-mono text-gray-600">{{ svc.default_host }}</td>
-              <td class="px-4 py-3 text-sm font-mono text-gray-600">{{ svc.default_port }}</td>
-              <td class="px-4 py-3 text-sm text-gray-600">{{ svc.health_check_type }}</td>
-              <td class="px-4 py-3 text-right">
-                <div class="flex gap-1 justify-end">
-                  <button
-                    @click="handleServiceAction(svc.name, 'start')"
-                    :disabled="actionInProgress !== null"
-                    class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 disabled:opacity-50"
-                  >Start</button>
-                  <button
-                    @click="handleServiceAction(svc.name, 'stop')"
-                    :disabled="actionInProgress !== null"
-                    class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
-                  >Stop</button>
-                  <button
-                    @click="handleServiceAction(svc.name, 'restart')"
-                    :disabled="actionInProgress !== null"
-                    class="px-2 py-1 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 disabled:opacity-50"
-                  >Restart</button>
-                  <button
-                    @click="openMigrateDialog(svc.name)"
-                    class="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200"
-                  >Migrate</button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div v-if="!orch.services.value.length" class="p-8 text-center text-gray-500">
-          No service definitions found
-        </div>
-      </div>
-    </div>
-
-    <!-- Fleet Status Tab -->
-    <div v-else-if="activeTab === 'status'">
-      <div class="bg-white rounded-lg border overflow-hidden">
-        <table class="w-full">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Service</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Host</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Port</th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Message</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-200">
-            <tr v-for="svc in fleetServices" :key="svc.name" class="hover:bg-gray-50">
-              <td class="px-4 py-3 font-medium text-gray-900">{{ svc.name }}</td>
-              <td class="px-4 py-3">
-                <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusBg(svc.status)]">
-                  {{ svc.status }}
-                </span>
-              </td>
-              <td class="px-4 py-3 text-sm font-mono text-gray-600">{{ svc.host }}</td>
-              <td class="px-4 py-3 text-sm font-mono text-gray-600">{{ svc.port }}</td>
-              <td class="px-4 py-3 text-sm text-gray-500">{{ svc.message }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <div v-if="!fleetServices.length" class="p-8 text-center text-gray-500">
-          No fleet status data available
-        </div>
-        <div v-if="orch.fleetStatus.value?.timestamp" class="px-4 py-2 bg-gray-50 text-xs text-gray-500 border-t">
-          Last updated: {{ new Date(orch.fleetStatus.value.timestamp).toLocaleString() }}
-        </div>
-      </div>
-    </div>
-
-    <!-- Migrate Dialog -->
-    <div v-if="showMigrateDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-        <h3 class="text-lg font-bold mb-4">Migrate Service: {{ migrateService }}</h3>
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Source Node</label>
-            <select v-model="migrateSourceNode" class="w-full border rounded-lg px-3 py-2 text-sm">
-              <option value="">Select source node...</option>
-              <option v-for="node in nodes" :key="node.id" :value="node.id">
-                {{ node.hostname || node.id }} ({{ node.ip_address }})
-              </option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Target Node</label>
-            <select v-model="migrateTargetNode" class="w-full border rounded-lg px-3 py-2 text-sm">
-              <option value="">Select target node...</option>
-              <option
-                v-for="node in nodes"
-                :key="node.id"
-                :value="node.id"
-                :disabled="node.id === migrateSourceNode"
+            <!-- Category Tabs -->
+            <div class="flex items-center gap-2">
+              <button
+                @click="categoryFilter = 'autobot'"
+                :class="[
+                  'px-3 py-1.5 text-sm font-medium rounded-lg',
+                  categoryFilter === 'autobot'
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ]"
               >
-                {{ node.hostname || node.id }} ({{ node.ip_address }})
-              </option>
-            </select>
+                AutoBot ({{ categoryCounts.autobot }})
+              </button>
+              <button
+                @click="categoryFilter = 'system'"
+                :class="[
+                  'px-3 py-1.5 text-sm font-medium rounded-lg',
+                  categoryFilter === 'system'
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ]"
+              >
+                System ({{ categoryCounts.system }})
+              </button>
+              <button
+                @click="categoryFilter = 'all'"
+                :class="[
+                  'px-3 py-1.5 text-sm font-medium rounded-lg',
+                  categoryFilter === 'all'
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ]"
+              >
+                All ({{ categoryCounts.all }})
+              </button>
+            </div>
+
+            <!-- Expand/Collapse -->
+            <div class="flex items-center gap-2">
+              <button @click="expandAll" class="text-sm text-primary-600 hover:text-primary-800">
+                Expand All
+              </button>
+              <span class="text-gray-300">|</span>
+              <button @click="collapseAll" class="text-sm text-primary-600 hover:text-primary-800">
+                Collapse All
+              </button>
+            </div>
           </div>
         </div>
-        <div class="flex justify-end gap-3 mt-6">
-          <button @click="showMigrateDialog = false" class="px-4 py-2 text-sm text-gray-700 border rounded-lg hover:bg-gray-50">
-            Cancel
-          </button>
+
+        <!-- Services by Node -->
+        <div v-if="servicesByNode.length > 0" class="space-y-4">
+          <div v-for="node in servicesByNode" :key="node.nodeId" class="card overflow-hidden">
+            <NodeHealthCard
+              :nodeId="node.nodeId"
+              :hostname="node.hostname"
+              :ipAddress="node.ipAddress"
+              :status="node.status as any"
+              :runningCount="node.runningCount"
+              :stoppedCount="node.stoppedCount"
+              :failedCount="node.failedCount"
+              :totalServices="node.services.length"
+              :isExpanded="expandedNodes.has(node.nodeId)"
+              :showExpandIcon="true"
+              :showRestartButton="true"
+              @toggle="toggleNode"
+              @restartAll="handleRestartAllServices"
+            />
+
+            <!-- Services List -->
+            <div v-if="expandedNodes.has(node.nodeId)" class="border-t border-gray-100">
+              <table class="w-full">
+                <thead class="bg-gray-50">
+                  <tr class="text-xs text-gray-500 uppercase">
+                    <th class="px-4 py-2 text-left">Service</th>
+                    <th class="px-4 py-2 text-left w-24">Category</th>
+                    <th class="px-4 py-2 text-left w-24">Status</th>
+                    <th class="px-4 py-2 text-right w-32">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="service in node.services"
+                    :key="service.service_name"
+                    class="border-t border-gray-50 hover:bg-gray-50"
+                  >
+                    <td class="px-4 py-2">
+                      <span class="font-medium text-gray-900">{{ service.service_name }}</span>
+                    </td>
+                    <td class="px-4 py-2">
+                      <span
+                        :class="[
+                          'px-1.5 py-0.5 text-xs font-medium rounded',
+                          service.category === 'autobot'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-gray-100 text-gray-700'
+                        ]"
+                      >
+                        {{ service.category === 'autobot' ? 'AutoBot' : 'System' }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-2">
+                      <ServiceStatusBadge :status="service.status as any" />
+                    </td>
+                    <td class="px-4 py-2">
+                      <ServiceActionButtons
+                        :serviceName="service.service_name"
+                        :nodeId="node.nodeId"
+                        :status="service.status as any"
+                        :isActionInProgress="orchestration.actionInProgress"
+                        :activeAction="orchestration.activeAction"
+                        @start="handleServiceAction"
+                        @stop="handleServiceAction"
+                        @restart="handleServiceAction"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div v-else class="card p-12 text-center">
+          <p class="text-gray-500">No services found matching filters</p>
+        </div>
+      </div>
+
+      <!-- Tab 2: Fleet Operations -->
+      <div v-if="activeTab === 'fleet'" class="space-y-4">
+        <!-- Fleet Actions -->
+        <div class="card p-4">
+          <h3 class="font-medium text-gray-900 mb-3">Fleet-Wide Actions</h3>
+          <div class="flex items-center gap-3">
+            <button
+              @click="handleBulkAction('start')"
+              :disabled="orchestration.loading"
+              class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+            >
+              Start All Services
+            </button>
+            <button
+              @click="handleBulkAction('stop')"
+              :disabled="orchestration.loading"
+              class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+            >
+              Stop All Services
+            </button>
+            <button
+              @click="handleBulkAction('restart')"
+              :disabled="orchestration.loading"
+              class="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+            >
+              Restart All Services
+            </button>
+          </div>
+        </div>
+
+        <!-- Fleet Services Table -->
+        <div class="card">
+          <div class="px-4 py-3 bg-gray-50 border-b">
+            <h3 class="font-medium text-gray-900">Fleet Services</h3>
+          </div>
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr class="text-xs text-gray-500 uppercase">
+                <th class="px-4 py-2 text-left">Service</th>
+                <th class="px-4 py-2 text-left">Category</th>
+                <th class="px-4 py-2 text-center">Running</th>
+                <th class="px-4 py-2 text-center">Stopped</th>
+                <th class="px-4 py-2 text-center">Failed</th>
+                <th class="px-4 py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="service in filteredFleetServices"
+                :key="service.service_name"
+                class="border-t border-gray-50 hover:bg-gray-50"
+              >
+                <td class="px-4 py-2">
+                  <span class="font-medium text-gray-900">{{ service.service_name }}</span>
+                  <span class="text-xs text-gray-500 ml-2">({{ service.total_nodes }} nodes)</span>
+                </td>
+                <td class="px-4 py-2">
+                  <span
+                    :class="[
+                      'px-1.5 py-0.5 text-xs font-medium rounded',
+                      service.category === 'autobot'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-700'
+                    ]"
+                  >
+                    {{ service.category === 'autobot' ? 'AutoBot' : 'System' }}
+                  </span>
+                </td>
+                <td class="px-4 py-2 text-center text-green-600 font-medium">
+                  {{ service.running_count }}
+                </td>
+                <td class="px-4 py-2 text-center text-gray-500 font-medium">
+                  {{ service.stopped_count }}
+                </td>
+                <td class="px-4 py-2 text-center text-red-600 font-medium">
+                  {{ service.failed_count }}
+                </td>
+                <td class="px-4 py-2">
+                  <div class="flex items-center justify-end gap-1">
+                    <button
+                      @click="handleFleetAction(service.service_name, 'start')"
+                      class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                      title="Start on all nodes"
+                    >
+                      Start
+                    </button>
+                    <button
+                      @click="handleFleetAction(service.service_name, 'stop')"
+                      class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                      title="Stop on all nodes"
+                    >
+                      Stop
+                    </button>
+                    <button
+                      @click="handleFleetAction(service.service_name, 'restart')"
+                      class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                      title="Restart on all nodes"
+                    >
+                      Restart
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab 3: Roles & Deployment -->
+      <div v-if="activeTab === 'roles'">
+        <div class="mb-4">
           <button
-            @click="executeMigration"
-            :disabled="!migrateSourceNode || !migrateTargetNode || isMigrating"
-            class="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+            @click="openCreateRoleForm"
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
-            {{ isMigrating ? 'Migrating...' : 'Migrate' }}
+            Create Role
           </button>
+        </div>
+
+        <!-- Role Form -->
+        <div v-if="showRoleForm" class="card mb-6">
+          <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
+            <h3 class="font-medium text-gray-900">
+              {{ editingRole ? `Edit Role: ${editingRole}` : 'Create Role' }}
+            </h3>
+            <button @click="showRoleForm = false" class="text-gray-400 hover:text-gray-600">
+              &times;
+            </button>
+          </div>
+          <form @submit.prevent="saveRole" class="p-4 space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                <input
+                  v-model="roleFormData.name"
+                  :disabled="!!editingRole"
+                  required
+                  class="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-100"
+                  placeholder="e.g. redis-server"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+                <input
+                  v-model="roleFormData.display_name"
+                  class="w-full px-3 py-2 border rounded-lg text-sm"
+                  placeholder="e.g. Redis Server"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Sync Type</label>
+                <select v-model="roleFormData.sync_type" class="w-full px-3 py-2 border rounded-lg text-sm">
+                  <option value="component">Component</option>
+                  <option value="full">Full</option>
+                  <option value="config">Config Only</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Target Path *</label>
+                <input
+                  v-model="roleFormData.target_path"
+                  required
+                  class="w-full px-3 py-2 border rounded-lg text-sm"
+                  placeholder="/opt/autobot"
+                />
+              </div>
+              <div class="col-span-2">
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Source Paths (comma-separated)</label
+                >
+                <input
+                  v-model="roleFormData.source_paths"
+                  class="w-full px-3 py-2 border rounded-lg text-sm"
+                  placeholder="autobot-slm-backend/, autobot-shared/"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Systemd Service</label>
+                <input
+                  v-model="roleFormData.systemd_service"
+                  class="w-full px-3 py-2 border rounded-lg text-sm"
+                  placeholder="autobot-slm.service"
+                />
+              </div>
+              <div class="flex items-center gap-2 pt-6">
+                <input
+                  id="auto-restart"
+                  type="checkbox"
+                  v-model="roleFormData.auto_restart"
+                  class="rounded"
+                />
+                <label for="auto-restart" class="text-sm text-gray-700"
+                  >Auto Restart on Deploy</label
+                >
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                {{ editingRole ? 'Update' : 'Create' }}
+              </button>
+              <button
+                type="button"
+                @click="showRoleForm = false"
+                class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Roles Table -->
+        <div class="card">
+          <div class="px-4 py-3 bg-gray-50 border-b">
+            <h3 class="font-medium text-gray-900">Registered Roles ({{ roles.roles.length }})</h3>
+          </div>
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr class="text-xs text-gray-500 uppercase">
+                <th class="px-4 py-2 text-left">Name</th>
+                <th class="px-4 py-2 text-left">Sync Type</th>
+                <th class="px-4 py-2 text-left">Target</th>
+                <th class="px-4 py-2 text-left">Service</th>
+                <th class="px-4 py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="role in roles.roles"
+                :key="role.name"
+                class="border-t border-gray-50 hover:bg-gray-50"
+              >
+                <td class="px-4 py-2">
+                  <p class="text-sm font-medium text-gray-900">{{ role.display_name || role.name }}</p>
+                  <p v-if="role.display_name" class="text-xs text-gray-500">{{ role.name }}</p>
+                </td>
+                <td class="px-4 py-2">
+                  <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">
+                    {{ role.sync_type || 'component' }}
+                  </span>
+                </td>
+                <td class="px-4 py-2 text-sm text-gray-600 font-mono">{{ role.target_path }}</td>
+                <td class="px-4 py-2 text-sm text-gray-600">{{ role.systemd_service || '-' }}</td>
+                <td class="px-4 py-2 text-right">
+                  <button
+                    @click="openEditRoleForm(role)"
+                    class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 mr-1"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    @click="deleteRole(role.name)"
+                    class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab 4: Migration & Advanced -->
+      <div v-if="activeTab === 'migration'">
+        <div class="card p-4 mb-4">
+          <h3 class="font-medium text-gray-900 mb-3">Service Migration</h3>
+          <p class="text-sm text-gray-600 mb-4">
+            Move a service from one node to another. The service will be stopped on the source node and
+            started on the target node.
+          </p>
+          <button
+            @click="openMigrationWizard()"
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Start Migration
+          </button>
+        </div>
+
+        <!-- Migration Form -->
+        <div v-if="showMigrationWizard" class="card p-4">
+          <h3 class="font-medium text-gray-900 mb-4">Migration Wizard</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Service Name</label>
+              <select
+                v-model="migrationService"
+                class="w-full px-3 py-2 border rounded-lg text-sm"
+              >
+                <option value="">Select a service...</option>
+                <option
+                  v-for="svc in orchestration.fleetServices"
+                  :key="svc.service_name"
+                  :value="svc.service_name"
+                >
+                  {{ svc.service_name }}
+                </option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Source Node</label>
+              <select
+                v-model="migrationSourceNode"
+                class="w-full px-3 py-2 border rounded-lg text-sm"
+              >
+                <option value="">Select source node...</option>
+                <option
+                  v-for="node in orchestration.fleetStore.nodeList"
+                  :key="node.node_id"
+                  :value="node.node_id"
+                >
+                  {{ node.hostname }} ({{ node.ip_address }})
+                </option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Target Node</label>
+              <select
+                v-model="migrationTargetNode"
+                class="w-full px-3 py-2 border rounded-lg text-sm"
+              >
+                <option value="">Select target node...</option>
+                <option
+                  v-for="node in orchestration.fleetStore.nodeList"
+                  :key="node.node_id"
+                  :value="node.node_id"
+                  :disabled="node.node_id === migrationSourceNode"
+                >
+                  {{ node.hostname }} ({{ node.ip_address }})
+                </option>
+              </select>
+            </div>
+            <div class="flex gap-2">
+              <button
+                @click="executeMigration"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Execute Migration
+              </button>
+              <button
+                @click="showMigrationWizard = false"
+                class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 5: Infrastructure Overview -->
+      <div v-if="activeTab === 'infrastructure'" class="space-y-4">
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-4 gap-4">
+          <div class="card p-4">
+            <p class="text-sm text-gray-500">Total Nodes</p>
+            <p class="text-2xl font-bold text-gray-900 mt-1">{{ infrastructureStats.totalNodes }}</p>
+            <p class="text-xs text-gray-500 mt-1">
+              {{ infrastructureStats.onlineNodes }} online, {{ infrastructureStats.offlineNodes }} offline
+            </p>
+          </div>
+          <div class="card p-4">
+            <p class="text-sm text-gray-500">Total Services</p>
+            <p class="text-2xl font-bold text-gray-900 mt-1">{{ infrastructureStats.totalServices }}</p>
+          </div>
+          <div class="card p-4">
+            <p class="text-sm text-gray-500">Running</p>
+            <p class="text-2xl font-bold text-green-600 mt-1">{{ infrastructureStats.runningServices }}</p>
+          </div>
+          <div class="card p-4">
+            <p class="text-sm text-gray-500">Stopped/Failed</p>
+            <p class="text-2xl font-bold text-red-600 mt-1">
+              {{ infrastructureStats.stoppedServices + infrastructureStats.failedServices }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Nodes List -->
+        <div class="card">
+          <div class="px-4 py-3 bg-gray-50 border-b">
+            <h3 class="font-medium text-gray-900">Fleet Nodes</h3>
+          </div>
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr class="text-xs text-gray-500 uppercase">
+                <th class="px-4 py-2 text-left">Node</th>
+                <th class="px-4 py-2 text-left">IP Address</th>
+                <th class="px-4 py-2 text-left">Status</th>
+                <th class="px-4 py-2 text-left">Services</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="node in orchestration.fleetStore.nodeList"
+                :key="node.node_id"
+                class="border-t border-gray-50 hover:bg-gray-50"
+              >
+                <td class="px-4 py-2">
+                  <span class="font-medium text-gray-900">{{ node.hostname }}</span>
+                </td>
+                <td class="px-4 py-2 text-sm text-gray-600 font-mono">{{ node.ip_address }}</td>
+                <td class="px-4 py-2">
+                  <ServiceStatusBadge :status="node.status as any" />
+                </td>
+                <td class="px-4 py-2 text-sm text-gray-600">
+                  {{
+                    orchestration.fleetServices.reduce(
+                      (sum, svc) => sum + svc.nodes.filter((n) => n.node_id === node.node_id).length,
+                      0
+                    )
+                  }}
+                  services
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
+
+    <!-- Restart All Confirmation Dialog -->
+    <RestartConfirmDialog
+      :show="showRestartAllConfirm"
+      title="Restart All Services"
+      :message="`Are you sure you want to restart all services on <strong>${restartAllHostname}</strong>?<br><br>Services will be restarted sequentially.`"
+      confirmButtonText="Restart All Services"
+      @confirm="confirmRestartAll"
+      @cancel="showRestartAllConfirm = false"
+    />
   </div>
 </template>
