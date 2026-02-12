@@ -14,7 +14,7 @@
  * Provides single interface for all orchestration operations.
  */
 
-import { ref, computed, readonly, type Ref } from 'vue'
+import { ref, computed, readonly } from 'vue'
 import axios, { type AxiosInstance } from 'axios'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
