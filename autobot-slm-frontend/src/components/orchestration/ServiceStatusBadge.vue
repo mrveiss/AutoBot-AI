@@ -13,7 +13,7 @@
 import { computed } from 'vue'
 
 interface Props {
-  status: 'running' | 'stopped' | 'failed' | 'unknown' | 'healthy' | 'unhealthy'
+  status: string
   size?: 'sm' | 'md' | 'lg'
   showText?: boolean
 }
@@ -35,18 +35,31 @@ const statusClasses = computed(() => {
     lg: { dot: 'w-2.5 h-2.5', text: 'text-base' },
   }
 
-  const colorClasses = {
+  const colorClasses: Record<string, { dot: string; text: string }> = {
     running: { dot: 'bg-green-500', text: 'text-green-600' },
+    active: { dot: 'bg-green-500', text: 'text-green-600' },
+    activating: { dot: 'bg-blue-500', text: 'text-blue-600' },
+    online: { dot: 'bg-green-500', text: 'text-green-600' },
     stopped: { dot: 'bg-gray-400', text: 'text-gray-500' },
+    inactive: { dot: 'bg-gray-400', text: 'text-gray-500' },
+    deactivating: { dot: 'bg-orange-500', text: 'text-orange-600' },
+    offline: { dot: 'bg-gray-500', text: 'text-gray-600' },
     failed: { dot: 'bg-red-500', text: 'text-red-600' },
+    error: { dot: 'bg-red-500', text: 'text-red-600' },
     unknown: { dot: 'bg-yellow-500', text: 'text-yellow-600' },
     healthy: { dot: 'bg-green-500', text: 'text-green-600' },
     unhealthy: { dot: 'bg-red-500', text: 'text-red-600' },
+    degraded: { dot: 'bg-yellow-500', text: 'text-yellow-600' },
+    maintenance: { dot: 'bg-purple-500', text: 'text-purple-600' },
   }
 
+  // Fallback for unknown status values
+  const defaultColors = { dot: 'bg-gray-400', text: 'text-gray-500' }
+  const colors = colorClasses[props.status.toLowerCase()] || defaultColors
+
   return {
-    dot: `${baseClasses.dot} ${sizeClasses[props.size].dot} ${colorClasses[props.status].dot}`,
-    text: `${baseClasses.text} ${sizeClasses[props.size].text} ${colorClasses[props.status].text}`,
+    dot: `${baseClasses.dot} ${sizeClasses[props.size].dot} ${colors.dot}`,
+    text: `${baseClasses.text} ${sizeClasses[props.size].text} ${colors.text}`,
   }
 })
 </script>
