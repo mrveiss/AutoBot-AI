@@ -577,6 +577,83 @@ async def assign_role_to_node(
     return NodeRoleResponse.model_validate(node_role)
 
 
+@router.post("/{node_id}/provision")
+async def provision_node_roles(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    role_names: Optional[List[str]] = None,
+) -> dict:
+    """
+    Provision assigned roles on a node using Ansible playbooks.
+
+    Args:
+        node_id: Node to provision
+        role_names: Specific roles to provision (if None, provisions all assigned roles)
+
+    Uses deploy.yml playbook with --limit and --tags for targeted provisioning.
+    """
+    from services.playbook_executor import get_playbook_executor
+
+    # Verify node exists
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+
+    # Get assigned roles
+    query = select(NodeRole).where(NodeRole.node_id == node_id)
+    if role_names:
+        query = query.where(NodeRole.role_name.in_(role_names))
+
+    roles_result = await db.execute(query)
+    roles = roles_result.scalars().all()
+
+    if not roles:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No roles assigned to provision",
+        )
+
+    # Extract role names and update status to installing
+    target_roles = [r.role_name for r in roles]
+    for role in roles:
+        role.status = "installing"
+    await db.commit()
+
+    # Execute deploy playbook
+    executor = get_playbook_executor()
+    result = await executor.execute_playbook(
+        playbook_name="deploy.yml",
+        limit=[node.hostname],
+        extra_vars={"target_roles": ",".join(target_roles)},
+    )
+
+    # Update role status based on result
+    for role in roles:
+        role.status = "installed" if result["success"] else "failed"
+    await db.commit()
+
+    if result["success"]:
+        logger.info("Provisioned roles %s on node %s", target_roles, node_id)
+        return {
+            "success": True,
+            "message": f"Provisioned {len(target_roles)} role(s) on {node.hostname}",
+            "roles": target_roles,
+            "output": result["output"][:500],
+        }
+    else:
+        logger.error("Failed to provision node %s: %s", node_id, result["output"])
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Provisioning failed: {result['output'][:500]}",
+        )
+
+
 @router.delete("/{node_id}/detected-roles/{role_name}")
 async def remove_role_from_node(
     node_id: str,
