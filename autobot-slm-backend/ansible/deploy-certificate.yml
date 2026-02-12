@@ -1,0 +1,84 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# TLS Certificate Deployment Playbook
+# Deploys TLS certificates to a node with proper permissions
+---
+
+- name: Deploy TLS Certificate
+  hosts: "{{ target_hosts | default('all') }}"
+  become: true
+  gather_facts: false
+
+  vars:
+    cert_dir: "/etc/ssl/autobot"
+    cert_file: "{{ cert_file | mandatory }}"
+    key_file: "{{ key_file | mandatory }}"
+    chain_file: "{{ chain_file | default(omit) }}"
+    reload_service: "{{ reload_service | default('nginx') }}"
+
+  tasks:
+    - name: Display deployment info
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║          TLS CERTIFICATE DEPLOYMENT                        ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║ Target: {{ inventory_hostname }}                           ║
+          ║ Certificate: {{ cert_file | basename }}                    ║
+          ║ Service: {{ reload_service }}                              ║
+          ╚════════════════════════════════════════════════════════════╝
+      run_once: false
+
+    - name: Create TLS certificate directory
+      ansible.builtin.file:
+        path: "{{ cert_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Deploy certificate file
+      ansible.builtin.copy:
+        src: "{{ cert_file }}"
+        dest: "{{ cert_dir }}/cert.pem"
+        owner: root
+        group: root
+        mode: '0644'
+        backup: true
+
+    - name: Deploy private key
+      ansible.builtin.copy:
+        src: "{{ key_file }}"
+        dest: "{{ cert_dir }}/key.pem"
+        owner: root
+        group: root
+        mode: '0600'
+        backup: true
+
+    - name: Deploy certificate chain
+      ansible.builtin.copy:
+        src: "{{ chain_file }}"
+        dest: "{{ cert_dir }}/chain.pem"
+        owner: root
+        group: root
+        mode: '0644'
+        backup: true
+      when: chain_file is defined and chain_file
+
+    - name: Reload service to apply new certificate
+      ansible.builtin.service:
+        name: "{{ reload_service }}"
+        state: reloaded
+      when: reload_service != "none"
+
+    - name: Display deployment completion
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║          TLS DEPLOYMENT COMPLETE                           ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║ Target: {{ inventory_hostname }}                           ║
+          ║ Status: ✅ Certificate deployed and service reloaded       ║
+          ╚════════════════════════════════════════════════════════════╝

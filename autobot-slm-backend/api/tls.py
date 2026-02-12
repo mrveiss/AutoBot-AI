@@ -13,10 +13,6 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import PlainTextResponse
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
 from models.database import Node
 from models.schemas import (
     TLSCredentialCreate,
@@ -29,6 +25,9 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.tls_credentials import get_tls_credential_service
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 
@@ -958,19 +957,11 @@ async def enable_tls_on_services(
 
 
 async def _deploy_certificate_to_node(node, credential, db) -> dict:
-    """Deploy a TLS certificate to a node via Ansible."""
-    import asyncio
-    import shutil
+    """Deploy a TLS certificate to a node via Ansible playbook."""
+    import os
+    import tempfile
 
     try:
-        # Check if ansible-playbook is available
-        ansible_path = shutil.which("ansible-playbook")
-        if not ansible_path:
-            return {
-                "success": False,
-                "message": "ansible-playbook not found",
-            }
-
         # Get certificates for deployment
         service = get_tls_credential_service()
         certs = await service.get_certificates(db, credential.credential_id)
@@ -981,49 +972,57 @@ async def _deploy_certificate_to_node(node, credential, db) -> dict:
                 "message": "Failed to get certificate data",
             }
 
-        # Deploy via SSH (simplified - in production would use Ansible)
-        ssh_cmd = [
-            "ssh",
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
-            "-o",
-            "ConnectTimeout=30",
-            "-o",
-            "BatchMode=yes",
-            "-p",
-            str(node.ssh_port or 22),
-            f"{node.ssh_user or 'autobot'}@{node.ip_address}",
-            # Deploy cert files and reload nginx
-            "sudo mkdir -p /etc/ssl/autobot && "
-            "sudo systemctl reload nginx 2>/dev/null || true",
-        ]
+        # Create temporary directory for certificate files
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cert_path = os.path.join(tmpdir, "cert.pem")
+            key_path = os.path.join(tmpdir, "key.pem")
+            chain_path = (
+                os.path.join(tmpdir, "chain.pem") if certs.get("chain") else None
+            )
 
-        proc = await asyncio.create_subprocess_exec(
-            *ssh_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+            # Write certificate files to temp directory
+            with open(cert_path, "w", encoding="utf-8") as f:
+                f.write(certs["certificate"])
 
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+            with open(key_path, "w", encoding="utf-8") as f:
+                f.write(certs["private_key"])
 
-        if proc.returncode == 0:
-            return {
-                "success": True,
-                "message": "Certificate deployed successfully",
-            }
-        else:
-            return {
-                "success": False,
-                "message": f"Deployment failed: {stderr.decode('utf-8', errors='replace')}",
+            if chain_path:
+                with open(chain_path, "w", encoding="utf-8") as f:
+                    f.write(certs["chain"])
+
+            # Deploy via Ansible playbook
+            from services.playbook_executor import get_playbook_executor
+
+            executor = get_playbook_executor()
+
+            extra_vars = {
+                "cert_file": cert_path,
+                "key_file": key_path,
+                "reload_service": "nginx",
             }
 
-    except asyncio.TimeoutError:
-        return {
-            "success": False,
-            "message": "Deployment timed out",
-        }
+            if chain_path:
+                extra_vars["chain_file"] = chain_path
+
+            result = await executor.execute_playbook(
+                playbook_name="deploy-certificate.yml",
+                limit=[node.hostname],
+                extra_vars=extra_vars,
+            )
+
+            if result.get("success"):
+                return {
+                    "success": True,
+                    "message": "Certificate deployed successfully",
+                }
+            else:
+                error_msg = result.get("error", "Unknown error")
+                return {
+                    "success": False,
+                    "message": f"Deployment failed: {error_msg}",
+                }
+
     except Exception as e:
         return {
             "success": False,
