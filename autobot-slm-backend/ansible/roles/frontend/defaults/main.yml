@@ -23,8 +23,10 @@ frontend_port: 443
 nginx_http_port: 80
 
 # Backend connection (user backend on main machine)
+# Backend runs on HTTPS port 8443 (TLS enabled)
 backend_host: "172.16.168.20"
-backend_port: 8001
+backend_port: 8443
+backend_protocol: "https"
 
 # TLS Configuration
 frontend_tls_cert_dir: /etc/autobot/certs

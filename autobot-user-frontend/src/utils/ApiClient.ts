@@ -43,7 +43,8 @@ export class ApiClient {
     this.baseUrlPromise = null;
     this.defaultTimeout = appConfig.getTimeout('default');
     this.settings = this._loadSettings();
-    this.initializeBaseUrl();
+    // Don't call initializeBaseUrl() in constructor to avoid circular dependency
+    // It will be called lazily on first API request
   }
 
   // Public setter for base URL (used by plugin configuration)
@@ -663,6 +664,24 @@ export class ApiClient {
   }
 }
 
-// Create singleton instance
-const apiClient = new ApiClient();
-export default apiClient;
+// Lazy singleton to avoid circular dependency during module initialization
+let apiClientInstance: ApiClient | null = null;
+
+function getApiClient(): ApiClient {
+  if (!apiClientInstance) {
+    apiClientInstance = new ApiClient();
+    // Initialize base URL asynchronously after instance creation
+    apiClientInstance['initializeBaseUrl']();
+  }
+  return apiClientInstance;
+}
+
+// Export getter as default for backwards compatibility
+export default new Proxy({} as ApiClient, {
+  get(target, prop) {
+    return getApiClient()[prop as keyof ApiClient];
+  },
+  apply(target, thisArg, args) {
+    return getApiClient();
+  }
+});

@@ -15,7 +15,7 @@
  * @copyright 2025 mrveiss
  */
 
-import { useToast, type ToastType } from '@/composables/useToast'
+// Dynamic import to avoid circular dependency with composables
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('NotificationBridge')
@@ -25,6 +25,7 @@ const logger = createLogger('NotificationBridge')
 // ========================================
 
 export type NotificationType = 'error' | 'warning' | 'info' | 'success'
+export type ToastType = 'error' | 'warning' | 'info' | 'success' // Defined locally to avoid circular import
 
 interface NotificationConfig {
   /** Default duration for each notification type (ms) */
@@ -81,13 +82,15 @@ class NotificationBridge {
    * Initialize the bridge with the Vue toast system.
    * Call this once when the Vue app mounts (in App.vue setup).
    */
-  initialize(): void {
+  async initialize(): Promise<void> {
     if (this.isInitialized) {
       logger.debug('NotificationBridge already initialized')
       return
     }
 
     try {
+      // Dynamic import to avoid circular dependency with composables
+      const { useToast } = await import('@/composables/useToast')
       const { showToast } = useToast()
       this.showToast = showToast
       this.isInitialized = true
@@ -279,8 +282,8 @@ export const notificationBridge = new NotificationBridge()
 /**
  * Initialize the notification bridge (call from App.vue setup)
  */
-export function initializeNotificationBridge(): void {
-  notificationBridge.initialize()
+export async function initializeNotificationBridge(): Promise<void> {
+  await notificationBridge.initialize()
 }
 
 /**

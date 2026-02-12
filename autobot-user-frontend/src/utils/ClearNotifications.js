@@ -4,14 +4,15 @@
  * are covering the entire UI due to accumulated consecutive failures
  */
 
-import { useAppStore } from '@/stores/useAppStore'
 import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for ClearNotifications
 const logger = createLogger('ClearNotifications')
 
-export function clearAllSystemNotifications() {
+export async function clearAllSystemNotifications() {
   try {
+    // Lazy-load store to avoid circular dependency during initialization
+    const { useAppStore } = await import('@/stores/useAppStore')
     const appStore = useAppStore()
 
 
