@@ -108,6 +108,7 @@ AutoBot now includes comprehensive Redis service management capabilities:
 - [**System Configuration**](CLAUDE.md) - Complete development notes, fixes, and architecture
 - [**Infrastructure**](infrastructure/README.md) - Per-role infrastructure and deployment scripts
 - [**Scripts & Utilities**](infrastructure/shared/scripts/README.md) - All scripts and utilities documentation
+- [**Troubleshooting Guide**](docs/troubleshooting/INDEX.md) - Searchable index of 15+ troubleshooting guides organized by component and symptom
 
 ### MCP & Agent Integration
 - [**LangChain MCP Integration Guide**](docs/developer/LANGCHAIN_MCP_INTEGRATION.md) - How to integrate AutoBot MCP tools with LangChain agents
