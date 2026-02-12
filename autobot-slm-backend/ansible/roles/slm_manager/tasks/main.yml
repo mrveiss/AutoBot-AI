@@ -253,6 +253,13 @@
   tags: ['slm', 'frontend']
 
 # ==========================================================
+# Grafana monitoring (Issue #853)
+# ==========================================================
+- name: "SLM | Include Grafana configuration tasks"
+  ansible.builtin.import_tasks: grafana.yml
+  tags: ['slm', 'grafana']
+
+# ==========================================================
 # Nginx configuration
 # ==========================================================
 - name: "SLM | Deploy nginx configuration"

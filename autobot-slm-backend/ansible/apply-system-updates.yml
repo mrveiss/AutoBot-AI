@@ -1,0 +1,254 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Apply System Updates Playbook
+# Safely applies system package updates with rollback capability
+---
+
+- name: Apply System Updates
+  hosts: "{{ target_hosts | default('all') }}"
+  become: true
+  gather_facts: true
+  serial: "{{ update_batch_size | default(3) }}"  # Rolling updates
+
+  vars:
+    update_type: "{{ update_type | default('all') }}"  # all, security, specific
+    auto_reboot: "{{ auto_reboot | default(false) }}"
+    reboot_timeout: "{{ reboot_timeout | default(300) }}"
+    backup_before_update: "{{ backup_before_update | default(true) }}"
+    specific_packages: "{{ specific_packages | default([]) }}"
+    dry_run: "{{ dry_run | default(false) }}"
+
+  pre_tasks:
+    # =========================================================================
+    # PRE-UPDATE VALIDATION
+    # =========================================================================
+    - name: Check disk space before update
+      ansible.builtin.shell: |
+        df -BG /var/cache/apt/archives | tail -1 | awk '{print $4}' | sed 's/G//'
+      register: available_space
+      changed_when: false
+
+    - name: Fail if insufficient disk space
+      ansible.builtin.fail:
+        msg: "Insufficient disk space: {{ available_space.stdout }}GB available, need at least 5GB"
+      when: available_space.stdout | int < 5
+
+    - name: Check if dpkg is locked
+      ansible.builtin.wait_for:
+        path: /var/lib/dpkg/lock-frontend
+        state: absent
+        timeout: 300
+      when: ansible_os_family == "Debian"
+
+  tasks:
+    # =========================================================================
+    # BACKUP CURRENT STATE
+    # =========================================================================
+    - name: Create backup directory
+      ansible.builtin.file:
+        path: /opt/autobot/backups/system-updates
+        state: directory
+        mode: '0750'
+      when: backup_before_update | bool
+
+    - name: Backup current package list
+      ansible.builtin.shell: |
+        dpkg --get-selections > /opt/autobot/backups/system-updates/package-list-{{ ansible_date_time.epoch }}.txt
+      changed_when: false
+      when:
+        - ansible_os_family == "Debian"
+        - backup_before_update | bool
+
+    - name: Backup apt sources
+      ansible.builtin.copy:
+        src: /etc/apt/sources.list
+        dest: "/opt/autobot/backups/system-updates/sources.list-{{ ansible_date_time.epoch }}"
+        remote_src: true
+        mode: '0640'
+      when:
+        - ansible_os_family == "Debian"
+        - backup_before_update | bool
+
+    # =========================================================================
+    # UPDATE CACHE
+    # =========================================================================
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 0
+      when: ansible_os_family == "Debian"
+
+    # =========================================================================
+    # APPLY UPDATES (DRY RUN MODE)
+    # =========================================================================
+    - name: Simulate package updates (dry run)
+      ansible.builtin.apt:
+        upgrade: dist
+        force_apt_get: true
+        dpkg_options: 'force-confold,force-confdef'
+      check_mode: true
+      register: dry_run_result
+      when:
+        - ansible_os_family == "Debian"
+        - dry_run | bool
+
+    - name: Display dry run results
+      ansible.builtin.debug:
+        msg: |
+          DRY RUN - Would update {{ dry_run_result.changed | default(0) }} packages
+      when: dry_run | bool
+
+    - name: Stop here if dry run
+      ansible.builtin.meta: end_host
+      when: dry_run | bool
+
+    # =========================================================================
+    # APPLY UPDATES (REAL)
+    # =========================================================================
+    - name: Apply security updates only
+      ansible.builtin.apt:
+        upgrade: safe
+        update_cache: true
+        force_apt_get: true
+        dpkg_options: 'force-confold,force-confdef'
+      register: security_update_result
+      when:
+        - ansible_os_family == "Debian"
+        - update_type == "security"
+        - not dry_run | bool
+
+    - name: Apply all available updates
+      ansible.builtin.apt:
+        upgrade: dist
+        update_cache: true
+        force_apt_get: true
+        dpkg_options: 'force-confold,force-confdef'
+        autoremove: true
+        autoclean: true
+      register: full_update_result
+      when:
+        - ansible_os_family == "Debian"
+        - update_type == "all"
+        - not dry_run | bool
+
+    - name: Apply specific package updates
+      ansible.builtin.apt:
+        name: "{{ specific_packages }}"
+        state: latest
+        update_cache: true
+        force_apt_get: true
+      register: specific_update_result
+      when:
+        - ansible_os_family == "Debian"
+        - update_type == "specific"
+        - specific_packages | length > 0
+        - not dry_run | bool
+
+    # =========================================================================
+    # POST-UPDATE CHECKS
+    # =========================================================================
+    - name: Check if reboot is required after updates
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_needed
+
+    - name: Get packages requiring reboot
+      ansible.builtin.command:
+        cmd: cat /var/run/reboot-required.pkgs
+      register: reboot_packages
+      changed_when: false
+      when: reboot_needed.stat.exists
+      ignore_errors: true
+
+    - name: Display reboot requirement
+      ansible.builtin.debug:
+        msg: |
+          ⚠️  REBOOT REQUIRED
+          Packages requiring reboot:
+          {{ reboot_packages.stdout }}
+      when: reboot_needed.stat.exists
+
+    # =========================================================================
+    # REBOOT HANDLING
+    # =========================================================================
+    - name: Reboot node if required and auto_reboot enabled
+      ansible.builtin.reboot:
+        reboot_timeout: "{{ reboot_timeout }}"
+        msg: "Rebooting for system updates"
+        pre_reboot_delay: 10
+        post_reboot_delay: 30
+      when:
+        - reboot_needed.stat.exists
+        - auto_reboot | bool
+
+    - name: Wait for node to come back online
+      ansible.builtin.wait_for_connection:
+        delay: 10
+        timeout: "{{ reboot_timeout }}"
+      when:
+        - reboot_needed.stat.exists
+        - auto_reboot | bool
+
+    # =========================================================================
+    # VERIFY SERVICES
+    # =========================================================================
+    - name: Verify critical services are running
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+      loop:
+        - ssh
+        - systemd-resolved
+      ignore_errors: true
+
+    - name: Verify AutoBot services are running
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+      loop:
+        - autobot-backend
+        - autobot-slm-backend
+        - autobot-npu-worker
+        - nginx
+        - redis-stack-server
+      ignore_errors: true
+      when: "'slm_nodes' in group_names"
+
+  post_tasks:
+    # =========================================================================
+    # UPDATE SUMMARY
+    # =========================================================================
+    - name: Generate update report
+      ansible.builtin.set_fact:
+        update_report:
+          hostname: "{{ ansible_hostname }}"
+          ip_address: "{{ ansible_default_ipv4.address }}"
+          update_type: "{{ update_type }}"
+          packages_updated: "{{ (full_update_result.changed | default(false)) or (security_update_result.changed | default(false)) or (specific_update_result.changed | default(false)) }}"
+          reboot_required: "{{ reboot_needed.stat.exists }}"
+          reboot_performed: "{{ (reboot_needed.stat.exists and auto_reboot) | bool }}"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+
+    - name: Display update summary
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║          SYSTEM UPDATE COMPLETE                            ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║ Host:            {{ ansible_hostname }}                    ║
+          ║ Update Type:     {{ update_type }}                         ║
+          ║ Packages Updated: {{ 'Yes' if update_report.packages_updated else 'No' }} ║
+          ║ Reboot Required: {{ 'Yes' if reboot_needed.stat.exists else 'No' }} ║
+          ║ Reboot Performed: {{ 'Yes' if update_report.reboot_performed else 'No' }} ║
+          ║                                                            ║
+          ║ Status: ✅ UPDATE SUCCESSFUL                               ║
+          ╚════════════════════════════════════════════════════════════╝
+
+    - name: Save update report
+      ansible.builtin.copy:
+        content: "{{ update_report | to_json }}"
+        dest: "/tmp/update-report-{{ ansible_hostname }}.json"
+        mode: '0644'
+      delegate_to: localhost

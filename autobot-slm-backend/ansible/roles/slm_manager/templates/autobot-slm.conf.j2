@@ -75,8 +75,9 @@ server {
     }
 
     # Grafana reverse proxy (monitoring dashboards)
+    # Issue #853: Keep /grafana/ prefix for serve_from_sub_path
     location /grafana/ {
-        proxy_pass http://127.0.0.1:{{ grafana_port | default(3000) }}/;
+        proxy_pass http://127.0.0.1:{{ grafana_port | default(3000) }}/grafana/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

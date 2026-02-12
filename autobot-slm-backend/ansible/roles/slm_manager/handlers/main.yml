@@ -25,3 +25,8 @@
   ansible.builtin.systemd:
     name: nginx
     state: restarted
+
+- name: restart grafana
+  ansible.builtin.systemd:
+    name: grafana-server
+    state: restarted

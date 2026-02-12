@@ -1,0 +1,145 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Grafana Configuration Tasks for SLM Manager Role
+# Issue #853: Configure Grafana for embedded dashboards
+---
+
+# ==========================================================
+# Install Grafana
+# ==========================================================
+- name: "Grafana | Add Grafana GPG key"
+  ansible.builtin.apt_key:
+    url: https://apt.grafana.com/gpg.key
+    state: present
+  tags: ['grafana', 'packages']
+
+- name: "Grafana | Add Grafana APT repository"
+  ansible.builtin.apt_repository:
+    repo: deb https://apt.grafana.com stable main
+    state: present
+    filename: grafana
+  tags: ['grafana', 'packages']
+
+- name: "Grafana | Install Grafana"
+  ansible.builtin.apt:
+    name: grafana
+    state: present
+    update_cache: true
+  tags: ['grafana', 'packages']
+
+# ==========================================================
+# Configure Grafana for subpath serving
+# ==========================================================
+- name: "Grafana | Configure serve_from_sub_path"
+  ansible.builtin.lineinfile:
+    path: /etc/grafana/grafana.ini
+    regexp: '^;?serve_from_sub_path\s*='
+    line: 'serve_from_sub_path = true'
+    insertafter: '^\[server\]'
+    state: present
+  notify: restart grafana
+  tags: ['grafana', 'config']
+
+- name: "Grafana | Enable anonymous authentication"
+  ansible.builtin.lineinfile:
+    path: /etc/grafana/grafana.ini
+    regexp: '^;?enabled\s*=\s*(false|true)'
+    line: 'enabled = true'
+    insertafter: '^\[auth.anonymous\]'
+    state: present
+  notify: restart grafana
+  tags: ['grafana', 'config']
+
+- name: "Grafana | Set anonymous org role"
+  ansible.builtin.lineinfile:
+    path: /etc/grafana/grafana.ini
+    regexp: '^;?org_role\s*='
+    line: 'org_role = Viewer'
+    insertafter: '^\[auth.anonymous\]'
+    state: present
+  notify: restart grafana
+  tags: ['grafana', 'config']
+
+- name: "Grafana | Allow iframe embedding"
+  ansible.builtin.lineinfile:
+    path: /etc/grafana/grafana.ini
+    regexp: '^;?allow_embedding\s*='
+    line: 'allow_embedding = true'
+    insertafter: '^\[security\]'
+    state: present
+  notify: restart grafana
+  tags: ['grafana', 'config']
+
+- name: "Grafana | Set cookie_samesite for embedding"
+  ansible.builtin.lineinfile:
+    path: /etc/grafana/grafana.ini
+    regexp: '^;?cookie_samesite\s*='
+    line: 'cookie_samesite = none'
+    insertafter: '^\[security\]'
+    state: present
+  notify: restart grafana
+  tags: ['grafana', 'config']
+
+# ==========================================================
+# Deploy dashboard files
+# ==========================================================
+- name: "Grafana | Create dashboard directory"
+  ansible.builtin.file:
+    path: /var/lib/grafana/dashboards
+    state: directory
+    owner: root
+    group: grafana
+    mode: "0755"
+  tags: ['grafana', 'dashboards']
+
+- name: "Grafana | Deploy AutoBot dashboards"
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../infrastructure/shared/config/grafana/dashboards/"
+    dest: /var/lib/grafana/dashboards/
+    owner: root
+    group: grafana
+    mode: "0640"
+  notify: restart grafana
+  tags: ['grafana', 'dashboards']
+
+- name: "Grafana | Configure dashboard provisioning"
+  ansible.builtin.copy:
+    dest: /etc/grafana/provisioning/dashboards/default.yml
+    content: |
+      apiVersion: 1
+      providers:
+        - name: 'AutoBot'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          updateIntervalSeconds: 30
+          allowUiUpdates: false
+          options:
+            path: /var/lib/grafana/dashboards
+    owner: root
+    group: grafana
+    mode: "0640"
+  notify: restart grafana
+  tags: ['grafana', 'dashboards']
+
+# ==========================================================
+# Start Grafana service
+# ==========================================================
+- name: "Grafana | Enable and start Grafana"
+  ansible.builtin.systemd:
+    name: grafana-server
+    enabled: true
+    state: started
+  tags: ['grafana', 'service']
+
+- name: "Grafana | Wait for Grafana to be ready"
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 3000
+    delay: 2
+    timeout: 60
+    state: started
+  tags: ['grafana', 'service']

@@ -51,7 +51,7 @@ const dashboardIds: Record<DashboardType, string> = {
   overview: 'autobot-overview',
   system: 'autobot-system',
   performance: 'autobot-performance',
-  nodes: 'slm-node-metrics',
+  nodes: 'autobot-multi-machine',
   redis: 'autobot-redis',
   'api-health': 'autobot-api-health',
 }
