@@ -205,12 +205,6 @@ const router = createRouter({
           meta: { title: 'System Monitor', parent: 'monitoring' }
         },
         {
-          path: 'infrastructure',
-          name: 'monitoring-infrastructure',
-          component: () => import('@/views/monitoring/InfrastructureMonitor.vue'),
-          meta: { title: 'Infrastructure', parent: 'monitoring' }
-        },
-        {
           path: 'logs',
           name: 'monitoring-logs',
           component: () => import('@/views/monitoring/LogViewer.vue'),
