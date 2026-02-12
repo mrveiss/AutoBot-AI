@@ -1,0 +1,28 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Deploy centralized logging infrastructure
+#
+# Usage:
+#   ansible-playbook -i inventory.yml deploy-centralized-logging.yml
+#   ansible-playbook -i inventory.yml deploy-centralized-logging.yml --limit backend  # Main server only
+#   ansible-playbook -i inventory.yml deploy-centralized-logging.yml --tags promtail  # Agents only
+
+- name: Deploy Loki on main server
+  hosts: backend
+  become: yes
+  tags:
+    - loki
+    - logging
+  roles:
+    - centralized_logging
+
+- name: Deploy Promtail on all nodes
+  hosts: autobot
+  become: yes
+  tags:
+    - promtail
+    - logging
+  roles:
+    - centralized_logging

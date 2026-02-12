@@ -1,0 +1,85 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Deploy Promtail agent (native binary) on all nodes
+
+- name: Check if Promtail binary exists
+  stat:
+    path: "{{ promtail_binary_path }}"
+  register: promtail_binary
+
+- name: Download Promtail binary
+  get_url:
+    url: "{{ promtail_binary_url }}"
+    dest: "/tmp/promtail-linux-amd64.zip"
+    mode: '0644'
+  when: not promtail_binary.stat.exists
+
+- name: Ensure unzip is installed
+  package:
+    name: unzip
+    state: present
+  when: not promtail_binary.stat.exists
+
+- name: Extract Promtail binary
+  unarchive:
+    src: "/tmp/promtail-linux-amd64.zip"
+    dest: "/tmp/"
+    remote_src: yes
+  when: not promtail_binary.stat.exists
+
+- name: Install Promtail binary
+  copy:
+    src: "/tmp/promtail-linux-amd64"
+    dest: "{{ promtail_binary_path }}"
+    mode: '0755'
+    remote_src: yes
+  when: not promtail_binary.stat.exists
+  notify: restart promtail
+
+- name: Create Promtail positions directory
+  file:
+    path: "{{ promtail_positions_file | dirname }}"
+    state: directory
+    owner: "{{ logging_user }}"
+    group: "{{ logging_group }}"
+    mode: '0755'
+
+- name: Determine node services to monitor
+  set_fact:
+    node_services: "{{ vm_services[inventory_hostname] | default([]) }}"
+
+- name: Create Promtail configuration
+  template:
+    src: promtail-config.yml.j2
+    dest: "{{ promtail_config_dir }}/config.yml"
+    owner: "{{ logging_user }}"
+    group: "{{ logging_group }}"
+    mode: '0644'
+  notify: restart promtail
+
+- name: Create Promtail systemd service
+  template:
+    src: promtail.service.j2
+    dest: /etc/systemd/system/promtail.service
+    mode: '0644'
+  notify:
+    - reload systemd
+    - restart promtail
+
+- name: Enable and start Promtail service
+  systemd:
+    name: promtail
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Cleanup temporary files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/promtail-linux-amd64.zip"
+    - "/tmp/promtail-linux-amd64"
+  when: not promtail_binary.stat.exists

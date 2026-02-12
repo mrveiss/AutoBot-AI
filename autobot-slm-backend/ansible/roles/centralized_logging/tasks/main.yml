@@ -1,0 +1,50 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# centralized_logging role - Main tasks
+
+- name: Include OS-specific variables
+  include_vars: "{{ ansible_os_family }}.yml"
+  failed_when: false
+
+- name: Create logging directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ logging_user }}"
+    group: "{{ logging_group }}"
+    mode: '0755'
+  loop:
+    - "{{ log_base_dir }}"
+    - "{{ centralized_log_dir }}"
+    - "{{ loki_data_dir }}"
+    - "{{ loki_config_dir }}"
+    - "{{ promtail_config_dir }}"
+    - "{{ loki_data_dir }}/chunks"
+    - "{{ loki_data_dir }}/rules"
+
+- name: Deploy Loki stack (main server only)
+  include_tasks: loki.yml
+  when: inventory_hostname == 'main' or inventory_hostname == groups['backend'][0]
+
+- name: Deploy Promtail agents (all nodes)
+  include_tasks: promtail.yml
+
+- name: Configure log rotation
+  include_tasks: logrotate.yml
+
+- name: Set up log aggregation
+  include_tasks: aggregation.yml
+  when: inventory_hostname == 'main' or inventory_hostname == groups['backend'][0]
+
+- name: Configure monitoring and alerting
+  include_tasks: monitoring.yml
+  when: inventory_hostname == 'main' or inventory_hostname == groups['backend'][0]
+
+- name: Create centralized logging documentation
+  template:
+    src: README.md.j2
+    dest: "{{ centralized_log_dir }}/README.md"
+    mode: '0644'
+  when: inventory_hostname == 'main' or inventory_hostname == groups['backend'][0]

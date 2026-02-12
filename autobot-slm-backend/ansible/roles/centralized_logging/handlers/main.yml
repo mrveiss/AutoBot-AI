@@ -1,0 +1,19 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# centralized_logging role - Handlers
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: restart loki
+  systemd:
+    name: loki
+    state: restarted
+
+- name: restart promtail
+  systemd:
+    name: promtail
+    state: restarted

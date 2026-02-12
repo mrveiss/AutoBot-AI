@@ -1,0 +1,17 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Configure log rotation
+
+- name: Install logrotate
+  package:
+    name: logrotate
+    state: present
+
+- name: Create AutoBot logrotate configuration
+  template:
+    src: logrotate.conf.j2
+    dest: /etc/logrotate.d/autobot
+    mode: '0644'
+  notify: restart promtail

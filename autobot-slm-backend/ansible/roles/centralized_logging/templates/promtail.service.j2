@@ -1,0 +1,32 @@
+[Unit]
+Description=Promtail Log Shipper
+Documentation=https://grafana.com/docs/loki/latest/clients/promtail/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ logging_user }}
+Group={{ logging_group }}
+ExecStart={{ promtail_binary_path }} -config.file={{ promtail_config_dir }}/config.yml
+Restart=on-failure
+RestartSec=10s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=promtail
+
+# Security
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths={{ promtail_positions_file | dirname }} {{ log_base_dir }}
+
+# Resource limits
+LimitNOFILE=65536
+
+# Journal access (for systemd journal scraping)
+SupplementaryGroups=systemd-journal
+
+[Install]
+WantedBy=multi-user.target
