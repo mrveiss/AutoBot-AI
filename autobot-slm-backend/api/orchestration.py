@@ -8,19 +8,23 @@ API endpoints for portable AutoBot service orchestration across machines.
 Enables starting/stopping/migrating services on any enrolled node.
 
 Related to Issue #728 - Service portability across machines.
+Updated for Issue #850 - Complete orchestration consolidation.
 """
 
 import logging
-from typing import List, Optional
+from datetime import datetime
+from typing import Dict, List, Optional
 
+from api.websocket import ws_manager
 from fastapi import APIRouter, Depends, HTTPException, status
+from models.database import Node, Service, ServiceStatus
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
 from services.auth import get_current_user
 from services.database import get_db
 from services.service_orchestrator import service_orchestrator
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/orchestration", tags=["orchestration"])
@@ -99,6 +103,39 @@ class BulkActionResponse(BaseModel):
     results: dict
     success_count: int
     failure_count: int
+
+
+class FleetServiceNodeStatus(BaseModel):
+    """Per-node status for a fleet service."""
+
+    node_id: str
+    hostname: str
+    status: str
+
+
+class FleetServiceStatus(BaseModel):
+    """Aggregated fleet service status."""
+
+    service_name: str
+    category: str
+    nodes: List[FleetServiceNodeStatus]
+    running_count: int
+    stopped_count: int
+    failed_count: int
+    total_nodes: int
+
+
+class FleetServicesResponse(BaseModel):
+    """Response for fleet services listing."""
+
+    services: List[FleetServiceStatus]
+    total_services: int
+
+
+class ServiceCategoryUpdate(BaseModel):
+    """Request to update service category."""
+
+    category: str = Field(..., pattern="^(autobot|system)$")
 
 
 # =============================================================================
@@ -442,3 +479,434 @@ async def restart_all_services(
         success_count=success_count,
         failure_count=failure_count,
     )
+
+
+# =============================================================================
+# Fleet-wide Service Management Endpoints (Issue #850)
+# =============================================================================
+
+# Fleet sub-router for aggregated service operations
+fleet_router = APIRouter(prefix="/fleet", tags=["orchestration-fleet"])
+
+
+async def _run_ssh_service_action(
+    node: Node,
+    service_name: str,
+    action: str,
+) -> tuple[bool, str]:
+    """
+    Run SSH command to control a service via systemctl.
+
+    Helper for fleet operations. Returns (success, message).
+
+    Issue #850: Extracted from services.py for orchestration consolidation.
+    """
+    import asyncio
+
+    # Map action to systemctl command
+    systemctl_action = action
+    if action not in ["start", "stop", "restart"]:
+        return False, f"Invalid action: {action}"
+
+    # Build SSH command
+    ssh_user = node.ssh_user or "autobot"
+    ssh_port = node.ssh_port or 22
+    ssh_key = "/home/autobot/.ssh/id_rsa"
+
+    # Use sudo -n (non-interactive) to run systemctl as root
+    remote_cmd = f"sudo -n systemctl {systemctl_action} {service_name}"
+
+    ssh_cmd = [
+        "/usr/bin/ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "BatchMode=yes",
+        "-i",
+        ssh_key,
+        "-p",
+        str(ssh_port),
+        f"{ssh_user}@{node.ip_address}",
+        remote_cmd,
+    ]
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *ssh_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout_data, stderr_data = await asyncio.wait_for(
+            proc.communicate(), timeout=30
+        )
+
+        if proc.returncode == 0:
+            return True, f"{action.capitalize()} successful"
+        else:
+            error_msg = stderr_data.decode().strip() or stdout_data.decode().strip()
+            logger.warning(
+                "SSH service action failed: node=%s service=%s action=%s rc=%d error=%s",
+                node.node_id,
+                service_name,
+                action,
+                proc.returncode,
+                error_msg,
+            )
+            return False, f"Failed: {error_msg[:200]}"
+
+    except asyncio.TimeoutError:
+        logger.error(
+            "SSH service action timeout: node=%s service=%s action=%s",
+            node.node_id,
+            service_name,
+            action,
+        )
+        return False, "Timeout waiting for service action"
+    except Exception as e:
+        logger.error(
+            "SSH service action exception: node=%s service=%s action=%s error=%s",
+            node.node_id,
+            service_name,
+            action,
+            str(e),
+        )
+        return False, f"Error: {str(e)[:200]}"
+
+
+@fleet_router.get("/services", response_model=FleetServicesResponse)
+async def get_fleet_services(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> FleetServicesResponse:
+    """
+    Get aggregated service status across all nodes.
+
+    Issue #850: Moved from /fleet/services to /orchestration/fleet/services.
+    """
+    # Get all services grouped by name
+    query = select(Service).order_by(Service.service_name)
+    result = await db.execute(query)
+    all_services = result.scalars().all()
+
+    # Get node info for hostname lookup
+    nodes_result = await db.execute(select(Node))
+    nodes = {n.node_id: n for n in nodes_result.scalars().all()}
+
+    # Aggregate by service name
+    service_map: Dict[str, dict] = {}
+    for svc in all_services:
+        if svc.service_name not in service_map:
+            service_map[svc.service_name] = {
+                "nodes": [],
+                "category": getattr(svc, "category", "system") or "system",
+            }
+        node = nodes.get(svc.node_id)
+        service_map[svc.service_name]["nodes"].append(
+            FleetServiceNodeStatus(
+                node_id=svc.node_id,
+                hostname=node.hostname if node else "unknown",
+                status=svc.status,
+            )
+        )
+
+    # Build response
+    fleet_services = []
+    for service_name, data in service_map.items():
+        node_statuses = data["nodes"]
+        running = sum(1 for n in node_statuses if n.status == "running")
+        stopped = sum(1 for n in node_statuses if n.status == "stopped")
+        failed = sum(1 for n in node_statuses if n.status == "failed")
+
+        fleet_services.append(
+            FleetServiceStatus(
+                service_name=service_name,
+                category=data["category"],
+                nodes=node_statuses,
+                running_count=running,
+                stopped_count=stopped,
+                failed_count=failed,
+                total_nodes=len(node_statuses),
+            )
+        )
+
+    return FleetServicesResponse(
+        services=fleet_services,
+        total_services=len(fleet_services),
+    )
+
+
+@fleet_router.patch("/services/{service_name}/category")
+async def update_fleet_service_category(
+    service_name: str,
+    update: ServiceCategoryUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """
+    Update the category for a service across all nodes.
+
+    This is an admin override - manually categorize a service as
+    'autobot' or 'system' across all nodes that have it.
+
+    Issue #850: Moved from /fleet/services/{name}/category to /orchestration/fleet/services/{name}/category.
+    """
+    # Find all service records with this name
+    query = select(Service).where(Service.service_name == service_name)
+    result = await db.execute(query)
+    services = result.scalars().all()
+
+    if not services:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Service {service_name} not found on any node",
+        )
+
+    # Update category on all records
+    for svc in services:
+        svc.category = update.category
+
+    await db.commit()
+
+    logger.info(
+        "Service %s category updated to %s across %d nodes",
+        service_name,
+        update.category,
+        len(services),
+    )
+
+    return {
+        "service_name": service_name,
+        "category": update.category,
+        "nodes_updated": len(services),
+    }
+
+
+@fleet_router.post(
+    "/services/{service_name}/start",
+    response_model=ServiceActionResponse,
+)
+async def start_fleet_service(
+    service_name: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> ServiceActionResponse:
+    """
+    Start a service on all nodes that have it.
+
+    Issue #850: Moved from /fleet/services/{name}/start to /orchestration/fleet/services/{name}/start.
+    """
+    # Find all nodes with this service
+    query = select(Service).where(Service.service_name == service_name)
+    result = await db.execute(query)
+    services = result.scalars().all()
+
+    if not services:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Service {service_name} not found on any node",
+        )
+
+    # Get nodes
+    node_ids = [s.node_id for s in services]
+    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
+    nodes = {n.node_id: n for n in nodes_result.scalars().all()}
+
+    # Start on each node
+    success_count = 0
+    fail_count = 0
+    for svc in services:
+        node = nodes.get(svc.node_id)
+        if not node:
+            fail_count += 1
+            continue
+
+        success, msg = await _run_ssh_service_action(node, service_name, "start")
+        if success:
+            success_count += 1
+            svc.status = ServiceStatus.RUNNING.value
+            svc.active_state = "active"
+            svc.sub_state = "running"
+            svc.last_checked = datetime.utcnow()
+            # Broadcast status change for this node
+            await ws_manager.send_service_status(
+                node_id=svc.node_id,
+                service_name=service_name,
+                status="running",
+                action="start",
+                success=True,
+                message=msg,
+            )
+        else:
+            fail_count += 1
+            await ws_manager.send_service_status(
+                node_id=svc.node_id,
+                service_name=service_name,
+                status="unknown",
+                action="start",
+                success=False,
+                message=msg,
+            )
+
+    await db.commit()
+
+    return ServiceActionResponse(
+        action="start",
+        service_name=service_name,
+        node_id="fleet",
+        success=fail_count == 0,
+        message=f"Started on {success_count}/{len(services)} nodes",
+    )
+
+
+@fleet_router.post(
+    "/services/{service_name}/stop",
+    response_model=ServiceActionResponse,
+)
+async def stop_fleet_service(
+    service_name: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> ServiceActionResponse:
+    """
+    Stop a service on all nodes.
+
+    Issue #850: Moved from /fleet/services/{name}/stop to /orchestration/fleet/services/{name}/stop.
+    """
+    query = select(Service).where(Service.service_name == service_name)
+    result = await db.execute(query)
+    services = result.scalars().all()
+
+    if not services:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Service {service_name} not found on any node",
+        )
+
+    node_ids = [s.node_id for s in services]
+    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
+    nodes = {n.node_id: n for n in nodes_result.scalars().all()}
+
+    success_count = 0
+    fail_count = 0
+    for svc in services:
+        node = nodes.get(svc.node_id)
+        if not node:
+            fail_count += 1
+            continue
+
+        success, msg = await _run_ssh_service_action(node, service_name, "stop")
+        if success:
+            success_count += 1
+            svc.status = ServiceStatus.STOPPED.value
+            svc.active_state = "inactive"
+            svc.sub_state = "dead"
+            svc.last_checked = datetime.utcnow()
+            # Broadcast status change for this node
+            await ws_manager.send_service_status(
+                node_id=svc.node_id,
+                service_name=service_name,
+                status="stopped",
+                action="stop",
+                success=True,
+                message=msg,
+            )
+        else:
+            fail_count += 1
+            await ws_manager.send_service_status(
+                node_id=svc.node_id,
+                service_name=service_name,
+                status="unknown",
+                action="stop",
+                success=False,
+                message=msg,
+            )
+
+    await db.commit()
+
+    return ServiceActionResponse(
+        action="stop",
+        service_name=service_name,
+        node_id="fleet",
+        success=fail_count == 0,
+        message=f"Stopped on {success_count}/{len(services)} nodes",
+    )
+
+
+@fleet_router.post(
+    "/services/{service_name}/restart",
+    response_model=ServiceActionResponse,
+)
+async def restart_fleet_service(
+    service_name: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> ServiceActionResponse:
+    """
+    Restart a service on all nodes that have it.
+
+    Issue #850: Moved from /fleet/services/{name}/restart to /orchestration/fleet/services/{name}/restart.
+    """
+    query = select(Service).where(Service.service_name == service_name)
+    result = await db.execute(query)
+    services = result.scalars().all()
+
+    if not services:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Service {service_name} not found on any node",
+        )
+
+    node_ids = [s.node_id for s in services]
+    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
+    nodes = {n.node_id: n for n in nodes_result.scalars().all()}
+
+    success_count = 0
+    fail_count = 0
+    for svc in services:
+        node = nodes.get(svc.node_id)
+        if not node:
+            fail_count += 1
+            continue
+
+        success, msg = await _run_ssh_service_action(node, service_name, "restart")
+        if success:
+            success_count += 1
+            svc.status = ServiceStatus.RUNNING.value
+            svc.active_state = "active"
+            svc.sub_state = "running"
+            svc.last_checked = datetime.utcnow()
+            # Broadcast status change for this node
+            await ws_manager.send_service_status(
+                node_id=svc.node_id,
+                service_name=service_name,
+                status="running",
+                action="restart",
+                success=True,
+                message=msg,
+            )
+        else:
+            fail_count += 1
+            await ws_manager.send_service_status(
+                node_id=svc.node_id,
+                service_name=service_name,
+                status="unknown",
+                action="restart",
+                success=False,
+                message=msg,
+            )
+
+    await db.commit()
+
+    return ServiceActionResponse(
+        action="restart",
+        service_name=service_name,
+        node_id="fleet",
+        success=fail_count == 0,
+        message=f"Restarted on {success_count}/{len(services)} nodes",
+    )
+
+
+# Include fleet sub-router in main orchestration router
+router.include_router(fleet_router)
