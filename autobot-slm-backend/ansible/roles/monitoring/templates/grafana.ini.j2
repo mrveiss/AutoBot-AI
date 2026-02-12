@@ -16,6 +16,7 @@ http_addr = 127.0.0.1
 http_port = {{ grafana_port }}
 domain = localhost
 root_url = %(protocol)s://%(domain)s:%(http_port)s/grafana/
+serve_from_sub_path = true
 
 [database]
 type = sqlite3
@@ -27,7 +28,8 @@ admin_password = {{ grafana_admin_password }}
 secret_key = {{ lookup('password', '/dev/null chars=ascii_letters,digits length=32') }}
 disable_gravatar = true
 cookie_secure = false
-cookie_samesite = lax
+cookie_samesite = none
+allow_embedding = true
 
 [users]
 allow_sign_up = false

@@ -98,6 +98,23 @@
     mode: "0640"
   notify: Restart grafana
 
+- name: Create dashboard directory
+  ansible.builtin.file:
+    path: /var/lib/grafana/dashboards
+    state: directory
+    owner: root
+    group: grafana
+    mode: "0755"
+
+- name: Deploy AutoBot dashboards
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../infrastructure/shared/config/grafana/dashboards/"
+    dest: /var/lib/grafana/dashboards/
+    owner: root
+    group: grafana
+    mode: "0640"
+  notify: Restart grafana
+
 - name: Enable and start Grafana
   ansible.builtin.systemd:
     name: grafana-server
