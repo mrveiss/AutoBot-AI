@@ -1,0 +1,36 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Run access control validation tests
+
+- name: Run validation tests
+  command: "{{ project_root }}/scripts/access_control/validate.sh"
+  register: validation_result
+  changed_when: false
+  failed_when: false
+
+- name: Parse validation results
+  set_fact:
+    validation_passed: "{{ validation_result.stdout | regex_search('(\\d+)\\s+passed') | regex_replace('[^0-9]', '') | int }}"
+    validation_failed: "{{ validation_result.stdout | regex_search('(\\d+)\\s+failed') | regex_replace('[^0-9]', '') | int }}"
+  when: validation_result.rc == 0
+
+- name: Calculate failure rate
+  set_fact:
+    failure_rate: "{{ (validation_failed | int * 100 / validation_test_count) | round(2) }}"
+  when: validation_result.rc == 0
+
+- name: Display validation results
+  debug:
+    msg:
+      - "Validation tests: {{ validation_passed | default(0) }} passed, {{ validation_failed | default(0) }} failed"
+      - "Failure rate: {{ failure_rate | default('N/A') }}%"
+      - "Threshold: {{ validation_failure_threshold }}%"
+
+- name: Fail if validation threshold exceeded
+  fail:
+    msg: "Validation failure rate {{ failure_rate }}% exceeds threshold {{ validation_failure_threshold }}%"
+  when:
+    - validation_result.rc == 0
+    - failure_rate | float > validation_failure_threshold

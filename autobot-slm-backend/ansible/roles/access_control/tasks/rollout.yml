@@ -1,0 +1,25 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Execute gradual rollout phase
+
+- name: Set rollout phase configuration
+  copy:
+    content: |
+      # Rollout Phase {{ rollout_phase }}
+      # Generated: {{ ansible_date_time.iso8601 }}
+      ROLLOUT_PHASE={{ rollout_phase }}
+      ACCESS_CONTROL_MODE={{ access_control_mode }}
+      AUTO_PROCEED={{ 'true' if auto_proceed_phases else 'false' }}
+    dest: "{{ config_dir }}/access_control/rollout_phase.env"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0640'
+
+- name: Display rollout phase
+  debug:
+    msg:
+      - "Rollout Phase: {{ rollout_phase }}"
+      - "Mode: {{ access_control_mode }}"
+      - "Auto-proceed: {{ auto_proceed_phases }}"

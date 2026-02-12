@@ -1,0 +1,37 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Create access control management scripts
+
+- name: Create access control scripts directory
+  file:
+    path: "{{ project_root }}/scripts/access_control"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+
+- name: Deploy validation script
+  template:
+    src: validate.sh.j2
+    dest: "{{ project_root }}/scripts/access_control/validate.sh"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+
+- name: Deploy rollback script
+  template:
+    src: rollback.sh.j2
+    dest: "{{ project_root }}/scripts/access_control/rollback.sh"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'
+
+- name: Deploy status script
+  template:
+    src: status.sh.j2
+    dest: "{{ project_root }}/scripts/access_control/status.sh"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0755'

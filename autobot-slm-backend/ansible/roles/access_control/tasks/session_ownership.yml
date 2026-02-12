@@ -1,0 +1,25 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Configure session ownership validation
+
+- name: Deploy session ownership configuration
+  template:
+    src: session_ownership.yml.j2
+    dest: "{{ config_dir }}/access_control/session_ownership.yml"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0640'
+
+- name: Run session ownership backfill
+  command: "{{ project_root }}/venv/bin/python -m autobot_user_backend.scripts.backfill_session_ownership"
+  when: session_ownership_backfill
+  register: backfill_result
+  failed_when: false
+  changed_when: "'backfilled' in backfill_result.stdout"
+
+- name: Display backfill results
+  debug:
+    msg: "{{ backfill_result.stdout_lines }}"
+  when: session_ownership_backfill and backfill_result is defined

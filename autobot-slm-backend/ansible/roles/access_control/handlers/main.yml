@@ -1,0 +1,14 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Handlers for access_control role
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: restart access-monitor
+  systemd:
+    name: autobot-access-monitor.timer
+    state: restarted

@@ -1,0 +1,49 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Configure access control policies
+
+- name: Create access control configuration directory
+  file:
+    path: "{{ config_dir }}/access_control"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0750'
+
+- name: Deploy access control policies configuration
+  template:
+    src: access_policies.yml.j2
+    dest: "{{ config_dir }}/access_control/policies.yml"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0640'
+
+- name: Deploy access control mode configuration
+  copy:
+    content: |
+      # Access Control Mode Configuration
+      # Generated: {{ ansible_date_time.iso8601 }}
+      ACCESS_CONTROL_MODE={{ access_control_mode }}
+      ENFORCEMENT_ENABLED={{ 'true' if access_control_mode == 'full' else 'false' }}
+      LOG_ONLY_MODE={{ 'true' if access_control_mode == 'log_only' else 'false' }}
+      LEGACY_MODE_SUPPORT={{ 'true' if legacy_mode_support else 'false' }}
+      GRACE_PERIOD_DAYS={{ grace_period_days }}
+    dest: "{{ config_dir }}/access_control/mode.env"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0640'
+
+- name: Verify policies configuration
+  stat:
+    path: "{{ config_dir }}/access_control/policies.yml"
+  register: policies_config
+
+- name: Display policy configuration status
+  debug:
+    msg:
+      - "Access control mode: {{ access_control_mode }}"
+      - "Policies configured: {{ access_policies | length }}"
+      - "Audit logging: {{ 'Enabled' if enable_audit_logging else 'Disabled' }}"
+      - "Session validation: {{ 'Enabled' if enable_session_validation else 'Disabled' }}"

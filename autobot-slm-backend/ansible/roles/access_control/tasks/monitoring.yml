@@ -1,0 +1,41 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Setup access control monitoring
+
+- name: Deploy monitoring configuration
+  template:
+    src: monitoring_config.yml.j2
+    dest: "{{ config_dir }}/access_control/monitoring.yml"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0640'
+
+- name: Create monitoring systemd service
+  template:
+    src: access-control-monitor.service.j2
+    dest: /etc/systemd/system/autobot-access-monitor.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload systemd
+
+- name: Create monitoring timer
+  template:
+    src: access-control-monitor.timer.j2
+    dest: /etc/systemd/system/autobot-access-monitor.timer
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Enable and start monitoring timer
+  systemd:
+    name: autobot-access-monitor.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes
+
+- name: Display monitoring status
+  debug:
+    msg: "Access control monitoring enabled: {{ monitoring_interval }}s interval"

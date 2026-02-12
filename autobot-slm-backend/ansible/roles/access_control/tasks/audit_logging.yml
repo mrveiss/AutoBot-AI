@@ -1,0 +1,38 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Setup audit logging
+
+- name: Create audit log directory
+  file:
+    path: "{{ logs_dir }}/audit"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0750'
+
+- name: Deploy audit logging configuration
+  template:
+    src: audit_config.yml.j2
+    dest: "{{ config_dir }}/access_control/audit.yml"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0640'
+
+- name: Configure log rotation for audit logs
+  template:
+    src: audit_logrotate.j2
+    dest: /etc/logrotate.d/autobot-audit
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Verify audit logging setup
+  stat:
+    path: "{{ logs_dir }}/audit"
+  register: audit_log_dir
+
+- name: Display audit logging status
+  debug:
+    msg: "Audit logging configured: {{ audit_log_format }} format, {{ audit_log_rotation }} day retention"

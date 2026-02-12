@@ -1,0 +1,69 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Access control role default variables
+
+# Service configuration
+service_user: autobot
+service_group: autobot
+project_root: /opt/autobot
+config_dir: /etc/autobot
+logs_dir: /var/log/autobot
+
+# Access control mode
+access_control_mode: log_only  # log_only, partial, full
+enable_audit_logging: true
+enable_session_validation: true
+
+# Policy configuration
+access_policies:
+  - name: "session_ownership"
+    enabled: true
+    enforcement_level: "{{ access_control_mode }}"
+  - name: "resource_permissions"
+    enabled: true
+    enforcement_level: "{{ access_control_mode }}"
+  - name: "api_rate_limiting"
+    enabled: false
+    enforcement_level: "log_only"
+
+# Audit logging
+audit_log_level: INFO
+audit_log_rotation: 7  # days
+audit_log_format: json
+audit_backends:
+  - file
+  - redis
+
+# Session ownership
+session_ownership_backfill: true
+session_ownership_strict_mode: false  # Reject if owner missing
+
+# Gradual rollout configuration
+rollout_phase: 0  # 0=prep, 1=backfill, 2=audit, 3=log_only, 4=partial, 5=full, 6=validation
+auto_proceed_phases: false
+rollout_validation_timeout: 300  # seconds
+
+# Monitoring
+enable_access_monitoring: true
+monitoring_interval: 60  # seconds
+alert_on_violations: true
+alert_threshold: 10  # violations per minute
+
+# Redis configuration
+redis_backup_before_changes: true
+redis_backup_retention_days: 30
+
+# Validation
+run_validation_tests: true
+validation_test_count: 100
+validation_failure_threshold: 5  # percent
+
+# Rollback configuration
+enable_auto_rollback: false
+rollback_on_error_rate: 10  # percent
+
+# Legacy compatibility
+legacy_mode_support: true
+grace_period_days: 30

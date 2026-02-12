@@ -1,0 +1,45 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Backup Redis before access control changes
+
+- name: Create backup directory
+  file:
+    path: "{{ project_root }}/backups/redis"
+    state: directory
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0750'
+
+- name: Get current timestamp
+  set_fact:
+    backup_timestamp: "{{ ansible_date_time.epoch }}"
+
+- name: Trigger Redis BGSAVE
+  command: "redis-cli -h {{ hostvars[groups['redis'][0]]['ansible_host'] }} -p 6379 BGSAVE"
+  register: bgsave_result
+  changed_when: "'Background saving started' in bgsave_result.stdout"
+
+- name: Wait for Redis BGSAVE to complete
+  command: "redis-cli -h {{ hostvars[groups['redis'][0]]['ansible_host'] }} -p 6379 LASTSAVE"
+  register: lastsave
+  until: lastsave.stdout | int > (backup_timestamp | int)
+  retries: 30
+  delay: 2
+
+- name: Create backup metadata
+  copy:
+    content: |
+      Backup created: {{ ansible_date_time.iso8601 }}
+      Purpose: Access control deployment
+      Redis host: {{ hostvars[groups['redis'][0]]['ansible_host'] }}
+      Retention: {{ redis_backup_retention_days }} days
+    dest: "{{ project_root }}/backups/redis/backup_{{ ansible_date_time.epoch }}.txt"
+    owner: "{{ service_user }}"
+    group: "{{ service_group }}"
+    mode: '0644'
+
+- name: Display backup status
+  debug:
+    msg: "Redis backup completed: {{ ansible_date_time.iso8601 }}"
