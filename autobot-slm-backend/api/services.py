@@ -9,7 +9,6 @@ Related to Issue #728.
 """
 
 import asyncio
-import json
 import logging
 from datetime import datetime
 from typing import Dict, Optional, Tuple
@@ -269,90 +268,19 @@ def _build_scan_failure_response(node_id: str, message: str) -> ServiceScanRespo
     )
 
 
-def _build_service_scan_ssh_command(node: Node) -> list:
-    """
-    Build SSH command for scanning services on a node.
-
-    Helper for scan_node_services (Issue #665).
-
-    Args:
-        node: The node to scan.
-
-    Returns:
-        List of command arguments for subprocess.
-    """
-    ssh_user = node.ssh_user or "autobot"
-    ssh_port = node.ssh_port or 22
-    ssh_key = "/home/autobot/.ssh/id_rsa"
-
-    remote_cmd = (
-        "systemctl list-units --type=service --all --no-pager --plain "
-        "--output=json 2>/dev/null || "
-        "systemctl list-units --type=service --all --no-pager --plain"
-    )
-
-    return [
-        "/usr/bin/ssh",
-        "-o",
-        "StrictHostKeyChecking=no",
-        "-o",
-        "ConnectTimeout=15",
-        "-o",
-        "BatchMode=yes",
-        "-i",
-        ssh_key,
-        "-p",
-        str(ssh_port),
-        f"{ssh_user}@{node.ip_address}",
-        remote_cmd,
-    ]
-
-
-async def _execute_service_scan(node: Node, ssh_cmd: list) -> Tuple[bool, str, str]:
-    """
-    Execute SSH service scan command.
-
-    Helper for scan_node_services (Issue #665).
-
-    Args:
-        node: The node being scanned.
-        ssh_cmd: SSH command arguments list.
-
-    Returns:
-        Tuple of (success, stdout, error_message).
-    """
-    process = await asyncio.create_subprocess_exec(
-        *ssh_cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-
-    stdout, stderr = await asyncio.wait_for(
-        process.communicate(),
-        timeout=60.0,
-    )
-
-    if process.returncode != 0:
-        error = stderr.decode("utf-8", errors="replace")
-        logger.error("Service scan failed on %s: %s", node.hostname, error[:500])
-        return False, "", f"SSH command failed: {error[:200]}"
-
-    return True, stdout.decode("utf-8", errors="replace"), ""
-
-
-async def _parse_services_json(
-    services_data: list,
+async def _parse_ansible_service_facts(
+    services_data: dict,
     db: AsyncSession,
     node_id: str,
     now: datetime,
 ) -> Tuple[int, int, int]:
     """
-    Parse JSON format service data and upsert records.
+    Parse Ansible service_facts format and upsert records.
 
     Helper for scan_node_services (Issue #665).
 
     Args:
-        services_data: List of service dictionaries from JSON output.
+        services_data: Dict from ansible_facts.services (service_name -> service_info).
         db: Database session.
         node_id: Node identifier.
         now: Current timestamp.
@@ -364,69 +292,30 @@ async def _parse_services_json(
     created = 0
     updated = 0
 
-    for svc in services_data:
-        service_name = svc.get("unit", "").replace(".service", "")
-        if not service_name:
+    for service_name, service_info in services_data.items():
+        # Filter to systemd services only
+        if service_info.get("source") != "systemd":
             continue
-        discovered += 1
-        was_created, was_updated = await _upsert_service(
-            db, node_id, service_name, svc, now
-        )
-        if was_created:
-            created += 1
-        elif was_updated:
-            updated += 1
 
-    return discovered, created, updated
-
-
-async def _parse_services_plain(
-    output: str,
-    db: AsyncSession,
-    node_id: str,
-    now: datetime,
-) -> Tuple[int, int, int]:
-    """
-    Parse plain text format service data and upsert records.
-
-    Helper for scan_node_services (Issue #665).
-
-    Args:
-        output: Plain text output from systemctl.
-        db: Database session.
-        node_id: Node identifier.
-        now: Current timestamp.
-
-    Returns:
-        Tuple of (discovered, created, updated) counts.
-    """
-    discovered = 0
-    created = 0
-    updated = 0
-
-    for line in output.strip().split("\n"):
-        if not line.strip() or line.startswith("UNIT"):
+        # Remove .service suffix for consistency
+        clean_name = service_name.replace(".service", "")
+        if not clean_name:
             continue
-        parts = line.split()
-        if len(parts) < 4:
-            continue
-        service_name = parts[0].replace(".service", "")
-        if not service_name:
-            continue
+
         discovered += 1
 
-        # Parse status from columns: UNIT LOAD ACTIVE SUB DESCRIPTION...
-        active_state = parts[2] if len(parts) > 2 else "unknown"
-        sub_state = parts[3] if len(parts) > 3 else "unknown"
-        description = " ".join(parts[4:]) if len(parts) > 4 else None
-
+        # Map Ansible service_facts format to our schema
+        # state: running, stopped, etc.
+        # status: enabled, disabled, etc.
         svc_data = {
-            "active": active_state,
-            "sub": sub_state,
-            "description": description,
+            "active": service_info.get("state", "unknown"),
+            "sub": service_info.get("state", "unknown"),
+            "description": None,  # service_facts doesn't provide description
+            "enabled": service_info.get("status") == "enabled",
         }
+
         was_created, was_updated = await _upsert_service(
-            db, node_id, service_name, svc_data, now
+            db, node_id, clean_name, svc_data, now
         )
         if was_created:
             created += 1
@@ -487,31 +376,43 @@ async def scan_node_services(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> ServiceScanResponse:
     """
-    Manually scan and refresh services on a node via SSH.
+    Manually scan and refresh services on a node via Ansible.
 
-    This endpoint discovers all systemd services on the node by running
-    'systemctl list-units --type=service' via SSH and updates the database.
+    This endpoint discovers all systemd services on the node using
+    ansible.builtin.service_facts and updates the database.
     """
     node = await _get_node_or_404(db, node_id)
-    ssh_cmd = _build_service_scan_ssh_command(node)
 
     try:
-        success, output, error_msg = await _execute_service_scan(node, ssh_cmd)
-        if not success:
+        from services.playbook_executor import get_playbook_executor
+
+        executor = get_playbook_executor()
+        result = await executor.execute_playbook(
+            playbook_name="discover-services.yml",
+            limit=[node.hostname],
+        )
+
+        if not result.get("success"):
+            error_msg = result.get("error", "Unknown error")
+            logger.error("Service discovery failed on %s: %s", node.hostname, error_msg)
             return _build_scan_failure_response(node_id, error_msg)
 
-        now = datetime.utcnow()
+        # Extract service facts from Ansible result
+        # service_facts returns ansible_facts.services as a dict
+        services_data = (
+            result.get("facts", {}).get(node.hostname, {}).get("services", {})
+        )
 
-        # Parse output - handle both JSON and plain formats
-        try:
-            services_data = json.loads(output)
-            discovered, created, updated = await _parse_services_json(
-                services_data, db, node_id, now
+        if not services_data:
+            logger.warning("No service facts returned for %s", node.hostname)
+            return _build_scan_failure_response(
+                node_id, "No service data returned from Ansible"
             )
-        except json.JSONDecodeError:
-            discovered, created, updated = await _parse_services_plain(
-                output, db, node_id, now
-            )
+
+        now = datetime.utcnow()
+        discovered, created, updated = await _parse_ansible_service_facts(
+            services_data, db, node_id, now
+        )
 
         await db.commit()
         logger.info(
@@ -531,9 +432,6 @@ async def scan_node_services(
             services_created=created,
         )
 
-    except asyncio.TimeoutError:
-        logger.warning("Service scan timeout on %s", node.hostname)
-        return _build_scan_failure_response(node_id, "SSH command timed out")
     except Exception as e:
         logger.exception("Service scan error on %s: %s", node.hostname, e)
         return _build_scan_failure_response(node_id, f"Error: {str(e)[:200]}")

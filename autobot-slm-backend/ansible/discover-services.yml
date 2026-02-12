@@ -1,0 +1,38 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Service Discovery Playbook
+# Discovers all systemd services on a node using service_facts
+---
+
+- name: Discover Services
+  hosts: "{{ target_hosts | default('all') }}"
+  become: false
+  gather_facts: false
+
+  tasks:
+    - name: Display discovery info
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║          SERVICE DISCOVERY                                ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║ Target: {{ inventory_hostname }}                           ║
+          ║ Action: Discover systemd services                          ║
+          ╚════════════════════════════════════════════════════════════╝
+      run_once: false
+
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+      register: services_result
+
+    - name: Display discovery completion
+      ansible.builtin.debug:
+        msg: |
+          ╔════════════════════════════════════════════════════════════╗
+          ║          SERVICE DISCOVERY COMPLETE                        ║
+          ╠════════════════════════════════════════════════════════════╣
+          ║ Target: {{ inventory_hostname }}                           ║
+          ║ Services: {{ services_result.ansible_facts.services | length }} ║
+          ╚════════════════════════════════════════════════════════════╝
