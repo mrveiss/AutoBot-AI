@@ -53,6 +53,15 @@
   failed_when: false
   become_user: "{{ npu_user }}"
 
+- name: Install FastAPI and web server dependencies
+  ansible.builtin.pip:
+    name:
+      - fastapi>=0.100.0
+      - uvicorn[standard]>=0.20.0
+    virtualenv: "{{ npu_install_dir }}/venv"
+    state: present
+  become_user: "{{ npu_user }}"
+
 - name: Install OpenVINO and dependencies
   ansible.builtin.pip:
     name:
@@ -96,6 +105,20 @@
   notify:
     - reload systemd
     - restart npu-worker
+
+- name: Check if UFW is installed
+  ansible.builtin.command: which ufw
+  register: _ufw_installed
+  changed_when: false
+  failed_when: false
+
+- name: Configure UFW for NPU worker
+  community.general.ufw:
+    rule: allow
+    port: "{{ npu_port }}"
+    proto: tcp
+    comment: "NPU Worker API"
+  when: _ufw_installed.rc == 0
 
 - name: Enable and start NPU worker service
   ansible.builtin.systemd:
