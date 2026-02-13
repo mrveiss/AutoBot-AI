@@ -261,20 +261,46 @@ async def sync_node(
     if not request.restart:
         tags.append("!restart")  # Skip restart tasks
 
-    # Execute update playbook
-    playbook_result = await executor.execute_playbook(
-        playbook_name="update-all-nodes.yml",
-        limit=limit,
-        tags=tags if tags else None,
+    # Check if this is the SLM server itself (Issue #867)
+    # When syncing the SLM server, we can't wait for the playbook to complete
+    # because the backend will restart during execution, causing HTTP 502 errors
+    is_slm_server = (
+        node.hostname == "00-SLM-Manager" or node.node_id == "00-SLM-Manager"
     )
 
-    return NodeSyncResponse(
-        success=playbook_result["success"],
-        message=playbook_result["output"]
-        if playbook_result["success"]
-        else f"Playbook failed: {playbook_result['output']}",
-        node_id=node_id,
-    )
+    if is_slm_server and request.restart:
+        # Fire-and-forget for SLM server self-restart to avoid HTTP connection issues
+        logger.info(
+            "Executing playbook for SLM server %s in fire-and-forget mode",
+            node_id,
+        )
+        asyncio.create_task(
+            executor.execute_playbook(
+                playbook_name="update-all-nodes.yml",
+                limit=limit,
+                tags=tags if tags else None,
+            )
+        )
+        return NodeSyncResponse(
+            success=True,
+            message="Playbook queued (self-restart mode - check backend health after 30s)",
+            node_id=node_id,
+        )
+    else:
+        # Normal execution - wait for result
+        playbook_result = await executor.execute_playbook(
+            playbook_name="update-all-nodes.yml",
+            limit=limit,
+            tags=tags if tags else None,
+        )
+
+        return NodeSyncResponse(
+            success=playbook_result["success"],
+            message=playbook_result["output"]
+            if playbook_result["success"]
+            else f"Playbook failed: {playbook_result['output']}",
+            node_id=node_id,
+        )
 
 
 async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
