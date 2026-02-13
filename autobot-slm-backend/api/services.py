@@ -1143,12 +1143,9 @@ async def get_fleet_services(
 ) -> FleetServicesResponse:
     """Get aggregated service status across all nodes.
 
-    DEPRECATED: Use /orchestration/fleet/services instead (Issue #850).
-    This endpoint is maintained for backward compatibility only.
+    This is the canonical endpoint for fleet-wide service status.
+    Consolidated from Issue #850 orchestration unification.
     """
-    logger.warning(
-        "DEPRECATED: /fleet/services called - use /orchestration/fleet/services"
-    )
     # Get all services grouped by name
     query = select(Service).order_by(Service.service_name)
     result = await db.execute(query)
@@ -1215,15 +1212,8 @@ async def update_service_category(
     This is an admin override - manually categorize a service as
     'autobot' or 'system' across all nodes that have it.
 
-    DEPRECATED: Use PATCH /orchestration/fleet/services/{name}/category (Issue #850).
-    This endpoint is maintained for backward compatibility only.
+    Canonical endpoint for fleet-wide category updates (Issue #850).
     """
-    logger.warning(
-        "DEPRECATED: /fleet/services/%s/category called - "
-        "use /orchestration/fleet/services/%s/category",
-        service_name,
-        service_name,
-    )
     # Find all service records with this name
     query = select(Service).where(Service.service_name == service_name)
     result = await db.execute(query)
@@ -1266,15 +1256,8 @@ async def start_fleet_service(
 ) -> ServiceActionResponse:
     """Start a service on all nodes that have it.
 
-    DEPRECATED: Use POST /orchestration/fleet/services/{name}/start (Issue #850).
-    This endpoint is maintained for backward compatibility only.
+    Canonical endpoint for fleet-wide service start (Issue #850).
     """
-    logger.warning(
-        "DEPRECATED: /fleet/services/%s/start called - "
-        "use /orchestration/fleet/services/%s/start",
-        service_name,
-        service_name,
-    )
     # Find all nodes with this service
     query = select(Service).where(Service.service_name == service_name)
     result = await db.execute(query)
@@ -1349,15 +1332,8 @@ async def stop_fleet_service(
 ) -> ServiceActionResponse:
     """Stop a service on all nodes.
 
-    DEPRECATED: Use POST /orchestration/fleet/services/{name}/stop (Issue #850).
-    This endpoint is maintained for backward compatibility only.
+    Canonical endpoint for fleet-wide service stop (Issue #850).
     """
-    logger.warning(
-        "DEPRECATED: /fleet/services/%s/stop called - "
-        "use /orchestration/fleet/services/%s/stop",
-        service_name,
-        service_name,
-    )
     query = select(Service).where(Service.service_name == service_name)
     result = await db.execute(query)
     services = result.scalars().all()
@@ -1429,15 +1405,8 @@ async def restart_fleet_service(
 ) -> ServiceActionResponse:
     """Restart a service on all nodes that have it.
 
-    DEPRECATED: Use POST /orchestration/fleet/services/{name}/restart (Issue #850).
-    This endpoint is maintained for backward compatibility only.
+    Canonical endpoint for fleet-wide service restart (Issue #850).
     """
-    logger.warning(
-        "DEPRECATED: /fleet/services/%s/restart called - "
-        "use /orchestration/fleet/services/%s/restart",
-        service_name,
-        service_name,
-    )
     query = select(Service).where(Service.service_name == service_name)
     result = await db.execute(query)
     services = result.scalars().all()
