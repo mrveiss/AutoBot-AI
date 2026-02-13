@@ -12,7 +12,9 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
-import { getBackendUrl } from '@/config/ssot-config'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('CodeSourceModal')
 
 const props = defineProps<{
   currentNodeId?: string
@@ -41,7 +43,8 @@ const isLoading = ref(true)
 const isSaving = ref(false)
 const error = ref<string | null>(null)
 
-const API_BASE = getBackendUrl()
+// Use relative path for same-origin SLM backend API calls (Issue #860)
+const API_BASE = '/api'
 const authStore = useAuthStore()
 
 const api = axios.create({ baseURL: API_BASE, timeout: 15000 })
@@ -57,8 +60,11 @@ onMounted(async () => {
   try {
     const response = await api.get<{ nodes: Node[] }>('/api/nodes')
     nodes.value = response.data.nodes
-  } catch {
-    error.value = 'Failed to load nodes'
+  } catch (e: unknown) {
+    // Show actual error for debugging (Issue #860)
+    const err = e as { response?: { data?: { detail?: string } }; message?: string }
+    error.value = err.response?.data?.detail || err.message || 'Failed to load nodes'
+    logger.error('Failed to load nodes:', e)
   } finally {
     isLoading.value = false
   }
