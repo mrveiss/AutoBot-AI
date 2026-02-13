@@ -11,10 +11,12 @@
 
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { useAuthStore } from '@/stores/auth'
+import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
+import type { SLMNode } from '@/types/slm'
 
 const logger = createLogger('CodeSourceModal')
+const slmApi = useSlmApi()
 
 const props = defineProps<{
   currentNodeId?: string
@@ -29,13 +31,7 @@ const emit = defineEmits<{
 
 const isEditing = Boolean(props.currentNodeId)
 
-interface Node {
-  node_id: string
-  hostname: string
-  ip_address: string
-}
-
-const nodes = ref<Node[]>([])
+const nodes = ref<SLMNode[]>([])
 const selectedNodeId = ref(props.currentNodeId ?? '')
 const repoPath = ref(props.currentRepoPath ?? '/opt/autobot')
 const branch = ref(props.currentBranch ?? 'main')
@@ -43,13 +39,10 @@ const isLoading = ref(true)
 const isSaving = ref(false)
 const error = ref<string | null>(null)
 
-// Use relative path for same-origin SLM backend API calls (Issue #860)
-const API_BASE = '/api'
-const authStore = useAuthStore()
-
-const api = axios.create({ baseURL: API_BASE, timeout: 15000 })
+// Minimal axios client for code-source POST (Issue #860)
+const api = axios.create({ baseURL: '/api', timeout: 15000 })
 api.interceptors.request.use((config) => {
-  const token = authStore.token
+  const token = localStorage.getItem('slm_access_token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -58,8 +51,8 @@ api.interceptors.request.use((config) => {
 
 onMounted(async () => {
   try {
-    const response = await api.get<{ nodes: Node[] }>('/api/nodes')
-    nodes.value = response.data.nodes
+    // Reuse existing API composable (Issue #860)
+    nodes.value = await slmApi.getNodes()
   } catch (e: unknown) {
     // Show actual error for debugging (Issue #860)
     const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -77,7 +70,8 @@ async function handleAssign(): Promise<void> {
   error.value = null
 
   try {
-    await api.post('/api/code-source/assign', {
+    // Fix double-prefix bug: baseURL is /api, endpoint is /code-source/assign (Issue #860)
+    await api.post('/code-source/assign', {
       node_id: selectedNodeId.value,
       repo_path: repoPath.value,
       branch: branch.value,
