@@ -45,6 +45,7 @@ const runningScheduleId = ref<number | null>(null)
 // Role-based sync state (Issue #779)
 const syncingRole = ref<string | null>(null)
 const isPulling = ref(false)
+const successMessage = ref<string | null>(null)
 
 // Code Source state (Issue #779)
 const codeSourceComposable = useCodeSource()
@@ -162,13 +163,27 @@ async function handleSyncAll(): Promise<void> {
 
 async function handlePullFromSource(): Promise<void> {
   isPulling.value = true
+  codeSync.clearError()
+  successMessage.value = null
+
   const result = await codeSync.pullFromSource()
   isPulling.value = false
 
   if (result.success) {
     logger.info('Pulled from source:', result.commit)
+    const shortCommit = result.commit?.substring(0, 12) || 'unknown'
+    successMessage.value = `Successfully pulled latest changes (${shortCommit})`
+
+    // Auto-dismiss success message after 5 seconds
+    setTimeout(() => {
+      successMessage.value = null
+    }, 5000)
+
+    // Refresh status to show updated commit
+    await handleRefresh()
   } else {
     logger.error('Pull failed:', result.message)
+    codeSync.setError(result.message || 'Failed to pull from source')
   }
 }
 
@@ -422,6 +437,25 @@ onMounted(async () => {
       <button
         @click="codeSync.clearError()"
         class="text-red-600 hover:text-red-800 font-medium text-sm"
+      >
+        Dismiss
+      </button>
+    </div>
+
+    <!-- Success Display -->
+    <div
+      v-if="successMessage"
+      class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6 flex items-center justify-between"
+    >
+      <div class="flex items-center gap-3">
+        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span class="text-green-700">{{ successMessage }}</span>
+      </div>
+      <button
+        @click="successMessage = null"
+        class="text-green-600 hover:text-green-800 font-medium text-sm"
       >
         Dismiss
       </button>
