@@ -141,9 +141,9 @@
       when: "'browser_worker' in group_names"
       tags: [browser, browser-worker]
 
-    - name: Browser | Restart autobot-browser-worker service
+    - name: Browser | Restart autobot-playwright service
       systemd:
-        name: autobot-browser-worker
+        name: autobot-playwright
         state: restarted
       when:
         - "'browser_worker' in group_names"
@@ -230,7 +230,7 @@
       loop:
         - autobot-backend
         - autobot-npu-worker
-        - autobot-browser-worker
+        - autobot-playwright
         - autobot-slm-backend
         - nginx
       when: verify_health | bool
