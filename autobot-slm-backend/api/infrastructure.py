@@ -526,6 +526,61 @@ async def cancel_execution(
     return ExecutionResponse(execution=execution)
 
 
+def _build_playbook_command(
+    playbook_path: str,
+    inventory_path: str,
+    playbook: PlaybookInfo,
+    limit_hosts,
+    variables,
+):
+    """Build ansible-playbook command with arguments.
+
+    Helper for _run_playbook (Issue #665).
+    """
+    cmd = ["ansible-playbook", "-i", inventory_path, playbook_path]
+
+    if limit_hosts:
+        cmd.extend(["--limit", ",".join(limit_hosts)])
+
+    if playbook.tags:
+        cmd.extend(["--tags", ",".join(playbook.tags)])
+
+    merged_vars = {**playbook.variables, **variables}
+    for key, value in merged_vars.items():
+        cmd.extend(["-e", f"{key}={value}"])
+
+    return cmd
+
+
+def _get_ansible_environment():
+    """Get environment variables for Ansible subprocess.
+
+    Helper for _run_playbook (Issue #665).
+    """
+    env = os.environ.copy()
+    env.update(
+        {
+            "ANSIBLE_CONFIG": "/opt/autobot/.ansible.cfg",
+            "ANSIBLE_HOME": "/opt/autobot/.ansible",
+            "ANSIBLE_LOCAL_TEMP": "/opt/autobot/.ansible/tmp",
+        }
+    )
+    return env
+
+
+async def _stream_process_output(process, execution):
+    """Stream subprocess output to execution log.
+
+    Helper for _run_playbook (Issue #665).
+    """
+    while True:
+        line = await process.stdout.readline()
+        if not line:
+            break
+        decoded = line.decode().rstrip()
+        execution.output.append(decoded)
+
+
 async def _run_playbook(
     execution_id: str,
     playbook: PlaybookInfo,
@@ -557,42 +612,20 @@ async def _run_playbook(
 
         inventory_dir = os.path.join(os.path.dirname(PLAYBOOKS_DIR), "inventory")
         inventory_path = os.path.join(inventory_dir, "slm-nodes.yml")
-        cmd = [
-            "ansible-playbook",
-            "-i",
-            inventory_path,
-            playbook_path,
-        ]
-
-        # Add limit if specified
-        if limit_hosts:
-            cmd.extend(["--limit", ",".join(limit_hosts)])
-
-        # Add tags if specified
-        if playbook.tags:
-            cmd.extend(["--tags", ",".join(playbook.tags)])
-
-        # Add extra variables
-        merged_vars = {**playbook.variables, **variables}
-        for key, value in merged_vars.items():
-            cmd.extend(["-e", f"{key}={value}"])
+        cmd = _build_playbook_command(
+            playbook_path, inventory_path, playbook, limit_hosts, variables
+        )
 
         execution.output.append(f"[INFO] Running: {' '.join(cmd)}")
 
-        # Execute the playbook
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
+            env=_get_ansible_environment(),
         )
 
-        # Stream output
-        while True:
-            line = await process.stdout.readline()
-            if not line:
-                break
-            decoded = line.decode().rstrip()
-            execution.output.append(decoded)
+        await _stream_process_output(process, execution)
 
         await process.wait()
 
