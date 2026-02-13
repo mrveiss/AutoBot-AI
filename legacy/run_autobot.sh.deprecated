@@ -1,5 +1,35 @@
 #!/bin/bash
 
+# ============================================================================
+# ⚠️  DEPRECATED - DO NOT USE ⚠️
+# ============================================================================
+# This script has been deprecated in favor of SLM orchestration (Issue #863)
+#
+# INSTEAD USE:
+#   - SLM GUI: https://172.16.168.19/orchestration
+#   - systemctl: sudo systemctl start autobot-backend
+#   - New wrapper: scripts/start-services.sh
+#
+# See: docs/developer/SERVICE_MANAGEMENT.md
+# ============================================================================
+
+echo "============================================================================"
+echo "⚠️  DEPRECATED SCRIPT - DO NOT USE ⚠️"
+echo "============================================================================"
+echo ""
+echo "This script has been deprecated. Please use:"
+echo ""
+echo "  1. SLM Orchestration GUI: https://172.16.168.19/orchestration"
+echo "  2. systemctl: sudo systemctl start autobot-backend"
+echo "  3. New wrapper: scripts/start-services.sh"
+echo ""
+echo "For more information, see: docs/developer/SERVICE_MANAGEMENT.md"
+echo "Issue: #863"
+echo "============================================================================"
+echo ""
+read -p "Press Enter to continue anyway (NOT RECOMMENDED) or Ctrl+C to exit..."
+echo ""
+
 # AutoBot - Distributed VM Startup Script (Performance Optimized)
 # ONLY starts backend locally (0.0.0.0:8443 HTTPS)
 # Connects to existing services running on distributed VMs
