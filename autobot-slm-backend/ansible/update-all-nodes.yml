@@ -168,13 +168,15 @@
       tags: [slm, slm-backend]
 
     - name: SLM | Restart autobot-slm-backend service
-      systemd:
-        name: autobot-slm-backend
-        state: restarted
+      command: systemctl restart autobot-slm-backend
+      async: 1
+      poll: 0
+      become: true
       when:
         - "'slm_server' in group_names"
         - restart_services | bool
       tags: [slm, slm-backend, restart]
+      changed_when: true
 
     # =========================================================================
     # SLM FRONTEND
