@@ -28,11 +28,54 @@ server {
     root {{ frontend_dist_dir }};
     index index.html;
 
+    # Enable ETag support for cache validation
+    etag on;
+
+    # HTML files - NEVER cache (ensures new deployments load immediately)
+    location ~* \.html$ {
+        # Strongest possible no-cache headers
+        add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
+        add_header Pragma "no-cache";
+        add_header Expires "0";
+        add_header Last-Modified $date_gmt;
+
+        # Force revalidation on every request
+        if_modified_since off;
+        add_header 'Cache-Control' 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0';
+
+        # Security headers
+        add_header X-Frame-Options SAMEORIGIN;
+        add_header X-Content-Type-Options nosniff;
+        add_header X-XSS-Protection "1; mode=block";
+        add_header Referrer-Policy strict-origin-when-cross-origin;
+
+        try_files $uri =404;
+    }
+
+    # Static assets with hash in filename - aggressive caching with immutable
+    location ~* \.(js|css)$ {
+        # These files have content-based hashes in their names (e.g., index-BcXl2NoH.js)
+        # They can be cached forever since the hash changes when content changes
+        expires 1y;
+        add_header Cache-Control "public, immutable, max-age=31536000";
+        access_log off;
+        try_files $uri =404;
+    }
+
+    # Other static assets - long cache but not immutable
+    location ~* \.(png|jpg|jpeg|gif|ico|svg|woff2?|ttf|eot|webp)$ {
+        expires 1y;
+        add_header Cache-Control "public, max-age=31536000";
+        access_log off;
+        try_files $uri =404;
+    }
+
     # SPA fallback - serve index.html for client-side routes
+    # This must come AFTER specific file locations to avoid overriding them
     location / {
         try_files $uri $uri/ /index.html;
 
-        # Prevent caching of HTML (new deployments picked up immediately)
+        # Default cache prevention for dynamic routes
         add_header Cache-Control "no-cache, no-store, must-revalidate";
         add_header Pragma "no-cache";
         add_header Expires "0";
@@ -42,13 +85,6 @@ server {
         add_header X-Content-Type-Options nosniff;
         add_header X-XSS-Protection "1; mode=block";
         add_header Referrer-Policy strict-origin-when-cross-origin;
-    }
-
-    # Static assets - long cache
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|eot)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-        try_files $uri =404;
     }
 
     # API proxy to user backend
