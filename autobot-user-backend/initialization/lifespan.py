@@ -191,6 +191,25 @@ async def initialize_critical_services(app: FastAPI):
         await update_app_state("security_layer", security_layer)
         logger.info("✅ [ 15%] Security: Security layer initialized successfully")
 
+        # Issue #732: Initialize Gateway - CRITICAL
+        logger.info("✅ [ 17%] Gateway: Initializing unified communication gateway...")
+        try:
+            from services.gateway import ChannelType, Gateway, WebSocketAdapter
+
+            gateway = Gateway()
+            await gateway.start()
+
+            # Register WebSocket adapter
+            ws_adapter = WebSocketAdapter()
+            gateway.register_channel_adapter(ChannelType.WEBSOCKET, ws_adapter)
+
+            app.state.gateway = gateway
+            await update_app_state("gateway", gateway)
+            logger.info("✅ [ 17%] Gateway: Gateway initialized with WebSocket adapter")
+        except Exception as gateway_error:
+            logger.error(f"❌ CRITICAL: Gateway initialization failed: {gateway_error}")
+            raise RuntimeError(f"Gateway initialization failed: {gateway_error}")
+
         # Issue #697: Instrument Redis and aiohttp with OpenTelemetry
         instrument_redis()
         instrument_aiohttp()
@@ -614,6 +633,14 @@ async def cleanup_services(app: FastAPI):
             logger.info("✅ SLM client shutdown")
         except Exception as slm_error:
             logger.warning("SLM client shutdown failed: %s", slm_error)
+
+        # Issue #732: Shutdown Gateway
+        try:
+            if hasattr(app.state, "gateway") and app.state.gateway:
+                await app.state.gateway.stop()
+                logger.info("✅ Gateway shutdown")
+        except Exception as gateway_error:
+            logger.warning("Gateway shutdown failed: %s", gateway_error)
 
         # Issue #726: Stop SLM reconciler
         # REMOVED as part of Issue #729 - SLM moved to slm-server

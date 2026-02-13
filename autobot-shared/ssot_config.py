@@ -44,7 +44,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -846,6 +846,10 @@ class AutoBotConfig(BaseSettings):
         env_file=str(PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
+        env_ignore={
+            "PORT",
+            "HOST",
+        },  # Issue #858: Ignore uvicorn's env vars to prevent conflicts
     )
 
     # Sub-configurations
@@ -864,6 +868,16 @@ class AutoBotConfig(BaseSettings):
     environment: str = Field(default="development", alias="AUTOBOT_ENVIRONMENT")
     debug: bool = Field(default=False, alias="AUTOBOT_DEBUG")
     log_level: str = Field(default="INFO", alias="AUTOBOT_LOG_LEVEL")
+
+    # Issue #858: Handle PORT env var from uvicorn without breaking port config
+    @field_validator("port", mode="before")
+    @classmethod
+    def handle_port_env_var(cls, v):
+        """Convert integer PORT (from uvicorn) to PortConfig object."""
+        if isinstance(v, int):
+            # PORT env var from uvicorn - ignore it and return default PortConfig
+            return PortConfig()
+        return v
 
     # Computed URL properties for backward compatibility
     # Issue #164: Support HTTPS when TLS is enabled

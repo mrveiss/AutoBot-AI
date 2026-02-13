@@ -33,6 +33,14 @@
     - "{{ backend_log_dir }}"
     - "{{ backend_data_dir }}"
 
+- name: Create backend symlink for imports
+  ansible.builtin.file:
+    src: "{{ backend_code_dir }}"
+    dest: "{{ backend_install_dir }}/backend"
+    state: link
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+
 - name: Clone/update AutoBot repository
   ansible.builtin.git:
     repo: "{{ backend_repo_url }}"
@@ -77,6 +85,25 @@
   become_user: "{{ backend_user }}"
   environment:
     PIP_NO_BINARY: ":none:"
+    PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
+
+- name: Deploy aioredis compatibility shim for Python 3.13
+  ansible.builtin.template:
+    src: aioredis_shim.py.j2
+    dest: "{{ backend_code_dir }}/venv/lib/python3.13/site-packages/aioredis.py"
+    mode: '0644'
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+
+- name: Reinstall autobot-shared to pick up ssot_config fixes
+  ansible.builtin.pip:
+    name: "{{ backend_install_dir }}/autobot-shared"
+    editable: true
+    virtualenv: "{{ backend_code_dir }}/venv"
+    state: forcereinstall
+    extra_args: "--no-deps"
+  become_user: "{{ backend_user }}"
+  when: backend_install_dir is defined
 
 - name: Deploy backend environment file
   ansible.builtin.template:

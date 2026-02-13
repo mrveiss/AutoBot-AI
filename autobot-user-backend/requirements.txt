@@ -9,7 +9,7 @@ cachetools>=5.0.0
 # Database
 sqlalchemy>=2.0
 alembic>=1.12.0
-aiosqlite>=0.19.0
+# aiosqlite>=0.19.0  # Included from ../requirements.txt (>=0.21.0)
 
 # AI/ML
 openai>=1.0.0
@@ -19,3 +19,8 @@ sentence-transformers>=2.2.0
 
 # Include existing requirements
 -r ../requirements.txt
+
+# Issue #858: Additional runtime dependencies for Python 3.13
+xxhash>=3.6.0          # Hash functions for LLM caching
+structlog>=25.5.0      # Structured logging for service auth
+llama-index>=0.12.0    # RAG and knowledge base framework
