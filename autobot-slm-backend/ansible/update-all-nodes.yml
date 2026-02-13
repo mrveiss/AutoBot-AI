@@ -155,7 +155,7 @@
     # =========================================================================
     - name: SLM | Sync autobot-slm-backend code
       synchronize:
-        src: "{{ playbook_dir }}/../autobot-slm-backend/"
+        src: "{{ playbook_dir }}/../"
         dest: "{{ code_base_dir }}/autobot-slm-backend/"
         delete: false
         rsync_opts:
@@ -181,7 +181,7 @@
     # =========================================================================
     - name: SLM Frontend | Sync autobot-slm-frontend code
       synchronize:
-        src: "{{ playbook_dir }}/../autobot-slm-frontend/"
+        src: "{{ playbook_dir }}/../../autobot-slm-frontend/"
         dest: "{{ code_base_dir }}/autobot-slm-frontend/"
         delete: false
         rsync_opts:
