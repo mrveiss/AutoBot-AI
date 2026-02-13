@@ -69,8 +69,8 @@ _SERVICE_DEFINITIONS = {
         service_type=AutoBotServiceType.BACKEND,
         default_host_env="AUTOBOT_BACKEND_HOST",
         default_port_env="AUTOBOT_BACKEND_PORT",
-        default_host="172.16.168.20",
-        default_port=8001,
+        default_host="0.0.0.0",  # nosec B104 - intentional for VM network access
+        default_port=8443,  # Issue #858/#861: HTTPS port
         start_command=(
             "cd /opt/autobot/autobot-user-backend && "
             "source venv/bin/activate && "

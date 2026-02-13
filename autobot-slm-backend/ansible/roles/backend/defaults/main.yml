@@ -5,7 +5,8 @@
 # Backend configuration defaults
 backend_user: autobot
 backend_group: autobot
-backend_install_dir: /opt/autobot/backend
+backend_install_dir: /opt/autobot/autobot-user-backend
+backend_code_dir: "{{ backend_install_dir }}"  # Actual code location (can be overridden by playbook)
 backend_log_dir: /var/log/autobot
 backend_data_dir: /var/lib/autobot
 
@@ -16,7 +17,7 @@ backend_deploy_from_git: true
 
 # Server settings
 backend_host: "0.0.0.0"
-backend_port: 8001
+backend_port: 8443  # Issue #858/#861: HTTPS port
 backend_workers: 4
 
 # Redis connection
