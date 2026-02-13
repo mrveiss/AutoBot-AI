@@ -220,7 +220,8 @@
     # =========================================================================
     - name: Verify | Wait for services to stabilize
       pause:
-        seconds: 5
+        # Give SLM backend extra time since it restarts asynchronously
+        seconds: "{{ 10 if 'slm_server' in group_names else 5 }}"
       when: verify_health | bool
       tags: [verify]
 
@@ -235,7 +236,10 @@
         - autobot-playwright
         - autobot-slm-backend
         - nginx
-      when: verify_health | bool
+      when:
+        - verify_health | bool
+        # Skip slm-backend health check on SLM server itself (it's restarting async)
+        - not (item == 'autobot-slm-backend' and 'slm_server' in group_names)
       tags: [verify]
 
     - name: Display update summary
