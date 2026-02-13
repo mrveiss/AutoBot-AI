@@ -48,7 +48,7 @@
     # =========================================================================
     - name: Backend | Sync autobot-user-backend code
       synchronize:
-        src: "{{ playbook_dir }}/../../../autobot-user-backend/"
+        src: "{{ playbook_dir }}/../../autobot-user-backend/"
         dest: "{{ code_base_dir }}/autobot-user-backend/"
         delete: false
         rsync_opts:
@@ -75,7 +75,7 @@
     # =========================================================================
     - name: Frontend | Sync autobot-user-frontend code
       synchronize:
-        src: "{{ playbook_dir }}/../../../autobot-user-frontend/"
+        src: "{{ playbook_dir }}/../../autobot-user-frontend/"
         dest: "{{ code_base_dir }}/autobot-user-frontend/"
         delete: false
         rsync_opts:
@@ -105,7 +105,7 @@
     # =========================================================================
     - name: NPU | Sync autobot-npu-worker code
       synchronize:
-        src: "{{ playbook_dir }}/../../../autobot-npu-worker/"
+        src: "{{ playbook_dir }}/../../autobot-npu-worker/"
         dest: "{{ code_base_dir }}/autobot-npu-worker/"
         delete: false
         rsync_opts:
@@ -130,7 +130,7 @@
     # =========================================================================
     - name: Browser | Sync autobot-browser-worker code
       synchronize:
-        src: "{{ playbook_dir }}/../../../autobot-browser-worker/"
+        src: "{{ playbook_dir }}/../../autobot-browser-worker/"
         dest: "{{ code_base_dir }}/autobot-browser-worker/"
         delete: false
         rsync_opts:
@@ -203,7 +203,7 @@
     # =========================================================================
     - name: Shared | Sync autobot-shared library
       synchronize:
-        src: "{{ playbook_dir }}/../../../autobot-shared/"
+        src: "{{ playbook_dir }}/../../autobot-shared/"
         dest: "{{ code_base_dir }}/autobot-shared/"
         delete: false
         rsync_opts:
