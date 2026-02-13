@@ -12,6 +12,7 @@
 import { ref, computed, readonly } from 'vue'
 import axios, { type AxiosInstance } from 'axios'
 import { useRoles, type Role, type SyncResult } from './useRoles'
+import { formatCommitHash } from '@/utils/commitHashUtils'
 
 // SLM Admin uses the local SLM backend API
 const API_BASE = '/api'
@@ -201,8 +202,8 @@ export function useCodeSync() {
   })
 
   const latestVersionShort = computed(() => {
-    // Return full version - no truncation per user request
-    return latestVersion.value
+    // Return 12-character format for consistency (Issue #866)
+    return formatCommitHash(latestVersion.value)
   })
 
   const totalNodes = computed(() => {

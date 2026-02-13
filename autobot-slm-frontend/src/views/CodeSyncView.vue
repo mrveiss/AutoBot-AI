@@ -20,6 +20,7 @@ import {
   type ScheduleCreateRequest,
 } from '@/composables/useCodeSync'
 import { createLogger } from '@/utils/debugUtils'
+import { getCommitHashDisplay } from '@/utils/commitHashUtils'
 import ScheduleModal from '@/components/ScheduleModal.vue'
 import CodeSourceModal from '@/components/CodeSourceModal.vue'
 import { useCodeSource } from '@/composables/useCodeSource'
@@ -65,6 +66,11 @@ const someSelected = computed(() => {
 
 const selectedCount = computed(() => selectedNodes.value.size)
 
+// Formatted commit hash with full hash for tooltip (Issue #866)
+const codeSourceCommit = computed(() => {
+  return getCommitHashDisplay(codeSourceData.value?.last_known_commit)
+})
+
 // =============================================================================
 // Methods
 // =============================================================================
@@ -87,8 +93,8 @@ function toggleNode(nodeId: string): void {
 }
 
 function formatVersion(version: string | null): string {
-  if (!version) return 'Unknown'
-  return version  // Return full version - no truncation
+  // Use 12-character format for consistency (Issue #866)
+  return getCommitHashDisplay(version).display
 }
 
 function formatDate(dateStr: string | null): string {
@@ -322,7 +328,10 @@ onMounted(async () => {
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div>
           <span class="text-sm text-gray-500 block mb-1">Latest Version</span>
-          <span class="text-lg font-semibold font-mono text-gray-900">
+          <span
+            class="text-lg font-semibold font-mono text-gray-900 cursor-help"
+            :title="codeSync.latestVersion.value || 'Full commit hash unavailable'"
+          >
             {{ formatVersion(codeSync.latestVersion.value) }}
           </span>
         </div>
@@ -381,7 +390,13 @@ onMounted(async () => {
           <p class="font-medium text-gray-900">{{ codeSourceData.hostname || codeSourceData.node_id }}</p>
           <p class="text-sm text-gray-500">{{ codeSourceData.repo_path }} ({{ codeSourceData.branch }})</p>
           <p class="text-sm text-gray-500">
-            Last commit: <span class="font-mono">{{ codeSourceData.last_known_commit?.slice(0, 12) || 'Unknown' }}</span>
+            Last commit:
+            <span
+              class="font-mono cursor-help"
+              :title="codeSourceCommit.full || 'Full commit hash unavailable'"
+            >
+              {{ codeSourceCommit.display }}
+            </span>
           </p>
         </div>
         <button @click="handleRemoveCodeSource" class="btn btn-danger text-sm">
@@ -525,7 +540,10 @@ onMounted(async () => {
             <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">
               {{ node.ip_address }}
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">
+            <td
+              class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500 cursor-help"
+              :title="node.current_version || 'Full commit hash unavailable'"
+            >
               {{ formatVersion(node.current_version) }}
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
