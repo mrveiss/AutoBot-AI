@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # AutoBot - Distributed VM Startup Script (Performance Optimized)
-# ONLY starts backend locally (172.16.168.20:8001)
+# ONLY starts backend locally (0.0.0.0:8443 HTTPS)
 # Connects to existing services running on distributed VMs
 
 set -e
@@ -76,8 +76,9 @@ declare -A VMS=(
 )
 
 # Service ports - Using SSOT env vars with fallbacks
-BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-172.16.168.20}"
-BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8001}"
+# Backend binds to 0.0.0.0 to accept VM connections (Issue #858)
+BACKEND_HOST="${AUTOBOT_BACKEND_HOST:-0.0.0.0}"
+BACKEND_PORT="${AUTOBOT_BACKEND_PORT:-8443}"
 FRONTEND_PORT="${AUTOBOT_FRONTEND_PORT:-5173}"
 REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
 BROWSER_PORT="${AUTOBOT_BROWSER_SERVICE_PORT:-3000}"
@@ -89,7 +90,7 @@ print_usage() {
 ${GREEN}AutoBot - Distributed VM Startup Script (Performance Optimized)${NC}
 
 ${YELLOW}DISTRIBUTED ARCHITECTURE:${NC}
-  This script ONLY starts the backend locally on WSL (${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001})
+  This script ONLY starts the backend locally on WSL (${AUTOBOT_BACKEND_HOST:-0.0.0.0}:${AUTOBOT_BACKEND_PORT:-8443})
   All other services run on separate VMs and must be started separately.
 
 ${YELLOW}VM Services:${NC}
@@ -99,7 +100,7 @@ ${YELLOW}VM Services:${NC}
   Browser:    ${AUTOBOT_BROWSER_SERVICE_HOST:-172.16.168.25}:${AUTOBOT_BROWSER_SERVICE_PORT:-3000} (Web Automation)
 
 ${YELLOW}Local Services (Main Machine):${NC}
-  Backend:    ${AUTOBOT_BACKEND_HOST:-172.16.168.20}:${AUTOBOT_BACKEND_PORT:-8001} (FastAPI)
+  Backend:    ${AUTOBOT_BACKEND_HOST:-0.0.0.0}:${AUTOBOT_BACKEND_PORT:-8443} (FastAPI/HTTPS)
   Ollama:     localhost:11434 (AI LLM)
 
 Usage: $0 [MODE] [OPTIONS]
@@ -393,10 +394,10 @@ show_system_status() {
     echo ""
 
     # Backend Status (Local WSL)
-    echo -e "${CYAN}🔧 Backend Service (WSL - ${AUTOBOT_BACKEND_HOST:-172.16.168.20}):${NC}"
-    if curl -s http://$BACKEND_HOST:$BACKEND_PORT/api/health &> /dev/null; then
+    echo -e "${CYAN}🔧 Backend Service (WSL - ${AUTOBOT_BACKEND_HOST:-0.0.0.0}):${NC}"
+    if curl -s -k https://$BACKEND_HOST:$BACKEND_PORT/api/health &> /dev/null; then
         echo -e "${GREEN}  ✅ Backend Running${NC}"
-        echo -e "${BLUE}    URL: http://$BACKEND_HOST:$BACKEND_PORT${NC}"
+        echo -e "${BLUE}    URL: https://$BACKEND_HOST:$BACKEND_PORT${NC}"
     else
         echo -e "${RED}  ❌ Backend Not Responding${NC}"
         echo -e "${YELLOW}    Start with: bash run_autobot.sh --dev${NC}"
