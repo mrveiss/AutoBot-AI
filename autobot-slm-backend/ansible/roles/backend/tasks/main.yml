@@ -32,6 +32,7 @@
     - "{{ backend_install_dir }}"
     - "{{ backend_log_dir }}"
     - "{{ backend_data_dir }}"
+    - "{{ backend_data_dir }}/conversation_files"
 
 - name: Create backend symlink for imports
   ansible.builtin.file:

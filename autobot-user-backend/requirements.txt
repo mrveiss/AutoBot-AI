@@ -23,4 +23,9 @@ sentence-transformers>=2.2.0
 # Issue #858: Additional runtime dependencies for Python 3.13
 xxhash>=3.6.0          # Hash functions for LLM caching
 structlog>=25.5.0      # Structured logging for service auth
-llama-index>=0.12.0    # RAG and knowledge base framework
+llama-index>=0.10.0,<0.11.0    # RAG framework (pinned for API compatibility)
+llama-index-llms-ollama>=0.1.0,<0.2.0  # Ollama LLM integration (older API)
+llama-index-embeddings-ollama>=0.1.0,<0.2.0  # Ollama embeddings (older API)
+llama-index-vector-stores-chroma>=0.1.0,<0.2.0  # ChromaDB vector store (older API)
+langchain>=0.1.0,<0.2.0       # LangChain with Tool API (not 0.3+)
+markdownify>=0.11.0  # HTML to Markdown conversion

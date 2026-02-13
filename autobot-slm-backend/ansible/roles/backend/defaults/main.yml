@@ -33,6 +33,11 @@ backend_redis_password: ""
 backend_secret_key: "change-me-in-production"
 backend_cors_origins: "*"
 
+# LLM Configuration (Issue #858)
+backend_llm_provider: "ollama"  # Default LLM provider for all agents
+backend_llm_endpoint: "http://127.0.0.1:11434"  # Default Ollama endpoint
+backend_llm_model: "mistral:7b-instruct"  # Default LLM model
+
 # Service Authentication
 service_auth_service_id: "main-backend"
 service_auth_keys_dir: "/etc/autobot/service-keys"
