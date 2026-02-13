@@ -12,8 +12,6 @@
 
 import { ref } from 'vue'
 import axios from 'axios'
-import { useAuthStore } from '@/stores/auth'
-import { getBackendUrl } from '@/config/ssot-config'
 
 export interface CodeSource {
   node_id: string
@@ -37,12 +35,10 @@ export function useCodeSource() {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
-  const API_BASE = getBackendUrl()
-  const authStore = useAuthStore()
-
-  const api = axios.create({ baseURL: API_BASE, timeout: 15000 })
+  // Use relative path for same-origin SLM backend API (Issue #860)
+  const api = axios.create({ baseURL: '/api', timeout: 15000 })
   api.interceptors.request.use((config) => {
-    const token = authStore.token
+    const token = localStorage.getItem('slm_access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -57,7 +53,8 @@ export function useCodeSource() {
     error.value = null
 
     try {
-      const response = await api.get<CodeSource | null>('/api/code-source')
+      // Fix double-prefix: baseURL is /api, endpoint is /code-source (Issue #860)
+      const response = await api.get<CodeSource | null>('/code-source')
       codeSource.value = response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
@@ -83,7 +80,8 @@ export function useCodeSource() {
     error.value = null
 
     try {
-      const response = await api.post<CodeSource>('/api/code-source/assign', {
+      // Fix double-prefix: baseURL is /api, endpoint is /code-source/assign (Issue #860)
+      const response = await api.post<CodeSource>('/code-source/assign', {
         node_id: nodeId,
         repo_path: repoPath,
         branch,
@@ -107,7 +105,8 @@ export function useCodeSource() {
     error.value = null
 
     try {
-      await api.delete('/api/code-source/assign')
+      // Fix double-prefix: baseURL is /api, endpoint is /code-source/assign (Issue #860)
+      await api.delete('/code-source/assign')
       codeSource.value = null
       return true
     } catch (e: unknown) {
