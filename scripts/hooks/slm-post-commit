@@ -15,8 +15,8 @@ set -e
 
 # SLM server configuration
 SLM_HOST="${AUTOBOT_SLM_HOST:-172.16.168.19}"
-SLM_PORT="${AUTOBOT_SLM_PORT:-8000}"
-SLM_URL="https://${SLM_HOST}:${SLM_PORT}"
+# Port 443 for nginx HTTPS (not 8000 which is backend localhost only)
+SLM_URL="https://${SLM_HOST}"
 
 # Code-source node ID (whichever node has the code-source role assigned)
 CODE_SOURCE_NODE_ID="${AUTOBOT_CODE_SOURCE_NODE:-01-Backend}"
