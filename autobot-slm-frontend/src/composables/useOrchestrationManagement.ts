@@ -207,11 +207,11 @@ export function useOrchestrationManagement() {
   async function fetchFleetServices(): Promise<FleetServicesResponse | null> {
     loading.value = true
     error.value = null
-    logger.info('Fetching fleet services from /orchestration/fleet/services')
+    logger.info('Fetching fleet services from /fleet/services')
 
     try {
       const response = await client.get<FleetServicesResponse>(
-        '/orchestration/fleet/services'
+        '/fleet/services'
       )
       logger.info('Fleet services response:', {
         serviceCount: response.data.services?.length,
@@ -247,7 +247,7 @@ export function useOrchestrationManagement() {
     error.value = null
 
     try {
-      await client.patch(`/orchestration/fleet/services/${serviceName}/category`, {
+      await client.patch(`/fleet/services/${serviceName}/category`, {
         category,
       } as ServiceCategoryUpdate)
       logger.info(`Updated ${serviceName} category to ${category}`)
@@ -264,7 +264,7 @@ export function useOrchestrationManagement() {
 
     try {
       const response = await client.post<ServiceActionResponse>(
-        `/orchestration/fleet/services/${serviceName}/start`
+        `/fleet/services/${serviceName}/start`
       )
       logger.info(`Fleet start ${serviceName}:`, response.data.message)
       return response.data
@@ -280,7 +280,7 @@ export function useOrchestrationManagement() {
 
     try {
       const response = await client.post<ServiceActionResponse>(
-        `/orchestration/fleet/services/${serviceName}/stop`
+        `/fleet/services/${serviceName}/stop`
       )
       logger.info(`Fleet stop ${serviceName}:`, response.data.message)
       return response.data
@@ -296,7 +296,7 @@ export function useOrchestrationManagement() {
 
     try {
       const response = await client.post<ServiceActionResponse>(
-        `/orchestration/fleet/services/${serviceName}/restart`
+        `/fleet/services/${serviceName}/restart`
       )
       logger.info(`Fleet restart ${serviceName}:`, response.data.message)
       return response.data
