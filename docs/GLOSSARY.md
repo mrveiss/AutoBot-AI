@@ -13,7 +13,7 @@ A document that captures an important architectural decision along with its cont
 An autonomous AI component that can perform specific tasks. AutoBot uses multiple specialized agents including KB Librarian, RAG Agent, and Task Agents.
 
 ### API Gateway
-The central entry point for all API requests, handling routing, authentication, and rate limiting. Located at `172.16.168.20:8001`.
+The central entry point for all API requests, handling routing, authentication, and rate limiting. Located at `172.16.168.20:8443` (HTTPS).
 
 ### Async Client
 A non-blocking Redis or HTTP client that allows concurrent operations. Used for high-performance data access.

@@ -32,7 +32,7 @@ The Redis Service Management API provides comprehensive control over the Redis s
 ### Base URL
 
 ```
-http://172.16.168.20:8001/api/services/redis
+https://172.16.168.20:8443/api/services/redis
 ```
 
 ### API Versioning
@@ -107,7 +107,7 @@ Operations are restricted based on user roles:
 
 ```bash
 curl -X POST \
-  http://172.16.168.20:8001/api/services/redis/start \
+  https://172.16.168.20:8443/api/services/redis/start \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -182,7 +182,7 @@ curl -X POST \
 
 ```bash
 curl -X POST \
-  http://172.16.168.20:8001/api/services/redis/stop \
+  https://172.16.168.20:8443/api/services/redis/stop \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"confirmation": true}'
@@ -252,7 +252,7 @@ curl -X POST \
 
 ```bash
 curl -X POST \
-  http://172.16.168.20:8001/api/services/redis/restart \
+  https://172.16.168.20:8443/api/services/redis/restart \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -314,7 +314,7 @@ curl -X POST \
 
 ```bash
 curl -X GET \
-  http://172.16.168.20:8001/api/services/redis/status
+  https://172.16.168.20:8443/api/services/redis/status
 ```
 
 **Example Response (Running):**
@@ -424,7 +424,7 @@ curl -X GET \
 
 ```bash
 curl -X GET \
-  http://172.16.168.20:8001/api/services/redis/health
+  https://172.16.168.20:8443/api/services/redis/health
 ```
 
 **Example Response (Healthy):**
@@ -560,7 +560,7 @@ curl -X GET \
 
 ```bash
 curl -X GET \
-  "http://172.16.168.20:8001/api/services/redis/logs?lines=20&level=error" \
+  "https://172.16.168.20:8443/api/services/redis/logs?lines=20&level=error" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
@@ -602,7 +602,7 @@ curl -X GET \
 ```bash
 # Start Redis service as operator
 curl -X POST \
-  http://172.16.168.20:8001/api/services/redis/start \
+  https://172.16.168.20:8443/api/services/redis/start \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Content-Type: application/json"
 ```
@@ -612,7 +612,7 @@ curl -X POST \
 ```bash
 # Stop Redis service with confirmation
 curl -X POST \
-  http://172.16.168.20:8001/api/services/redis/stop \
+  https://172.16.168.20:8443/api/services/redis/stop \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Content-Type: application/json" \
   -d '{
@@ -625,7 +625,7 @@ curl -X POST \
 ```bash
 # Restart Redis service
 curl -X POST \
-  http://172.16.168.20:8001/api/services/redis/restart \
+  https://172.16.168.20:8443/api/services/redis/restart \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
   -H "Content-Type: application/json"
 ```
@@ -635,7 +635,7 @@ curl -X POST \
 ```bash
 # Get current status (no authentication required)
 curl -X GET \
-  http://172.16.168.20:8001/api/services/redis/status
+  https://172.16.168.20:8443/api/services/redis/status
 ```
 
 #### Get Health (Public)
@@ -643,7 +643,7 @@ curl -X GET \
 ```bash
 # Get detailed health status
 curl -X GET \
-  http://172.16.168.20:8001/api/services/redis/health
+  https://172.16.168.20:8443/api/services/redis/health
 ```
 
 #### Get Logs (Admin)
@@ -651,7 +651,7 @@ curl -X GET \
 ```bash
 # Get last 100 error logs
 curl -X GET \
-  "http://172.16.168.20:8001/api/services/redis/logs?lines=100&level=error" \
+  "https://172.16.168.20:8443/api/services/redis/logs?lines=100&level=error" \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
 
@@ -732,7 +732,7 @@ class RedisServiceClient:
 
 # Usage example
 client = RedisServiceClient(
-    base_url='http://172.16.168.20:8001',
+    base_url='https://172.16.168.20:8443',
     api_token='your_jwt_token_here'
 )
 
@@ -896,7 +896,7 @@ X-RateLimit-Reset: 1696950000
 
 ### WebSocket Connection
 
-**Endpoint:** `ws://172.16.168.20:8001/ws/services/redis/status`
+**Endpoint:** `ws://172.16.168.20:8443/ws/services/redis/status`
 
 **Authentication:** Required (JWT token in URL parameter or header)
 
@@ -906,7 +906,7 @@ X-RateLimit-Reset: 1696950000
 // JavaScript WebSocket connection
 const token = 'your_jwt_token_here';
 const ws = new WebSocket(
-  `ws://172.16.168.20:8001/ws/services/redis/status?token=${token}`
+  `ws://172.16.168.20:8443/ws/services/redis/status?token=${token}`
 );
 
 ws.onopen = () => {
@@ -1017,7 +1017,7 @@ function useRedisServiceStatus(token) {
 
   useEffect(() => {
     const ws = new WebSocket(
-      `ws://172.16.168.20:8001/ws/services/redis/status?token=${token}`
+      `ws://172.16.168.20:8443/ws/services/redis/status?token=${token}`
     );
 
     ws.onopen = () => {

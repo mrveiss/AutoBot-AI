@@ -402,7 +402,7 @@ async def log_async_operation():
 uvicorn.run(
     "app:app",
     host="0.0.0.0",
-    port=8001,
+    port=8443,
     workers=4,           # Multiple worker processes
     loop="uvloop",       # High-performance event loop
     http="httptools",    # Fast HTTP parsing

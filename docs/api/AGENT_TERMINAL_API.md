@@ -89,7 +89,7 @@ Create a new terminal session for an AI agent.
 #### Example
 
 ```bash
-curl -X POST http://172.16.168.20:8001/api/agent-terminal/sessions \
+curl -X POST https://172.16.168.20:8443/api/agent-terminal/sessions \
   -H "Content-Type: application/json" \
   -d '{
     "agent_id": "chat_agent_1",
@@ -138,13 +138,13 @@ List agent terminal sessions with optional filtering.
 
 ```bash
 # List all sessions
-curl http://172.16.168.20:8001/api/agent-terminal/sessions
+curl https://172.16.168.20:8443/api/agent-terminal/sessions
 
 # List sessions for specific agent
-curl http://172.16.168.20:8001/api/agent-terminal/sessions?agent_id=chat_agent_1
+curl https://172.16.168.20:8443/api/agent-terminal/sessions?agent_id=chat_agent_1
 
 # List sessions for specific conversation
-curl http://172.16.168.20:8001/api/agent-terminal/sessions?conversation_id=conv_abc123
+curl https://172.16.168.20:8443/api/agent-terminal/sessions?conversation_id=conv_abc123
 ```
 
 ---
@@ -183,7 +183,7 @@ Get detailed information about a specific agent terminal session.
 #### Example
 
 ```bash
-curl http://172.16.168.20:8001/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000
+curl https://172.16.168.20:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000
 ```
 
 ---
@@ -206,7 +206,7 @@ Close and delete an agent terminal session.
 #### Example
 
 ```bash
-curl -X DELETE http://172.16.168.20:8001/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000
+curl -X DELETE https://172.16.168.20:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000
 ```
 
 ---
@@ -279,7 +279,7 @@ Execute a command in an agent terminal session with security controls.
 
 ```bash
 # Execute safe command (auto-approved)
-curl -X POST "http://172.16.168.20:8001/api/agent-terminal/execute?session_id=550e8400-e29b-41d4-a716-446655440000" \
+curl -X POST "https://172.16.168.20:8443/api/agent-terminal/execute?session_id=550e8400-e29b-41d4-a716-446655440000" \
   -H "Content-Type: application/json" \
   -d '{
     "command": "echo \"Hello World\"",
@@ -287,7 +287,7 @@ curl -X POST "http://172.16.168.20:8001/api/agent-terminal/execute?session_id=55
   }'
 
 # Execute moderate command (requires approval)
-curl -X POST "http://172.16.168.20:8001/api/agent-terminal/execute?session_id=550e8400-e29b-41d4-a716-446655440000" \
+curl -X POST "https://172.16.168.20:8443/api/agent-terminal/execute?session_id=550e8400-e29b-41d4-a716-446655440000" \
   -H "Content-Type: application/json" \
   -d '{
     "command": "mkdir /tmp/test_dir",
@@ -340,7 +340,7 @@ Approve or deny a pending agent command.
 
 ```bash
 # Approve command
-curl -X POST http://172.16.168.20:8001/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/approve \
+curl -X POST https://172.16.168.20:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/approve \
   -H "Content-Type: application/json" \
   -d '{
     "approved": true,
@@ -348,7 +348,7 @@ curl -X POST http://172.16.168.20:8001/api/agent-terminal/sessions/550e8400-e29b
   }'
 
 # Deny command
-curl -X POST http://172.16.168.20:8001/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/approve \
+curl -X POST https://172.16.168.20:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/approve \
   -H "Content-Type: application/json" \
   -d '{
     "approved": false,
@@ -390,7 +390,7 @@ User interrupts agent and takes control of the terminal session.
 #### Example
 
 ```bash
-curl -X POST http://172.16.168.20:8001/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/interrupt \
+curl -X POST https://172.16.168.20:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/interrupt \
   -H "Content-Type: application/json" \
   -d '{
     "user_id": "user_123"
@@ -418,7 +418,7 @@ Resume agent control after user interrupt.
 #### Example
 
 ```bash
-curl -X POST http://172.16.168.20:8001/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/resume
+curl -X POST https://172.16.168.20:8443/api/agent-terminal/sessions/550e8400-e29b-41d4-a716-446655440000/resume
 ```
 
 ---
@@ -512,7 +512,7 @@ import httpx
 async def create_agent_session():
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            "http://172.16.168.20:8001/api/agent-terminal/sessions",
+            "https://172.16.168.20:8443/api/agent-terminal/sessions",
             json={
                 "agent_id": "chat_agent_1",
                 "agent_role": "chat_agent",
@@ -525,7 +525,7 @@ async def create_agent_session():
 async def execute_command(session_id, command):
     async with httpx.AsyncClient() as client:
         response = await client.post(
-            f"http://172.16.168.20:8001/api/agent-terminal/execute?session_id={session_id}",
+            f"https://172.16.168.20:8443/api/agent-terminal/execute?session_id={session_id}",
             json={
                 "command": command,
                 "description": "Agent command"

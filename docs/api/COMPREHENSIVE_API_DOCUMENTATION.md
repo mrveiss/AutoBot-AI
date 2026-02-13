@@ -9,14 +9,14 @@ Status: **Production Ready** - All endpoints documented with schemas and example
 AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoints across 63 API modules, providing complete control over the distributed multi-modal AI system.
 
 ### API Architecture Summary
-- **Base URL**: `http://127.0.0.1:8001/api` (Development) | `https://your-domain.com/api` (Production)
+- **Base URL**: `http://127.0.0.1:8443/api` (Development) | `https://your-domain.com/api` (Production)
 - **Authentication**: Bearer token (where required)
 - **Content Type**: `application/json`
 - **Rate Limiting**: 100 requests/minute per IP (configurable)
 - **API Version**: v1 (versioned endpoints use `/api/v1/`)
 
 ### Service Distribution
-- **Main Backend**: 127.0.0.1:8001 - Core API and system management
+- **Main Backend**: 127.0.0.1:8443 - Core API and system management
 - **Frontend**: 172.16.168.21:5173 - Vue.js web interface
 - **NPU Worker**: 172.16.168.22:8081 - Hardware AI acceleration
 - **Redis**: 172.16.168.23:6379 - Data persistence layer
@@ -236,7 +236,7 @@ AutoBot's Phase 5 architecture exposes a comprehensive REST API with 518+ endpoi
         "response_time": 0.05,
         "uptime": "5d 12h 30m",
         "version": "5.0.0",
-        "host": "127.0.0.1:8001"
+        "host": "127.0.0.1:8443"
       },
       "redis": {
         "status": "healthy",
@@ -722,11 +722,11 @@ When `current_password` is null or omitted, the endpoint operates in admin reset
 ## Advanced Features
 
 ### WebSocket Real-Time Communication
-**Endpoint**: `ws://127.0.0.1:8001/ws/{session_id}`
+**Endpoint**: `ws://127.0.0.1:8443/ws/{session_id}`
 
 **Connection Example**:
 ```javascript
-const ws = new WebSocket('ws://127.0.0.1:8001/ws/session_123');
+const ws = new WebSocket('ws://127.0.0.1:8443/ws/session_123');
 
 // Subscribe to system events
 ws.send(JSON.stringify({
@@ -844,14 +844,14 @@ X-RateLimit-Window: 60
 ```bash
 curl -H "Authorization: Bearer api_key_here" \
      -H "Content-Type: application/json" \
-     https://127.0.0.1:8001/api/system/health
+     https://127.0.0.1:8443/api/system/health
 ```
 
 ### JWT Token Authentication  
 ```bash
 curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
      -H "Content-Type: application/json" \
-     https://127.0.0.1:8001/api/workflows
+     https://127.0.0.1:8443/api/workflows
 ```
 
 ## SDK Examples
@@ -861,7 +861,7 @@ curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
 from autobot_sdk import AutoBotClient
 
 client = AutoBotClient(
-    base_url="http://127.0.0.1:8001/api",
+    base_url="http://127.0.0.1:8443/api",
     api_key="your_api_key_here"
 )
 
@@ -897,7 +897,7 @@ workflow = await client.workflows.create({
 import { AutoBotClient } from '@autobot/sdk';
 
 const client = new AutoBotClient({
-  baseURL: 'http://127.0.0.1:8001/api',
+  baseURL: 'http://127.0.0.1:8443/api',
   apiKey: 'your_api_key_here'
 });
 
@@ -928,5 +928,5 @@ const uploadResult = await client.files.upload({
 
 **Support**:
 - Documentation: `/docs/api/`
-- Interactive API Explorer: `http://127.0.0.1:8001/docs`
-- WebSocket Test Client: `http://127.0.0.1:8001/ws-test`
+- Interactive API Explorer: `http://127.0.0.1:8443/docs`
+- WebSocket Test Client: `http://127.0.0.1:8443/ws-test`

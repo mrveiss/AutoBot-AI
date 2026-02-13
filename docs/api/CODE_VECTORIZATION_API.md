@@ -1,7 +1,7 @@
 # Code Vectorization API Specification
 **Version**: 1.0
 **Date**: 2025-10-25
-**Base URL**: `http://172.16.168.20:8001/api/analytics/code`
+**Base URL**: `https://172.16.168.20:8443/api/analytics/code`
 
 ---
 
@@ -64,7 +64,7 @@ Trigger code vectorization for the codebase.
         "status": "in_progress",
         "estimated_time_seconds": 120,
         "total_files": 450,
-        "websocket_url": "ws://172.16.168.20:8001/ws/vectorization/550e8400-e29b-41d4-a716-446655440000"
+        "websocket_url": "wss://172.16.168.20:8443/ws/vectorization/550e8400-e29b-41d4-a716-446655440000"
     }
 }
 ```
@@ -563,7 +563,7 @@ Get cache statistics.
 
 ### Vectorization Progress
 
-**Endpoint:** `ws://172.16.168.20:8001/ws/vectorization/{job_id}`
+**Endpoint:** `wss://172.16.168.20:8443/ws/vectorization/{job_id}`
 
 **Message Types:**
 

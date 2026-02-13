@@ -1,18 +1,18 @@
 # AutoBot Frontend Integration API Specifications
 
 ## Overview
-This document provides complete API specifications for frontend integration with the AutoBot backend system. The backend runs on `http://172.16.168.20:8001/` and provides 285+ documented endpoints across multiple service modules.
+This document provides complete API specifications for frontend integration with the AutoBot backend system. The backend runs on `https://172.16.168.20:8443/` and provides 285+ documented endpoints across multiple service modules.
 
 ## Base Configuration
 
 ### Backend API Base URL
 ```
-http://172.16.168.20:8001/
+https://172.16.168.20:8443/
 ```
 
 ### OpenAPI Documentation
-- **Swagger UI**: `http://172.16.168.20:8001/docs`  
-- **OpenAPI JSON**: `http://172.16.168.20:8001/openapi.json`
+- **Swagger UI**: `https://172.16.168.20:8443/docs`  
+- **OpenAPI JSON**: `https://172.16.168.20:8443/openapi.json`
 
 ## Core API Endpoints
 
@@ -273,12 +273,12 @@ Content-Type: application/json
 
 #### Main WebSocket Connection
 ```javascript
-const ws = new WebSocket('ws://172.16.168.20:8001/ws');
+const ws = new WebSocket('ws://172.16.168.20:8443/ws');
 ```
 
 #### Test WebSocket Connection
 ```javascript
-const ws = new WebSocket('ws://172.16.168.20:8001/ws-test');
+const ws = new WebSocket('ws://172.16.168.20:8443/ws-test');
 ```
 
 #### WebSocket Message Types
@@ -590,7 +590,7 @@ Content-Type: application/json
 #### React/TypeScript Example
 ```typescript
 // API client configuration
-const API_BASE = 'http://172.16.168.20:8001';
+const API_BASE = 'https://172.16.168.20:8443';
 
 interface ChatMessage {
   message: string;
@@ -613,18 +613,18 @@ async function createNewChat(): Promise<string> {
       'Content-Type': 'application/json',
     },
   });
-  
+
   if (!response.ok) {
     throw new Error(`Failed to create chat: ${response.statusText}`);
   }
-  
+
   const data = await response.json();
   return data.chat_id;
 }
 
 // Send chat message
 async function sendChatMessage(
-  chatId: string, 
+  chatId: string,
   message: ChatMessage
 ): Promise<ChatResponse> {
   const response = await fetch(
@@ -637,31 +637,31 @@ async function sendChatMessage(
       body: JSON.stringify(message),
     }
   );
-  
+
   if (!response.ok) {
     throw new Error(`Failed to send message: ${response.statusText}`);
   }
-  
+
   return await response.json();
 }
 
 // WebSocket connection
 function connectWebSocket(onMessage: (data: any) => void) {
-  const ws = new WebSocket(`ws://172.16.168.20:8001/ws`);
-  
+  const ws = new WebSocket(`ws://172.16.168.20:8443/ws`);
+
   ws.onopen = () => {
     console.log('WebSocket connected');
   };
-  
+
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
     onMessage(data);
   };
-  
+
   ws.onerror = (error) => {
     console.error('WebSocket error:', error);
   };
-  
+
   return ws;
 }
 ```
@@ -690,7 +690,7 @@ export function useChatAPI() {
 
   const sendMessage = async (message: string) => {
     if (!chatId.value) await createChat();
-    
+
     try {
       const response = await fetch(
         `/api/async_chat/chats/${chatId.value}/message`,
@@ -700,7 +700,7 @@ export function useChatAPI() {
           body: JSON.stringify({ message }),
         }
       );
-      
+
       const result = await response.json();
       messages.value.push(result);
     } catch (error) {
@@ -709,17 +709,17 @@ export function useChatAPI() {
   };
 
   const connectWebSocket = () => {
-    ws.value = new WebSocket('ws://172.16.168.20:8001/ws');
-    
+    ws.value = new WebSocket('ws://172.16.168.20:8443/ws');
+
     ws.value.onopen = () => {
       isConnected.value = true;
     };
-    
+
     ws.value.onmessage = (event) => {
       const data = JSON.parse(event.data);
       // Handle real-time updates
     };
-    
+
     ws.value.onclose = () => {
       isConnected.value = false;
     };
@@ -783,7 +783,7 @@ async function retryWithBackoff(
       return await fn();
     } catch (error) {
       if (attempt === maxRetries - 1) throw error;
-      
+
       const delay = baseDelay * Math.pow(2, attempt);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
@@ -803,7 +803,7 @@ async function systemHealthCheck() {
     '/api/chat_knowledge/health',
     '/api/monitoring/services/health'
   ];
-  
+
   for (const endpoint of endpoints) {
     try {
       const response = await fetch(`${API_BASE}${endpoint}`);
@@ -819,17 +819,17 @@ async function systemHealthCheck() {
 ```typescript
 // Test WebSocket connectivity and message handling
 function testWebSocket() {
-  const ws = new WebSocket('ws://172.16.168.20:8001/ws-test');
-  
+  const ws = new WebSocket('ws://172.16.168.20:8443/ws-test');
+
   ws.onopen = () => {
     console.log('Test WebSocket connected');
     ws.send('test message');
   };
-  
+
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
     console.log('Received:', data);
-    
+
     if (data.type === 'echo') {
       console.log('Echo test successful');
       ws.close();

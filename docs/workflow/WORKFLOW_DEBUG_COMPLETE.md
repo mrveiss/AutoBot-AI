@@ -135,7 +135,7 @@ python3 test_workflow_execution.py
 
 ### ✅ **Live API Tests**
 ```bash
-curl -X POST "http://localhost:8001/api/workflow/execute" \
+curl -X POST "https://localhost:8443/api/workflow/execute" \
   -H "Content-Type: application/json" \
   -d '{"user_message":"I need to scan my network for security vulnerabilities"}'
 

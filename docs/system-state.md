@@ -192,7 +192,7 @@ Navigate: AutoBot UI → Monitoring → Dashboards
 - **Prometheus** (172.16.168.23:9090) - Metrics collection & storage (30-day retention)
 - **Grafana** (172.16.168.23:3000) - Dashboard visualization (admin/autobot)
 - **AlertManager** (172.16.168.23:9093) - Alert routing & notifications
-- **Backend Metrics** (172.16.168.20:8001) - `/api/monitoring/metrics` endpoint
+- **Backend Metrics** (172.16.168.20:8443) - `/api/monitoring/metrics` endpoint
 
 **Dashboards:**
 1. AutoBot Overview - System-wide health
@@ -1423,7 +1423,7 @@ Desktop access is **enabled by default** on all modes:
 ### Service Layout - Distributed VM Infrastructure
 
 **Infrastructure Overview:**
-- 📡 **Main Machine (WSL)**: `172.16.168.20` - Backend API (port 8001) + Desktop/Terminal VNC (port 6080)
+- 📡 **Main Machine (WSL)**: `172.16.168.20` - Backend API (port 8443) + Desktop/Terminal VNC (port 6080)
 - 🌐 **Remote VMs:**
   - **VM1 Frontend**: `172.16.168.21:5173` - Web interface (SINGLE FRONTEND SERVER)
   - **VM2 NPU Worker**: `172.16.168.22:8081` - Hardware AI acceleration
@@ -1432,7 +1432,7 @@ Desktop access is **enabled by default** on all modes:
   - **VM5 Browser**: `172.16.168.25:3000` - Web automation (Playwright)
 
 **Service Distribution:**
-- **Backend API**: `172.16.168.20:8001` - Main machine
+- **Backend API**: `172.16.168.20:8443` - Main machine
 - **Desktop VNC**: `172.16.168.20:6080` - Main machine
 - **Terminal VNC**: `172.16.168.20:6080` - Main machine
 - **Browser Automation**: `172.16.168.25:3000` - Browser VM
@@ -1506,7 +1506,7 @@ All major issues have been resolved:
 
 The application is now fully functional with:
 
-- Backend responding on port 8001 (main machine)
+- Backend responding on port 8443 (main machine)
 - **Single Frontend VM** running on 172.16.168.21:5173 with proxy to backend
 - **VNC desktop access on port 6080 (enabled by default)**
 - All VM services healthy
@@ -1654,7 +1654,7 @@ All services now start cleanly and maintain stable operations.
 redis-cli -h 172.16.168.23 FLUSHDB
 
 # Repopulate knowledge base after dropping
-curl -X POST http://localhost:8001/api/knowledge_base/rebuild
+curl -X POST https://localhost:8443/api/knowledge_base/rebuild
 
 # All databases designed for safe recreation
 ```
@@ -1982,7 +1982,7 @@ These fixes address the **root architectural causes** rather than symptoms, maki
 
 ```bash
 # Backend health
-curl http://localhost:8001/api/health
+curl https://localhost:8443/api/health
 
 # Redis connection
 redis-cli -h 172.16.168.23 ping

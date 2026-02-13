@@ -18,7 +18,7 @@ redis:
   container_name: autobot-redis
   ports:
     - "6379:6379"    # Redis server
-    - "8002:8001"    # RedisInsight web interface
+    - "8002:8443"    # RedisInsight web interface
   volumes:
     - redis_data:/data
     - ./config/redis.conf:/usr/local/etc/redis/redis.conf
@@ -66,7 +66,7 @@ REDIS_CONFIG = {
 class RedisManager:
     def __init__(self):
         self.sessions_db = redis.Redis(db=0, **REDIS_CONFIG)
-        self.chat_db = redis.Redis(db=1, **REDIS_CONFIG) 
+        self.chat_db = redis.Redis(db=1, **REDIS_CONFIG)
         self.knowledge_db = redis.Redis(db=2, **REDIS_CONFIG)
         self.cache_db = redis.Redis(db=3, **REDIS_CONFIG)
         self.websocket_db = redis.Redis(db=4, **REDIS_CONFIG)
@@ -76,7 +76,7 @@ class RedisManager:
 ### Frontend Configuration
 ```javascript
 // Frontend connects through backend API, not directly to Redis
-const API_BASE_URL = process.env.VITE_API_BASE_URL || 'http://host.docker.internal:8001';
+const API_BASE_URL = process.env.VITE_API_BASE_URL || 'http://host.docker.internal:8443';
 ```
 
 ## Data Structures

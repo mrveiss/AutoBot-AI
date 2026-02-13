@@ -62,7 +62,7 @@ Successfully orchestrating specialized agents:
 
 ### API Test
 ```bash
-curl -X POST "http://localhost:8001/api/workflow/execute" \
+curl -X POST "https://localhost:8443/api/workflow/execute" \
   -H "Content-Type: application/json" \
   -d '{"user_message": "find network scanning tools", "auto_approve": true}'
 ```
@@ -83,7 +83,7 @@ curl -X POST "http://localhost:8001/api/workflow/execute" \
 import aiohttp
 async with aiohttp.ClientSession() as session:
     response = await session.post(
-        "http://localhost:8001/api/workflow/execute",
+        "https://localhost:8443/api/workflow/execute",
         json={"user_message": "your complex request", "auto_approve": True}
     )
     result = await response.json()

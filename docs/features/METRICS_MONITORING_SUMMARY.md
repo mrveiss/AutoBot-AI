@@ -234,22 +234,22 @@ system_data = system_monitor.export_resource_data(format="json")
 
 ### **Get Real-time System Status**
 ```bash
-curl http://localhost:8001/api/metrics/system/current
+curl https://localhost:8443/api/metrics/system/current
 ```
 
 ### **Check System Health**
 ```bash
-curl http://localhost:8001/api/metrics/system/health
+curl https://localhost:8443/api/metrics/system/health
 ```
 
 ### **Get Performance Summary**
 ```bash
-curl "http://localhost:8001/api/metrics/performance/summary?time_window_hours=24"
+curl "https://localhost:8443/api/metrics/performance/summary?time_window_hours=24"
 ```
 
 ### **Access Dashboard Data**
 ```bash
-curl http://localhost:8001/api/metrics/dashboard
+curl https://localhost:8443/api/metrics/dashboard
 ```
 
 ---

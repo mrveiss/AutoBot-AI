@@ -10,7 +10,7 @@
 |-----------|------------|---------|----------|
 | `127.0.0.1` | **RESERVED** | Internal processes only | System internal only |
 | `127.0.0.2` | Windows Host | Windows services | Windows-side services |
-| `127.0.0.3` | WSL Kali | AutoBot backend, Ollama | `http://127.0.0.3:8001` |
+| `127.0.0.3` | WSL Kali | AutoBot backend, Ollama | `https://127.0.0.3:8443` |
 | `127.0.0.4` | Playwright | VNC, browser testing | `http://127.0.0.4:6080` |
 | `127.0.0.5` | NPU Worker | AI processing | `http://127.0.0.5:8081` |
 | `127.0.0.6` | AI Stack | ML services | `http://127.0.0.6:8080` |
@@ -22,19 +22,19 @@
 ### **Frontend (Vue.js)**
 ```javascript
 // ✅ CORRECT - Use specific IPs
-BASE_URL: 'http://127.0.0.3:8001'
-WS_BASE_URL: 'ws://127.0.0.3:8001/ws'
+BASE_URL: 'https://127.0.0.3:8443'
+WS_BASE_URL: 'wss://127.0.0.3:8443/ws'
 PLAYWRIGHT_VNC_URL: 'http://127.0.0.4:6080/vnc.html'
 
 // ❌ WRONG - Never use localhost
-BASE_URL: 'http://localhost:8001'  // NO!
+BASE_URL: 'https://localhost:8443'  // NO!
 ```
 
 ### **Backend**
 ```json
 {
   "backend": {
-    "api_endpoint": "http://127.0.0.3:8001",
+    "api_endpoint": "https://127.0.0.3:8443",
     "ollama_endpoint": "http://127.0.0.3:11434"
   }
 }
@@ -66,13 +66,13 @@ BASE_URL: 'http://localhost:8001'  // NO!
 
 ```bash
 # Test backend connectivity
-curl http://127.0.0.3:8001/api/system/health
+curl https://127.0.0.3:8443/api/system/health
 
 # Test VNC access
 curl http://127.0.0.4:6080/vnc.html
 
 # Test from container
-docker exec autobot-playwright-vnc curl http://127.0.0.3:8001/api/system/health
+docker exec autobot-playwright-vnc curl https://127.0.0.3:8443/api/system/health
 ```
 
 ---

@@ -151,7 +151,7 @@ Findings stored in Memory MCP:
 python /home/kali/Desktop/AutoBot/tests/test_session_validation.py
 
 # Test with actual backend (if running)
-curl -X DELETE http://172.16.168.20:8001/api/chat/sessions/test_conv
+curl -X DELETE http://172.16.168.20:8443/api/chat/sessions/test_conv
 
 # Expected: Success (session deleted)
 # Previous: 500 error "Invalid session ID format"

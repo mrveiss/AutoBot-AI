@@ -6,7 +6,7 @@
 ## 🚀 System Health
 
 ### Backend Services
-- **FastAPI Server**: ✅ Running on port 8001
+- **FastAPI Server**: ✅ Running on port 8443
 - **Health Check**: ✅ All systems healthy
 - **LLM Integration**: ✅ Connected (artifish/llama3.2-uncensored:latest)
 - **Redis**: ✅ Connected with search module loaded

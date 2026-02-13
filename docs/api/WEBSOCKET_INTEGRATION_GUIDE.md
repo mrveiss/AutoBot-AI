@@ -6,9 +6,9 @@ This guide provides comprehensive WebSocket integration patterns for real-time c
 ## WebSocket Endpoints
 
 ### Primary Endpoints
-- **Main WebSocket**: `ws://172.16.168.20:8001/ws`
-- **Test WebSocket**: `ws://172.16.168.20:8001/ws-test`
-- **Health Check**: `ws://172.16.168.20:8001/ws/health`
+- **Main WebSocket**: `wss://172.16.168.20:8443/ws`
+- **Test WebSocket**: `wss://172.16.168.20:8443/ws-test`
+- **Health Check**: `wss://172.16.168.20:8443/ws/health`
 
 ## Message Formats
 
@@ -53,7 +53,7 @@ This guide provides comprehensive WebSocket integration patterns for real-time c
 
 // AI/Bot response
 {
-  "type": "llm_response", 
+  "type": "llm_response",
   "payload": {
     "response": "AI response content",
     "chat_id": "uuid",
@@ -105,7 +105,7 @@ This guide provides comprehensive WebSocket integration patterns for real-time c
 
 // Command execution completed
 {
-  "type": "command_execution_end", 
+  "type": "command_execution_end",
   "payload": {
     "execution_id": "exec-uuid",
     "status": "success|failed",
@@ -123,7 +123,7 @@ This guide provides comprehensive WebSocket integration patterns for real-time c
   "type": "workflow_step_started",
   "payload": {
     "workflow_id": "workflow-uuid",
-    "description": "Step description", 
+    "description": "Step description",
     "step_number": 1,
     "total_steps": 5
   }
@@ -145,7 +145,7 @@ This guide provides comprehensive WebSocket integration patterns for real-time c
 {
   "type": "workflow_approval_required",
   "payload": {
-    "workflow_id": "workflow-uuid", 
+    "workflow_id": "workflow-uuid",
     "description": "Action requiring approval",
     "action": "delete_file|install_package|modify_config",
     "details": {}
@@ -212,7 +212,7 @@ This guide provides comprehensive WebSocket integration patterns for real-time c
   "type": "llm_status",
   "payload": {
     "status": "connected|disconnected|reconnecting",
-    "model": "model-name", 
+    "model": "model-name",
     "message": "Status details"
   }
 }
@@ -266,7 +266,7 @@ This guide provides comprehensive WebSocket integration patterns for real-time c
 
 // Tool execution output
 {
-  "type": "tool_output", 
+  "type": "tool_output",
   "payload": {
     "output": "Hello World\n",
     "tool": "python_interpreter",
@@ -355,7 +355,7 @@ This guide provides comprehensive WebSocket integration patterns for real-time c
 
 // Cancel workflow
 {
-  "type": "workflow_cancel", 
+  "type": "workflow_cancel",
   "payload": {
     "workflow_id": "workflow-uuid",
     "reason": "User cancelled"
@@ -387,15 +387,15 @@ export function useWebSocket(url: string, options: UseWebSocketOptions = {}) {
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  
+
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
-  
+
   const {
     onMessage,
     onConnect,
-    onDisconnect, 
+    onDisconnect,
     onError,
     reconnectAttempts = 5,
     reconnectDelay = 1000
@@ -422,7 +422,7 @@ export function useWebSocket(url: string, options: UseWebSocketOptions = {}) {
           const message: WebSocketMessage = JSON.parse(event.data);
           setLastMessage(message);
           onMessage?.(message);
-          
+
           // Handle ping-pong
           if (message.type === 'ping') {
             sendMessage({ type: 'pong' });
@@ -441,7 +441,7 @@ export function useWebSocket(url: string, options: UseWebSocketOptions = {}) {
         if (reconnectAttemptsRef.current < reconnectAttempts) {
           const delay = reconnectDelay * Math.pow(2, reconnectAttemptsRef.current);
           console.log(`Attempting reconnect in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1})`);
-          
+
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectAttemptsRef.current++;
             connect();
@@ -510,7 +510,7 @@ export function useWebSocket(url: string) {
   const lastMessage = ref<any>(null);
   const connectionError = ref<string | null>(null);
   const messages = ref<any[]>([]);
-  
+
   let ws: WebSocket | null = null;
   let reconnectTimeout: NodeJS.Timeout | null = null;
   let reconnectAttempts = 0;
@@ -693,7 +693,7 @@ class ChatEventAggregator {
     };
 
     this.events.push(event);
-    
+
     // Keep only last 10000 events
     if (this.events.length > 10000) {
       this.events = this.events.slice(-10000);
@@ -720,7 +720,7 @@ class ChatEventAggregator {
   }
 
   getEvents(type?: string): ChatEvent[] {
-    return type 
+    return type
       ? this.events.filter(event => event.type === type)
       : this.events;
   }
@@ -744,7 +744,7 @@ class WebSocketHealthMonitor {
   private pingInterval: NodeJS.Timeout | null = null;
   private pongReceived = false;
   private healthCheckInterval = 30000; // 30 seconds
-  
+
   constructor(ws: WebSocket) {
     this.ws = ws;
     this.startHealthCheck();
@@ -838,7 +838,7 @@ class MockWebSocket extends EventTarget {
   static CLOSED = 3;
 
   readyState = MockWebSocket.CONNECTING;
-  
+
   constructor(public url: string) {
     super();
     // Simulate async connection
@@ -873,7 +873,7 @@ describe('useWebSocket', () => {
 
   test('connects and receives messages', async () => {
     const onMessage = jest.fn();
-    const { result } = renderHook(() => 
+    const { result } = renderHook(() =>
       useWebSocket('ws://test', { onMessage })
     );
 
@@ -900,7 +900,7 @@ describe('AutoBot WebSocket Integration', () => {
   let ws: WebSocket;
 
   beforeEach(() => {
-    ws = new WebSocket('ws://172.16.168.20:8001/ws-test');
+    ws = new WebSocket('wss://172.16.168.20:8443/ws-test');
   });
 
   afterEach(() => {
@@ -936,7 +936,7 @@ describe('AutoBot WebSocket Integration', () => {
 
   test('handles connection failures gracefully', (done) => {
     const invalidWs = new WebSocket('ws://invalid-host:9999');
-    
+
     invalidWs.onerror = () => {
       expect(invalidWs.readyState).toBe(WebSocket.CLOSED);
       done();
@@ -1006,16 +1006,16 @@ class MessageFilter {
     return (message: any) => {
       const now = Date.now();
       const oneSecondAgo = now - 1000;
-      
+
       // Remove old timestamps
       while (timestamps.length > 0 && timestamps[0] < oneSecondAgo) {
         timestamps.shift();
       }
-      
+
       if (timestamps.length >= maxPerSecond) {
         return false; // Rate limit exceeded
       }
-      
+
       timestamps.push(now);
       return true;
     };

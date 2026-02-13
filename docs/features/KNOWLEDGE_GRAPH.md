@@ -201,7 +201,7 @@ Target performance metrics:
 ### 1. Create Knowledge Entity via API
 
 ```bash
-curl -X POST http://localhost:8001/api/memory/entities \
+curl -X POST https://localhost:8443/api/memory/entities \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Redis Configuration",
@@ -216,19 +216,19 @@ curl -X POST http://localhost:8001/api/memory/entities \
 ### 2. Search Entities
 
 ```bash
-curl "http://localhost:8001/api/memory/search?query=redis+configuration"
+curl "https://localhost:8443/api/memory/search?query=redis+configuration"
 ```
 
 ### 3. Get Entity Relations
 
 ```bash
-curl "http://localhost:8001/api/memory/entities/{entity_id}/relations?direction=both"
+curl "https://localhost:8443/api/memory/entities/{entity_id}/relations?direction=both"
 ```
 
 ### 4. Create Relationship
 
 ```bash
-curl -X POST http://localhost:8001/api/memory/relations \
+curl -X POST https://localhost:8443/api/memory/relations \
   -H "Content-Type: application/json" \
   -d '{
     "from_entity": "Redis Configuration",
@@ -262,7 +262,7 @@ Potential future improvements:
 
 ### Graph Not Loading
 
-1. Check backend is running: `curl http://localhost:8001/api/memory/health`
+1. Check backend is running: `curl https://localhost:8443/api/memory/health`
 2. Verify Redis connection: `redis-cli -h 172.16.168.23 ping`
 3. Check browser console for API errors
 

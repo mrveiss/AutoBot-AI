@@ -190,7 +190,7 @@ GET /api/terminal/consolidated/audit/{session_id}
 
 ### Primary WebSocket Endpoint
 ```
-ws://localhost:8001/api/terminal/consolidated/ws/{session_id}
+ws://localhost:8443/api/terminal/consolidated/ws/{session_id}
 ```
 
 ### Message Types
@@ -283,7 +283,7 @@ The consolidated API maintains backward compatibility with existing implementati
 
 #### Simple Terminal (Legacy)
 ```
-ws://localhost:8001/api/terminal/consolidated/ws/simple/{session_id}
+ws://localhost:8443/api/terminal/consolidated/ws/simple/{session_id}
 ```
 - Maps to STANDARD security level
 - Logging disabled
@@ -291,7 +291,7 @@ ws://localhost:8001/api/terminal/consolidated/ws/simple/{session_id}
 
 #### Secure Terminal (Legacy)
 ```
-ws://localhost:8001/api/terminal/consolidated/ws/secure/{session_id}
+ws://localhost:8443/api/terminal/consolidated/ws/secure/{session_id}
 ```
 - Maps to ELEVATED security level
 - Logging enabled
@@ -396,14 +396,14 @@ async def terminal_example():
     # Create session
     async with aiohttp.ClientSession() as session:
         async with session.post(
-            'http://localhost:8001/api/terminal/consolidated/sessions',
+            'https://localhost:8443/api/terminal/consolidated/sessions',
             json={'user_id': 'python_user', 'security_level': 'standard'}
         ) as response:
             session_data = await response.json()
             session_id = session_data['session_id']
 
     # Connect WebSocket
-    ws_url = f'ws://localhost:8001/api/terminal/consolidated/ws/{session_id}'
+    ws_url = f'ws://localhost:8443/api/terminal/consolidated/ws/{session_id}'
     async with websockets.connect(ws_url) as websocket:
         # Send command
         await websocket.send(json.dumps({
@@ -465,13 +465,13 @@ GET /api/terminal/consolidated/
 Replace WebSocket URL:
 ```javascript
 // Old
-ws://localhost:8001/api/terminal/ws/simple/{session_id}
+ws://localhost:8443/api/terminal/ws/simple/{session_id}
 
 // New (backward compatible)
-ws://localhost:8001/api/terminal/consolidated/ws/simple/{session_id}
+ws://localhost:8443/api/terminal/consolidated/ws/simple/{session_id}
 
 // Recommended
-ws://localhost:8001/api/terminal/consolidated/ws/{session_id}
+ws://localhost:8443/api/terminal/consolidated/ws/{session_id}
 ```
 
 #### From secure_terminal_websocket.py

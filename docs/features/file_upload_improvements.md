@@ -57,7 +57,7 @@ const processFileUpload = async (file) => {
       'X-User-Role': 'admin' // Proper permission handling
     };
 
-    const response = await fetch('http://localhost:8001/api/files/upload', {
+    const response = await fetch('https://localhost:8443/api/files/upload', {
       method: 'POST',
       headers: headers,
       body: formData
@@ -283,7 +283,7 @@ await fileInput.setInputFiles('./test-files/sample.txt');
 cd autobot-vue && npx playwright test tests/gui/test_file_upload_functionality.js
 
 # Test API directly with curl
-curl -H "X-User-Role: admin" -F "file=@sample.txt" http://localhost:8001/api/files/upload
+curl -H "X-User-Role: admin" -F "file=@sample.txt" https://localhost:8443/api/files/upload
 ```
 
 ## Validation Criteria

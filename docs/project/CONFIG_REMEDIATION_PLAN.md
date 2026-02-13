@@ -776,7 +776,7 @@ infrastructure:
     redis: "localhost"
     # ... all localhost for tests
   ports:
-    backend: 8001
+    backend: 8443
     frontend: 5173
     redis: 6379
     # ... same as dev

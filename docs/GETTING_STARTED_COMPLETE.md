@@ -88,10 +88,10 @@ open http://localhost:5173
 docker ps | grep autobot
 
 # Verify backend health
-curl http://localhost:8001/api/system/health
+curl https://localhost:8443/api/system/health
 
 # Test agent communication
-curl http://localhost:8001/api/agents/health
+curl https://localhost:8443/api/agents/health
 ```
 
 ## 🧭 **Navigation Guide**

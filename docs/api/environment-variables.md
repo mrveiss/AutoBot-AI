@@ -7,8 +7,8 @@ AutoBot supports comprehensive configuration through environment variables with 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUTOBOT_BACKEND_HOST` | `0.0.0.0` | Backend server host |
-| `AUTOBOT_BACKEND_PORT` | `8001` | Backend server port |
-| `AUTOBOT_BACKEND_API_ENDPOINT` | `http://localhost:8001` | Full API endpoint URL |
+| `AUTOBOT_BACKEND_PORT` | `8443` | Backend server port |
+| `AUTOBOT_BACKEND_API_ENDPOINT` | `https://localhost:8443` | Full API endpoint URL |
 | `AUTOBOT_BACKEND_TIMEOUT` | `60` | Request timeout in seconds |
 | `AUTOBOT_BACKEND_MAX_RETRIES` | `3` | Maximum retry attempts |
 | `AUTOBOT_BACKEND_STREAMING` | `false` | Enable streaming responses |
@@ -113,7 +113,7 @@ The frontend uses Vite environment variables with the `VITE_` prefix:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VITE_API_BASE_URL` | `http://localhost:8001` | Backend API base URL |
+| `VITE_API_BASE_URL` | `https://localhost:8443` | Backend API base URL |
 
 ## Usage Examples
 
