@@ -1,0 +1,45 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+[Unit]
+Description=AutoBot Celery Worker
+After=network.target redis.service autobot-backend.service
+Wants=redis.service
+
+[Service]
+Type=simple
+User={{ backend_user }}
+Group={{ backend_group }}
+WorkingDirectory={{ backend_code_dir | default(backend_install_dir) }}
+Environment="PATH={{ backend_code_dir | default(backend_install_dir) }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile={{ backend_code_dir | default(backend_install_dir) }}/.env
+EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys') }}/{{ service_auth_service_id | default('main-backend') }}.env
+
+# Celery worker command
+# -A backend.celery_app: Application instance
+# worker: Start worker process
+# --loglevel=info: Logging level
+# --concurrency=4: Number of worker processes (adjust based on CPU)
+ExecStart={{ backend_code_dir | default(backend_install_dir) }}/venv/bin/celery -A backend.celery_app worker \
+    --loglevel=info \
+    --concurrency={{ celery_concurrency | default(4) }} \
+    --max-tasks-per-child={{ celery_max_tasks_per_child | default(1000) }}
+
+# Graceful shutdown
+ExecStop=/bin/kill -TERM $MAINPID
+TimeoutStopSec=30
+
+# Restart policy
+Restart=always
+RestartSec=5
+
+# Logging
+StandardOutput=append:{{ backend_log_dir }}/celery.log
+StandardError=append:{{ backend_log_dir }}/celery-error.log
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

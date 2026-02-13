@@ -10,3 +10,8 @@
   ansible.builtin.systemd:
     name: autobot-backend
     state: restarted
+
+- name: restart celery
+  ansible.builtin.systemd:
+    name: autobot-celery
+    state: restarted

@@ -44,24 +44,39 @@
 
 - name: Create Python virtual environment
   ansible.builtin.command:
-    cmd: python3 -m venv {{ backend_install_dir }}/venv
-    creates: "{{ backend_install_dir }}/venv/bin/python"
+    cmd: python3 -m venv {{ backend_code_dir }}/venv
+    creates: "{{ backend_code_dir }}/venv/bin/python"
 
 - name: Fix venv ownership
   ansible.builtin.file:
-    path: "{{ backend_install_dir }}/venv"
+    path: "{{ backend_code_dir }}/venv"
     state: directory
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
     recurse: true
 
-- name: Install Python requirements
+- name: Upgrade pip
   ansible.builtin.pip:
-    requirements: "{{ backend_install_dir }}/requirements.txt"
-    virtualenv: "{{ backend_install_dir }}/venv"
-    state: present
+    name: pip
+    state: latest
+    virtualenv: "{{ backend_code_dir }}/venv"
   become_user: "{{ backend_user }}"
-  when: backend_deploy_from_git | default(true)
+
+- name: Install autobot-shared as editable package
+  ansible.builtin.pip:
+    name: "{{ backend_install_dir }}/autobot-shared"
+    editable: true
+    virtualenv: "{{ backend_code_dir }}/venv"
+  become_user: "{{ backend_user }}"
+  when: backend_install_dir is defined
+
+- name: Install Python requirements (excluding autobot-shared)
+  ansible.builtin.shell:
+    cmd: "{{ backend_code_dir }}/venv/bin/pip install -r {{ backend_code_dir }}/requirements.txt"
+    chdir: "{{ backend_code_dir }}"
+  become_user: "{{ backend_user }}"
+  environment:
+    PIP_NO_BINARY: ":none:"
 
 - name: Deploy backend environment file
   ansible.builtin.template:
@@ -84,6 +99,23 @@
 - name: Enable and start backend service
   ansible.builtin.systemd:
     name: autobot-backend
+    state: started
+    enabled: true
+    daemon_reload: true
+
+# Issue #863: Deploy Celery worker service for background tasks
+- name: Deploy Celery worker systemd service
+  ansible.builtin.template:
+    src: autobot-celery.service.j2
+    dest: /etc/systemd/system/autobot-celery.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart celery
+
+- name: Enable and start Celery worker service
+  ansible.builtin.systemd:
+    name: autobot-celery
     state: started
     enabled: true
     daemon_reload: true

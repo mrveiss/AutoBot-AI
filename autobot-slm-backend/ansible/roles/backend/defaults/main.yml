@@ -20,6 +20,10 @@ backend_host: "0.0.0.0"
 backend_port: 8443  # Issue #858/#861: HTTPS port
 backend_workers: 4
 
+# Celery worker settings (Issue #863)
+celery_concurrency: 4  # Number of worker processes
+celery_max_tasks_per_child: 1000  # Restart worker after N tasks (prevents memory leaks)
+
 # Redis connection
 backend_redis_host: "{{ redis_host | default('127.0.0.1') }}"
 backend_redis_port: 6379

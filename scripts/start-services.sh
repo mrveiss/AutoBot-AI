@@ -21,6 +21,7 @@ NC='\033[0m' # No Color
 
 # Services
 BACKEND_SERVICE="autobot-backend"
+CELERY_SERVICE="autobot-celery"
 REDIS_SERVICE="redis-stack-server"
 OLLAMA_SERVICE="ollama"
 
@@ -40,6 +41,7 @@ Commands:
 
 Services:
   backend            AutoBot backend API
+  celery             Celery worker (background tasks)
   redis              Redis Stack
   ollama             Ollama LLM service
   all                All local services (default)
@@ -65,6 +67,9 @@ get_services() {
         backend)
             echo "$BACKEND_SERVICE"
             ;;
+        celery)
+            echo "$CELERY_SERVICE"
+            ;;
         redis)
             echo "$REDIS_SERVICE"
             ;;
@@ -72,11 +77,11 @@ get_services() {
             echo "$OLLAMA_SERVICE"
             ;;
         all)
-            echo "$BACKEND_SERVICE $REDIS_SERVICE $OLLAMA_SERVICE"
+            echo "$BACKEND_SERVICE $CELERY_SERVICE $REDIS_SERVICE $OLLAMA_SERVICE"
             ;;
         *)
             echo -e "${RED}Unknown service: $target${NC}" >&2
-            echo "Valid services: backend, redis, ollama, all" >&2
+            echo "Valid services: backend, celery, redis, ollama, all" >&2
             return 1
             ;;
     esac
@@ -145,6 +150,9 @@ show_logs() {
     case "$service" in
         backend)
             service="$BACKEND_SERVICE"
+            ;;
+        celery)
+            service="$CELERY_SERVICE"
             ;;
         redis)
             service="$REDIS_SERVICE"
