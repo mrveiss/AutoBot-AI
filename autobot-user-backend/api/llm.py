@@ -868,3 +868,268 @@ async def clear_provider_health_cache(
                 "error": str(e),
             },
         )
+
+
+# ============================================================================
+# Tiered Model Routing Endpoints (Issue #696)
+# ============================================================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_tiered_routing_metrics",
+    error_code_prefix="LLM",
+)
+@router.get("/tiered-routing/metrics")
+async def get_tiered_routing_metrics(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get tiered model routing metrics.
+
+    Issue #696: Provides statistics on model tier usage, complexity scores,
+    and fallback frequency for monitoring and optimization.
+
+    Returns:
+        Dictionary with routing metrics including:
+        - simple_tier_requests: Count of requests routed to simple models
+        - complex_tier_requests: Count of requests routed to complex models
+        - total_requests: Total routed requests
+        - simple_tier_percentage: Percentage using simple tier
+        - avg_simple_score: Average complexity score for simple tier
+        - avg_complex_score: Average complexity score for complex tier
+        - fallback_count: Times simple tier failed and escalated
+    """
+    try:
+        llm_interface = _get_llm_interface()
+
+        if not hasattr(llm_interface, "_tier_router") or not llm_interface._tier_router:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "enabled": False,
+                    "message": "Tiered routing is not enabled",
+                },
+            )
+
+        metrics = llm_interface._tier_router.get_metrics()
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "enabled": True,
+                "metrics": metrics,
+            },
+        )
+
+    except Exception as e:
+        logger.error("Error getting tiered routing metrics: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting tiered routing metrics: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_tiered_routing_config",
+    error_code_prefix="LLM",
+)
+@router.get("/tiered-routing/config")
+async def get_tiered_routing_config(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get current tiered routing configuration.
+
+    Issue #696: Returns the active configuration including model assignments,
+    threshold values, and feature flags.
+
+    Returns:
+        Dictionary with configuration:
+        - enabled: Whether tiered routing is active
+        - complexity_threshold: Score threshold (0-10) for tier selection
+        - models: Model assignments per tier
+        - fallback_to_complex: Whether to escalate on simple tier failure
+        - logging: Logging configuration
+    """
+    try:
+        llm_interface = _get_llm_interface()
+
+        if not hasattr(llm_interface, "_tier_router") or not llm_interface._tier_router:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "enabled": False,
+                    "message": "Tiered routing is not initialized",
+                },
+            )
+
+        router = llm_interface._tier_router
+        tier_config = router.config
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "enabled": tier_config.enabled,
+                "complexity_threshold": tier_config.complexity_threshold,
+                "models": {
+                    "simple": tier_config.models.simple,
+                    "complex": tier_config.models.complex,
+                },
+                "fallback_to_complex": tier_config.fallback_to_complex,
+                "logging": {
+                    "log_scores": tier_config.logging.log_scores,
+                    "log_routing_decisions": tier_config.logging.log_routing_decisions,
+                },
+            },
+        )
+
+    except Exception as e:
+        logger.error("Error getting tiered routing config: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting tiered routing config: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_tiered_routing_config",
+    error_code_prefix="LLM",
+)
+@router.post("/tiered-routing/config")
+async def update_tiered_routing_config(
+    config_data: dict,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Update tiered routing configuration.
+
+    Issue #696: Allows runtime adjustment of thresholds and model assignments.
+    Requires admin authentication.
+
+    Args:
+        config_data: Configuration updates with optional fields:
+            - enabled: bool
+            - complexity_threshold: float (0-10)
+            - models.simple: str
+            - models.complex: str
+            - fallback_to_complex: bool
+
+    Returns:
+        Updated configuration and confirmation message
+    """
+    try:
+        llm_interface = _get_llm_interface()
+
+        if not hasattr(llm_interface, "_tier_router") or not llm_interface._tier_router:
+            raise HTTPException(
+                status_code=400,
+                detail="Tiered routing is not initialized",
+            )
+
+        router = llm_interface._tier_router
+
+        # Update enabled status
+        if "enabled" in config_data:
+            router.config.enabled = bool(config_data["enabled"])
+
+        # Update complexity threshold
+        if "complexity_threshold" in config_data:
+            threshold = float(config_data["complexity_threshold"])
+            if not 0 <= threshold <= 10:
+                raise HTTPException(
+                    status_code=400,
+                    detail="complexity_threshold must be between 0 and 10",
+                )
+            router.config.complexity_threshold = threshold
+
+        # Update model assignments
+        if "models" in config_data:
+            if "simple" in config_data["models"]:
+                router.config.models.simple = str(config_data["models"]["simple"])
+            if "complex" in config_data["models"]:
+                router.config.models.complex = str(config_data["models"]["complex"])
+
+        # Update fallback behavior
+        if "fallback_to_complex" in config_data:
+            router.config.fallback_to_complex = bool(config_data["fallback_to_complex"])
+
+        logger.info("Tiered routing configuration updated: %s", config_data)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": "Tiered routing configuration updated successfully",
+                "config": {
+                    "enabled": router.config.enabled,
+                    "complexity_threshold": router.config.complexity_threshold,
+                    "models": {
+                        "simple": router.config.models.simple,
+                        "complex": router.config.models.complex,
+                    },
+                    "fallback_to_complex": router.config.fallback_to_complex,
+                },
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error updating tiered routing config: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error updating tiered routing config: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reset_tiered_routing_metrics",
+    error_code_prefix="LLM",
+)
+@router.post("/tiered-routing/metrics/reset")
+async def reset_tiered_routing_metrics(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Reset tiered routing metrics to zero.
+
+    Issue #696: Useful for starting fresh monitoring periods or after
+    configuration changes. Requires admin authentication.
+
+    Returns:
+        Confirmation of metrics reset
+    """
+    try:
+        llm_interface = _get_llm_interface()
+
+        if not hasattr(llm_interface, "_tier_router") or not llm_interface._tier_router:
+            raise HTTPException(
+                status_code=400,
+                detail="Tiered routing is not initialized",
+            )
+
+        llm_interface._tier_router.reset_metrics()
+
+        logger.info("Tiered routing metrics reset by admin")
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": "Tiered routing metrics reset successfully",
+                "metrics": llm_interface._tier_router.get_metrics(),
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error resetting tiered routing metrics: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error resetting tiered routing metrics: {str(e)}",
+        )
