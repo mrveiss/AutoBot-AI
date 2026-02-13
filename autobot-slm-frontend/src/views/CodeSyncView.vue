@@ -134,27 +134,57 @@ async function handleSyncNode(node: PendingNode): Promise<void> {
 async function handleSyncSelected(): Promise<void> {
   const nodeIds = Array.from(selectedNodes.value)
   logger.info('Syncing selected nodes:', nodeIds)
+  codeSync.clearError()
+  successMessage.value = null
 
-  await codeSync.syncFleet({
+  const result = await codeSync.syncFleet({
     node_ids: nodeIds,
     strategy: syncStrategy.value === 'manual' ? 'manual' : 'rolling',
     restart: restartAfterSync.value,
     batch_size: 1,
   })
 
-  selectedNodes.value.clear()
+  if (result.success) {
+    const count = nodeIds.length
+    successMessage.value = `Successfully synced ${count} node${count > 1 ? 's' : ''}`
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+      successMessage.value = null
+    }, 5000)
+
+    selectedNodes.value.clear()
+    await handleRefresh()
+  } else {
+    codeSync.setError(result.message || 'Fleet sync failed')
+  }
 }
 
 async function handleSyncAll(): Promise<void> {
   logger.info('Syncing all outdated nodes')
+  codeSync.clearError()
+  successMessage.value = null
 
-  await codeSync.syncFleet({
+  const result = await codeSync.syncFleet({
     strategy: 'rolling',
     restart: restartAfterSync.value,
     batch_size: 1,
   })
 
-  selectedNodes.value.clear()
+  if (result.success) {
+    const count = result.nodes?.length || codeSync.pendingNodes.value.length
+    successMessage.value = `Successfully queued sync for ${count} node${count > 1 ? 's' : ''}`
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+      successMessage.value = null
+    }, 5000)
+
+    selectedNodes.value.clear()
+    await handleRefresh()
+  } else {
+    codeSync.setError(result.message || 'Fleet sync failed')
+  }
 }
 
 // =============================================================================
