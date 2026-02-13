@@ -117,9 +117,8 @@
       tags: [npu, npu-worker]
 
     - name: NPU | Restart autobot-npu-worker service
-      systemd:
-        name: autobot-npu-worker
-        state: restarted
+      command: systemctl restart autobot-npu-worker
+      become: true
       when:
         - "'npu_worker' in group_names"
         - restart_services | bool
