@@ -86,7 +86,7 @@
 
     - name: Frontend | Rebuild production dist
       command:
-        cmd: npm run build
+        cmd: npx vite build
         chdir: "{{ code_base_dir }}/autobot-user-frontend"
       when: "'frontend' in group_names"
       tags: [frontend, user-frontend]
