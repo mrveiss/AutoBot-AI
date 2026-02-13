@@ -379,17 +379,25 @@ done
 
 ```bash
 # 1. Start AutoBot services (main machine)
-bash run_autobot.sh --dev
+scripts/start-services.sh start
+# Or: sudo systemctl start autobot-backend
 
 # 2. Make code changes locally
-vim /home/kali/Desktop/AutoBot/autobot-user-autobot-user-backend/api/chat.py
+vim /home/kali/Desktop/AutoBot/autobot-user-backend/api/chat.py
 
-# 3. Sync changes to VMs
-./infrastructure/shared/scripts/sync-to-vm.sh all autobot-user-autobot-user-backend/api/chat.py /home/autobot/autobot-user-autobot-user-backend/api/chat.py
+# 3. Sync changes to VMs (if needed)
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/ /opt/autobot/autobot-user-backend/
 
 # 4. Restart affected services
-ssh autobot@172.16.168.21 "cd /home/autobot && bash run_autobot.sh --restart"
+scripts/start-services.sh restart backend
+# Or: sudo systemctl restart autobot-backend
+
+# 5. View logs
+scripts/start-services.sh logs backend
+# Or: journalctl -u autobot-backend -f
 ```
+
+**See**: [Service Management Guide](SERVICE_MANAGEMENT.md) for complete documentation.
 
 ### Production Deployment
 
@@ -397,41 +405,53 @@ ssh autobot@172.16.168.21 "cd /home/autobot && bash run_autobot.sh --restart"
 
 ```bash
 # 1. Test locally first
-bash run_autobot.sh --dev
+scripts/start-services.sh start
 # Verify everything works
 
 # 2. Commit changes
 git add .
 git commit -m "Production-ready changes"
 
-# 3. Sync to all VMs
-./infrastructure/shared/scripts/sync-to-vm.sh all ./ /home/autobot/
+# 3. Deploy via Ansible
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/deploy-native-services.yml
 
-# 4. Start in production mode
-bash run_autobot.sh --prod
+# 4. Verify health checks
+curl -k https://172.16.168.20:8443/api/health
+curl https://172.16.168.21
 
-# 5. Verify health checks
-curl http://172.16.168.20:8001/api/health
-curl http://172.16.168.21:5173
+# 5. Monitor via SLM GUI
+# Visit: https://172.16.168.19/orchestration
 ```
+
+**See**: [Service Management Guide](SERVICE_MANAGEMENT.md) for Ansible deployment details.
 
 ### Rolling Updates
 
-**Update one VM at a time**:
+**Update one VM at a time using Ansible**:
+
+```bash
+# Update specific node via Ansible
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/deploy-native-services.yml --limit 172.16.168.21 --tags frontend
+
+# Wait for health check
+curl https://172.16.168.21
+
+# Update NPU Worker VM
+ansible-playbook playbooks/deploy-native-services.yml --limit 172.16.168.22 --tags npu
+
+# Or use SLM GUI for rolling updates
+# Visit: https://172.16.168.19/orchestration
+# Select node → Deploy → Monitor progress
+```
+
+**Manual alternative (not recommended)**:
 
 ```bash
 # Update Frontend VM
-./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/ /home/autobot/autobot-slm-frontend/
-ssh autobot@172.16.168.21 "cd /home/autobot && bash run_autobot.sh --restart"
-
-# Wait for health check
-curl http://172.16.168.21:5173
-
-# Update NPU Worker VM
-./infrastructure/shared/scripts/sync-to-vm.sh npu-worker autobot-npu-worker/ /home/autobot/autobot-npu-worker/
-ssh autobot@172.16.168.22 "cd /home/autobot && bash run_autobot.sh --restart"
-
-# Continue for other VMs...
+./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/ /opt/autobot/autobot-slm-frontend/
+ssh autobot@172.16.168.21 "sudo systemctl restart autobot-frontend"
 ```
 
 ---
@@ -455,27 +475,40 @@ ssh autobot@172.16.168.23 "systemctl status redis"
 ### Restart Services
 
 ```bash
-# Restart frontend service
-ssh autobot@172.16.168.21 "cd /home/autobot && bash run_autobot.sh --restart"
+# Main machine services (CLI wrapper)
+scripts/start-services.sh restart backend
+scripts/start-services.sh restart celery
 
-# Restart Redis
-ssh autobot@172.16.168.23 "sudo systemctl restart redis"
+# Or direct systemctl
+sudo systemctl restart autobot-backend
+sudo systemctl restart autobot-celery
 
-# Restart all services on main machine
-bash run_autobot.sh --restart
+# Remote VM services (via SSH)
+ssh autobot@172.16.168.21 "sudo systemctl restart autobot-frontend"
+ssh autobot@172.16.168.23 "sudo systemctl restart redis-stack-server"
+
+# Or use SLM Orchestration GUI
+# Visit: https://172.16.168.19/orchestration
 ```
 
 ### View Logs
 
 ```bash
-# Backend logs (main machine)
-tail -f logs/backend.log
+# Main machine - Backend logs (systemd)
+scripts/start-services.sh logs backend
+# Or: journalctl -u autobot-backend -f
 
-# Frontend logs (VM1)
-ssh autobot@172.16.168.21 "tail -f /home/autobot/logs/frontend.log"
+# Main machine - Celery logs
+journalctl -u autobot-celery -f
 
-# Redis logs (VM3)
-ssh autobot@172.16.168.23 "sudo tail -f /var/log/redis/redis-server.log"
+# Remote VMs - Frontend logs
+ssh autobot@172.16.168.21 "journalctl -u autobot-frontend -f"
+
+# Remote VMs - Redis logs
+ssh autobot@172.16.168.23 "journalctl -u redis-stack-server -f"
+
+# Or use SLM GUI for log viewing
+# Visit: https://172.16.168.19/orchestration → Select service → Logs
 ```
 
 ---
@@ -549,15 +582,17 @@ ssh autobot@172.16.168.21 "curl http://172.16.168.20:8001/api/health"
 **Solution**:
 
 ```bash
-# Full re-sync of entire project
-./infrastructure/shared/scripts/sync-to-vm.sh all ./ /home/autobot/
+# Recommended: Full redeploy via Ansible
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/deploy-native-services.yml
 
-# Restart services
-ssh autobot@172.16.168.21 "cd /home/autobot && bash run_autobot.sh --restart"
+# Or manual re-sync (not recommended)
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/ /opt/autobot/autobot-user-backend/
+sudo systemctl restart autobot-backend
 
 # Verify sync
-ssh autobot@172.16.168.21 "md5sum /home/autobot/autobot-user-autobot-user-backend/api/chat.py"
-md5sum /home/kali/Desktop/AutoBot/autobot-user-autobot-user-backend/api/chat.py
+ssh autobot@172.16.168.20 "md5sum /opt/autobot/autobot-user-backend/api/chat.py"
+md5sum /home/kali/Desktop/AutoBot/autobot-user-backend/api/chat.py
 # Hashes should match
 ```
 

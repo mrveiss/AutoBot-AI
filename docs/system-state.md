@@ -1081,11 +1081,23 @@ bash setup.sh [--full|--minimal|--distributed]
 
 ### Startup (Daily Use)
 ```bash
-bash run_autobot.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
+# Recommended: CLI wrapper
+scripts/start-services.sh start
+
+# Or: SLM Orchestration GUI
+scripts/start-services.sh gui
+# Visit: https://172.16.168.19/orchestration
+
+# Or: Direct systemctl
+sudo systemctl start autobot-backend
+sudo systemctl start autobot-celery
 ```
 
+**See**: [Service Management Guide](developer/SERVICE_MANAGEMENT.md) for complete documentation.
+
 **❌ OBSOLETE METHODS (DO NOT USE):**
-- ~~`run_agent_unified.sh`~~ → Use `run_autobot.sh`
+- ~~`run_autobot.sh`~~ → Deprecated (Issue #863), moved to `legacy/`
+- ~~`run_agent_unified.sh`~~ → Use service management methods
 - ~~`setup_agent.sh`~~ → Use `setup.sh`
 - ~~Any other run scripts~~ → ALL archived in `scripts/archive/`
 
@@ -1104,8 +1116,8 @@ bash run_autobot.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
 **Files Updated**:
 - `autobot-user-backend/utils/semantic_chunker.py` - Added env vars at module level
 - `setup.sh` - Added to standardized setup script
-- `run_autobot.sh` - Added to startup script
 - `.env` and `.env.localhost` - Added to environment files
+- Backend systemd service - Loads environment variables
 
 **Environment Variables**:
 ```bash
@@ -1353,63 +1365,86 @@ OPTIONS:
 - ✅ Sets up VNC desktop access
 - ✅ Validates all service connections
 
-**After setup, always use `run_autobot.sh` for starting the system.**
+**After setup, use one of the service management methods to start the system.**
 
 ## How to Run AutoBot
 
 ### Standard Startup (Recommended)
 
+**Method 1: CLI Wrapper (Development)**
 ```bash
-bash run_autobot.sh --dev
+# Start all services
+scripts/start-services.sh start
+
+# Start specific service
+scripts/start-services.sh start backend
+
+# Check status
+scripts/start-services.sh status
+
+# Follow logs
+scripts/start-services.sh logs backend
+
+# Show help
+scripts/start-services.sh --help
 ```
 
-**Available Options:**
+**Method 2: SLM Orchestration GUI (Operations)**
 ```bash
-bash run_autobot.sh [OPTIONS]
+# Open web interface
+scripts/start-services.sh gui
 
-OPTIONS:
-  --dev              Development mode with auto-reload and debugging
-  --prod             Production mode (default)
-  --no-build         Skip builds (fastest restart)
-  --build            Force build even if images exist
-  --rebuild          Force rebuild everything (clean slate)
-  --no-desktop       Disable VNC desktop access
-  --desktop          Enable VNC desktop access (default)
-  --help             Show this help message
+# Or visit directly:
+# https://172.16.168.19/orchestration
+```
+- Visual service management
+- Real-time health monitoring
+- Fleet-wide operations
+- Service logs viewer
+
+**Method 3: Direct systemctl (Advanced)**
+```bash
+# Start services
+sudo systemctl start autobot-backend
+sudo systemctl start autobot-celery
+
+# Restart after code changes
+sudo systemctl restart autobot-backend
+
+# View logs
+journalctl -u autobot-backend -f
 ```
 
 ### Common Usage Examples
 
 **Development Mode (Daily Use):**
 ```bash
-bash run_autobot.sh --dev --no-build
-```
-- Fastest startup for development
-- Uses existing services
-- Auto-reload and debugging enabled
+# Start backend in foreground for debugging
+cd autobot-user-backend
+source venv/bin/activate
+python backend/main.py
 
-**Fresh Development Setup:**
-```bash
-bash run_autobot.sh --dev --build
+# Or start as service
+scripts/start-services.sh start backend
+scripts/start-services.sh logs backend
 ```
-- Builds/rebuilds all services
-- Development mode with debugging
-- VNC desktop enabled by default
+- Hot reload when running in foreground
+- systemd for background operation
 
 **Production Mode:**
 ```bash
-bash run_autobot.sh --prod
-```
-- Production configuration
-- All services optimized
-- Minimal logging
+# Deploy via Ansible
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/deploy-native-services.yml
 
-**Clean Rebuild:**
-```bash
-bash run_autobot.sh --dev --rebuild
+# Monitor via SLM GUI
+# https://172.16.168.19/orchestration
 ```
-- Complete rebuild of all services
-- Use when major changes are made
+- Automated deployment
+- Service orchestration
+- Health monitoring
+
+**See**: [Service Management Guide](developer/SERVICE_MANAGEMENT.md) for complete documentation.
 
 ### Desktop Access (VNC)
 

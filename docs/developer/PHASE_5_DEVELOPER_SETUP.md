@@ -17,16 +17,17 @@ cd AutoBot
 # 2. Run automated setup (handles everything)
 bash setup.sh --full
 
-# 3. Start development environment  
-bash run_autobot.sh --dev --build
+# 3. Start development environment
+scripts/start-services.sh start
 
 # 4. Access development interface
-# Frontend: http://172.16.168.21:5173 (auto-opens)
-# Backend API: http://127.0.0.1:8001/docs
+# SLM Orchestration: https://172.16.168.19/orchestration
+# User Frontend: https://172.16.168.21
+# Backend API: https://172.16.168.20:8443/docs
 # VNC Desktop: http://127.0.0.1:6080
 ```
 
-**That's it!** The rest of this guide explains what happens behind the scenes and advanced configuration options.
+**That's it!** Services are managed via SLM orchestration, CLI wrapper (scripts/start-services.sh), or systemctl. See [Service Management Guide](SERVICE_MANAGEMENT.md) for complete documentation.
 
 ## Prerequisites
 
@@ -214,16 +215,26 @@ After setup completes, verify everything works:
 
 ```bash
 # Check all services are running
-bash run_autobot.sh --status
+scripts/start-services.sh status
 
-# Expected output:
-✓ Main Backend API      (http://127.0.0.1:8001)
-✓ Frontend Service      (http://172.16.168.21:5173)
+# Or check individual services
+systemctl status autobot-backend
+systemctl status autobot-celery
+systemctl status redis-stack-server
+systemctl status ollama
+
+# Or use SLM GUI
+scripts/start-services.sh gui
+# Visit: https://172.16.168.19/orchestration
+
+# Expected services:
+✓ Main Backend API      (https://172.16.168.20:8443)
+✓ Celery Worker         (Background tasks)
+✓ Frontend Service      (https://172.16.168.21)
 ✓ NPU Worker           (http://172.16.168.22:8081)
 ✓ Redis Stack          (tcp://172.16.168.23:6379)
 ✓ AI Orchestrator      (http://172.16.168.24:8080)
 ✓ Browser Service      (http://172.16.168.25:3000)
-✓ VNC Desktop          (http://127.0.0.1:6080)
 ✓ Ollama LLM           (http://127.0.0.1:11434)
 
 System Status: ALL SERVICES HEALTHY ✓
@@ -233,37 +244,65 @@ System Status: ALL SERVICES HEALTHY ✓
 
 ### Starting Development Environment
 
+**Recommended: CLI Wrapper**
 ```bash
-# Start development mode (with hot reload)
-bash run_autobot.sh --dev
+# Start all services
+scripts/start-services.sh start
 
-# Available options:
---dev          # Development mode with hot reload & debugging
---build        # Force build/rebuild all services  
---no-build     # Skip building (fastest for daily development)
---desktop      # Enable VNC desktop access (default: enabled)
---no-desktop   # Disable VNC desktop access
+# Start specific service for development
+scripts/start-services.sh start backend
+
+# Stop services
+scripts/start-services.sh stop
+
+# Restart after code changes
+scripts/start-services.sh restart backend
+
+# Follow logs (live)
+scripts/start-services.sh logs backend
 ```
+
+**Alternative: Direct systemctl**
+```bash
+# Start service
+sudo systemctl start autobot-backend
+
+# Restart after code changes
+sudo systemctl restart autobot-backend
+
+# Follow logs
+journalctl -u autobot-backend -f
+```
+
+**Alternative: SLM GUI (Best for operations)**
+```bash
+scripts/start-services.sh gui
+# Or visit: https://172.16.168.19/orchestration
+```
+
+See [Service Management Guide](SERVICE_MANAGEMENT.md) for complete documentation.
 
 ### Development URLs
 
-Once started, these URLs will be available:
+Once services are started, these URLs will be available:
 
 ```yaml
 # Primary interfaces
-Frontend_UI: "http://172.16.168.21:5173"      # Main development interface
-Backend_API: "http://127.0.0.1:8001"          # FastAPI backend
-API_Docs: "http://127.0.0.1:8001/docs"        # Interactive API documentation
+SLM_Orchestration: "https://172.16.168.19/orchestration"  # Service management GUI
+Frontend_UI: "https://172.16.168.21"                      # User interface (production)
+Frontend_Dev: "http://172.16.168.21:5173"                 # Development server (if running)
+Backend_API: "https://172.16.168.20:8443"                 # FastAPI backend (TLS)
+API_Docs: "https://172.16.168.20:8443/docs"               # Interactive API documentation
 
-# Administrative interfaces  
+# Administrative interfaces
 VNC_Desktop: "http://127.0.0.1:6080"          # Full desktop access
 Redis_Insight: "http://172.16.168.23:8002"   # Database management
-System_Health: "http://172.16.168.21/health"  # System monitoring
+System_Health: "https://172.16.168.21/health" # System monitoring
 
-# Development tools
-WebSocket_Test: "http://127.0.0.1:8001/ws-test"  # WebSocket testing
-File_Manager: "http://127.0.0.1:8001/files"      # File browser
-Log_Viewer: "http://127.0.0.1:8001/logs"         # Real-time logs
+# Development tools (backend endpoints)
+WebSocket_Test: "https://172.16.168.20:8443/ws-test"  # WebSocket testing
+File_Manager: "https://172.16.168.20:8443/files"      # File browser
+Log_Viewer: "https://172.16.168.20:8443/logs"         # Real-time logs
 ```
 
 ### Hot Reload Development
@@ -285,11 +324,15 @@ autobot-user-frontend/src/**/*.css     # Stylesheets
 
 **Backend (FastAPI)**:
 ```bash
-# Backend auto-reloads on code changes
-cd backend
-uvicorn main:app --reload  # Runs automatically with --dev flag
+# For development with hot reload, run in foreground
+cd autobot-user-backend
+source venv/bin/activate
+python backend/main.py
 
-# Files watched for changes:
+# Or restart systemd service after changes
+sudo systemctl restart autobot-backend
+
+# Files watched for changes (if running in foreground):
 backend/**/*.py              # Python source files
 src/**/*.py                  # Core application files
 config/**/*.yaml             # Configuration files
@@ -439,15 +482,18 @@ docker restart autobot-redis
 ```
 
 **Problem: Frontend shows "Network Error" for API calls**
-```bash  
+```bash
 # Check backend is running
-curl http://127.0.0.1:8001/api/health
+curl -k https://172.16.168.20:8443/api/health
 
-# Check Vite proxy configuration
-cat autobot-user-frontend/vite.config.ts | grep proxy -A 10
+# Check systemd service status
+systemctl status autobot-backend
 
-# Restart frontend with correct proxy
-cd autobot-vue && npm run dev
+# Restart backend if needed
+sudo systemctl restart autobot-backend
+
+# Check frontend configuration
+cat autobot-user-frontend/src/config/ssot-config.ts
 ```
 
 **Problem: "Module not found" errors in Python**
@@ -479,33 +525,40 @@ sudo systemctl restart autobot-npu-worker
 
 **Enable Debug Mode**:
 ```bash
-# Enable detailed logging
-export DEBUG=true
-export LOG_LEVEL=DEBUG
+# Enable detailed logging in .env file
+cd autobot-user-backend
+echo "AUTOBOT_LOG_LEVEL=DEBUG" >> .env
 
-# Start with debugging enabled
-bash run_autobot.sh --dev --build
+# Restart backend service
+sudo systemctl restart autobot-backend
+
+# Or run in foreground for immediate log output
+source venv/bin/activate
+python backend/main.py
 ```
 
 **View Real-time Logs**:
 ```bash
-# Backend logs
-tail -f logs/autobot.log
+# Backend logs (systemd)
+journalctl -u autobot-backend -f
+
+# Celery worker logs
+journalctl -u autobot-celery -f
 
 # Frontend logs (browser console)
 # Open browser DevTools -> Console
 
-# Redis logs
-docker logs -f autobot-redis
+# Redis logs (systemd)
+journalctl -u redis-stack-server -f
 
-# All service logs  
-docker compose logs -f
+# All services at once
+journalctl -u autobot-backend -u autobot-celery -u redis-stack-server -f
 ```
 
 **Debug WebSocket Connections**:
 ```javascript
 // Test WebSocket connection in browser console
-const ws = new WebSocket('ws://127.0.0.1:8001/ws/test');
+const ws = new WebSocket('wss://172.16.168.20:8443/ws/test');
 ws.onopen = () => console.log('WebSocket connected');
 ws.onmessage = (event) => console.log('Received:', event.data);
 ws.onerror = (error) => console.log('WebSocket error:', error);
@@ -514,7 +567,7 @@ ws.onerror = (error) => console.log('WebSocket error:', error);
 **Debug Multi-modal AI Processing**:
 ```bash
 # Test AI processing pipeline
-curl -X POST http://127.0.0.1:8001/api/multimodal/process \
+curl -k -X POST https://172.16.168.20:8443/api/multimodal/process \
   -H "Content-Type: application/json" \
   -d '{
     "inputs": {
@@ -710,12 +763,14 @@ MODALITY_PROCESSORS = {
 
 **1. Fast Development Restarts**:
 ```bash
-# Skip building if no changes to containers
-bash run_autobot.sh --dev --no-build
+# Restart specific service after code changes
+sudo systemctl restart autobot-backend
 
-# Only restart specific services
-docker restart autobot-backend
-docker restart autobot-frontend
+# Or use CLI wrapper
+scripts/start-services.sh restart backend
+
+# Check status
+scripts/start-services.sh status
 ```
 
 **2. Database Optimization**:
@@ -724,7 +779,7 @@ docker restart autobot-frontend
 redis-cli -h 172.16.168.23 FLUSHDB 3
 
 # Optimize knowledge base index
-curl -X POST http://127.0.0.1:8001/api/knowledge_base/optimize
+curl -k -X POST https://172.16.168.20:8443/api/knowledge_base/optimize
 ```
 
 **3. AI Model Caching**:
@@ -752,16 +807,20 @@ bash scripts/performance_test.sh
 # 4. Documentation check
 bash scripts/validate_documentation.sh
 
-# 5. Production configuration
-cp .env.production .env
-bash run_autobot.sh --prod --build
+# 5. Deploy via Ansible
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/deploy-native-services.yml
+
+# 6. Verify deployment via SLM GUI
+# Visit: https://172.16.168.19/orchestration
 ```
 
 ## Getting Help
 
 ### Documentation Resources
 
-- **API Documentation**: http://127.0.0.1:8001/docs (when running)
+- **Service Management**: `docs/developer/SERVICE_MANAGEMENT.md` - Complete service management guide
+- **API Documentation**: https://172.16.168.20:8443/docs (when running)
 - **Architecture Guide**: `docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md`
 - **Troubleshooting**: `docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING.md`
 - **Security Guide**: `docs/security/SECURITY_IMPLEMENTATION.md`
@@ -796,9 +855,9 @@ bash run_autobot.sh --prod --build
 ### Support Channels
 
 **Internal Support**:
-- Check logs: `tail -f logs/autobot.log`
-- Health check: `http://127.0.0.1:8001/api/health`
-- System status: `bash run_autobot.sh --status`
+- Check logs: `journalctl -u autobot-backend -f` or `scripts/start-services.sh logs backend`
+- Health check: `curl -k https://172.16.168.20:8443/api/health`
+- System status: `scripts/start-services.sh status` or visit SLM GUI
 
 **Community Resources**:
 - GitHub Issues: For bug reports and feature requests

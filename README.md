@@ -5,16 +5,42 @@ AutoBot is a comprehensive autonomous system for Linux administration, featuring
 ## Quick Start
 
 ### Starting AutoBot
+
+**Method 1: CLI Wrapper (Recommended for developers)**
 ```bash
-# Standard startup (native VM deployment)
-bash run_autobot.sh
+# Start all services
+scripts/start-services.sh start
 
-# Development mode with debug features
-bash run_autobot.sh --dev
+# Start specific service
+scripts/start-services.sh start backend
 
-# With specific options
-bash run_autobot.sh --dev --no-browser --rebuild
+# Check status
+scripts/start-services.sh status
+
+# View logs
+scripts/start-services.sh logs backend
 ```
+
+**Method 2: SLM Orchestration GUI (Recommended for operations)**
+```bash
+# Open web interface
+scripts/start-services.sh gui
+# Or visit: https://172.16.168.19/orchestration
+```
+
+**Method 3: Direct systemctl commands**
+```bash
+# Start backend service
+sudo systemctl start autobot-backend
+
+# Check status
+systemctl status autobot-backend
+
+# View logs
+journalctl -u autobot-backend -f
+```
+
+See [Service Management Guide](docs/developer/SERVICE_MANAGEMENT.md) for complete documentation.
 
 ### Initial Setup
 ```bash
@@ -98,8 +124,9 @@ AutoBot now includes comprehensive Redis service management capabilities:
 
 ## Access Points
 
-- **Frontend:** http://172.16.168.21:5173
-- **Backend API:** http://172.16.168.20:8001
+- **SLM Orchestration:** https://172.16.168.19/orchestration (Service management GUI)
+- **User Frontend:** https://172.16.168.21 (Vue.js interface)
+- **Backend API:** https://172.16.168.20:8443 (FastAPI with TLS)
 - **VNC Desktop:** http://localhost:6080 (when enabled)
 
 ## Documentation
@@ -144,7 +171,7 @@ AutoBot now includes comprehensive Redis service management capabilities:
 
 ## Development Guidelines
 
-- Use `bash run_autobot.sh` and `bash setup.sh` only - no other startup methods
+- Use service management methods (CLI wrapper, SLM GUI, or systemctl) - see [Service Management Guide](docs/developer/SERVICE_MANAGEMENT.md)
 - All reports and documentation are organized in appropriate folders
 - Follow the established file organization structure
 - See [CLAUDE.md](CLAUDE.md) for complete development procedures and fixes
