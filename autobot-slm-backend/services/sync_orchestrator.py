@@ -14,10 +14,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
 
-from sqlalchemy import select
-
 from models.database import CodeSource, Node, NodeRole, Role, RoleStatus
 from services.database import db_service
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -333,6 +333,91 @@ class SyncOrchestrator:
             f"{cache_path}/",
         ]
 
+    async def _get_current_git_commit(
+        self, node_ip: str, node_user: str, repo_path: str
+    ) -> Optional[str]:
+        """
+        Get current git commit from source node via SSH.
+
+        Helper for pull_from_source.
+
+        Args:
+            node_ip: Source node IP address
+            node_user: SSH user for source node
+            repo_path: Path to git repository on source node
+
+        Returns:
+            Full 40-character commit hash, or None if failed
+        """
+        ssh_cmd = [
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "ConnectTimeout=10",
+        ]
+        if Path(SSH_KEY_PATH).exists():
+            ssh_cmd.extend(["-i", SSH_KEY_PATH])
+
+        ssh_cmd.extend(
+            [
+                f"{node_user}@{node_ip}",
+                f"git -C {repo_path} rev-parse HEAD 2>/dev/null || echo ''",
+            ]
+        )
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *ssh_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
+
+            if proc.returncode != 0:
+                logger.warning(
+                    "Failed to get git commit from %s: %s",
+                    node_ip,
+                    stderr.decode("utf-8", errors="replace")[:200],
+                )
+                return None
+
+            commit = stdout.decode("utf-8", errors="replace").strip()
+            if len(commit) == 40 and commit.isalnum():
+                return commit
+
+            logger.warning("Invalid git commit format from %s: %s", node_ip, commit)
+            return None
+
+        except asyncio.TimeoutError:
+            logger.warning("Timeout getting git commit from %s", node_ip)
+            return None
+        except Exception as e:
+            logger.warning("Error getting git commit from %s: %s", node_ip, e)
+            return None
+
+    async def _update_code_source_commit(self, db: "AsyncSession", commit: str) -> None:
+        """
+        Update active code source with new commit hash.
+
+        Helper for pull_from_source.
+
+        Args:
+            db: Database session
+            commit: New commit hash to set
+        """
+        result = await db.execute(
+            select(CodeSource).where(CodeSource.is_active == True)  # noqa: E712
+        )
+        source = result.scalar_one_or_none()
+
+        if source:
+            source.last_known_commit = commit
+            await db.commit()
+            logger.info("Updated CodeSource commit to %s", commit[:12])
+
     async def pull_from_source(self) -> Tuple[bool, str, Optional[str]]:
         """
         Pull code from code-source node to SLM cache.
@@ -346,6 +431,26 @@ class SyncOrchestrator:
             if not success:
                 return False, msg, None
 
+            # Fetch actual current commit from source node
+            current_commit = await self._get_current_git_commit(
+                node_info["node_ip"], node_info["node_user"], node_info["repo_path"]
+            )
+
+            if not current_commit:
+                logger.warning(
+                    "Could not get git commit from source, using database value"
+                )
+                current_commit = node_info["commit"]
+            elif current_commit != node_info["commit"]:
+                # Update database with actual current commit
+                logger.info(
+                    "Updating code source commit: %s -> %s",
+                    node_info["commit"][:12],
+                    current_commit[:12],
+                )
+                await self._update_code_source_commit(db, current_commit)
+                node_info["commit"] = current_commit
+
         # Prepare cache path and rsync command
         commit = node_info["commit"]
         cache_path = self.cache_dir / commit
@@ -358,7 +463,11 @@ class SyncOrchestrator:
 
         # Execute rsync
         try:
-            logger.info("Pulling code from %s to cache", node_info["node_ip"])
+            logger.info(
+                "Pulling code from %s to cache (commit: %s)",
+                node_info["node_ip"],
+                commit[:12],
+            )
             proc = await asyncio.create_subprocess_exec(
                 *rsync_cmd,
                 stdout=asyncio.subprocess.PIPE,
@@ -372,7 +481,7 @@ class SyncOrchestrator:
                 return False, f"Pull failed: {output[:200]}", None
 
             logger.info("Code pulled to cache: %s", cache_path)
-            return True, f"Code cached at {commit}", commit
+            return True, f"Code cached at {commit[:12]}", commit
 
         except asyncio.TimeoutError:
             return False, "Pull timed out", None
