@@ -619,11 +619,11 @@ async def initialize_background_services(app: FastAPI):
         await _init_npu_worker_websocket()
         await _warmup_npu_connection()  # Issue #165: Warm up NPU for fast embeddings
         await _init_memory_graph(app)
-        await _init_slm_client()  # Issue #760: SLM client for agent configs
-        await _init_background_llm_sync(app)
+        # await _init_slm_client()  # Issue #876: TEMP DISABLED - blocks event loop
+        # await _init_background_llm_sync(app)  # Issue #876: TEMP DISABLED - blocks event loop
         await _init_documentation_watcher()  # Issue #165: Real-time doc sync
         await _init_log_forwarding()  # Issue #553: Auto-start log forwarding if configured
-        await _init_slm_reconciler(app)  # Issue #726: SLM health reconciler
+        # await _init_slm_reconciler(app)  # Issue #876: TEMP DISABLED - blocks event loop
         # await _init_metrics_collection()  # Issue #876: TEMP DISABLED - blocks event loop
 
         await update_app_state_multi(
