@@ -624,7 +624,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_documentation_watcher()  # Issue #165: Real-time doc sync
         await _init_log_forwarding()  # Issue #553: Auto-start log forwarding if configured
         await _init_slm_reconciler(app)  # Issue #726: SLM health reconciler
-        await _init_metrics_collection()  # Issue #876: Start metrics after backend is ready
+        # await _init_metrics_collection()  # Issue #876: TEMP DISABLED - blocks event loop
 
         await update_app_state_multi(
             initialization_status="ready", initialization_message="All services ready"
