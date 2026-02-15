@@ -14,6 +14,7 @@ from backend.api.agent import router as agent_router
 from backend.api.agent_config import router as agent_config_router
 from backend.api.browser_mcp import router as browser_mcp_router
 from backend.api.chat import router as chat_router
+from backend.api.collaboration import router as collaboration_router
 from backend.api.data_storage import router as data_storage_router
 from backend.api.database_mcp import router as database_mcp_router
 from backend.api.developer import router as developer_router
@@ -62,6 +63,7 @@ def _get_system_routers() -> list:
     """Get system and settings routers (Issue #560: extracted)."""
     return [
         (chat_router, "", ["chat"], "chat"),
+        (collaboration_router, "", ["collaboration"], "collaboration"),
         (system_router, "/system", ["system"], "system"),
         (settings_router, "/settings", ["settings"], "settings"),
         (data_storage_router, "", ["data-storage"], "data_storage"),
