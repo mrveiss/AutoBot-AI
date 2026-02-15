@@ -162,6 +162,32 @@ rsync_cmd \
     "$REMOTE_USER@$REMOTE_HOST:$SLM_FRONTEND_REMOTE/"
 log_info "Frontend synced"
 
+# ===== Update Database Version =====
+
+# Get current commit hash (Issue #885)
+echo ""
+log_step "Updating SLM node version in database..."
+CURRENT_COMMIT=$(git -C "$PROJECT_ROOT" log --oneline -1 --format='%h' 2>/dev/null || echo "unknown")
+
+if [ "$CURRENT_COMMIT" != "unknown" ]; then
+    # Update database with current commit hash
+    # Note: Sources /etc/autobot/db-credentials.env on remote for postgres credentials
+    UPDATE_SQL="UPDATE nodes SET code_version = '$CURRENT_COMMIT', code_status = 'UP_TO_DATE', updated_at = NOW() WHERE node_id = '00-SLM-Manager';"
+
+    ssh ${SSH_KEY:+-i "$SSH_KEY"} $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" \
+        "source /etc/autobot/db-credentials.env 2>/dev/null && \
+         PGPASSWORD=\$SLM_DB_PASSWORD psql -h 127.0.0.1 -U slm_app -d slm -c \"$UPDATE_SQL\"" \
+        > /dev/null 2>&1
+
+    if [ $? -eq 0 ]; then
+        log_info "Database updated: 00-SLM-Manager → $CURRENT_COMMIT"
+    else
+        log_warn "Could not update database (non-critical, code is deployed)"
+    fi
+else
+    log_warn "Could not determine current commit (non-critical, code is deployed)"
+fi
+
 # ===== Phase 2: Run Ansible =====
 
 if [ "$ACTION" = "deploy" ]; then
