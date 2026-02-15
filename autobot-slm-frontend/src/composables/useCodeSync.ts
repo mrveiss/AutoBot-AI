@@ -328,6 +328,21 @@ export function useCodeSync() {
 
       return response.data
     } catch (e) {
+      // Special handling for SLM Manager self-restart (502 errors expected)
+      if (axios.isAxiosError(e) && e.response?.status === 502) {
+        // Check if this is the SLM server itself
+        const isSLMServer = nodeId === '00-SLM-Manager' || nodeId.includes('SLM')
+
+        if (isSLMServer && (options.restart ?? true)) {
+          // 502 is expected when SLM restarts itself - treat as success
+          return {
+            success: true,
+            message: 'SLM Manager restart in progress. Backend will be available in ~30 seconds. Refresh the page after waiting.',
+            node_id: nodeId
+          }
+        }
+      }
+
       const message = e instanceof Error ? e.message : 'Sync failed'
       error.value = message
       if (axios.isAxiosError(e) && e.response?.data?.detail) {
