@@ -307,7 +307,19 @@ export const useUserStore = defineStore('user', () => {
   // Check auth status from backend (handles single_user mode auto-auth)
   async function checkAuthFromBackend(): Promise<boolean> {
     try {
-      const response = await fetch('/api/auth/me')
+      // Issue #869: Use absolute URL to backend, not relative (which hits frontend nginx)
+      const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://172.16.168.20:8443'
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5s timeout
+
+      const response = await fetch(`${backendUrl}/api/auth/me`, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json'
+        }
+      })
+      clearTimeout(timeoutId)
+
       if (response.ok) {
         const data = await response.json()
         if (data.authenticated) {
@@ -333,7 +345,12 @@ export const useUserStore = defineStore('user', () => {
       }
       return false
     } catch (error) {
-      logger.warn('Failed to check auth from backend:', error)
+      // Silently fail on timeout/network errors (don't block login page)
+      if (error instanceof Error && error.name === 'AbortError') {
+        logger.debug('Backend auth check timed out (5s)')
+      } else {
+        logger.debug('Backend auth check failed:', error)
+      }
       return false
     }
   }
