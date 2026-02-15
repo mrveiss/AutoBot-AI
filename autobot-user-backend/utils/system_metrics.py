@@ -268,15 +268,15 @@ class SystemMetricsCollector:
         """
         Get service endpoints for health checks.
 
-        Issue #620.
+        Issue #620, #876: Backend self-check removed to prevent circular deadlock.
 
         Returns:
             Dictionary mapping service names to their health check URLs
         """
         return {
-            "backend": (
-                f"http://{config.get_host('backend')}:{config.get_port('backend')}/api/health"
-            ),
+            # Issue #876: Removed backend self-health-check - backend checking
+            # itself during initialization creates circular deadlock.
+            # Backend health is implicit: if metrics are being collected, backend is running.
             "redis": None,  # Special handling for Redis
             "ollama": (
                 f"http://{config.get_host('ollama')}:{config.get_port('ollama')}/api/tags"

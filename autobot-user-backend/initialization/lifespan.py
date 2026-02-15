@@ -528,6 +528,38 @@ async def _init_slm_client():
         )
 
 
+async def _init_metrics_collection():
+    """
+    Initialize system metrics collection (NON-CRITICAL).
+
+    Issue #876: Start metrics collection AFTER backend initialization completes.
+    Previously started at module load time causing self-health-check deadlock.
+    """
+    logger.info("✅ [ 91%] Metrics Collection: Starting system metrics collection...")
+    try:
+        # Import here to avoid circular dependency
+        from datetime import datetime
+
+        from api.analytics import analytics_controller
+
+        # Initialize session tracking
+        analytics_state = {}
+        analytics_state["session_start"] = datetime.now().isoformat()
+
+        # Start metrics collection safely (backend is now ready to serve requests)
+        collector = analytics_controller.metrics_collector
+        if hasattr(collector, "_is_collecting") and not collector._is_collecting:
+            import asyncio
+
+            asyncio.create_task(collector.start_collection())
+            logger.info("✅ [ 91%] Metrics Collection: Started successfully")
+        else:
+            logger.info("✅ [ 91%] Metrics Collection: Already running")
+
+    except Exception as metrics_error:
+        logger.warning("Metrics collection initialization failed: %s", metrics_error)
+
+
 async def _init_background_llm_sync(app: FastAPI):
     """
     Initialize background LLM sync and AI Stack client (NON-CRITICAL).
@@ -592,6 +624,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_documentation_watcher()  # Issue #165: Real-time doc sync
         await _init_log_forwarding()  # Issue #553: Auto-start log forwarding if configured
         await _init_slm_reconciler(app)  # Issue #726: SLM health reconciler
+        await _init_metrics_collection()  # Issue #876: Start metrics after backend is ready
 
         await update_app_state_multi(
             initialization_status="ready", initialization_message="All services ready"

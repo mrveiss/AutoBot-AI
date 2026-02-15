@@ -111,6 +111,49 @@ class PrometheusMetricsManager:
         """Generate Prometheus format output (stub returns empty string)."""
         return ""
 
+    # Issue #876: Missing methods called by system_metrics.py and multimodal_performance_monitor.py
+    def update_system_cpu(self, cpu_percent: float, **kwargs: Any) -> None:
+        """Update system CPU usage metric (no-op stub)."""
+
+    def update_system_memory(self, memory_percent: float, **kwargs: Any) -> None:
+        """Update system memory usage metric (no-op stub)."""
+
+    def update_system_disk(self, path: str, disk_percent: float, **kwargs: Any) -> None:
+        """Update system disk usage metric (no-op stub)."""
+
+    def record_network_bytes(
+        self, direction: str, bytes_count: int, **kwargs: Any
+    ) -> None:
+        """Record network bytes sent/received (no-op stub)."""
+
+    def update_service_status(self, service: str, status: str, **kwargs: Any) -> None:
+        """Update service health status (no-op stub)."""
+
+    def record_service_response_time(
+        self, service: str, response_time: float, **kwargs: Any
+    ) -> None:
+        """Record service response time (no-op stub)."""
+
+    def set_gpu_available(self, available: bool, **kwargs: Any) -> None:
+        """Set GPU availability status (no-op stub)."""
+
+    def update_gpu_metrics(
+        self,
+        gpu_id: int,
+        gpu_name: str,
+        utilization: float,
+        memory_utilization: float,
+        temperature: float,
+        power_watts: float,
+        **kwargs: Any
+    ) -> None:
+        """Update GPU metrics (no-op stub)."""
+
+    def record_multimodal_processing(
+        self, modality: str, processing_time: float, success: bool, **kwargs: Any
+    ) -> None:
+        """Record multimodal processing metrics (no-op stub)."""
+
 
 # Singleton instance
 _metrics_manager: Optional[PrometheusMetricsManager] = None

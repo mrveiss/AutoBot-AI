@@ -16,7 +16,12 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 
 import httpx
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import RedisDatabase
 
 # Import controller class (extracted from this file - Issue #212)
 from backend.api.analytics_controller import (
@@ -27,10 +32,6 @@ from backend.api.analytics_controller import (
 
 # Import models from dedicated module (Issue #185 - split oversized files)
 from backend.api.analytics_models import AnalyticsOverview, RealTimeEvent
-from constants.network_constants import NetworkConstants
-from constants.threshold_constants import TimingConstants
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import RedisDatabase
 
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import hardware_monitor
@@ -1147,23 +1148,27 @@ async def websocket_live_analytics(websocket: WebSocket):
 # ============================================================================
 
 
-# Initialize analytics on module load
-@router.on_event("startup")
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="initialize_analytics",
-    error_code_prefix="ANALYTICS",
-)
-async def initialize_analytics():
-    """Initialize analytics system on startup"""
-    logger.info("Initializing Enhanced Analytics API...")
-
-    # Initialize session
-    analytics_state["session_start"] = datetime.now().isoformat()
-
-    # Start metrics collection
-    collector = analytics_controller.metrics_collector
-    if hasattr(collector, "_is_collecting") and not collector._is_collecting:
-        asyncio.create_task(collector.start_collection())
-
-    logger.info("Enhanced Analytics API initialized successfully")
+# Issue #876: Disabled module-load metrics collection to prevent deadlock.
+# Metrics collection should be started via lifespan manager Phase 2, not at router startup.
+# The @router.on_event("startup") decorator is deprecated and executes too early,
+# before backend is ready to serve requests, causing self-health-check deadlock.
+#
+# @router.on_event("startup")
+# @with_error_handling(
+#     category=ErrorCategory.SERVER_ERROR,
+#     operation="initialize_analytics",
+#     error_code_prefix="ANALYTICS",
+# )
+# async def initialize_analytics():
+#     """Initialize analytics system on startup"""
+#     logger.info("Initializing Enhanced Analytics API...")
+#
+#     # Initialize session
+#     analytics_state["session_start"] = datetime.now().isoformat()
+#
+#     # Start metrics collection
+#     collector = analytics_controller.metrics_collector
+#     if hasattr(collector, "_is_collecting") and not collector._is_collecting:
+#         asyncio.create_task(collector.start_collection())
+#
+#     logger.info("Enhanced Analytics API initialized successfully")
