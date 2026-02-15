@@ -559,20 +559,52 @@ infrastructure/
 ./infrastructure/shared/scripts/sync-to-vm.sh browser autobot-browser-worker/
 ```
 
+### Ansible Deployment (PRIMARY METHOD)
+
+**23 Ansible roles available** in `autobot-slm-backend/ansible/roles/`:
+- Infrastructure: `common`, `dns`, `distributed_setup`, `time_sync`
+- Services: `backend`, `frontend`, `redis`, `postgresql`, `monitoring`
+- AI/ML: `llm`, `npu-worker`, `ai-stack`, `agent_config`
+- Security: `service_auth`, `access_control`, `centralized_logging`
+- Management: `slm_manager`, `slm_agent`, `browser`, `vnc`
+
+**Common Playbooks:**
+```bash
+cd autobot-slm-backend/ansible
+
+# Full fleet deployment
+ansible-playbook playbooks/deploy-full.yml
+
+# Service control (start/stop/restart any service)
+ansible-playbook playbooks/slm-service-control.yml -e "service=autobot-backend action=restart"
+
+# Deploy specific components
+ansible-playbook playbooks/deploy-full.yml --tags frontend,backend
+
+# Deploy to specific nodes
+ansible-playbook playbooks/deploy-full.yml --limit slm_server
+```
+
+**Use Ansible for:**
+- Production deployments
+- Service orchestration (start/stop/restart)
+- Configuration management
+- Multi-node operations
+
 ### Frontend Deployment (CRITICAL)
 
 - `.19` serves SLM admin frontend via nginx+SSL (production build)
 - `.21` serves User frontend via nginx+SSL (production build)
 - **FORBIDDEN**: `npm run dev` on any VM — production builds only
-- Sync user frontend: `./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-user-frontend/`
-- Sync SLM frontend: `./infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-frontend/`
+- **Ansible deployment:** `ansible-playbook playbooks/deploy-full.yml --tags frontend`
+- **Manual sync:** `./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-user-frontend/`
 
 ### Local-Only Development (ZERO TOLERANCE)
 
 **NEVER edit on remote VMs** - No version control, no backup, VMs are ephemeral.
 
 1. Edit in `/home/kali/Desktop/AutoBot/`
-2. Sync immediately: `./infrastructure/shared/scripts/sync-to-vm.sh <vm> <component>/`
+2. Deploy via Ansible or sync: `./infrastructure/shared/scripts/sync-to-vm.sh <vm> <component>/`
 
 ---
 
@@ -617,14 +649,19 @@ Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
 ## QUICK COMMANDS
 
 ```bash
-# Startup
+# Startup (local dev)
 bash run_autobot.sh --dev
 
 # Health checks
 curl http://localhost:8001/api/health
 redis-cli -h 172.16.168.23 ping
 
-# Sync to VMs (new paths)
+# Ansible Deployment (production)
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/deploy-full.yml                    # Full deployment
+ansible-playbook playbooks/slm-service-control.yml -e "service=autobot-backend action=restart"
+
+# Manual sync to VMs (dev/manual operations)
 ./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/
 ./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/
 ./infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-backend/
