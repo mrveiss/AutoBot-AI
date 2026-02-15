@@ -294,6 +294,21 @@ async def sync_node(
             tags=tags if tags else None,
         )
 
+        # Update node version in database after successful sync
+        if playbook_result["success"]:
+            git_tracker = get_git_tracker()
+            current_commit = await git_tracker.get_local_commit()
+
+            if current_commit:
+                node.code_version = current_commit
+                node.code_status = CodeStatus.UP_TO_DATE
+                await db.commit()
+                logger.info(
+                    "Updated node %s version to %s",
+                    node_id,
+                    current_commit[:8],
+                )
+
         return NodeSyncResponse(
             success=playbook_result["success"],
             message=playbook_result["output"]
