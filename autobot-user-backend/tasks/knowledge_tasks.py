@@ -244,8 +244,8 @@ async def _scan_man_page_changes_async(
         Dict with scan results and storage statistics
     """
     from knowledge import get_knowledge_base
-    from utils.redis_client import get_redis_client
 
+    from autobot_shared.redis_client import get_redis_client
     from backend.services.fast_document_scanner import FastDocumentScanner
 
     try:
@@ -385,8 +385,8 @@ async def _execute_full_man_page_index(
     """
     from constants.threshold_constants import TimingConstants
     from knowledge import get_knowledge_base
-    from utils.redis_client import get_redis_client
 
+    from autobot_shared.redis_client import get_redis_client
     from backend.services.fast_document_scanner import FastDocumentScanner
 
     # Get system context

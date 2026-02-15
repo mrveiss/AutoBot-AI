@@ -431,7 +431,9 @@ async def create_service_client(
     """
     try:
         if redis_manager is None:
-            from utils.redis_client import get_redis_client as get_redis_manager
+            from autobot_shared.redis_client import (
+                get_redis_client as get_redis_manager,
+            )
 
             redis_manager = await get_redis_manager()
 
