@@ -614,22 +614,23 @@ async def initialize_background_services(app: FastAPI):
         )
         logger.info("=== PHASE 2: Background Services Initialization ===")
 
-        # Initialize services (Issue #281: uses helpers)
-        await _init_knowledge_base(app)
-        await _init_npu_worker_websocket()
-        await _warmup_npu_connection()  # Issue #165: Warm up NPU for fast embeddings
-        await _init_memory_graph(app)
-        # await _init_slm_client()  # Issue #876: TEMP DISABLED - blocks event loop
-        # await _init_background_llm_sync(app)  # Issue #876: TEMP DISABLED - blocks event loop
-        await _init_documentation_watcher()  # Issue #165: Real-time doc sync
-        await _init_log_forwarding()  # Issue #553: Auto-start log forwarding if configured
-        # await _init_slm_reconciler(app)  # Issue #876: TEMP DISABLED - blocks event loop
-        # await _init_metrics_collection()  # Issue #876: TEMP DISABLED - blocks event loop
+        # Issue #876: ALL PHASE 2 DISABLED TEMPORARILY - isolating event loop deadlock
+        # await _init_knowledge_base(app)
+        # await _init_npu_worker_websocket()
+        # await _warmup_npu_connection()
+        # await _init_memory_graph(app)
+        # await _init_slm_client()
+        # await _init_background_llm_sync(app)
+        # await _init_documentation_watcher()
+        # await _init_log_forwarding()
+        # await _init_slm_reconciler(app)
+        # await _init_metrics_collection()
 
         await update_app_state_multi(
-            initialization_status="ready", initialization_message="All services ready"
+            initialization_status="ready",
+            initialization_message="Phase 1 only (Phase 2 disabled)",
         )
-        logger.info("✅ [100%] PHASE 2 COMPLETE: All background services initialized")
+        logger.info("✅ [100%] PHASE 2 SKIPPED: Testing with Phase 1 only")
 
     except Exception as e:
         logger.error("Background initialization encountered errors: %s", e)
