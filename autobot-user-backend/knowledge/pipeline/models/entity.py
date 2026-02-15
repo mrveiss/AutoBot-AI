@@ -21,6 +21,7 @@ EntityType = Literal[
     "LOCATION",
     "EVENT",
     "DOCUMENT",
+    "USER",  # Issue #870: User entity for chat sessions and ownership tracking
 ]
 
 
