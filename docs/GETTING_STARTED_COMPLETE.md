@@ -72,13 +72,14 @@ Regardless of your role, get AutoBot running in 5 minutes:
 git clone <repository-url>
 cd AutoBot
 
-# 2. Run setup script
-./scripts/setup/setup_agent.sh
+# 2. Deploy with Ansible (recommended for production)
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/deploy-full.yml
 
-# 3. Start full system
+# OR: Run setup script (development/local)
 ./run_agent.sh
 
-# 4. Access AutoBot
+# 3. Access AutoBot
 open http://localhost:5173
 ```
 

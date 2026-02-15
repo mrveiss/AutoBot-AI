@@ -16,7 +16,7 @@
 - **Circuit Breaker Pattern**: Service failure protection with performance monitoring
 - **GUI Testing**: Playwright-based end-to-end testing framework
 
-### ✅ Browser Dependencies**: Automated installation via setup_agent.sh
+### ✅ Browser Dependencies**: Automated installation via Ansible deployment (see autobot-slm-backend/ansible/)
 
 ---
 

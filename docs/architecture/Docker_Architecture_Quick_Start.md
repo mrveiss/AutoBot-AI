@@ -19,7 +19,7 @@ AutoBot now features a comprehensive Docker architecture with three deployment m
 ### 1. Initial Setup
 ```bash
 # Run setup script to install all dependencies
-./setup_agent.sh
+# Deploy with Ansible: cd autobot-slm-backend/ansible && ansible-playbook playbooks/deploy-full.yml
 
 # Create Docker volumes and configuration
 mkdir -p docker/volumes/{prompts,knowledge_base,config,uploads}
@@ -197,7 +197,7 @@ print(redis_db_manager.validate_database_separation())
 
 ## 📚 Additional Documentation
 
-- **Complete setup**: See `scripts/setup/setup_agent.sh`
+- **Complete setup**: See `scripts/setu# Deploy with Ansible: cd autobot-slm-backend/ansible && ansible-playbook playbooks/deploy-full.yml`
 - **Kubernetes migration**: See `docs/Kubernetes_Migration_Strategy.md`
 - **API documentation**: See `docs/API_Duplication_Analysis.md`
 - **Redis configuration**: See `docker/volumes/config/redis-databases.yaml`

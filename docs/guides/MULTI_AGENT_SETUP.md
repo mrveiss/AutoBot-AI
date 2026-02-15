@@ -14,17 +14,23 @@ curl -fsSL https://ollama.com/install.sh | sh
 ```
 
 ### 2. Run Complete Setup
+
+**Option A: Ansible Deployment (Recommended for Production)**
 ```bash
-./setup_agent.sh
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/deploy-full.yml
+```
+
+**Option B: Local Development Setup**
+```bash
+./run_agent.sh
 ```
 
 This will:
-- ✅ Install Python 3.10.13 with pyenv
 - ✅ Set up virtual environment with all dependencies
-- ✅ Install Docker and required containers
 - ✅ Download required Ollama models (1B and 3B)
 - ✅ Build Vue.js frontend
-- ✅ Verify all components
+- ✅ Start all services
 
 ### 3. Verify Installation
 ```bash
@@ -118,7 +124,7 @@ export AUTOBOT_MODEL_SYSTEM_COMMANDS="artifish/llama3.2-uncensored:1b"
 4. **Docker issues**
    ```bash
    sudo systemctl start docker
-   ./setup_agent.sh  # Re-run setup
+   # Use Ansible playbooks (see autobot-slm-backend/ansible/) or ./run_agent.sh  # Re-run setup
    ```
 
 ### Verification Commands

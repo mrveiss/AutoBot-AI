@@ -101,7 +101,26 @@ The `shared/` directory contains resources used across multiple components:
 | `tests/` | Shared test utilities |
 | `analysis/` | Code analysis tools and reports |
 
-## Key Scripts
+## Deployment Methods
+
+### Ansible (Recommended for Production)
+
+```bash
+cd autobot-slm-backend/ansible
+
+# Full fleet deployment
+ansible-playbook playbooks/deploy-full.yml
+
+# Service control (start/stop/restart)
+ansible-playbook playbooks/slm-service-control.yml -e "service=autobot-backend action=restart"
+
+# Deploy specific roles
+ansible-playbook playbooks/deploy-full.yml --tags frontend,backend
+```
+
+**Available Ansible Roles:** 23 roles covering all infrastructure needs (centralized_logging, agent_config, distributed_setup, dns, monitoring, etc.)
+
+### Shell Scripts (Development/Manual Operations)
 
 **Sync to VMs:**
 

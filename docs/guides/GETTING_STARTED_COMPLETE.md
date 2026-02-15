@@ -73,7 +73,7 @@ git clone <repository-url>
 cd AutoBot
 
 # 2. Run setup script
-./scripts/setup/setup_agent.sh
+cd autobot-slm-backend/ansible && ansible-playbook playbooks/deploy-full.yml
 
 # 3. Start full system
 ./run_agent.sh
