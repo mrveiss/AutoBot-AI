@@ -14,16 +14,22 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from user_management.models.organization import Organization
-    from user_management.models.team import TeamMembership
-    from user_management.models.role import UserRole
+    from models.activities import (
+        BrowserActivityModel,
+        DesktopActivityModel,
+        FileActivityModel,
+        SecretUsageModel,
+        TerminalActivityModel,
+    )
     from user_management.models.api_key import APIKey
-    from user_management.models.sso import UserSSOLink
     from user_management.models.mfa import UserMFA
+    from user_management.models.organization import Organization
+    from user_management.models.role import UserRole
+    from user_management.models.sso import UserSSOLink
+    from user_management.models.team import TeamMembership
 
 
 class User(Base, TimestampMixin):
@@ -180,6 +186,37 @@ class User(Base, TimestampMixin):
         "UserMFA",
         back_populates="user",
         uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # Activity tracking relationships (Issue #871)
+    terminal_activities: Mapped[list["TerminalActivityModel"]] = relationship(
+        "TerminalActivityModel",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    file_activities: Mapped[list["FileActivityModel"]] = relationship(
+        "FileActivityModel",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    browser_activities: Mapped[list["BrowserActivityModel"]] = relationship(
+        "BrowserActivityModel",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    desktop_activities: Mapped[list["DesktopActivityModel"]] = relationship(
+        "DesktopActivityModel",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    secret_usage: Mapped[list["SecretUsageModel"]] = relationship(
+        "SecretUsageModel",
+        back_populates="user",
         cascade="all, delete-orphan",
     )
 
