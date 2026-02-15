@@ -118,6 +118,7 @@ class PlaybookExecutor:
             "ANSIBLE_NOCOLOR": "1",
             "ANSIBLE_HOST_KEY_CHECKING": "False",
             "ANSIBLE_SSH_RETRIES": "3",
+            "ANSIBLE_LOCAL_TEMP": "/tmp/ansible_local_tmp",  # nosec B108 - Avoid ProtectHome conflicts
         }
 
         # Execute
