@@ -37,6 +37,10 @@ const syncStrategy = ref<'immediate' | 'graceful' | 'manual'>('graceful')
 const restartAfterSync = ref(true)
 const syncingNodeId = ref<string | null>(null)
 
+// Progress tracking (Issue #880)
+const syncProgress = ref<Map<string, string>>(new Map())
+const syncStage = ref<string | null>(null)
+
 // Schedule state (Issue #741 - Phase 7)
 const showScheduleModal = ref(false)
 const editingSchedule = ref<UpdateSchedule | null>(null)
@@ -113,6 +117,8 @@ async function handleRefresh(): Promise<void> {
 async function handleSyncNode(node: PendingNode): Promise<void> {
   logger.info('Syncing node:', node.node_id)
   syncingNodeId.value = node.node_id
+  syncProgress.value.clear()
+  syncStage.value = null
 
   const options: SyncOptions = {
     restart: restartAfterSync.value,
@@ -129,6 +135,11 @@ async function handleSyncNode(node: PendingNode): Promise<void> {
   }
 
   syncingNodeId.value = null
+  // Clear progress after a delay to show final message
+  setTimeout(() => {
+    syncProgress.value.delete(node.node_id)
+    syncStage.value = null
+  }, 3000)
 }
 
 async function handleSyncSelected(): Promise<void> {
@@ -321,6 +332,18 @@ function describeCron(expression: string): string {
 }
 
 // =============================================================================
+// WebSocket Progress Tracking (Issue #880)
+// =============================================================================
+
+function handleSyncProgress(data: any): void {
+  if (data.node_id && data.stage && data.message) {
+    syncProgress.value.set(data.node_id, data.message)
+    syncStage.value = data.stage
+    logger.debug('Sync progress:', data.stage, data.message)
+  }
+}
+
+// =============================================================================
 // Lifecycle
 // =============================================================================
 
@@ -333,6 +356,14 @@ onMounted(async () => {
     codeSync.fetchRoles(),
     codeSourceComposable.fetchCodeSource(),
   ])
+
+  // Subscribe to WebSocket sync progress updates (Issue #880)
+  try {
+    const { default: GlobalWebSocketService } = await import('@/services/GlobalWebSocketService')
+    GlobalWebSocketService.subscribe('sync_progress', handleSyncProgress)
+  } catch (error) {
+    logger.warn('Failed to subscribe to sync progress:', error)
+  }
 })
 </script>
 
@@ -414,6 +445,24 @@ onMounted(async () => {
             </svg>
             All Up To Date
           </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sync Progress Banner (Issue #880) -->
+    <div
+      v-if="syncingNodeId && syncProgress.size > 0"
+      class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6"
+    >
+      <div class="flex items-center gap-3">
+        <svg class="w-5 h-5 text-blue-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <div class="flex-1">
+          <div class="font-medium text-blue-900">Sync in Progress</div>
+          <div class="text-sm text-blue-700">
+            {{ Array.from(syncProgress.values())[0] }}
+          </div>
         </div>
       </div>
     </div>
@@ -615,7 +664,7 @@ onMounted(async () => {
                 Outdated
               </span>
             </td>
-            <td class="px-6 py-4 whitespace-nowrap">
+            <td class="px-6 py-4">
               <button
                 @click="handleSyncNode(node)"
                 :disabled="syncingNodeId === node.node_id"
@@ -623,6 +672,16 @@ onMounted(async () => {
               >
                 {{ syncingNodeId === node.node_id ? 'Syncing...' : 'Sync' }}
               </button>
+              <!-- Progress indicator (Issue #880) -->
+              <div
+                v-if="syncingNodeId === node.node_id && syncProgress.has(node.node_id)"
+                class="mt-1 text-xs text-gray-600 flex items-center gap-1"
+              >
+                <svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>{{ syncProgress.get(node.node_id) }}</span>
+              </div>
             </td>
           </tr>
         </tbody>

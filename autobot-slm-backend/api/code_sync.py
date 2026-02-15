@@ -233,6 +233,47 @@ async def get_pending_nodes(
     )
 
 
+async def _broadcast_sync_progress(node_id: str, progress: Dict[str, str]) -> None:
+    """
+    Broadcast sync progress via WebSocket (Issue #880).
+
+    Helper for sync_node.
+    """
+    try:
+        from api.websocket import ws_manager
+
+        await ws_manager.broadcast(
+            {
+                "type": "sync_progress",
+                "data": {
+                    "node_id": node_id,
+                    "stage": progress["stage"],
+                    "message": progress["message"],
+                },
+            }
+        )
+    except Exception as e:
+        logger.debug("Failed to broadcast sync progress: %s", e)
+
+
+async def _update_node_version_after_sync(
+    db: AsyncSession, node: Node, node_id: str
+) -> None:
+    """
+    Update node version in database after successful sync (Issue #880).
+
+    Helper for sync_node.
+    """
+    git_tracker = get_git_tracker()
+    current_commit = await git_tracker.get_local_commit()
+
+    if current_commit:
+        node.code_version = current_commit
+        node.code_status = CodeStatus.UP_TO_DATE
+        await db.commit()
+        logger.info("Updated node %s version to %s", node_id, current_commit[:8])
+
+
 @router.post("/nodes/{node_id}/sync", response_model=NodeSyncResponse)
 async def sync_node(
     node_id: str,
@@ -241,7 +282,9 @@ async def sync_node(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> NodeSyncResponse:
     """
-    Trigger code sync on a specific node using Ansible playbook.
+    Trigger code sync on a specific node using Ansible playbook (Issue #880).
+
+    Now includes real-time progress updates via WebSocket.
     """
     # Get node
     result = await db.execute(select(Node).where(Node.node_id == node_id))
@@ -261,6 +304,10 @@ async def sync_node(
     if not request.restart:
         tags.append("!restart")  # Skip restart tasks
 
+    # Progress callback for WebSocket broadcasts (Issue #880)
+    async def progress_callback(progress: Dict[str, str]) -> None:
+        await _broadcast_sync_progress(node_id, progress)
+
     # Check if this is the SLM server itself (Issue #867)
     # When syncing the SLM server, we can't wait for the playbook to complete
     # because the backend will restart during execution, causing HTTP 502 errors
@@ -279,6 +326,7 @@ async def sync_node(
                 playbook_name="update-all-nodes.yml",
                 limit=limit,
                 tags=tags if tags else None,
+                progress_callback=progress_callback,
             )
         )
         return NodeSyncResponse(
@@ -287,27 +335,17 @@ async def sync_node(
             node_id=node_id,
         )
     else:
-        # Normal execution - wait for result
+        # Normal execution - wait for result with progress updates
         playbook_result = await executor.execute_playbook(
             playbook_name="update-all-nodes.yml",
             limit=limit,
             tags=tags if tags else None,
+            progress_callback=progress_callback,
         )
 
         # Update node version in database after successful sync
         if playbook_result["success"]:
-            git_tracker = get_git_tracker()
-            current_commit = await git_tracker.get_local_commit()
-
-            if current_commit:
-                node.code_version = current_commit
-                node.code_status = CodeStatus.UP_TO_DATE
-                await db.commit()
-                logger.info(
-                    "Updated node %s version to %s",
-                    node_id,
-                    current_commit[:8],
-                )
+            await _update_node_version_after_sync(db, node, node_id)
 
         return NodeSyncResponse(
             success=playbook_result["success"],

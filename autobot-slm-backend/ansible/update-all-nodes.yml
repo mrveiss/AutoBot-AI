@@ -2,7 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 ---
-# Fast Code Update for All Fleet Nodes
+# Fast Code Update for All Fleet Nodes (Issue #880)
 #
 # This playbook performs code-only updates without full provisioning:
 # - Syncs latest code from control machine
@@ -11,16 +11,146 @@
 # - NO system package updates
 # - NO configuration changes
 #
+# Two-Play Structure (Issue #880):
+# 1. Play 1: Update SLM server FIRST (if in scope)
+# 2. Play 2: Update all other nodes (after SLM is ready)
+#
+# This prevents GUI sync from triggering SLM backend restart when syncing
+# other nodes. The SLM server always updates itself first when included.
+#
 # Usage:
-#   ansible-playbook update-all-nodes.yml                    # All nodes
-#   ansible-playbook update-all-nodes.yml --limit frontend   # Specific node
+#   ansible-playbook update-all-nodes.yml                    # All nodes (SLM first, then others)
+#   ansible-playbook update-all-nodes.yml --limit frontend   # Only frontend (Play 1 skips)
+#   ansible-playbook update-all-nodes.yml --limit 00-SLM-Manager  # Only SLM (Play 2 skips)
 #   ansible-playbook update-all-nodes.yml --tags backend     # Specific service
 #   ansible-playbook update-all-nodes.yml --skip-tags restart  # No restart
 #
 # Speed: ~30 seconds per node (vs. 5+ minutes for full provision)
 
-- name: Update All Fleet Nodes - Code Only
-  hosts: infrastructure
+# =============================================================================
+# PLAY 1: Update SLM Server First (Self-Update Pattern)
+# =============================================================================
+- name: Play 1 - Update SLM Server First
+  hosts: slm_server
+  become: true
+  gather_facts: false
+
+  vars:
+    code_base_dir: /opt/autobot
+    restart_services: true
+    verify_health: true
+
+  pre_tasks:
+    - name: "[PLAY 1] Starting SLM Server Self-Update"
+      debug:
+        msg: |
+          ╔═══════════════════════════════════════════════════════════════╗
+          ║  PLAY 1: SLM Server Self-Update (Issue #880)                 ║
+          ╚═══════════════════════════════════════════════════════════════╝
+          Target: {{ inventory_hostname }} ({{ ansible_host }})
+          Action: Sync code + restart backend
+          Note: Backend will restart - expect brief WebSocket disconnect
+          ═══════════════════════════════════════════════════════════════
+      run_once: false
+
+  tasks:
+    # =========================================================================
+    # SLM BACKEND - Self-Update First
+    # =========================================================================
+    - name: "[PLAY 1] SLM | Sync autobot-slm-backend code"
+      synchronize:
+        src: "{{ playbook_dir }}/../"
+        dest: "{{ code_base_dir }}/autobot-slm-backend/"
+        delete: false
+        rsync_opts:
+          - "--exclude=venv"
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=.git"
+          - "--exclude=data/"
+      tags: [slm, slm-backend]
+
+    - name: "[PLAY 1] SLM | Restart autobot-slm-backend service"
+      command: systemctl restart autobot-slm-backend
+      async: 1
+      poll: 0
+      become: true
+      when: restart_services | bool
+      tags: [slm, slm-backend, restart]
+      changed_when: true
+
+    # =========================================================================
+    # SLM FRONTEND
+    # =========================================================================
+    - name: "[PLAY 1] SLM Frontend | Sync autobot-slm-frontend code"
+      synchronize:
+        src: "{{ playbook_dir }}/../../autobot-slm-frontend/"
+        dest: "{{ code_base_dir }}/autobot-slm-frontend/"
+        delete: false
+        rsync_opts:
+          - "--exclude=node_modules"
+          - "--exclude=.git"
+      tags: [slm, slm-frontend]
+
+    - name: "[PLAY 1] SLM Frontend | Rebuild production dist"
+      command:
+        cmd: npm run build
+        chdir: "{{ code_base_dir }}/autobot-slm-frontend"
+      tags: [slm, slm-frontend]
+
+    # =========================================================================
+    # SHARED LIBRARY
+    # =========================================================================
+    - name: "[PLAY 1] Shared | Sync autobot-shared library"
+      synchronize:
+        src: "{{ playbook_dir }}/../../autobot-shared/"
+        dest: "{{ code_base_dir }}/autobot-shared/"
+        delete: false
+        rsync_opts:
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=.git"
+      tags: [shared, library]
+
+  post_tasks:
+    # =========================================================================
+    # HEALTH VERIFICATION
+    # =========================================================================
+    - name: "[PLAY 1] Verify | Wait for SLM backend to stabilize"
+      pause:
+        seconds: 10
+      when: verify_health | bool
+      tags: [verify]
+
+    - name: "[PLAY 1] Verify | Check SLM backend health"
+      uri:
+        url: "https://{{ ansible_host }}/api/health"
+        validate_certs: false
+        status_code: 200
+      register: health_check
+      retries: 6
+      delay: 5
+      until: health_check.status == 200
+      failed_when: false
+      when: verify_health | bool
+      tags: [verify]
+
+    - name: "[PLAY 1] SLM Server Update Complete"
+      debug:
+        msg: |
+          ╔═══════════════════════════════════════════════════════════════╗
+          ║  PLAY 1: SLM Server Update Complete ✓                        ║
+          ╚═══════════════════════════════════════════════════════════════╝
+          Status: {{ 'Backend restarted and healthy' if restart_services else 'Code updated (no restart)' }}
+          Ready to update other nodes
+          ═══════════════════════════════════════════════════════════════
+      tags: [verify]
+
+# =============================================================================
+# PLAY 2: Update All Other Infrastructure Nodes
+# =============================================================================
+- name: Play 2 - Update Other Infrastructure Nodes
+  hosts: infrastructure:!slm_server
   become: true
   gather_facts: false
   serial: 3  # Update 3 nodes at a time (rolling updates)
@@ -31,14 +161,15 @@
     verify_health: true
 
   pre_tasks:
-    - name: Display update info
+    - name: "[PLAY 2] Starting Node Update"
       debug:
         msg: |
-          ═══════════════════════════════════════════════════════════════
-          Fast Code Update
-          ═══════════════════════════════════════════════════════════════
+          ╔═══════════════════════════════════════════════════════════════╗
+          ║  PLAY 2: Infrastructure Node Update (Issue #880)             ║
+          ╚═══════════════════════════════════════════════════════════════╝
           Target: {{ inventory_hostname }} ({{ ansible_host }})
           Action: Code sync + service restart
+          Batch: Processing up to 3 nodes at a time
           ═══════════════════════════════════════════════════════════════
       run_once: false
 
@@ -46,7 +177,7 @@
     # =========================================================================
     # USER BACKEND - Main AutoBot Backend
     # =========================================================================
-    - name: Backend | Sync autobot-user-backend code
+    - name: "[PLAY 2] Backend | Sync autobot-user-backend code"
       synchronize:
         src: "{{ playbook_dir }}/../../autobot-user-backend/"
         dest: "{{ code_base_dir }}/autobot-user-backend/"
@@ -61,7 +192,7 @@
       when: "'main' in group_names"
       tags: [backend, user-backend]
 
-    - name: Backend | Restart autobot-backend service
+    - name: "[PLAY 2] Backend | Restart autobot-backend service"
       systemd:
         name: autobot-backend
         state: restarted
@@ -73,7 +204,7 @@
     # =========================================================================
     # USER FRONTEND - Vue Application
     # =========================================================================
-    - name: Frontend | Sync autobot-user-frontend code
+    - name: "[PLAY 2] Frontend | Sync autobot-user-frontend code"
       synchronize:
         src: "{{ playbook_dir }}/../../autobot-user-frontend/"
         dest: "{{ code_base_dir }}/autobot-user-frontend/"
@@ -84,14 +215,14 @@
       when: "'frontend' in group_names"
       tags: [frontend, user-frontend]
 
-    - name: Frontend | Rebuild production dist
+    - name: "[PLAY 2] Frontend | Rebuild production dist"
       command:
         cmd: npx vite build
         chdir: "{{ code_base_dir }}/autobot-user-frontend"
       when: "'frontend' in group_names"
       tags: [frontend, user-frontend]
 
-    - name: Frontend | Reload nginx
+    - name: "[PLAY 2] Frontend | Reload nginx"
       systemd:
         name: nginx
         state: reloaded
@@ -103,7 +234,7 @@
     # =========================================================================
     # NPU WORKER
     # =========================================================================
-    - name: NPU | Sync autobot-npu-worker code
+    - name: "[PLAY 2] NPU | Sync autobot-npu-worker code"
       synchronize:
         src: "{{ playbook_dir }}/../../autobot-npu-worker/"
         dest: "{{ code_base_dir }}/autobot-npu-worker/"
@@ -116,7 +247,7 @@
       when: "'npu_worker' in group_names"
       tags: [npu, npu-worker]
 
-    - name: NPU | Restart autobot-npu-worker service
+    - name: "[PLAY 2] NPU | Restart autobot-npu-worker service"
       command: systemctl restart autobot-npu-worker
       become: true
       when:
@@ -127,7 +258,7 @@
     # =========================================================================
     # BROWSER WORKER
     # =========================================================================
-    - name: Browser | Sync autobot-browser-worker code
+    - name: "[PLAY 2] Browser | Sync autobot-browser-worker code"
       synchronize:
         src: "{{ playbook_dir }}/../../autobot-browser-worker/"
         dest: "{{ code_base_dir }}/autobot-browser-worker/"
@@ -141,7 +272,7 @@
       when: "'browser_worker' in group_names"
       tags: [browser, browser-worker]
 
-    - name: Browser | Restart autobot-playwright service
+    - name: "[PLAY 2] Browser | Restart autobot-playwright service"
       systemd:
         name: autobot-playwright
         state: restarted
@@ -151,58 +282,9 @@
       tags: [browser, browser-worker, restart]
 
     # =========================================================================
-    # SLM BACKEND
-    # =========================================================================
-    - name: SLM | Sync autobot-slm-backend code
-      synchronize:
-        src: "{{ playbook_dir }}/../"
-        dest: "{{ code_base_dir }}/autobot-slm-backend/"
-        delete: false
-        rsync_opts:
-          - "--exclude=venv"
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
-          - "--exclude=data/"
-      when: "'slm_server' in group_names"
-      tags: [slm, slm-backend]
-
-    - name: SLM | Restart autobot-slm-backend service
-      command: systemctl restart autobot-slm-backend
-      async: 1
-      poll: 0
-      become: true
-      when:
-        - "'slm_server' in group_names"
-        - restart_services | bool
-      tags: [slm, slm-backend, restart]
-      changed_when: true
-
-    # =========================================================================
-    # SLM FRONTEND
-    # =========================================================================
-    - name: SLM Frontend | Sync autobot-slm-frontend code
-      synchronize:
-        src: "{{ playbook_dir }}/../../autobot-slm-frontend/"
-        dest: "{{ code_base_dir }}/autobot-slm-frontend/"
-        delete: false
-        rsync_opts:
-          - "--exclude=node_modules"
-          - "--exclude=.git"
-      when: "'slm_server' in group_names"
-      tags: [slm, slm-frontend]
-
-    - name: SLM Frontend | Rebuild production dist
-      command:
-        cmd: npm run build
-        chdir: "{{ code_base_dir }}/autobot-slm-frontend"
-      when: "'slm_server' in group_names"
-      tags: [slm, slm-frontend]
-
-    # =========================================================================
     # SHARED LIBRARY - All nodes with Python services
     # =========================================================================
-    - name: Shared | Sync autobot-shared library
+    - name: "[PLAY 2] Shared | Sync autobot-shared library"
       synchronize:
         src: "{{ playbook_dir }}/../../autobot-shared/"
         dest: "{{ code_base_dir }}/autobot-shared/"
@@ -211,21 +293,20 @@
           - "--exclude=__pycache__"
           - "--exclude=*.pyc"
           - "--exclude=.git"
-      when: "'main' in group_names or 'npu_worker' in group_names or 'browser_worker' in group_names or 'slm_server' in group_names"
+      when: "'main' in group_names or 'npu_worker' in group_names or 'browser_worker' in group_names"
       tags: [shared, library]
 
   post_tasks:
     # =========================================================================
     # HEALTH VERIFICATION
     # =========================================================================
-    - name: Verify | Wait for services to stabilize
+    - name: "[PLAY 2] Verify | Wait for services to stabilize"
       pause:
-        # Give SLM backend extra time since it restarts asynchronously
-        seconds: "{{ 10 if 'slm_server' in group_names else 5 }}"
+        seconds: 5
       when: verify_health | bool
       tags: [verify]
 
-    - name: Verify | Check service status
+    - name: "[PLAY 2] Verify | Check service status"
       systemd:
         name: "{{ item }}"
       register: service_status
@@ -234,26 +315,26 @@
         - autobot-backend
         - autobot-npu-worker
         - autobot-playwright
-        - autobot-slm-backend
         - nginx
       when:
         - verify_health | bool
-        # Skip slm-backend health check on SLM server itself (it's restarting async)
-        - not (item == 'autobot-slm-backend' and 'slm_server' in group_names)
       tags: [verify]
 
-    - name: Display update summary
+    - name: "[PLAY 2] Node Update Complete"
       debug:
         msg: |
-          ═══════════════════════════════════════════════════════════════
-          Update Complete: {{ inventory_hostname }}
-          ═══════════════════════════════════════════════════════════════
-          Code: Updated
-          Services: {{ 'Restarted' if restart_services else 'Not restarted' }}
+          ╔═══════════════════════════════════════════════════════════════╗
+          ║  PLAY 2: Node Update Complete ✓                              ║
+          ╚═══════════════════════════════════════════════════════════════╝
+          Node: {{ inventory_hostname }}
+          Status: {{ 'Services restarted' if restart_services else 'Code updated (no restart)' }}
           ═══════════════════════════════════════════════════════════════
       tags: [verify]
 
-- name: Update Summary Report
+# =============================================================================
+# FINAL SUMMARY
+# =============================================================================
+- name: Fleet Update Summary
   hosts: localhost
   gather_facts: false
   run_once: true
@@ -263,11 +344,15 @@
       debug:
         msg: |
           ╔═══════════════════════════════════════════════════════════════╗
-          ║             Fleet Update Complete                             ║
+          ║             Fleet Update Complete (Issue #880)                ║
           ╚═══════════════════════════════════════════════════════════════╝
 
-          All nodes have been updated with the latest code.
-          Services have been restarted gracefully (3 nodes at a time).
+          Two-Play Structure Executed:
+          - Play 1: SLM Server updated first (if in scope)
+          - Play 2: Other infrastructure nodes updated
+
+          All targeted nodes have been updated with the latest code.
+          Services have been restarted gracefully.
 
           Next steps:
           - Verify services via monitoring dashboards
