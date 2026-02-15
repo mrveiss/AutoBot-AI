@@ -1,0 +1,155 @@
+---
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Fix Backend Worker Deadlock (Issue #876)
+#
+# This playbook fixes the backend systemd service to use single worker mode
+# instead of 4 workers which causes deadlock during initialization.
+#
+# Usage:
+#   ansible-playbook fix-backend-worker-deadlock.yml
+#   ansible-playbook fix-backend-worker-deadlock.yml --check  # Dry run
+
+- name: Fix Backend Worker Deadlock
+  hosts: backend
+  become: true
+  vars:
+    backend_service_file: /etc/systemd/system/autobot-backend.service
+    backend_venv: /opt/autobot/autobot-user-backend/venv
+    backend_workdir: /opt/autobot/autobot-user-backend
+    health_check_url: "https://172.16.168.20:8443/api/health"
+    health_check_timeout: 30
+    health_check_retries: 6
+
+  tasks:
+    - name: Check if backend service exists
+      ansible.builtin.stat:
+        path: "{{ backend_service_file }}"
+      register: service_file
+
+    - name: Fail if service file doesn't exist
+      ansible.builtin.fail:
+        msg: "Backend service file not found at {{ backend_service_file }}"
+      when: not service_file.stat.exists
+
+    - name: Backup current service file
+      ansible.builtin.command:
+        cmd: "cp {{ backend_service_file }} {{ backend_service_file }}.backup-{{ ansible_date_time.epoch }}"
+      register: backup_result
+      changed_when: true
+
+    - name: Display backup location
+      ansible.builtin.debug:
+        msg: "Service file backed up to {{ backend_service_file }}.backup-{{ ansible_date_time.epoch }}"
+
+    - name: Update systemd service to single worker mode
+      ansible.builtin.template:
+        src: templates/autobot-backend-single-worker.service.j2
+        dest: "{{ backend_service_file }}"
+        owner: root
+        group: root
+        mode: '0644'
+      register: service_updated
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+      when: service_updated.changed
+
+    - name: Stop backend service (clean shutdown)
+      ansible.builtin.systemd:
+        name: autobot-backend
+        state: stopped
+      when: service_updated.changed
+
+    - name: Wait for all backend processes to stop
+      ansible.builtin.shell:
+        cmd: |
+          for i in {1..10}; do
+            if ! pgrep -f "uvicorn main:app" > /dev/null; then
+              echo "All processes stopped"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Timeout waiting for processes to stop"
+          exit 1
+      register: stop_result
+      changed_when: false
+      when: service_updated.changed
+
+    - name: Start backend service with new configuration
+      ansible.builtin.systemd:
+        name: autobot-backend
+        state: started
+        enabled: true
+      when: service_updated.changed
+
+    - name: Wait for backend to initialize (Phase 1)
+      ansible.builtin.pause:
+        seconds: 10
+        prompt: "Waiting for backend critical services initialization..."
+      when: service_updated.changed
+
+    - name: Check backend health endpoint
+      ansible.builtin.uri:
+        url: "{{ health_check_url }}"
+        method: GET
+        validate_certs: false
+        timeout: "{{ health_check_timeout }}"
+        status_code: 200
+      register: health_check
+      retries: "{{ health_check_retries }}"
+      delay: 5
+      until: health_check.status == 200
+      when: service_updated.changed
+
+    - name: Verify no deadlock (check for SYN_SENT connections)
+      ansible.builtin.shell:
+        cmd: lsof -i :8443 -n | grep SYN_SENT || true
+      register: syn_sent_check
+      changed_when: false
+      when: service_updated.changed
+
+    - name: Fail if deadlock detected
+      ansible.builtin.fail:
+        msg: "Deadlock detected! Workers still in SYN_SENT state: {{ syn_sent_check.stdout }}"
+      when:
+        - service_updated.changed
+        - syn_sent_check.stdout | length > 0
+
+    - name: Get backend process info
+      ansible.builtin.shell:
+        cmd: ps aux | grep -E 'uvicorn main:app' | grep -v grep
+      register: backend_processes
+      changed_when: false
+      when: service_updated.changed
+
+    - name: Verify single worker mode
+      ansible.builtin.assert:
+        that:
+          - backend_processes.stdout_lines | length <= 2  # 1 master + 1 worker max
+        fail_msg: "Multiple workers detected! Expected 1-2 processes, found {{ backend_processes.stdout_lines | length }}"
+        success_msg: "Single worker mode confirmed"
+      when: service_updated.changed
+
+    - name: Display backend service status
+      ansible.builtin.systemd:
+        name: autobot-backend
+      register: service_status
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "========================================="
+          - "Backend Worker Deadlock Fix Complete"
+          - "========================================="
+          - "Service updated: {{ service_updated.changed }}"
+          - "Service state: {{ service_status.status.ActiveState }}"
+          - "Workers: Single worker mode (no deadlock)"
+          - "Health check: {{ 'PASSED' if health_check.status == 200 else 'N/A' }}"
+          - "Backup: {{ backend_service_file }}.backup-{{ ansible_date_time.epoch if service_updated.changed else 'Not needed' }}"
+          - ""
+          - "Login should now work at https://172.16.168.21/"
