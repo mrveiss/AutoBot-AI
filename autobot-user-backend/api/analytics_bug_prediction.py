@@ -17,11 +17,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from auth_middleware import check_admin_permission
+from constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from auth_middleware import check_admin_permission
-from constants.threshold_constants import TimingConstants
 from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -999,7 +999,7 @@ def _get_flat_heatmap_data(files: list) -> list:
 @router.get("/heatmap")
 async def get_risk_heatmap(
     admin_check: bool = Depends(check_admin_permission),
-    grouping: str = Query("directory", regex="^(directory|module|flat)$"),
+    grouping: str = Query("directory", pattern="^(directory|module|flat)$"),
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
     limit: int = Query(100, ge=1, le=300),
@@ -1048,7 +1048,7 @@ async def get_risk_heatmap(
 @router.get("/trends")
 async def get_prediction_trends(
     admin_check: bool = Depends(check_admin_permission),
-    period: str = Query("30d", regex="^(7d|30d|90d)$"),
+    period: str = Query("30d", pattern="^(7d|30d|90d)$"),
 ) -> dict[str, Any]:
     """
     Get historical bug prediction accuracy trends.

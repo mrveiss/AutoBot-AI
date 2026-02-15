@@ -8,6 +8,9 @@ import json
 import logging
 from typing import List, Optional
 
+from auth_middleware import check_admin_permission
+from constants.threshold_constants import CategoryDefaults, QueryDefaults
+from exceptions import InternalError
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -18,16 +21,14 @@ from fastapi import (
     Request,
 )
 from pydantic import BaseModel, Field, field_validator
+from utils.path_validation import contains_path_traversal
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # NOTE: Pydantic models moved to knowledge_maintenance.py (Issue #185 - split oversized files)
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
 from backend.knowledge_factory import get_or_create_knowledge_base
-from auth_middleware import check_admin_permission
-from constants.threshold_constants import CategoryDefaults, QueryDefaults
-from exceptions import InternalError
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from utils.path_validation import contains_path_traversal
 
 # =============================================================================
 # Issue #549: Pydantic Models for Knowledge Ingestion Endpoints
@@ -1061,8 +1062,8 @@ async def get_knowledge_entries(
     admin_check: bool = Depends(check_admin_permission),
     req: Request = None,
     limit: int = Query(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=1000),
-    cursor: Optional[str] = Query(default="0", regex=r"^[0-9]+$"),
-    category: Optional[str] = Query(default=None, regex=r"^[a-zA-Z0-9_-]*$"),
+    cursor: Optional[str] = Query(default="0", pattern=r"^[0-9]+$"),
+    category: Optional[str] = Query(default=None, pattern=r"^[a-zA-Z0-9_-]*$"),
 ):
     """Get knowledge base entries with cursor-based pagination.
 
@@ -1935,7 +1936,7 @@ def _extract_fact_created_at(fact_data: dict) -> str:
 @router.get("/fact/{fact_key}")
 async def get_fact_by_key(
     admin_check: bool = Depends(check_admin_permission),
-    fact_key: str = Path(..., regex=r"^[a-zA-Z0-9_:-]+$", max_length=255),
+    fact_key: str = Path(..., pattern=r"^[a-zA-Z0-9_:-]+$", max_length=255),
     req: Request = None,
 ):
     """

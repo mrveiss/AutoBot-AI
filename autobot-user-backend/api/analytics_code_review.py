@@ -17,11 +17,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
-
 from auth_middleware import check_admin_permission
 from constants.threshold_constants import TimingConstants
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -589,7 +588,7 @@ async def get_review_history(
 @router.get("/metrics")
 async def get_review_metrics(
     admin_check: bool = Depends(check_admin_permission),
-    period: str = Query("30d", regex="^(7d|30d|90d)$"),
+    period: str = Query("30d", pattern="^(7d|30d|90d)$"),
 ) -> dict[str, Any]:
     """
     Get review metrics over time.

@@ -15,11 +15,10 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Optional
 
+from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-
-from auth_middleware import check_admin_permission
 
 logger = logging.getLogger(__name__)
 
@@ -1123,7 +1122,7 @@ async def get_complexity_metrics(
 
 @router.get("/trends")
 async def get_quality_trends(
-    period: str = Query("30d", regex="^(7d|14d|30d|90d)$"),
+    period: str = Query("30d", pattern="^(7d|14d|30d|90d)$"),
     metric: Optional[str] = Query(None, description="Specific metric to trend"),
     admin_check: bool = Depends(check_admin_permission),
 ) -> dict[str, Any]:
@@ -1303,7 +1302,7 @@ async def drill_down_category(
 
 @router.get("/export")
 async def export_quality_report(
-    format: str = Query("json", regex="^(json|csv|pdf)$"),
+    format: str = Query("json", pattern="^(json|csv|pdf)$"),
     admin_check: bool = Depends(check_admin_permission),
 ) -> JSONResponse:
     """

@@ -427,7 +427,7 @@ async def unshare_knowledge(
     entity_id: str,
     request: Request,
     current_user: User = Depends(get_current_user),
-    entity_type: str = Query(..., regex="^(user|group)$"),
+    entity_type: str = Query(..., pattern="^(user|group)$"),
 ):
     """Revoke access to a knowledge fact from a user or group.
 

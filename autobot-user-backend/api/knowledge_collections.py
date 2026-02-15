@@ -25,17 +25,17 @@ Related Issues: #77 (Organization), #412 (Collections)
 import logging
 import re
 
+from constants.threshold_constants import QueryDefaults
 from fastapi import APIRouter, HTTPException, Path, Query
 from starlette.requests import Request
 
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.api.knowledge_models import (
     CollectionFactsRequest,
     CreateCollectionRequest,
     UpdateCollectionRequest,
 )
 from backend.knowledge_factory import get_or_create_knowledge_base
-from constants.threshold_constants import QueryDefaults
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ async def create_collection(
 async def list_collections(
     limit: int = Query(default=QueryDefaults.KNOWLEDGE_DEFAULT_LIMIT, ge=1, le=500),
     offset: int = Query(default=QueryDefaults.DEFAULT_OFFSET, ge=0),
-    sort_by: str = Query(default="name", regex="^(name|created_at|fact_count)$"),
+    sort_by: str = Query(default="name", pattern="^(name|created_at|fact_count)$"),
     req: Request = None,
 ):
     """
