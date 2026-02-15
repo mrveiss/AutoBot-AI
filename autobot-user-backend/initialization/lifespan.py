@@ -192,23 +192,24 @@ async def initialize_critical_services(app: FastAPI):
         logger.info("✅ [ 15%] Security: Security layer initialized successfully")
 
         # Issue #732: Initialize Gateway - CRITICAL
-        logger.info("✅ [ 17%] Gateway: Initializing unified communication gateway...")
-        try:
-            from services.gateway import ChannelType, Gateway, WebSocketAdapter
-
-            gateway = Gateway()
-            await gateway.start()
-
-            # Register WebSocket adapter
-            ws_adapter = WebSocketAdapter()
-            gateway.register_channel_adapter(ChannelType.WEBSOCKET, ws_adapter)
-
-            app.state.gateway = gateway
-            await update_app_state("gateway", gateway)
-            logger.info("✅ [ 17%] Gateway: Gateway initialized with WebSocket adapter")
-        except Exception as gateway_error:
-            logger.error(f"❌ CRITICAL: Gateway initialization failed: {gateway_error}")
-            raise RuntimeError(f"Gateway initialization failed: {gateway_error}")
+        # Issue #881: TEMP DISABLED - testing if Gateway blocks event loop
+        logger.info("✅ [ 17%] Gateway: SKIPPED (testing event loop deadlock)")
+        # try:
+        #     from services.gateway import ChannelType, Gateway, WebSocketAdapter
+        #
+        #     gateway = Gateway()
+        #     await gateway.start()
+        #
+        #     # Register WebSocket adapter
+        #     ws_adapter = WebSocketAdapter()
+        #     gateway.register_channel_adapter(ChannelType.WEBSOCKET, ws_adapter)
+        #
+        #     app.state.gateway = gateway
+        #     await update_app_state("gateway", gateway)
+        #     logger.info("✅ [ 17%] Gateway: Gateway initialized with WebSocket adapter")
+        # except Exception as gateway_error:
+        #     logger.error(f"❌ CRITICAL: Gateway initialization failed: {gateway_error}")
+        #     raise RuntimeError(f"Gateway initialization failed: {gateway_error}")
 
         # Issue #697: Instrument Redis and aiohttp with OpenTelemetry
         instrument_redis()
