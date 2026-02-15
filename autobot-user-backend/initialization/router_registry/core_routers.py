@@ -24,13 +24,17 @@ from backend.api.git_mcp import router as git_mcp_router
 from backend.api.http_client_mcp import router as http_client_mcp_router
 from backend.api.intelligent_agent import router as intelligent_agent_router
 from backend.api.knowledge import router as knowledge_router
+from backend.api.knowledge_audit import router as knowledge_audit_router
 from backend.api.knowledge_categories import router as knowledge_categories_router
+from backend.api.knowledge_collaboration import router as knowledge_collaboration_router
 from backend.api.knowledge_collections import router as knowledge_collections_router
 from backend.api.knowledge_mcp import router as knowledge_mcp_router
 from backend.api.knowledge_metadata import router as knowledge_metadata_router
+from backend.api.knowledge_organization import router as knowledge_organization_router
 from backend.api.knowledge_ownership import router as knowledge_ownership_router
 from backend.api.knowledge_population import router as knowledge_population_router
 from backend.api.knowledge_search import router as knowledge_search_router
+from backend.api.knowledge_search_scoped import router as knowledge_search_scoped_router
 from backend.api.knowledge_suggestions import router as knowledge_suggestions_router
 from backend.api.knowledge_tags import router as knowledge_tags_router
 from backend.api.llm import router as llm_router
@@ -66,16 +70,35 @@ def _get_system_routers() -> list:
     ]
 
 
-def _get_knowledge_routers() -> list:
-    """Get knowledge base routers (Issue #560: extracted, #688: ownership added)."""
+def _get_core_knowledge_routers() -> list:
+    """Get core knowledge base routers.
+
+    Helper for _get_knowledge_routers() (Issue #679).
+    """
     return [
         (knowledge_router, "/knowledge_base", ["knowledge"], "knowledge"),
+        (knowledge_audit_router, "", ["knowledge-audit"], "knowledge_audit"),
         (
             knowledge_search_router,
             "/knowledge_base",
             ["knowledge-search"],
             "knowledge_search",
         ),
+        (
+            knowledge_search_scoped_router,
+            "",
+            ["knowledge-search-scoped"],
+            "knowledge_search_scoped",
+        ),
+    ]
+
+
+def _get_knowledge_organization_routers() -> list:
+    """Get knowledge organization and metadata routers.
+
+    Helper for _get_knowledge_routers() (Issue #679).
+    """
+    return [
         (
             knowledge_tags_router,
             "/knowledge_base",
@@ -112,13 +135,43 @@ def _get_knowledge_routers() -> list:
             ["knowledge-population"],
             "knowledge_population",
         ),
+    ]
+
+
+def _get_knowledge_collaboration_routers() -> list:
+    """Get knowledge collaboration routers (Issue #688, #679).
+
+    Helper for _get_knowledge_routers() (Issue #679).
+    """
+    return [
         (
             knowledge_ownership_router,
             "/knowledge_base",
             ["knowledge-ownership"],
             "knowledge_ownership",
         ),
+        (
+            knowledge_collaboration_router,
+            "",
+            ["knowledge-collaboration"],
+            "knowledge_collaboration",
+        ),
+        (
+            knowledge_organization_router,
+            "",
+            ["knowledge-organization"],
+            "knowledge_organization",
+        ),
     ]
+
+
+def _get_knowledge_routers() -> list:
+    """Get knowledge base routers (Issue #560: extracted, #688: ownership, #679: full collaboration)."""
+    return (
+        _get_core_knowledge_routers()
+        + _get_knowledge_organization_routers()
+        + _get_knowledge_collaboration_routers()
+    )
 
 
 def _get_service_routers() -> list:
