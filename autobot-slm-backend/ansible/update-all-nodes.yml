@@ -135,12 +135,36 @@
       when: verify_health | bool
       tags: [verify]
 
+    # =========================================================================
+    # DATABASE VERSION UPDATE (Issue #885)
+    # =========================================================================
+    - name: "[PLAY 1] Database | Get current commit hash"
+      command: git log --oneline -1 --format='%h'
+      register: git_commit
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      failed_when: false
+      tags: [verify, database]
+
+    - name: "[PLAY 1] Database | Update SLM node version"
+      shell: |
+        source /etc/autobot/db-credentials.env
+        PGPASSWORD=$SLM_DB_PASSWORD psql -h 127.0.0.1 -U slm_app -d slm \
+          -c "UPDATE nodes SET code_version = '{{ git_commit.stdout }}', \
+              code_status = 'UP_TO_DATE', updated_at = NOW() \
+              WHERE node_id = '00-SLM-Manager';"
+      when: git_commit.rc == 0
+      failed_when: false
+      tags: [verify, database]
+
     - name: "[PLAY 1] SLM Server Update Complete"
       debug:
         msg: |
           ╔═══════════════════════════════════════════════════════════════╗
           ║  PLAY 1: SLM Server Update Complete ✓                        ║
           ╚═══════════════════════════════════════════════════════════════╝
+          Version: {{ git_commit.stdout | default('unknown') }}
           Status: {{ 'Backend restarted and healthy' if restart_services else 'Code updated (no restart)' }}
           Ready to update other nodes
           ═══════════════════════════════════════════════════════════════
@@ -320,6 +344,30 @@
         - verify_health | bool
       tags: [verify]
 
+    # =========================================================================
+    # DATABASE VERSION UPDATE (Issue #885)
+    # =========================================================================
+    - name: "[PLAY 2] Database | Get current commit hash"
+      command: git log --oneline -1 --format='%h'
+      register: git_commit
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      failed_when: false
+      tags: [verify, database]
+
+    - name: "[PLAY 2] Database | Update node version"
+      shell: |
+        source /etc/autobot/db-credentials.env
+        PGPASSWORD=$SLM_DB_PASSWORD psql -h 127.0.0.1 -U slm_app -d slm \
+          -c "UPDATE nodes SET code_version = '{{ git_commit.stdout }}', \
+              code_status = 'UP_TO_DATE', updated_at = NOW() \
+              WHERE node_id = '{{ slm_node_id }}';"
+      delegate_to: "{{ groups['slm_server'][0] }}"
+      when: git_commit.rc == 0
+      failed_when: false
+      tags: [verify, database]
+
     - name: "[PLAY 2] Node Update Complete"
       debug:
         msg: |
@@ -327,6 +375,7 @@
           ║  PLAY 2: Node Update Complete ✓                              ║
           ╚═══════════════════════════════════════════════════════════════╝
           Node: {{ inventory_hostname }}
+          Version: {{ git_commit.stdout | default('unknown') }}
           Status: {{ 'Services restarted' if restart_services else 'Code updated (no restart)' }}
           ═══════════════════════════════════════════════════════════════
       tags: [verify]
