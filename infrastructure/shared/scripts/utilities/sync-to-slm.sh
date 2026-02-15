@@ -188,6 +188,9 @@ if [ "$ACTION" = "deploy" ]; then
     fi
 
     # Build ansible command (run from ansible/ dir so ansible.cfg is picked up)
+    # Set ANSIBLE_LOCAL_TEMP to avoid ProtectHome=read-only issues on delegate_to: localhost tasks
+    export ANSIBLE_LOCAL_TEMP=/tmp/ansible_local_tmp
+
     ANSIBLE_CMD=(
         ansible-playbook
         -i "inventory/slm-nodes.yml"
