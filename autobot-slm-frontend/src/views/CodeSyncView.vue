@@ -359,8 +359,13 @@ onMounted(async () => {
 
   // Subscribe to WebSocket sync progress updates (Issue #880)
   try {
-    const { default: GlobalWebSocketService } = await import('@/services/GlobalWebSocketService')
-    GlobalWebSocketService.subscribe('sync_progress', handleSyncProgress)
+    const { useSlmWebSocket } = await import('@/composables/useSlmWebSocket')
+    const ws = useSlmWebSocket()
+    ws.subscribe('sync_progress', (message: any) => {
+      if (message.data) {
+        handleSyncProgress(message.data)
+      }
+    })
   } catch (error) {
     logger.warn('Failed to subscribe to sync progress:', error)
   }
