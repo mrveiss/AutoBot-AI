@@ -33,7 +33,7 @@
 
 - name: "ServiceAuth | Find latest service keys backup"
   ansible.builtin.find:
-    paths: "{{ playbook_dir }}/../../infrastructure/shared/config/service-keys"
+    paths: "{{ playbook_dir }}/../../../infrastructure/shared/config/service-keys"
     patterns: "service-keys-*.yaml"
   register: _service_keys_files
   delegate_to: localhost
