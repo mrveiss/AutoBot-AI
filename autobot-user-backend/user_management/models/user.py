@@ -176,6 +176,7 @@ class User(Base, TimestampMixin):
     api_keys: Mapped[list["APIKey"]] = relationship(
         "APIKey",
         back_populates="user",
+        foreign_keys="[APIKey.user_id]",
         cascade="all, delete-orphan",
     )
 
