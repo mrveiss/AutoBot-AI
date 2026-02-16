@@ -19,11 +19,11 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
+from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
 
@@ -1080,3 +1080,149 @@ def _generate_demo_trends(days: int) -> Dict[str, Any]:
         metric: _build_demo_trend_entry(first, last, direction, days)
         for metric, (first, last, direction) in _DEMO_TREND_CONFIG.items()
     }
+
+
+# =============================================================================
+# Code Evolution Mining (Issue #243)
+# =============================================================================
+
+
+class EvolutionAnalysisRequest(BaseModel):
+    """Request to trigger code evolution analysis"""
+
+    repo_path: str = Field(description="Path to git repository to analyze")
+    start_date: Optional[str] = Field(
+        None, description="Start date for analysis (ISO format)"
+    )
+    end_date: Optional[str] = Field(
+        None, description="End date for analysis (ISO format)"
+    )
+    commit_limit: int = Field(
+        100, description="Maximum number of commits to analyze", ge=1, le=1000
+    )
+
+
+class EvolutionAnalysisResponse(BaseModel):
+    """Response from evolution analysis"""
+
+    status: str
+    message: str
+    commits_analyzed: int = 0
+    emerging_patterns: List[Dict[str, Any]] = []
+    declining_patterns: List[Dict[str, Any]] = []
+    refactorings_detected: int = 0
+    analysis_duration_seconds: float = 0.0
+
+
+async def _store_pattern_snapshots(analysis_result: Dict) -> int:
+    """
+    Store pattern snapshots from analysis results (Issue #243).
+
+    Returns number of snapshots stored.
+    """
+    snapshots_stored = 0
+
+    try:
+        timestamp = datetime.now().isoformat()
+
+        # Store snapshots for each pattern type
+        pattern_timeline = analysis_result.get("pattern_timeline", {})
+
+        for month, patterns in pattern_timeline.items():
+            for pattern_type, count in patterns.items():
+                if count > 0:
+                    snapshot = PatternSnapshot(
+                        timestamp=timestamp,
+                        pattern_type=pattern_type,
+                        count=count,
+                        severity_distribution={},
+                        top_files=[],
+                    )
+
+                    success = await store_pattern_snapshot(snapshot)
+                    if success:
+                        snapshots_stored += 1
+
+    except Exception as e:
+        logger.error("Failed to store pattern snapshots: %s", e)
+
+    return snapshots_stored
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="trigger_evolution_analysis",
+    error_code_prefix="EVOLUTION",
+)
+@router.post("/analyze", response_model=EvolutionAnalysisResponse)
+async def trigger_evolution_analysis(
+    request: EvolutionAnalysisRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Trigger code evolution mining analysis on a git repository (Issue #243).
+
+    Analyzes git history to track pattern evolution, detect refactorings,
+    and identify emerging/declining code patterns.
+
+    Requires admin authentication.
+    """
+    import time
+    from pathlib import Path
+
+    from code_intelligence.code_evolution_miner import CodeEvolutionMiner
+
+    start_time = time.time()
+
+    try:
+        # Validate repo path
+        repo_path = Path(request.repo_path)
+        if not repo_path.exists():
+            return EvolutionAnalysisResponse(
+                status="error",
+                message=f"Repository path not found: {request.repo_path}",
+            )
+
+        if not (repo_path / ".git").exists():
+            return EvolutionAnalysisResponse(
+                status="error",
+                message=f"Not a git repository: {request.repo_path}",
+            )
+
+        # Parse dates
+        start_date = (
+            datetime.fromisoformat(request.start_date) if request.start_date else None
+        )
+        end_date = (
+            datetime.fromisoformat(request.end_date) if request.end_date else None
+        )
+
+        # Run analysis in thread pool to avoid blocking
+        def _run_analysis():
+            miner = CodeEvolutionMiner(str(repo_path))
+            return miner.analyze_evolution(start_date=start_date, end_date=end_date)
+
+        analysis_result = await asyncio.to_thread(_run_analysis)
+
+        # Store pattern snapshots in Redis for timeline tracking
+        await _store_pattern_snapshots(analysis_result)
+
+        duration = time.time() - start_time
+
+        return EvolutionAnalysisResponse(
+            status="success",
+            message="Code evolution analysis completed successfully",
+            commits_analyzed=analysis_result.get("commits_analyzed", 0),
+            emerging_patterns=analysis_result.get("emerging_patterns", []),
+            declining_patterns=analysis_result.get("declining_patterns", []),
+            refactorings_detected=len(analysis_result.get("refactorings", [])),
+            analysis_duration_seconds=round(duration, 2),
+        )
+
+    except Exception as e:
+        logger.error("Evolution analysis failed: %s", e)
+        return EvolutionAnalysisResponse(
+            status="error",
+            message=f"Analysis failed: {str(e)}",
+            analysis_duration_seconds=round(time.time() - start_time, 2),
+        )
