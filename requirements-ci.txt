@@ -75,7 +75,7 @@ llama-index
 llama-index-llms-ollama
 llama-index-embeddings-ollama
 llama-index-vector-stores-redis
-llama-index-readers-file
+llama-index-readers-file>=0.5.6  # Pin to v0.5.6+ for pypdf>=6.1.3 compatibility (Issue #888)
 
 # ===== VOICE INTERFACE DEPENDENCIES (EXCLUDED FOR CI) =====
 # speechrecognition==3.10.0

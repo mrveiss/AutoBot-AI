@@ -86,7 +86,7 @@ llama-index
 llama-index-llms-ollama
 llama-index-embeddings-ollama
 llama-index-vector-stores-redis
-llama-index-readers-file          # File readers for RAG
+llama-index-readers-file>=0.5.6   # File readers for RAG - Pin to v0.5.6+ for pypdf>=6.1.3 compatibility (Issue #888)
 
 # ===== VOICE INTERFACE DEPENDENCIES =====
 # Moved to requirements-voice.txt to avoid CI/CD build failures
