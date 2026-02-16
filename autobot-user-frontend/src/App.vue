@@ -1,13 +1,14 @@
 <template>
   <div id="app" class="h-screen bg-gray-100 flex flex-col overflow-hidden">
     <!-- Skip Navigation Links -->
-    <div class="skip-links">
+    <div v-if="!isLoginPage" class="skip-links">
       <a href="#main-content" class="skip-link sr-only-focusable">Skip to main content</a>
       <a href="#navigation" class="skip-link sr-only-focusable">Skip to navigation</a>
     </div>
 
     <!-- Header - Issue #901: Professional solid color (no gradients) -->
-    <header class="bg-slate-800 border-b border-slate-700 relative z-30" style="height: 56px;">
+    <!-- Hide navigation bar on login page -->
+    <header v-if="!isLoginPage" class="bg-slate-800 border-b border-slate-700 relative z-30" style="height: 56px;">
       <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between" style="height: 56px;">
           <!-- Logo/Brand with System Status -->
@@ -646,6 +647,7 @@ export default {
     // Computed properties
     const isLoading = computed(() => appStore?.isLoading || false);
     const hasErrors = computed(() => false); // No errors property in store
+    const isLoginPage = computed(() => router.currentRoute.value.path === '/login');
 
     // Methods
     const toggleMobileNav = () => {
@@ -904,6 +906,7 @@ export default {
       // Computed
       isLoading,
       hasErrors,
+      isLoginPage,
       slmAdminUrl,
 
       // Methods
