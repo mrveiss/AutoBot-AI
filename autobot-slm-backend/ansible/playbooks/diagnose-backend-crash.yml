@@ -1,0 +1,317 @@
+---
+# AutoBot Backend Crash-Loop Diagnostic Playbook
+# Issue #893: Investigate backend crash-loop with high memory usage
+#
+# Usage from SLM server:
+#   cd /opt/autobot/autobot-slm-backend/ansible
+#   ansible-playbook playbooks/diagnose-backend-crash.yml
+
+- name: Diagnose Backend Crash-Loop
+  hosts: autobot-backend
+  become: yes
+  gather_facts: yes
+
+  vars:
+    backend_install_dir: /opt/autobot
+    backend_code_dir: /opt/autobot/autobot-user-backend
+    backend_log_dir: /var/log/autobot
+    diagnostic_output_dir: /tmp/backend-diagnostics
+
+  tasks:
+    - name: Create diagnostic output directory
+      file:
+        path: "{{ diagnostic_output_dir }}"
+        state: directory
+        mode: '0755'
+
+    # ============================================================
+    # Phase 1: Service Status & Configuration
+    # ============================================================
+
+    - name: Get systemd service status
+      command: systemctl status autobot-backend --no-pager -l
+      register: service_status
+      failed_when: false
+
+    - name: Save service status
+      copy:
+        content: "{{ service_status.stdout }}\n{{ service_status.stderr }}"
+        dest: "{{ diagnostic_output_dir }}/01-service-status.txt"
+
+    - name: Get current service configuration
+      slurp:
+        src: /etc/systemd/system/autobot-backend.service
+      register: service_config
+
+    - name: Save service configuration
+      copy:
+        content: "{{ service_config.content | b64decode }}"
+        dest: "{{ diagnostic_output_dir }}/02-service-config.txt"
+
+    - name: Check if backend is listening on port 8443
+      shell: ss -tlnp | grep 8443 || echo "Port 8443 not listening"
+      register: port_check
+
+    - name: Save port check
+      copy:
+        content: "{{ port_check.stdout }}"
+        dest: "{{ diagnostic_output_dir }}/03-port-status.txt"
+
+    # ============================================================
+    # Phase 2: Log Analysis
+    # ============================================================
+
+    - name: Get last 200 lines from backend log
+      shell: tail -200 {{ backend_log_dir }}/backend.log 2>/dev/null || echo "Log file not found"
+      register: backend_log
+
+    - name: Save backend log
+      copy:
+        content: "{{ backend_log.stdout }}"
+        dest: "{{ diagnostic_output_dir }}/04-backend-log.txt"
+
+    - name: Get last 200 lines from error log
+      shell: tail -200 {{ backend_log_dir }}/backend-error.log 2>/dev/null || echo "Error log not found"
+      register: error_log
+
+    - name: Save error log
+      copy:
+        content: "{{ error_log.stdout }}"
+        dest: "{{ diagnostic_output_dir }}/05-error-log.txt"
+
+    - name: Get systemd journal errors (last 500 lines)
+      shell: journalctl -u autobot-backend -n 500 --no-pager | grep -i -E "(error|exception|traceback|failed|fatal)" || echo "No errors found in journal"
+      register: journal_errors
+
+    - name: Save journal errors
+      copy:
+        content: "{{ journal_errors.stdout }}"
+        dest: "{{ diagnostic_output_dir }}/06-journal-errors.txt"
+
+    - name: Get recent systemd restarts
+      shell: journalctl -u autobot-backend --since "10 minutes ago" --no-pager | grep -E "(Started|Stopped|restart)" | tail -50
+      register: restart_history
+
+    - name: Save restart history
+      copy:
+        content: "{{ restart_history.stdout }}"
+        dest: "{{ diagnostic_output_dir }}/07-restart-history.txt"
+
+    # ============================================================
+    # Phase 3: Environment & Dependencies
+    # ============================================================
+
+    - name: Check if backend directory exists
+      stat:
+        path: "{{ backend_code_dir }}"
+      register: backend_dir
+
+    - name: Check if main.py exists
+      stat:
+        path: "{{ backend_code_dir }}/main.py"
+      register: main_py
+
+    - name: Check if backend symlink exists
+      stat:
+        path: "{{ backend_code_dir }}/backend"
+      register: backend_symlink
+
+    - name: Check if .env file exists
+      stat:
+        path: "{{ backend_install_dir }}/.env"
+      register: env_file
+
+    - name: Check conda environment
+      shell: |
+        if [ -d /home/autobot/miniconda3/envs/autobot-backend ]; then
+          /home/autobot/miniconda3/envs/autobot-backend/bin/python --version
+          echo "---"
+          /home/autobot/miniconda3/envs/autobot-backend/bin/uvicorn --version
+        else
+          echo "Conda environment not found"
+        fi
+      become_user: autobot
+      register: conda_check
+      failed_when: false
+
+    - name: Save environment check
+      copy:
+        content: |
+          Backend directory exists: {{ backend_dir.stat.exists }}
+          Main.py exists: {{ main_py.stat.exists }}
+          Backend symlink exists: {{ backend_symlink.stat.exists }}
+          {% if backend_symlink.stat.exists %}
+          Backend symlink type: {{ backend_symlink.stat.islnk | default('not a symlink') }}
+          Backend symlink target: {{ backend_symlink.stat.lnk_source | default('N/A') }}
+          {% endif %}
+          .env file exists: {{ env_file.stat.exists }}
+
+          Conda environment:
+          {{ conda_check.stdout }}
+        dest: "{{ diagnostic_output_dir }}/08-environment.txt"
+
+    # ============================================================
+    # Phase 4: Import Test
+    # ============================================================
+
+    - name: Test if main.py can be imported
+      shell: |
+        cd {{ backend_code_dir }}
+        export PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}
+        /home/autobot/miniconda3/envs/autobot-backend/bin/python -c "
+        import sys
+        print('Python version:', sys.version)
+        print('Python path:', sys.path[:5])
+        try:
+            import main
+            print('SUCCESS: main.py imported successfully')
+        except Exception as e:
+            print('ERROR importing main.py:', str(e))
+            import traceback
+            traceback.print_exc()
+        " 2>&1
+      become_user: autobot
+      register: import_test
+      failed_when: false
+      timeout: 30
+
+    - name: Save import test
+      copy:
+        content: "{{ import_test.stdout }}\n{{ import_test.stderr }}"
+        dest: "{{ diagnostic_output_dir }}/09-import-test.txt"
+
+    # ============================================================
+    # Phase 5: Memory & Process Analysis
+    # ============================================================
+
+    - name: Get current memory usage
+      shell: free -h
+      register: memory_usage
+
+    - name: Get backend processes
+      shell: ps aux | grep -E "(uvicorn|autobot)" | grep -v grep || echo "No backend processes found"
+      register: process_list
+
+    - name: Check for zombie processes
+      shell: ps aux | grep -E "Z|defunct" | grep -v grep || echo "No zombie processes"
+      register: zombie_check
+
+    - name: Save memory and process info
+      copy:
+        content: |
+          === Memory Usage ===
+          {{ memory_usage.stdout }}
+
+          === Backend Processes ===
+          {{ process_list.stdout }}
+
+          === Zombie Processes ===
+          {{ zombie_check.stdout }}
+        dest: "{{ diagnostic_output_dir }}/10-memory-processes.txt"
+
+    # ============================================================
+    # Phase 6: Temporary Manual Start Test
+    # ============================================================
+
+    - name: Stop backend service temporarily
+      systemd:
+        name: autobot-backend
+        state: stopped
+      ignore_errors: yes
+
+    - name: Wait for service to stop
+      pause:
+        seconds: 5
+
+    - name: Attempt manual backend start (10 second timeout)
+      shell: |
+        cd {{ backend_code_dir }}
+        export PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}
+        timeout 10s /home/autobot/miniconda3/envs/autobot-backend/bin/uvicorn main:app --host 0.0.0.0 --port 8443 --workers 1 2>&1 || echo "Manual start attempt completed/timeout"
+      become_user: autobot
+      register: manual_start
+      failed_when: false
+
+    - name: Save manual start output
+      copy:
+        content: "{{ manual_start.stdout }}\n{{ manual_start.stderr }}"
+        dest: "{{ diagnostic_output_dir }}/11-manual-start.txt"
+
+    - name: Restart backend service
+      systemd:
+        name: autobot-backend
+        state: started
+      ignore_errors: yes
+
+    # ============================================================
+    # Phase 7: Collect All Diagnostics
+    # ============================================================
+
+    - name: Fetch diagnostic files to local machine
+      fetch:
+        src: "{{ diagnostic_output_dir }}/{{ item }}"
+        dest: "/tmp/backend-diagnostics-{{ ansible_date_time.iso8601_basic_short }}/"
+        flat: no
+      loop:
+        - 01-service-status.txt
+        - 02-service-config.txt
+        - 03-port-status.txt
+        - 04-backend-log.txt
+        - 05-error-log.txt
+        - 06-journal-errors.txt
+        - 07-restart-history.txt
+        - 08-environment.txt
+        - 09-import-test.txt
+        - 10-memory-processes.txt
+        - 11-manual-start.txt
+
+    - name: Generate summary report
+      copy:
+        content: |
+          ====================================================
+          AutoBot Backend Crash-Loop Diagnostic Report
+          ====================================================
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          Host: {{ ansible_hostname }} ({{ ansible_host }})
+
+          === Quick Summary ===
+          Backend directory exists: {{ backend_dir.stat.exists }}
+          Main.py exists: {{ main_py.stat.exists }}
+          Backend symlink exists: {{ backend_symlink.stat.exists }}
+          .env file exists: {{ env_file.stat.exists }}
+          Port 8443 listening: {{ 'YES' if '8443' in port_check.stdout else 'NO' }}
+
+          === Service Status ===
+          {{ service_status.stdout | truncate(500) }}
+
+          === Import Test Result ===
+          {{ import_test.stdout | truncate(500) }}
+
+          === Recent Errors ===
+          {{ journal_errors.stdout | truncate(500) }}
+
+          ====================================================
+          Full diagnostics saved to: {{ diagnostic_output_dir }}
+          ====================================================
+
+          Next Steps:
+          1. Review diagnostic files (especially 09-import-test.txt and 06-journal-errors.txt)
+          2. Check for import errors or dependency issues
+          3. Verify PYTHONPATH and environment configuration
+          4. If imports fail, investigate Issue #891 (symlink removal side effects)
+
+        dest: "{{ diagnostic_output_dir }}/00-SUMMARY.txt"
+
+    - name: Display summary
+      debug:
+        msg: |
+          ====================================================
+          Diagnostic complete! Results saved to:
+          {{ diagnostic_output_dir }}
+
+          Key files to review:
+          - 00-SUMMARY.txt (this summary)
+          - 09-import-test.txt (import failures)
+          - 06-journal-errors.txt (crash errors)
+          - 11-manual-start.txt (manual start attempt)
+          ====================================================
