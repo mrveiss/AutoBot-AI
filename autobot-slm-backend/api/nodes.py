@@ -864,9 +864,10 @@ async def node_heartbeat(
             detail="Node not found",
         )
 
-    # Store code_version if provided (Issue #741)
-    if heartbeat.code_version:
-        node.code_version = heartbeat.code_version
+    # Issue #889: Do NOT overwrite code_version from heartbeats
+    # Code version should only be updated by sync/deployment operations,
+    # not by agent heartbeats (agents report stale values before restart).
+    # Heartbeat code_version is used for status comparison only (see below).
 
     # Process role report (Issue #779)
     if heartbeat.role_report:
