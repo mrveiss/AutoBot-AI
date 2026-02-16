@@ -202,7 +202,9 @@ async def login(request: Request, login_data: LoginRequest):
                 "user_id": str(user.id),
                 "role": "admin" if user.is_platform_admin else "user",
                 "email": user.email,
-                "last_login": user.updated_at.isoformat() if user.updated_at else None,
+                "last_login": user.last_login_at.isoformat()
+                if user.last_login_at
+                else None,
             }
             if user.org_id:
                 user_data["org_id"] = str(user.org_id)

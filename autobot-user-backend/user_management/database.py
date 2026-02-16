@@ -83,6 +83,7 @@ def get_async_session_factory() -> async_sessionmaker[AsyncSession]:
         expire_on_commit=False,
         autocommit=False,
         autoflush=False,
+        sync_session_class=None,  # Issue #898: Disable sync session fallback
     )
 
     return _async_session_factory
