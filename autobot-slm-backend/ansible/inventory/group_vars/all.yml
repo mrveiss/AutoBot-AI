@@ -104,20 +104,16 @@ security:
     change_default_port: false
     fail2ban_enabled: true
 
-  # Firewall rules (common to all VMs)
-  firewall_rules:
-    # SSH access from gateway
+  # Base firewall rules (common to ALL VMs)
+  # Role-specific rules are defined in group_vars/<role>.yml (Issue #894)
+  base_firewall_rules:
+    # SSH access from gateway (CRITICAL - prevents lockout)
     - rule: allow
       port: 22
       src: "172.16.168.1"
-    # Internal network communication
-    - rule: allow
-      src: "172.16.168.0/24"
-    # Health check endpoints
-    # TODO Issue #725: Replace broad range with specific ports via SLM config
-    - rule: allow
-      port: "8000:8099"
-      src: "172.16.168.0/24"
+      comment: "SSH from gateway"
+    # Allow established connections (stateful firewall)
+    # Note: UFW handles this automatically, no explicit rule needed
 
 # ==========================================
 # LOGGING CONFIGURATION

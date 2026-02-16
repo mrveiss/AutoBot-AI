@@ -3,6 +3,38 @@
 # Services: FastAPI, Python 3.10+, Log aggregation
 
 # ==========================================
+# FIREWALL CONFIGURATION (Issue #894)
+# ==========================================
+
+security:
+  # Backend-specific firewall rules (least privilege)
+  firewall_rules:
+    # Backend API (infrastructure only)
+    - rule: allow
+      port: 8443
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "Backend API HTTPS"
+    - rule: allow
+      port: 8001
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "Backend API HTTP"
+    # VNC/noVNC (infrastructure only)
+    - rule: allow
+      port: 6080
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "noVNC web console"
+    - rule: allow
+      port: 5900
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "VNC"
+    # Redis connection (outbound, stateful firewall handles return)
+    # PostgreSQL connection (outbound, stateful firewall handles return)
+
+# ==========================================
 # BACKEND SERVICE CONFIGURATION
 # ==========================================
 

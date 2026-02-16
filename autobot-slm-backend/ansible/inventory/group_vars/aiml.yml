@@ -3,6 +3,32 @@
 # Services: AI Stack, NPU Worker, Intel OpenVINO, Model serving
 
 # ==========================================
+# FIREWALL CONFIGURATION (Issue #894)
+# ==========================================
+
+security:
+  # AI/ML-specific firewall rules (least privilege)
+  firewall_rules:
+    # AI Stack service (infrastructure only)
+    - rule: allow
+      port: 8080
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "AI Stack API"
+    # NPU Worker service (infrastructure only)
+    - rule: allow
+      port: 8081
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "NPU Worker API"
+    # Ollama API (infrastructure only)
+    - rule: allow
+      port: 11434
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "Ollama API"
+
+# ==========================================
 # AI STACK CONFIGURATION
 # ==========================================
 

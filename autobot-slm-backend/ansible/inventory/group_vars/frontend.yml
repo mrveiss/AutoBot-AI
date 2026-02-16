@@ -3,6 +3,40 @@
 # Services: nginx, Node.js, Vue.js frontend, DNS cache
 
 # ==========================================
+# FIREWALL CONFIGURATION (Issue #894)
+# ==========================================
+
+security:
+  # Frontend-specific firewall rules (least privilege)
+  firewall_rules:
+    # Public web access
+    - rule: allow
+      port: 443
+      proto: tcp
+      comment: "HTTPS - Public access"
+    - rule: allow
+      port: 80
+      proto: tcp
+      comment: "HTTP - Public access (redirects to HTTPS)"
+    # Vue dev server (infrastructure only)
+    - rule: allow
+      port: 5173
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "Vue dev server"
+    # Backend API access (infrastructure only)
+    - rule: allow
+      port: 8001
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "Backend API connectivity"
+    - rule: allow
+      port: 8443
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "Backend API HTTPS connectivity"
+
+# ==========================================
 # FRONTEND SERVICE CONFIGURATION
 # ==========================================
 

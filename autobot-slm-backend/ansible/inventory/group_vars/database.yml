@@ -3,6 +3,32 @@
 # Services: Redis Stack, Model storage, Data persistence
 
 # ==========================================
+# FIREWALL CONFIGURATION (Issue #894)
+# ==========================================
+
+security:
+  # Database-specific firewall rules (least privilege)
+  firewall_rules:
+    # Redis Stack (infrastructure only)
+    - rule: allow
+      port: 6379
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "Redis Stack"
+    # PostgreSQL (infrastructure only)
+    - rule: allow
+      port: 5432
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "PostgreSQL"
+    # Redis Insight (infrastructure only - web UI)
+    - rule: allow
+      port: 8001
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "Redis Insight UI"
+
+# ==========================================
 # REDIS CONFIGURATION
 # ==========================================
 

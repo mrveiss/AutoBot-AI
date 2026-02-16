@@ -1,0 +1,48 @@
+---
+# SLM Server Configuration
+# Services: SLM Backend, PostgreSQL, Nginx, Prometheus, Grafana, Node Exporter
+
+# ==========================================
+# FIREWALL CONFIGURATION (Issue #894)
+# ==========================================
+
+security:
+  # SLM-specific firewall rules (least privilege)
+  firewall_rules:
+    # SLM Backend API (infrastructure only)
+    - rule: allow
+      port: 8000
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "SLM Backend API"
+    # Web UI (public access)
+    - rule: allow
+      port: 443
+      proto: tcp
+      comment: "SLM Frontend HTTPS"
+    - rule: allow
+      port: 80
+      proto: tcp
+      comment: "SLM Frontend HTTP (redirects to HTTPS)"
+    # Monitoring (infrastructure only)
+    - rule: allow
+      port: 9090
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "Prometheus"
+    - rule: allow
+      port: 3000
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "Grafana"
+    - rule: allow
+      port: 9100
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "Node Exporter"
+    # PostgreSQL (infrastructure only)
+    - rule: allow
+      port: 5432
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "PostgreSQL"

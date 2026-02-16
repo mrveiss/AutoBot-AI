@@ -110,18 +110,23 @@
   become: yes
   tags: ['common', 'firewall']
 
-- name: "Common | Configure firewall - Apply rules from group_vars (#887)"
+- name: "Common | Merge base and role-specific firewall rules (#894)"
+  set_fact:
+    merged_firewall_rules: "{{ (security.base_firewall_rules | default([])) + (security.firewall_rules | default([])) }}"
+  tags: ['common', 'firewall']
+
+- name: "Common | Configure firewall - Apply merged rules (#894)"
   ufw:
     rule: "{{ item.rule }}"
     port: "{{ item.port | default(omit) }}"
     proto: "{{ item.proto | default('tcp') }}"
     from_ip: "{{ item.src | default('any') }}"
     to_ip: "{{ item.dest | default('any') }}"
-    comment: "{{ item.comment | default('AutoBot infrastructure rule') }}"
-  loop: "{{ security.firewall_rules | default([]) }}"
+    comment: "{{ item.comment | default('AutoBot rule') }}"
+  loop: "{{ merged_firewall_rules }}"
   become: yes
   notify: reload firewall
-  when: security.firewall_rules is defined
+  when: merged_firewall_rules | length > 0
   tags: ['common', 'firewall']
 
 - name: "Common | Configure firewall - Set logging level (#887)"

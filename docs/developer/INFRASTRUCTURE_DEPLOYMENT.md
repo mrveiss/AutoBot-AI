@@ -378,29 +378,52 @@ sudo ./infrastructure/shared/config/ufw-defaults.sh status
 
 **Script location**: `infrastructure/shared/config/ufw-defaults.sh`
 
+### Role-Specific Firewall Rules (Issue #894)
+
+**Each VM receives firewall rules specific to its role (least privilege principle):**
+
 ### Default Firewall Rules
 
-The following rules are applied by default:
+**Base rules (applied to ALL VMs):**
+- SSH from gateway (port 22, source: 172.16.168.1)
 
-| Rule | Port | Source | Purpose |
-|------|------|--------|---------|
-| Allow | 22/tcp | any | SSH access (CRITICAL - prevents lockout) |
-| Allow | any | 172.16.168.0/24 | Infrastructure subnet (CRITICAL - VM communication) |
-| Allow | 8443/tcp | any | Backend API (HTTPS) |
-| Allow | 8001/tcp | any | Backend API (HTTP - legacy) |
-| Allow | 6379/tcp | any | Redis Stack |
-| Allow | 5432/tcp | any | PostgreSQL |
-| Allow | 443/tcp | any | Frontend HTTPS |
-| Allow | 80/tcp | any | Frontend HTTP |
-| Allow | 8080/tcp | any | AI Stack |
-| Allow | 8081/tcp | any | NPU Worker |
-| Allow | 3000/tcp | any | Browser Worker |
-| Allow | 5900/tcp | any | VNC |
-| Allow | 6080/tcp | any | NoVNC Web Console |
-| Allow | 9090/tcp | any | Prometheus |
-| Allow | 3001/tcp | any | Grafana |
-| Allow | 9100/tcp | any | Node Exporter |
-| Allow | 8000/tcp | any | SLM Backend |
+**Role-specific rules (defined in `inventory/group_vars/<role>.yml`):**
+
+**Frontend VM (172.16.168.21):**
+- 443/tcp (any) - HTTPS public access
+- 80/tcp (any) - HTTP public access
+- 5173/tcp (infrastructure only) - Vue dev server
+- 8001/tcp (infrastructure only) - Backend API connectivity
+- 8443/tcp (infrastructure only) - Backend API HTTPS connectivity
+
+**Backend VM (172.16.168.20):**
+- 8443/tcp (infrastructure only) - Backend API HTTPS
+- 8001/tcp (infrastructure only) - Backend API HTTP
+- 6080/tcp (infrastructure only) - noVNC web console
+- 5900/tcp (infrastructure only) - VNC
+
+**Redis VM (172.16.168.23):**
+- 6379/tcp (infrastructure only) - Redis Stack
+- 5432/tcp (infrastructure only) - PostgreSQL
+- 8001/tcp (infrastructure only) - Redis Insight UI
+
+**AI/ML VMs (172.16.168.22, 172.16.168.24):**
+- 8080/tcp (infrastructure only) - AI Stack API
+- 8081/tcp (infrastructure only) - NPU Worker API
+- 11434/tcp (infrastructure only) - Ollama API
+
+**Browser VM (172.16.168.25):**
+- 3000/tcp (infrastructure only) - Browser Worker API
+- 3001/tcp (infrastructure only) - Playwright Debug
+
+**SLM Server (172.16.168.19):**
+- 443/tcp (any) - SLM Frontend HTTPS
+- 80/tcp (any) - SLM Frontend HTTP
+- 8000/tcp (infrastructure only) - SLM Backend API
+- 9090/tcp (infrastructure only) - Prometheus
+- 3000/tcp (infrastructure only) - Grafana
+- 9100/tcp (infrastructure only) - Node Exporter
+- 5432/tcp (infrastructure only) - PostgreSQL
 
 **Default Policies**:
 - Incoming: DENY (default-deny security stance)

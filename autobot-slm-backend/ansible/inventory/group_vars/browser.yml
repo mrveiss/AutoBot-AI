@@ -3,6 +3,26 @@
 # Services: Playwright, VNC server, Desktop environment, Browser automation
 
 # ==========================================
+# FIREWALL CONFIGURATION (Issue #894)
+# ==========================================
+
+security:
+  # Browser-specific firewall rules (least privilege)
+  firewall_rules:
+    # Browser worker service (infrastructure only)
+    - rule: allow
+      port: 3000
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "Browser Worker API"
+    # Playwright debug port (infrastructure only)
+    - rule: allow
+      port: 3001
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "Playwright Debug"
+
+# ==========================================
 # DESKTOP ENVIRONMENT CONFIGURATION
 # ==========================================
 
