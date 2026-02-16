@@ -7,6 +7,7 @@ Code Source API Routes (Issue #779).
 Manages the code-source node assignment and git notifications.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Optional
@@ -151,6 +152,99 @@ async def _ensure_code_source_role(db: AsyncSession, node_id: str) -> None:
         )
 
 
+async def _find_similar_paths(node: Node, target_path: str) -> Optional[str]:
+    """Find paths similar to target (case-insensitive match).
+
+    Helper for _validate_repo_path (#865).
+    Returns the actual path if found, None otherwise.
+    """
+    parent_dir = target_path.rsplit("/", 1)[0] if "/" in target_path else "/"
+    basename = target_path.rsplit("/", 1)[-1] if "/" in target_path else target_path
+
+    # Check if parent directory exists and list contents
+    ssh_cmd = [
+        "ssh",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "StrictHostKeyChecking=no",
+        f"{node.ssh_user}@{node.ip_address}",
+        f"test -d {parent_dir} && ls -1 {parent_dir} 2>/dev/null || true",
+    ]
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *ssh_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+
+        if proc.returncode == 0 and stdout:
+            # Check for case-insensitive match
+            entries = stdout.decode().strip().split("\n")
+            for entry in entries:
+                if entry.lower() == basename.lower() and entry != basename:
+                    return f"{parent_dir}/{entry}"
+    except Exception as e:
+        logger.debug("Failed to search for similar paths: %s", e)
+
+    return None
+
+
+async def _validate_repo_path(node: Node, repo_path: str) -> None:
+    """Validate that repo path exists on the source node.
+
+    Helper for assign_code_source (#865).
+
+    Args:
+        node: The source node to SSH into
+        repo_path: The repository path to validate
+
+    Raises:
+        HTTPException: If path doesn't exist or SSH fails
+    """
+    ssh_cmd = [
+        "ssh",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "StrictHostKeyChecking=no",
+        f"{node.ssh_user}@{node.ip_address}",
+        f"test -d {repo_path} && echo exists",
+    ]
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *ssh_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
+
+        if proc.returncode != 0 or stdout.decode().strip() != "exists":
+            # Check for similar paths (case mismatch)
+            similar_path = await _find_similar_paths(node, repo_path)
+
+            error_detail = f"Repository path does not exist on source node: {repo_path}"
+            if similar_path:
+                error_detail += f". Did you mean: {similar_path}?"
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail
+            )
+
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=f"Timeout connecting to node {node.hostname} ({node.ip_address})",
+        )
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions as-is
+    except Exception as e:
+        logger.error("SSH validation failed for %s: %s", node.hostname, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to validate path on {node.hostname}: {str(e)}",
+        )
+
+
 @router.post("/assign", response_model=CodeSourceResponse)
 async def assign_code_source(
     data: CodeSourceAssign,
@@ -166,6 +260,9 @@ async def assign_code_source(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Node not found: {data.node_id}",
         )
+
+    # Validate repo path exists on the node (#865)
+    await _validate_repo_path(node, data.repo_path)
 
     source = await _upsert_code_source(db, data)
     await _ensure_code_source_role(db, data.node_id)
