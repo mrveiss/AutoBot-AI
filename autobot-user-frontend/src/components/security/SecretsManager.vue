@@ -1270,8 +1270,41 @@ const confirmTransfer = async () => {
   }
 };
 
+// Issue #685: Validation helper for hierarchical access
+const validateAccessLevelCombination = (
+  visibility: string,
+  fields: { org_id?: string; team_ids?: string[]; shared_with?: string[] }
+): string | null => {
+  if (visibility === 'organization' && !fields.org_id) {
+    return 'Organization ID is required when visibility is set to "Organization"';
+  }
+
+  if (visibility === 'group' && (!fields.team_ids || fields.team_ids.length === 0)) {
+    return 'At least one Team ID is required when visibility is set to "Group"';
+  }
+
+  if (visibility === 'shared' && (!fields.shared_with || fields.shared_with.length === 0)) {
+    return 'At least one user must be specified when visibility is set to "Shared"';
+  }
+
+  return null;
+};
+
 const saveSecret = async () => {
   if (!isFormValid.value) return;
+
+  // Issue #685: Frontend validation for hierarchical access
+  const validationError = validateAccessLevelCombination(secretForm.visibility, {
+    org_id: secretForm.org_id,
+    team_ids: secretForm.team_ids,
+    shared_with: secretForm.shared_with
+  });
+
+  if (validationError) {
+    logger.error('Validation failed:', validationError);
+    // Could add a toast notification here
+    return;
+  }
 
   saving.value = true;
   try {

@@ -519,6 +519,35 @@ const CATEGORY_PATTERNS: Record<string, RegExp[]> = {
 }
 
 // =============================================================================
+// Issue #685: Validation Helpers
+// =============================================================================
+
+/**
+ * Validates hierarchical access level combinations
+ * @param visibility - The visibility level
+ * @param fields - Object containing org_id, team_ids, shared_with
+ * @returns Error message if validation fails, null if valid
+ */
+function validateAccessLevelCombination(
+  visibility: string,
+  fields: { org_id?: string; team_ids?: string[]; shared_with?: string[] }
+): string | null {
+  if (visibility === 'organization' && !fields.org_id) {
+    return 'Organization ID is required when visibility is set to "Organization"'
+  }
+
+  if (visibility === 'group' && (!fields.team_ids || fields.team_ids.length === 0)) {
+    return 'At least one Team ID is required when visibility is set to "Group"'
+  }
+
+  if (visibility === 'shared' && (!fields.shared_with || fields.shared_with.length === 0)) {
+    return 'At least one user must be specified when visibility is set to "Shared"'
+  }
+
+  return null
+}
+
+// =============================================================================
 // Computed
 // =============================================================================
 
@@ -539,6 +568,18 @@ const hasAutoCategories = computed(() => {
 
 async function addTextEntry(): Promise<void> {
   if (!textEntry.content.trim()) return
+
+  // Issue #685: Frontend validation for hierarchical access
+  const validationError = validateAccessLevelCombination(textEntry.visibility, {
+    org_id: undefined, // Not collected in text entry form yet
+    team_ids: undefined, // Not collected in text entry form yet
+    shared_with: undefined // Not collected in text entry form yet
+  })
+
+  if (validationError) {
+    errorMessage.value = validationError
+    return
+  }
 
   isSubmitting.value = true
   errorMessage.value = ''

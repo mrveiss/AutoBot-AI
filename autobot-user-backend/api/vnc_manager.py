@@ -12,8 +12,9 @@ import base64
 import logging
 import subprocess  # nosec B404
 import tempfile
+from datetime import datetime
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends
@@ -494,3 +495,197 @@ async def vnc_clipboard_sync(
     except Exception as e:
         logger.error("Error syncing clipboard: %s", e)
         return {"status": "error", "message": str(e)}
+
+
+# Desktop Context Info (Issue #74 - Area 3)
+
+
+def _get_system_info() -> Dict[str, str]:
+    """
+    Get system information for desktop context panel.
+
+    Helper for desktop context endpoint (Issue #74).
+    """
+    info = {}
+
+    # CPU usage
+    try:
+        with open("/proc/loadavg", "r", encoding="utf-8") as f:
+            load = f.read().split()
+            info["cpu_load_1min"] = load[0]
+            info["cpu_load_5min"] = load[1]
+            info["cpu_load_15min"] = load[2]
+    except Exception as e:
+        logger.warning("Failed to get CPU load: %s", e)
+
+    # Memory usage
+    try:
+        with open("/proc/meminfo", "r", encoding="utf-8") as f:
+            lines = f.readlines()
+            mem_info = {}
+            for line in lines[:3]:  # MemTotal, MemFree, MemAvailable
+                parts = line.split()
+                if len(parts) >= 2:
+                    mem_info[parts[0].rstrip(":")] = parts[1]
+
+            if "MemTotal" in mem_info and "MemAvailable" in mem_info:
+                total = int(mem_info["MemTotal"])
+                available = int(mem_info["MemAvailable"])
+                used = total - available
+                percent = (used / total) * 100
+                info["memory_used_mb"] = str(used // 1024)
+                info["memory_total_mb"] = str(total // 1024)
+                info["memory_percent"] = f"{percent:.1f}"
+    except Exception as e:
+        logger.warning("Failed to get memory info: %s", e)
+
+    # Uptime
+    try:
+        with open("/proc/uptime", "r", encoding="utf-8") as f:
+            uptime_seconds = float(f.read().split()[0])
+            hours = int(uptime_seconds // 3600)
+            minutes = int((uptime_seconds % 3600) // 60)
+            info["uptime"] = f"{hours}h {minutes}m"
+    except Exception as e:
+        logger.warning("Failed to get uptime: %s", e)
+
+    return info
+
+
+def _get_desktop_info() -> Dict[str, str]:
+    """
+    Get desktop environment information.
+
+    Helper for desktop context endpoint (Issue #74).
+    """
+    info = {}
+
+    # Screen resolution
+    try:
+        result = subprocess.run(  # nosec B607
+            ["xdpyinfo"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            env={"DISPLAY": ":1"},
+        )
+        if result.returncode == 0:
+            for line in result.stdout.split("\n"):
+                if "dimensions:" in line:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        info["resolution"] = parts[1]
+                        break
+    except Exception as e:
+        logger.warning("Failed to get resolution: %s", e)
+
+    # Active window
+    try:
+        result = subprocess.run(  # nosec B607
+            ["xdotool", "getactivewindow", "getwindowname"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            env={"DISPLAY": ":1"},
+        )
+        if result.returncode == 0:
+            info["active_window"] = result.stdout.strip()
+    except Exception as e:
+        logger.warning("Failed to get active window: %s", e)
+
+    # Window count
+    try:
+        result = subprocess.run(  # nosec B607
+            ["wmctrl", "-l"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            env={"DISPLAY": ":1"},
+        )
+        if result.returncode == 0:
+            window_count = len(
+                [line for line in result.stdout.split("\n") if line.strip()]
+            )
+            info["window_count"] = str(window_count)
+    except Exception as e:
+        logger.debug("Failed to get window count (wmctrl may not be installed): %s", e)
+
+    return info
+
+
+def _get_process_list() -> List[Dict[str, str]]:
+    """
+    Get list of running GUI applications.
+
+    Helper for desktop context endpoint (Issue #74).
+    """
+    processes = []
+
+    try:
+        # Get process list with their display usage
+        result = subprocess.run(  # nosec B607
+            ["ps", "aux"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        if result.returncode == 0:
+            lines = result.stdout.split("\n")[1:]  # Skip header
+            for line in lines:
+                parts = line.split(None, 10)
+                if len(parts) >= 11:
+                    # Filter for X11/GUI apps (rough heuristic)
+                    if any(
+                        x in parts[10].lower()
+                        for x in [
+                            "x11",
+                            "xorg",
+                            "firefox",
+                            "chrome",
+                            "xfce",
+                            "terminal",
+                        ]
+                    ):
+                        processes.append(
+                            {
+                                "pid": parts[1],
+                                "cpu": parts[2],
+                                "mem": parts[3],
+                                "command": parts[10][:50],  # Truncate long commands
+                            }
+                        )
+
+            # Limit to top 10 by CPU
+            processes.sort(key=lambda x: float(x.get("cpu", "0")), reverse=True)
+            processes = processes[:10]
+
+    except Exception as e:
+        logger.warning("Failed to get process list: %s", e)
+
+    return processes
+
+
+@router.get("/desktop/context")
+@with_error_handling(error_code_prefix="VNC_CONTEXT")
+async def get_desktop_context(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, object]:
+    """
+    Get desktop context information for context panel.
+    Issue #74 - Area 3: Desktop Context Panel.
+
+    Returns:
+        {
+            "system": {...},      # CPU, memory, uptime
+            "desktop": {...},     # Resolution, active window, window count
+            "processes": [...],   # Running GUI apps
+            "timestamp": "..."
+        }
+    """
+    return {
+        "system": _get_system_info(),
+        "desktop": _get_desktop_info(),
+        "processes": _get_process_list(),
+        "timestamp": datetime.now().isoformat(),
+    }
