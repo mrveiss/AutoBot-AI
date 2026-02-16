@@ -13,9 +13,20 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [[ \"$TOOL_ARGS\" == *\".py\"* ]]; then cd $(git rev-parse --show-toplevel 2>/dev/null || pwd) && FILE=$(echo \"$TOOL_ARGS\" | grep -o '\"file_path\":\"[^\"]*' | cut -d'\"' -f4) && if [[ -n \"$FILE\" && \"$FILE\" == *.py ]]; then python -m py_compile \"$FILE\" 2>&1 | head -5 || echo \"✓ Syntax OK\"; fi; fi",
-            "statusMessage": "Checking Python syntax...",
-            "timeout": 5
+            "command": "cd $(git rev-parse --show-toplevel 2>/dev/null || pwd) && FILE=$(echo \"$TOOL_ARGS\" | grep -o '\"file_path\":\"[^\"]*' | cut -d'\"' -f4) && if [[ -n \"$FILE\" ]]; then if [[ \"$FILE\" == *.py ]]; then echo \"🐍 Linting $FILE...\"; ruff check \"$FILE\" 2>&1 | head -20 || echo \"✅ Python linting passed\"; elif [[ \"$FILE\" == *.ts || \"$FILE\" == *.tsx ]]; then echo \"📘 Type checking $FILE...\"; if [[ \"$FILE\" == *\"autobot-user-frontend\"* ]]; then cd autobot-user-frontend && npx tsc --noEmit 2>&1 | grep -E \"(error TS|✓)\" | head -15 || echo \"✅ TypeScript checks passed\"; elif [[ \"$FILE\" == *\"autobot-slm-frontend\"* ]]; then cd autobot-slm-frontend && npx tsc --noEmit 2>&1 | grep -E \"(error TS|✓)\" | head -15 || echo \"✅ TypeScript checks passed\"; fi; elif [[ \"$FILE\" == *.vue ]]; then echo \"🖼️  Linting Vue component...\"; if [[ \"$FILE\" == *\"autobot-user-frontend\"* ]]; then cd autobot-user-frontend && npm run lint -- \"$FILE\" 2>&1 | head -15 || echo \"✅ Vue linting passed\"; elif [[ \"$FILE\" == *\"autobot-slm-frontend\"* ]]; then cd autobot-slm-frontend && npm run lint -- \"$FILE\" 2>&1 | head -15 || echo \"✅ Vue linting passed\"; fi; else echo \"✓ File type not configured for linting\"; fi; fi",
+            "statusMessage": "Running linting checks...",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd $(git rev-parse --show-toplevel 2>/dev/null || pwd) && FILE=$(echo \"$TOOL_ARGS\" | grep -o '\"file_path\":\"[^\"]*' | cut -d'\"' -f4) && if [[ -n \"$FILE\" ]]; then if [[ \"$FILE\" == *.py ]]; then echo \"🐍 Linting new Python file...\"; ruff check \"$FILE\" 2>&1 | head -20 || echo \"✅ Python linting passed\"; elif [[ \"$FILE\" == *.ts || \"$FILE\" == *.tsx ]]; then echo \"📘 Type checking new TypeScript file...\"; if [[ \"$FILE\" == *\"autobot-user-frontend\"* ]]; then cd autobot-user-frontend && npx tsc --noEmit 2>&1 | grep -E \"(error TS|✓)\" | head -15 || echo \"✅ TypeScript checks passed\"; elif [[ \"$FILE\" == *\"autobot-slm-frontend\"* ]]; then cd autobot-slm-frontend && npx tsc --noEmit 2>&1 | grep -E \"(error TS|✓)\" | head -15 || echo \"✅ TypeScript checks passed\"; fi; fi; fi",
+            "statusMessage": "Running linting checks on new file...",
+            "timeout": 10
           }
         ]
       }
