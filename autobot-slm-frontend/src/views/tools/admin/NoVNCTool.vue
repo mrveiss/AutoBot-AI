@@ -14,10 +14,18 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { getVNCHosts } from '@/config/ssot-config'
 import { useSlmApi } from '@/composables/useSlmApi'
+import { useVncControls } from '@/composables/useVncControls'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('NoVNCTool')
 const api = useSlmApi()
+
+// VNC controls (Issue #74)
+const vncControls = useVncControls()
+const showScreenshotModal = ref(false)
+const screenshotData = ref<string | null>(null)
+const textToType = ref('')
+const showTypeDialog = ref(false)
 
 // State
 const loading = ref(false)
@@ -106,6 +114,62 @@ function toggleFullscreen(): void {
 
 function handleFullscreenChange(): void {
   isFullscreen.value = !!document.fullscreenElement
+}
+
+// Desktop interaction actions (Issue #74)
+async function takeScreenshot(): Promise<void> {
+  const result = await vncControls.captureScreenshot()
+  if (result.status === 'success' && result.image_data) {
+    screenshotData.value = `data:image/png;base64,${result.image_data}`
+    showScreenshotModal.value = true
+  } else {
+    logger.error('Screenshot failed:', result.message)
+    error.value = result.message
+  }
+}
+
+async function handleTypeText(): Promise<void> {
+  if (!textToType.value.trim()) return
+
+  const result = await vncControls.keyboardType(textToType.value)
+  if (result.status === 'success') {
+    textToType.value = ''
+    showTypeDialog.value = false
+  } else {
+    logger.error('Type text failed:', result.message)
+    error.value = result.message
+  }
+}
+
+async function sendCtrlAltDel(): Promise<void> {
+  const result = await vncControls.sendCtrlAltDel()
+  if (result.status !== 'success') {
+    logger.error('Ctrl+Alt+Del failed:', result.message)
+    error.value = result.message
+  }
+}
+
+async function pasteFromClipboard(): Promise<void> {
+  try {
+    const text = await navigator.clipboard.readText()
+    const result = await vncControls.syncClipboard(text)
+    if (result.status !== 'success') {
+      logger.error('Clipboard sync failed:', result.message)
+      error.value = result.message
+    }
+  } catch (err) {
+    logger.error('Clipboard read failed:', err)
+    error.value = 'Failed to read clipboard'
+  }
+}
+
+function downloadScreenshot(): void {
+  if (!screenshotData.value) return
+
+  const link = document.createElement('a')
+  link.href = screenshotData.value
+  link.download = `desktop-screenshot-${Date.now()}.png`
+  link.click()
 }
 
 onMounted(() => {
@@ -289,5 +353,79 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Desktop Actions Toolbar (Issue #74) -->
+    <div v-if="isConnected" class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+      <h3 class="text-sm font-medium text-gray-900 mb-3">Desktop Actions</h3>
+      <div class="flex items-center gap-2 flex-wrap">
+        <button @click="takeScreenshot" class="action-btn" title="Take Screenshot">
+          📷 Screenshot
+        </button>
+        <button @click="showTypeDialog = true" class="action-btn" title="Type Text">
+          ⌨️ Type Text
+        </button>
+        <button @click="sendCtrlAltDel" class="action-btn" title="Send Ctrl+Alt+Del">
+          🔴 Ctrl+Alt+Del
+        </button>
+        <button @click="pasteFromClipboard" class="action-btn" title="Paste Clipboard">
+          📋 Paste
+        </button>
+      </div>
+    </div>
+
+    <!-- Screenshot Modal (Issue #74) -->
+    <Teleport to="body">
+      <div v-if="showScreenshotModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75" @click="showScreenshotModal = false">
+        <div class="bg-white rounded-lg shadow-xl max-w-4xl max-h-[90vh] flex flex-col" @click.stop>
+          <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-gray-900">Desktop Screenshot</h3>
+            <button @click="showScreenshotModal = false" class="text-2xl text-gray-500 hover:text-gray-700 transition-colors">×</button>
+          </div>
+          <div class="p-6 overflow-auto flex-1">
+            <img v-if="screenshotData" :src="screenshotData" alt="Desktop Screenshot" class="max-w-full h-auto rounded-lg shadow-lg" />
+          </div>
+          <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
+            <button @click="downloadScreenshot" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
+              💾 Download
+            </button>
+            <button @click="showScreenshotModal = false" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded transition-colors">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Type Text Dialog (Issue #74) -->
+      <div v-if="showTypeDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" @click="showTypeDialog = false">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md" @click.stop>
+          <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-gray-900">Type Text on Desktop</h3>
+            <button @click="showTypeDialog = false" class="text-2xl text-gray-500 hover:text-gray-700 transition-colors">×</button>
+          </div>
+          <div class="p-6">
+            <textarea
+              v-model="textToType"
+              placeholder="Enter text to type on the desktop..."
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              rows="4"
+            ></textarea>
+          </div>
+          <div class="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-2">
+            <button @click="handleTypeText" :disabled="!textToType.trim()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              ⌨️ Type
+            </button>
+            <button @click="showTypeDialog = false" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+.action-btn {
+  @apply px-3 py-1.5 text-sm bg-blue-100 hover:bg-blue-200 text-blue-700 rounded border border-blue-300 transition-colors;
+}
+</style>

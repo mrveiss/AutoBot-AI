@@ -63,6 +63,76 @@
         <span :class="connectionStatusClass">{{ connectionStatus }}</span>
       </div>
     </div>
+
+    <!-- Desktop Actions Toolbar (Issue #74) -->
+    <div class="desktop-actions">
+      <div class="actions-label text-sm font-medium text-gray-700 dark:text-gray-300">
+        Desktop Actions:
+      </div>
+      <div class="actions-buttons">
+        <button @click="takeScreenshot" class="action-btn" title="Take Screenshot">
+          📷 Screenshot
+        </button>
+        <button @click="showTypeDialog = true" class="action-btn" title="Type Text">
+          ⌨️ Type Text
+        </button>
+        <button @click="sendCtrlAltDel" class="action-btn" title="Send Ctrl+Alt+Del">
+          🔴 Ctrl+Alt+Del
+        </button>
+        <button @click="pasteFromClipboard" class="action-btn" title="Paste Clipboard">
+          📋 Paste
+        </button>
+      </div>
+    </div>
+
+    <!-- Screenshot Modal (Issue #74) -->
+    <Teleport to="body">
+      <div v-if="showScreenshotModal" class="screenshot-modal" @click="showScreenshotModal = false">
+        <div class="screenshot-content" @click.stop>
+          <div class="screenshot-header">
+            <h3 class="text-lg font-semibold text-gray-900">Desktop Screenshot</h3>
+            <button @click="showScreenshotModal = false" class="close-btn">×</button>
+          </div>
+          <div class="screenshot-body">
+            <img v-if="screenshotData" :src="screenshotData" alt="Desktop Screenshot" class="screenshot-image" />
+          </div>
+          <div class="screenshot-footer">
+            <button @click="downloadScreenshot" class="download-btn">
+              💾 Download
+            </button>
+            <button @click="showScreenshotModal = false" class="cancel-btn">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Type Text Dialog (Issue #74) -->
+      <div v-if="showTypeDialog" class="type-dialog-modal" @click="showTypeDialog = false">
+        <div class="type-dialog-content" @click.stop>
+          <div class="type-dialog-header">
+            <h3 class="text-lg font-semibold text-gray-900">Type Text on Desktop</h3>
+            <button @click="showTypeDialog = false" class="close-btn">×</button>
+          </div>
+          <div class="type-dialog-body">
+            <textarea
+              v-model="textToType"
+              placeholder="Enter text to type on the desktop..."
+              class="type-textarea"
+              rows="4"
+            ></textarea>
+          </div>
+          <div class="type-dialog-footer">
+            <button @click="handleTypeText" :disabled="!textToType.trim()" class="type-btn">
+              ⌨️ Type
+            </button>
+            <button @click="showTypeDialog = false" class="cancel-btn">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -72,6 +142,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import { useAsyncOperation } from '@/composables/useAsyncOperation'
+import { useVncControls } from '@/composables/useVncControls'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('DesktopInterface')
@@ -79,6 +150,13 @@ const logger = createLogger('DesktopInterface')
 // Async operation composables
 const { execute: executeLoadVnc, loading: loadingVnc, error: errorVnc } = useAsyncOperation()
 const { execute: executeCheckConnection, loading: loadingCheck, error: errorCheck } = useAsyncOperation()
+
+// VNC controls (Issue #74)
+const vncControls = useVncControls()
+const showScreenshotModal = ref(false)
+const screenshotData = ref<string | null>(null)
+const textToType = ref('')
+const showTypeDialog = ref(false)
 
 const vncFrame = ref(null)
 const loading = ref(true)
@@ -264,6 +342,62 @@ const handleFullscreenChange = () => {
   isFullscreen.value = !!document.fullscreenElement
 }
 
+// Desktop interaction actions (Issue #74)
+async function takeScreenshot() {
+  const result = await vncControls.captureScreenshot()
+  if (result.status === 'success' && result.image_data) {
+    screenshotData.value = `data:image/png;base64,${result.image_data}`
+    showScreenshotModal.value = true
+  } else {
+    logger.error('Screenshot failed:', result.message)
+    error.value = result.message
+  }
+}
+
+async function handleTypeText() {
+  if (!textToType.value.trim()) return
+
+  const result = await vncControls.keyboardType(textToType.value)
+  if (result.status === 'success') {
+    textToType.value = ''
+    showTypeDialog.value = false
+  } else {
+    logger.error('Type text failed:', result.message)
+    error.value = result.message
+  }
+}
+
+async function sendCtrlAltDel() {
+  const result = await vncControls.sendCtrlAltDel()
+  if (result.status !== 'success') {
+    logger.error('Ctrl+Alt+Del failed:', result.message)
+    error.value = result.message
+  }
+}
+
+async function pasteFromClipboard() {
+  try {
+    const text = await navigator.clipboard.readText()
+    const result = await vncControls.syncClipboard(text)
+    if (result.status !== 'success') {
+      logger.error('Clipboard sync failed:', result.message)
+      error.value = result.message
+    }
+  } catch (err) {
+    logger.error('Clipboard read failed:', err)
+    error.value = 'Failed to read clipboard'
+  }
+}
+
+function downloadScreenshot() {
+  if (!screenshotData.value) return
+
+  const link = document.createElement('a')
+  link.href = screenshotData.value
+  link.download = `desktop-screenshot-${Date.now()}.png`
+  link.click()
+}
+
 onUnmounted(() => {
   if (connectionCheckInterval) {
     clearInterval(connectionCheckInterval)
@@ -308,5 +442,88 @@ onUnmounted(() => {
 
 .connection-status {
   @apply text-sm font-medium;
+}
+
+/* Desktop Actions Toolbar (Issue #74) */
+.desktop-actions {
+  @apply px-6 py-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex items-center gap-4;
+}
+
+.actions-label {
+  @apply shrink-0;
+}
+
+.actions-buttons {
+  @apply flex items-center gap-2 flex-wrap;
+}
+
+.action-btn {
+  @apply px-3 py-1.5 text-sm bg-blue-100 hover:bg-blue-200 dark:bg-blue-900 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 rounded border border-blue-300 dark:border-blue-700 transition-colors;
+}
+
+/* Screenshot Modal (Issue #74) */
+.screenshot-modal {
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75;
+}
+
+.screenshot-content {
+  @apply bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl max-h-[90vh] flex flex-col;
+}
+
+.screenshot-header {
+  @apply px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between;
+}
+
+.screenshot-body {
+  @apply p-6 overflow-auto flex-1;
+}
+
+.screenshot-image {
+  @apply max-w-full h-auto rounded-lg shadow-lg;
+}
+
+.screenshot-footer {
+  @apply px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-2;
+}
+
+.download-btn {
+  @apply px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors;
+}
+
+.cancel-btn {
+  @apply px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors;
+}
+
+.close-btn {
+  @apply text-2xl text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors;
+}
+
+/* Type Dialog (Issue #74) */
+.type-dialog-modal {
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50;
+}
+
+.type-dialog-content {
+  @apply bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md;
+}
+
+.type-dialog-header {
+  @apply px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between;
+}
+
+.type-dialog-body {
+  @apply p-6;
+}
+
+.type-textarea {
+  @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-200 resize-none;
+}
+
+.type-dialog-footer {
+  @apply px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-2;
+}
+
+.type-btn {
+  @apply px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
 }
 </style>
