@@ -18,7 +18,7 @@ bash setup.sh [--full|--minimal|--distributed]
 
 **Daily Startup:**
 ```bash
-bash run_autobot.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
+scripts/start-services.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
 ```
 - `--dev`: Development mode with auto-reload
 - `--prod`: Production mode (default)
@@ -74,7 +74,7 @@ Explain the 5-VM distributed architecture clearly:
 - Test connectivity: `ping 172.16.168.21`
 
 **Build Failures:**
-- Try: `bash run_autobot.sh --rebuild`
+- Try: `scripts/start-services.sh --rebuild`
 - Check Docker resources
 - Verify disk space availability
 

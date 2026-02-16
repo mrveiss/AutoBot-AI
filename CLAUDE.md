@@ -649,8 +649,10 @@ Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
 ## QUICK COMMANDS
 
 ```bash
-# Startup (local dev)
-bash run_autobot.sh --dev
+# Startup (local dev) - Use SLM orchestration or systemctl
+# GUI: https://172.16.168.19/orchestration
+# CLI: scripts/start-services.sh start
+# Direct: sudo systemctl start autobot-backend
 
 # Health checks
 curl http://localhost:8001/api/health

@@ -121,7 +121,7 @@ cd AutoBot
 
 # Verify you're in the right location
 ls -la
-# You should see: setup.sh, run_autobot.sh, docker-compose.yml, etc.
+# You should see: setup.sh, scripts/, docs/, etc.
 ```
 
 ### Step 2: Choose Setup Mode
@@ -466,7 +466,7 @@ vms:
 **Problem: Setup script fails with "Permission denied"**
 ```bash
 # Solution: Fix permissions
-chmod +x setup.sh run_autobot.sh
+chmod +x setup.sh scripts/start-services.sh
 sudo usermod -aG docker $USER
 # Logout/login or restart WSL2
 ```

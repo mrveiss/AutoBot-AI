@@ -438,7 +438,7 @@ async def restart_all_services(
     Restart all AutoBot services.
 
     Performs a stop-all followed by start-all in the correct dependency order.
-    This is equivalent to the smart restart in run_autobot.sh.
+    This provides intelligent service orchestration for the distributed fleet.
 
     Use the 'exclude' parameter to skip specific services.
     """

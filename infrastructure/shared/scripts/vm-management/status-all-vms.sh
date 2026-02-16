@@ -161,7 +161,7 @@ check_backend_status() {
         echo "  PID: $backend_pid"
     else
         echo -e "${RED}Not Running${NC}"
-        echo -e "${YELLOW}  Start with: bash run_autobot.sh --dev${NC}"
+        echo -e "${YELLOW}  Start with: scripts/start-services.sh --dev${NC}"
     fi
 
     # Check health endpoint
@@ -203,7 +203,7 @@ check_vnc_status() {
         echo "  VNC Client: localhost:5901"
     else
         echo -e "  Status: ${YELLOW}Partially running or stopped${NC}"
-        echo "  Start with: bash run_autobot.sh --desktop"
+        echo "  Start with: scripts/start-services.sh --desktop"
     fi
 }
 
@@ -347,7 +347,7 @@ main() {
     echo -e "${YELLOW}Quick Actions:${NC}"
     echo -e "${CYAN}  Start all VMs:    bash scripts/vm-management/start-all-vms.sh${NC}"
     echo -e "${CYAN}  Stop all VMs:     bash scripts/vm-management/stop-all-vms.sh${NC}"
-    echo -e "${CYAN}  Start backend:    bash run_autobot.sh --dev${NC}"
+    echo -e "${CYAN}  Start backend:    scripts/start-services.sh --dev${NC}"
     echo -e "${CYAN}  Check logs:       tail -f logs/*.log${NC}"
     echo ""
 

@@ -273,7 +273,7 @@ run_health_checks() {
     if curl -s --connect-timeout 5 "http://$MAIN_HOST_IP:8001/api/health" &> /dev/null; then
         print_success "Backend API is healthy"
     else
-        print_warning "Backend API not responding (start with ./run_autobot.sh)"
+        print_warning "Backend API not responding (start with SLM GUI or scripts/start-services.sh)"
     fi
 
     # Check Frontend
@@ -400,7 +400,7 @@ run_full_setup() {
         print_divider
         echo ""
         echo -e "${BOLD}Next Steps:${NC}"
-        echo "  1. Start AutoBot: ${GREEN}./run_autobot.sh --dev${NC}"
+        echo "  1. Start AutoBot: ${GREEN}scripts/start-services.sh start${NC}"
         echo "  2. Access the UI: ${CYAN}http://${VM1_IP}:${AUTOBOT_FRONTEND_PORT:-5173}${NC}"
         echo "  3. Access VNC:    ${CYAN}http://127.0.0.1:6080/vnc.html${NC}"
         echo ""
@@ -491,9 +491,9 @@ show_documentation() {
     echo ""
     echo -e "${CYAN}Quick Commands:${NC}"
     echo ""
-    echo "  • Start AutoBot:         ./run_autobot.sh --dev"
-    echo "  • Stop AutoBot:          ./run_autobot.sh --stop"
-    echo "  • Check Status:          ./run_autobot.sh --status"
+    echo "  • Start AutoBot:         scripts/start-services.sh start"
+    echo "  • Stop AutoBot:          scripts/start-services.sh stop"
+    echo "  • Check Status:          scripts/start-services.sh status"
     echo "  • View Logs:             tail -f logs/backend.log"
     echo ""
     echo -e "${CYAN}In-Chat Commands:${NC}"

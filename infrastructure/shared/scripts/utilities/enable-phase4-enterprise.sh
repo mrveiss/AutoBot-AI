@@ -107,7 +107,7 @@ main() {
         print_success "Backend is accessible"
     else
         print_error "Backend is not accessible. Please ensure AutoBot is running."
-        echo -e "${YELLOW}Try running: ${NC}bash run_autobot.sh --dev"
+        echo -e "${YELLOW}Try running: ${NC}scripts/start-services.sh start"
         exit 1
     fi
 

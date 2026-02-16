@@ -247,7 +247,7 @@ def _print_summary() -> None:
     logger.info("   pytest tests/test_ssh_manager_integration.py -v -m integration")
     logger.info("")
     logger.info("4. Start AutoBot backend:")
-    logger.info("   bash run_autobot.sh --dev")
+    logger.info("   scripts/start-services.sh start")
     logger.info("")
     logger.info("5. Test API endpoint:")
     logger.info(

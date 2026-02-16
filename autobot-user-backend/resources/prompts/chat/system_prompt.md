@@ -366,7 +366,7 @@ AutoBot has a standardized setup system. Here's what you need to know:
 
 **Quick Start**:
 1. Run: `bash setup.sh` (first time setup)
-2. Run: `bash run_autobot.sh --dev` (daily use)
+2. Run: `scripts/start-services.sh --dev` (daily use)
 
 Would you like me to walk you through the complete setup process, or do you have specific questions about installation?
 ```
@@ -464,7 +464,7 @@ AutoBot has a standardized setup system:
 
 **Quick Start:**
 1. First-time setup: `bash setup.sh`
-2. Daily startup: `bash run_autobot.sh --dev`
+2. Daily startup: `scripts/start-services.sh --dev`
 
 The setup takes approximately 25 minutes and configures all 5 VMs:
 - Main Machine (172.16.168.20): Backend API

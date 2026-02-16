@@ -23,12 +23,12 @@ import re
 from pathlib import Path as PathLib
 
 import aiofiles
-from fastapi import APIRouter, BackgroundTasks, Request
-
-from backend.knowledge_factory import get_or_create_knowledge_base
 from constants.threshold_constants import TimingConstants
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from fastapi import APIRouter, BackgroundTasks, Request
 from utils.template_loader import knowledge_data_exists, load_knowledge_data
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)
 
@@ -881,7 +881,7 @@ Network Layout:
 
 Key Commands:
 - Setup: bash setup.sh [--full|--minimal|--distributed]
-- Run: bash run_autobot.sh [--dev|--prod] [--build|--no-build] [--desktop|--no-desktop]
+- Run: SLM GUI (https://172.16.168.19/orchestration) or scripts/start-services.sh
 
 Critical Rules:
 - NEVER edit code directly on remote VMs (VM1-VM5)
@@ -1130,8 +1130,8 @@ async def _scan_and_store_man_pages(
 
     Issue #423: Uses ManPageParser for structured content extraction.
     """
-    from backend.services.fast_document_scanner import FastDocumentScanner
     from autobot_shared.redis_client import get_redis_client
+    from backend.services.fast_document_scanner import FastDocumentScanner
 
     try:
         redis_client = get_redis_client(async_client=False, database="main")
@@ -1274,8 +1274,8 @@ async def scan_man_pages_changes(
     """Scan for changed man pages only (Issue #398: refactored)."""
     import socket
 
-    from backend.services.fast_document_scanner import FastDocumentScanner
     from autobot_shared.redis_client import get_redis_client
+    from backend.services.fast_document_scanner import FastDocumentScanner
 
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
     if kb_to_use is None:

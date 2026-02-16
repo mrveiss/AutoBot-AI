@@ -31,7 +31,7 @@ You are helping diagnose and resolve AutoBot issues. Focus on systematic debuggi
 4. Check ports: `netstat -tlnp | grep 5173` on Frontend VM
 
 *Solutions*:
-- If VM down: Restart with `bash run_autobot.sh`
+- If VM down: Restart with `scripts/start-services.sh start`
 - If service crashed: Check logs `/home/autobot/logs/frontend.log`
 - If network issue: Verify VM network configuration
 - If port conflict: Check for rogue processes using port 5173

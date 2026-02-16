@@ -158,7 +158,7 @@ async def main():
         logger.info("✅ DEMO SUCCESSFUL")
         logger.info("\n🎯 The codebase indexing system is working correctly!")
         logger.info("\nNext steps:")
-        logger.info("1. Start the AutoBot backend: bash run_autobot.sh --dev")
+        logger.info("1. Start the AutoBot backend: scripts/start-services.sh start")
         logger.info("2. Use API endpoint: POST /api/knowledge/quick_index")
         logger.info("3. Check Knowledge Manager in the frontend")
         logger.info("4. Search the indexed codebase")

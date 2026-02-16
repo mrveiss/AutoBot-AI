@@ -1,0 +1,114 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Simple CLI wrapper around systemctl for AutoBot service management
+# For developers who prefer terminal commands over GUI
+#
+# Related: Issue #863
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+SERVICE="autobot-backend"
+
+show_usage() {
+    echo "AutoBot Service Control - CLI Wrapper"
+    echo ""
+    echo "Usage: $0 {start|stop|restart|status|logs|health}"
+    echo ""
+    echo "Commands:"
+    echo "  start    - Start the AutoBot backend service"
+    echo "  stop     - Stop the AutoBot backend service"
+    echo "  restart  - Restart the AutoBot backend service"
+    echo "  status   - Show service status"
+    echo "  logs     - Follow service logs (Ctrl+C to exit)"
+    echo "  health   - Check API health endpoint"
+    echo ""
+    echo "Alternative (Recommended):"
+    echo "  SLM GUI: https://172.16.168.19/orchestration"
+    echo ""
+    echo "Documentation: docs/developer/SERVICE_MANAGEMENT.md"
+    exit 1
+}
+
+check_service_exists() {
+    if ! systemctl list-unit-files | grep -q "^${SERVICE}.service"; then
+        echo -e "${RED}Error: Service ${SERVICE} not found${NC}"
+        echo "Run setup first or use Ansible deployment."
+        exit 1
+    fi
+}
+
+case "$1" in
+    start)
+        check_service_exists
+        echo -e "${BLUE}Starting ${SERVICE}...${NC}"
+        sudo systemctl start "${SERVICE}"
+        sleep 2
+        if systemctl is-active --quiet "${SERVICE}"; then
+            echo -e "${GREEN}✓ Service started successfully${NC}"
+            echo "Check health: $0 health"
+        else
+            echo -e "${RED}✗ Service failed to start${NC}"
+            echo "Check logs: $0 logs"
+            exit 1
+        fi
+        ;;
+
+    stop)
+        check_service_exists
+        echo -e "${BLUE}Stopping ${SERVICE}...${NC}"
+        sudo systemctl stop "${SERVICE}"
+        echo -e "${GREEN}✓ Service stopped${NC}"
+        ;;
+
+    restart)
+        check_service_exists
+        echo -e "${BLUE}Restarting ${SERVICE}...${NC}"
+        sudo systemctl restart "${SERVICE}"
+        sleep 2
+        if systemctl is-active --quiet "${SERVICE}"; then
+            echo -e "${GREEN}✓ Service restarted successfully${NC}"
+            echo "Check health: $0 health"
+        else
+            echo -e "${RED}✗ Service failed to restart${NC}"
+            echo "Check logs: $0 logs"
+            exit 1
+        fi
+        ;;
+
+    status)
+        check_service_exists
+        systemctl status "${SERVICE}" --no-pager
+        ;;
+
+    logs)
+        check_service_exists
+        echo -e "${BLUE}Following logs for ${SERVICE} (Ctrl+C to exit)...${NC}"
+        journalctl -u "${SERVICE}" -f --no-pager
+        ;;
+
+    health)
+        echo -e "${BLUE}Checking API health...${NC}"
+        if curl -s http://localhost:8001/api/health > /dev/null 2>&1; then
+            echo -e "${GREEN}✓ API is responding${NC}"
+            curl -s http://localhost:8001/api/health | python3 -m json.tool 2>/dev/null || curl -s http://localhost:8001/api/health
+        else
+            echo -e "${RED}✗ API is not responding${NC}"
+            echo "Check if service is running: $0 status"
+            exit 1
+        fi
+        ;;
+
+    *)
+        show_usage
+        ;;
+esac
