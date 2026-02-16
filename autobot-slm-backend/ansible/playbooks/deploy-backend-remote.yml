@@ -1,0 +1,53 @@
+---
+# Deploy Backend Services to Main Machine (Remote from SLM)
+# Issue #856: Python 3.12 deployment with pyenv
+#
+# This playbook deploys from SLM server to backend server:
+# - AutoBot Backend API (FastAPI on port 8443)
+# - Celery Worker (background tasks)
+
+- name: Deploy Backend Services to Main Machine (Remote)
+  hosts: autobot-host
+  become: yes
+  gather_facts: yes
+
+  vars:
+    # Backend configuration
+    backend_user: autobot
+    backend_group: autobot
+    backend_install_dir: /opt/autobot
+    backend_code_dir: /opt/autobot/autobot-user-backend
+    backend_log_dir: /var/log/autobot
+    backend_data_dir: /var/lib/autobot
+
+    # Server settings (Issue #858/#861)
+    backend_host: "0.0.0.0"
+    backend_port: 8443
+    backend_workers: 4
+
+    # Celery worker settings (Issue #863)
+    celery_concurrency: 4
+    celery_max_tasks_per_child: 1000
+
+    # Redis connection
+    backend_redis_host: "172.16.168.23"
+    backend_redis_port: 6379
+
+    # Deployment settings
+    backend_deploy_from_git: false  # Use existing code
+
+    # Override connection to SSH
+    ansible_connection: ssh
+    ansible_host: 172.16.168.20
+
+  roles:
+    - backend
+
+  tasks:
+    - name: Display deployment summary
+      debug:
+        msg:
+          - "✅ Backend deployment complete"
+          - "Backend API: https://172.16.168.20:8443"
+          - "Celery Worker: Running with {{ celery_concurrency }} workers"
+          - "Logs: ssh autobot@172.16.168.20 'journalctl -u autobot-backend -f'"

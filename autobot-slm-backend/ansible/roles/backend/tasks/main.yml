@@ -104,6 +104,17 @@
   become_user: "{{ backend_user }}"
   when: backend_deploy_from_git | default(true)
 
+- name: Check if valid venv exists
+  ansible.builtin.stat:
+    path: "{{ backend_code_dir }}/venv/bin/python"
+  register: venv_check
+
+- name: Remove old/broken venv if it's a symlink
+  ansible.builtin.file:
+    path: "{{ backend_code_dir }}/venv"
+    state: absent
+  when: venv_check.stat.exists and venv_check.stat.islnk
+
 - name: Create Python 3.12 virtual environment with pyenv
   ansible.builtin.shell: |
     export PYENV_ROOT="/home/{{ backend_user }}/.pyenv"
@@ -111,7 +122,7 @@
     eval "$(pyenv init --path)"
     /home/{{ backend_user }}/.pyenv/versions/3.12.7/bin/python3.12 -m venv {{ backend_code_dir }}/venv
   args:
-    creates: "{{ backend_code_dir }}/venv/bin/python"
+    creates: "{{ backend_code_dir }}/venv/bin/activate"
     executable: /bin/bash
   become_user: "{{ backend_user }}"
 
@@ -140,12 +151,15 @@
 
 - name: Install Python requirements (excluding autobot-shared)
   ansible.builtin.shell:
-    cmd: "{{ backend_code_dir }}/venv/bin/pip install -r {{ backend_code_dir }}/requirements.txt"
+    cmd: "grep -v '^-e.*autobot-shared' {{ backend_code_dir }}/requirements.txt | {{ backend_code_dir }}/venv/bin/pip install -r /dev/stdin"
     chdir: "{{ backend_code_dir }}"
   become_user: "{{ backend_user }}"
   environment:
     PIP_NO_BINARY: ":none:"
     PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
+  register: pip_install_result
+  failed_when: pip_install_result.rc != 0
+  changed_when: "'Successfully installed' in pip_install_result.stdout"
 
 - name: Deploy aioredis compatibility shim for Python 3.12
   ansible.builtin.template:
