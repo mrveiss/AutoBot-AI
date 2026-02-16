@@ -28,6 +28,30 @@ security:
       src: "172.16.168.0/24"
       comment: "Ollama API"
 
+  # Model security
+  model_security:
+    # Model verification
+    verify_checksums: true
+    scan_models: true
+
+    # Access control
+    model_permissions:
+      owner: "{{ autobot.user }}"
+      group: "{{ autobot.group }}"
+      files: "644"
+      directories: "755"
+
+  # API security
+  api_security:
+    rate_limiting: true
+    input_validation: true
+    output_sanitization: true
+
+    # CORS configuration
+    cors_origins:
+      - "http://172.16.168.21"  # Frontend VM
+      - "http://172.16.168.20:8001"  # Backend VM
+
 # ==========================================
 # AI STACK CONFIGURATION
 # ==========================================
@@ -509,33 +533,8 @@ backup_paths:
     retention: 30  # days
 
 # ==========================================
-# SECURITY CONFIGURATION
+# TROUBLESHOOTING CONFIGURATION (continued after security section)
 # ==========================================
-
-security:
-  # Model security
-  model_security:
-    # Model verification
-    verify_checksums: true
-    scan_models: true
-
-    # Access control
-    model_permissions:
-      owner: "{{ autobot.user }}"
-      group: "{{ autobot.group }}"
-      files: "644"
-      directories: "755"
-
-  # API security
-  api_security:
-    rate_limiting: true
-    input_validation: true
-    output_sanitization: true
-
-    # CORS configuration
-    cors_origins:
-      - "http://172.16.168.21"  # Frontend VM
-      - "http://172.16.168.20:8001"  # Backend VM
 
 # ==========================================
 # TROUBLESHOOTING CONFIGURATION
