@@ -59,7 +59,7 @@
             @click="selectEntry(entry)"
           >
             <td class="col-timestamp">
-              <span class="timestamp-full">{{ formatTimestamp(entry.timestamp) }}</span>
+              <span class="timestamp-full mono-timestamp">{{ formatTimestamp(entry.timestamp) }}</span>
               <span class="timestamp-relative">{{ formatRelativeTime(entry.timestamp) }}</span>
             </td>
             <td class="col-operation">
@@ -74,7 +74,7 @@
             <td class="col-user">
               <button
                 v-if="entry.user_id"
-                class="link-btn"
+                class="link-btn mono-id"
                 @click.stop="$emit('user-click', entry.user_id)"
               >
                 {{ entry.user_id }}
@@ -84,7 +84,7 @@
             <td class="col-session">
               <button
                 v-if="entry.session_id"
-                class="link-btn"
+                class="link-btn mono-id"
                 @click.stop="$emit('session-click', entry.session_id)"
               >
                 {{ truncateId(entry.session_id) }}
@@ -325,11 +325,12 @@ function exportLogs(format: 'json' | 'csv') {
 </script>
 
 <style scoped>
+/* Issue #901: Technical Precision AuditLogTable Design */
 .audit-log-table {
   position: relative;
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
+  border-radius: 4px;
   overflow: hidden;
 }
 
@@ -367,7 +368,7 @@ function exportLogs(format: 'json' | 'csv') {
   margin-top: var(--spacing-1);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-default);
+  border-radius: 4px;
   box-shadow: var(--shadow-lg);
   z-index: 10;
   min-width: 150px;
@@ -455,10 +456,19 @@ th span {
   color: var(--text-primary);
 }
 
+/* Issue #901: Monospace font for timestamps */
+.mono-timestamp {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
 .timestamp-relative {
   display: block;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
+  font-family: var(--font-sans);
 }
 
 .col-operation {
@@ -473,35 +483,38 @@ th span {
   min-width: 100px;
 }
 
+/* Issue #901: Technical Precision badges */
 .result-badge {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-1);
   padding: var(--spacing-1) var(--spacing-2);
-  border-radius: var(--radius-default);
-  font-size: var(--text-xs);
-  font-weight: var(--font-medium);
-  text-transform: capitalize;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .badge-success {
-  background: rgba(34, 197, 94, 0.1);
-  color: rgb(34, 197, 94);
+  background: var(--color-success-bg);
+  color: var(--color-success-dark);
 }
 
 .badge-denied {
-  background: rgba(239, 68, 68, 0.1);
-  color: rgb(239, 68, 68);
+  background: var(--color-error-bg);
+  color: var(--color-error-dark);
 }
 
 .badge-failed {
-  background: rgba(249, 115, 22, 0.1);
-  color: rgb(249, 115, 22);
+  background: var(--color-warning-bg);
+  color: var(--color-warning-dark);
 }
 
 .badge-error {
-  background: rgba(234, 179, 8, 0.1);
-  color: rgb(234, 179, 8);
+  background: var(--color-warning-bg);
+  color: var(--color-warning-dark);
 }
 
 .col-user, .col-session {
@@ -511,15 +524,23 @@ th span {
 .link-btn {
   background: none;
   border: none;
-  color: var(--color-primary);
+  color: var(--color-info);
   font-size: inherit;
   cursor: pointer;
   padding: 0;
   text-decoration: underline;
+  font-family: var(--font-sans);
 }
 
 .link-btn:hover {
-  color: var(--color-primary-hover);
+  color: var(--color-info-dark);
+}
+
+/* Issue #901: Monospace font for IDs */
+.mono-id {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: -0.02em;
 }
 
 .empty-value {
@@ -619,13 +640,14 @@ th span {
 
 .modal-content {
   background: var(--bg-card);
-  border-radius: var(--radius-lg);
+  border-radius: 4px;
   max-width: 700px;
   width: 100%;
   max-height: 90vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--border-default);
 }
 
 .modal-header {
@@ -675,28 +697,35 @@ th span {
   grid-column: span 2;
 }
 
+/* Issue #901: Monospace for technical data in modal */
 .mono {
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: 12px;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .error-message {
-  color: rgb(239, 68, 68);
-  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-error);
+  background: var(--color-error-bg);
   padding: var(--spacing-2);
-  border-radius: var(--radius-default);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 
 .details-json {
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  font-size: 12px;
   background: var(--bg-secondary);
   padding: var(--spacing-3);
-  border-radius: var(--radius-default);
+  border-radius: 2px;
   overflow-x: auto;
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
+  letter-spacing: -0.02em;
+  line-height: 1.5;
 }
 
 .loading-overlay {

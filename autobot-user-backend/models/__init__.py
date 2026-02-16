@@ -23,6 +23,7 @@ from backend.models.activities import (
 
 # Other backend models
 from backend.models.atomic_fact import AtomicFact
+from backend.models.code_pattern import CodePattern
 from backend.models.command_execution import CommandExecution
 from backend.models.secret import Secret
 from backend.models.session_collaboration import SessionCollaboration
@@ -36,6 +37,7 @@ __all__ = [
     "SecretUsageModel",
     # Other models
     "AtomicFact",
+    "CodePattern",
     "CommandExecution",
     "Secret",
     "SessionCollaboration",
