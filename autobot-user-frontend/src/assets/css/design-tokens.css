@@ -5,6 +5,7 @@
  *
  * design-tokens.css - Centralized Design Token System (SSOT)
  * Issue #704: CSS Design System - Centralized Theming & SSOT Styles
+ * Issue #901: Technical Precision Theme - Professional Data-Focused Redesign
  *
  * This file defines all design tokens as CSS custom properties.
  * Theme files (dark.css, light.css) override these values.
@@ -20,6 +21,9 @@
  * │  Component Styles (using tokens)                        │
  * └─────────────────────────────────────────────────────────┘
  */
+
+/* Import IBM Plex Sans and JetBrains Mono fonts */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
   /* ============================================
@@ -123,10 +127,7 @@
   --bg-overlay-medium: rgba(255, 255, 255, 0.3);
   --bg-dark: #000000;
 
-  /* Gradients */
-  --gradient-surface: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
-  --gradient-purple: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
-  --gradient-primary: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
+  /* Issue #901: NO GRADIENTS - Removed all gradient variables for professional aesthetic */
 
   /* Border colors (light theme variants) */
   --border-light: #e9ecef;
@@ -271,11 +272,12 @@
    * Font families, sizes, weights, and line heights
    * ============================================ */
 
-  /* Font families */
-  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont,
+  /* Font families - Issue #901: Technical Precision Theme */
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont,
     'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas,
     'Courier New', monospace;
+  --font-numeric: 'IBM Plex Mono', 'JetBrains Mono', Consolas, monospace;
   --font-display: var(--font-sans);
 
   /* Font sizes */
@@ -415,8 +417,9 @@
    * Content dimensions and breakpoints
    * ============================================ */
 
-  --header-height: 64px;
-  --sidebar-width: 256px;
+  /* Issue #901: Compact header height (56px instead of 64px) */
+  --header-height: 56px;
+  --sidebar-width: 240px;
   --sidebar-width-collapsed: 64px;
   --content-max-width: 1280px;
   --view-min-height: calc(100vh - var(--header-height));

@@ -6,19 +6,19 @@
       <a href="#navigation" class="skip-link sr-only-focusable">Skip to navigation</a>
     </div>
 
-    <!-- Header -->
-    <header class="bg-gradient-to-r from-indigo-600 to-purple-600 shadow-sm relative z-30">
+    <!-- Header - Issue #901: Professional solid color (no gradients) -->
+    <header class="bg-slate-800 border-b border-slate-700 relative z-30" style="height: 56px;">
       <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between h-16">
+        <div class="flex items-center justify-between" style="height: 56px;">
           <!-- Logo/Brand with System Status -->
           <div class="flex-shrink-0 flex items-center">
             <button
               @click="toggleSystemStatus"
-              class="flex items-center space-x-3 hover:bg-indigo-500 rounded-lg px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
+              class="flex items-center space-x-3 hover:bg-slate-700 rounded-md px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-electric-500 focus:ring-opacity-50"
               :title="getSystemStatusTooltip()"
             >
-              <div class="relative w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                <span class="text-indigo-600 font-bold text-sm">AB</span>
+              <div class="relative w-8 h-8 bg-white rounded flex items-center justify-center">
+                <span class="text-slate-800 font-bold text-sm font-mono">AB</span>
                 <!-- System status indicator dot -->
                 <div
                   :class="{
@@ -41,10 +41,10 @@
                 <router-link
                   to="/chat"
                   :class="{
-                    'bg-white text-indigo-700': $route.path.startsWith('/chat'),
-                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/chat')
+                    'bg-electric-600 text-white': $route.path.startsWith('/chat'),
+                    'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/chat')
                   }"
-                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                  class="px-3 py-2 rounded text-sm font-medium transition-colors duration-150"
                 >
                   <div class="flex items-center space-x-1">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -57,8 +57,8 @@
                 <router-link
                   to="/knowledge"
                   :class="{
-                    'bg-white text-indigo-700': $route.path.startsWith('/knowledge'),
-                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/knowledge')
+                    'bg-electric-600 text-white': $route.path.startsWith('/knowledge'),
+                    'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/knowledge')
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
@@ -73,8 +73,8 @@
                 <router-link
                   to="/automation"
                   :class="{
-                    'bg-white text-indigo-700': $route.path.startsWith('/automation'),
-                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/automation')
+                    'bg-electric-600 text-white': $route.path.startsWith('/automation'),
+                    'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/automation')
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
@@ -89,8 +89,8 @@
                 <router-link
                   to="/analytics"
                   :class="{
-                    'bg-white text-indigo-700': $route.path.startsWith('/analytics'),
-                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/analytics')
+                    'bg-electric-600 text-white': $route.path.startsWith('/analytics'),
+                    'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/analytics')
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
@@ -106,8 +106,8 @@
                 <router-link
                   to="/secrets"
                   :class="{
-                    'bg-white text-indigo-700': $route.path.startsWith('/secrets'),
-                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/secrets')
+                    'bg-electric-600 text-white': $route.path.startsWith('/secrets'),
+                    'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/secrets')
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
@@ -123,8 +123,8 @@
                 <router-link
                   to="/vision"
                   :class="{
-                    'bg-white text-indigo-700': $route.path.startsWith('/vision'),
-                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/vision')
+                    'bg-electric-600 text-white': $route.path.startsWith('/vision'),
+                    'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/vision')
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
@@ -141,8 +141,8 @@
                 <router-link
                   to="/preferences"
                   :class="{
-                    'bg-white text-indigo-700': $route.path.startsWith('/preferences'),
-                    'text-white hover:bg-indigo-500': !$route.path.startsWith('/preferences')
+                    'bg-electric-600 text-white': $route.path.startsWith('/preferences'),
+                    'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/preferences')
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
@@ -158,7 +158,7 @@
                 <a
                   :href="slmAdminUrl"
                   target="_blank"
-                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 text-white hover:bg-indigo-500"
+                  class="px-3 py-2 rounded text-sm font-medium transition-colors duration-150 text-slate-200 hover:bg-slate-700 hover:text-white"
                   title="Open SLM Admin for infrastructure management"
                 >
                   <div class="flex items-center space-x-1">
@@ -184,7 +184,7 @@
             <!-- Mobile menu button -->
             <button
               @click="toggleMobileNav"
-              class="lg:hidden inline-flex items-center justify-center p-2 rounded-md text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-indigo-600 focus:ring-white"
+              class="lg:hidden inline-flex items-center justify-center p-2 rounded text-slate-200 hover:bg-slate-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-electric-500"
               aria-controls="mobile-nav"
               aria-expanded="false"
             >
@@ -209,7 +209,7 @@
         <div
           v-show="showMobileNav"
           id="mobile-nav"
-          class="lg:hidden absolute top-full left-0 right-0 bg-gradient-to-r from-indigo-600 to-purple-600 shadow-lg z-20"
+          class="lg:hidden absolute top-full left-0 right-0 bg-slate-800 border-b border-slate-700 shadow-lg z-20"
         >
           <div class="px-4 py-3 space-y-2">
             <router-link
@@ -217,7 +217,7 @@
               @click="closeMobileNav"
               :class="{
                 'bg-white text-indigo-700': $route.path.startsWith('/chat'),
-                'text-white hover:bg-indigo-600': !$route.path.startsWith('/chat')
+                'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/chat')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
@@ -234,7 +234,7 @@
               @click="closeMobileNav"
               :class="{
                 'bg-white text-indigo-700': $route.path.startsWith('/knowledge'),
-                'text-white hover:bg-indigo-600': !$route.path.startsWith('/knowledge')
+                'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/knowledge')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
@@ -251,7 +251,7 @@
               @click="closeMobileNav"
               :class="{
                 'bg-white text-indigo-700': $route.path.startsWith('/automation'),
-                'text-white hover:bg-indigo-600': !$route.path.startsWith('/automation')
+                'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/automation')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
@@ -268,7 +268,7 @@
               @click="closeMobileNav"
               :class="{
                 'bg-white text-indigo-700': $route.path.startsWith('/analytics'),
-                'text-white hover:bg-indigo-600': !$route.path.startsWith('/analytics')
+                'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/analytics')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
@@ -286,7 +286,7 @@
               @click="closeMobileNav"
               :class="{
                 'bg-white text-indigo-700': $route.path.startsWith('/secrets'),
-                'text-white hover:bg-indigo-600': !$route.path.startsWith('/secrets')
+                'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/secrets')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
@@ -304,7 +304,7 @@
               @click="closeMobileNav"
               :class="{
                 'bg-white text-indigo-700': $route.path.startsWith('/vision'),
-                'text-white hover:bg-indigo-600': !$route.path.startsWith('/vision')
+                'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/vision')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
@@ -323,7 +323,7 @@
               @click="closeMobileNav"
               :class="{
                 'bg-white text-indigo-700': $route.path.startsWith('/preferences'),
-                'text-white hover:bg-indigo-600': !$route.path.startsWith('/preferences')
+                'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/preferences')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
@@ -339,7 +339,7 @@
             <a
               :href="slmAdminUrl"
               @click="closeMobileNav"
-              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block text-white hover:bg-indigo-600"
+              class="w-full text-left px-3 py-2 rounded text-sm font-medium transition-colors duration-150 block text-slate-200 hover:bg-slate-700 hover:text-white"
             >
               <div class="flex items-center space-x-2">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
