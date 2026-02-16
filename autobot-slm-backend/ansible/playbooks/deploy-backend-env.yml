@@ -67,6 +67,24 @@
         owner: "{{ backend_user }}"
         group: "{{ backend_group }}"
 
+    - name: Deploy backend systemd service
+      ansible.builtin.template:
+        src: ../roles/backend/templates/autobot-backend.service.j2
+        dest: /etc/systemd/system/autobot-backend.service
+        mode: "0644"
+      notify:
+        - reload systemd
+        - restart backend
+
+    - name: Remove inner backend symlink if it exists (Issue #891)
+      ansible.builtin.file:
+        path: "{{ backend_code_dir }}/backend/backend"
+        state: absent
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+
     - name: Restart backend service
       ansible.builtin.systemd:
         name: autobot-backend
