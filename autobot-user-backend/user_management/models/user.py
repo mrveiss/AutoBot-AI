@@ -169,6 +169,7 @@ class User(Base, TimestampMixin):
     user_roles: Mapped[list["UserRole"]] = relationship(
         "UserRole",
         back_populates="user",
+        foreign_keys="[UserRole.user_id]",
         cascade="all, delete-orphan",
     )
 
