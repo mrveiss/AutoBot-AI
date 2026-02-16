@@ -182,6 +182,11 @@
               <h4>{{ secret.name }}</h4>
               <div class="card-badges">
                 <span class="badge" :class="secret.scope">{{ secret.scope }}</span>
+                <!-- Issue #685: Visibility badge -->
+                <span v-if="getVisibility(secret)" class="badge visibility" :class="`visibility-${getVisibility(secret)}`">
+                  <i :class="getVisibilityIcon(secret)"></i>
+                  {{ formatVisibility(secret) }}
+                </span>
                 <span v-if="isExpired(secret)" class="badge expired">
                   <i class="fas fa-exclamation-triangle"></i> Expired
                 </span>
@@ -1468,6 +1473,37 @@ const isExpiringSoon = (secret: any) => {
   return daysUntilExpiry <= 7;
 };
 
+// Issue #685: Visibility badge helpers
+const getVisibility = (secret: any): string | null => {
+  return secret?.visibility || null;
+};
+
+const formatVisibility = (secret: any): string => {
+  const visibility = getVisibility(secret);
+  if (!visibility) return '';
+
+  const labels: Record<string, string> = {
+    'private': 'Private',
+    'shared': 'Shared',
+    'group': 'Group',
+    'organization': 'Organization',
+    'system': 'System'
+  };
+  return labels[visibility] || visibility.charAt(0).toUpperCase() + visibility.slice(1);
+};
+
+const getVisibilityIcon = (secret: any): string => {
+  const visibility = getVisibility(secret);
+  const icons: Record<string, string> = {
+    'private': 'fas fa-lock',
+    'shared': 'fas fa-user-friends',
+    'group': 'fas fa-users',
+    'organization': 'fas fa-building',
+    'system': 'fas fa-globe'
+  };
+  return icons[visibility || ''] || 'fas fa-eye';
+};
+
 // Lifecycle
 onMounted(() => {
   loadSecrets();
@@ -1875,6 +1911,38 @@ watch(selectedScope, () => {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* Issue #685: Visibility badge styles */
+.badge.visibility {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge.visibility-private {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.badge.visibility-shared {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+.badge.visibility-group {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge.visibility-organization {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.badge.visibility-system {
+  background: #d1fae5;
+  color: #065f46;
 }
 
 .card-description {
