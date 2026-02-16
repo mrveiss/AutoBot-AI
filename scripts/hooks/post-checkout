@@ -1,0 +1,42 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Post-checkout hook: Fix WSL2 symlink breakage
+# Issue #886: WSL2's core.symlinks=false causes symlinks to become text files
+
+set -e
+
+# Determine git root directory
+if [ -n "$GIT_DIR" ]; then
+    GIT_ROOT="$(cd "$GIT_DIR/.." && pwd)"
+else
+    # When run manually, find git root
+    GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+fi
+
+# Fix backend symlink (self-referencing in autobot-user-backend/)
+BACKEND_DIR="$GIT_ROOT/autobot-user-backend"
+BACKEND_SYMLINK="$BACKEND_DIR/backend"
+
+if [ ! -L "$BACKEND_SYMLINK" ] || [ ! -e "$BACKEND_SYMLINK" ]; then
+    echo "🔧 Fixing backend symlink..."
+    cd "$BACKEND_DIR"
+    rm -f backend
+    ln -s . backend
+    echo "✅ Backend symlink restored: $BACKEND_SYMLINK -> ."
+fi
+
+# Fix autobot_shared symlink (root level)
+SHARED_SYMLINK="$GIT_ROOT/autobot_shared"
+
+if [ ! -L "$SHARED_SYMLINK" ] || [ ! -e "$SHARED_SYMLINK" ]; then
+    echo "🔧 Fixing autobot_shared symlink..."
+    cd "$GIT_ROOT"
+    rm -f autobot_shared
+    ln -s autobot-shared autobot_shared
+    echo "✅ autobot_shared symlink restored: $SHARED_SYMLINK -> autobot-shared"
+fi
+
+exit 0

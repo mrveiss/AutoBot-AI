@@ -14,6 +14,7 @@ Environment="PATH={{ backend_code_dir | default(backend_install_dir) }}/venv/bin
 Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir | default(backend_install_dir) }}"
 EnvironmentFile={{ backend_code_dir | default(backend_install_dir) }}/.env
 EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys') }}/{{ service_auth_service_id | default('main-backend') }}.env
+ExecStartPre=/bin/bash -c 'cd {{ backend_code_dir | default(backend_install_dir) }} && [ -L backend ] || (rm -f backend && ln -s . backend)'
 ExecStart={{ backend_code_dir | default(backend_install_dir) }}/venv/bin/uvicorn main:app --host {{ backend_host }} --port {{ backend_port }} --workers {{ backend_workers }}
 Restart=always
 RestartSec=5
