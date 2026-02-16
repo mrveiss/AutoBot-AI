@@ -1,9 +1,14 @@
 <template>
   <div class="workflow-builder-view">
-    <!-- Sidebar Navigation -->
+    <!-- Sidebar Navigation - Issue #901: Technical Precision Design -->
     <aside class="workflow-sidebar">
       <div class="sidebar-header">
-        <h3><i class="fas fa-project-diagram"></i> Workflow Builder</h3>
+        <h3>
+          <svg class="header-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+          </svg>
+          Workflow Builder
+        </h3>
       </div>
 
       <!-- Category Navigation -->
@@ -13,7 +18,9 @@
           :class="{ active: activeSection === 'overview' }"
           @click="activeSection = 'overview'"
         >
-          <i class="fas fa-tachometer-alt"></i>
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+          </svg>
           <span>Overview</span>
         </div>
 
@@ -26,7 +33,9 @@
           :class="{ active: activeSection === 'canvas' }"
           @click="activeSection = 'canvas'"
         >
-          <i class="fas fa-draw-polygon"></i>
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 12a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z"></path>
+          </svg>
           <span>Visual Builder</span>
         </div>
 
@@ -35,7 +44,9 @@
           :class="{ active: activeSection === 'templates' }"
           @click="activeSection = 'templates'"
         >
-          <i class="fas fa-clone"></i>
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+          </svg>
           <span>Templates</span>
           <span class="count">{{ templates.length }}</span>
         </div>
@@ -45,7 +56,9 @@
           :class="{ active: activeSection === 'natural-language' }"
           @click="activeSection = 'natural-language'"
         >
-          <i class="fas fa-comments"></i>
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+          </svg>
           <span>Natural Language</span>
         </div>
 
@@ -58,7 +71,10 @@
           :class="{ active: activeSection === 'runner' }"
           @click="activeSection = 'runner'"
         >
-          <i class="fas fa-play-circle"></i>
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
           <span>Runner</span>
           <span class="count active-badge" v-if="hasActiveWorkflows">
             {{ activeWorkflows.length }}
@@ -70,7 +86,9 @@
           :class="{ active: activeSection === 'history' }"
           @click="activeSection = 'history'"
         >
-          <i class="fas fa-history"></i>
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
           <span>History</span>
         </div>
 
@@ -83,7 +101,9 @@
           :class="{ active: activeSection === 'orchestration' }"
           @click="activeSection = 'orchestration'"
         >
-          <i class="fas fa-sitemap"></i>
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+          </svg>
           <span>Visualizer</span>
         </div>
 
@@ -92,7 +112,9 @@
           :class="{ active: activeSection === 'agents' }"
           @click="activeSection = 'agents'"
         >
-          <i class="fas fa-users-cog"></i>
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+          </svg>
           <span>Agents</span>
         </div>
       </nav>
@@ -100,7 +122,9 @@
       <!-- Quick Actions -->
       <div class="sidebar-actions">
         <button @click="refreshAll" class="btn-refresh" :disabled="loading">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+          <svg class="refresh-icon" :class="{ 'spinning': loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          </svg>
           Refresh
         </button>
       </div>
@@ -775,6 +799,8 @@ watch(hasActiveWorkflows, (hasActive) => {
 </script>
 
 <style scoped>
+/* Issue #901: Technical Precision Workflow Builder Design */
+
 .workflow-builder-view {
   display: flex;
   height: 100%;
@@ -800,16 +826,21 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .sidebar-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
+  font-family: var(--font-sans);
   display: flex;
   align-items: center;
   gap: 10px;
+  line-height: 1.5;
 }
 
-.sidebar-header i {
-  color: var(--color-primary);
+.header-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--color-info);
+  flex-shrink: 0;
 }
 
 .category-nav {
@@ -820,11 +851,12 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .category-divider {
   padding: 12px 20px 8px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
+  letter-spacing: 0.8px;
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
 }
 
 .category-item {
@@ -833,46 +865,53 @@ watch(hasActiveWorkflows, (hasActive) => {
   gap: 12px;
   padding: 10px 20px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
   color: var(--text-secondary);
+  border-left: 2px solid transparent;
 }
 
 .category-item:hover {
-  background: var(--bg-hover);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .category-item.active {
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border-left-color: var(--color-info);
 }
 
-.category-item i {
-  width: 20px;
-  text-align: center;
-  font-size: 14px;
+.item-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .category-item span:first-of-type:not(.count) {
   flex: 1;
   font-size: 14px;
+  font-weight: 500;
+  font-family: var(--font-sans);
 }
 
 .category-item .count {
-  font-size: 12px;
+  font-size: 11px;
+  font-family: var(--font-mono);
   background: var(--bg-tertiary);
   padding: 2px 8px;
   border-radius: 10px;
   color: var(--text-tertiary);
+  font-weight: 500;
 }
 
 .category-item .count.active-badge {
   background: var(--color-success);
-  color: var(--text-on-primary);
+  color: white;
 }
 
 .category-item.active .count:not(.active-badge) {
-  background: var(--color-primary);
-  color: var(--text-on-primary);
+  background: var(--color-info);
+  color: white;
 }
 
 .sidebar-actions {
@@ -882,28 +921,49 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .btn-refresh {
   width: 100%;
-  padding: 10px;
+  height: 36px;
+  padding: 0 12px;
   background: var(--bg-tertiary);
   color: var(--text-secondary);
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 2px;
+  font-size: 13px;
   font-weight: 500;
+  font-family: var(--font-sans);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: all 0.2s;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .btn-refresh:hover:not(:disabled) {
   background: var(--bg-hover);
+  border-color: var(--border-strong);
 }
 
 .btn-refresh:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.refresh-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.refresh-icon.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Main Content */

@@ -9,17 +9,13 @@
 -->
 <template>
   <div class="vision-view">
-    <!-- Sidebar Navigation -->
+    <!-- Sidebar Navigation - Issue #901: Technical Precision Design -->
     <aside class="vision-sidebar">
       <div class="sidebar-header">
         <h3>
-          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-            <path
-              fill-rule="evenodd"
-              d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-              clip-rule="evenodd"
-            />
+          <svg class="header-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
           </svg>
           Vision & AI
         </h3>
@@ -31,7 +27,9 @@
           class="nav-item"
           :class="{ active: $route.path === '/vision/analyze' }"
         >
-          <i class="fas fa-desktop"></i>
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+          </svg>
           <span>Screen Analysis</span>
         </router-link>
 
@@ -40,7 +38,9 @@
           class="nav-item"
           :class="{ active: $route.path === '/vision/image' }"
         >
-          <i class="fas fa-image"></i>
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          </svg>
           <span>Image Processing</span>
         </router-link>
 
@@ -49,7 +49,9 @@
           class="nav-item"
           :class="{ active: $route.path === '/vision/automation' }"
         >
-          <i class="fas fa-robot"></i>
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+          </svg>
           <span>Automation</span>
         </router-link>
       </nav>
@@ -111,6 +113,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Issue #901: Technical Precision Vision View Design */
+
 .vision-view {
   display: flex;
   height: 100%;
@@ -119,74 +123,81 @@ onMounted(() => {
 
 /* Sidebar */
 .vision-sidebar {
-  width: 220px;
-  min-width: 220px;
-  background: var(--bg-secondary, #fff);
-  border-right: 1px solid var(--border-default, #e5e7eb);
+  width: 260px;
+  min-width: 260px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
 }
 
 .sidebar-header {
-  padding: 20px 16px 12px;
-  border-bottom: 1px solid var(--border-default, #e5e7eb);
+  padding: 20px;
+  border-bottom: 1px solid var(--border-default);
 }
 
 .sidebar-header h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary, #111827);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  line-height: 1.5;
 }
 
-.sidebar-header svg {
-  color: var(--color-primary, #6366f1);
+.header-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--color-info);
+  flex-shrink: 0;
 }
 
 .sidebar-nav {
   flex: 1;
-  padding: 8px;
+  padding: 12px 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  font-size: 13px;
+  gap: 12px;
+  padding: 10px 20px;
+  border-left: 2px solid transparent;
+  font-size: 14px;
   font-weight: 500;
-  color: var(--text-secondary, #6b7280);
+  font-family: var(--font-sans);
+  color: var(--text-secondary);
   text-decoration: none;
-  transition: all 0.15s;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .nav-item:hover {
-  background: var(--bg-tertiary, #f3f4f6);
-  color: var(--text-primary, #111827);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .nav-item.active {
-  background: var(--color-primary-bg, #eef2ff);
-  color: var(--color-primary, #6366f1);
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border-left-color: var(--color-info);
 }
 
-.nav-item i {
+.item-icon {
   width: 18px;
-  text-align: center;
-  font-size: 14px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 /* Footer status */
 .sidebar-footer {
-  padding: 12px 16px;
-  border-top: 1px solid var(--border-default, #e5e7eb);
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-default);
 }
 
 .status-indicator {
@@ -194,76 +205,100 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: var(--text-tertiary, #9ca3af);
+  font-family: var(--font-sans);
+  color: var(--text-tertiary);
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--text-muted, #d1d5db);
+  background: var(--border-default);
+  flex-shrink: 0;
 }
 
 .status-indicator.healthy .status-dot {
-  background: #22c55e;
+  background: var(--color-success);
 }
 
 .status-indicator.healthy {
-  color: #16a34a;
+  color: var(--color-success-dark);
 }
 
 .status-indicator.degraded .status-dot {
-  background: #f59e0b;
+  background: var(--color-warning);
 }
 
 .status-indicator.degraded {
-  color: #d97706;
+  color: var(--color-warning-dark);
 }
 
 .status-indicator.offline .status-dot {
-  background: #ef4444;
+  background: var(--color-error);
+}
+
+.status-indicator.offline {
+  color: var(--color-error);
 }
 
 /* Main content */
 .vision-content {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
-  background: var(--bg-primary, #f9fafb);
+  padding: 24px 32px;
+  background: var(--bg-primary);
 }
 
 /* Responsive */
 @media (max-width: 768px) {
   .vision-sidebar {
-    width: 56px;
-    min-width: 56px;
+    width: 64px;
+    min-width: 64px;
   }
 
-  .sidebar-header h3 span,
-  .nav-item span,
-  .sidebar-footer span {
-    display: none;
+  .sidebar-header {
+    padding: 16px 12px;
   }
 
   .sidebar-header h3 {
+    font-size: 0;
     justify-content: center;
+  }
+
+  .header-icon {
+    width: 20px;
+    height: 20px;
   }
 
   .nav-item {
     justify-content: center;
     padding: 10px;
+    gap: 0;
   }
 
-  .nav-item i {
-    width: auto;
+  .nav-item span {
+    display: none;
+  }
+
+  .item-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .sidebar-footer {
+    padding: 12px;
+  }
+
+  .status-indicator {
+    justify-content: center;
   }
 
   .status-indicator span {
     display: none;
   }
 
-  .status-indicator {
-    justify-content: center;
+  .vision-content {
+    padding: 16px;
   }
 }
 </style>
