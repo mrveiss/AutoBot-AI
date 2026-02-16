@@ -94,7 +94,7 @@
           <span class="count active-badge" v-if="hasActiveWorkflows" aria-label="{{ activeWorkflows.length }} active workflows">
             {{ activeWorkflows.length }}
           </span>
-        </div>
+        </button>
 
         <div
           class="category-item"
