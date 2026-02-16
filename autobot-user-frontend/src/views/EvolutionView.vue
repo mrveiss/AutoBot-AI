@@ -132,7 +132,7 @@
       <!-- Declining Patterns -->
       <div v-if="evolution.analysisResult.value?.declining_patterns.length" class="pattern-table">
         <h3 class="table-title">
-          <i class="fas fa-arrow-trend-down text-blue-500"></i>
+          <i class="fas fa-arrow-trend-down text-autobot-info"></i>
           Declining Patterns
         </h3>
         <table class="data-table">
