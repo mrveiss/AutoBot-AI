@@ -16,6 +16,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
+# Issue #74 - Area 5: Human-like behavior helpers
+from api.vnc_humanization import (
+    humanize_action_delay,
+    humanize_click_position,
+    humanize_pause_duration,
+    humanize_typing_speed,
+    should_add_human_pause,
+    simulate_mouse_curve,
+)
 from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -313,8 +322,8 @@ async def vnc_mouse_click(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, str]:
     """
-    Perform mouse click at specified coordinates.
-    Issue #74: Desktop interaction controls.
+    Perform mouse click at specified coordinates with human-like behavior.
+    Issue #74: Desktop interaction controls + Area 5 (humanization).
 
     Args:
         request: MouseClickRequest with x, y coordinates and button type
@@ -322,11 +331,18 @@ async def vnc_mouse_click(
     Returns:
         {"status": "success|error", "message": "..."}
     """
+    # Add human-like randomness to click position (Issue #74 - Area 5)
+    humanized_x, humanized_y = humanize_click_position(request.x, request.y)
+
     button_map = {"left": "1", "middle": "2", "right": "3"}
     button_num = button_map.get(request.button, "1")
 
+    # Add realistic delay before action
+    delay = humanize_action_delay()
+    await asyncio.sleep(delay)
+
     return _run_xdotool_cmd(
-        ["mousemove", str(request.x), str(request.y), "click", button_num]
+        ["mousemove", str(humanized_x), str(humanized_y), "click", button_num]
     )
 
 
@@ -337,8 +353,8 @@ async def vnc_keyboard_type(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, str]:
     """
-    Type text via keyboard.
-    Issue #74: Desktop interaction controls.
+    Type text via keyboard with human-like speed and pauses.
+    Issue #74: Desktop interaction controls + Area 5 (humanization).
 
     Args:
         request: KeyboardTypeRequest with text to type
@@ -346,7 +362,35 @@ async def vnc_keyboard_type(
     Returns:
         {"status": "success|error", "message": "..."}
     """
-    return _run_xdotool_cmd(["type", "--", request.text])
+    # Get humanized typing delay in milliseconds for xdotool
+    delay_seconds = humanize_typing_speed()
+    delay_ms = int(delay_seconds * 1000)
+
+    # Add realistic delay before starting to type
+    pre_delay = humanize_action_delay()
+    await asyncio.sleep(pre_delay)
+
+    # Add random pause during typing if needed
+    if should_add_human_pause():
+        # Split text roughly in half for mid-typing pause
+        mid_point = len(request.text) // 2
+        first_half = request.text[:mid_point]
+        second_half = request.text[mid_point:]
+
+        # Type first half
+        result = _run_xdotool_cmd(["type", "--delay", str(delay_ms), "--", first_half])
+        if result["status"] == "error":
+            return result
+
+        # Human pause
+        pause = humanize_pause_duration()
+        await asyncio.sleep(pause)
+
+        # Type second half
+        return _run_xdotool_cmd(["type", "--delay", str(delay_ms), "--", second_half])
+    else:
+        # Type all at once with humanized delay
+        return _run_xdotool_cmd(["type", "--delay", str(delay_ms), "--", request.text])
 
 
 @router.post("/key")
@@ -402,8 +446,8 @@ async def vnc_mouse_drag(
     admin_check: bool = Depends(check_admin_permission),
 ) -> Dict[str, str]:
     """
-    Perform mouse drag operation.
-    Issue #74: Desktop interaction controls.
+    Perform mouse drag operation with curved, human-like movement.
+    Issue #74: Desktop interaction controls + Area 5 (humanization).
 
     Args:
         request: MouseDragRequest with start and end coordinates
@@ -411,20 +455,28 @@ async def vnc_mouse_drag(
     Returns:
         {"status": "success|error", "message": "..."}
     """
-    return _run_xdotool_cmd(
-        [
-            "mousemove",
-            str(request.x1),
-            str(request.y1),
-            "mousedown",
-            "1",
-            "mousemove",
-            str(request.x2),
-            str(request.y2),
-            "mouseup",
-            "1",
-        ]
+    # Add realistic delay before starting drag
+    pre_delay = humanize_action_delay()
+    await asyncio.sleep(pre_delay)
+
+    # Generate curved path for realistic mouse movement
+    path_points = simulate_mouse_curve(request.x1, request.y1, request.x2, request.y2)
+
+    # Move to start position and press mouse button
+    result = _run_xdotool_cmd(
+        ["mousemove", str(request.x1), str(request.y1), "mousedown", "1"]
     )
+    if result["status"] == "error":
+        return result
+
+    # Move through the curved path with small delays
+    for x, y in path_points[1:]:  # Skip first point (already there)
+        _run_xdotool_cmd(["mousemove", str(x), str(y)])
+        # Small delay between movements for smooth curve
+        await asyncio.sleep(0.01)
+
+    # Release mouse button at end position
+    return _run_xdotool_cmd(["mouseup", "1"])
 
 
 @router.get("/screenshot")
