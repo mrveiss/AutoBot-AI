@@ -464,6 +464,7 @@ async def add_text_to_knowledge(
     """Add text to knowledge base - FIXED to use proper instance
 
     Issue #744: Requires admin authentication.
+    Issue #685: Added hierarchical access level support.
     """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
@@ -477,26 +478,53 @@ async def add_text_to_knowledge(
     source = request.get("source", "manual")
     category = request.get("category", "general")
 
+    # Issue #685: Extract hierarchical access fields
+    access_level = request.get("access_level", "user")
+    visibility = request.get("visibility", "private")
+    owner_id = request.get("owner_id")
+    organization_id = request.get("organization_id")
+    group_ids = request.get("group_ids", [])
+    shared_with = request.get("shared_with", [])
+
     if not text:
         raise ValueError("Text content is required")
 
     logger.info(
-        f"Adding text to knowledge: title='{title}', source='{source}', length={len(text)}"
+        f"Adding text to knowledge: title='{title}', source='{source}', "
+        f"access_level='{access_level}', visibility='{visibility}', length={len(text)}"
     )
+
+    # Build metadata with ownership fields
+    metadata = {
+        "title": title,
+        "source": source,
+        "category": category,
+        "access_level": access_level,
+        "visibility": visibility,
+    }
+
+    if owner_id:
+        metadata["owner_id"] = owner_id
+    if organization_id:
+        metadata["organization_id"] = organization_id
+    if group_ids:
+        metadata["group_ids"] = group_ids
+    if shared_with:
+        metadata["shared_with"] = shared_with
 
     # Use the store_fact method for KnowledgeBaseV2 or add_fact for compatibility
     if hasattr(kb_to_use, "store_fact"):
         # KnowledgeBaseV2
         result = await kb_to_use.store_fact(
             content=text,
-            metadata={"title": title, "source": source, "category": category},
+            metadata=metadata,
         )
         fact_id = result.get("fact_id")
     else:
         # Original KnowledgeBase
         result = await kb_to_use.store_fact(
             text=text,
-            metadata={"title": title, "source": source, "category": category},
+            metadata=metadata,
         )
         fact_id = result.get("fact_id")
 
@@ -507,6 +535,8 @@ async def add_text_to_knowledge(
         "text_length": len(text),
         "title": title,
         "source": source,
+        "access_level": access_level,
+        "visibility": visibility,
     }
 
 

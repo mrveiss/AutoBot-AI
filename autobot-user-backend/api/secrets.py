@@ -28,15 +28,15 @@ from enum import Enum
 from time import time
 from typing import Dict, List, Optional
 
+from auth_middleware import check_admin_permission
+from autobot_memory_graph import AutoBotMemoryGraph
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
-from backend.type_defs.common import Metadata
-from auth_middleware import check_admin_permission
-from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -99,19 +99,24 @@ def validate_secret_name(name: str) -> str:
 
 
 class SecretScope(str, Enum):
-    """Secret scope enumeration"""
+    """Secret scope enumeration (Issue #685: aligned with database model)"""
 
     CHAT = "chat"
     GENERAL = "general"
+    USER = "user"  # Private to user
+    SESSION = "session"  # Session-scoped
+    SHARED = "shared"  # Explicitly shared
+    GROUP = "group"  # Team members
+    ORGANIZATION = "organization"  # All org members
 
 
 class SecretType(str, Enum):
     """Secret type enumeration"""
 
     SSH_KEY = "ssh_key"
-    PASSWORD = "password"
+    PASSWORD = "password"  # nosec B105 - enum value, not actual password
     API_KEY = "api_key"
-    TOKEN = "token"
+    TOKEN = "token"  # nosec B105 - enum value, not actual token
     CERTIFICATE = "certificate"
     DATABASE_URL = "database_url"
     INFRASTRUCTURE_HOST = "infrastructure_host"  # SSH/VNC host credentials
@@ -135,7 +140,7 @@ class SecretModel(BaseModel):
 
 
 class SecretCreateRequest(BaseModel):
-    """Request model for creating secrets"""
+    """Request model for creating secrets (Issue #685: hierarchical access)"""
 
     name: str = Field(..., min_length=1, max_length=256)
     type: SecretType
@@ -146,6 +151,17 @@ class SecretCreateRequest(BaseModel):
     tags: List[str] = Field(default_factory=list)
     expires_at: Optional[datetime] = None
     metadata: Metadata = Field(default_factory=dict)
+    # Issue #685: Hierarchical access fields
+    owner_id: Optional[str] = Field(None, max_length=128, description="Owner user ID")
+    org_id: Optional[str] = Field(
+        None, max_length=128, description="Organization ID for org-level secrets"
+    )
+    team_ids: List[str] = Field(
+        default_factory=list, description="Team IDs for group-level secrets"
+    )
+    shared_with: List[str] = Field(
+        default_factory=list, description="User IDs to share with"
+    )
 
     @field_validator("name")
     @classmethod
