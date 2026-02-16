@@ -78,6 +78,34 @@
       </div>
     </div>
 
+    <!-- Issue #685: Access Level Filter -->
+    <div class="access-level-filter">
+      <label class="filter-label">
+        <i class="fas fa-shield-alt"></i>
+        Filter by Access Level:
+      </label>
+      <div class="filter-chips">
+        <button
+          v-for="level in accessLevels"
+          :key="level.value"
+          :class="['filter-chip', { active: selectedAccessLevel === level.value }]"
+          @click="toggleAccessLevel(level.value)"
+        >
+          <i :class="level.icon"></i>
+          {{ level.label }}
+        </button>
+        <button
+          v-if="selectedAccessLevel"
+          @click="clearAccessLevelFilter"
+          class="clear-chip"
+          title="Clear access level filter"
+        >
+          <i class="fas fa-times"></i>
+          Clear
+        </button>
+      </div>
+    </div>
+
     <!-- Search Input -->
     <div class="search-input-container">
       <div class="search-input-wrapper">
@@ -204,6 +232,11 @@
               {{ result.document.type || 'text' }}
             </span>
             <span class="result-category">{{ result.document.category || 'general' }}</span>
+            <!-- Issue #685: Access level badge -->
+            <span v-if="getAccessLevel(result.document)" class="access-level-badge" :class="`access-${getAccessLevel(result.document)}`">
+              <i :class="getAccessLevelIcon(result.document)"></i>
+              {{ formatAccessLevel(result.document) }}
+            </span>
           </div>
           <div v-if="result && result.document" class="result-content">
             <p>{{ result.highlights?.[0] || (result.document.content ? result.document.content.substring(0, 200) + '...' : 'No content') }}</p>
@@ -327,6 +360,15 @@ const selectedCategory = ref<string>('')
 const loadingCategories = ref(false)
 const categoriesError = ref<string | null>(null)
 
+// Issue #685: Access level filter state
+const selectedAccessLevel = ref<string>('')
+const accessLevels = [
+  { value: 'autobot', label: 'Platform', icon: 'fas fa-robot' },
+  { value: 'general', label: 'Public', icon: 'fas fa-globe' },
+  { value: 'system', label: 'System', icon: 'fas fa-cog' },
+  { value: 'user', label: 'User', icon: 'fas fa-user' }
+]
+
 // Document viewer state
 const showDocumentModal = ref(false)
 const selectedDocument = ref<KnowledgeDocument | null>(null)
@@ -407,6 +449,14 @@ const handleSearch = async () => {
                 (typeof metaCategory === 'string' && metaCategory === selectedCategory.value)
             })
           }
+          // Issue #685: Filter by access level client-side
+          if (selectedAccessLevel.value) {
+            results = results.filter(r => {
+              const docAccessLevel = (r.document as any)?.access_level
+              const metaAccessLevel = (r.document as any)?.metadata?.access_level
+              return docAccessLevel === selectedAccessLevel.value || metaAccessLevel === selectedAccessLevel.value
+            })
+          }
           searchResults.value = results
         }
       } catch (ragErr: unknown) {
@@ -425,13 +475,21 @@ const handleSearch = async () => {
       }
     } else {
       // Use traditional search (without reranking in non-RAG mode)
-      const results = await knowledgeRepo.searchKnowledge({
+      let results = await knowledgeRepo.searchKnowledge({
         query: searchQuery.value,
         limit: 20,
         use_rag: false,
         enable_reranking: false,
         filters: categoryFilter
       })
+      // Issue #685: Filter by access level client-side
+      if (selectedAccessLevel.value) {
+        results = results.filter(r => {
+          const docAccessLevel = (r.document as any)?.access_level
+          const metaAccessLevel = (r.document as any)?.metadata?.access_level
+          return docAccessLevel === selectedAccessLevel.value || metaAccessLevel === selectedAccessLevel.value
+        })
+      }
       searchResults.value = results
     }
   } catch (error) {
@@ -456,6 +514,23 @@ const clearCategoryFilter = async () => {
   }
 }
 
+// Issue #685: Access level filter methods
+const toggleAccessLevel = async (level: string) => {
+  selectedAccessLevel.value = selectedAccessLevel.value === level ? '' : level
+  // Re-run search with new access level filter
+  if (searchPerformed.value && searchQuery.value.trim()) {
+    await handleSearch()
+  }
+}
+
+const clearAccessLevelFilter = async () => {
+  selectedAccessLevel.value = ''
+  // Re-run search to show unfiltered results
+  if (searchPerformed.value && searchQuery.value.trim()) {
+    await handleSearch()
+  }
+}
+
 const getScoreClass = (score: number) => {
   if (score >= 0.8) return 'score-high'
   if (score >= 0.6) return 'score-medium'
@@ -466,6 +541,37 @@ const getConfidenceBadgeClass = (confidence: number) => {
   if (confidence >= 0.8) return 'confidence-high'
   if (confidence >= 0.6) return 'confidence-medium'
   return 'confidence-low'
+}
+
+// Issue #685: Access level badge helpers
+const getAccessLevel = (document: KnowledgeDocument): string | null => {
+  // Check both document properties and metadata
+  const level = (document as any).access_level || (document as any).metadata?.access_level
+  return level || null
+}
+
+const formatAccessLevel = (document: KnowledgeDocument): string => {
+  const level = getAccessLevel(document)
+  if (!level) return ''
+
+  const labels: Record<string, string> = {
+    'autobot': 'Platform',
+    'general': 'Public',
+    'system': 'System',
+    'user': 'User'
+  }
+  return labels[level] || level.charAt(0).toUpperCase() + level.slice(1)
+}
+
+const getAccessLevelIcon = (document: KnowledgeDocument): string => {
+  const level = getAccessLevel(document)
+  const icons: Record<string, string> = {
+    'autobot': 'fas fa-robot',
+    'general': 'fas fa-globe',
+    'system': 'fas fa-cog',
+    'user': 'fas fa-user'
+  }
+  return icons[level || ''] || 'fas fa-file'
 }
 
 // Document viewer methods
@@ -578,6 +684,33 @@ const copyDocument = async () => {
 
 .retry-button {
   @apply ml-auto px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors flex items-center gap-1;
+}
+
+/* Issue #685: Access Level Filter */
+.access-level-filter {
+  @apply mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200;
+}
+
+.filter-chips {
+  @apply flex flex-wrap gap-2;
+}
+
+.filter-chip {
+  @apply px-3 py-1.5 text-sm font-medium rounded-full border-2 transition-all flex items-center gap-1.5;
+  @apply border-gray-300 bg-white text-gray-700 hover:bg-gray-50;
+}
+
+.filter-chip.active {
+  @apply border-blue-500 bg-blue-50 text-blue-700;
+}
+
+.filter-chip i {
+  @apply text-xs;
+}
+
+.clear-chip {
+  @apply px-3 py-1.5 text-sm font-medium rounded-full border-2 transition-all flex items-center gap-1.5;
+  @apply border-red-300 bg-white text-red-600 hover:bg-red-50 hover:border-red-400;
 }
 
 .toggle-container {
@@ -766,6 +899,31 @@ const copyDocument = async () => {
 
 .result-meta {
   @apply flex gap-4 text-xs text-gray-500 mb-2;
+}
+
+/* Issue #685: Access level badge styles */
+.access-level-badge {
+  @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+}
+
+.access-level-badge.access-autobot {
+  @apply bg-purple-100 text-purple-700;
+}
+
+.access-level-badge.access-general {
+  @apply bg-green-100 text-green-700;
+}
+
+.access-level-badge.access-system {
+  @apply bg-blue-100 text-blue-700;
+}
+
+.access-level-badge.access-user {
+  @apply bg-gray-100 text-gray-700;
+}
+
+.access-level-badge i {
+  @apply text-xs;
 }
 
 .result-content p {
