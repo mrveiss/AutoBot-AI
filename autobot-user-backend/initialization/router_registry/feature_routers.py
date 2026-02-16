@@ -143,6 +143,12 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["code-completion", "patterns", "ml"],
         "code_completion",
     ),
+    (
+        "routers.model_management",
+        "/code-completion/model",
+        ["ml-models", "training", "serving"],
+        "model_management",
+    ),
     # Orchestration and caching
     ("backend.api.orchestration", "/orchestration", ["orchestration"], "orchestration"),
     (
