@@ -20,7 +20,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, Tuple
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -81,7 +81,7 @@ class TerminalActivityModel(Base, TimestampMixin):
     )
 
     # Additional metadata (shell type, env vars, duration, etc.)
-    metadata: Mapped[dict] = mapped_column(
+    extra_data: Mapped[dict] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
@@ -158,7 +158,7 @@ class FileActivityModel(Base, TimestampMixin):
     size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Additional metadata (permissions, owner, hash, etc.)
-    metadata: Mapped[dict] = mapped_column(
+    extra_data: Mapped[dict] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
@@ -237,7 +237,7 @@ class BrowserActivityModel(Base, TimestampMixin):
     )
 
     # Additional metadata (status code, cookies, headers, etc.)
-    metadata: Mapped[dict] = mapped_column(
+    extra_data: Mapped[dict] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
@@ -300,7 +300,7 @@ class DesktopActivityModel(Base, TimestampMixin):
     )
 
     coordinates: Mapped[Optional[tuple[int, int]]] = mapped_column(
-        Tuple,
+        ARRAY(Integer, dimensions=1),
         nullable=True,
     )
 
@@ -317,7 +317,7 @@ class DesktopActivityModel(Base, TimestampMixin):
     )
 
     # Additional metadata (app name, OCR results, etc.)
-    metadata: Mapped[dict] = mapped_column(
+    extra_data: Mapped[dict] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,
@@ -403,7 +403,7 @@ class SecretUsageModel(Base, TimestampMixin):
     )
 
     # Additional metadata (IP, user agent, location, etc.)
-    metadata: Mapped[dict] = mapped_column(
+    extra_data: Mapped[dict] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,

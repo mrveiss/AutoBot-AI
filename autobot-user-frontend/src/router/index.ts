@@ -312,6 +312,18 @@ const routes: RouteRecordRaw[] = [
           requiresAuth: true
         }
       },
+      {
+        path: 'evolution',
+        name: 'analytics-evolution',
+        component: () => import('@/views/EvolutionView.vue'),
+        meta: {
+          title: 'Code Evolution',
+          parent: 'analytics',
+          icon: 'fas fa-chart-line',
+          description: 'Git history analysis and pattern evolution tracking (Issue #243)',
+          requiresAuth: true
+        }
+      },
     ]
   },
   // Issue #777: Vision & Multimodal AI Features
@@ -405,6 +417,18 @@ const routes: RouteRecordRaw[] = [
       title: 'Browser Automation',
       icon: 'fas fa-globe',
       description: 'Control browser workers and automate web tasks',
+      requiresAuth: true
+    }
+  },
+  // Issue #902: Developer Speedup Tools
+  {
+    path: '/dev-speedup',
+    name: 'dev-speedup',
+    component: () => import('@/views/DevSpeedupView.vue'),
+    meta: {
+      title: 'Developer Speedup',
+      icon: 'fas fa-bolt',
+      description: 'Code search, generation, and productivity tools',
       requiresAuth: true
     }
   },

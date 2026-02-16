@@ -10,6 +10,9 @@ All models use UUID primary keys and include:
 - Multi-tenancy via org_id foreign key
 """
 
+# Issue #898: Import backend.models FIRST to ensure activity models
+# are registered before User relationships are configured
+import backend.models  # noqa: F401 - imports for side effects
 from backend.user_management.models.api_key import APIKey
 from backend.user_management.models.audit import AuditLog
 from backend.user_management.models.base import Base, TenantMixin, TimestampMixin

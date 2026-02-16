@@ -162,7 +162,7 @@ class Secret(Base, TimestampMixin):
         nullable=False,
     )
 
-    metadata: Mapped[dict] = mapped_column(
+    extra_data: Mapped[dict] = mapped_column(
         JSONB,
         default=dict,
         nullable=False,
