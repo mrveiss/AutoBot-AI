@@ -236,7 +236,6 @@
   loop:
     - /etc/autobot/certs/server-key.pem
     - /etc/autobot/certs/server-cert.pem
-  when: not backend_cert_stat.stat.exists or (backend_cert_valid.rc | default(1)) != 0
 
 - name: Deploy backend environment file
   ansible.builtin.template:
