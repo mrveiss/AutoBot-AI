@@ -69,6 +69,32 @@
             </div>
           </div>
 
+          <!-- Issue #685: Hierarchical Access Controls -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="text-access-level">Access Level</label>
+              <select id="text-access-level" v-model="textEntry.accessLevel" class="form-select">
+                <option value="user">User Content (default)</option>
+                <option value="system">System Documentation</option>
+                <option value="general">Public Knowledge</option>
+                <option value="autobot">Platform Documentation</option>
+              </select>
+              <small class="form-hint">Determines the type of knowledge</small>
+            </div>
+
+            <div class="form-group">
+              <label for="text-visibility">Visibility</label>
+              <select id="text-visibility" v-model="textEntry.visibility" class="form-select">
+                <option value="private">Private (only me)</option>
+                <option value="shared">Shared (specific users)</option>
+                <option value="group">Group (team members)</option>
+                <option value="organization">Organization (all org members)</option>
+                <option value="system">System (all authenticated users)</option>
+              </select>
+              <small class="form-hint">Who can access this knowledge</small>
+            </div>
+          </div>
+
           <button
             @click="addTextEntry"
             :disabled="!textEntry.content.trim() || isSubmitting"
@@ -439,7 +465,10 @@ const textEntry = reactive({
   title: '',
   content: '',
   category: '',
-  tagsInput: ''
+  tagsInput: '',
+  // Issue #685: Hierarchical access fields
+  accessLevel: 'user',
+  visibility: 'private'
 })
 
 const urlEntry = reactive({
@@ -518,11 +547,16 @@ async function addTextEntry(): Promise<void> {
   try {
     const tags = parseTags(textEntry.tagsInput)
 
+    // Issue #685: Pass hierarchical access fields
     await controller.addTextDocument(
       textEntry.content,
       textEntry.title,
       textEntry.category || 'General',
-      tags
+      tags,
+      {
+        access_level: textEntry.accessLevel,
+        visibility: textEntry.visibility
+      }
     )
 
     successMessage.value = 'Text entry added successfully!'

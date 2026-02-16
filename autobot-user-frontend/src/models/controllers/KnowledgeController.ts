@@ -93,16 +93,24 @@ export class KnowledgeController {
   }
 
   // Document operations
-  async addTextDocument(content: string, title?: string, category?: string, tags?: string[]): Promise<string> {
+  async addTextDocument(
+    content: string,
+    title?: string,
+    category?: string,
+    tags?: string[],
+    accessOptions?: { access_level?: string; visibility?: string }
+  ): Promise<string> {
     try {
       this.knowledgeStore.setLoading(true)
 
-      // Build request with proper typing
+      // Build request with proper typing (Issue #685: hierarchical access)
       const request: AddTextRequest = {
         content,
         title: title || this.generateTitleFromContent(content),
         category: category || 'General',
-        tags: tags || []
+        tags: tags || [],
+        access_level: accessOptions?.access_level || 'user',
+        visibility: accessOptions?.visibility || 'private'
       }
 
       await knowledgeRepository.addTextToKnowledge(request)

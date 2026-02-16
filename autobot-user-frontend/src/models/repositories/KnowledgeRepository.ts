@@ -68,6 +68,7 @@ export interface RagSearchResponse {
 /**
  * Request to add text content to knowledge base
  * Supports both 'text' and 'content' fields for backward compatibility
+ * Issue #685: Added hierarchical access level fields
  */
 export interface AddTextRequest {
   /** Text content to add (primary field) */
@@ -78,6 +79,13 @@ export interface AddTextRequest {
   source?: string
   category?: string
   tags?: string[]
+  // Issue #685: Hierarchical access fields
+  access_level?: string
+  visibility?: string
+  owner_id?: string
+  organization_id?: string
+  group_ids?: string[]
+  shared_with?: string[]
 }
 
 /**
