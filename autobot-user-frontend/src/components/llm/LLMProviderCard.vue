@@ -32,9 +32,9 @@ const testing = ref(false)
 const testResult = ref<ConnectionTestResult | null>(null)
 
 const statusColor = computed(() => {
-  if (!props.provider.is_available) return 'bg-gray-100 text-gray-600'
-  if (props.isActive) return 'bg-success-100 text-success-700'
-  return 'bg-warning-100 text-warning-700'
+  if (!props.provider.is_available) return 'bg-autobot-bg-secondary text-secondary'
+  if (props.isActive) return 'bg-autobot-success-bg text-autobot-success'
+  return 'bg-autobot-warning-bg text-autobot-warning'
 })
 
 const statusText = computed(() => {
@@ -66,19 +66,19 @@ function handleConfigure() {
 </script>
 
 <template>
-  <div class="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
+  <div class="bg-autobot-bg-card rounded border border-default p-6 hover:shadow-md transition-shadow">
     <!-- Header -->
     <div class="flex items-start justify-between mb-4">
       <div class="flex-1">
-        <h3 class="text-lg font-semibold text-gray-900">
+        <h3 class="text-lg font-semibold text-primary">
           {{ provider.display_name }}
         </h3>
-        <p class="text-sm text-gray-500 mt-1">
+        <p class="text-sm text-secondary mt-1">
           {{ provider.models.length }} model{{ provider.models.length !== 1 ? 's' : '' }} available
         </p>
       </div>
       <span
-        :class="['px-3 py-1 text-xs font-medium rounded-full', statusColor]"
+        :class="['px-3 py-1 text-xs font-medium rounded-sm', statusColor]"
       >
         {{ statusText }}
       </span>
@@ -86,18 +86,18 @@ function handleConfigure() {
 
     <!-- Models List -->
     <div v-if="provider.models.length > 0" class="mb-4">
-      <div class="text-sm font-medium text-gray-700 mb-2">Available Models:</div>
+      <div class="text-sm font-medium text-primary mb-2">Available Models:</div>
       <div class="flex flex-wrap gap-2">
         <span
           v-for="model in provider.models.slice(0, 3)"
           :key="model"
-          class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded"
+          class="px-2 py-1 text-xs bg-autobot-bg-secondary text-primary rounded"
         >
           {{ model }}
         </span>
         <span
           v-if="provider.models.length > 3"
-          class="px-2 py-1 text-xs bg-gray-100 text-gray-500 rounded"
+          class="px-2 py-1 text-xs bg-autobot-bg-secondary text-secondary rounded"
         >
           +{{ provider.models.length - 3 }} more
         </span>
@@ -105,13 +105,13 @@ function handleConfigure() {
     </div>
 
     <!-- Test Result -->
-    <div v-if="testResult" class="mb-4 p-3 rounded-lg" :class="[
-      testResult.success ? 'bg-success-50 border border-success-200' : 'bg-danger-50 border border-danger-200'
+    <div v-if="testResult" class="mb-4 p-3 rounded" :class="[
+      testResult.success ? 'bg-success-50 border border-success-200' : 'bg-autobot-error-bg border border-autobot-error'
     ]">
       <div class="flex items-start gap-2">
         <svg
           v-if="testResult.success"
-          class="w-5 h-5 text-success-600 mt-0.5"
+          class="w-5 h-5 text-autobot-success mt-0.5"
           fill="currentColor"
           viewBox="0 0 20 20"
         >
@@ -119,17 +119,17 @@ function handleConfigure() {
         </svg>
         <svg
           v-else
-          class="w-5 h-5 text-danger-600 mt-0.5"
+          class="w-5 h-5 text-autobot-error mt-0.5"
           fill="currentColor"
           viewBox="0 0 20 20"
         >
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
         </svg>
         <div class="flex-1">
-          <p :class="['text-sm font-medium', testResult.success ? 'text-success-800' : 'text-danger-800']">
+          <p :class="['text-sm font-medium', testResult.success ? 'text-autobot-success' : 'text-autobot-error']">
             {{ testResult.message }}
           </p>
-          <p v-if="testResult.latency_ms" class="text-xs text-gray-600 mt-1">
+          <p v-if="testResult.latency_ms" class="text-xs text-secondary mt-1">
             Latency: {{ testResult.latency_ms }}ms
           </p>
         </div>
@@ -141,21 +141,21 @@ function handleConfigure() {
       <button
         v-if="!isActive && provider.is_available"
         @click="handleActivate"
-        class="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors"
+        class="flex-1 px-4 py-2 text-sm font-medium text-white bg-autobot-primary rounded hover:bg-autobot-primary-hover transition-colors"
       >
         Activate
       </button>
       <button
         v-if="isActive"
         disabled
-        class="flex-1 px-4 py-2 text-sm font-medium text-white bg-success-600 rounded-lg cursor-default"
+        class="flex-1 px-4 py-2 text-sm font-medium text-white bg-autobot-success rounded cursor-default"
       >
         Active Provider
       </button>
       <button
         @click="handleTest"
         :disabled="testing || !provider.is_available"
-        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+        class="px-4 py-2 text-sm font-medium text-primary bg-autobot-bg-card border border-default rounded hover:bg-autobot-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
       >
         <svg
           v-if="testing"
@@ -171,7 +171,7 @@ function handleConfigure() {
       <button
         @click="handleConfigure"
         :disabled="!provider.is_available"
-        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        class="px-4 py-2 text-sm font-medium text-primary bg-autobot-bg-card border border-default rounded hover:bg-autobot-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         Configure
       </button>
