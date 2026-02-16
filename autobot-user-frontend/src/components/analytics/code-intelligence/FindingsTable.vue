@@ -172,10 +172,11 @@ function copyPath(finding: Finding): void {
 </script>
 
 <style scoped>
+/* Issue #901: Technical Precision FindingsTable Design */
 .findings-table {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
   overflow: hidden;
 }
 
@@ -204,26 +205,57 @@ function copyPath(finding: Finding): void {
 
 .search-input {
   padding: var(--spacing-2);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  border-radius: 2px;
   background: var(--bg-primary);
   color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
   width: 200px;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.search-input:focus {
+  outline: none;
+  border-color: var(--color-info);
+  box-shadow: 0 0 0 3px var(--color-info-bg);
+}
+
+/* Issue #901: Technical Precision severity badges */
 .severity-badge {
   padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 0.75rem;
-  font-weight: var(--font-medium);
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--font-sans);
   text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.severity-badge.critical { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
-.severity-badge.high { background: rgba(249, 115, 22, 0.2); color: #f97316; }
-.severity-badge.medium { background: rgba(234, 179, 8, 0.2); color: #eab308; }
-.severity-badge.low { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
-.severity-badge.info { background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
+.severity-badge.critical {
+  background: var(--color-error-bg);
+  color: var(--color-error-dark);
+}
+
+.severity-badge.high {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-dark);
+}
+
+.severity-badge.medium {
+  background: rgba(234, 179, 8, 0.1);
+  color: rgb(161, 98, 7);
+}
+
+.severity-badge.low {
+  background: var(--color-info-bg);
+  color: var(--color-info-dark);
+}
+
+.severity-badge.info {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+}
 
 .loading-state, .empty-state {
   display: flex;
@@ -237,8 +269,8 @@ function copyPath(finding: Finding): void {
 .spinner {
   width: 24px;
   height: 24px;
-  border: 2px solid var(--border-primary);
-  border-top-color: var(--color-info-dark);
+  border: 2px solid var(--border-default);
+  border-top-color: var(--color-info);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -287,10 +319,13 @@ th {
 .col-type { width: 150px; }
 .col-message { flex: 1; }
 
+/* Issue #901: Monospace for file paths and line numbers */
 code {
-  font-family: monospace;
-  font-size: 0.875rem;
+  font-family: var(--font-mono);
+  font-size: 12px;
   color: var(--text-primary);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .detail-row td {
@@ -300,10 +335,10 @@ code {
 
 .detail-card {
   padding: var(--spacing-4);
-  border-left: 3px solid var(--color-info-dark);
+  border-left: 2px solid var(--color-info);
   margin: var(--spacing-2);
   background: var(--bg-secondary);
-  border-radius: var(--radius-md);
+  border-radius: 2px;
 }
 
 .detail-section {
@@ -321,13 +356,18 @@ code {
   margin: 0;
 }
 
+/* Issue #901: Electric blue for OWASP tags */
 .owasp-tag {
   display: inline-block;
   padding: 2px 8px;
-  background: rgba(99, 102, 241, 0.2);
-  color: #6366f1;
-  border-radius: var(--radius-sm);
-  font-size: 0.875rem;
+  background: var(--color-info-bg);
+  color: var(--color-info-dark);
+  border-radius: 2px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .detail-actions {
@@ -336,17 +376,25 @@ code {
   margin-top: var(--spacing-3);
 }
 
+/* Issue #901: Technical Precision button styling */
 .btn-small {
-  padding: var(--spacing-1) var(--spacing-2);
-  background: var(--bg-primary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 2px;
   color: var(--text-primary);
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .btn-small:hover {
-  background: var(--bg-tertiary);
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
 }
 </style>
