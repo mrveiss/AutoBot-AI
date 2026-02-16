@@ -190,11 +190,13 @@ async def check_database_health() -> dict:
         }
 
     try:
+        from sqlalchemy import text
+
         engine = get_async_engine()
         pool = engine.pool
 
         async with engine.begin() as conn:
-            result = await conn.execute("SELECT 1")
+            result = await conn.execute(text("SELECT 1"))
             result.close()
 
         return {

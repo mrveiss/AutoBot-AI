@@ -195,7 +195,8 @@ async def login(request: Request, login_data: LoginRequest):
                     status_code=401, detail="Invalid username or password"
                 )
 
-            # Build user data dict for JWT token
+            # Build user data dict for JWT token INSIDE session context
+            # to avoid lazy-load errors after session closes (Issue #898)
             user_data = {
                 "username": user.username,
                 "user_id": str(user.id),

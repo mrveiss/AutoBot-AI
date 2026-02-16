@@ -17,11 +17,15 @@ from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.ssot_config import config
 from backend.models.code_pattern import CodePattern
+from backend.services.context_analyzer import ContextAnalyzer
 from backend.services.pattern_extractor import PatternExtractor
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/code-completion", tags=["code-completion"])
+
+# Initialize context analyzer
+context_analyzer = ContextAnalyzer()
 
 # Database setup
 DATABASE_URL = (
@@ -338,3 +342,91 @@ async def get_statistics():
         return stats
     finally:
         db.close()
+
+
+# =============================================================================
+# Context Analysis Endpoints (Issue #907)
+# =============================================================================
+
+
+class ContextAnalysisRequest(BaseModel):
+    """Request for context analysis."""
+
+    file_content: str = Field(..., description="Full file content")
+    cursor_line: int = Field(..., ge=0, description="Cursor line (0-indexed)")
+    cursor_position: int = Field(..., ge=0, description="Cursor column position")
+    file_path: Optional[str] = Field(None, description="Optional file path")
+
+
+class ContextAnalysisResponse(BaseModel):
+    """Response from context analysis."""
+
+    context: Dict
+    analysis_time_ms: float
+
+
+@router.post("/context/analyze", response_model=ContextAnalysisResponse)
+async def analyze_context(request: ContextAnalysisRequest):
+    """
+    Analyze code context for completion.
+
+    Performs multi-level analysis:
+    - File-level: imports, defined symbols
+    - Function-level: parameters, return types, decorators
+    - Block-level: variables in scope, control flow
+    - Line-level: cursor position, partial statement
+    - Semantic: detected frameworks, coding style
+    - Dependencies: import usage, missing imports
+
+    - **file_content**: Full source code
+    - **cursor_line**: Line number (0-indexed)
+    - **cursor_position**: Column position in line
+    - **file_path**: Optional file path for context
+    """
+    import time
+
+    start_time = time.time()
+
+    try:
+        context = context_analyzer.analyze(
+            file_content=request.file_content,
+            cursor_line=request.cursor_line,
+            cursor_position=request.cursor_position,
+            file_path=request.file_path or "",
+        )
+
+        analysis_time = (time.time() - start_time) * 1000  # Convert to ms
+
+        return ContextAnalysisResponse(
+            context=context.to_dict(),
+            analysis_time_ms=round(analysis_time, 2),
+        )
+
+    except Exception as e:
+        logger.error(f"Context analysis failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/context/{context_id}")
+async def get_context(context_id: str):
+    """
+    Retrieve cached context by ID.
+
+    - **context_id**: Context identifier from previous analysis
+    """
+    try:
+        cached = context_analyzer._get_cached_context(context_id)
+
+        if not cached:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Context {context_id} not found or expired",
+            )
+
+        return {"context": cached.to_dict()}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get context: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

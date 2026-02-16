@@ -1,0 +1,97 @@
+---
+# Sync User Backend Code to Main Server
+# Syncs autobot-user-backend and autobot-shared from local machine to /opt/autobot
+# This playbook runs locally on the WSL machine (172.16.168.20)
+
+- name: Sync User Backend Code
+  hosts: autobot-host
+  gather_facts: no
+  vars:
+    local_autobot_root: "/home/kali/Desktop/AutoBot"
+    backend_user: "autobot"
+    backend_install_dir: "/opt/autobot"
+    backend_host: "172.16.168.20"
+
+  tasks:
+    - name: Stop backend service before sync
+      ansible.builtin.systemd:
+        name: autobot-backend
+        state: stopped
+      become: yes
+      ignore_errors: yes  # Service might not be running
+
+    - name: Clean up problematic symlinks
+      ansible.builtin.file:
+        path: "/opt/autobot/autobot-user-backend/{{ item }}"
+        state: absent
+      loop:
+        - autobot_shared
+        - backend
+      become: yes
+      ignore_errors: yes
+
+    - name: Sync code using direct sudo rsync
+      ansible.builtin.shell: |
+        sudo rsync -a --delete \
+          --exclude=.git \
+          --exclude=__pycache__ \
+          --exclude='*.pyc' \
+          --exclude=.pytest_cache \
+          --exclude=venv \
+          --exclude=.env \
+          --exclude=data \
+          --exclude=logs \
+          {{ local_autobot_root }}/autobot-user-backend/ \
+          {{ backend_install_dir }}/autobot-user-backend/
+
+        sudo rsync -a --delete \
+          --exclude=.git \
+          --exclude=__pycache__ \
+          --exclude='*.pyc' \
+          {{ local_autobot_root }}/autobot-shared/ \
+          {{ backend_install_dir }}/autobot-shared/
+      register: sync_result
+      changed_when: true
+
+    - name: Fix ownership of synced files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: "{{ backend_user }}"
+        group: "{{ backend_user }}"
+        recurse: yes
+      loop:
+        - "{{ backend_install_dir }}/autobot-user-backend"
+        - "{{ backend_install_dir }}/autobot-shared"
+      become: yes
+
+    - name: Start backend service
+      ansible.builtin.systemd:
+        name: autobot-backend
+        state: started
+      become: yes
+
+    - name: Wait for backend to initialize
+      ansible.builtin.pause:
+        seconds: 15
+
+    - name: Check backend health
+      ansible.builtin.uri:
+        url: "http://{{ backend_host }}:8001/api/health"
+        timeout: 5
+      register: health_check
+      ignore_errors: yes
+      retries: 5
+      delay: 3
+      until: health_check.status == 200
+
+    - name: Display deployment result
+      ansible.builtin.debug:
+        msg:
+          - "✅ Backend service stopped"
+          - "✅ Code synchronized"
+          - "✅ Ownership fixed"
+          - "✅ Backend service started"
+          - "Backend health: {{ health_check.status | default('Unknown - check logs') }}"
+          - ""
+          - "Test login:"
+          - "curl -k -X POST https://172.16.168.21/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin\"}'"
