@@ -126,6 +126,12 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "code_intelligence",
     ),
     (
+        "backend.api.merge_conflict_resolution",
+        "/code-intelligence/merge-conflicts",
+        ["merge-conflicts", "code-intelligence", "git"],
+        "merge_conflict_resolution",
+    ),
+    (
         "backend.api.natural_language_search",
         "",
         ["natural-language-search", "code-search"],
