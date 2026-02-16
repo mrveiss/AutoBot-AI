@@ -119,14 +119,10 @@ class PatternExtractor:
         # Get function signature
         args = []
         for arg in node.args.args:
-            annotation = (
-                ast.unparse(arg.annotation) if arg.annotation else "Any"
-            )
+            annotation = ast.unparse(arg.annotation) if arg.annotation else "Any"
             args.append(f"{arg.arg}: {annotation}")
 
-        return_annotation = (
-            ast.unparse(node.returns) if node.returns else "Any"
-        )
+        return_annotation = ast.unparse(node.returns) if node.returns else "Any"
 
         signature = f"def {node.name}({', '.join(args)}) -> {return_annotation}"
 
@@ -159,22 +155,14 @@ class PatternExtractor:
 
         self.patterns["function"].append(pattern)
 
-    def _extract_error_handling_pattern(
-        self, node: ast.Try, file_path: Path
-    ) -> None:
+    def _extract_error_handling_pattern(self, node: ast.Try, file_path: Path) -> None:
         """Extract try/except error handling patterns."""
         for handler in node.handlers:
-            exception_type = (
-                ast.unparse(handler.type) if handler.type else "Exception"
-            )
+            exception_type = ast.unparse(handler.type) if handler.type else "Exception"
             handler_name = handler.name or "_"
 
             # Get handler body (simplified)
-            handler_body = (
-                ast.unparse(handler.body[0])
-                if handler.body
-                else "pass"
-            )
+            handler_body = ast.unparse(handler.body[0]) if handler.body else "pass"
 
             pattern = {
                 "pattern_type": "error_handling",
@@ -228,9 +216,7 @@ class PatternExtractor:
 
         self.patterns["api_route"].append(pattern)
 
-    def _categorize_function(
-        self, node: ast.FunctionDef, file_path: Path
-    ) -> str:
+    def _categorize_function(self, node: ast.FunctionDef, file_path: Path) -> str:
         """Categorize function based on name, decorators, and file path."""
         func_name = node.name.lower()
         file_str = str(file_path).lower()
@@ -288,7 +274,9 @@ class PatternExtractor:
             content = f.read()
 
         # Extract composable functions
-        composable_pattern = r"export\s+function\s+(use[A-Z]\w+)\s*\([^)]*\)\s*:\s*(\{[^}]+\})"
+        composable_pattern = (
+            r"export\s+function\s+(use[A-Z]\w+)\s*\([^)]*\)\s*:\s*(\{[^}]+\})"
+        )
         for match in re.finditer(composable_pattern, content):
             func_name, return_type = match.groups()
             pattern = {

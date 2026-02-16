@@ -111,9 +111,7 @@ async def extract_patterns(request: ExtractionRequest):
         extractor = PatternExtractor()
 
         # Extract patterns
-        patterns_dict = extractor.extract_from_codebase(
-            languages=request.languages
-        )
+        patterns_dict = extractor.extract_from_codebase(languages=request.languages)
 
         # Store patterns in database
         db = SessionLocal()
@@ -320,9 +318,7 @@ async def get_statistics():
                 .all()
             ),
             "by_type": dict(
-                db.query(
-                    CodePattern.pattern_type, func.count(CodePattern.id)
-                )
+                db.query(CodePattern.pattern_type, func.count(CodePattern.id))
                 .group_by(CodePattern.pattern_type)
                 .all()
             ),

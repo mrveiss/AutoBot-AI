@@ -34,9 +34,7 @@ class CodePattern(Base):
     pattern_type = Column(
         String(50), nullable=False, index=True
     )  # function, error_handling, api_usage, etc.
-    language = Column(
-        String(20), nullable=False, index=True
-    )  # python, typescript, vue
+    language = Column(String(20), nullable=False, index=True)  # python, typescript, vue
     category = Column(String(50), index=True)  # fastapi, redis, vue_composable, etc.
 
     # Pattern content
@@ -49,9 +47,7 @@ class CodePattern(Base):
     # Pattern metadata
     file_path = Column(String(500))  # Source file where pattern was found
     line_number = Column(Integer)  # Line number in source file
-    frequency = Column(
-        Integer, default=1, index=True
-    )  # How many times pattern appears
+    frequency = Column(Integer, default=1, index=True)  # How many times pattern appears
 
     # Usage statistics (for learning loop - Issue #905)
     times_suggested = Column(Integer, default=0)
@@ -96,7 +92,9 @@ class CodePattern(Base):
         }
 
     @classmethod
-    def get_redis_key(cls, pattern_type: str, language: str, category: Optional[str] = None) -> str:
+    def get_redis_key(
+        cls, pattern_type: str, language: str, category: Optional[str] = None
+    ) -> str:
         """Generate Redis key for caching hot patterns."""
         if category:
             return f"patterns:{language}:{pattern_type}:{category}"

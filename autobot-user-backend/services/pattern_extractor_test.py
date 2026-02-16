@@ -73,7 +73,7 @@ class UserService:
 
         sample_ts = frontend / "composable.ts"
         sample_ts.write_text(
-            '''
+            """
 export interface User {
   id: number
   name: string
@@ -91,7 +91,7 @@ export function useUserStore(): {
 
   return { users, fetchUsers }
 }
-'''
+"""
         )
 
         yield base
@@ -142,9 +142,7 @@ def test_extract_async_function_patterns(temp_codebase):
     function_patterns = extractor.patterns.get("function", [])
 
     # Find async functions
-    async_patterns = [
-        p for p in function_patterns if p["context"].get("is_async")
-    ]
+    async_patterns = [p for p in function_patterns if p["context"].get("is_async")]
     assert len(async_patterns) >= 1  # get_user and create_user are async
 
 
@@ -166,9 +164,7 @@ def test_categorize_function():
 
     # Test private function
     private_node = ast.parse("def _helper(): pass").body[0]
-    category = extractor._categorize_function(
-        private_node, Path("/test/utils.py")
-    )
+    category = extractor._categorize_function(private_node, Path("/test/utils.py"))
     assert category == "private"
 
 
@@ -300,8 +296,6 @@ def test_skip_long_functions():
         # Long function should be skipped
         function_patterns = extractor.patterns.get("function", [])
         long_patterns = [
-            p
-            for p in function_patterns
-            if "very_long_function" in p["signature"]
+            p for p in function_patterns if "very_long_function" in p["signature"]
         ]
         assert len(long_patterns) == 0
