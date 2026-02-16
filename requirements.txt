@@ -10,12 +10,11 @@ asyncssh>=2.22.0
 # Protobuf 5.x/6.x causes MessageFactory.GetPrototype AttributeError
 protobuf>=4.23.0,<5.0.0
 
-# vLLM - High-performance LLM inference with prefix caching (Optional)
+# vLLM - High-performance LLM inference with prefix caching
 # Provides 3-4x throughput improvement with 98.7% cache efficiency
-# Requires: CUDA-compatible GPU, Enable in config: llm.vllm.enabled = true
-# Installation: pip install vllm (or pip install -r requirements.txt)
-# NOTE: Commented out for main backend (no GPU). Install on AI Stack VM only.
-# vllm>=0.6.0
+# Requires: CUDA-compatible GPU, Python 3.12
+# Enable in config: llm.vllm.enabled = true
+vllm>=0.6.0
 
 # Document parsing libraries for knowledge base
 # Supports PDF, Word, Excel, PowerPoint, OpenDocument formats
@@ -36,14 +35,13 @@ opentelemetry-proto==1.34.0
 opentelemetry-instrumentation-fastapi>=0.55b0
 opentelemetry-propagator-b3==1.34.0
 # Issue #697: Additional instrumentation for comprehensive tracing
-# opentelemetry-instrumentation-redis>=0.55b0  # Commented - causes version conflicts with ChromaDB on Python 3.13
-# opentelemetry-instrumentation-aiohttp-client>=0.55b0  # Commented - causes version conflicts with ChromaDB on Python 3.13
+opentelemetry-instrumentation-redis>=0.55b0
+opentelemetry-instrumentation-aiohttp-client>=0.55b0
 
-# FAISS - GPU-Accelerated Vector Similarity Search (Issue #387)
+# FAISS - GPU-Accelerated Vector Similarity Search (Issue #387, #856)
 # Provides 10-100x speedup for vector similarity search operations
-# Use faiss-cpu for Python 3.13+ compatibility (faiss-gpu requires Python <3.13)
-# For GPU acceleration, use dedicated NPU worker with Python 3.12
-faiss-cpu>=1.7.4          # CPU version with Python 3.13+ support
+# Requires: CUDA-compatible GPU, Python 3.12
+faiss-gpu>=1.7.4
 aiosqlite>=0.21.0
 
 # Security - XML parsing protection (Issue #67)

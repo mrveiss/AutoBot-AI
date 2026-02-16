@@ -11,8 +11,23 @@
       - python3-pip
       - python3-venv
       - git
+      - software-properties-common
     state: present
     update_cache: true
+
+- name: Add deadsnakes PPA for Python 3.12
+  ansible.builtin.apt_repository:
+    repo: ppa:deadsnakes/ppa
+    state: present
+    update_cache: true
+
+- name: Install Python 3.12 for GPU package compatibility
+  ansible.builtin.apt:
+    name:
+      - python3.12
+      - python3.12-venv
+      - python3.12-dev
+    state: present
 
 - name: Create autobot user
   ansible.builtin.user:
@@ -51,9 +66,9 @@
   become_user: "{{ backend_user }}"
   when: backend_deploy_from_git | default(true)
 
-- name: Create Python virtual environment
+- name: Create Python virtual environment with Python 3.12
   ansible.builtin.command:
-    cmd: python3 -m venv {{ backend_code_dir }}/venv
+    cmd: python3.12 -m venv {{ backend_code_dir }}/venv
     creates: "{{ backend_code_dir }}/venv/bin/python"
 
 - name: Fix venv ownership
@@ -88,10 +103,10 @@
     PIP_NO_BINARY: ":none:"
     PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
 
-- name: Deploy aioredis compatibility shim for Python 3.13
+- name: Deploy aioredis compatibility shim for Python 3.12
   ansible.builtin.template:
     src: aioredis_shim.py.j2
-    dest: "{{ backend_code_dir }}/venv/lib/python3.13/site-packages/aioredis.py"
+    dest: "{{ backend_code_dir }}/venv/lib/python3.12/site-packages/aioredis.py"
     mode: '0644'
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
