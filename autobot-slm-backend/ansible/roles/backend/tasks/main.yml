@@ -149,16 +149,21 @@
   become_user: "{{ backend_user }}"
   when: backend_install_dir is defined
 
+- name: Create filtered requirements file
+  ansible.builtin.shell:
+    cmd: "grep -Ev '^-e.*autobot-shared|^-r.*requirements' {{ backend_code_dir }}/requirements.txt > /tmp/requirements-filtered.txt"
+  become_user: "{{ backend_user }}"
+
 - name: Install Python requirements (excluding autobot-shared)
   ansible.builtin.shell:
-    cmd: "grep -v '^-e.*autobot-shared' {{ backend_code_dir }}/requirements.txt | {{ backend_code_dir }}/venv/bin/pip install -r /dev/stdin"
+    cmd: "{{ backend_code_dir }}/venv/bin/pip install -r /tmp/requirements-filtered.txt"
     chdir: "{{ backend_code_dir }}"
   become_user: "{{ backend_user }}"
   environment:
     PIP_NO_BINARY: ":none:"
     PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
   register: pip_install_result
-  failed_when: pip_install_result.rc != 0
+  failed_when: pip_install_result.rc != 0 and 'Requirement already satisfied' not in pip_install_result.stdout
   changed_when: "'Successfully installed' in pip_install_result.stdout"
 
 - name: Deploy aioredis compatibility shim for Python 3.12
