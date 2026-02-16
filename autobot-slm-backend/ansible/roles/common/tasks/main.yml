@@ -98,25 +98,35 @@
   when: lookup('file', '~/.ssh/autobot_key.pub', errors='ignore') is not none
   tags: ['common', 'ssh']
 
-- name: "Common | Configure firewall - Allow SSH"
-  ufw:
-    rule: allow
-    port: 22
-    proto: tcp
-    comment: "SSH access"
-  become: yes
-  notify: reload firewall
-  tags: ['common', 'firewall']
-
-- name: "Common | Configure firewall - Default policies"
+- name: "Common | Configure firewall - Set default policies"
   ufw:
     state: enabled
     policy: "{{ item.policy }}"
     direction: "{{ item.direction }}"
   loop:
-    - { direction: 'incoming', policy: 'deny' }
-    - { direction: 'outgoing', policy: 'allow' }
-    - { direction: 'routed', policy: 'deny' }
+    - { direction: 'incoming', policy: "{{ ufw_default_incoming_policy }}" }
+    - { direction: 'outgoing', policy: "{{ ufw_default_outgoing_policy }}" }
+    - { direction: 'routed', policy: "{{ ufw_default_routed_policy }}" }
+  become: yes
+  tags: ['common', 'firewall']
+
+- name: "Common | Configure firewall - Apply rules from group_vars (#887)"
+  ufw:
+    rule: "{{ item.rule }}"
+    port: "{{ item.port | default(omit) }}"
+    proto: "{{ item.proto | default('tcp') }}"
+    from_ip: "{{ item.src | default('any') }}"
+    to_ip: "{{ item.dest | default('any') }}"
+    comment: "{{ item.comment | default('AutoBot infrastructure rule') }}"
+  loop: "{{ security.firewall_rules | default([]) }}"
+  become: yes
+  notify: reload firewall
+  when: security.firewall_rules is defined
+  tags: ['common', 'firewall']
+
+- name: "Common | Configure firewall - Set logging level (#887)"
+  ufw:
+    logging: "{{ ufw_logging }}"
   become: yes
   tags: ['common', 'firewall']
 
@@ -124,6 +134,7 @@
   ufw:
     state: enabled
   become: yes
+  when: ufw_enabled | bool
   tags: ['common', 'firewall']
 
 - name: "Common | Set hostname"

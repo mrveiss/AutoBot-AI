@@ -328,6 +328,194 @@ done
 
 ---
 
+## Firewall Configuration (UFW)
+
+> **Issue #887**: UFW firewall blocks localhost connections - needs proper default rules
+
+### Critical Firewall Requirements
+
+AutoBot infrastructure requires specific firewall rules to function correctly:
+
+1. **Infrastructure subnet must be allowed** (`172.16.168.0/24`) - VMs cannot communicate without this
+2. **SSH must be allowed** (port 22) - Critical to prevent lockout
+3. **Service-specific ports** - Backend API, Redis, Frontend, etc.
+
+**CRITICAL**: Without proper UFW configuration, services will show as "LISTENING" but all connection attempts will timeout due to UFW BLOCK rules.
+
+### Firewall Configuration Methods
+
+#### Method 1: Ansible Deployment (RECOMMENDED)
+
+The `common` role automatically configures UFW during provisioning:
+
+```bash
+# Deploy firewall configuration to all VMs
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/provision-fleet-roles.yml --tags common,firewall
+
+# Deploy to specific VM
+ansible-playbook playbooks/provision-fleet-roles.yml --limit 172.16.168.20 --tags common,firewall
+```
+
+**Firewall rules are defined in**: `ansible/inventory/group_vars/all.yml` under `security.firewall_rules`
+
+**Service port mappings are in**: `ansible/roles/common/defaults/main.yml` under `firewall_service_ports`
+
+#### Method 2: Standalone Script (Manual/Emergency)
+
+For manual configuration or emergency repairs:
+
+```bash
+# Apply AutoBot firewall rules (preserves existing rules)
+sudo ./infrastructure/shared/config/ufw-defaults.sh apply
+
+# Reset UFW and apply AutoBot rules (CAUTION: removes all existing rules)
+sudo ./infrastructure/shared/config/ufw-defaults.sh reset
+
+# Show current firewall status
+sudo ./infrastructure/shared/config/ufw-defaults.sh status
+```
+
+**Script location**: `infrastructure/shared/config/ufw-defaults.sh`
+
+### Default Firewall Rules
+
+The following rules are applied by default:
+
+| Rule | Port | Source | Purpose |
+|------|------|--------|---------|
+| Allow | 22/tcp | any | SSH access (CRITICAL - prevents lockout) |
+| Allow | any | 172.16.168.0/24 | Infrastructure subnet (CRITICAL - VM communication) |
+| Allow | 8443/tcp | any | Backend API (HTTPS) |
+| Allow | 8001/tcp | any | Backend API (HTTP - legacy) |
+| Allow | 6379/tcp | any | Redis Stack |
+| Allow | 5432/tcp | any | PostgreSQL |
+| Allow | 443/tcp | any | Frontend HTTPS |
+| Allow | 80/tcp | any | Frontend HTTP |
+| Allow | 8080/tcp | any | AI Stack |
+| Allow | 8081/tcp | any | NPU Worker |
+| Allow | 3000/tcp | any | Browser Worker |
+| Allow | 5900/tcp | any | VNC |
+| Allow | 6080/tcp | any | NoVNC Web Console |
+| Allow | 9090/tcp | any | Prometheus |
+| Allow | 3001/tcp | any | Grafana |
+| Allow | 9100/tcp | any | Node Exporter |
+| Allow | 8000/tcp | any | SLM Backend |
+
+**Default Policies**:
+- Incoming: DENY (default-deny security stance)
+- Outgoing: ALLOW (services can make outbound connections)
+- Routed: DENY (no routing between interfaces)
+
+### Troubleshooting Firewall Issues
+
+#### Symptom: Service starts but connection attempts timeout
+
+```bash
+# Check if UFW is blocking connections
+sudo dmesg | grep UFW | tail -20
+
+# Example of blocked connection:
+# [UFW BLOCK] IN=loopback0 SRC=127.0.0.1 DST=127.0.0.1 PROTO=TCP DPT=8443
+```
+
+**Solution**: Apply proper firewall rules using Ansible or standalone script
+
+#### Verify Firewall Status
+
+```bash
+# Check UFW status
+sudo ufw status verbose
+
+# Check specific rule exists
+sudo ufw status | grep "172.16.168.0/24"
+sudo ufw status | grep "8443"
+
+# Check recent UFW blocks
+sudo tail -f /var/log/ufw.log
+```
+
+#### Emergency Firewall Disable (TEMPORARY ONLY)
+
+```bash
+# ONLY use this to verify firewall is the issue
+# DO NOT leave firewall disabled in production
+sudo ufw disable
+
+# Test your connection
+curl http://localhost:8443/api/health
+
+# Re-enable with proper rules
+sudo ./infrastructure/shared/config/ufw-defaults.sh apply
+```
+
+### Adding Custom Firewall Rules
+
+#### Via Ansible (Recommended)
+
+Edit `ansible/inventory/group_vars/all.yml`:
+
+```yaml
+security:
+  firewall_rules:
+    # Existing rules...
+    # Add new rule:
+    - rule: allow
+      port: 9999
+      proto: tcp
+      src: "172.16.168.0/24"
+      comment: "Custom service port"
+```
+
+Then deploy:
+
+```bash
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/provision-fleet-roles.yml --tags common,firewall
+```
+
+#### Via Command Line (Temporary)
+
+```bash
+# Allow specific port from infrastructure subnet
+sudo ufw allow from 172.16.168.0/24 to any port 9999 proto tcp comment 'Custom service'
+
+# Allow specific port from any source
+sudo ufw allow 9999/tcp comment 'Public service'
+
+# Reload firewall
+sudo ufw reload
+```
+
+**WARNING**: Command-line rules are not persistent in Ansible-managed environments. Always update Ansible configuration for permanent changes.
+
+### Verification Checklist
+
+After deploying firewall configuration, verify:
+
+```bash
+# 1. UFW is enabled
+sudo ufw status | grep "Status: active"
+
+# 2. Infrastructure subnet rule exists
+sudo ufw status | grep "172.16.168.0/24"
+
+# 3. SSH rule exists (CRITICAL)
+sudo ufw status | grep "22/tcp"
+
+# 4. Service-specific ports are allowed
+sudo ufw status | grep "8443/tcp"  # Backend
+sudo ufw status | grep "6379/tcp"  # Redis
+sudo ufw status | grep "443/tcp"   # Frontend
+
+# 5. Test actual connectivity
+curl http://172.16.168.20:8443/api/health  # Backend
+redis-cli -h 172.16.168.23 ping            # Redis
+curl https://172.16.168.21                 # Frontend
+```
+
+---
+
 ## VM Infrastructure Overview
 
 ### Service Layout

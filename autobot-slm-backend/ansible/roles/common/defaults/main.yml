@@ -1,0 +1,60 @@
+---
+# Common role default variables
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+
+# ==========================================
+# FIREWALL PORT CONFIGURATION (#887)
+# ==========================================
+
+# Service-specific port mappings
+# These are used when firewall_rules reference service names
+firewall_service_ports:
+  # Core services
+  ssh: 22
+
+  # Backend services
+  backend_api: 8443
+  backend_http: 8001
+
+  # Frontend services
+  https: 443
+  http: 80
+
+  # Database services
+  redis: 6379
+  postgresql: 5432
+
+  # AI/ML services
+  ai_stack: 8080
+  npu_worker: 8081
+
+  # Browser automation
+  browser: 3000
+  playwright: 3001
+
+  # VNC/Desktop streaming
+  vnc: 5900
+  novnc: 6080
+
+  # Monitoring
+  prometheus: 9090
+  grafana: 3000
+  node_exporter: 9100
+
+  # SLM services
+  slm_backend: 8000
+  slm_frontend: 443
+
+# Default UFW logging level
+# Options: off, low, medium, high, full
+ufw_logging: "low"
+
+# Enable/disable firewall by default
+ufw_enabled: true
+
+# Default policies (overridden by group_vars if set)
+ufw_default_incoming_policy: "deny"
+ufw_default_outgoing_policy: "allow"
+ufw_default_routed_policy: "deny"
