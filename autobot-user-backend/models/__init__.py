@@ -25,6 +25,7 @@ from backend.models.activities import (
 from backend.models.atomic_fact import AtomicFact
 from backend.models.code_pattern import CodePattern
 from backend.models.command_execution import CommandExecution
+from backend.models.completion_feedback import CompletionFeedback
 from backend.models.ml_model import MLModel
 from backend.models.secret import Secret
 from backend.models.session_collaboration import SessionCollaboration
@@ -40,6 +41,7 @@ __all__ = [
     "AtomicFact",
     "CodePattern",
     "CommandExecution",
+    "CompletionFeedback",
     "MLModel",
     "Secret",
     "SessionCollaboration",
