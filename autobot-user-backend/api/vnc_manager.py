@@ -885,3 +885,486 @@ async def get_desktop_context(
         "processes": _get_process_list(),
         "timestamp": datetime.now().isoformat(),
     }
+
+
+# Area 5: Automation Features - Macro Recording/Playback
+
+
+class MacroAction(BaseModel):
+    """Single macro action"""
+
+    action_type: str = Field(
+        ..., description="Action type: click, type, key, scroll, drag"
+    )
+    params: Dict = Field(default_factory=dict, description="Action parameters")
+    timestamp: float = Field(..., description="Timestamp when action was recorded")
+
+
+class MacroRecording(BaseModel):
+    """Recorded macro sequence"""
+
+    name: str = Field(..., description="Macro name")
+    actions: List[MacroAction] = Field(default_factory=list)
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+# Global macro storage (in-memory for now)
+_macros: Dict[str, MacroRecording] = {}
+_recording_session: Dict[str, MacroRecording] = {}
+_macros_lock = asyncio.Lock()
+
+
+@router.post("/macro/record/start")
+@with_error_handling(error_code_prefix="VNC_MACRO_START")
+async def start_macro_recording(
+    name: str, admin_check: bool = Depends(check_admin_permission)
+) -> Dict[str, str]:
+    """
+    Start recording a macro sequence.
+    Issue #74 - Area 5: Automation Features.
+
+    Args:
+        name: Macro name
+
+    Returns:
+        {"status": "success|error", "message": "..."}
+    """
+    async with _macros_lock:
+        if name in _recording_session:
+            return {"status": "error", "message": f"Macro '{name}' already recording"}
+
+        _recording_session[name] = MacroRecording(name=name)
+        logger.info("Started recording macro: %s", name)
+
+    return {"status": "success", "message": f"Started recording macro '{name}'"}
+
+
+@router.post("/macro/record/stop")
+@with_error_handling(error_code_prefix="VNC_MACRO_STOP")
+async def stop_macro_recording(
+    name: str, admin_check: bool = Depends(check_admin_permission)
+) -> Dict[str, str]:
+    """
+    Stop recording a macro and save it.
+    Issue #74 - Area 5: Automation Features.
+
+    Args:
+        name: Macro name
+
+    Returns:
+        {"status": "success|error", "message": "...", "action_count": N}
+    """
+    async with _macros_lock:
+        if name not in _recording_session:
+            return {"status": "error", "message": f"Macro '{name}' not recording"}
+
+        macro = _recording_session.pop(name)
+        _macros[name] = macro
+        logger.info(
+            "Stopped recording macro: %s (%d actions)", name, len(macro.actions)
+        )
+
+    return {
+        "status": "success",
+        "message": f"Saved macro '{name}'",
+        "action_count": len(macro.actions),
+    }
+
+
+@router.get("/macros")
+@with_error_handling(error_code_prefix="VNC_MACROS_LIST")
+async def list_macros(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, List[Dict]]:
+    """
+    List all saved macros.
+    Issue #74 - Area 5: Automation Features.
+
+    Returns:
+        {"macros": [{name, action_count, created_at}, ...]}
+    """
+    async with _macros_lock:
+        macro_list = [
+            {
+                "name": name,
+                "action_count": len(macro.actions),
+                "created_at": macro.created_at,
+            }
+            for name, macro in _macros.items()
+        ]
+
+    return {"macros": macro_list}
+
+
+@router.post("/macro/playback")
+@with_error_handling(error_code_prefix="VNC_MACRO_PLAY")
+async def playback_macro(
+    name: str, admin_check: bool = Depends(check_admin_permission)
+) -> Dict[str, str]:
+    """
+    Play back a recorded macro.
+    Issue #74 - Area 5: Automation Features.
+
+    Args:
+        name: Macro name
+
+    Returns:
+        {"status": "success|error", "message": "..."}
+    """
+    async with _macros_lock:
+        if name not in _macros:
+            return {"status": "error", "message": f"Macro '{name}' not found"}
+
+        macro = _macros[name]
+
+    logger.info("Playing back macro: %s (%d actions)", name, len(macro.actions))
+
+    # Replay actions with timing delays
+    start_time = datetime.now()
+    for i, action in enumerate(macro.actions):
+        # Calculate delay since previous action
+        if i > 0:
+            prev_time = macro.actions[i - 1].timestamp
+            delay = action.timestamp - prev_time
+            await asyncio.sleep(min(delay, 2.0))  # Cap delays at 2s
+
+        # Execute action based on type
+        try:
+            if action.action_type == "click":
+                await vnc_mouse_click(MouseClickRequest(**action.params))
+            elif action.action_type == "type":
+                await vnc_keyboard_type(KeyboardTypeRequest(**action.params))
+            elif action.action_type == "key":
+                await vnc_special_key(SpecialKeyRequest(**action.params))
+            elif action.action_type == "scroll":
+                await vnc_mouse_scroll(MouseScrollRequest(**action.params))
+            elif action.action_type == "drag":
+                await vnc_mouse_drag(MouseDragRequest(**action.params))
+        except Exception as e:
+            logger.error("Error executing macro action %d: %s", i, e)
+            return {
+                "status": "error",
+                "message": f"Failed at action {i + 1}/{len(macro.actions)}: {e}",
+            }
+
+    elapsed = (datetime.now() - start_time).total_seconds()
+    return {
+        "status": "success",
+        "message": f"Played macro '{name}' ({len(macro.actions)} actions in {elapsed:.1f}s)",
+    }
+
+
+@router.delete("/macro/{name}")
+@with_error_handling(error_code_prefix="VNC_MACRO_DELETE")
+async def delete_macro(
+    name: str, admin_check: bool = Depends(check_admin_permission)
+) -> Dict[str, str]:
+    """
+    Delete a saved macro.
+    Issue #74 - Area 5: Automation Features.
+
+    Args:
+        name: Macro name
+
+    Returns:
+        {"status": "success|error", "message": "..."}
+    """
+    async with _macros_lock:
+        if name not in _macros:
+            return {"status": "error", "message": f"Macro '{name}' not found"}
+
+        del _macros[name]
+        logger.info("Deleted macro: %s", name)
+
+    return {"status": "success", "message": f"Deleted macro '{name}'"}
+
+
+# Area 5: Automation Features - OCR Text Recognition
+
+
+class OCRRequest(BaseModel):
+    """OCR text recognition request"""
+
+    region: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Optional region {x, y, width, height}, empty for full screen",
+    )
+
+
+@router.post("/ocr")
+@with_error_handling(error_code_prefix="VNC_OCR")
+async def vnc_ocr_text(
+    request: OCRRequest, admin_check: bool = Depends(check_admin_permission)
+) -> Dict[str, object]:
+    """
+    Perform OCR text recognition on desktop screenshot.
+    Issue #74 - Area 5: Automation Features.
+
+    Args:
+        request: OCRRequest with optional region
+
+    Returns:
+        {"status": "success|error", "text": "recognized text", "message": "..."}
+    """
+    try:
+        # Check if pytesseract is available
+        import pytesseract
+        from PIL import Image
+    except ImportError:
+        return {
+            "status": "error",
+            "text": "",
+            "message": "pytesseract not installed. Run: pip install pytesseract pillow",
+        }
+
+    try:
+        # Capture screenshot
+        screenshot_result = await vnc_screenshot()
+        if screenshot_result["status"] != "success":
+            return {"status": "error", "text": "", "message": "Screenshot failed"}
+
+        # Decode image
+        image_data = base64.b64decode(screenshot_result["image_data"])
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
+            tmp_file.write(image_data)
+            tmp_path = tmp_file.name
+
+        # Load image
+        image = Image.open(tmp_path)
+
+        # Crop to region if specified
+        if request.region and all(
+            k in request.region for k in ["x", "y", "width", "height"]
+        ):
+            box = (
+                request.region["x"],
+                request.region["y"],
+                request.region["x"] + request.region["width"],
+                request.region["y"] + request.region["height"],
+            )
+            image = image.crop(box)
+
+        # Perform OCR
+        text = pytesseract.image_to_string(image)
+
+        # Cleanup
+        Path(tmp_path).unlink(missing_ok=True)
+
+        return {"status": "success", "text": text.strip(), "message": "OCR completed"}
+
+    except Exception as e:
+        logger.error("OCR failed: %s", e)
+        return {"status": "error", "text": "", "message": str(e)}
+
+
+# Area 5: Automation Features - Image Template Matching
+
+
+class FindImageRequest(BaseModel):
+    """Find image on screen request"""
+
+    template_data: str = Field(..., description="Base64-encoded template image (PNG)")
+    threshold: float = Field(
+        default=0.8, ge=0.0, le=1.0, description="Match confidence threshold (0-1)"
+    )
+
+
+@router.post("/find-image")
+@with_error_handling(error_code_prefix="VNC_FIND_IMAGE")
+async def vnc_find_image(
+    request: FindImageRequest, admin_check: bool = Depends(check_admin_permission)
+) -> Dict[str, object]:
+    """
+    Find template image on desktop screenshot.
+    Issue #74 - Area 5: Automation Features.
+
+    Args:
+        request: FindImageRequest with template and threshold
+
+    Returns:
+        {
+            "status": "success|error",
+            "found": true/false,
+            "x": center_x,
+            "y": center_y,
+            "confidence": 0.95,
+            "message": "..."
+        }
+    """
+    try:
+        # Check if opencv is available
+        import cv2
+        import numpy as np
+    except ImportError:
+        return {
+            "status": "error",
+            "found": False,
+            "message": "opencv not installed. Run: pip install opencv-python",
+        }
+
+    try:
+        # Capture screenshot
+        screenshot_result = await vnc_screenshot()
+        if screenshot_result["status"] != "success":
+            return {"status": "error", "found": False, "message": "Screenshot failed"}
+
+        # Decode images
+        screen_data = base64.b64decode(screenshot_result["image_data"])
+        template_data = base64.b64decode(request.template_data)
+
+        # Convert to cv2 images
+        screen_array = np.frombuffer(screen_data, dtype=np.uint8)
+        template_array = np.frombuffer(template_data, dtype=np.uint8)
+
+        screen_img = cv2.imdecode(screen_array, cv2.IMREAD_COLOR)
+        template_img = cv2.imdecode(template_array, cv2.IMREAD_COLOR)
+
+        if screen_img is None or template_img is None:
+            return {"status": "error", "found": False, "message": "Invalid image data"}
+
+        # Template matching
+        result = cv2.matchTemplate(screen_img, template_img, cv2.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+
+        if max_val >= request.threshold:
+            # Calculate center coordinates
+            template_h, template_w = template_img.shape[:2]
+            center_x = max_loc[0] + template_w // 2
+            center_y = max_loc[1] + template_h // 2
+
+            return {
+                "status": "success",
+                "found": True,
+                "x": center_x,
+                "y": center_y,
+                "confidence": float(max_val),
+                "message": "Template found",
+            }
+        else:
+            return {
+                "status": "success",
+                "found": False,
+                "confidence": float(max_val),
+                "message": f"Template not found (best match: {max_val:.2f} < {request.threshold})",
+            }
+
+    except Exception as e:
+        logger.error("Image template matching failed: %s", e)
+        return {"status": "error", "found": False, "message": str(e)}
+
+
+# Area 5: Automation Features - Wait Conditions
+
+
+class WaitForTextRequest(BaseModel):
+    """Wait for text to appear request"""
+
+    text: str = Field(..., description="Text to wait for")
+    timeout_seconds: int = Field(
+        default=30, ge=1, le=300, description="Timeout in seconds"
+    )
+    region: Dict[str, int] = Field(
+        default_factory=dict, description="Optional region to search"
+    )
+
+
+@router.post("/wait-for-text")
+@with_error_handling(error_code_prefix="VNC_WAIT_TEXT")
+async def vnc_wait_for_text(
+    request: WaitForTextRequest, admin_check: bool = Depends(check_admin_permission)
+) -> Dict[str, object]:
+    """
+    Wait for text to appear on screen using OCR.
+    Issue #74 - Area 5: Automation Features.
+
+    Args:
+        request: WaitForTextRequest with text and timeout
+
+    Returns:
+        {"status": "success|timeout", "found": true/false, "message": "..."}
+    """
+    start_time = datetime.now()
+    poll_interval = 2.0  # Check every 2 seconds
+
+    while (datetime.now() - start_time).total_seconds() < request.timeout_seconds:
+        # Perform OCR
+        ocr_result = await vnc_ocr_text(OCRRequest(region=request.region))
+
+        if ocr_result["status"] == "success":
+            recognized_text = ocr_result["text"]
+
+            if request.text.lower() in recognized_text.lower():
+                return {
+                    "status": "success",
+                    "found": True,
+                    "message": f"Text '{request.text}' found",
+                }
+
+        # Wait before next check
+        await asyncio.sleep(poll_interval)
+
+    return {
+        "status": "timeout",
+        "found": False,
+        "message": f"Text '{request.text}' not found within {request.timeout_seconds}s",
+    }
+
+
+class WaitForImageRequest(BaseModel):
+    """Wait for image to appear request"""
+
+    template_data: str = Field(..., description="Base64-encoded template image")
+    timeout_seconds: int = Field(default=30, ge=1, le=300)
+    threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+
+
+@router.post("/wait-for-image")
+@with_error_handling(error_code_prefix="VNC_WAIT_IMAGE")
+async def vnc_wait_for_image(
+    request: WaitForImageRequest, admin_check: bool = Depends(check_admin_permission)
+) -> Dict[str, object]:
+    """
+    Wait for image template to appear on screen.
+    Issue #74 - Area 5: Automation Features.
+
+    Args:
+        request: WaitForImageRequest with template and timeout
+
+    Returns:
+        {
+            "status": "success|timeout",
+            "found": true/false,
+            "x": center_x,
+            "y": center_y,
+            "message": "..."
+        }
+    """
+    start_time = datetime.now()
+    poll_interval = 2.0  # Check every 2 seconds
+
+    while (datetime.now() - start_time).total_seconds() < request.timeout_seconds:
+        # Find image
+        find_result = await vnc_find_image(
+            FindImageRequest(
+                template_data=request.template_data, threshold=request.threshold
+            )
+        )
+
+        if find_result["status"] == "success" and find_result["found"]:
+            return {
+                "status": "success",
+                "found": True,
+                "x": find_result["x"],
+                "y": find_result["y"],
+                "confidence": find_result["confidence"],
+                "message": "Template found",
+            }
+
+        # Wait before next check
+        await asyncio.sleep(poll_interval)
+
+    return {
+        "status": "timeout",
+        "found": False,
+        "message": f"Template not found within {request.timeout_seconds}s",
+    }

@@ -372,6 +372,18 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
+  // Issue #897: LLM Configuration Panel
+  {
+    path: '/llm-config',
+    name: 'llm-config',
+    component: () => import('@/views/settings/LLMConfigView.vue'),
+    meta: {
+      title: 'LLM Configuration',
+      icon: 'fas fa-brain',
+      description: 'Configure and monitor LLM providers',
+      requiresAuth: true
+    }
+  },
   // Issue #729: Infrastructure routes redirected to slm-admin
   // These routes are kept as redirects for backwards compatibility
   {
