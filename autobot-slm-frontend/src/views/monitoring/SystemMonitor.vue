@@ -12,6 +12,7 @@
 
 import { ref, computed } from 'vue'
 import GrafanaDashboard from '@/components/monitoring/GrafanaDashboard.vue'
+import MetricsDetailsView from './MetricsDetailsView.vue'
 import { useFleetStore } from '@/stores/fleet'
 import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
 import { getGrafanaUrl } from '@/config/ssot-config'
@@ -28,8 +29,8 @@ const {
   systemHealth,
 } = usePrometheusMetrics({ autoFetch: true, pollInterval: 30000 })
 
-// View mode toggle
-const viewMode = ref<'grafana' | 'details'>('grafana')
+// View mode toggle (Issue #896 - added 'metrics' mode)
+const viewMode = ref<'grafana' | 'details' | 'metrics'>('grafana')
 
 // Dashboard selector
 type DashboardType = 'overview' | 'system' | 'performance' | 'nodes' | 'redis' | 'api-health'
@@ -106,6 +107,20 @@ function getMetricColor(value: number): string {
           </svg>
           Service Details
         </button>
+        <button
+          @click="viewMode = 'metrics'"
+          :class="[
+            'px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2',
+            viewMode === 'metrics'
+              ? 'bg-primary-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          ]"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          Metrics Details
+        </button>
       </div>
     </div>
 
@@ -141,8 +156,11 @@ function getMetricColor(value: number): string {
       </div>
     </div>
 
+    <!-- Metrics Details View (Issue #896) -->
+    <MetricsDetailsView v-if="viewMode === 'metrics'" />
+
     <!-- Details View -->
-    <div v-else class="space-y-6">
+    <div v-else-if="viewMode === 'details'" class="space-y-6">
       <!-- Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">

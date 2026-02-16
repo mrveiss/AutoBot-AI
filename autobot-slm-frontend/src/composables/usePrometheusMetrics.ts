@@ -11,7 +11,6 @@
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import type { Ref, ComputedRef } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useAuthStore } from '@/stores/auth'
 
@@ -107,6 +106,56 @@ export interface DashboardOverview {
   timestamp?: number
 }
 
+export interface NodeMetricsDetailed {
+  node_id: string
+  hostname: string
+  ip_address: string
+  status: string
+  cpu_percent: number
+  memory_percent: number
+  disk_percent: number
+  last_heartbeat: string | null
+  services_running: number
+  services_failed: number
+}
+
+export interface FleetMetricsDetailed {
+  total_nodes: number
+  online_nodes: number
+  degraded_nodes: number
+  offline_nodes: number
+  avg_cpu_percent: number
+  avg_memory_percent: number
+  avg_disk_percent: number
+  total_services: number
+  running_services: number
+  failed_services: number
+  nodes: NodeMetricsDetailed[]
+  timestamp: string
+}
+
+export interface PerformanceOverview {
+  avg_response_time_ms: number
+  p50_response_time_ms: number
+  p95_response_time_ms: number
+  p99_response_time_ms: number
+  request_rate: number
+  error_rate: number
+  trace_count: number
+  error_count: number
+  timestamp: string
+}
+
+export interface NPUFleetMetrics {
+  total_npu_nodes: number
+  online_npu_nodes: number
+  total_workers: number
+  active_workers: number
+  avg_utilization_percent: number
+  total_inferences: number
+  avg_inference_time_ms: number
+}
+
 export interface UsePrometheusMetricsOptions {
   autoFetch?: boolean
   pollInterval?: number
@@ -138,6 +187,13 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
   const recommendations = ref<OptimizationRecommendation[]>([])
   const gpuDetails = ref<GPUMetrics | null>(null)
   const npuDetails = ref<NPUMetrics | null>(null)
+
+  // New metrics state (Issue #896)
+  const fleetMetrics = ref<FleetMetricsDetailed | null>(null)
+  const nodeMetrics = ref<Map<string, NodeMetricsDetailed>>(new Map())
+  const performanceOverview = ref<PerformanceOverview | null>(null)
+  const npuFleetMetrics = ref<NPUFleetMetrics | null>(null)
+  const prometheusExport = ref<string | null>(null)
 
   const isLoading = ref(false)
   const error = ref<string | null>(null)
@@ -329,6 +385,113 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
     await fetchAll()
   }
 
+  // ===== New Metrics Methods (Issue #896) =====
+
+  async function fetchFleetMetrics(): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE}/monitoring/metrics/fleet`, {
+        headers: getHeaders(),
+      })
+      if (response.ok) {
+        fleetMetrics.value = await response.json()
+        error.value = null
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch fleet metrics'
+      logger.error('Failed to fetch fleet metrics:', err)
+      error.value = message
+    }
+  }
+
+  async function fetchNodeMetricsDetailed(nodeId: string): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE}/monitoring/metrics/node/${nodeId}`, {
+        headers: getHeaders(),
+      })
+      if (response.ok) {
+        const data = await response.json()
+        nodeMetrics.value.set(nodeId, data)
+        error.value = null
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch node metrics'
+      logger.error(`Failed to fetch node metrics for ${nodeId}:`, err)
+      error.value = message
+    }
+  }
+
+  async function fetchPerformanceOverview(): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE}/performance/overview`, {
+        headers: getHeaders(),
+      })
+      if (response.ok) {
+        performanceOverview.value = await response.json()
+        error.value = null
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch performance overview'
+      logger.error('Failed to fetch performance overview:', err)
+      error.value = message
+    }
+  }
+
+  async function fetchNPUFleetMetrics(): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE}/npu/metrics`, {
+        headers: getHeaders(),
+      })
+      if (response.ok) {
+        npuFleetMetrics.value = await response.json()
+        error.value = null
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch NPU fleet metrics'
+      logger.error('Failed to fetch NPU fleet metrics:', err)
+      error.value = message
+    }
+  }
+
+  async function fetchPrometheusExport(): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE}/performance/metrics/prometheus`, {
+        headers: getHeaders(),
+      })
+      if (response.ok) {
+        prometheusExport.value = await response.text()
+        error.value = null
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch Prometheus export'
+      logger.error('Failed to fetch Prometheus export:', err)
+      error.value = message
+    }
+  }
+
+  async function refreshMetrics(): Promise<void> {
+    isLoading.value = true
+    try {
+      await Promise.all([
+        fetchFleetMetrics(),
+        fetchPerformanceOverview(),
+        fetchNPUFleetMetrics(),
+      ])
+      lastUpdate.value = new Date()
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   // ===== Polling Methods =====
 
   function startPolling(): void {
@@ -382,6 +545,13 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
     lastUpdate,
     isConnected,
 
+    // New metrics state (Issue #896)
+    fleetMetrics,
+    nodeMetrics,
+    performanceOverview,
+    npuFleetMetrics,
+    prometheusExport,
+
     // Computed
     systemHealth,
     cpuUsage,
@@ -405,6 +575,14 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
     connectWebSocket,
     disconnectWebSocket,
     refresh,
+
+    // New metrics methods (Issue #896)
+    fetchFleetMetrics,
+    fetchNodeMetricsDetailed,
+    fetchPerformanceOverview,
+    fetchNPUFleetMetrics,
+    fetchPrometheusExport,
+    refreshMetrics,
   }
 }
 
