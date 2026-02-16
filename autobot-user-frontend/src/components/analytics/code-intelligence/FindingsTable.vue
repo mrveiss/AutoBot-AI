@@ -19,6 +19,7 @@
           type="text"
           placeholder="Search files or messages..."
           class="search-input"
+          aria-label="Search findings by file path or message"
         />
       </div>
     </div>
@@ -52,6 +53,12 @@
               @click="toggleExpand(index)"
               :class="{ expanded: expandedRow === index }"
               class="finding-row"
+              role="button"
+              tabindex="0"
+              :aria-expanded="expandedRow === index"
+              :aria-label="`${finding.severity} severity finding in ${finding.file_path}, click to expand details`"
+              @keydown.enter="toggleExpand(index)"
+              @keydown.space.prevent="toggleExpand(index)"
             >
               <td class="col-severity">
                 <span :class="['severity-badge', finding.severity]">
@@ -81,8 +88,12 @@
                     <span class="owasp-tag">{{ finding.owasp_category }}</span>
                   </div>
                   <div class="detail-actions">
-                    <button @click.stop="copyPath(finding)" class="btn-small">
-                      <i class="fas fa-copy"></i> Copy Path
+                    <button
+                      @click.stop="copyPath(finding)"
+                      class="btn-small"
+                      aria-label="Copy file path to clipboard"
+                    >
+                      <i class="fas fa-copy" aria-hidden="true"></i> Copy Path
                     </button>
                   </div>
                 </div>

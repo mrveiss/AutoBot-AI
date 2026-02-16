@@ -4,7 +4,7 @@
     <aside class="knowledge-sidebar">
       <div class="sidebar-header">
         <h3>
-          <svg class="header-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="header-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
           </svg>
           Knowledge Base
@@ -12,7 +12,7 @@
       </div>
 
       <!-- Category Navigation -->
-      <nav class="category-nav">
+      <nav class="category-nav" aria-label="Knowledge base navigation">
         <div class="category-divider">
           <span>Browse</span>
         </div>
@@ -21,8 +21,9 @@
           to="/knowledge/search"
           class="category-item"
           :class="{ active: $route.name === 'knowledge-search' }"
+          aria-label="Search knowledge base"
         >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
           </svg>
           <span>Search</span>
@@ -32,8 +33,9 @@
           to="/knowledge/categories"
           class="category-item"
           :class="{ active: $route.name === 'knowledge-categories' }"
+          aria-label="Browse categories"
         >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
           </svg>
           <span>Categories</span>
@@ -43,8 +45,9 @@
           to="/knowledge/graph"
           class="category-item"
           :class="{ active: $route.name === 'knowledge-graph' }"
+          aria-label="View knowledge graph"
         >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
           </svg>
           <span>Graph</span>
@@ -58,8 +61,9 @@
           to="/knowledge/manage"
           class="category-item"
           :class="{ active: $route.name === 'knowledge-manage' }"
+          aria-label="Manage knowledge base"
         >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
           </svg>
           <span>Manage</span>
@@ -68,9 +72,10 @@
         <router-link
           to="/knowledge/entities"
           class="category-item"
+          aria-label="View entities"
           :class="{ active: $route.name === 'knowledge-entities' }"
         >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
           </svg>
           <span>Entities</span>
@@ -80,8 +85,9 @@
           to="/knowledge/maintenance"
           class="category-item"
           :class="{ active: $route.name === 'knowledge-maintenance' }"
+          aria-label="Knowledge base maintenance"
         >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
           </svg>

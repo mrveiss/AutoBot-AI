@@ -4,7 +4,7 @@
     <aside class="workflow-sidebar">
       <div class="sidebar-header">
         <h3>
-          <svg class="header-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="header-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
           </svg>
           Workflow Builder
@@ -12,71 +12,86 @@
       </div>
 
       <!-- Category Navigation -->
-      <nav class="category-nav">
-        <div
+      <nav class="category-nav" aria-label="Workflow builder navigation">
+        <button
           class="category-item"
           :class="{ active: activeSection === 'overview' }"
           @click="activeSection = 'overview'"
+          role="button"
+          aria-label="View workflow overview"
+          tabindex="0"
         >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
           </svg>
           <span>Overview</span>
-        </div>
+        </button>
 
         <div class="category-divider">
           <span>Build</span>
         </div>
 
-        <div
+        <button
           class="category-item"
           :class="{ active: activeSection === 'canvas' }"
           @click="activeSection = 'canvas'"
+          role="button"
+          aria-label="Open visual workflow builder"
+          tabindex="0"
         >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 12a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z"></path>
           </svg>
           <span>Visual Builder</span>
-        </div>
+        </button>
 
-        <div
+        <button
           class="category-item"
           :class="{ active: activeSection === 'templates' }"
           @click="activeSection = 'templates'"
+          role="button"
+          aria-label="Browse workflow templates"
+          tabindex="0"
         >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
           </svg>
           <span>Templates</span>
-          <span class="count">{{ templates.length }}</span>
-        </div>
+          <span class="count" aria-label="{{ templates.length }} templates">{{ templates.length }}</span>
+        </button>
 
-        <div
+        <button
           class="category-item"
           :class="{ active: activeSection === 'natural-language' }"
           @click="activeSection = 'natural-language'"
+          role="button"
+          aria-label="Natural language workflow builder"
+          tabindex="0"
         >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
           </svg>
           <span>Natural Language</span>
-        </div>
+        </button>
 
         <div class="category-divider">
           <span>Execute</span>
         </div>
 
-        <div
+        <button
           class="category-item"
           :class="{ active: activeSection === 'runner' }"
           @click="activeSection = 'runner'"
+          role="button"
+          aria-label="Workflow runner"
+          tabindex="0"
         >
-          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
           <span>Runner</span>
-          <span class="count active-badge" v-if="hasActiveWorkflows">
+          <span class="count active-badge" v-if="hasActiveWorkflows" aria-label="{{ activeWorkflows.length }} active workflows">
             {{ activeWorkflows.length }}
           </span>
         </div>
@@ -868,6 +883,13 @@ watch(hasActiveWorkflows, (hasActive) => {
   transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
   color: var(--text-secondary);
   border-left: 2px solid transparent;
+  /* Reset button styles */
+  background: none;
+  border: none;
+  border-left: 2px solid transparent;
+  text-align: left;
+  width: 100%;
+  font-family: inherit;
 }
 
 .category-item:hover {
