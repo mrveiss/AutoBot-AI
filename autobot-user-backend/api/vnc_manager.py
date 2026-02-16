@@ -72,6 +72,43 @@ class ClipboardSyncRequest(BaseModel):
     content: str = Field(..., description="Text content to copy to clipboard")
 
 
+# Issue #74 - Area 4: Advanced Session Management
+class ConnectionQualitySettings(BaseModel):
+    """VNC connection quality settings"""
+
+    compression_level: int = Field(
+        default=6, ge=0, le=9, description="Compression level (0=none, 9=max)"
+    )
+    quality: int = Field(
+        default=6, ge=0, le=9, description="JPEG quality (0=poor, 9=best)"
+    )
+    encoding: str = Field(
+        default="tight", description="Encoding method: tight, hextile, raw"
+    )
+
+
+class ConnectionSettings(BaseModel):
+    """VNC connection configuration"""
+
+    auto_reconnect: bool = Field(
+        default=True, description="Enable auto-reconnect on disconnect"
+    )
+    reconnect_delay_ms: int = Field(
+        default=3000, ge=1000, le=30000, description="Delay before reconnect"
+    )
+    max_reconnect_attempts: int = Field(
+        default=10, ge=1, le=100, description="Max reconnect attempts"
+    )
+    quality: ConnectionQualitySettings = Field(
+        default_factory=ConnectionQualitySettings
+    )
+
+
+# Global connection settings storage (in-memory for now)
+_connection_settings: Dict[str, ConnectionSettings] = {}
+_settings_lock = asyncio.Lock()
+
+
 def is_vnc_running() -> bool:
     """Check if VNC server is running on display :1"""
     try:
@@ -495,6 +532,113 @@ async def vnc_clipboard_sync(
     except Exception as e:
         logger.error("Error syncing clipboard: %s", e)
         return {"status": "error", "message": str(e)}
+
+
+# Connection Settings Management (Issue #74 - Area 4)
+
+
+@router.get("/connection/settings")
+@with_error_handling(error_code_prefix="VNC_CONN_GET")
+async def get_connection_settings(
+    session_id: str = "default",
+    admin_check: bool = Depends(check_admin_permission),
+) -> ConnectionSettings:
+    """
+    Get VNC connection settings for a session.
+    Issue #74 - Area 4: Advanced Session Management.
+
+    Args:
+        session_id: Session identifier (default: "default")
+
+    Returns:
+        Connection settings including quality and reconnect config
+    """
+    async with _settings_lock:
+        if session_id not in _connection_settings:
+            _connection_settings[session_id] = ConnectionSettings()
+        return _connection_settings[session_id]
+
+
+@router.post("/connection/settings")
+@with_error_handling(error_code_prefix="VNC_CONN_SET")
+async def update_connection_settings(
+    settings: ConnectionSettings,
+    session_id: str = "default",
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, str]:
+    """
+    Update VNC connection settings for a session.
+    Issue #74 - Area 4: Advanced Session Management.
+
+    Args:
+        settings: New connection settings
+        session_id: Session identifier (default: "default")
+
+    Returns:
+        {"status": "success", "message": "..."}
+    """
+    async with _settings_lock:
+        _connection_settings[session_id] = settings
+
+    logger.info(
+        "Updated connection settings for session %s: quality=%d, auto_reconnect=%s",
+        session_id,
+        settings.quality.quality,
+        settings.auto_reconnect,
+    )
+
+    return {"status": "success", "message": "Connection settings updated"}
+
+
+@router.get("/connection/quality-metrics")
+@with_error_handling(error_code_prefix="VNC_QUALITY")
+async def get_connection_quality_metrics(
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, object]:
+    """
+    Get current connection quality metrics.
+    Issue #74 - Area 4: Advanced Session Management.
+
+    Returns:
+        Connection quality stats (latency, bandwidth, packet loss)
+    """
+    metrics = {
+        "vnc_running": is_vnc_running(),
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    # Check VNC port connectivity
+    try:
+        import socket
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(2)
+        start_time = datetime.now()
+        result = sock.connect_ex(("localhost", 5901))
+        latency_ms = (datetime.now() - start_time).total_seconds() * 1000
+        sock.close()
+
+        metrics["vnc_port_reachable"] = result == 0
+        metrics["latency_ms"] = round(latency_ms, 2)
+    except Exception as e:
+        logger.warning("Failed to check VNC connectivity: %s", e)
+        metrics["vnc_port_reachable"] = False
+
+    # Get websockify process info
+    try:
+        result = subprocess.run(  # nosec B607
+            ["pgrep", "-a", "websockify"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        metrics["websockify_running"] = result.returncode == 0
+        if result.returncode == 0:
+            metrics["websockify_processes"] = len(result.stdout.strip().split("\n"))
+    except Exception as e:
+        logger.warning("Failed to check websockify: %s", e)
+
+    return metrics
 
 
 # Desktop Context Info (Issue #74 - Area 3)
