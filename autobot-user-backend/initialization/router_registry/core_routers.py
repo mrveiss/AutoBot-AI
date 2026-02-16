@@ -56,6 +56,7 @@ from backend.api.vnc_mcp import router as vnc_mcp_router
 from backend.api.vnc_proxy import router as vnc_proxy_router
 from backend.api.voice import router as voice_router
 from backend.api.wake_word import router as wake_word_router
+from backend.plugin_manager import router as plugin_manager_router
 
 # Issue #729: infrastructure_hosts removed - now served by slm-server
 
@@ -253,9 +254,16 @@ def _get_agent_routers() -> list:
     ]
 
 
+def _get_plugin_routers() -> list:
+    """Get plugin management routers (Issue #730)."""
+    return [
+        (plugin_manager_router, "/plugins", ["plugins"], "plugin_manager"),
+    ]
+
+
 def load_core_routers():
     """
-    Load and return core API routers (Issue #560: decomposed).
+    Load and return core API routers (Issue #560: decomposed, #730: plugins).
 
     Core routers provide essential functionality and should always be available.
     These routers are imported at module level to ensure they fail fast if missing.
@@ -273,4 +281,5 @@ def load_core_routers():
     routers.extend(_get_service_routers())
     routers.extend(_get_mcp_routers())
     routers.extend(_get_agent_routers())
+    routers.extend(_get_plugin_routers())
     return routers
