@@ -1368,3 +1368,311 @@ async def vnc_wait_for_image(
         "found": False,
         "message": f"Template not found within {request.timeout_seconds}s",
     }
+
+
+# Area 6: Session-Tied Desktop Views
+
+
+class DesktopSessionState(BaseModel):
+    """Desktop state tied to a chat session"""
+
+    session_id: str = Field(..., description="Chat session ID")
+    window_layout: Dict = Field(
+        default_factory=dict, description="Window positions and sizes"
+    )
+    active_applications: List[str] = Field(
+        default_factory=list, description="Running applications"
+    )
+    screenshots: List[str] = Field(
+        default_factory=list, description="Screenshot file paths"
+    )
+    action_log: List[Dict] = Field(
+        default_factory=list, description="VNC actions performed"
+    )
+    last_updated: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+
+class SessionActionLog(BaseModel):
+    """Log entry for VNC action in a session"""
+
+    action_type: str = Field(..., description="Type of action performed")
+    params: Dict = Field(default_factory=dict)
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+    result: str = Field(default="success", description="Action result: success/error")
+
+
+# Global session state storage (in-memory for now, should be Redis-backed in production)
+_session_states: Dict[str, DesktopSessionState] = {}
+_session_lock = asyncio.Lock()
+
+
+@router.post("/session/save-state")
+@with_error_handling(error_code_prefix="VNC_SESSION_SAVE")
+async def save_session_desktop_state(
+    session_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, str]:
+    """
+    Save current desktop state to a chat session.
+    Issue #74 - Area 6: Session-Tied Desktop Views.
+
+    Args:
+        session_id: Chat session ID
+
+    Returns:
+        {"status": "success|error", "message": "..."}
+    """
+    async with _session_lock:
+        # Get or create session state
+        if session_id not in _session_states:
+            _session_states[session_id] = DesktopSessionState(session_id=session_id)
+
+        state = _session_states[session_id]
+
+        # Capture current desktop context
+        context = await get_desktop_context()
+
+        # Save window layout (from desktop info)
+        if "desktop" in context:
+            state.window_layout = context["desktop"]
+
+        # Save running apps (from processes)
+        if "processes" in context:
+            state.active_applications = [
+                proc["command"] for proc in context["processes"]
+            ]
+
+        # Update timestamp
+        state.last_updated = datetime.now().isoformat()
+
+        logger.info("Saved desktop state for session: %s", session_id)
+
+    return {
+        "status": "success",
+        "message": f"Desktop state saved for session {session_id}",
+    }
+
+
+@router.get("/session/restore-state")
+@with_error_handling(error_code_prefix="VNC_SESSION_RESTORE")
+async def restore_session_desktop_state(
+    session_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, object]:
+    """
+    Restore desktop state for a chat session.
+    Issue #74 - Area 6: Session-Tied Desktop Views.
+
+    Args:
+        session_id: Chat session ID
+
+    Returns:
+        {
+            "status": "success|not_found",
+            "state": {...},  # Desktop state if found
+            "message": "..."
+        }
+    """
+    async with _session_lock:
+        if session_id not in _session_states:
+            return {
+                "status": "not_found",
+                "message": f"No saved state for session {session_id}",
+            }
+
+        state = _session_states[session_id]
+
+    return {
+        "status": "success",
+        "state": state.dict(),
+        "message": "Desktop state restored",
+    }
+
+
+@router.post("/session/log-action")
+@with_error_handling(error_code_prefix="VNC_SESSION_LOG")
+async def log_session_action(
+    session_id: str,
+    action: SessionActionLog,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, str]:
+    """
+    Log a VNC action to a chat session.
+    Issue #74 - Area 6: Session-Tied Desktop Views.
+
+    Args:
+        session_id: Chat session ID
+        action: Action log entry
+
+    Returns:
+        {"status": "success", "message": "..."}
+    """
+    async with _session_lock:
+        # Get or create session state
+        if session_id not in _session_states:
+            _session_states[session_id] = DesktopSessionState(session_id=session_id)
+
+        state = _session_states[session_id]
+        state.action_log.append(action.dict())
+        state.last_updated = datetime.now().isoformat()
+
+    return {"status": "success", "message": "Action logged to session"}
+
+
+@router.get("/session/action-log")
+@with_error_handling(error_code_prefix="VNC_SESSION_LOG_GET")
+async def get_session_action_log(
+    session_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, object]:
+    """
+    Get VNC action log for a chat session.
+    Issue #74 - Area 6: Session-Tied Desktop Views.
+
+    Args:
+        session_id: Chat session ID
+
+    Returns:
+        {
+            "status": "success|not_found",
+            "actions": [...],  # Action log entries
+            "message": "..."
+        }
+    """
+    async with _session_lock:
+        if session_id not in _session_states:
+            return {
+                "status": "not_found",
+                "actions": [],
+                "message": f"No action log for session {session_id}",
+            }
+
+        state = _session_states[session_id]
+        actions = state.action_log
+
+    return {
+        "status": "success",
+        "actions": actions,
+        "message": f"Retrieved {len(actions)} actions",
+    }
+
+
+@router.post("/session/save-screenshot")
+@with_error_handling(error_code_prefix="VNC_SESSION_SCREENSHOT")
+async def save_session_screenshot(
+    session_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, str]:
+    """
+    Capture and save screenshot to a chat session.
+    Issue #74 - Area 6: Session-Tied Desktop Views.
+
+    Args:
+        session_id: Chat session ID
+
+    Returns:
+        {
+            "status": "success|error",
+            "screenshot_path": "path/to/screenshot.png",
+            "message": "..."
+        }
+    """
+    # Capture screenshot
+    screenshot_result = await vnc_screenshot()
+    if screenshot_result["status"] != "success":
+        return {"status": "error", "message": "Screenshot capture failed"}
+
+    # Save screenshot to session-specific directory
+    screenshot_dir = Path(f"/tmp/vnc_sessions/{session_id}")  # nosec B108
+    screenshot_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    screenshot_path = screenshot_dir / f"screenshot_{timestamp}.png"
+
+    # Decode and save
+    image_data = base64.b64decode(screenshot_result["image_data"])
+    with open(screenshot_path, "wb") as f:
+        f.write(image_data)
+
+    # Add to session state
+    async with _session_lock:
+        if session_id not in _session_states:
+            _session_states[session_id] = DesktopSessionState(session_id=session_id)
+
+        state = _session_states[session_id]
+        state.screenshots.append(str(screenshot_path))
+        state.last_updated = datetime.now().isoformat()
+
+    logger.info("Saved screenshot for session %s: %s", session_id, screenshot_path)
+
+    return {
+        "status": "success",
+        "screenshot_path": str(screenshot_path),
+        "message": "Screenshot saved to session",
+    }
+
+
+@router.get("/session/screenshots")
+@with_error_handling(error_code_prefix="VNC_SESSION_SCREENSHOTS")
+async def get_session_screenshots(
+    session_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, object]:
+    """
+    Get all screenshots for a chat session.
+    Issue #74 - Area 6: Session-Tied Desktop Views.
+
+    Args:
+        session_id: Chat session ID
+
+    Returns:
+        {
+            "status": "success|not_found",
+            "screenshots": ["path1.png", "path2.png", ...],
+            "message": "..."
+        }
+    """
+    async with _session_lock:
+        if session_id not in _session_states:
+            return {
+                "status": "not_found",
+                "screenshots": [],
+                "message": f"No screenshots for session {session_id}",
+            }
+
+        state = _session_states[session_id]
+        screenshots = state.screenshots
+
+    return {
+        "status": "success",
+        "screenshots": screenshots,
+        "message": f"Retrieved {len(screenshots)} screenshots",
+    }
+
+
+@router.delete("/session/clear-state")
+@with_error_handling(error_code_prefix="VNC_SESSION_CLEAR")
+async def clear_session_state(
+    session_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+) -> Dict[str, str]:
+    """
+    Clear desktop state for a chat session.
+    Issue #74 - Area 6: Session-Tied Desktop Views.
+
+    Args:
+        session_id: Chat session ID
+
+    Returns:
+        {"status": "success", "message": "..."}
+    """
+    async with _session_lock:
+        if session_id in _session_states:
+            del _session_states[session_id]
+            logger.info("Cleared session state: %s", session_id)
+            return {
+                "status": "success",
+                "message": f"Cleared state for session {session_id}",
+            }
+        else:
+            return {"status": "success", "message": "No state to clear"}
