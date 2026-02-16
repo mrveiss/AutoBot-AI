@@ -396,6 +396,18 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
+  // Issue #900: Browser Automation Dashboard
+  {
+    path: '/browser-automation',
+    name: 'browser-automation',
+    component: () => import('@/views/BrowserAutomationView.vue'),
+    meta: {
+      title: 'Browser Automation',
+      icon: 'fas fa-globe',
+      description: 'Control browser workers and automate web tasks',
+      requiresAuth: true
+    }
+  },
   // Issue #729: Infrastructure routes redirected to slm-admin
   // These routes are kept as redirects for backwards compatibility
   {

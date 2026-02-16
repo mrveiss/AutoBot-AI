@@ -1,399 +1,348 @@
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
+
 /**
  * Browser Automation Composable
- * Centralized Playwright API interactions for browser automation
+ * Issue #900 - Browser Automation Dashboard
  */
 
-import { ref } from 'vue'
-import apiClient from '@/utils/ApiClient'
+import { ref, onMounted, onUnmounted } from 'vue'
+import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
-import type {
-  AutomationTask,
-  MediaItem,
-  AutomationRecording,
-  BrowserSession,
-  TaskStatus,
-  TaskType
-} from '@/types/browser'
 
 const logger = createLogger('useBrowserAutomation')
 
-export function useBrowserAutomation() {
+// ===== Type Definitions =====
+
+export interface BrowserWorkerStatus {
+  status: 'online' | 'offline' | 'degraded'
+  active_sessions: number
+  max_sessions: number
+  cpu_usage: number
+  memory_usage: number
+  uptime_seconds: number
+}
+
+export interface BrowserSession {
+  id: string
+  url: string
+  title: string
+  status: 'active' | 'idle' | 'error'
+  created_at: string
+  last_activity: string
+  viewport: {
+    width: number
+    height: number
+  }
+}
+
+export interface BrowserAction {
+  type: 'navigate' | 'click' | 'type' | 'screenshot' | 'execute'
+  session_id: string
+  params: Record<string, unknown>
+}
+
+export interface ScreenshotResult {
+  session_id: string
+  image_data: string
+  timestamp: string
+  format: 'png' | 'jpeg'
+}
+
+export interface AutomationScript {
+  id: string
+  name: string
+  description: string
+  script: string
+  status: 'idle' | 'running' | 'completed' | 'failed'
+  last_run?: string
+  result?: unknown
+}
+
+export interface UseBrowserAutomationOptions {
+  autoFetch?: boolean
+  pollInterval?: number
+}
+
+// ===== Composable Implementation =====
+
+export function useBrowserAutomation(options: UseBrowserAutomationOptions = {}) {
+  const { autoFetch = true, pollInterval = 5000 } = options
+
+  // State
+  const workerStatus = ref<BrowserWorkerStatus | null>(null)
+  const sessions = ref<BrowserSession[]>([])
+  const currentSession = ref<BrowserSession | null>(null)
+  const screenshots = ref<ScreenshotResult[]>([])
+  const scripts = ref<AutomationScript[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
-  // Task Management
-  const tasks = ref<AutomationTask[]>([])
+  let pollingInterval: ReturnType<typeof setInterval> | null = null
 
-  const createTask = async (
-    type: TaskType,
-    name: string,
-    params: Record<string, unknown>,
-    description?: string
-  ): Promise<AutomationTask> => {
-    const task: AutomationTask = {
-      id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      type,
-      status: 'queued',
-      name,
-      description,
-      params,
-      createdAt: new Date(),
-      progress: 0
-    }
+  // ===== API Methods =====
 
-    tasks.value.push(task)
-    logger.info(`Created task: ${task.id}`, { type, name })
-
-    // Execute task asynchronously
-    executeTask(task)
-
-    return task
-  }
-
-  const executeTask = async (task: AutomationTask) => {
+  async function fetchWorkerStatus(): Promise<void> {
     try {
-      task.status = 'running'
-      task.startedAt = new Date()
-
-      let result: unknown = null
-
-      switch (task.type) {
-        case 'navigate':
-          result = await apiClient.post('/api/playwright/navigate', {
-            url: task.params.url,
-            wait_until: task.params.waitUntil || 'networkidle',
-            timeout: task.params.timeout || 30000
-          })
-          break
-
-        case 'screenshot':
-          result = await apiClient.post('/api/playwright/screenshot', {
-            url: task.params.url,
-            full_page: task.params.fullPage !== false,
-            wait_timeout: task.params.waitTimeout || 5000
-          })
-          break
-
-        case 'search':
-          result = await apiClient.post('/api/playwright/search', {
-            query: task.params.query,
-            search_engine: task.params.searchEngine || 'duckduckgo',
-            max_results: task.params.maxResults || 5
-          })
-          break
-
-        case 'test':
-          result = await apiClient.post('/api/playwright/test-frontend', {
-            frontend_url: task.params.frontendUrl || window.location.origin
-          })
-          break
-
-        case 'script':
-          // Execute custom script (sequence of actions)
-          result = await executeScript(task.params.actions)
-          break
-
-        default:
-          throw new Error(`Unknown task type: ${task.type}`)
-      }
-
-      task.result = result
-      task.status = 'completed'
-      task.completedAt = new Date()
-      task.progress = 100
-
-      logger.info(`Task completed: ${task.id}`, { result })
-    } catch (err: unknown) {
-      task.status = 'failed'
-      task.error = (err as Error).message || 'Task execution failed'
-      task.completedAt = new Date()
-
-      logger.error(`Task failed: ${task.id}`, err)
+      const data = await ApiClient.get('/api/browser/status')
+      workerStatus.value = data
+      logger.debug('Fetched worker status:', data)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch worker status'
+      logger.error('Failed to fetch worker status:', err)
+      error.value = message
     }
   }
 
-  const executeScript = async (actions: Array<Record<string, unknown>>): Promise<unknown> => {
-    const results = []
-    for (const action of actions) {
-      let result: unknown = null
-
-      switch (action.type) {
-        case 'navigate':
-          result = await apiClient.post('/api/playwright/navigate', {
-            url: action.url
-          })
-          break
-
-        case 'screenshot':
-          result = await apiClient.post('/api/playwright/screenshot', {
-            url: action.url || window.location.href
-          })
-          break
-
-        case 'wait':
-          await new Promise(resolve => setTimeout(resolve, action.duration || 1000))
-          result = { waited: action.duration }
-          break
-
-        default:
-          logger.warn(`Unknown action type: ${action.type}`)
-      }
-
-      results.push(result)
-    }
-
-    return results
-  }
-
-  const cancelTask = (taskId: string) => {
-    const task = tasks.value.find(t => t.id === taskId)
-    if (task && (task.status === 'queued' || task.status === 'running')) {
-      task.status = 'cancelled'
-      task.completedAt = new Date()
-      logger.info(`Task cancelled: ${taskId}`)
-    }
-  }
-
-  const getTaskById = (taskId: string): AutomationTask | undefined => {
-    return tasks.value.find(t => t.id === taskId)
-  }
-
-  const clearCompletedTasks = () => {
-    tasks.value = tasks.value.filter(
-      t => t.status === 'queued' || t.status === 'running'
-    )
-    logger.info('Cleared completed tasks')
-  }
-
-  // Media Gallery
-  const mediaItems = ref<MediaItem[]>([])
-
-  const captureScreenshot = async (url: string, pageTitle?: string): Promise<MediaItem> => {
+  async function launchSession(url?: string): Promise<BrowserSession | null> {
     isLoading.value = true
     error.value = null
-
     try {
-      const result = await apiClient.post('/api/playwright/screenshot', {
-        url,
-        full_page: true,
-        wait_timeout: 5000
-      })
-
-      const mediaItem: MediaItem = {
-        id: `media-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        type: 'screenshot',
-        url: result.screenshot_url || result.path || '',
-        filename: `screenshot-${Date.now()}.png`,
-        size: result.size || 0,
-        width: result.width,
-        height: result.height,
-        capturedAt: new Date(),
-        pageUrl: url,
-        pageTitle
-      }
-
-      mediaItems.value.unshift(mediaItem)
-      logger.info('Screenshot captured', { mediaItem })
-
-      return mediaItem
-    } catch (err: unknown) {
-      error.value = (err as Error).message || 'Failed to capture screenshot'
-      logger.error('Screenshot capture failed', err)
-      throw err
+      const data = await ApiClient.post('/api/browser/launch', { url: url || 'about:blank' })
+      sessions.value.push(data.session)
+      currentSession.value = data.session
+      logger.debug('Launched browser session:', data.session)
+      return data.session
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to launch session'
+      logger.error('Failed to launch session:', err)
+      error.value = message
+      return null
     } finally {
       isLoading.value = false
     }
   }
 
-  const deleteMediaItem = (mediaId: string) => {
-    mediaItems.value = mediaItems.value.filter(m => m.id !== mediaId)
-    logger.info(`Media item deleted: ${mediaId}`)
-  }
-
-  const clearMediaGallery = () => {
-    mediaItems.value = []
-    logger.info('Media gallery cleared')
-  }
-
-  // Automation Recording
-  const recordings = ref<AutomationRecording[]>([])
-  const currentRecording = ref<AutomationRecording | null>(null)
-  const isRecording = ref(false)
-
-  const startRecording = (name: string, description?: string) => {
-    currentRecording.value = {
-      id: `rec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name,
-      description,
-      actions: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      duration: 0
-    }
-    isRecording.value = true
-    logger.info('Started recording', { name })
-  }
-
-  const stopRecording = (): AutomationRecording | null => {
-    if (currentRecording.value) {
-      const recording = { ...currentRecording.value }
-      recordings.value.unshift(recording)
-      currentRecording.value = null
-      isRecording.value = false
-      logger.info('Stopped recording', { id: recording.id })
-      return recording
-    }
-    return null
-  }
-
-  const addRecordingAction = (
-    type: string,
-    description: string,
-    data: Record<string, unknown> = {}
-  ) => {
-    if (currentRecording.value) {
-      const action = {
-        id: `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        type,
-        description,
-        timestamp: Date.now(),
-        ...data
+  async function closeSession(sessionId: string): Promise<boolean> {
+    isLoading.value = true
+    error.value = null
+    try {
+      await ApiClient.post('/api/browser/close', { session_id: sessionId })
+      sessions.value = sessions.value.filter(s => s.id !== sessionId)
+      if (currentSession.value?.id === sessionId) {
+        currentSession.value = null
       }
-
-      currentRecording.value.actions.push(action)
-      currentRecording.value.updatedAt = new Date()
-      currentRecording.value.duration = Date.now() - currentRecording.value.createdAt.getTime()
-
-      logger.debug('Action recorded', { action })
+      logger.debug('Closed session:', sessionId)
+      return true
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to close session'
+      logger.error('Failed to close session:', err)
+      error.value = message
+      return false
+    } finally {
+      isLoading.value = false
     }
   }
 
-  const playbackRecording = async (recordingId: string) => {
-    const recording = recordings.value.find(r => r.id === recordingId)
-    if (!recording) {
-      throw new Error(`Recording not found: ${recordingId}`)
-    }
-
-    logger.info('Playing back recording', { id: recordingId })
-
-    const task = await createTask(
-      'script',
-      `Playback: ${recording.name}`,
-      { actions: recording.actions },
-      `Playing back recorded automation`
-    )
-
-    return task
-  }
-
-  const deleteRecording = (recordingId: string) => {
-    recordings.value = recordings.value.filter(r => r.id !== recordingId)
-    logger.info(`Recording deleted: ${recordingId}`)
-  }
-
-  // Browser Session Management
-  const sessions = ref<BrowserSession[]>([])
-
-  const createSession = (name: string, url: string, persistent: boolean = false): BrowserSession => {
-    const session: BrowserSession = {
-      id: `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      name,
-      url,
-      status: 'active',
-      createdAt: new Date(),
-      lastActivityAt: new Date(),
-      persistent
-    }
-
-    sessions.value.push(session)
-    logger.info('Session created', { id: session.id, name })
-
-    return session
-  }
-
-  const closeSession = (sessionId: string) => {
-    const session = sessions.value.find(s => s.id === sessionId)
-    if (session) {
-      session.status = 'closed'
-      logger.info(`Session closed: ${sessionId}`)
-    }
-  }
-
-  const deleteSession = (sessionId: string) => {
-    sessions.value = sessions.value.filter(s => s.id !== sessionId)
-    logger.info(`Session deleted: ${sessionId}`)
-  }
-
-  const updateSessionActivity = (sessionId: string) => {
-    const session = sessions.value.find(s => s.id === sessionId)
-    if (session) {
-      session.lastActivityAt = new Date()
-      session.status = 'active'
-    }
-  }
-
-  // Playwright Service Status
-  const checkPlaywrightStatus = async () => {
+  async function fetchSessions(): Promise<void> {
     try {
-      const status = await apiClient.get('/api/playwright/status')
-      logger.info('Playwright status', status)
-      return status
-    } catch (err: unknown) {
-      logger.error('Failed to check Playwright status', err)
-      throw err
+      const data = await ApiClient.get('/api/browser/sessions')
+      sessions.value = data.sessions || []
+      logger.debug('Fetched sessions:', sessions.value.length)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch sessions'
+      logger.error('Failed to fetch sessions:', err)
+      error.value = message
     }
   }
 
-  const checkPlaywrightHealth = async () => {
+  async function getSession(sessionId: string): Promise<BrowserSession | null> {
     try {
-      const health = await apiClient.get('/api/playwright/health')
-      return health
-    } catch (err: unknown) {
-      logger.error('Playwright health check failed', err)
-      throw err
+      const data = await ApiClient.get(`/api/browser/session/${sessionId}`)
+      currentSession.value = data
+      logger.debug('Fetched session details:', data)
+      return data
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch session'
+      logger.error('Failed to fetch session:', err)
+      error.value = message
+      return null
     }
   }
+
+  async function navigate(sessionId: string, url: string): Promise<boolean> {
+    isLoading.value = true
+    error.value = null
+    try {
+      await ApiClient.post('/api/browser/navigate', { session_id: sessionId, url })
+      logger.debug('Navigated to:', url)
+      await fetchSessions()
+      return true
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to navigate'
+      logger.error('Failed to navigate:', err)
+      error.value = message
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function click(sessionId: string, selector: string): Promise<boolean> {
+    isLoading.value = true
+    error.value = null
+    try {
+      await ApiClient.post('/api/browser/click', { session_id: sessionId, selector })
+      logger.debug('Clicked element:', selector)
+      return true
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to click'
+      logger.error('Failed to click:', err)
+      error.value = message
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function type(sessionId: string, selector: string, text: string): Promise<boolean> {
+    isLoading.value = true
+    error.value = null
+    try {
+      await ApiClient.post('/api/browser/type', { session_id: sessionId, selector, text })
+      logger.debug('Typed text into:', selector)
+      return true
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to type'
+      logger.error('Failed to type:', err)
+      error.value = message
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function takeScreenshot(sessionId: string): Promise<ScreenshotResult | null> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const data = await ApiClient.post('/api/browser/screenshot', { session_id: sessionId })
+      screenshots.value.unshift(data)
+      logger.debug('Captured screenshot')
+      return data
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to take screenshot'
+      logger.error('Failed to take screenshot:', err)
+      error.value = message
+      return null
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function executeScript(sessionId: string, script: string): Promise<unknown> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const data = await ApiClient.post('/api/browser/execute', { session_id: sessionId, script })
+      logger.debug('Executed script, result:', data.result)
+      return data.result
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to execute script'
+      logger.error('Failed to execute script:', err)
+      error.value = message
+      return null
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function runAutomationScript(script: string): Promise<unknown> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const data = await ApiClient.post('/api/browser/automation/run', { script })
+      logger.debug('Automation script completed:', data)
+      return data.result
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to run automation'
+      logger.error('Failed to run automation:', err)
+      error.value = message
+      return null
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function deleteSession(sessionId: string): Promise<boolean> {
+    isLoading.value = true
+    error.value = null
+    try {
+      await ApiClient.delete(`/api/browser/session/${sessionId}`)
+      sessions.value = sessions.value.filter(s => s.id !== sessionId)
+      logger.debug('Deleted session:', sessionId)
+      return true
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete session'
+      logger.error('Failed to delete session:', err)
+      error.value = message
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  // ===== Polling Methods =====
+
+  function startPolling(): void {
+    if (pollingInterval) return
+    logger.debug(`Starting polling with interval: ${pollInterval}ms`)
+    pollingInterval = setInterval(() => {
+      fetchWorkerStatus()
+      fetchSessions()
+    }, pollInterval)
+  }
+
+  function stopPolling(): void {
+    if (pollingInterval) {
+      clearInterval(pollingInterval)
+      pollingInterval = null
+      logger.debug('Polling stopped')
+    }
+  }
+
+  // ===== Lifecycle =====
+
+  onMounted(() => {
+    if (autoFetch) {
+      Promise.all([fetchWorkerStatus(), fetchSessions()])
+    }
+    if (pollInterval > 0) {
+      startPolling()
+    }
+  })
+
+  onUnmounted(() => {
+    stopPolling()
+  })
 
   return {
     // State
+    workerStatus,
+    sessions,
+    currentSession,
+    screenshots,
+    scripts,
     isLoading,
     error,
-    tasks,
-    mediaItems,
-    recordings,
-    currentRecording,
-    isRecording,
-    sessions,
 
-    // Task Management
-    createTask,
-    cancelTask,
-    getTaskById,
-    clearCompletedTasks,
-
-    // Media Gallery
-    captureScreenshot,
-    deleteMediaItem,
-    clearMediaGallery,
-
-    // Recording
-    startRecording,
-    stopRecording,
-    addRecordingAction,
-    playbackRecording,
-    deleteRecording,
-
-    // Session Management
-    createSession,
+    // Methods
+    fetchWorkerStatus,
+    launchSession,
     closeSession,
+    fetchSessions,
+    getSession,
+    navigate,
+    click,
+    type,
+    takeScreenshot,
+    executeScript,
+    runAutomationScript,
     deleteSession,
-    updateSessionActivity,
-
-    // Service Status
-    checkPlaywrightStatus,
-    checkPlaywrightHealth
+    startPolling,
+    stopPolling,
   }
 }
+
+export default useBrowserAutomation

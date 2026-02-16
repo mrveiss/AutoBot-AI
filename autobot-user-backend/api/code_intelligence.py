@@ -1684,3 +1684,312 @@ async def get_performance_report(
             status_code=500,
             detail=f"Report generation failed: {str(e)}",
         )
+
+
+# Issue #243: Code Evolution Mining Endpoints
+
+from backend.code_intelligence.code_evolution_miner import CodeEvolutionMiner
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="analyze_evolution",
+    error_code_prefix="EVOLUTION",
+)
+@router.post("/evolution/analyze")
+async def analyze_code_evolution(
+    path: str = Query(..., description="Repository path to analyze"),
+    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Analyze code evolution over git history.
+
+    Issue #243: Code Evolution Mining from Git History
+    Issue #744: Requires admin authentication.
+
+    Analyzes git history to identify emerging patterns, declining patterns,
+    and refactoring events. Returns comprehensive evolution report.
+
+    Args:
+        path: Repository path to analyze
+        start_date: Optional start date for analysis period (ISO format)
+        end_date: Optional end date for analysis period (ISO format)
+
+    Returns:
+        Evolution report with emerging/declining patterns and refactorings
+    """
+    await _validate_path_exists(path)
+
+    try:
+        # Parse dates if provided
+        start = datetime.fromisoformat(start_date) if start_date else None
+        end = datetime.fromisoformat(end_date) if end_date else None
+
+        # Analyze evolution
+        miner = CodeEvolutionMiner(path)
+        report = await asyncio.to_thread(miner.analyze_evolution, start, end)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "timestamp": datetime.now().isoformat(),
+                "report": report,
+            },
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        logger.error("Evolution analysis failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Evolution analysis failed: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_pattern_evolution",
+    error_code_prefix="EVOLUTION",
+)
+@router.get("/evolution/patterns")
+async def get_pattern_evolution(
+    path: str = Query(..., description="Repository path to analyze"),
+    pattern_type: Optional[str] = Query(None, description="Filter by pattern type"),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Get pattern evolution metrics.
+
+    Issue #243: Code Evolution Mining from Git History
+    Issue #744: Requires admin authentication.
+
+    Returns metrics about how patterns evolve over time including
+    adoption rates, trends (emerging/stable/declining), and first/last seen dates.
+
+    Args:
+        path: Repository path to analyze
+        pattern_type: Optional filter for specific pattern type
+
+    Returns:
+        Pattern evolution metrics
+    """
+    await _validate_path_exists(path)
+
+    try:
+        miner = CodeEvolutionMiner(path)
+        # Run basic analysis first
+        await asyncio.to_thread(miner.analyze_evolution)
+
+        # Get pattern metrics
+        metrics = await asyncio.to_thread(miner.get_pattern_metrics)
+
+        # Filter if pattern_type specified
+        if pattern_type and pattern_type in metrics:
+            metrics = {pattern_type: metrics[pattern_type]}
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "timestamp": datetime.now().isoformat(),
+                "path": path,
+                "pattern_metrics": metrics,
+            },
+        )
+
+    except Exception as e:
+        logger.error("Pattern evolution retrieval failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Pattern evolution failed: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="detect_refactorings",
+    error_code_prefix="EVOLUTION",
+)
+@router.get("/evolution/refactorings")
+async def detect_refactorings(
+    path: str = Query(..., description="Repository path to analyze"),
+    limit: int = Query(
+        default=20, ge=1, le=100, description="Maximum results to return"
+    ),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Detect refactoring events in git history.
+
+    Issue #243: Code Evolution Mining from Git History
+    Issue #744: Requires admin authentication.
+
+    Identifies commits that likely contain refactorings based on commit
+    messages and file change patterns.
+
+    Args:
+        path: Repository path to analyze
+        limit: Maximum number of refactorings to return
+
+    Returns:
+        List of detected refactoring commits
+    """
+    await _validate_path_exists(path)
+
+    try:
+        miner = CodeEvolutionMiner(path)
+        refactorings = await asyncio.to_thread(
+            miner.refactoring_detector.detect_refactorings
+        )
+
+        # Limit results
+        refactorings = refactorings[:limit]
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "timestamp": datetime.now().isoformat(),
+                "path": path,
+                "refactorings": refactorings,
+                "total": len(refactorings),
+            },
+        )
+
+    except Exception as e:
+        logger.error("Refactoring detection failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Refactoring detection failed: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_timeline",
+    error_code_prefix="EVOLUTION",
+)
+@router.get("/evolution/timeline")
+async def get_evolution_timeline(
+    path: str = Query(..., description="Repository path to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Generate evolution timeline visualization data.
+
+    Issue #243: Code Evolution Mining from Git History
+    Issue #744: Requires admin authentication.
+
+    Returns timeline data showing pattern counts over time, suitable for
+    visualization in charts/graphs.
+
+    Args:
+        path: Repository path to analyze
+
+    Returns:
+        Timeline data with monthly pattern counts
+    """
+    await _validate_path_exists(path)
+
+    try:
+        miner = CodeEvolutionMiner(path)
+        # Run basic analysis first
+        await asyncio.to_thread(miner.analyze_evolution)
+
+        # Generate timeline
+        timeline_data = await asyncio.to_thread(miner.generate_timeline_data)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "timestamp": datetime.now().isoformat(),
+                "path": path,
+                "timeline": timeline_data["timeline"],
+            },
+        )
+
+    except Exception as e:
+        logger.error("Timeline generation failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Timeline generation failed: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_evolution_report",
+    error_code_prefix="EVOLUTION",
+)
+@router.get("/evolution/report")
+async def get_full_evolution_report(
+    path: str = Query(..., description="Repository path to analyze"),
+    start_date: Optional[str] = Query(None, description="Start date (ISO format)"),
+    end_date: Optional[str] = Query(None, description="End date (ISO format)"),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Generate comprehensive code evolution report.
+
+    Issue #243: Code Evolution Mining from Git History
+    Issue #744: Requires admin authentication.
+
+    Combines evolution analysis, pattern metrics, refactorings, and timeline
+    into a single comprehensive report.
+
+    Args:
+        path: Repository path to analyze
+        start_date: Optional start date for analysis period
+        end_date: Optional end date for analysis period
+
+    Returns:
+        Comprehensive evolution report
+    """
+    await _validate_path_exists(path)
+
+    try:
+        # Parse dates if provided
+        start = datetime.fromisoformat(start_date) if start_date else None
+        end = datetime.fromisoformat(end_date) if end_date else None
+
+        # Analyze evolution
+        miner = CodeEvolutionMiner(path)
+        evolution_report = await asyncio.to_thread(miner.analyze_evolution, start, end)
+        pattern_metrics = await asyncio.to_thread(miner.get_pattern_metrics)
+        timeline_data = await asyncio.to_thread(miner.generate_timeline_data)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "timestamp": datetime.now().isoformat(),
+                "path": path,
+                "evolution": evolution_report,
+                "pattern_metrics": pattern_metrics,
+                "timeline": timeline_data["timeline"],
+                "summary": {
+                    "emerging_patterns_count": len(
+                        evolution_report["emerging_patterns"]
+                    ),
+                    "declining_patterns_count": len(
+                        evolution_report["declining_patterns"]
+                    ),
+                    "refactorings_count": len(evolution_report["refactorings"]),
+                    "commits_analyzed": evolution_report["commits_analyzed"],
+                },
+            },
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        logger.error("Evolution report generation failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Evolution report failed: {str(e)}",
+        )
