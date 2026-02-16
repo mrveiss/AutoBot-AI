@@ -58,6 +58,17 @@ _VALID_SEARCH_MODES = ("semantic", "keyword", "hybrid", "auto")
 _VALID_SORT_OPTIONS = ("newest", "oldest", "longest")
 
 
+# Issue #685: Access level filtering
+class AccessLevelFilter(str, Enum):
+    """Filter enum for access levels in knowledge search."""
+
+    ALL = "all"  # No filter (default)
+    AUTOBOT = "autobot"  # Platform documentation only
+    GENERAL = "general"  # Public knowledge only
+    SYSTEM = "system"  # System capability docs only
+    USER = "user"  # User-created content only
+
+
 # ===== BASIC VALIDATION MODELS =====
 
 
@@ -96,7 +107,7 @@ class SearchRequest(BaseModel):
 
 
 class EnhancedSearchRequest(BaseModel):
-    """Enhanced search request with tag filtering and hybrid mode (Issue #78)"""
+    """Enhanced search request with tag filtering and hybrid mode (Issue #78, #685)"""
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query")
     limit: int = Field(
@@ -132,6 +143,11 @@ class EnhancedSearchRequest(BaseModel):
         ge=0.0,
         le=1.0,
         description="Minimum similarity score threshold (0.0-1.0)",
+    )
+    # Issue #685: Access level filtering
+    access_level: str = Field(
+        default=AccessLevelFilter.ALL.value,
+        description="Filter by access level: all, autobot, general, system, user",
     )
 
     @validator("category")
@@ -400,7 +416,7 @@ class PaginationRequest(BaseModel):
 
 
 class AddTextRequest(BaseModel):
-    """Request model for adding text to knowledge base (Issue #688: enhanced)."""
+    """Request model for adding text to knowledge base (Issue #688: enhanced, #685: access levels)."""
 
     text: str = Field(..., min_length=1, max_length=1000000)
     metadata: Optional[Metadata] = Field(default=None)
@@ -409,7 +425,7 @@ class AddTextRequest(BaseModel):
     owner_id: Optional[str] = Field(default=None, max_length=100)
     visibility: str = Field(
         default="private",
-        description="Visibility level: private, shared, public",
+        description="Visibility level: private, shared, group, organization, system, public",
     )
     source_type: str = Field(
         default="manual",
@@ -419,6 +435,21 @@ class AddTextRequest(BaseModel):
         default=None,
         max_items=50,
         description="List of user IDs to share with",
+    )
+    # Issue #685: Hierarchical access fields
+    access_level: str = Field(
+        default="user",
+        description="Access level: autobot, general, system, user",
+    )
+    organization_id: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        description="Organization ID for org-level knowledge",
+    )
+    group_ids: Optional[List[str]] = Field(
+        default=None,
+        max_items=20,
+        description="List of group/team IDs for group-level knowledge",
     )
 
     @validator("metadata")
@@ -430,10 +461,27 @@ class AddTextRequest(BaseModel):
 
     @validator("visibility")
     def validate_visibility(cls, v):
-        """Validate visibility level."""
-        valid_levels = {"private", "shared", "public"}
+        """Validate visibility level (Issue #685: expanded)."""
+        valid_levels = {
+            "private",
+            "shared",
+            "group",
+            "organization",
+            "system",
+            "public",
+        }
         if v not in valid_levels:
             raise ValueError(f"Invalid visibility: {v}. Must be one of: {valid_levels}")
+        return v
+
+    @validator("access_level")
+    def validate_access_level(cls, v):
+        """Validate access level (Issue #685)."""
+        valid_levels = {"autobot", "general", "system", "user"}
+        if v not in valid_levels:
+            raise ValueError(
+                f"Invalid access_level: {v}. Must be one of: {valid_levels}"
+            )
         return v
 
     @validator("source_type")

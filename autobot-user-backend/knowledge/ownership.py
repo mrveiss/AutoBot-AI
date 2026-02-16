@@ -19,6 +19,18 @@ from typing import Dict, List, Optional, Set
 logger = logging.getLogger(__name__)
 
 
+class AccessLevel(str, Enum):
+    """Access level types for knowledge classification.
+
+    Issue #685: Hierarchical knowledge categorization.
+    """
+
+    AUTOBOT = "autobot"  # Platform documentation (available to all authenticated users)
+    GENERAL = "general"  # Public knowledge (no auth required, org-wide shared)
+    SYSTEM = "system"  # System capability documentation (scoped by visibility)
+    USER = "user"  # User-created content (scoped by visibility, default)
+
+
 class VisibilityLevel(str, Enum):
     """Visibility levels for knowledge facts.
 
@@ -70,10 +82,12 @@ class KnowledgeOwnership:
         shared_with: Optional[List[str]] = None,
         organization_id: Optional[str] = None,
         group_ids: Optional[List[str]] = None,
+        access_level: str = AccessLevel.USER,
     ) -> None:
         """Set ownership metadata and update Redis indexes.
 
         Issue #679: Extended with organization and group support.
+        Issue #685: Added access_level for hierarchical knowledge types.
 
         Args:
             fact_id: Fact ID
@@ -83,6 +97,7 @@ class KnowledgeOwnership:
             shared_with: Optional list of user IDs to share with
             organization_id: Organization ID for org-level knowledge
             group_ids: List of group/team IDs for group-level knowledge
+            access_level: Access level (autobot/general/system/user)
         """
         shared_with = shared_with or []
         group_ids = group_ids or []
@@ -139,10 +154,12 @@ class KnowledgeOwnership:
         fact_metadata: Dict,
         user_org_id: Optional[str] = None,
         user_group_ids: Optional[List[str]] = None,
+        is_authenticated: bool = True,
     ) -> bool:
         """Check if user has access to a fact.
 
         Issue #679: Extended with hierarchical access control.
+        Issue #685: Added access_level support for knowledge types.
 
         Args:
             fact_id: Fact ID to check
@@ -150,6 +167,7 @@ class KnowledgeOwnership:
             fact_metadata: Fact metadata dict
             user_org_id: User's organization ID
             user_group_ids: List of group/team IDs user belongs to
+            is_authenticated: Whether user is authenticated
 
         Returns:
             True if user has access, False otherwise
@@ -159,17 +177,27 @@ class KnowledgeOwnership:
         # Extract ownership metadata
         owner_id = fact_metadata.get("owner_id")
         visibility = fact_metadata.get("visibility", VisibilityLevel.PRIVATE)
+        access_level = fact_metadata.get("access_level", AccessLevel.USER)
         shared_with = fact_metadata.get("shared_with", [])
         fact_org_id = fact_metadata.get("organization_id")
         fact_group_ids = fact_metadata.get("group_ids", [])
+
+        # Issue #685: Access level-based checks
+        # GENERAL knowledge: Public, no auth required
+        if access_level == AccessLevel.GENERAL:
+            return True
+
+        # AUTOBOT knowledge: Platform docs, requires authentication
+        if access_level == AccessLevel.AUTOBOT and is_authenticated:
+            return True
 
         # Owner always has access
         if owner_id and owner_id == user_id:
             return True
 
-        # System-level facts are accessible to all
+        # System-level facts are accessible to all authenticated users
         if visibility in (VisibilityLevel.SYSTEM, VisibilityLevel.PUBLIC):
-            return True
+            return is_authenticated
 
         # Organization-level facts accessible to org members
         if (

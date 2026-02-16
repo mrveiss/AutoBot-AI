@@ -21,11 +21,16 @@ from backend.user_management.models.base import Base, TimestampMixin
 
 
 class SecretScope(str, Enum):
-    """Secret visibility scope."""
+    """Secret visibility scope.
 
-    USER = "user"  # Accessible across all user sessions
+    Issue #685: Aligned with knowledge VisibilityLevel for consistency.
+    """
+
+    USER = "user"  # Only accessible by owner (private)
     SESSION = "session"  # Only accessible in specific session
-    SHARED = "shared"  # Explicitly shared with other users
+    SHARED = "shared"  # Explicitly shared with specific users
+    GROUP = "group"  # Accessible to team members
+    ORGANIZATION = "organization"  # Accessible to all org members
 
 
 class SecretType(str, Enum):
@@ -69,12 +74,19 @@ class Secret(Base, TimestampMixin):
         default=uuid.uuid4,
     )
 
-    # Ownership (Issue #870)
+    # Ownership (Issue #870, #685)
     owner_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
         index=True,
         comment="User ID who owns this secret",
+    )
+
+    org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        index=True,
+        comment="Organization ID for org-level secrets (Issue #685)",
     )
 
     # Secret identity
@@ -90,13 +102,20 @@ class Secret(Base, TimestampMixin):
         index=True,
     )
 
-    # Scoping (Issue #870)
+    # Scoping (Issue #870, #685)
     scope: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
         default=SecretScope.USER.value,
         index=True,
-        comment="Visibility scope: user, session, or shared",
+        comment="Visibility scope: user, session, shared, group, or organization",
+    )
+
+    team_ids: Mapped[dict] = mapped_column(
+        JSONB,
+        default=list,
+        nullable=False,
+        comment="Array of team IDs for group-scoped secrets (Issue #685)",
     )
 
     session_id: Mapped[Optional[str]] = mapped_column(
@@ -164,18 +183,28 @@ class Secret(Base, TimestampMixin):
         return datetime.utcnow() > self.expires_at
 
     def is_accessible_by(
-        self, user_id: uuid.UUID, session_id: Optional[str] = None
+        self,
+        user_id: uuid.UUID,
+        session_id: Optional[str] = None,
+        user_org_id: Optional[uuid.UUID] = None,
+        user_team_ids: Optional[list] = None,
     ) -> bool:
         """
         Check if user can access this secret.
 
+        Issue #685: Added org and team-based access control.
+
         Args:
             user_id: User requesting access
             session_id: Session context (required for session-scoped secrets)
+            user_org_id: User's organization ID
+            user_team_ids: List of team IDs user belongs to
 
         Returns:
             True if user has access, False otherwise
         """
+        user_team_ids = user_team_ids or []
+
         # Owner always has access
         if self.owner_id == user_id:
             return True
@@ -183,6 +212,15 @@ class Secret(Base, TimestampMixin):
         # Session-scoped requires matching session
         if self.scope == SecretScope.SESSION.value:
             return self.session_id == session_id
+
+        # Organization-scoped: accessible to all org members
+        if self.scope == SecretScope.ORGANIZATION.value:
+            return user_org_id and self.org_id == user_org_id
+
+        # Group-scoped: accessible to team members
+        if self.scope == SecretScope.GROUP.value:
+            secret_teams = self.team_ids if isinstance(self.team_ids, list) else []
+            return any(str(team_id) in secret_teams for team_id in user_team_ids)
 
         # Shared secrets check shared_with list
         if self.scope == SecretScope.SHARED.value:
