@@ -1,0 +1,196 @@
+---
+# Clean Restart Backend Service
+# Issue #893: Performs clean shutdown and restart with verification
+#
+# Usage from SLM server:
+#   ansible-playbook playbooks/fix-backend-clean-restart.yml
+
+- name: Clean Restart Backend Service
+  hosts: autobot-backend
+  become: yes
+  gather_facts: yes
+
+  vars:
+    backend_code_dir: /opt/autobot/autobot-user-backend
+    backend_log_dir: /var/log/autobot
+
+  tasks:
+    # ============================================================
+    # Phase 1: Clean Shutdown
+    # ============================================================
+
+    - name: Stop backend service
+      systemd:
+        name: autobot-backend
+        state: stopped
+
+    - name: Wait for graceful shutdown
+      pause:
+        seconds: 5
+
+    - name: Kill any remaining uvicorn processes
+      shell: pkill -9 uvicorn || true
+      register: kill_result
+
+    - name: Wait for processes to terminate
+      pause:
+        seconds: 2
+
+    - name: Verify no uvicorn processes remain
+      shell: pgrep -f uvicorn || echo "No processes found"
+      register: process_check
+
+    - name: Display process check
+      debug:
+        msg: "Remaining processes: {{ process_check.stdout }}"
+
+    # ============================================================
+    # Phase 2: Clean Up Temporary Files
+    # ============================================================
+
+    - name: Remove stale PID files if present
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /var/run/autobot-backend.pid
+        - /tmp/uvicorn.pid
+      ignore_errors: yes
+
+    - name: Clear Python bytecode cache
+      shell: |
+        find {{ backend_code_dir }} -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+        find {{ backend_code_dir }} -type f -name "*.pyc" -delete 2>/dev/null || true
+      register: cache_clear
+
+    - name: Rotate log files if too large
+      shell: |
+        if [ -f {{ backend_log_dir }}/backend.log ] && [ $(stat -f%z {{ backend_log_dir }}/backend.log 2>/dev/null || stat -c%s {{ backend_log_dir }}/backend.log) -gt 104857600 ]; then
+          mv {{ backend_log_dir }}/backend.log {{ backend_log_dir }}/backend.log.old
+        fi
+        if [ -f {{ backend_log_dir }}/backend-error.log ] && [ $(stat -f%z {{ backend_log_dir }}/backend-error.log 2>/dev/null || stat -c%s {{ backend_log_dir }}/backend-error.log) -gt 104857600 ]; then
+          mv {{ backend_log_dir }}/backend-error.log {{ backend_log_dir }}/backend-error.log.old
+        fi
+      ignore_errors: yes
+
+    # ============================================================
+    # Phase 3: Verify Configuration
+    # ============================================================
+
+    - name: Verify systemd service file exists
+      stat:
+        path: /etc/systemd/system/autobot-backend.service
+      register: service_file
+
+    - name: Fail if service file missing
+      fail:
+        msg: "Service file not found! Deploy backend role first."
+      when: not service_file.stat.exists
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Display current service configuration
+      command: cat /etc/systemd/system/autobot-backend.service
+      register: service_config
+
+    - name: Show service config
+      debug:
+        msg: "{{ service_config.stdout_lines }}"
+
+    # ============================================================
+    # Phase 4: Start Service with Monitoring
+    # ============================================================
+
+    - name: Start backend service
+      systemd:
+        name: autobot-backend
+        state: started
+        enabled: yes
+
+    - name: Wait 10 seconds for initialization
+      pause:
+        seconds: 10
+        prompt: "Waiting for backend to initialize..."
+
+    - name: Check service status
+      command: systemctl status autobot-backend --no-pager -l
+      register: service_status
+      failed_when: false
+
+    - name: Get recent journal logs
+      command: journalctl -u autobot-backend -n 50 --no-pager
+      register: recent_logs
+
+    - name: Check if port 8443 is listening
+      shell: ss -tlnp | grep 8443 || echo "Port not listening"
+      register: port_status
+
+    - name: Count backend processes
+      shell: ps aux | grep -E "(uvicorn|autobot)" | grep -v grep | wc -l
+      register: process_count
+
+    # ============================================================
+    # Phase 5: Health Check
+    # ============================================================
+
+    - name: Wait additional 5 seconds before health check
+      pause:
+        seconds: 5
+
+    - name: Test health endpoint
+      uri:
+        url: http://localhost:8443/api/health
+        timeout: 5
+      register: health_check
+      failed_when: false
+      ignore_errors: yes
+
+    # ============================================================
+    # Phase 6: Report Results
+    # ============================================================
+
+    - name: Generate restart report
+      set_fact:
+        restart_report: |
+          ====================================================
+          Backend Clean Restart Report
+          ====================================================
+
+          Service Status: {{ 'RUNNING' if 'active (running)' in service_status.stdout else 'FAILED' }}
+          Port 8443: {{ 'LISTENING' if '8443' in port_status.stdout else 'NOT LISTENING' }}
+          Backend Processes: {{ process_count.stdout }}
+          Health Check: {{ 'PASSED' if health_check.status == 200 else 'FAILED' }}
+
+          === Recent Logs (last 20 lines) ===
+          {{ recent_logs.stdout_lines[-20:] | join('\n') }}
+
+          ====================================================
+
+    - name: Display restart report
+      debug:
+        msg: "{{ restart_report.split('\n') }}"
+
+    - name: Fail if service not healthy
+      fail:
+        msg: |
+          ❌ Backend failed to start healthy!
+
+          Check diagnostics:
+          1. journalctl -u autobot-backend -n 100 --no-pager
+          2. tail -50 /var/log/autobot/backend-error.log
+          3. Run: ansible-playbook diagnose-backend-crash.yml
+      when:
+        - "'active (running)' not in service_status.stdout or health_check.status != 200"
+
+    - name: Success message
+      debug:
+        msg: |
+          ✅ Backend restarted successfully!
+
+          Service is healthy and responding.
+          Monitor: journalctl -u autobot-backend -f
+      when:
+        - "'active (running)' in service_status.stdout"
+        - "health_check.status == 200"

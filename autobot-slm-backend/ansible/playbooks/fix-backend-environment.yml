@@ -1,0 +1,187 @@
+---
+# Fix Backend Environment Configuration
+# Issue #893: Corrects PYTHONPATH, .env paths, and conda environment
+#
+# Usage from SLM server:
+#   ansible-playbook playbooks/fix-backend-environment.yml
+
+- name: Fix Backend Environment Configuration
+  hosts: autobot-backend
+  become: yes
+  gather_facts: yes
+
+  vars:
+    backend_install_dir: /opt/autobot
+    backend_code_dir: /opt/autobot/autobot-user-backend
+    backend_log_dir: /var/log/autobot
+    backend_user: autobot
+    backend_group: autobot
+    backend_host: "0.0.0.0"
+    backend_port: 8443
+    backend_workers: 4
+
+  tasks:
+    # ============================================================
+    # Phase 1: Verify Conda Environment
+    # ============================================================
+
+    - name: Check if conda environment exists
+      stat:
+        path: /home/autobot/miniconda3/envs/autobot-backend
+      register: conda_env
+
+    - name: Verify uvicorn in conda environment
+      stat:
+        path: /home/autobot/miniconda3/envs/autobot-backend/bin/uvicorn
+      register: uvicorn_binary
+      when: conda_env.stat.exists
+
+    - name: Fail if conda environment missing
+      fail:
+        msg: "Conda environment autobot-backend not found! Run backend role deployment first."
+      when: not conda_env.stat.exists or not uvicorn_binary.stat.exists
+
+    # ============================================================
+    # Phase 2: Verify .env File Location
+    # ============================================================
+
+    - name: Check for .env in backend_install_dir
+      stat:
+        path: "{{ backend_install_dir }}/.env"
+      register: env_install_dir
+
+    - name: Check for .env in backend_code_dir
+      stat:
+        path: "{{ backend_code_dir }}/.env"
+      register: env_code_dir
+
+    - name: Display .env location findings
+      debug:
+        msg: |
+          .env in {{ backend_install_dir }}: {{ env_install_dir.stat.exists }}
+          .env in {{ backend_code_dir }}: {{ env_code_dir.stat.exists }}
+
+    - name: Warn if .env in wrong location
+      debug:
+        msg: "⚠️  WARNING: .env found in {{ backend_code_dir }} but service expects {{ backend_install_dir }}/.env"
+      when: env_code_dir.stat.exists and not env_install_dir.stat.exists
+
+    # ============================================================
+    # Phase 3: Update systemd Service Configuration
+    # ============================================================
+
+    - name: Deploy corrected systemd service file
+      template:
+        src: ../roles/backend/templates/autobot-backend.service.j2
+        dest: /etc/systemd/system/autobot-backend.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: reload systemd
+
+    - name: Ensure systemd service has correct configuration
+      lineinfile:
+        path: /etc/systemd/system/autobot-backend.service
+        regexp: '^EnvironmentFile={{ backend_code_dir }}/.env'
+        line: 'EnvironmentFile={{ backend_install_dir }}/.env'
+        state: present
+      notify: reload systemd
+
+    - name: Verify PYTHONPATH includes both directories
+      lineinfile:
+        path: /etc/systemd/system/autobot-backend.service
+        regexp: '^Environment="PYTHONPATH='
+        line: 'Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot-shared"'
+        state: present
+      notify: reload systemd
+
+    # ============================================================
+    # Phase 4: Verify Backend Directory Structure
+    # ============================================================
+
+    - name: Ensure main.py exists
+      stat:
+        path: "{{ backend_code_dir }}/main.py"
+      register: main_py
+
+    - name: Fail if main.py missing
+      fail:
+        msg: "main.py not found at {{ backend_code_dir }}/main.py"
+      when: not main_py.stat.exists
+
+    - name: Ensure log directory exists
+      file:
+        path: "{{ backend_log_dir }}"
+        state: directory
+        owner: "{{ backend_user }}"
+        group: "{{ backend_group }}"
+        mode: '0755'
+
+    # ============================================================
+    # Phase 5: Test Configuration
+    # ============================================================
+
+    - name: Test Python can import main module
+      shell: |
+        cd {{ backend_code_dir }}
+        export PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot-shared
+        /home/autobot/miniconda3/envs/autobot-backend/bin/python -c "
+        import sys
+        print('PYTHONPATH:', sys.path[:5])
+        try:
+            import main
+            print('✅ SUCCESS: main.py imports correctly')
+        except Exception as e:
+            print('❌ ERROR:', str(e))
+            import traceback
+            traceback.print_exc()
+            exit(1)
+        "
+      become_user: autobot
+      register: import_test
+      failed_when: import_test.rc != 0
+
+    - name: Display import test results
+      debug:
+        msg: "{{ import_test.stdout_lines }}"
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
+  post_tasks:
+    - name: Restart backend service
+      systemd:
+        name: autobot-backend
+        state: restarted
+
+    - name: Wait for service to start
+      pause:
+        seconds: 5
+
+    - name: Check service status
+      command: systemctl status autobot-backend --no-pager
+      register: service_status
+      failed_when: false
+
+    - name: Display service status
+      debug:
+        msg: "{{ service_status.stdout_lines }}"
+
+    - name: Display next steps
+      debug:
+        msg: |
+          ====================================================
+          Environment configuration fixed!
+
+          Changes applied:
+          - ✅ .env path: {{ backend_install_dir }}/.env
+          - ✅ PYTHONPATH: {{ backend_install_dir }}:{{ backend_code_dir }}:{{ backend_install_dir }}/autobot-shared
+          - ✅ Conda env: /home/autobot/miniconda3/envs/autobot-backend
+
+          Next steps:
+          1. Monitor: journalctl -u autobot-backend -f
+          2. Test: curl http://localhost:8443/api/health
+          3. If issues persist, check imports: ansible-playbook diagnose-backend-crash.yml
+          ====================================================

@@ -1,0 +1,143 @@
+---
+# Fix Backend Symlink Configuration
+# Issue #893: Addresses symlink-related import issues
+#
+# This playbook handles the Issue #886 vs #891 conflict:
+# - Option 1: Remove symlink (follow #891 approach)
+# - Option 2: Restore symlink (follow #886 approach)
+#
+# Usage from SLM server:
+#   ansible-playbook playbooks/fix-backend-symlink.yml -e "symlink_action=remove"
+#   ansible-playbook playbooks/fix-backend-symlink.yml -e "symlink_action=restore"
+
+- name: Fix Backend Symlink Configuration
+  hosts: autobot-backend
+  become: yes
+  gather_facts: yes
+
+  vars:
+    backend_code_dir: /opt/autobot/autobot-user-backend
+    # symlink_action: remove|restore (must be provided via -e)
+
+  pre_tasks:
+    - name: Validate symlink_action parameter
+      fail:
+        msg: "Please specify symlink_action: -e 'symlink_action=remove' or -e 'symlink_action=restore'"
+      when: symlink_action is not defined or symlink_action not in ['remove', 'restore']
+
+    - name: Stop backend service
+      systemd:
+        name: autobot-backend
+        state: stopped
+
+    - name: Wait for service to stop
+      pause:
+        seconds: 3
+
+  tasks:
+    # ============================================================
+    # Option 1: Remove Symlink (Issue #891 approach)
+    # ============================================================
+
+    - name: Remove backend symlink if action=remove
+      block:
+        - name: Check if backend symlink exists
+          stat:
+            path: "{{ backend_code_dir }}/backend"
+          register: symlink_check
+
+        - name: Remove backend symlink
+          file:
+            path: "{{ backend_code_dir }}/backend"
+            state: absent
+          when: symlink_check.stat.exists
+
+        - name: Verify symlink removed
+          stat:
+            path: "{{ backend_code_dir }}/backend"
+          register: verify_removed
+
+        - name: Confirm removal
+          debug:
+            msg: "✅ Backend symlink removed successfully"
+          when: not verify_removed.stat.exists
+
+      when: symlink_action == 'remove'
+
+    # ============================================================
+    # Option 2: Restore Symlink (Issue #886 approach)
+    # ============================================================
+
+    - name: Restore backend symlink if action=restore
+      block:
+        - name: Remove existing file/symlink if present
+          file:
+            path: "{{ backend_code_dir }}/backend"
+            state: absent
+
+        - name: Create backend symlink pointing to current directory
+          file:
+            src: "."
+            dest: "{{ backend_code_dir }}/backend"
+            state: link
+            owner: autobot
+            group: autobot
+
+        - name: Verify symlink created
+          stat:
+            path: "{{ backend_code_dir }}/backend"
+          register: verify_created
+
+        - name: Confirm creation
+          debug:
+            msg: "✅ Backend symlink restored: {{ backend_code_dir }}/backend -> ."
+          when: verify_created.stat.islnk
+
+        - name: Test import with symlink
+          shell: |
+            cd {{ backend_code_dir }}
+            export PYTHONPATH=/opt/autobot:{{ backend_code_dir }}
+            /home/autobot/miniconda3/envs/autobot-backend/bin/python -c "
+            try:
+                from backend.models.user import User
+                print('SUCCESS: backend.models import works with symlink')
+            except Exception as e:
+                print('ERROR:', str(e))
+                exit(1)
+            "
+          become_user: autobot
+          register: import_test
+          failed_when: import_test.rc != 0
+
+      when: symlink_action == 'restore'
+
+  post_tasks:
+    - name: Start backend service
+      systemd:
+        name: autobot-backend
+        state: started
+
+    - name: Wait for service to start
+      pause:
+        seconds: 5
+
+    - name: Check service status
+      command: systemctl status autobot-backend --no-pager -l
+      register: service_status
+      failed_when: false
+
+    - name: Display service status
+      debug:
+        msg: "{{ service_status.stdout_lines }}"
+
+    - name: Display next steps
+      debug:
+        msg: |
+          ====================================================
+          Symlink fix applied: {{ symlink_action }}
+
+          Next steps:
+          1. Monitor service: journalctl -u autobot-backend -f
+          2. Test health: curl http://localhost:8443/api/health
+          3. If still crashing, check logs: tail -f /var/log/autobot/backend-error.log
+          ====================================================
