@@ -34,22 +34,9 @@ For backward compatibility, the original llm_pattern_analyzer.py module
 still exports all classes directly.
 """
 
-# Types and constants
-from backend.code_intelligence.llm_pattern_analysis.types import (
-    CacheOpportunityType,
-    EXCESSIVE_CONTEXT_PATTERNS,
-    FORMAT_INEFFICIENCY_PATTERNS,
-    HIGH_PRIORITY_LEVELS,
-    OptimizationCategory,
-    OptimizationPriority,
-    PromptIssueType,
-    REDUNDANT_PATTERNS,
-    RETRY_COUNT_PATTERNS,
-    RETRY_LOGIC_PATTERNS,
-    SIMPLE_LLM_MODELS,
-    TEMPLATE_VAR_PATTERNS,
-    UsagePatternType,
-    VALID_BACKOFF_STRATEGIES,
+from backend.code_intelligence.llm_pattern_analysis.calculators import (
+    CostCalculator,
+    TokenTracker,
 )
 
 # Data models
@@ -67,18 +54,34 @@ from backend.code_intelligence.llm_pattern_analysis.data_models import (
 )
 
 # Analyzers and scanners
-from backend.code_intelligence.llm_pattern_analysis.prompt_analyzer import PromptAnalyzer
+from backend.code_intelligence.llm_pattern_analysis.prompt_analyzer import (
+    PromptAnalyzer,
+)
+from backend.code_intelligence.llm_pattern_analysis.recommendation_engine import (
+    RecommendationEngine,
+)
 from backend.code_intelligence.llm_pattern_analysis.scanners import (
     BatchingAnalyzer,
     CacheOpportunityDetector,
     CodePatternScanner,
 )
-from backend.code_intelligence.llm_pattern_analysis.calculators import (
-    CostCalculator,
-    TokenTracker,
-)
-from backend.code_intelligence.llm_pattern_analysis.recommendation_engine import (
-    RecommendationEngine,
+
+# Types and constants
+from backend.code_intelligence.llm_pattern_analysis.types import (
+    EXCESSIVE_CONTEXT_PATTERNS,
+    FORMAT_INEFFICIENCY_PATTERNS,
+    HIGH_PRIORITY_LEVELS,
+    REDUNDANT_PATTERNS,
+    RETRY_COUNT_PATTERNS,
+    RETRY_LOGIC_PATTERNS,
+    SIMPLE_LLM_MODELS,
+    TEMPLATE_VAR_PATTERNS,
+    VALID_BACKOFF_STRATEGIES,
+    CacheOpportunityType,
+    OptimizationCategory,
+    OptimizationPriority,
+    PromptIssueType,
+    UsagePatternType,
 )
 
 # Re-export for convenience

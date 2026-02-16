@@ -221,7 +221,9 @@ class RecommendationEngine:
         """
         recommendations = []
         recommendations.extend(cls._get_caching_recommendations(cache_opportunities))
-        recommendations.extend(cls._get_batching_recommendations(batching_opportunities))
+        recommendations.extend(
+            cls._get_batching_recommendations(batching_opportunities)
+        )
         recommendations.extend(cls._get_retry_recommendations(retry_patterns))
         recommendations.extend(cls._get_token_recommendations(patterns))
         recommendations.extend(

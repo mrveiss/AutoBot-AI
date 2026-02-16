@@ -542,7 +542,7 @@ async def main():
         await optimizer.run_optimization()
         print("\n🚀 LLM Model Optimization completed successfully!")
         print("🔄 Please restart AutoBot services to apply changes:")
-        print("   bash run_autobot.sh --dev --no-build")
+        print("   scripts/start-services.sh start")
 
     except KeyboardInterrupt:
         print("\n⏹️ Optimization cancelled by user")

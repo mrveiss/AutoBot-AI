@@ -10,10 +10,10 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List
 
+from autobot_shared.http_client import get_http_client
 from backend.constants.network_constants import NetworkConstants
 from backend.constants.threshold_constants import TimingConstants
 from backend.utils.agent_command_helpers import run_agent_command
-from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,10 @@ class SecurityScannerAgent:
             target = context.get("target", "")
 
             if not target:
-                return {"status": "error", "message": "No target specified for security scan"}
+                return {
+                    "status": "error",
+                    "message": "No target specified for security scan",
+                }
 
             if not self._validate_target(target):
                 return {
@@ -80,7 +83,10 @@ class SecurityScannerAgent:
             handler = handlers.get(scan_type)
 
             if handler is None:
-                return {"status": "error", "message": f"Unsupported scan type: {scan_type}"}
+                return {
+                    "status": "error",
+                    "message": f"Unsupported scan type: {scan_type}",
+                }
 
             return await handler(target, context)
 
@@ -208,7 +214,9 @@ class SecurityScannerAgent:
             # Basic example using nmap vulnerability scripts
             cmd = ["nmap", "--script", "vuln", "-p-", target]
 
-            result = await run_agent_command(cmd, timeout=TimingConstants.VERY_LONG_TIMEOUT)  # 5 minute timeout
+            result = await run_agent_command(
+                cmd, timeout=TimingConstants.VERY_LONG_TIMEOUT
+            )  # 5 minute timeout
 
             if result["status"] == "success":
                 vulnerabilities = self._parse_vulnerabilities(result["output"])
@@ -304,11 +312,13 @@ class SecurityScannerAgent:
         try:
             async with await http_client.get(f"{target}/robots.txt") as response:
                 if response.status == 200:
-                    findings.append({
-                        "type": "info",
-                        "path": "/robots.txt",
-                        "message": "Robots.txt file found",
-                    })
+                    findings.append(
+                        {
+                            "type": "info",
+                            "path": "/robots.txt",
+                            "message": "Robots.txt file found",
+                        }
+                    )
         except Exception as e:
             logger.debug("robots.txt not accessible: %s", e)
 
@@ -319,12 +329,14 @@ class SecurityScannerAgent:
         try:
             async with await http_client.get(f"{target}{path}") as response:
                 if response.status in (200, 301, 302):
-                    findings.append({
-                        "type": "warning",
-                        "path": path,
-                        "status": response.status,
-                        "message": "Potentially sensitive path accessible",
-                    })
+                    findings.append(
+                        {
+                            "type": "warning",
+                            "path": path,
+                            "status": response.status,
+                            "message": "Potentially sensitive path accessible",
+                        }
+                    )
         except Exception as e:
             logger.debug("Path check failed for %s: %s", path, e)
 
@@ -338,7 +350,9 @@ class SecurityScannerAgent:
 
             admin_paths = ["/admin", "/login", "/wp-admin", "/.git", "/.env"]
             for path in admin_paths:
-                await self._check_admin_path(http_client, target, path, results["findings"])
+                await self._check_admin_path(
+                    http_client, target, path, results["findings"]
+                )
 
             return {
                 "status": "success",

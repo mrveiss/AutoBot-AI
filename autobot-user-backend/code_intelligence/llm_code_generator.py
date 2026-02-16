@@ -28,28 +28,25 @@ DEPRECATED: Import directly from code_intelligence.code_generation instead.
 """
 
 # Re-export everything from the new package for backward compatibility
-from backend.code_intelligence.code_generation import (
-    # Types and constants
+from backend.code_intelligence.code_generation import (  # Types and constants; Classes; Convenience functions
     CODE_BLOCK_RE,
     CONTROL_FLOW_TYPES,
     DEF_FUNCTION_RE,
     MUTABLE_DEFAULT_TYPES,
     TYPE_HINT_SUB_RE,
     CodeContext,
+    CodeValidator,
+    DiffGenerator,
     GeneratedCode,
     GenerationStatus,
+    LLMCodeGenerator,
     PromptTemplate,
+    PromptTemplateManager,
     RefactoringRequest,
     RefactoringResult,
     RefactoringType,
     ValidationResult,
     ValidationStatus,
-    # Classes
-    CodeValidator,
-    DiffGenerator,
-    LLMCodeGenerator,
-    PromptTemplateManager,
-    # Convenience functions
     generate_diff,
     get_generation_statuses,
     get_refactoring_types,

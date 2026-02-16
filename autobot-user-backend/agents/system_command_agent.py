@@ -14,15 +14,16 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from agents.interactive_terminal_agent import InteractiveTerminalAgent
-from backend.constants.threshold_constants import TimingConstants
 from event_manager import event_manager
+from security_layer import SecurityLayer
+
+from backend.constants.threshold_constants import TimingConstants
 from backend.security.command_patterns import (
     SENSITIVE_REDIRECT_PATHS,
     UNRESTRICTED_ROOT_COMMANDS,
     is_dangerous_command,
     is_persistent_session_command,
 )
-from security_layer import SecurityLayer
 
 logger = logging.getLogger(__name__)
 

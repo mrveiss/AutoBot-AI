@@ -22,8 +22,8 @@ import yaml
 if TYPE_CHECKING:
     from backend.utils.service_client import ServiceHTTPClient
 
-from backend.constants.threshold_constants import LLMDefaults, TimingConstants
 from autobot_shared.http_client import HTTPClientManager, get_http_client
+from backend.constants.threshold_constants import LLMDefaults, TimingConstants
 
 from .utils.service_registry import get_service_url
 

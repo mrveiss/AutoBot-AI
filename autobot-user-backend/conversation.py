@@ -18,8 +18,6 @@ from agents.classification_agent import ClassificationAgent, ClassificationResul
 from agents.llm_failsafe_agent import get_robust_llm_response
 from autobot_types import TaskComplexity
 from config import config as global_config_manager
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.threshold_constants import TimingConstants
 from research_browser_manager import research_browser_manager
 from source_attribution import (
     SourceType,
@@ -28,6 +26,9 @@ from source_attribution import (
     source_manager,
     track_source,
 )
+
+from backend.constants.network_constants import NetworkConstants
+from backend.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 

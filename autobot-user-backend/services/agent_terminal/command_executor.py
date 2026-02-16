@@ -14,9 +14,9 @@ import time
 import uuid
 from typing import Optional
 
-from backend.type_defs.common import Metadata
 from backend.constants.path_constants import PATH
 from backend.constants.threshold_constants import TimingConstants
+from backend.type_defs.common import Metadata
 from backend.utils.encoding_utils import strip_ansi_codes
 
 from .models import AgentTerminalSession
@@ -67,9 +67,7 @@ class CommandExecutor:
         """
         self.chat_history_manager = chat_history_manager
 
-    def _send_sigint_to_pty(
-        self, session: AgentTerminalSession
-    ) -> bool:
+    def _send_sigint_to_pty(self, session: AgentTerminalSession) -> bool:
         """
         Send SIGINT (Ctrl+C) to PTY for graceful command termination.
 
@@ -118,9 +116,7 @@ class CommandExecutor:
             )
             logger.info("[CANCEL] Logged cancellation to chat history")
         except Exception as log_error:
-            logger.warning(
-                f"[CANCEL] Failed to log cancellation to chat: {log_error}"
-            )
+            logger.warning(f"[CANCEL] Failed to log cancellation to chat: {log_error}")
 
     def _force_close_pty_session(self, pty_session_id: str) -> bool:
         """
@@ -228,7 +224,9 @@ class CommandExecutor:
             # Write to PTY
             success = pty.write_input(text)
             if success:
-                logger.debug("Wrote to PTY %s: %s...", session.pty_session_id, text[:50])
+                logger.debug(
+                    "Wrote to PTY %s: %s...", session.pty_session_id, text[:50]
+                )
             return success
 
         except Exception as e:
@@ -301,7 +299,9 @@ class CommandExecutor:
             return await self._finalize_cancellation(session, reason)
 
         except Exception as e:
-            logger.error("[CANCEL] Error during command cancellation: %s", e, exc_info=True)
+            logger.error(
+                "[CANCEL] Error during command cancellation: %s", e, exc_info=True
+            )
             return False
 
     def _search_for_exit_marker(
@@ -386,7 +386,9 @@ class CommandExecutor:
         )
         return await self._analyze_error_patterns(session)
 
-    def _check_error_patterns_in_text(self, clean_text: str, error_patterns: list) -> bool:
+    def _check_error_patterns_in_text(
+        self, clean_text: str, error_patterns: list
+    ) -> bool:
         """Check if text contains any error patterns. (Issue #315 - extracted)"""
         for pattern in error_patterns:
             if re.search(pattern, clean_text):
@@ -432,9 +434,7 @@ class CommandExecutor:
 
         return 0  # Assume success if no errors detected
 
-    async def _poll_for_current_output(
-        self, session: AgentTerminalSession
-    ) -> str:
+    async def _poll_for_current_output(self, session: AgentTerminalSession) -> str:
         """
         Poll chat history for current terminal output (Issue #665: extracted helper).
 

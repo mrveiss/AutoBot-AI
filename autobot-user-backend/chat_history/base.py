@@ -17,11 +17,12 @@ import threading
 from typing import Optional
 
 from autobot_memory_graph import AutoBotMemoryGraph
-from backend.constants.network_constants import NetworkConstants
+from config import config as global_config_manager
 from context_window_manager import ContextWindowManager
 from encryption_service import get_encryption_service, is_encryption_enabled
-from config import config as global_config_manager
+
 from autobot_shared.redis_client import get_redis_client
+from backend.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +153,7 @@ class ChatHistoryBase:
             try:
                 encryption_service = get_encryption_service()
                 key_info = encryption_service.get_key_info()
-                logger.info("Encryption service initialized: %s", key_info['algorithm'])
+                logger.info("Encryption service initialized: %s", key_info["algorithm"])
             except Exception as e:
                 logger.error("Failed to initialize encryption service: %s", e)
                 self.encryption_enabled = False

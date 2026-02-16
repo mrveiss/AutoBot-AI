@@ -8,12 +8,12 @@ Request/response validation models for API endpoints.
 """
 
 from backend.user_management.schemas.user import (
+    PasswordChange,
     UserCreate,
-    UserUpdate,
-    UserResponse,
     UserListResponse,
     UserLogin,
-    PasswordChange,
+    UserResponse,
+    UserUpdate,
 )
 
 __all__ = [

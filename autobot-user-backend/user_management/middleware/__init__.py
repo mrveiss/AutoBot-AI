@@ -9,9 +9,9 @@ Middleware components for authentication and authorization.
 
 from backend.user_management.middleware.rbac_middleware import (
     RBACMiddleware,
-    require_permission,
-    require_any_permission,
     require_all_permissions,
+    require_any_permission,
+    require_permission,
 )
 
 __all__ = [

@@ -29,29 +29,6 @@ For backward compatibility, the original doc_generator.py module
 still exports all classes directly.
 """
 
-# Types and simple data classes
-from backend.code_intelligence.doc_generation.types import (
-    DiagramType,
-    DocCompleteness,
-    DocFormat,
-    DocSection,
-    ElementType,
-    ExampleDoc,
-    ExceptionDoc,
-    ParameterDoc,
-    ReturnDoc,
-)
-
-# Larger data classes / models
-from backend.code_intelligence.doc_generation.models import (
-    ClassDoc,
-    DiagramSpec,
-    FunctionDoc,
-    GeneratedDoc,
-    ModuleDoc,
-    PackageDoc,
-)
-
 # Docstring parsing (Issue #394)
 from backend.code_intelligence.doc_generation.docstring_parser import (
     DocstringParser,
@@ -65,11 +42,34 @@ from backend.code_intelligence.doc_generation.markdown_generator import (
     generate_module_overview,
 )
 
+# Larger data classes / models
+from backend.code_intelligence.doc_generation.models import (
+    ClassDoc,
+    DiagramSpec,
+    FunctionDoc,
+    GeneratedDoc,
+    ModuleDoc,
+    PackageDoc,
+)
+
 # Module analysis (Issue #394)
 from backend.code_intelligence.doc_generation.module_analyzer import (
     ModuleAnalyzer,
     analyze_module,
     analyze_package,
+)
+
+# Types and simple data classes
+from backend.code_intelligence.doc_generation.types import (
+    DiagramType,
+    DocCompleteness,
+    DocFormat,
+    DocSection,
+    ElementType,
+    ExampleDoc,
+    ExceptionDoc,
+    ParameterDoc,
+    ReturnDoc,
 )
 
 # Re-export for convenience

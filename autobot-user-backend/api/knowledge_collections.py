@@ -25,7 +25,6 @@ Related Issues: #77 (Organization), #412 (Collections)
 import logging
 import re
 
-from backend.constants.threshold_constants import QueryDefaults
 from fastapi import APIRouter, HTTPException, Path, Query
 from starlette.requests import Request
 
@@ -35,6 +34,7 @@ from backend.api.knowledge_models import (
     CreateCollectionRequest,
     UpdateCollectionRequest,
 )
+from backend.constants.threshold_constants import QueryDefaults
 from backend.knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)

@@ -6,10 +6,10 @@ from typing import Any, Dict
 
 from fastapi import APIRouter
 
-from backend.services.config_service import ConfigService
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.constants.network_constants import NetworkConstants
 from backend.constants.path_constants import PathConstants
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.services.config_service import ConfigService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

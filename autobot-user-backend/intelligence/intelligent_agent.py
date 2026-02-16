@@ -21,6 +21,12 @@ _SUDO_PACKAGE_MANAGERS: FrozenSet[str] = frozenset(
     {"apt", "yum", "dn", "pacman", "zypper"}
 )
 
+from knowledge_base import KnowledgeBase
+
+# Import existing AutoBot components
+from llm_interface import LLMInterface
+from worker_node import WorkerNode
+
 from backend.constants.threshold_constants import TimingConstants
 
 # Import our new intelligent agent components
@@ -31,12 +37,7 @@ from backend.intelligence.streaming_executor import (
     StreamingCommandExecutor,
 )
 from backend.intelligence.tool_selector import OSAwareToolSelector
-from knowledge_base import KnowledgeBase
-
-# Import existing AutoBot components
-from llm_interface import LLMInterface
 from backend.utils.command_validator import CommandValidator
-from worker_node import WorkerNode
 
 logger = logging.getLogger(__name__)
 

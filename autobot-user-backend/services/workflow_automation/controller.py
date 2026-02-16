@@ -63,7 +63,9 @@ class WorkflowController:
             return await self._cancel_workflow(workflow, workflows)
 
         elif action == "approve_step":
-            return await self._approve_step(workflow, control_request.step_id, workflows)
+            return await self._approve_step(
+                workflow, control_request.step_id, workflows
+            )
 
         elif action == "skip_step":
             return await self._skip_step(workflow, control_request.step_id, workflows)

@@ -15,7 +15,6 @@ from typing import Any, Optional
 
 from backend.constants.threshold_constants import BatchConfig, RetryConfig
 
-
 # =============================================================================
 # Loop States and Phases
 # =============================================================================
@@ -148,8 +147,12 @@ class AgentLoopConfig:
     """
 
     # Iteration limits
-    max_iterations: int = BatchConfig.MAX_CONCURRENCY  # 100 - Maximum iterations per task
-    max_consecutive_errors: int = RetryConfig.DEFAULT_RETRIES  # 3 - Stop after N consecutive errors
+    max_iterations: int = (
+        BatchConfig.MAX_CONCURRENCY
+    )  # 100 - Maximum iterations per task
+    max_consecutive_errors: int = (
+        RetryConfig.DEFAULT_RETRIES
+    )  # 3 - Stop after N consecutive errors
 
     # Timeouts (milliseconds) - kept as specific values for tool execution timing
     iteration_timeout_ms: int = 60000  # Max time per iteration
@@ -168,7 +171,9 @@ class AgentLoopConfig:
 
     # Parallel execution
     enable_parallel_tools: bool = True  # Use parallel tool executor
-    max_parallel_tools: int = BatchConfig.DEFAULT_CONCURRENCY  # 10 - Max concurrent tool calls
+    max_parallel_tools: int = (
+        BatchConfig.DEFAULT_CONCURRENCY
+    )  # 10 - Max concurrent tool calls
 
     # Recovery settings
     retry_failed_tools: bool = True  # Retry failed tool calls

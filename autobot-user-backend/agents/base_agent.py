@@ -9,14 +9,13 @@ Provides unified interface for agents running locally or in containers
 import asyncio
 import json
 import logging
+import threading
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
-
-import threading
 
 # Import communication protocol
 from backend.protocols.agent_communication import (
@@ -150,7 +149,9 @@ class BaseAgent(ABC):
         self._message_handlers = {}
         self._handlers_lock = threading.Lock()
 
-        logger.info("Initialized %s agent in %s mode", agent_type, deployment_mode.value)
+        logger.info(
+            "Initialized %s agent in %s mode", agent_type, deployment_mode.value
+        )
 
     @abstractmethod
     async def process_request(self, request: AgentRequest) -> AgentResponse:
@@ -324,7 +325,9 @@ class BaseAgent(ABC):
             return True
 
         except Exception as e:
-            logger.error("Failed to initialize communication for %s: %s", self.agent_id, e)
+            logger.error(
+                "Failed to initialize communication for %s: %s", self.agent_id, e
+            )
             return False
 
     async def _handle_communication_request(

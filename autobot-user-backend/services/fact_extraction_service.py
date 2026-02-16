@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from agents.knowledge_extraction_agent import KnowledgeExtractionAgent
-from backend.utils.entity_resolver import entity_resolver
+from config import config_manager
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_redis_client
@@ -24,7 +24,7 @@ from backend.models.atomic_fact import (
     FactType,
     TemporalType,
 )
-from config import config_manager
+from backend.utils.entity_resolver import entity_resolver
 
 logger = get_llm_logger("fact_extraction_service")
 

@@ -11,6 +11,7 @@ redundant file traversals and AST parsing across analyzers.
 import ast
 
 import pytest
+
 from backend.code_intelligence.shared.ast_cache import (
     ASTCache,
     get_ast,

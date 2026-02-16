@@ -16,8 +16,8 @@ import aiohttp
 import yaml
 from cachetools import TTLCache
 
-from backend.constants.path_constants import PATH
 from autobot_shared.http_client import get_http_client
+from backend.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -140,9 +140,13 @@ class DomainReputationService:
 
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=config.get("timeout", 10))
-            async with await http_client.get(config["url"], timeout=timeout) as response:
+            async with await http_client.get(
+                config["url"], timeout=timeout
+            ) as response:
                 if response.status != 200:
-                    logger.error("Failed to update %s: HTTP %s", feed_name, response.status)
+                    logger.error(
+                        "Failed to update %s: HTTP %s", feed_name, response.status
+                    )
                     return
 
                 content = await response.text()
@@ -290,7 +294,9 @@ class DomainReputationService:
         for pattern in blacklist:
             if self._match_pattern(domain, pattern):
                 threats.append(f"blacklist_pattern_{pattern}")
-                logger.warning("Domain %s matches blacklist pattern: %s", domain, pattern)
+                logger.warning(
+                    "Domain %s matches blacklist pattern: %s", domain, pattern
+                )
 
         # Check for suspicious characteristics
         if self._is_suspicious_domain(domain):
@@ -373,7 +379,9 @@ class DomainReputationService:
 
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=config.get("timeout", 5.0))
-            async with await http_client.get(url, params=params, timeout=timeout) as response:
+            async with await http_client.get(
+                url, params=params, timeout=timeout
+            ) as response:
                 if response.status == 200:
                     data = await response.json()
 
@@ -386,9 +394,7 @@ class DomainReputationService:
                         "positives": positives,
                         "total": total,
                         "malicious": positives > 0,
-                        "suspicious": (
-                            positives > total * 0.1 if total > 0 else False
-                        ),
+                        "suspicious": (positives > total * 0.1 if total > 0 else False),
                         "reputation_score": (
                             max(0, 1 - (positives / total)) if total > 0 else 1.0
                         ),

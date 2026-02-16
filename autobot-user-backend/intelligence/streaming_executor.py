@@ -18,8 +18,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
-from backend.constants.network_constants import NetworkConstants
 from llm_interface import LLMInterface
+
+from backend.constants.network_constants import NetworkConstants
 from backend.utils.command_validator import CommandValidator
 
 logger = logging.getLogger(__name__)

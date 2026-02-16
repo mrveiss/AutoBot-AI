@@ -7,6 +7,7 @@ import os
 from unittest.mock import patch
 
 import pytest
+
 from backend.utils.config_manager import ConfigManager, config_manager
 
 

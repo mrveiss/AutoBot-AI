@@ -19,11 +19,15 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 import aiohttp
+from auth_middleware import check_admin_permission, get_current_user
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.constants.threshold_constants import TimingConstants
 from backend.dependencies import get_config, get_knowledge_base
+from backend.monitoring.prometheus_metrics import get_metrics_manager
 from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
 from backend.type_defs.common import Metadata
 from backend.utils.chat_exceptions import InternalError, SubprocessError
@@ -31,10 +35,6 @@ from backend.utils.response_helpers import (
     create_success_response,
     handle_ai_stack_error,
 )
-from auth_middleware import check_admin_permission, get_current_user
-from backend.constants.threshold_constants import TimingConstants
-from backend.monitoring.prometheus_metrics import get_metrics_manager
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

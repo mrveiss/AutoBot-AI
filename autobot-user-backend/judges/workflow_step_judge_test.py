@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from judges import JudgmentConfidence, JudgmentDimension, JudgmentResult
+
 from backend.judges.workflow_step_judge import WorkflowStepJudge
 
 

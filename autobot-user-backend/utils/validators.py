@@ -56,13 +56,7 @@ def process_input(value: str):
 import re
 from collections.abc import Collection
 from pathlib import Path
-from typing import (
-    Any,
-    Iterable,
-    Optional,
-    Set,
-    Union,
-)
+from typing import Any, Iterable, Optional, Set, Union
 from urllib.parse import urlparse
 
 from backend.utils.path_validation import contains_path_traversal

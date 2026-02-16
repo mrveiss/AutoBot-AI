@@ -125,10 +125,7 @@ class AlertAnalyzer:
                 }
             )
 
-        if (
-            service["response_time_ms"]
-            > self.baselines["api_response_time_threshold"]
-        ):
+        if service["response_time_ms"] > self.baselines["api_response_time_threshold"]:
             alerts.append(
                 {
                     "category": "performance",

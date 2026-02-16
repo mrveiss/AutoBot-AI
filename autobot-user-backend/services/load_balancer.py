@@ -30,10 +30,11 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Dict, List, Optional
 
-from backend.type_defs.common import Metadata
-from backend.constants.threshold_constants import RetryConfig, TimingConstants
 from event_manager import event_manager
 from npu_integration import NPUWorkerClient
+
+from backend.constants.threshold_constants import RetryConfig, TimingConstants
+from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +174,9 @@ class Worker:
             return True
         return False
 
-    def handle_unhealthy_check(self, circuit_breaker_threshold: int, circuit_breaker_timeout: int):
+    def handle_unhealthy_check(
+        self, circuit_breaker_threshold: int, circuit_breaker_timeout: int
+    ):
         """Handle failed health check result (Issue #372 - reduces feature envy).
 
         Args:
@@ -624,7 +627,7 @@ class NPULoadBalancer:
                     # Check all workers in parallel - eliminates N+1 sequential calls
                     await asyncio.gather(
                         *[self._check_worker_health(worker) for worker in workers],
-                        return_exceptions=True
+                        return_exceptions=True,
                     )
 
             except asyncio.CancelledError:
@@ -674,7 +677,10 @@ class NPULoadBalancer:
             )
 
             # Emit event if circuit breaker opened
-            if worker.circuit_breaker_state == CircuitBreakerState.OPEN and previous_status != worker.status:
+            if (
+                worker.circuit_breaker_state == CircuitBreakerState.OPEN
+                and previous_status != worker.status
+            ):
                 await self._emit_worker_status_change(worker, "circuit_breaker_opened")
 
         finally:

@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+
 from backend.skills.manager import SkillManager
 from backend.skills.registry import get_skill_registry
 

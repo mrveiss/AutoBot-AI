@@ -28,15 +28,15 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Path, Query, Request
 
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.api.knowledge_models import (
     AssignFactToCategoryRequest,
     CreateCategoryRequest,
     SearchCategoriesByPathRequest,
     UpdateCategoryRequest,
 )
-from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.constants.threshold_constants import QueryDefaults
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)
 

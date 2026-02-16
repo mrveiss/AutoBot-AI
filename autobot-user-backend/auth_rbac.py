@@ -32,10 +32,10 @@ import logging
 from enum import Enum
 from typing import Callable, List, Union
 
-from fastapi import Request
-
 from auth_middleware import auth_middleware
+from fastapi import Request
 from security_layer import SecurityLayer
+
 from backend.utils.catalog_http_exceptions import raise_auth_error
 
 logger = logging.getLogger(__name__)

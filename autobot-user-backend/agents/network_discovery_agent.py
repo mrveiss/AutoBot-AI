@@ -64,7 +64,10 @@ class NetworkDiscoveryAgent:
             handler = handlers.get(task_type)
 
             if handler is None:
-                return {"status": "error", "message": f"Unsupported task type: {task_type}"}
+                return {
+                    "status": "error",
+                    "message": f"Unsupported task type: {task_type}",
+                }
 
             return await handler(context)
 
@@ -206,7 +209,9 @@ class NetworkDiscoveryAgent:
             # Use traceroute command
             cmd = ["traceroute", "-m", str(max_hops), target]
 
-            result = await run_agent_command(cmd, timeout=TimingConstants.STANDARD_TIMEOUT)
+            result = await run_agent_command(
+                cmd, timeout=TimingConstants.STANDARD_TIMEOUT
+            )
 
             if result["status"] == "success":
                 hops = self._parse_traceroute(result["output"])
@@ -304,7 +309,9 @@ class NetworkDiscoveryAgent:
         # Quick port scan for common ports
         common_ports = "22,80,443,445,3389"
         port_cmd = ["nmap", "-p", common_ports, host["ip"], "-oX", "-"]
-        port_result = await run_agent_command(port_cmd, timeout=TimingConstants.SHORT_TIMEOUT)
+        port_result = await run_agent_command(
+            port_cmd, timeout=TimingConstants.SHORT_TIMEOUT
+        )
 
         if port_result["status"] == "success":
             open_ports = self._parse_nmap_output(port_result["output"])
@@ -336,8 +343,7 @@ class NetworkDiscoveryAgent:
 
             # Gather detailed info for each host
             assets = [
-                await self._gather_host_info(host)
-                for host in discovery_result["hosts"]
+                await self._gather_host_info(host) for host in discovery_result["hosts"]
             ]
 
             # Categorize assets

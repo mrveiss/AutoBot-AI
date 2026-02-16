@@ -14,39 +14,32 @@ For new code, import directly from llm_interface_pkg:
     from llm_interface_pkg import LLMInterface, LLMSettings, ProviderType
 """
 
-# Re-export everything from the refactored package
-from llm_interface_pkg import (
-    # Types
-    ProviderType,
-    LLMType,
-    # Models
-    LLMSettings,
-    LLMResponse,
-    ChatMessage,
-    LLMRequest,
-    # Hardware
-    HardwareDetector,
-    TORCH_AVAILABLE,
-    # Streaming
-    StreamingManager,
-    # Mock providers
-    LocalLLM,
-    MockPalm,
-    local_llm,
-    palm,
-    # Main interface
-    LLMInterface,
-    # Providers
-    OllamaProvider,
-    OpenAIProvider,
-    TransformersProvider,
-    VLLMProviderHandler,
-    MockHandler,
-    LocalHandler,
-)
-
 # Import additional dependencies that may be expected by consumers
 from config import UnifiedConfigManager
+
+# Re-export everything from the refactored package
+from llm_interface_pkg import (  # Types; Models; Hardware; Streaming; Mock providers; Main interface; Providers
+    TORCH_AVAILABLE,
+    ChatMessage,
+    HardwareDetector,
+    LLMInterface,
+    LLMRequest,
+    LLMResponse,
+    LLMSettings,
+    LLMType,
+    LocalHandler,
+    LocalLLM,
+    MockHandler,
+    MockPalm,
+    OllamaProvider,
+    OpenAIProvider,
+    ProviderType,
+    StreamingManager,
+    TransformersProvider,
+    VLLMProviderHandler,
+    local_llm,
+    palm,
+)
 
 # Create singleton config instance for backward compatibility
 config = UnifiedConfigManager()
@@ -69,8 +62,8 @@ except ImportError:
 # LLM Pattern Analyzer integration (Issue #229)
 try:
     from backend.api.analytics_llm_patterns import (
-        get_pattern_analyzer,
         UsageRecordRequest,
+        get_pattern_analyzer,
     )
 
     PATTERN_ANALYZER_AVAILABLE = True

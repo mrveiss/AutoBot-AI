@@ -11,8 +11,8 @@ import logging
 
 from fastapi import APIRouter, Request
 
-from backend.constants.threshold_constants import TimingConstants
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.constants.threshold_constants import TimingConstants
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

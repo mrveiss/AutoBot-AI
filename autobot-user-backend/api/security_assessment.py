@@ -17,9 +17,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-# Issue #756: Consolidated from src/utils/request_utils.py
-from backend.utils.request_utils import generate_request_id
-
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.services.security_tool_parsers import parse_tool_output
 from backend.services.security_workflow_manager import (
@@ -29,6 +26,9 @@ from backend.services.security_workflow_manager import (
     SecurityWorkflowManager,
     get_security_workflow_manager,
 )
+
+# Issue #756: Consolidated from src/utils/request_utils.py
+from backend.utils.request_utils import generate_request_id
 
 logger = logging.getLogger(__name__)
 

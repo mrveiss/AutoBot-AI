@@ -34,8 +34,9 @@ from agent_loop.types import (
     ThinkCategory,
 )
 from events import EventStreamManager, EventType
-from backend.events.types import create_message_event
 from planner import PlannerModule
+
+from backend.events.types import create_message_event
 from backend.tools.parallel import ParallelToolExecutor
 
 logger = logging.getLogger(__name__)

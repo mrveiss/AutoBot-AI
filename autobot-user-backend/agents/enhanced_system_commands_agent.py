@@ -14,13 +14,14 @@ import re
 import shlex
 from typing import Any, Dict, FrozenSet, List, Optional
 
+from llm_interface import LLMInterface
+
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
 from backend.constants.threshold_constants import LLMDefaults
-from llm_interface import LLMInterface
 
 from .base_agent import AgentRequest
 from .standardized_agent import StandardizedAgent

@@ -11,10 +11,10 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import redis
-
 from autobot_types import TaskComplexity
-from backend.constants.threshold_constants import StringParsingConstants
+
 from autobot_shared.redis_client import get_redis_client
+from backend.constants.threshold_constants import StringParsingConstants
 
 logger = logging.getLogger(__name__)
 

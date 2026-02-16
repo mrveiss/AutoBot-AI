@@ -38,6 +38,7 @@ from llm_interface import LLMInterface
 from security_layer import SecurityLayer
 from system_integration import SystemIntegration
 from task_handlers import TaskExecutor
+
 from autobot_shared.redis_client import get_redis_client
 
 # Conditional import for GUIController based on OS

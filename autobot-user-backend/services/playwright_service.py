@@ -14,11 +14,10 @@ from typing import Optional
 
 import aiohttp
 
+from autobot_shared.http_client import get_http_client
+from backend.constants.network_constants import NetworkConstants, ServiceURLs
 from backend.type_defs.common import Metadata
 from backend.utils.chat_exceptions import ServiceUnavailableError
-
-from backend.constants.network_constants import NetworkConstants, ServiceURLs
-from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +73,9 @@ class PlaywrightService:
                     logger.debug("Playwright health check: %s", health_data)
                     return self._healthy
                 else:
-                    logger.warning("Playwright health check failed: %s", response.status)
+                    logger.warning(
+                        "Playwright health check failed: %s", response.status
+                    )
                     self._healthy = False
                     return False
 
@@ -205,7 +206,9 @@ class PlaywrightService:
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    logger.info("Frontend test completed: %s", result.get('summary', {}))
+                    logger.info(
+                        "Frontend test completed: %s", result.get("summary", {})
+                    )
                     return result
                 else:
                     error_text = await response.text()
@@ -215,7 +218,9 @@ class PlaywrightService:
                     raise RuntimeError(f"Frontend test failed: {response.status}")
 
         except asyncio.TimeoutError:
-            logger.error("Frontend test timed out after %ss: %s", self.timeout, frontend_url)
+            logger.error(
+                "Frontend test timed out after %ss: %s", self.timeout, frontend_url
+            )
             return {
                 "success": False,
                 "error": f"Frontend test timed out after {self.timeout}s",
@@ -363,12 +368,18 @@ class PlaywrightService:
                     return screenshot_info
                 else:
                     error_text = await response.text()
-                    logger.error("Screenshot failed: %s - %s", response.status, error_text)
+                    logger.error(
+                        "Screenshot failed: %s - %s", response.status, error_text
+                    )
                     raise RuntimeError(f"Screenshot failed: {response.status}")
 
         except aiohttp.ClientError as e:
             logger.error("Screenshot HTTP error: %s", e)
-            return {"success": False, "error": f"Connection error: {str(e)}", "url": url}
+            return {
+                "success": False,
+                "error": f"Connection error: {str(e)}",
+                "url": url,
+            }
         except Exception as e:
             logger.error("Screenshot error: %s", e)
             return {"success": False, "error": str(e), "url": url}

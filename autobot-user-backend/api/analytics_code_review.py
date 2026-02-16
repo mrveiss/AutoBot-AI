@@ -18,9 +18,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 from auth_middleware import check_admin_permission
-from backend.constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+
+from backend.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 

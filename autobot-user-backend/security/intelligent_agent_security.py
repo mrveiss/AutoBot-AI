@@ -23,9 +23,8 @@ import logging
 from typing import Dict, List
 
 from enhanced_security_layer import EnhancedSecurityLayer
-from backend.security.prompt_injection_detector import (
-    get_prompt_injection_detector,
-)
+
+from backend.security.prompt_injection_detector import get_prompt_injection_detector
 from backend.security.secure_llm_command_parser import get_secure_llm_parser
 
 logger = logging.getLogger(__name__)
@@ -144,7 +143,9 @@ class SecureIntelligentAgentMixin:
                 }
             )
 
-        logger.info("✅ Securely parsed %s commands from LLM response", len(command_dicts))
+        logger.info(
+            "✅ Securely parsed %s commands from LLM response", len(command_dicts)
+        )
 
         return command_dicts
 

@@ -212,11 +212,15 @@ class SmartCancellationHandler:
                             "Knowledge base unavailable",
                         )
 
-                await asyncio.sleep(TimingConstants.STANDARD_DELAY)  # Check every second
+                await asyncio.sleep(
+                    TimingConstants.STANDARD_DELAY
+                )  # Check every second
 
             except Exception as e:
                 logger.error("Error in condition monitoring: %s", e)
-                await asyncio.sleep(TimingConstants.ERROR_RECOVERY_DELAY)  # Wait longer on error
+                await asyncio.sleep(
+                    TimingConstants.ERROR_RECOVERY_DELAY
+                )  # Wait longer on error
 
     async def shutdown(self):
         """Graceful shutdown - cancel all operations"""

@@ -21,7 +21,6 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
 from config import config_manager
-from backend.constants.threshold_constants import LLMDefaults, TimingConstants
 from conversation import ConversationManager
 from llm_interface import LLMInterface
 from memory import LongTermMemoryManager
@@ -36,12 +35,16 @@ from orchestration import (
 )
 from task_execution_tracker import Priority, TaskType, task_tracker
 
+from autobot_shared.logging_manager import get_logger
+from backend.constants.threshold_constants import LLMDefaults, TimingConstants
+
 # Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
 from backend.utils.agent_selection import find_best_agent_for_task as _find_best_agent
 from backend.utils.agent_selection import release_agent as _release_agent
 from backend.utils.agent_selection import reserve_agent as _reserve_agent
-from backend.utils.agent_selection import update_agent_performance as _update_performance
-from autobot_shared.logging_manager import get_logger
+from backend.utils.agent_selection import (
+    update_agent_performance as _update_performance,
+)
 
 logger = get_logger("orchestrator")
 

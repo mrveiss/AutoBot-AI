@@ -35,10 +35,10 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from backend.type_defs.common import JSONObject, Metadata
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import PROJECT_ROOT
 from backend.constants.threshold_constants import QueryDefaults
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.type_defs.common import JSONObject, Metadata
 
 logger = logging.getLogger(__name__)
 

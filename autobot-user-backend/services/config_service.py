@@ -19,13 +19,12 @@ from typing import Dict
 
 import yaml
 
-from backend.type_defs.common import Metadata
-
 # SSOT Migration (Issue #602): Import SSOT config as primary source
 from autobot_shared.ssot_config import get_config as get_ssot_config
 
 # Legacy import for backward compatibility - these now read from SSOT
 from backend.constants.network_constants import NetworkConstants
+from backend.type_defs.common import Metadata
 
 # Get SSOT config
 _ssot = get_ssot_config()
@@ -105,7 +104,9 @@ class ConfigService:
         """
         # Use SSOT for default backend URL
         default_api_endpoint = (
-            _ssot.backend_url if _ssot else f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}"
+            _ssot.backend_url
+            if _ssot
+            else f"{HTTP_PROTOCOL}://{BACKEND_HOST_IP}:{BACKEND_PORT}"
         )
         default_port = _ssot.port.backend if _ssot else BACKEND_PORT
 
@@ -160,9 +161,7 @@ class ConfigService:
             },
             "short_term": {
                 "enabled": get("memory.short_term.enabled", True),
-                "duration_minutes": get(
-                    "memory.short_term.duration_minutes", 30
-                ),
+                "duration_minutes": get("memory.short_term.duration_minutes", 30),
             },
             "vector_storage": {
                 "enabled": get("memory.vector_storage.enabled", True),
@@ -207,9 +206,7 @@ class ConfigService:
             },
             "security": {
                 "enable_encryption": get("security.enable_encryption", False),
-                "session_timeout_minutes": get(
-                    "security.session_timeout_minutes", 30
-                ),
+                "session_timeout_minutes": get("security.session_timeout_minutes", 30),
             },
         }
 
@@ -254,9 +251,7 @@ class ConfigService:
         return {
             "knowledge_base": {
                 "enabled": get("knowledge_base.enabled", True),
-                "update_frequency_days": get(
-                    "knowledge_base.update_frequency_days", 7
-                ),
+                "update_frequency_days": get("knowledge_base.update_frequency_days", 7),
             },
             "voice_interface": {
                 "enabled": get("voice_interface.enabled", False),
@@ -507,7 +502,13 @@ class ConfigService:
                 normalized_logging = {}
                 # Map frontend field names to config.yaml field names
                 field_mapping = {"level": "log_level", "file": "log_to_file"}
-                passthrough = {"console", "max_file_size", "log_requests", "log_sql", "log_file_path"}
+                passthrough = {
+                    "console",
+                    "max_file_size",
+                    "log_requests",
+                    "log_sql",
+                    "log_file_path",
+                }
                 for key, value in logging_cfg.items():
                     if key == "log_levels":
                         continue  # Drop - generated at runtime

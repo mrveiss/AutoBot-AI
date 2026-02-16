@@ -19,8 +19,10 @@ from typing import Optional
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from backend.code_intelligence.cross_language_patterns import CrossLanguagePatternDetector
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.code_intelligence.cross_language_patterns import (
+    CrossLanguagePatternDetector,
+)
 
 logger = logging.getLogger(__name__)
 

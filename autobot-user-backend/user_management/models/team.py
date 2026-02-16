@@ -19,9 +19,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.user_management.models.base import Base, TenantMixin, TimestampMixin
 
 if TYPE_CHECKING:
+    from user_management.models.api_key import APIKey
     from user_management.models.organization import Organization
     from user_management.models.user import User
-    from user_management.models.api_key import APIKey
 
 
 class TeamRole(str, Enum):
@@ -84,9 +84,7 @@ class Team(Base, TenantMixin, TimestampMixin):
     )
 
     # Unique constraint: team name unique within organization
-    __table_args__ = (
-        UniqueConstraint("org_id", "name", name="uq_team_org_name"),
-    )
+    __table_args__ = (UniqueConstraint("org_id", "name", name="uq_team_org_name"),)
 
     # Relationships
     organization: Mapped["Organization"] = relationship(
@@ -185,9 +183,7 @@ class TeamMembership(Base, TimestampMixin):
     )
 
     # Unique constraint: user can only be in a team once
-    __table_args__ = (
-        UniqueConstraint("team_id", "user_id", name="uq_team_user"),
-    )
+    __table_args__ = (UniqueConstraint("team_id", "user_id", name="uq_team_user"),)
 
     # Relationships
     team: Mapped["Team"] = relationship(

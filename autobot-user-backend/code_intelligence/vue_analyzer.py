@@ -385,7 +385,9 @@ class VueAnalyzer(BaseLanguageAnalyzer):
         attributes = section["attributes"]
 
         # Determine if TypeScript (for future TypeScript-specific checks)
-        _is_typescript = "lang=\"ts\"" in attributes or "lang='ts'" in attributes  # noqa: F841
+        _is_typescript = (
+            'lang="ts"' in attributes or "lang='ts'" in attributes
+        )  # noqa: F841
 
         # Security patterns
         self._check_patterns_in_section(
@@ -468,10 +470,18 @@ class VueAnalyzer(BaseLanguageAnalyzer):
         return recommendation, confidence, rule_id, IssueSeverity.MEDIUM
 
     def _create_vue_pattern_issue(
-        self, line_num: int, line: str, match, pattern_data: Tuple, prefix: str, category: "IssueCategory"
+        self,
+        line_num: int,
+        line: str,
+        match,
+        pattern_data: Tuple,
+        prefix: str,
+        category: "IssueCategory",
     ) -> "AnalysisIssue":
         """Create AnalysisIssue from Vue pattern match (Issue #315 - extracted helper)."""
-        recommendation, confidence, rule_id, severity = self._parse_pattern_data(pattern_data)
+        recommendation, confidence, rule_id, severity = self._parse_pattern_data(
+            pattern_data
+        )
         return AnalysisIssue(
             issue_id=self._generate_issue_id(prefix),
             category=category,
@@ -488,18 +498,28 @@ class VueAnalyzer(BaseLanguageAnalyzer):
             current_code=line.strip(),
             confidence=confidence,
             potential_false_positive=confidence < 0.75,
-            false_positive_reason="" if confidence >= 0.75 else "Context may make this acceptable",
+            false_positive_reason=""
+            if confidence >= 0.75
+            else "Context may make this acceptable",
             rule_id=rule_id,
             tags=["vue", prefix.split("-")[0], category.value],
         )
 
     def _check_vue_pattern_on_line(
-        self, line_num: int, line: str, pattern: str, pattern_data: Tuple, prefix: str, category: "IssueCategory"
+        self,
+        line_num: int,
+        line: str,
+        pattern: str,
+        pattern_data: Tuple,
+        prefix: str,
+        category: "IssueCategory",
     ) -> None:
         """Check single Vue pattern on a line (Issue #315 - extracted helper)."""
         match = re.search(pattern, line, re.IGNORECASE)
         if match:
-            issue = self._create_vue_pattern_issue(line_num, line, match, pattern_data, prefix, category)
+            issue = self._create_vue_pattern_issue(
+                line_num, line, match, pattern_data, prefix, category
+            )
             self.issues.append(issue)
 
     def _check_patterns_in_section(
@@ -518,7 +538,9 @@ class VueAnalyzer(BaseLanguageAnalyzer):
 
             line_num = base_line + i
             for pattern, pattern_data in patterns.items():
-                self._check_vue_pattern_on_line(line_num, line, pattern, pattern_data, prefix, category)
+                self._check_vue_pattern_on_line(
+                    line_num, line, pattern, pattern_data, prefix, category
+                )
 
     def _check_vfor_key(self, content: str, base_line: int) -> None:
         """Check for v-for directives without :key attribute.
@@ -552,7 +574,8 @@ class VueAnalyzer(BaseLanguageAnalyzer):
                         title="v-for without :key",
                         description=f"v-for on <{element_tag}> should have a :key attribute for optimal DOM updates",
                         recommendation=f"Add :key attribute with unique identifier from '{vfor_value}'",
-                        current_code=match.group(0)[:100] + ("..." if len(match.group(0)) > 100 else ""),
+                        current_code=match.group(0)[:100]
+                        + ("..." if len(match.group(0)) > 100 else ""),
                         confidence=0.92,
                         potential_false_positive=False,
                         rule_id="VUE-QUAL001",

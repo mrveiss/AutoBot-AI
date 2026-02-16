@@ -17,18 +17,20 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 import numpy as np
-
 from ai_hardware_accelerator import (
     HardwareDevice,
     accelerated_embedding_generation,
     get_ai_accelerator,
 )
 from config import cfg
+from knowledge_base import KnowledgeBase
+
+from autobot_shared.http_client import get_http_client
+from autobot_shared.logging_manager import get_llm_logger
 
 # Import existing AutoBot components
 from backend.constants.threshold_constants import TimingConstants
 from backend.knowledge.embedding_cache import get_embedding_cache
-from knowledge_base import KnowledgeBase
 from backend.utils.chromadb_client import get_chromadb_client
 
 # Issue #387: GPU-accelerated vector search
@@ -39,8 +41,6 @@ from backend.utils.gpu_vector_search import (
     VectorSearchConfig,
     get_hybrid_vector_search,
 )
-from autobot_shared.http_client import get_http_client
-from autobot_shared.logging_manager import get_llm_logger
 
 # Import ChromaDB for multi-modal vector storage
 try:

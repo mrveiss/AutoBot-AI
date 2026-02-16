@@ -894,9 +894,7 @@ async def search_similar_patterns_endpoint(
         # Generate embedding for query code
         # (Using the analyzer's embedding method)
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
-        from code_intelligence.pattern_analysis.storage import (
-            search_similar_patterns,
-        )
+        from code_intelligence.pattern_analysis.storage import search_similar_patterns
 
         analyzer = CodePatternAnalyzer()
         query_embedding = await analyzer._generate_embedding(code)

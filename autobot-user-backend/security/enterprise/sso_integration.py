@@ -28,8 +28,8 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_public_key,
 )
 
-from backend.constants.path_constants import PATH
 from autobot_shared.http_client import get_http_client
+from backend.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 

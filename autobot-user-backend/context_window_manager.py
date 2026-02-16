@@ -44,7 +44,7 @@ class ContextWindowManager:
             with open(path, "r") as f:
                 config = yaml.safe_load(f)
 
-            logger.info("✅ Loaded config for %s models", len(config['models']))
+            logger.info("✅ Loaded config for %s models", len(config["models"]))
             return config
         except Exception as e:
             logger.error("Failed to load config: %s, using defaults", e)

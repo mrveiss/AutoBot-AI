@@ -15,8 +15,8 @@ from typing import Dict, Optional
 
 import yaml
 
-from backend.constants.path_constants import PATH
 from autobot_shared.error_boundaries import ErrorCategory
+from backend.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -232,9 +232,7 @@ class ErrorCatalog:
             self.load_catalog()
 
         return [
-            code
-            for code in self._catalog
-            if code.startswith(component_prefix + "_")
+            code for code in self._catalog if code.startswith(component_prefix + "_")
         ]
 
     def get_catalog_stats(self) -> dict:

@@ -34,17 +34,17 @@ from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.propagate import set_global_textmap
-from opentelemetry.propagators.composite import CompositePropagator
 from opentelemetry.propagators.b3 import B3MultiFormat
-from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
+from opentelemetry.propagators.composite import CompositePropagator
+from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 from opentelemetry.sdk.trace.sampling import (
-    ParentBasedTraceIdRatio,
-    ALWAYS_ON,
     ALWAYS_OFF,
+    ALWAYS_ON,
+    ParentBasedTraceIdRatio,
 )
-from opentelemetry.trace import Status, StatusCode, SpanKind
+from opentelemetry.trace import SpanKind, Status, StatusCode
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 from backend.constants.network_constants import NetworkConstants
@@ -97,12 +97,11 @@ class TracingService:
         # Configuration from environment
         self._jaeger_endpoint = os.getenv(
             "AUTOBOT_JAEGER_ENDPOINT",
-            f"http://{NetworkConstants.REDIS_VM_IP}:4317"  # Default: Redis VM
+            f"http://{NetworkConstants.REDIS_VM_IP}:4317",  # Default: Redis VM
         )
-        self._console_export = os.getenv(
-            "AUTOBOT_TRACE_CONSOLE",
-            "false"
-        ).lower() == "true"
+        self._console_export = (
+            os.getenv("AUTOBOT_TRACE_CONSOLE", "false").lower() == "true"
+        )
 
         # Issue #697: Configurable sampling strategy
         # AUTOBOT_TRACE_SAMPLE_RATE: 0.0-1.0 (0.1 = 10% sampling in production)
@@ -126,6 +125,7 @@ class TracingService:
             return service_name
 
         import socket
+
         try:
             hostname = socket.gethostbyname(socket.gethostname())
             return SERVICE_INSTANCES.get(hostname, "autobot-unknown")
@@ -139,12 +139,14 @@ class TracingService:
         Returns:
             Resource with service name, version, and namespace
         """
-        return Resource.create({
-            SERVICE_NAME: self._service_name,
-            SERVICE_VERSION: self._service_version,
-            "deployment.environment": os.getenv("AUTOBOT_ENV", "development"),
-            "service.namespace": "autobot",
-        })
+        return Resource.create(
+            {
+                SERVICE_NAME: self._service_name,
+                SERVICE_VERSION: self._service_version,
+                "deployment.environment": os.getenv("AUTOBOT_ENV", "development"),
+                "service.namespace": "autobot",
+            }
+        )
 
     def _create_sampler(self):
         """
@@ -179,9 +181,7 @@ class TracingService:
                 endpoint=self._jaeger_endpoint,
                 insecure=True,  # Use insecure for internal network
             )
-            self._provider.add_span_processor(
-                BatchSpanProcessor(otlp_exporter)
-            )
+            self._provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
             logger.info("OTLP exporter configured for %s", self._jaeger_endpoint)
         except Exception as e:
             logger.warning("Failed to configure OTLP exporter: %s", e)
@@ -189,9 +189,7 @@ class TracingService:
 
         # Optionally add console exporter for debugging
         if enable_console_export or self._console_export:
-            self._provider.add_span_processor(
-                BatchSpanProcessor(ConsoleSpanExporter())
-            )
+            self._provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
             logger.info("Console span exporter enabled for debugging")
 
     def initialize(
@@ -240,10 +238,12 @@ class TracingService:
             trace.set_tracer_provider(self._provider)
 
             # Set up context propagation (W3C TraceContext + B3 for compatibility)
-            propagator = CompositePropagator([
-                TraceContextTextMapPropagator(),
-                B3MultiFormat(),
-            ])
+            propagator = CompositePropagator(
+                [
+                    TraceContextTextMapPropagator(),
+                    B3MultiFormat(),
+                ]
+            )
             set_global_textmap(propagator)
 
             # Get tracer instance

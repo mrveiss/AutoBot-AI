@@ -12,6 +12,7 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from backend.user_management.services.session_service import SessionService
 
 

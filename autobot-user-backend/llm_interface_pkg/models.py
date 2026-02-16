@@ -57,7 +57,9 @@ class LLMSettings(BaseSettings):
     cache_ttl: int = Field(default=ModelConfig.DEFAULT_CACHE_TTL, env="LLM_CACHE_TTL")
 
     # Streaming settings - using completion signal detection
-    max_chunks: int = Field(default=ModelConfig.DEFAULT_MAX_CHUNKS, env="LLM_MAX_CHUNKS")
+    max_chunks: int = Field(
+        default=ModelConfig.DEFAULT_MAX_CHUNKS, env="LLM_MAX_CHUNKS"
+    )
 
     class Config:
         env_file = ".env"

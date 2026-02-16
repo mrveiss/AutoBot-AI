@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Optional
 
 import aiofiles
-
 from chat_history import ChatHistoryManager
+
 from backend.utils.encoding_utils import is_terminal_prompt, strip_ansi_codes
 
 logger = logging.getLogger(__name__)

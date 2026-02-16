@@ -25,10 +25,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 import websockets
+from config import config_manager
+from task_execution_tracker import TaskPriority, task_tracker
 
 from backend.constants.threshold_constants import TimingConstants
-from task_execution_tracker import TaskPriority, task_tracker
-from config import config_manager
 
 # Type aliases for clarity
 SessionDict = dict[str, Any]
@@ -286,7 +286,11 @@ class VNCServerManager:
             f"Creating desktop streaming session for user {user_id}",
             agent_type="desktop_streaming",
             priority=TaskPriority.HIGH,
-            inputs={"session_id": session_id, "user_id": user_id, "resolution": resolution},
+            inputs={
+                "session_id": session_id,
+                "user_id": user_id,
+                "resolution": resolution,
+            },
         ) as task_context:
             return await self._create_session_impl(
                 session_id, user_id, resolution, depth, task_context
@@ -326,13 +330,23 @@ class VNCServerManager:
 
         try:
             vnc_session = await self._start_vnc_stack(
-                session_id, user_id, display_num, vnc_port, novnc_port, resolution, depth
+                session_id,
+                user_id,
+                display_num,
+                vnc_port,
+                novnc_port,
+                resolution,
+                depth,
             )
             self.active_sessions[session_id] = self._build_session_data(vnc_session)
 
-            outputs = self._build_session_output(session_id, display_num, vnc_port, novnc_port)
+            outputs = self._build_session_output(
+                session_id, display_num, vnc_port, novnc_port
+            )
             task_context.set_outputs(outputs)
-            logger.info("VNC session created: %s on display :%d", session_id, display_num)
+            logger.info(
+                "VNC session created: %s on display :%d", session_id, display_num
+            )
             return outputs
 
         except Exception as e:
@@ -369,7 +383,11 @@ class VNCServerManager:
         """
         xvfb_process = await self._start_xvfb(display_num, resolution, depth)
         vnc_process = await self._start_vnc_server(display_num, vnc_port)
-        novnc_process = await self._start_novnc(vnc_port, novnc_port) if self.novnc_available else None
+        novnc_process = (
+            await self._start_novnc(vnc_port, novnc_port)
+            if self.novnc_available
+            else None
+        )
 
         return VNCSessionData(
             session_id=session_id,
@@ -507,9 +525,7 @@ class VNCServerManager:
         await asyncio.sleep(TimingConstants.STANDARD_DELAY)
         return xvfb_process
 
-    async def _start_vnc_server(
-        self, display_num: int, vnc_port: int
-    ) -> ProcessType:
+    async def _start_vnc_server(self, display_num: int, vnc_port: int) -> ProcessType:
         """
         Start VNC server on display.
 
@@ -959,17 +975,13 @@ class DesktopStreamingManager:
             display, "mousemove", "--sync", str(x), str(y), "click", str(button)
         )
 
-    async def _handle_key_press(
-        self, display: int, control_data: SessionDict
-    ) -> None:
+    async def _handle_key_press(self, display: int, control_data: SessionDict) -> None:
         """Handle key press control."""
         key = control_data.get("key", "")
         if key:
             await _run_xdotool_command(display, "key", key)
 
-    async def _handle_type_text(
-        self, display: int, control_data: SessionDict
-    ) -> None:
+    async def _handle_type_text(self, display: int, control_data: SessionDict) -> None:
         """Handle type text control."""
         text = control_data.get("text", "")
         if text:

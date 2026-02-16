@@ -13,12 +13,17 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from llm_interface_pkg import LLMInterface
+
 from backend.knowledge.pipeline.base import BaseCognifier, PipelineContext
 from backend.knowledge.pipeline.models.chunk import ProcessedChunk
 from backend.knowledge.pipeline.models.entity import Entity
-from backend.knowledge.pipeline.models.event import EventType, TemporalEvent, TemporalType
+from backend.knowledge.pipeline.models.event import (
+    EventType,
+    TemporalEvent,
+    TemporalType,
+)
 from backend.knowledge.pipeline.registry import TaskRegistry
-from llm_interface_pkg import LLMInterface
 
 logger = logging.getLogger(__name__)
 

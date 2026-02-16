@@ -20,9 +20,10 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from backend.user_management.config import get_deployment_config
+
 # Import models to register with SQLAlchemy
 from backend.user_management.models import Base
-from backend.user_management.config import get_deployment_config
 
 # this is the Alembic Config object
 config = context.config
@@ -48,9 +49,7 @@ def get_url() -> str:
         return deployment_config.postgres_sync_url
     except Exception:
         # Default fallback for development
-        return (
-            "postgresql://autobot:autobot@172.16.168.23:5432/autobot"
-        )
+        return "postgresql://autobot:autobot@172.16.168.23:5432/autobot"
 
 
 def run_migrations_offline() -> None:

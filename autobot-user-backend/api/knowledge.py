@@ -9,7 +9,6 @@ import logging
 from typing import List, Optional
 
 from auth_middleware import check_admin_permission
-from backend.constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
 from fastapi import (
     APIRouter,
@@ -21,14 +20,15 @@ from fastapi import (
     Request,
 )
 from pydantic import BaseModel, Field, field_validator
-from backend.utils.path_validation import contains_path_traversal
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.constants.threshold_constants import CategoryDefaults, QueryDefaults
 
 # NOTE: Pydantic models moved to knowledge_maintenance.py (Issue #185 - split oversized files)
 # NOTE: Tag-related models moved to knowledge_tags.py
 # NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
 from backend.knowledge_factory import get_or_create_knowledge_base
+from backend.utils.path_validation import contains_path_traversal
 
 # =============================================================================
 # Issue #549: Pydantic Models for Knowledge Ingestion Endpoints

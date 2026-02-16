@@ -6,6 +6,7 @@ error messages, and edge case handling.
 """
 
 import pytest
+
 from backend.utils.validators import (
     sanitize_alphanumeric,
     sanitize_string,

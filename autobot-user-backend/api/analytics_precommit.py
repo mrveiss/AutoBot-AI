@@ -18,10 +18,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
+from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from auth_middleware import check_admin_permission
 from backend.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)

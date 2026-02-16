@@ -31,9 +31,9 @@ if _env_path.exists():
 # See: https://github.com/huggingface/tokenizers/issues/1062
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+from autobot_shared.logging_manager import get_logger
 from backend.app_factory import create_app
 from backend.constants.network_constants import NetworkConstants
-from autobot_shared.logging_manager import get_logger
 
 # Get centralized logger (respects AUTOBOT_LOG_LEVEL environment variable)
 logger = get_logger(__name__, "backend")
@@ -74,7 +74,9 @@ if __name__ == "__main__":
             cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")
             project_root = Path(__file__).parent.parent
             ssl_keyfile = str(project_root / cert_dir / "main-host" / "server-key.pem")
-            ssl_certfile = str(project_root / cert_dir / "main-host" / "server-cert.pem")
+            ssl_certfile = str(
+                project_root / cert_dir / "main-host" / "server-cert.pem"
+            )
 
         # Override port to TLS port when enabled
         port = int(os.getenv("AUTOBOT_BACKEND_TLS_PORT", "8443"))

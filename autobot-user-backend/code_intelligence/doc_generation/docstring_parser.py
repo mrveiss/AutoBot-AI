@@ -13,12 +13,12 @@ Part of god class refactoring initiative.
 import re
 from typing import Dict, List, Optional, Pattern
 
+from backend.code_intelligence.doc_generation.models import FunctionDoc
 from backend.code_intelligence.doc_generation.types import (
     ExampleDoc,
     ExceptionDoc,
     ReturnDoc,
 )
-from backend.code_intelligence.doc_generation.models import FunctionDoc
 
 
 class DocstringParser:
@@ -149,9 +149,7 @@ class DocstringParser:
 
         # Save last parameter
         if current_param:
-            func_doc.update_parameter_description(
-                current_param, " ".join(current_desc)
-            )
+            func_doc.update_parameter_description(current_param, " ".join(current_desc))
 
     def _parse_returns_section(self, func_doc: FunctionDoc, lines: List[str]) -> None:
         """

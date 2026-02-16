@@ -14,19 +14,19 @@ import ast
 import os
 from typing import List, Optional, Set, Union
 
-from backend.code_intelligence.doc_generation.types import (
-    ElementType,
-    ParameterDoc,
-    ReturnDoc,
-)
+from backend.code_intelligence.doc_generation import helpers
+from backend.code_intelligence.doc_generation.docstring_parser import DocstringParser
 from backend.code_intelligence.doc_generation.models import (
     ClassDoc,
     FunctionDoc,
     ModuleDoc,
     PackageDoc,
 )
-from backend.code_intelligence.doc_generation import helpers
-from backend.code_intelligence.doc_generation.docstring_parser import DocstringParser
+from backend.code_intelligence.doc_generation.types import (
+    ElementType,
+    ParameterDoc,
+    ReturnDoc,
+)
 
 # Re-export constants for internal use
 _FUNCTION_DEF_TYPES = helpers.FUNCTION_DEF_TYPES
@@ -138,7 +138,9 @@ class ModuleAnalyzer:
             for import_stmt in helpers.extract_imports(node):
                 module_doc.add_import(import_stmt)
 
-    def _process_module_constants(self, node: ast.Assign, module_doc: ModuleDoc) -> None:
+    def _process_module_constants(
+        self, node: ast.Assign, module_doc: ModuleDoc
+    ) -> None:
         """Extract constants from assignment node."""
         for target in node.targets:
             if not isinstance(target, ast.Name):
@@ -153,6 +155,7 @@ class ModuleAnalyzer:
     ) -> Optional[PackageDoc]:
         """Analyze a Python package and all its modules."""
         import logging
+
         logger = logging.getLogger(__name__)
 
         if depth > self.max_depth:
@@ -277,7 +280,9 @@ class ModuleAnalyzer:
     ) -> FunctionDoc:
         """Analyze a function/method definition and extract documentation."""
         is_async = isinstance(node, ast.AsyncFunctionDef)
-        element_type = ElementType.METHOD if helpers.is_method(node) else ElementType.FUNCTION
+        element_type = (
+            ElementType.METHOD if helpers.is_method(node) else ElementType.FUNCTION
+        )
 
         func_doc = FunctionDoc(
             name=node.name,
@@ -347,9 +352,7 @@ class ModuleAnalyzer:
             is_keyword_only=is_keyword_only,
         )
 
-    def _extract_regular_args(
-        self, args: ast.arguments
-    ) -> List[ParameterDoc]:
+    def _extract_regular_args(self, args: ast.arguments) -> List[ParameterDoc]:
         """
         Extract regular (non-keyword-only, non-positional-only) arguments.
 
@@ -380,9 +383,7 @@ class ModuleAnalyzer:
 
         return params
 
-    def _extract_keyword_only_args(
-        self, args: ast.arguments
-    ) -> List[ParameterDoc]:
+    def _extract_keyword_only_args(self, args: ast.arguments) -> List[ParameterDoc]:
         """
         Extract keyword-only arguments.
 
@@ -395,7 +396,9 @@ class ModuleAnalyzer:
             List of ParameterDoc for keyword-only arguments
         """
         params = []
-        kw_defaults_map = {i: d for i, d in enumerate(args.kw_defaults) if d is not None}
+        kw_defaults_map = {
+            i: d for i, d in enumerate(args.kw_defaults) if d is not None
+        }
 
         for i, arg in enumerate(args.kwonlyargs):
             param = self._create_parameter(arg, is_keyword_only=True)

@@ -5,6 +5,7 @@ Validates error catalog loading, retrieval, and caching functionality
 """
 
 import pytest
+
 from backend.utils.error_boundaries import ErrorCategory
 from backend.utils.error_catalog import (
     ErrorCatalog,

@@ -12,14 +12,15 @@ import logging
 from typing import Any, Dict, List
 
 from config import config
+from knowledge_base import KnowledgeBase
+from llm_interface import LLMInterface
+
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
 from backend.constants.path_constants import PATH
-from knowledge_base import KnowledgeBase
-from llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 

@@ -8,6 +8,7 @@ import asyncio
 import time
 
 import pytest
+
 from backend.utils.error_boundaries import ErrorCategory
 from backend.utils.error_metrics import ErrorMetricsCollector, get_metrics_collector
 

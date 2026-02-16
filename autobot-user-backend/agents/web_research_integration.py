@@ -42,7 +42,11 @@ class CircuitBreakerState(Enum):
 class CircuitBreaker:
     """Circuit breaker for web research services (thread-safe)"""
 
-    def __init__(self, failure_threshold: int = 5, recovery_timeout: int = TimingConstants.STANDARD_TIMEOUT):
+    def __init__(
+        self,
+        failure_threshold: int = 5,
+        recovery_timeout: int = TimingConstants.STANDARD_TIMEOUT,
+    ):
         """Initialize circuit breaker with failure threshold and recovery timeout."""
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
@@ -183,7 +187,8 @@ class WebResearchIntegration:
                 failure_threshold=5, recovery_timeout=TimingConstants.STANDARD_TIMEOUT
             ),
             ResearchType.API_BASED: CircuitBreaker(
-                failure_threshold=2, recovery_timeout=45  # Custom value between SHORT and STANDARD
+                failure_threshold=2,
+                recovery_timeout=45,  # Custom value between SHORT and STANDARD
             ),
         }
 
@@ -298,7 +303,9 @@ class WebResearchIntegration:
         circuit_breaker = self.circuit_breakers[research_method]
 
         if not circuit_breaker.can_execute():
-            logger.warning("Circuit breaker open for %s, skipping", research_method.value)
+            logger.warning(
+                "Circuit breaker open for %s, skipping", research_method.value
+            )
             return None
 
         try:
@@ -315,11 +322,17 @@ class WebResearchIntegration:
             if result.get("status") == "success":
                 self._cache_result(cache_key, result)
 
-            logger.info("Research completed successfully using %s", research_method.value)
+            logger.info(
+                "Research completed successfully using %s", research_method.value
+            )
             return result
 
         except asyncio.TimeoutError:
-            logger.warning("Research timed out after %ss using %s", timeout_secs, research_method.value)
+            logger.warning(
+                "Research timed out after %ss using %s",
+                timeout_secs,
+                research_method.value,
+            )
             circuit_breaker.call_failed()
         except Exception as e:
             logger.error("Research failed using %s: %s", research_method.value, str(e))
@@ -364,7 +377,9 @@ class WebResearchIntegration:
             if result:
                 return result
 
-        return self._build_failure_response(query, methods_to_try, "All methods exhausted")
+        return self._build_failure_response(
+            query, methods_to_try, "All methods exhausted"
+        )
 
     async def _execute_research_method(
         self, method: ResearchType, query: str, max_results: int
@@ -586,6 +601,7 @@ def _load_web_research_config() -> Dict[str, Any]:
     """Load web research config from config manager (Issue #334 - extracted helper)."""
     try:
         from config import config_manager
+
         return config_manager.get_nested("web_research", {})
     except Exception as e:
         logger.warning("Could not load web research config: %s", e)

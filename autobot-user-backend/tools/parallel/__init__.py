@@ -25,9 +25,9 @@ Usage:
     results = await executor.execute_batch(calls, task_id="task-123")
 """
 
-from backend.tools.parallel.types import ToolCall, DependencyType
 from backend.tools.parallel.analyzer import DependencyAnalyzer
-from backend.tools.parallel.executor import ParallelToolExecutor, ExecutionGraph
+from backend.tools.parallel.executor import ExecutionGraph, ParallelToolExecutor
+from backend.tools.parallel.types import DependencyType, ToolCall
 
 __all__ = [
     "ToolCall",

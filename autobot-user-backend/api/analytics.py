@@ -16,8 +16,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 
 import httpx
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -32,6 +30,8 @@ from backend.api.analytics_controller import (
 
 # Import models from dedicated module (Issue #185 - split oversized files)
 from backend.api.analytics_models import AnalyticsOverview, RealTimeEvent
+from backend.constants.network_constants import NetworkConstants
+from backend.constants.threshold_constants import TimingConstants
 
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import hardware_monitor

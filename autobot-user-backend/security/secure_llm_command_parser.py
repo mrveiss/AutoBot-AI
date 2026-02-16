@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from enhanced_security_layer import EnhancedSecurityLayer
+
 from backend.security.prompt_injection_detector import (
     InjectionRisk,
     PromptInjectionDetector,

@@ -12,6 +12,7 @@ Tests verify:
 """
 
 import pytest
+
 from backend.utils.errors import (
     REPAIRABLE_EXCEPTIONS,
     CriticalException,

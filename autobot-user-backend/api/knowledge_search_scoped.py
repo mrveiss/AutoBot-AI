@@ -12,15 +12,15 @@ from typing import List, Optional
 
 from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
+
 from backend.knowledge.search_filters import (
     augment_search_request_with_permissions,
     extract_user_context_from_request,
     filter_search_results_by_permission,
 )
-from pydantic import BaseModel, Field
-from backend.user_management.models.user import User
-
 from backend.knowledge_factory import get_or_create_knowledge_base
+from backend.user_management.models.user import User
 
 logger = logging.getLogger(__name__)
 

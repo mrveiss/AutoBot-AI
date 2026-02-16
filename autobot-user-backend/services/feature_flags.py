@@ -33,10 +33,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from backend.type_defs.common import Metadata
-
-from backend.constants.threshold_constants import StringParsingConstants
 from autobot_shared.redis_client import get_redis_client
+from backend.constants.threshold_constants import StringParsingConstants
+from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -255,9 +254,7 @@ class FeatureFlags:
                 logger.debug("Skipping malformed history entry: %s", e)
         return history
 
-    def _build_endpoint_overrides(
-        self, endpoint_keys: list, mode_values: list
-    ) -> dict:
+    def _build_endpoint_overrides(self, endpoint_keys: list, mode_values: list) -> dict:
         """Build endpoint overrides dict from keys and values. (Issue #315 - extracted)"""
         endpoint_overrides = {}
         for key, mode_val in zip(endpoint_keys, mode_values):

@@ -14,6 +14,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 import aiohttp
+from auth_middleware import check_admin_permission
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -26,6 +27,9 @@ from fastapi import (
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+# Import AutoBot monitoring system
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+
 # Import monitoring utility functions
 from backend.api.monitoring_utils import (
     _analyze_resource_utilization,
@@ -34,14 +38,10 @@ from backend.api.monitoring_utils import (
     _convert_metrics_to_csv,
     _identify_bottlenecks,
 )
-from backend.type_defs.common import Metadata
-from auth_middleware import check_admin_permission
 
 # Issue #474: Import ServiceURLs for AlertManager integration
 from backend.constants.network_constants import ServiceURLs
-
-# Import AutoBot monitoring system
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.type_defs.common import Metadata
 from backend.utils.performance_monitor import (
     add_alert_callback,
     collect_metrics,

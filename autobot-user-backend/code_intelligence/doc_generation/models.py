@@ -224,7 +224,13 @@ class ClassDoc:
         method_scores = [m.completeness.value for m in self.methods]
         if method_scores:
             avg_score = sum(
-                {"none": 0, "minimal": 1, "partial": 2, "complete": 3, "comprehensive": 4}[s]
+                {
+                    "none": 0,
+                    "minimal": 1,
+                    "partial": 2,
+                    "complete": 3,
+                    "comprehensive": 4,
+                }[s]
                 for s in method_scores
             ) / len(method_scores)
             score += int(avg_score)
@@ -320,7 +326,13 @@ class ModuleDoc:
 
         if all_completeness:
             avg_score = sum(
-                {"none": 0, "minimal": 1, "partial": 2, "complete": 3, "comprehensive": 4}[s]
+                {
+                    "none": 0,
+                    "minimal": 1,
+                    "partial": 2,
+                    "complete": 3,
+                    "comprehensive": 4,
+                }[s]
                 for s in all_completeness
             ) / len(all_completeness)
             score += int(avg_score)

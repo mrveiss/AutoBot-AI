@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
-
 from enhanced_memory_manager_async import TaskPriority
+
 from backend.voice_processing.types import SpeechQuality, VoiceCommand
 
 

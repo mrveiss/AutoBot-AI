@@ -10,6 +10,7 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 from uuid import uuid4
 
 import pytest
+
 from backend.knowledge.pipeline.models.chunk import ProcessedChunk
 from backend.knowledge.pipeline.models.entity import Entity
 from backend.knowledge.pipeline.models.event import TemporalEvent

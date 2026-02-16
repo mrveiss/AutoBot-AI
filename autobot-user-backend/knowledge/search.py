@@ -28,7 +28,6 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
-from backend.models.task_context import EnhancedSearchContext
 from autobot_shared.error_boundaries import error_boundary
 
 # Import components from the search_components package
@@ -47,6 +46,7 @@ from backend.knowledge.search_components.helpers import (
     score_fact_by_terms,
 )
 from backend.knowledge.search_components.hybrid_search import HybridSearcher
+from backend.models.task_context import EnhancedSearchContext
 
 if TYPE_CHECKING:
     import aioredis
@@ -140,7 +140,8 @@ class SearchMixin:
         results = self._deduplicate_results(results_data, similarity_top_k)
         logger.info(
             "ChromaDB search returned %d unique documents for query: %s...",
-            len(results), query[:50],
+            len(results),
+            query[:50],
         )
         return results
 
@@ -204,7 +205,9 @@ class SearchMixin:
         seen_documents: Dict[str, Dict[str, Any]] = {}
 
         if not (
-            results_data and "documents" in results_data and results_data["documents"][0]
+            results_data
+            and "documents" in results_data
+            and results_data["documents"][0]
         ):
             return []
 
@@ -215,7 +218,10 @@ class SearchMixin:
             )
             doc_key = self._get_document_key(metadata, i)
 
-            if doc_key not in seen_documents or score > seen_documents[doc_key]["score"]:
+            if (
+                doc_key not in seen_documents
+                or score > seen_documents[doc_key]["score"]
+            ):
                 seen_documents[doc_key] = self._build_result_dict(
                     doc, score, metadata, results_data, i
                 )
@@ -230,9 +236,7 @@ class SearchMixin:
     ) -> float:
         """Convert distance to similarity score. Issue #281: Extracted helper."""
         distance = (
-            results_data["distances"][0][index]
-            if "distances" in results_data
-            else 1.0
+            results_data["distances"][0][index] if "distances" in results_data else 1.0
         )
         return max(0.0, 1.0 - (distance / 2.0))
 
@@ -363,12 +367,19 @@ class SearchMixin:
         return min(int((limit + offset) * multiplier), 500)
 
     async def _execute_enhanced_search_pipeline(
-        self, processed_query: str, mode: str, category: Optional[str],
-        fetch_limit: int, tag_filtered_ids: Optional[Set[str]],
-        min_score: float, enable_reranking: bool,
+        self,
+        processed_query: str,
+        mode: str,
+        category: Optional[str],
+        fetch_limit: int,
+        tag_filtered_ids: Optional[Set[str]],
+        min_score: float,
+        enable_reranking: bool,
     ) -> List[Dict[str, Any]]:
         """Execute search pipeline with filtering and reranking (Issue #398: extracted)."""
-        results = await self._execute_search_by_mode(mode, processed_query, fetch_limit, category)
+        results = await self._execute_search_by_mode(
+            mode, processed_query, fetch_limit, category
+        )
         results = self._apply_post_search_filters(results, tag_filtered_ids, min_score)
         if enable_reranking and results:
             results = await self._rerank_results(processed_query, results)
@@ -376,10 +387,16 @@ class SearchMixin:
 
     @error_boundary(component="knowledge_base", function="enhanced_search")
     async def enhanced_search(
-        self, query: str, limit: int = 10, offset: int = 0,
-        category: Optional[str] = None, tags: Optional[List[str]] = None,
-        tags_match_any: bool = False, mode: str = "hybrid",
-        enable_reranking: bool = False, min_score: float = 0.0,
+        self,
+        query: str,
+        limit: int = 10,
+        offset: int = 0,
+        category: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        tags_match_any: bool = False,
+        mode: str = "hybrid",
+        enable_reranking: bool = False,
+        min_score: float = 0.0,
     ) -> Dict[str, Any]:
         """Enhanced search with filtering and reranking (Issue #398: refactored)."""
         self.ensure_initialized()
@@ -396,13 +413,25 @@ class SearchMixin:
 
             fetch_limit = self._calculate_fetch_limit(limit, offset, tags, min_score)
             results = await self._execute_enhanced_search_pipeline(
-                processed_query, mode, category, fetch_limit,
-                tag_filtered_ids, min_score, enable_reranking,
+                processed_query,
+                mode,
+                category,
+                fetch_limit,
+                tag_filtered_ids,
+                min_score,
+                enable_reranking,
             )
 
             return self._build_success_response(
-                results, len(results), offset, limit, processed_query,
-                mode, tags, min_score, enable_reranking,
+                results,
+                len(results),
+                offset,
+                limit,
+                processed_query,
+                mode,
+                tags,
+                min_score,
+                enable_reranking,
             )
         except Exception as e:
             logger.error("Enhanced search failed: %s", e)
@@ -476,9 +505,7 @@ class SearchMixin:
         """Ensure cross-encoder model is loaded. Issue #281: Extracted helper."""
         return await get_reranker()._ensure_cross_encoder()
 
-    def _apply_rerank_scores(
-        self, results: List[Dict[str, Any]], scores: list
-    ) -> None:
+    def _apply_rerank_scores(self, results: List[Dict[str, Any]], scores: list) -> None:
         """Apply rerank scores to results. Issue #281: Extracted helper."""
         get_reranker()._apply_rerank_scores(results, scores)
 
@@ -578,9 +605,8 @@ class SearchMixin:
                 mode, search_query, fetch_limit, category
             )
             for result in query_results:
-                result_id = (
-                    result.get("metadata", {}).get("fact_id")
-                    or result.get("node_id", "")
+                result_id = result.get("metadata", {}).get("fact_id") or result.get(
+                    "node_id", ""
                 )
                 if result_id not in seen_ids:
                     seen_ids.add(result_id)
@@ -670,7 +696,9 @@ class SearchMixin:
         )
 
     @error_boundary(component="knowledge_base", function="enhanced_search_v2_ctx")
-    async def enhanced_search_v2_ctx(self, ctx: EnhancedSearchContext) -> Dict[str, Any]:
+    async def enhanced_search_v2_ctx(
+        self, ctx: EnhancedSearchContext
+    ) -> Dict[str, Any]:
         """Enhanced search v2 using EnhancedSearchContext (Issue #398: refactored)."""
         self.ensure_initialized()
 
@@ -692,9 +720,13 @@ class SearchMixin:
             if early_return:
                 return early_return
 
-            fetch_multiplier = 3 if (
-                params["tags"] or params["min_score"] > 0 or params["exclude_terms"]
-            ) else 1.5
+            fetch_multiplier = (
+                3
+                if (
+                    params["tags"] or params["min_score"] > 0 or params["exclude_terms"]
+                )
+                else 1.5
+            )
             fetch_limit = min(
                 int((params["limit"] + params["offset"]) * fetch_multiplier), 500
             )

@@ -27,7 +27,12 @@ logger = logging.getLogger(__name__)
 class SQLiteConnectionPool:
     """Thread-safe SQLite connection pool with proper resource management."""
 
-    def __init__(self, db_path: str, pool_size: int = 10, timeout: float = TimingConstants.SHORT_TIMEOUT):
+    def __init__(
+        self,
+        db_path: str,
+        pool_size: int = 10,
+        timeout: float = TimingConstants.SHORT_TIMEOUT,
+    ):
         """
         Initialize SQLite connection pool.
 

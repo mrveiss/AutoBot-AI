@@ -9,9 +9,13 @@ Provides native API access to containerized Playwright functionality
 import logging
 
 import aiohttp
+from config import UnifiedConfigManager
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_client import get_http_client
+from backend.constants.network_constants import NetworkConstants
 from backend.services.playwright_service import (
     get_playwright_service,
     playwright_service,
@@ -19,10 +23,6 @@ from backend.services.playwright_service import (
     send_test_message_embedded,
     test_frontend_embedded,
 )
-from config import UnifiedConfigManager
-from backend.constants.network_constants import NetworkConstants
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.http_client import get_http_client
 
 # Create singleton config instance
 config = UnifiedConfigManager()

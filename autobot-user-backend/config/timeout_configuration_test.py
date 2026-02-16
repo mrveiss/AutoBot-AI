@@ -12,9 +12,9 @@ Validates:
 import os
 
 import pytest
-from backend.utils.knowledge_base_timeouts import KnowledgeBaseTimeouts
-
 from config import UnifiedConfigManager
+
+from backend.utils.knowledge_base_timeouts import KnowledgeBaseTimeouts
 
 
 class TestUnifiedConfigTimeouts:

@@ -30,9 +30,11 @@ import logging
 import re
 from typing import Optional
 
+from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from starlette.requests import Request
 
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.api.knowledge_models import (
     AddTagsRequest,
     BulkTagRequest,
@@ -43,10 +45,8 @@ from backend.api.knowledge_models import (
     SearchByTagsRequest,
     UpdateTagStyleRequest,
 )
-from backend.knowledge_factory import get_or_create_knowledge_base
-from auth_middleware import check_admin_permission
 from backend.constants.threshold_constants import QueryDefaults
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)
 

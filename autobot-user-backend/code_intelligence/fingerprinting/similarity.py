@@ -47,20 +47,14 @@ class SimilarityCalculator:
         """
         if fragment1.ast_node is None or fragment2.ast_node is None:
             # Fall back to text-based similarity
-            return self._text_similarity(
-                fragment1.source_code, fragment2.source_code
-            )
+            return self._text_similarity(fragment1.source_code, fragment2.source_code)
 
         # Calculate multiple similarity metrics
         structural_sim = self._structural_similarity(
             fragment1.ast_node, fragment2.ast_node
         )
-        token_sim = self._token_similarity(
-            fragment1.source_code, fragment2.source_code
-        )
-        feature_sim = self._feature_similarity(
-            fragment1.ast_node, fragment2.ast_node
-        )
+        token_sim = self._token_similarity(fragment1.source_code, fragment2.source_code)
+        feature_sim = self._feature_similarity(fragment1.ast_node, fragment2.ast_node)
 
         # Weighted average
         weights = {"structural": 0.5, "token": 0.3, "feature": 0.2}

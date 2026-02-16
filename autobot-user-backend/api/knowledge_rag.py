@@ -12,16 +12,16 @@ with cross-encoder reranking for improved relevance scoring.
 import logging
 from typing import List
 
+from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.constants.threshold_constants import QueryDefaults
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.services.rag_config import get_rag_config, update_rag_config
 from backend.services.rag_service import RAGService
 from backend.type_defs.common import Metadata
-from auth_middleware import get_current_user
-from backend.constants.threshold_constants import QueryDefaults
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

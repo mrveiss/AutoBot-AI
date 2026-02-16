@@ -88,9 +88,7 @@ class ExecutionStrategyHandler:
             if result.get("status") == "failed" and not task.metadata.get(
                 "optional", False
             ):
-                logger.error(
-                    "Required task %s failed, stopping workflow", task.task_id
-                )
+                logger.error("Required task %s failed, stopping workflow", task.task_id)
                 break
 
         return results
@@ -147,9 +145,7 @@ class ExecutionStrategyHandler:
 
         pipeline_data = {}
         for stage_num, stage_tasks in enumerate(stages):
-            logger.info(
-                "Executing pipeline stage %d/%d", stage_num + 1, len(stages)
-            )
+            logger.info("Executing pipeline stage %d/%d", stage_num + 1, len(stages))
 
             # Execute stage tasks in parallel
             stage_results = await asyncio.gather(

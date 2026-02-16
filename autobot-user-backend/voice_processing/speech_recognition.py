@@ -14,9 +14,9 @@ import time
 from typing import Any, Dict, List
 
 import numpy as np
-
 from enhanced_memory_manager_async import TaskPriority
 from task_execution_tracker import task_tracker
+
 from backend.voice_processing.models import AudioInput, SpeechRecognitionResult
 from backend.voice_processing.types import SpeechQuality
 
@@ -64,9 +64,7 @@ class SpeechRecognitionEngine:
         except ImportError:
             logger.warning("Language detection not available")
 
-    async def _run_parallel_analysis(
-        self, audio_input: AudioInput
-    ) -> tuple:
+    async def _run_parallel_analysis(self, audio_input: AudioInput) -> tuple:
         """Issue #665: Extracted from transcribe_audio to reduce function length.
 
         Run audio analysis operations in parallel for better performance.
@@ -143,22 +141,31 @@ class SpeechRecognitionEngine:
             start_time = time.time()
 
             try:
-                audio_quality, noise_level, transcription_result, speech_segments = (
-                    await self._run_parallel_analysis(audio_input)
-                )
+                (
+                    audio_quality,
+                    noise_level,
+                    transcription_result,
+                    speech_segments,
+                ) = await self._run_parallel_analysis(audio_input)
                 processing_time = time.time() - start_time
 
                 result = self._build_recognition_result(
-                    audio_input, transcription_result, speech_segments,
-                    audio_quality, noise_level, processing_time,
+                    audio_input,
+                    transcription_result,
+                    speech_segments,
+                    audio_quality,
+                    noise_level,
+                    processing_time,
                 )
 
-                task_context.set_outputs({
-                    "transcription": result.transcription,
-                    "confidence": result.confidence,
-                    "audio_quality": result.audio_quality.value,
-                    "processing_time": processing_time,
-                })
+                task_context.set_outputs(
+                    {
+                        "transcription": result.transcription,
+                        "confidence": result.confidence,
+                        "audio_quality": result.audio_quality.value,
+                        "processing_time": processing_time,
+                    }
+                )
 
                 logger.info(
                     f"Speech recognition completed: {audio_input.audio_id}, "
@@ -209,9 +216,7 @@ class SpeechRecognitionEngine:
             logger.debug("Noise level calculation failed: %s", e)
             return 0.5
 
-    def _try_google_recognition(
-        self, audio_data
-    ) -> List[Dict[str, Any]]:
+    def _try_google_recognition(self, audio_data) -> List[Dict[str, Any]]:
         """Try Google speech recognition (Issue #298 - extracted helper)."""
         results = []
         try:
@@ -219,11 +224,13 @@ class SpeechRecognitionEngine:
             if not result or "alternative" not in result:
                 return results
             for alt in result["alternative"]:
-                results.append({
-                    "text": alt.get("transcript", ""),
-                    "confidence": alt.get("confidence", 0.0),
-                    "engine": "google",
-                })
+                results.append(
+                    {
+                        "text": alt.get("transcript", ""),
+                        "confidence": alt.get("confidence", 0.0),
+                        "engine": "google",
+                    }
+                )
         except Exception as e:
             logger.debug("Google Speech Recognition failed: %s", e)
         return results
@@ -232,11 +239,13 @@ class SpeechRecognitionEngine:
         """Try Sphinx offline recognition (Issue #298 - extracted helper)."""
         try:
             text = self.recognizer.recognize_sphinx(audio_data)
-            return [{
-                "text": text,
-                "confidence": 0.7,  # Sphinx doesn't provide confidence
-                "engine": "sphinx",
-            }]
+            return [
+                {
+                    "text": text,
+                    "confidence": 0.7,  # Sphinx doesn't provide confidence
+                    "engine": "sphinx",
+                }
+            ]
         except Exception as e:
             logger.debug("Sphinx Recognition failed: %s", e)
             return []

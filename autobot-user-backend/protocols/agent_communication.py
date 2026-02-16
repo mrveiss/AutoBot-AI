@@ -26,8 +26,11 @@ sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
-from backend.constants.threshold_constants import RetryConfig, TimingConstants  # noqa: E402
 from autobot_shared.error_boundaries import error_boundary  # noqa: E402
+from backend.constants.threshold_constants import (  # noqa: E402
+    RetryConfig,
+    TimingConstants,
+)
 
 
 def _parse_message_type(msg_type: Any) -> "MessageType":

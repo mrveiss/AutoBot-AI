@@ -15,10 +15,10 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 import aiofiles
-
-from backend.type_defs.common import Metadata
-from backend.constants.network_constants import NetworkConstants
 from llm_interface import LLMInterface
+
+from backend.constants.network_constants import NetworkConstants
+from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 

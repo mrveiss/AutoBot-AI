@@ -29,16 +29,16 @@ Usage:
     events = await manager.get_latest(count=10)
 """
 
+from backend.events.stream_manager import EventStreamManager, RedisEventStreamManager
 from backend.events.types import (
-    EventType,
-    AgentEvent,
-    MessageContent,
     ActionContent,
+    AgentEvent,
+    EventType,
+    KnowledgeContent,
+    MessageContent,
     ObservationContent,
     PlanContent,
-    KnowledgeContent,
 )
-from backend.events.stream_manager import EventStreamManager, RedisEventStreamManager
 
 __all__ = [
     # Types

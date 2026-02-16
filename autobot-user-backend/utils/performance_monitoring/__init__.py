@@ -40,26 +40,11 @@ For backward compatibility, the original performance_monitor.py module
 still exports all classes and functions directly.
 """
 
-# Types and constants
-from backend.utils.performance_monitoring.types import (
-    CRITICAL_SERVICE_STATUSES,
-    DEFAULT_COLLECTION_INTERVAL,
-    DEFAULT_PERFORMANCE_BASELINES,
-    DEFAULT_RETENTION_HOURS,
-    AUTOBOT_PROCESS_KEYWORDS,
+# Analyzers
+from backend.utils.performance_monitoring.analyzers import (
+    AlertAnalyzer,
+    RecommendationGenerator,
 )
-
-# Metrics dataclasses
-from backend.utils.performance_monitoring.metrics import (
-    GPUMetrics,
-    MultiModalMetrics,
-    NPUMetrics,
-    ServicePerformanceMetrics,
-    SystemPerformanceMetrics,
-)
-
-# Hardware detection
-from backend.utils.performance_monitoring.hardware import HardwareDetector
 
 # Collectors
 from backend.utils.performance_monitoring.collectors import (
@@ -70,20 +55,35 @@ from backend.utils.performance_monitoring.collectors import (
     SystemCollector,
 )
 
-# Analyzers
-from backend.utils.performance_monitoring.analyzers import (
-    AlertAnalyzer,
-    RecommendationGenerator,
-)
-
 # Decorator
 from backend.utils.performance_monitoring.decorator import (
     monitor_performance,
     set_redis_client,
 )
 
+# Hardware detection
+from backend.utils.performance_monitoring.hardware import HardwareDetector
+
+# Metrics dataclasses
+from backend.utils.performance_monitoring.metrics import (
+    GPUMetrics,
+    MultiModalMetrics,
+    NPUMetrics,
+    ServicePerformanceMetrics,
+    SystemPerformanceMetrics,
+)
+
 # Main monitor class
 from backend.utils.performance_monitoring.monitor import PerformanceMonitor
+
+# Types and constants
+from backend.utils.performance_monitoring.types import (
+    AUTOBOT_PROCESS_KEYWORDS,
+    CRITICAL_SERVICE_STATUSES,
+    DEFAULT_COLLECTION_INTERVAL,
+    DEFAULT_PERFORMANCE_BASELINES,
+    DEFAULT_RETENTION_HOURS,
+)
 
 # Re-export for convenience
 __all__ = [

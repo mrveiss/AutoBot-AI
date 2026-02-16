@@ -19,11 +19,12 @@ import os
 from datetime import datetime
 from typing import Optional
 
+from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from auth_middleware import check_admin_permission
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.code_intelligence.anti_pattern_detector import (
     AntiPatternDetector,
     AntiPatternSeverity,
@@ -33,13 +34,15 @@ from backend.code_intelligence.performance_analyzer import (
     PerformanceSeverity,
     get_performance_issue_types,
 )
-from backend.code_intelligence.redis_optimizer import OptimizationSeverity, RedisOptimizer
+from backend.code_intelligence.redis_optimizer import (
+    OptimizationSeverity,
+    RedisOptimizer,
+)
 from backend.code_intelligence.security_analyzer import (
     SecurityAnalyzer,
     SecuritySeverity,
     get_vulnerability_types,
 )
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 

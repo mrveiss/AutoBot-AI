@@ -16,14 +16,14 @@ import asyncio
 import logging
 
 import aiohttp
+from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 
-from backend.type_defs.common import Metadata
-from auth_middleware import get_current_user
-from backend.constants.network_constants import NetworkConstants
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from backend.constants.network_constants import NetworkConstants
+from backend.type_defs.common import Metadata
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

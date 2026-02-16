@@ -40,14 +40,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
 import aiofiles
-
-from backend.models.task_context import AuditQueryContext
-from backend.type_defs.common import Metadata
-
 import redis.asyncio as async_redis
 
-from backend.constants.network_constants import NetworkConstants
 from autobot_shared.redis_client import get_redis_client
+from backend.constants.network_constants import NetworkConstants
+from backend.models.task_context import AuditQueryContext
+from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -370,8 +368,15 @@ class AuditLogger:
         try:
             # Create and sanitize audit entry (Issue #665: extracted)
             entry = self._create_sanitized_entry(
-                operation, result, user_id, session_id,
-                ip_address, resource, user_role, details, performance_ms
+                operation,
+                result,
+                user_id,
+                session_id,
+                ip_address,
+                resource,
+                user_role,
+                details,
+                performance_ms,
             )
 
             # Add to batch queue and schedule flush (Issue #665: extracted)
@@ -438,7 +443,10 @@ class AuditLogger:
             logger.error("Batch flush failed: %s", e)
             # Issue #370: Fallback to file in parallel for all entries
             await asyncio.gather(
-                *[self._fallback_log(entry, error=str(e)) for entry in entries_to_flush],
+                *[
+                    self._fallback_log(entry, error=str(e))
+                    for entry in entries_to_flush
+                ],
                 return_exceptions=True,
             )
 
@@ -508,9 +516,7 @@ class AuditLogger:
 
             # Append to JSONL file (one JSON object per line)
             try:
-                async with aiofiles.open(
-                    fallback_file, "a", encoding="utf-8"
-                ) as f:
+                async with aiofiles.open(fallback_file, "a", encoding="utf-8") as f:
                     await f.write(json.dumps(log_data, default=str) + "\n")
             except OSError as e:
                 logger.error("Fallback log file write failed: %s", e)
@@ -542,7 +548,9 @@ class AuditLogger:
         if session_id:
             return await self._query_session(audit_db, session_id, query_ctx)
         if user_id and operation:
-            return await self._query_user_operation(audit_db, user_id, operation, query_ctx)
+            return await self._query_user_operation(
+                audit_db, user_id, operation, query_ctx
+            )
         if user_id:
             return await self._query_user(audit_db, user_id, query_ctx)
         if operation:
@@ -595,9 +603,16 @@ class AuditLogger:
                 start_time = end_time - timedelta(days=1)
 
             return await self._execute_query(
-                audit_db, start_time, end_time, limit, offset,
-                session_id=session_id, user_id=user_id, operation=operation,
-                vm_name=vm_name, result=result
+                audit_db,
+                start_time,
+                end_time,
+                limit,
+                offset,
+                session_id=session_id,
+                user_id=user_id,
+                operation=operation,
+                vm_name=vm_name,
+                result=result,
             )
 
         except Exception as e:
@@ -622,10 +637,14 @@ class AuditLogger:
 
             # Query sorted set by timestamp range
             start_score = (
-                query_ctx.start_time.timestamp() if current_date == query_ctx.start_time.date() else 0
+                query_ctx.start_time.timestamp()
+                if current_date == query_ctx.start_time.date()
+                else 0
             )
             end_score = (
-                query_ctx.end_time.timestamp() if current_date == end_date else float("inf")
+                query_ctx.end_time.timestamp()
+                if current_date == end_date
+                else float("inf")
             )
 
             results = await audit_db.zrange(
@@ -652,7 +671,10 @@ class AuditLogger:
 
         # Get entry IDs from session index
         entry_ids = await audit_db.zrange(
-            key, query_ctx.start_time.timestamp(), query_ctx.end_time.timestamp(), withscores=False
+            key,
+            query_ctx.start_time.timestamp(),
+            query_ctx.end_time.timestamp(),
+            withscores=False,
         )
 
         # Batch fetch full entries from primary log - eliminates N+1

@@ -18,8 +18,8 @@ from typing import Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 
-from backend.type_defs.common import Metadata
 from backend.constants.path_constants import PATH
+from backend.type_defs.common import Metadata
 from backend.utils.file_categorization import (
     ALL_CODE_EXTENSIONS,
     CONFIG_EXTENSIONS,

@@ -50,22 +50,10 @@ await stop_monitoring()
 import logging
 from typing import Any, Dict, List
 
-# Import all types, dataclasses, and classes from the package (Issue #381 refactoring)
-from backend.utils.performance_monitoring.types import (
-    CRITICAL_SERVICE_STATUSES,
-    DEFAULT_COLLECTION_INTERVAL,
-    DEFAULT_PERFORMANCE_BASELINES,
-    DEFAULT_RETENTION_HOURS,
-    AUTOBOT_PROCESS_KEYWORDS,
+from backend.utils.performance_monitoring.analyzers import (
+    AlertAnalyzer,
+    RecommendationGenerator,
 )
-from backend.utils.performance_monitoring.metrics import (
-    GPUMetrics,
-    MultiModalMetrics,
-    NPUMetrics,
-    ServicePerformanceMetrics,
-    SystemPerformanceMetrics,
-)
-from backend.utils.performance_monitoring.hardware import HardwareDetector
 from backend.utils.performance_monitoring.collectors import (
     GPUCollector,
     MultiModalCollector,
@@ -73,15 +61,28 @@ from backend.utils.performance_monitoring.collectors import (
     ServiceCollector,
     SystemCollector,
 )
-from backend.utils.performance_monitoring.analyzers import (
-    AlertAnalyzer,
-    RecommendationGenerator,
-)
 from backend.utils.performance_monitoring.decorator import (
     monitor_performance,
     set_redis_client,
 )
+from backend.utils.performance_monitoring.hardware import HardwareDetector
+from backend.utils.performance_monitoring.metrics import (
+    GPUMetrics,
+    MultiModalMetrics,
+    NPUMetrics,
+    ServicePerformanceMetrics,
+    SystemPerformanceMetrics,
+)
 from backend.utils.performance_monitoring.monitor import PerformanceMonitor
+
+# Import all types, dataclasses, and classes from the package (Issue #381 refactoring)
+from backend.utils.performance_monitoring.types import (
+    AUTOBOT_PROCESS_KEYWORDS,
+    CRITICAL_SERVICE_STATUSES,
+    DEFAULT_COLLECTION_INTERVAL,
+    DEFAULT_PERFORMANCE_BASELINES,
+    DEFAULT_RETENTION_HOURS,
+)
 
 logger = logging.getLogger(__name__)
 

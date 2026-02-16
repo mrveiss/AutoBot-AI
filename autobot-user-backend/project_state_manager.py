@@ -19,9 +19,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from autobot_shared.logging_manager import get_logger
 from backend.constants.network_constants import NetworkConstants
 from backend.constants.path_constants import PATH
-from autobot_shared.logging_manager import get_logger
 
 from .utils.service_registry import get_service_url
 

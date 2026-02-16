@@ -8,11 +8,6 @@ to be applied across the codebase.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from pydantic import ValidationError as PydanticValidationError
-
 from auth_middleware import get_current_user
 from error_handler import log_error, safe_api_error, with_error_handling
 from exceptions import (
@@ -22,6 +17,10 @@ from exceptions import (
     ValidationError,
     get_error_code,
 )
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from pydantic import ValidationError as PydanticValidationError
 
 # Issue #756: Consolidated from src/utils/request_utils.py
 from backend.utils.request_utils import generate_request_id

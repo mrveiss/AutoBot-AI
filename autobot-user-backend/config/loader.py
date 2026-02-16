@@ -74,7 +74,9 @@ ENV_VAR_MAPPINGS = {
 def load_yaml_config(config_file: Path) -> Dict[str, Any]:
     """Load base configuration from YAML file"""
     if not config_file.exists():
-        logger.info("Base configuration file not found: %s, using defaults", config_file)
+        logger.info(
+            "Base configuration file not found: %s, using defaults", config_file
+        )
         return get_default_config()
 
     try:
@@ -146,7 +148,9 @@ def apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
         if env_value is not None:
             converted_value = _convert_env_value(env_value)
             set_nested_value(env_overrides, config_path, converted_value)
-            logger.info("Applied environment override: %s = %s", env_var, converted_value)
+            logger.info(
+                "Applied environment override: %s = %s", env_var, converted_value
+            )
 
     if env_overrides:
         return deep_merge(config, env_overrides)

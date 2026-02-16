@@ -19,12 +19,12 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from auth_middleware import get_current_user
-from backend.constants.threshold_constants import CategoryDefaults, TimingConstants
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.constants.threshold_constants import CategoryDefaults, TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
 from backend.dependencies import get_config, get_knowledge_base

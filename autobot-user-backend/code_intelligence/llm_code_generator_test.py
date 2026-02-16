@@ -9,6 +9,7 @@ implemented as part of Issue #228 under EPIC #217.
 """
 
 import pytest
+
 from backend.code_intelligence.llm_code_generator import (
     CodeContext,
     CodeValidator,

@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from enhanced_memory_manager_async import TaskPriority
 from task_execution_tracker import task_tracker
+
 from backend.voice_processing.constants import (
     APP_PATTERNS_RE,
     AUTOMATION_INTENT_PATTERNS,
@@ -219,7 +220,10 @@ class NaturalLanguageProcessor:
         ) as task_context:
             try:
                 # Step 1: Classify command type first (required for subsequent steps)
-                command_type, classification_confidence = await self._classify_command_type(transcription)
+                (
+                    command_type,
+                    classification_confidence,
+                ) = await self._classify_command_type(transcription)
 
                 # Step 2: Extract intent and entities in parallel
                 intent, entities = await asyncio.gather(
@@ -228,23 +232,42 @@ class NaturalLanguageProcessor:
                 )
 
                 # Step 3: Extract parameters (depends on entities from step 2)
-                parameters = await self._extract_parameters(transcription, command_type, entities)
+                parameters = await self._extract_parameters(
+                    transcription, command_type, entities
+                )
 
                 # Step 4: Run final checks in parallel
-                requires_confirmation, context_needed, suggested_actions = await asyncio.gather(
+                (
+                    requires_confirmation,
+                    context_needed,
+                    suggested_actions,
+                ) = await asyncio.gather(
                     self._requires_confirmation(command_type, intent, parameters),
                     self._needs_context(command_type, intent, parameters, context),
-                    self._generate_suggested_actions(command_type, intent, entities, parameters),
+                    self._generate_suggested_actions(
+                        command_type, intent, entities, parameters
+                    ),
                 )
 
                 # Build result and log outputs
                 confidence = classification_confidence * 0.8
                 analysis = self._build_analysis_result(
-                    command_type, intent, entities, parameters, confidence,
-                    suggested_actions, requires_confirmation, context_needed,
+                    command_type,
+                    intent,
+                    entities,
+                    parameters,
+                    confidence,
+                    suggested_actions,
+                    requires_confirmation,
+                    context_needed,
                 )
                 self._log_analysis_outputs(
-                    task_context, command_type, intent, confidence, entities, suggested_actions
+                    task_context,
+                    command_type,
+                    intent,
+                    confidence,
+                    entities,
+                    suggested_actions,
                 )
                 return analysis
 

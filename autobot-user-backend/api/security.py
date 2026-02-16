@@ -15,17 +15,17 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import aiofiles
+from enhanced_security_layer import EnhancedSecurityLayer
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from backend.type_defs.common import Metadata
-from enhanced_security_layer import EnhancedSecurityLayer
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.security.domain_security import get_domain_security_manager
 from backend.security.threat_intelligence import (
     ThreatLevel,
     get_threat_intelligence_service,
 )
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

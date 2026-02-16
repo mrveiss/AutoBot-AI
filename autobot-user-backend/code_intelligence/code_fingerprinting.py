@@ -28,22 +28,23 @@ backward compatibility by re-exporting all classes.
 
 from typing import Dict, List, Optional
 
-# Import all classes from the fingerprinting package (Issue #381 refactoring)
-from backend.code_intelligence.fingerprinting.types import (
-    CloneType,
-    FingerprintType,
-    CloneSeverity,
-    CodeFragment,
-    Fingerprint,
-    CloneInstance,
-    CloneGroup,
-    CloneDetectionReport,
-)
-from backend.code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
 from backend.code_intelligence.fingerprinting.ast_hasher import ASTHasher
+from backend.code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
+from backend.code_intelligence.fingerprinting.detector import CloneDetector
 from backend.code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
 from backend.code_intelligence.fingerprinting.similarity import SimilarityCalculator
-from backend.code_intelligence.fingerprinting.detector import CloneDetector
+
+# Import all classes from the fingerprinting package (Issue #381 refactoring)
+from backend.code_intelligence.fingerprinting.types import (
+    CloneDetectionReport,
+    CloneGroup,
+    CloneInstance,
+    CloneSeverity,
+    CloneType,
+    CodeFragment,
+    Fingerprint,
+    FingerprintType,
+)
 
 # Re-export for backward compatibility
 __all__ = [

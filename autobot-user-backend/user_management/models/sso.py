@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from backend.constants.threshold_constants import CategoryDefaults
 
+from backend.constants.threshold_constants import CategoryDefaults
 from backend.user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
@@ -141,7 +141,9 @@ class SSOProvider(Base, TimestampMixin):
 
     def __repr__(self) -> str:
         scope = f"org:{self.org_id}" if self.org_id else "global"
-        return f"<SSOProvider(type={self.provider_type}, name={self.name}, scope={scope})>"
+        return (
+            f"<SSOProvider(type={self.provider_type}, name={self.name}, scope={scope})>"
+        )
 
     @property
     def is_enterprise(self) -> bool:

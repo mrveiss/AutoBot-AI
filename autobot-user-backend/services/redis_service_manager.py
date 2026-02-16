@@ -24,12 +24,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
 
-from backend.type_defs.common import Metadata
-
 # TODO (#729): SSH proxied through SLM API
 # from backend.services.ssh_manager import RemoteCommandResult, SSHManager
 from backend.constants.network_constants import NetworkConstants
 from backend.constants.threshold_constants import TimingConstants
+from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +116,9 @@ class RedisServiceManager:
             enable_audit_logging: Enable audit logging (default: True)
         """
         # TODO (#729): SSH proxied through SLM API - This service needs refactoring
-        raise NotImplementedError("Redis Service Manager temporarily disabled - SSH proxied through SLM API (#729)")
+        raise NotImplementedError(
+            "Redis Service Manager temporarily disabled - SSH proxied through SLM API (#729)"
+        )
         # OLD CODE:
         # self.ssh_manager = ssh_manager or SSHManager(enable_audit_logging=True)
         self.redis_host = redis_host
@@ -327,7 +328,11 @@ class RedisServiceManager:
 
             self._audit_log(
                 "redis_service_start_completed",
-                {"success": success, "duration": duration, "new_status": new_status.status},
+                {
+                    "success": success,
+                    "duration": duration,
+                    "new_status": new_status.status,
+                },
                 user_id=user_id,
             )
             return operation_result
@@ -385,7 +390,11 @@ class RedisServiceManager:
 
             self._audit_log(
                 "redis_service_stop_completed",
-                {"success": success, "duration": duration, "new_status": new_status.status},
+                {
+                    "success": success,
+                    "duration": duration,
+                    "new_status": new_status.status,
+                },
                 user_id=user_id,
             )
             return operation_result
@@ -420,7 +429,9 @@ class RedisServiceManager:
 
         try:
             # Execute restart command
-            result = await self._execute_systemctl_command("restart", timeout=TimingConstants.SHORT_TIMEOUT)
+            result = await self._execute_systemctl_command(
+                "restart", timeout=TimingConstants.SHORT_TIMEOUT
+            )
 
             # Verify service restarted - wait for initialization
             await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
@@ -616,7 +627,9 @@ class RedisServiceManager:
             service_running = status.status == "running"
 
             connectivity, response_time_ms = await self._check_redis_connectivity()
-            overall_status = self._determine_health_status(service_running, connectivity)
+            overall_status = self._determine_health_status(
+                service_running, connectivity
+            )
             recommendations = self._generate_health_recommendations(
                 service_running, connectivity, response_time_ms
             )

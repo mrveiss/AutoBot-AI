@@ -15,7 +15,10 @@ import threading
 from typing import Any, Dict, List, Optional, Set, Type
 
 from backend.skills.base_skill import BaseSkill, SkillHealth, SkillManifest, SkillStatus
-from backend.skills.dependency_resolver import check_missing_dependencies, resolve_dependencies
+from backend.skills.dependency_resolver import (
+    check_missing_dependencies,
+    resolve_dependencies,
+)
 
 logger = logging.getLogger(__name__)
 

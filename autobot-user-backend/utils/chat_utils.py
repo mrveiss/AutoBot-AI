@@ -32,12 +32,12 @@ from uuid import uuid4
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+
+from backend.type_defs.common import Metadata
 from backend.utils.path_validation import contains_injection_patterns
 
 # Issue #756: Consolidated from utils/request_utils.py
 from backend.utils.request_utils import generate_request_id
-
-from backend.type_defs.common import Metadata
 from backend.utils.response_helpers import (
     create_error_response as _canonical_create_error_response,
 )

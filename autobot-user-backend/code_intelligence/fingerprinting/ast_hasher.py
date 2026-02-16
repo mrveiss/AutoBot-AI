@@ -246,9 +246,7 @@ class ASTHasher:
 
     def _handle_dict(self, node: ast.Dict, node_type: str) -> Tuple:
         """Handle Dict AST nodes."""
-        keys = tuple(
-            self._node_to_structure(k) if k else ("None",) for k in node.keys
-        )
+        keys = tuple(self._node_to_structure(k) if k else ("None",) for k in node.keys)
         values = tuple(self._node_to_structure(v) for v in node.values)
         return (node_type, keys, values)
 

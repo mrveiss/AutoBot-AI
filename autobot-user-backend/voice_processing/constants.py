@@ -33,21 +33,25 @@ QUERY_INTENT_PATTERNS = [
 ]
 
 # Issue #380: Module-level frozensets to avoid repeated list creation
-HIGH_RISK_INTENTS = frozenset({
-    "shutdown",
-    "restart",
-    "delete",
-    "uninstall",
-    "request_manual_control",
-    "emergency",
-})
+HIGH_RISK_INTENTS = frozenset(
+    {
+        "shutdown",
+        "restart",
+        "delete",
+        "uninstall",
+        "request_manual_control",
+        "emergency",
+    }
+)
 
-CONTEXT_DEPENDENT_INTENTS = frozenset({
-    "click_element",
-    "type_text",
-    "scroll_page",
-    "navigate_to",
-})
+CONTEXT_DEPENDENT_INTENTS = frozenset(
+    {
+        "click_element",
+        "type_text",
+        "scroll_page",
+        "navigate_to",
+    }
+)
 
 # Issue #380: Intents requiring current screen state
 SCREEN_STATE_INTENTS = frozenset({"click_element", "type_text"})
@@ -67,9 +71,7 @@ APP_PATTERNS_RE = [
 ]
 
 
-def match_intent_from_patterns(
-    transcription: str, patterns: list, default: str
-) -> str:
+def match_intent_from_patterns(transcription: str, patterns: list, default: str) -> str:
     """Match transcription against intent patterns (Issue #315 - extracted)."""
     for pattern, intent in patterns:
         if re.search(pattern, transcription):

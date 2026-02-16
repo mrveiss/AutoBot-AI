@@ -11,10 +11,9 @@ from datetime import datetime
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from backend.utils.entity_resolver import EntityResolver
-
 from backend.models.atomic_fact import AtomicFact, FactType, TemporalType
 from backend.models.entity_mapping import EntityMapping, EntityType
+from backend.utils.entity_resolver import EntityResolver
 
 
 class TestEntityResolution:

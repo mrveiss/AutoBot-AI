@@ -12,8 +12,8 @@ import socket
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from backend.constants.network_constants import NetworkConstants
 from autobot_shared.logging_manager import get_logger
+from backend.constants.network_constants import NetworkConstants
 
 # Get centralized logger
 logger = get_logger(__name__, "backend")
@@ -219,13 +219,13 @@ def test_system_context():
 
     context = get_system_context()
 
-    logger.debug("\nMachine ID: %s", context['machine_id'])
-    logger.debug("Machine IP: %s", context['machine_ip'])
-    logger.debug("OS Name: %s", context['os_name'])
-    logger.debug("OS Version: %s", context['os_version'])
-    logger.debug("OS Type: %s", context['os_type'])
-    logger.debug("Architecture: %s", context['architecture'])
-    logger.debug("Kernel Version: %s", context['kernel_version'])
+    logger.debug("\nMachine ID: %s", context["machine_id"])
+    logger.debug("Machine IP: %s", context["machine_ip"])
+    logger.debug("OS Name: %s", context["os_name"])
+    logger.debug("OS Version: %s", context["os_version"])
+    logger.debug("OS Type: %s", context["os_type"])
+    logger.debug("Architecture: %s", context["architecture"])
+    logger.debug("Kernel Version: %s", context["kernel_version"])
 
     logger.debug(f"\nCompatible OSes: {get_compatible_os_list(context['os_name'])}")
 

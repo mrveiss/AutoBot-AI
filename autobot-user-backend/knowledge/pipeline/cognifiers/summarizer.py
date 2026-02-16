@@ -12,12 +12,13 @@ import logging
 from typing import Any, Dict, List
 from uuid import UUID
 
+from llm_interface_pkg import LLMInterface
+
 from backend.knowledge.pipeline.base import BaseCognifier, PipelineContext
 from backend.knowledge.pipeline.models.chunk import ProcessedChunk
 from backend.knowledge.pipeline.models.entity import Entity
 from backend.knowledge.pipeline.models.summary import Summary, SummaryLevel
 from backend.knowledge.pipeline.registry import TaskRegistry
-from llm_interface_pkg import LLMInterface
 
 logger = logging.getLogger(__name__)
 

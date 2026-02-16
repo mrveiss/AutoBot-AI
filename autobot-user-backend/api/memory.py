@@ -36,10 +36,10 @@ from autobot_memory_graph import AutoBotMemoryGraph
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
-from backend.utils.request_utils import generate_request_id
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.type_defs.common import Metadata
+from backend.utils.request_utils import generate_request_id
 
 # ====================================================================
 # Router Configuration

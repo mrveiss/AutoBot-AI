@@ -45,14 +45,14 @@ from backend.knowledge.bulk import BulkOperationsMixin
 from backend.knowledge.categories import CategoriesMixin
 from backend.knowledge.collections import CollectionsMixin
 from backend.knowledge.documents import DocumentsMixin
-from backend.knowledge.suggestions import SuggestionsMixin
-from backend.knowledge.metadata import MetadataMixin
-from backend.knowledge.versioning import VersioningMixin
 from backend.knowledge.facts import FactsMixin
 from backend.knowledge.index import IndexMixin
+from backend.knowledge.metadata import MetadataMixin
 from backend.knowledge.search import SearchMixin
 from backend.knowledge.stats import StatsMixin
+from backend.knowledge.suggestions import SuggestionsMixin
 from backend.knowledge.tags import TagsMixin
+from backend.knowledge.versioning import VersioningMixin
 
 logger = logging.getLogger(__name__)
 

@@ -18,15 +18,14 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.code_intelligence.llm_pattern_analysis.types import (
-    CacheOpportunityType,
     HIGH_PRIORITY_LEVELS,
+    VALID_BACKOFF_STRATEGIES,
+    CacheOpportunityType,
     OptimizationCategory,
     OptimizationPriority,
     PromptIssueType,
     UsagePatternType,
-    VALID_BACKOFF_STRATEGIES,
 )
-
 
 # =============================================================================
 # Simple Data Classes
@@ -173,7 +172,10 @@ class CacheOpportunity:
             return True
 
         # Low effort with any savings is worth it
-        if self.implementation_effort == "low" and self.estimated_savings_percent > 10.0:
+        if (
+            self.implementation_effort == "low"
+            and self.estimated_savings_percent > 10.0
+        ):
             return True
 
         return False

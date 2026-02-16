@@ -9,9 +9,9 @@ import sys
 import time
 
 import redis
-from backend.utils.redis_client import get_redis_client
-
 from config import config as global_config_manager
+
+from backend.utils.redis_client import get_redis_client
 
 
 def test_worker_capabilities():

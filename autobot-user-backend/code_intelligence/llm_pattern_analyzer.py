@@ -44,7 +44,9 @@ from backend.code_intelligence.llm_pattern_analysis.data_models import (
     TokenUsage,
     UsagePattern,
 )
-from backend.code_intelligence.llm_pattern_analysis.prompt_analyzer import PromptAnalyzer
+from backend.code_intelligence.llm_pattern_analysis.prompt_analyzer import (
+    PromptAnalyzer,
+)
 from backend.code_intelligence.llm_pattern_analysis.recommendation_engine import (
     RecommendationEngine,
 )

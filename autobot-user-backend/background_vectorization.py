@@ -21,8 +21,8 @@ from backend.constants.threshold_constants import TimingConstants
 # Embedding analytics integration (Issue #285)
 try:
     from backend.api.analytics_embedding_patterns import (
-        get_embedding_analyzer,
         EmbeddingUsageRequest,
+        get_embedding_analyzer,
     )
 
     EMBEDDING_ANALYTICS_AVAILABLE = True
@@ -116,6 +116,7 @@ class BackgroundVectorizer:
     def _extract_fact_content(self, fact_data: dict) -> tuple:
         """Extract content and metadata from fact data (Issue #336 - extracted helper)."""
         import json
+
         content_bytes = fact_data.get(b"content", b"")
         content = self._decode_bytes(content_bytes)
         metadata_str = fact_data.get(b"metadata", b"{}")
@@ -151,6 +152,7 @@ class BackgroundVectorizer:
 
         try:
             from llama_index.core import Document
+
             document = Document(text=content, metadata=metadata, doc_id=fact_id)
             await asyncio.to_thread(kb.vector_index.insert, document)
             result["success"] = True
@@ -172,7 +174,9 @@ class BackgroundVectorizer:
         stats = {"success": 0, "skipped": 0, "failed": 0, "tokens": 0}
 
         all_status = await self._get_vectorization_status(kb, batch)
-        facts_to_process, already_skipped = self._filter_pending_facts(batch, all_status)
+        facts_to_process, already_skipped = self._filter_pending_facts(
+            batch, all_status
+        )
         stats["skipped"] += already_skipped
 
         all_fact_data = await self._fetch_fact_data(kb, facts_to_process)
@@ -212,7 +216,9 @@ class BackgroundVectorizer:
                 return
 
             total_batches = (len(fact_keys) + self.batch_size - 1) // self.batch_size
-            logger.info("Processing %s facts in %s batches", len(fact_keys), total_batches)
+            logger.info(
+                "Processing %s facts in %s batches", len(fact_keys), total_batches
+            )
 
             total_stats = {"success": 0, "skipped": 0, "failed": 0, "tokens": 0}
 

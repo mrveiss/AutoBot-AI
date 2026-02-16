@@ -13,11 +13,12 @@ import json
 import logging
 from typing import Any, Dict, List
 
-from backend.dependencies import global_config_manager
 from async_chat_workflow import WorkflowMessage
-from backend.constants.model_constants import ModelConstants
 from prompt_manager import get_prompt
+
 from autobot_shared.http_client import get_http_client
+from backend.constants.model_constants import ModelConstants
+from backend.dependencies import global_config_manager
 
 from .models import WorkflowSession
 
@@ -63,6 +64,7 @@ class LLMHandlerMixin:
     def _get_ollama_endpoint_fallback(self) -> str:
         """Get Ollama endpoint from UnifiedConfigManager as fallback."""
         from config import UnifiedConfigManager
+
         config = UnifiedConfigManager()
         ollama_host = config.get_host("ollama")
         ollama_port = config.get_port("ollama")
@@ -75,13 +77,17 @@ class LLMHandlerMixin:
         Config may store just the base URL, so we ensure the path is appended.
         """
         try:
-            endpoint = global_config_manager.get_nested("backend.llm.ollama.endpoint", None)
+            endpoint = global_config_manager.get_nested(
+                "backend.llm.ollama.endpoint", None
+            )
             if endpoint and endpoint.startswith(_VALID_URL_SCHEMES):  # Issue #380
                 # Ensure /api/generate path is included
                 if not endpoint.endswith("/api/generate"):
                     endpoint = endpoint.rstrip("/") + "/api/generate"
                 return endpoint
-            logger.error("Invalid endpoint URL: %s, using config-based default", endpoint)
+            logger.error(
+                "Invalid endpoint URL: %s, using config-based default", endpoint
+            )
             return self._get_ollama_endpoint_fallback()
         except Exception as e:
             logger.error("Failed to load Ollama endpoint from config: %s", e)
@@ -112,7 +118,8 @@ NEVER teach commands - ALWAYS execute them."""
         # Filter out incomplete entries (where assistant response is empty placeholder)
         # These are messages currently being processed
         complete_messages = [
-            msg for msg in session.conversation_history
+            msg
+            for msg in session.conversation_history
             if msg.get("assistant")  # Only include if assistant response exists
         ]
 
@@ -131,12 +138,17 @@ NEVER teach commands - ALWAYS execute them."""
     ) -> tuple:
         """Retrieve knowledge context for RAG. Returns (context, citations)."""
         try:
-            knowledge_context, citations, query_intent, enhanced_query = (
-                await self.knowledge_service.conversation_aware_retrieve(
-                    query=message,
-                    conversation_history=session.conversation_history or [],
-                    top_k=5, score_threshold=0.7, force_retrieval=False,
-                )
+            (
+                knowledge_context,
+                citations,
+                query_intent,
+                enhanced_query,
+            ) = await self.knowledge_service.conversation_aware_retrieve(
+                query=message,
+                conversation_history=session.conversation_history or [],
+                top_k=5,
+                score_threshold=0.7,
+                force_retrieval=False,
             )
             if knowledge_context:
                 logger.info(
@@ -149,7 +161,9 @@ NEVER teach commands - ALWAYS execute them."""
                 session.metadata["query_intent"] = query_intent.intent.value
                 if enhanced_query and enhanced_query.enhancement_applied:
                     session.metadata["query_enhanced"] = True
-                    session.metadata["context_entities"] = enhanced_query.context_entities
+                    session.metadata[
+                        "context_entities"
+                    ] = enhanced_query.context_entities
             else:
                 session.metadata["used_knowledge"] = False
                 session.metadata["query_enhanced"] = False
@@ -163,21 +177,35 @@ NEVER teach commands - ALWAYS execute them."""
             return "", []
 
     def _build_full_prompt(
-        self, system_prompt: str, knowledge_context: str, conversation_context: str, message: str
+        self,
+        system_prompt: str,
+        knowledge_context: str,
+        conversation_context: str,
+        message: str,
     ) -> str:
         """Build full prompt with optional knowledge context."""
         if knowledge_context:
             return (
-                system_prompt + "\n\n" + knowledge_context + "\n"
-                + conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
+                system_prompt
+                + "\n\n"
+                + knowledge_context
+                + "\n"
+                + conversation_context
+                + f"\n**Current user message:** {message}\n\nAssistant:"
             )
-        return system_prompt + conversation_context + f"\n**Current user message:** {message}\n\nAssistant:"
+        return (
+            system_prompt
+            + conversation_context
+            + f"\n**Current user message:** {message}\n\nAssistant:"
+        )
 
     def _get_selected_model(self) -> str:
         """Get selected LLM model from config with fallback."""
         try:
             default_model = global_config_manager.get_default_llm_model()
-            selected = global_config_manager.get_nested("backend.llm.ollama.selected_model", default_model)
+            selected = global_config_manager.get_nested(
+                "backend.llm.ollama.selected_model", default_model
+            )
             if selected and isinstance(selected, str):
                 logger.info("Using LLM model from config: %s", selected)
                 return selected
@@ -186,7 +214,10 @@ NEVER teach commands - ALWAYS execute them."""
         except Exception as e:
             logger.error("Failed to load model from config: %s", e)
             import os
-            return os.getenv("AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL)
+
+            return os.getenv(
+                "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
+            )
 
     async def _prepare_llm_request_params(
         self, session: WorkflowSession, message: str, use_knowledge: bool = True
@@ -199,14 +230,20 @@ NEVER teach commands - ALWAYS execute them."""
         # Knowledge retrieval for RAG
         knowledge_context, citations = "", []
         if self.knowledge_service and use_knowledge:
-            knowledge_context, citations = await self._retrieve_knowledge_context(message, session)
+            knowledge_context, citations = await self._retrieve_knowledge_context(
+                message, session
+            )
         else:
             session.metadata["used_knowledge"] = False
 
-        full_prompt = self._build_full_prompt(system_prompt, knowledge_context, conversation_context, message)
+        full_prompt = self._build_full_prompt(
+            system_prompt, knowledge_context, conversation_context, message
+        )
         selected_model = self._get_selected_model()
 
-        logger.info("[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint)
+        logger.info(
+            "[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint
+        )
         logger.info("[ChatWorkflowManager] Using model: %s", selected_model)
 
         return {
@@ -301,7 +338,10 @@ Do NOT conclude the task or provide a final summary - just explain this specific
                     yield WorkflowMessage(
                         type="stream",
                         content=chunk,
-                        metadata={"message_type": "command_interpretation", "streaming": True},
+                        metadata={
+                            "message_type": "command_interpretation",
+                            "streaming": True,
+                        },
                     )
 
                 if data.get("done"):
@@ -349,9 +389,7 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         ):
             yield msg
 
-    async def _save_to_chat_history(
-        self, session_id: str, interpretation: str
-    ) -> None:
+    async def _save_to_chat_history(self, session_id: str, interpretation: str) -> None:
         """
         Save interpretation to chat history.
 

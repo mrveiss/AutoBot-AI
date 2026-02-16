@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import aiohttp
+
 from backend.constants.network_constants import NetworkConstants, ServiceURLs
 
 # Import canonical Redis client pattern

@@ -10,14 +10,14 @@ from typing import List, Optional
 # Add the project root to Python path for absolute imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from backend.constants.network_constants import (  # noqa: F401 - used in docstring example
-    NetworkConstants,
-)
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 # Issue #697: OpenTelemetry distributed tracing
 from autobot_shared.tracing import init_tracing, instrument_fastapi
+from backend.constants.network_constants import (  # noqa: F401 - used in docstring example
+    NetworkConstants,
+)
 
 # Import initialization modules
 from backend.initialization import (

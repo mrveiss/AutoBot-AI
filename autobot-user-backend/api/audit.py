@@ -20,17 +20,17 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 
+from auth_middleware import auth_middleware
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.services.audit_logger import AuditResult, get_audit_logger
-from auth_middleware import auth_middleware
 from backend.utils.catalog_http_exceptions import (
     raise_auth_error,
     raise_server_error,
     raise_validation_error,
 )
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 logger = logging.getLogger(__name__)

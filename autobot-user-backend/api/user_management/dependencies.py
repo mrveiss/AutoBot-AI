@@ -9,10 +9,10 @@ FastAPI dependencies for user management endpoints.
 
 import uuid
 
+from auth_middleware import auth_middleware
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth_middleware import auth_middleware
 from backend.user_management.config import DeploymentMode, get_deployment_config
 from backend.user_management.database import get_async_session
 from backend.user_management.services import (

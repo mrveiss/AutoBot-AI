@@ -17,12 +17,13 @@ import threading
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from scripts.phase_validation_system import PhaseValidator
-from backend.constants.path_constants import PATH
-from backend.constants.threshold_constants import TimingConstants
 from phase_progression_manager import get_progression_manager
 from project_state_manager import ProjectStateManager
+
 from autobot_shared.redis_client import get_redis_client
+from backend.constants.path_constants import PATH
+from backend.constants.threshold_constants import TimingConstants
+from scripts.phase_validation_system import PhaseValidator
 
 from .database import (
     init_database,

@@ -13,13 +13,13 @@ import time
 from datetime import datetime
 
 import aiohttp
-from backend.constants.model_constants import ModelConstants
-from backend.constants.network_constants import NetworkConstants
-
-from autobot_shared.redis_client import get_redis_client
-from backend.type_defs.common import Metadata
 from config import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT
 from config import config as global_config_manager
+
+from autobot_shared.redis_client import get_redis_client
+from backend.constants.model_constants import ModelConstants
+from backend.constants.network_constants import NetworkConstants
+from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 

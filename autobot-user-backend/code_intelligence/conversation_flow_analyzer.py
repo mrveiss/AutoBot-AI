@@ -27,26 +27,22 @@ DEPRECATED: Import directly from code_intelligence.conversation_analysis instead
 """
 
 # Re-export everything from the new package for backward compatibility
-from backend.code_intelligence.conversation_analysis import (
-    # Types
+from backend.code_intelligence.conversation_analysis import (  # Types; Classifiers; Analyzer; Convenience functions
     SATISFACTION_SIGNALS,
     AnalysisResult,
     Bottleneck,
     BottleneckType,
     ConversationFlow,
+    ConversationFlowAnalyzer,
     ConversationMessage,
     FlowPattern,
     FlowState,
     IntentCategory,
+    IntentClassifier,
     Optimization,
     OptimizationType,
-    ResponseType,
-    # Classifiers
-    IntentClassifier,
     ResponseClassifier,
-    # Analyzer
-    ConversationFlowAnalyzer,
-    # Convenience functions
+    ResponseType,
     analyze_conversations,
     classify_intent,
     classify_response,

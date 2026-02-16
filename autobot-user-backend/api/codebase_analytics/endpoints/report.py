@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
 
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.code_intelligence.bug_predictor import BugPredictor, PredictionResult
 
 # Issue #244: Cross-Language Pattern Detection
@@ -31,7 +32,6 @@ from backend.code_intelligence.pattern_analysis import (
     CodePatternAnalyzer,
     PatternAnalysisReport,
 )
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
     FILE_CATEGORY_ASSETS,

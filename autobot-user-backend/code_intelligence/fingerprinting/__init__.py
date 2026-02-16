@@ -27,23 +27,14 @@ For backward compatibility, the original code_fingerprinting.py module
 still exports all classes directly.
 """
 
-# Types and data classes
-from backend.code_intelligence.fingerprinting.types import (
-    CloneType,
-    FingerprintType,
-    CloneSeverity,
-    CodeFragment,
-    Fingerprint,
-    CloneInstance,
-    CloneGroup,
-    CloneDetectionReport,
-)
+# AST Hasher
+from backend.code_intelligence.fingerprinting.ast_hasher import ASTHasher
 
 # AST Normalizer
 from backend.code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
 
-# AST Hasher
-from backend.code_intelligence.fingerprinting.ast_hasher import ASTHasher
+# Clone Detector
+from backend.code_intelligence.fingerprinting.detector import CloneDetector
 
 # Semantic Hasher
 from backend.code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
@@ -51,8 +42,17 @@ from backend.code_intelligence.fingerprinting.semantic_hasher import SemanticHas
 # Similarity Calculator
 from backend.code_intelligence.fingerprinting.similarity import SimilarityCalculator
 
-# Clone Detector
-from backend.code_intelligence.fingerprinting.detector import CloneDetector
+# Types and data classes
+from backend.code_intelligence.fingerprinting.types import (
+    CloneDetectionReport,
+    CloneGroup,
+    CloneInstance,
+    CloneSeverity,
+    CloneType,
+    CodeFragment,
+    Fingerprint,
+    FingerprintType,
+)
 
 # Re-export for convenience
 __all__ = [

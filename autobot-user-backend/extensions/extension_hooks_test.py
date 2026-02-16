@@ -15,6 +15,7 @@ Tests verify:
 from typing import Optional
 
 import pytest
+
 from backend.extensions.base import Extension, HookContext
 from backend.extensions.builtin import LoggingExtension, SecretMaskingExtension
 from backend.extensions.hooks import HookPoint, get_hook_metadata

@@ -16,14 +16,19 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 import yaml
-
-from backend.models.npu_models import (LoadBalancingConfig, NPUWorkerConfig,
-                                       NPUWorkerDetails, NPUWorkerMetrics,
-                                       NPUWorkerStatus, WorkerStatus,
-                                       WorkerTestResult)
-from backend.constants.threshold_constants import TimingConstants
 from event_manager import event_manager
 from npu_integration import NPUWorkerClient
+
+from backend.constants.threshold_constants import TimingConstants
+from backend.models.npu_models import (
+    LoadBalancingConfig,
+    NPUWorkerConfig,
+    NPUWorkerDetails,
+    NPUWorkerMetrics,
+    NPUWorkerStatus,
+    WorkerStatus,
+    WorkerTestResult,
+)
 
 logger = logging.getLogger(__name__)
 

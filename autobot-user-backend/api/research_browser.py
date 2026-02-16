@@ -13,14 +13,14 @@ from datetime import datetime
 from typing import Optional
 
 import aiofiles
+from config import UnifiedConfigManager
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
-
-from config import UnifiedConfigManager
-from backend.constants.network_constants import NetworkConstants
 from research_browser_manager import research_browser_manager
+
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

@@ -23,30 +23,27 @@ import time
 from dataclasses import asdict
 from typing import Any, Dict, List
 
+# Re-export benchmarking functions for backward compatibility (used by external code)
 # Re-export all public API from the package for backward compatibility
-from backend.utils.gpu_optimization import (
+from backend.utils.gpu_optimization import (  # noqa: F401
     DEFAULT_PERFORMANCE_BASELINES,
     GPUCapabilities,
     GPUOptimizationConfig,
     GPUOptimizationResult,
+    benchmark_compute_performance,
+    benchmark_memory_bandwidth,
+    benchmark_mixed_precision,
+    benchmark_tensor_cores,
     check_gpu_availability,
     detect_gpu_capabilities,
     enable_mixed_precision,
+    generate_benchmark_recommendations,
     monitor_gpu_acceleration_efficiency,
     optimize_batch_processing,
     optimize_memory_allocation,
     optimize_model_compilation,
     optimize_tensor_cores,
     run_comprehensive_benchmark,
-)
-
-# Re-export benchmarking functions for backward compatibility (used by external code)
-from backend.utils.gpu_optimization import (  # noqa: F401
-    benchmark_compute_performance,
-    benchmark_memory_bandwidth,
-    benchmark_mixed_precision,
-    benchmark_tensor_cores,
-    generate_benchmark_recommendations,
 )
 from backend.utils.performance_monitor import performance_monitor
 
@@ -125,7 +122,9 @@ class GPUAccelerationOptimizer:
 
         # Mixed precision optimization
         if self._capabilities.mixed_precision:
-            precision_result = await enable_mixed_precision(self.config, self._capabilities)
+            precision_result = await enable_mixed_precision(
+                self.config, self._capabilities
+            )
             if precision_result["success"]:
                 applied_optimizations.extend(precision_result["optimizations"])
             recommendations.extend(precision_result["recommendations"])
@@ -166,7 +165,12 @@ class GPUAccelerationOptimizer:
             "inference_latency_ms", 0
         ) - post_optimization.get("inference_latency_ms", 0)
 
-        return performance_improvement, memory_savings, throughput_improvement, latency_reduction
+        return (
+            performance_improvement,
+            memory_savings,
+            throughput_improvement,
+            latency_reduction,
+        )
 
     async def optimize_for_multimodal_workload(self) -> GPUOptimizationResult:
         """Optimize GPU for multi-modal AI workloads (Issue #398: refactored to use helpers)."""
@@ -178,7 +182,10 @@ class GPUAccelerationOptimizer:
             warnings: List[str] = []
 
             # Issue #398: Apply all optimization passes using extracted helper
-            applied_optimizations, recommendations = await self._apply_optimization_passes()
+            (
+                applied_optimizations,
+                recommendations,
+            ) = await self._apply_optimization_passes()
 
             # Collect post-optimization metrics
             post_optimization = await self._collect_performance_baseline()
@@ -235,13 +242,15 @@ class GPUAccelerationOptimizer:
             }
 
             if gpu_metrics:
-                baseline.update({
-                    "gpu_utilization_percent": gpu_metrics.utilization_percent,
-                    "memory_used_mb": gpu_metrics.memory_used_mb,
-                    "memory_utilization_percent": gpu_metrics.memory_utilization_percent,
-                    "temperature_celsius": gpu_metrics.temperature_celsius,
-                    "power_draw_watts": gpu_metrics.power_draw_watts,
-                })
+                baseline.update(
+                    {
+                        "gpu_utilization_percent": gpu_metrics.utilization_percent,
+                        "memory_used_mb": gpu_metrics.memory_used_mb,
+                        "memory_utilization_percent": gpu_metrics.memory_utilization_percent,
+                        "temperature_celsius": gpu_metrics.temperature_celsius,
+                        "power_draw_watts": gpu_metrics.power_draw_watts,
+                    }
+                )
 
             return baseline
 

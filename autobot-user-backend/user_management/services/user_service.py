@@ -20,7 +20,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from backend.user_management.models import Role, User, UserRole
-from backend.user_management.models.audit import AuditAction, AuditLog, AuditResourceType
+from backend.user_management.models.audit import (
+    AuditAction,
+    AuditLog,
+    AuditResourceType,
+)
 from backend.user_management.services.base_service import BaseService, TenantContext
 from backend.user_management.services.session_service import SessionService
 

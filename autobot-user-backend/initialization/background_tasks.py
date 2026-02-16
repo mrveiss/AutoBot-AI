@@ -10,12 +10,12 @@ including Redis, knowledge base, chat workflow, LLM sync, AI Stack, and distribu
 
 import asyncio
 
+from chat_workflow import ChatWorkflowManager
 from fastapi import FastAPI
 
-from backend.initialization.ai_stack_init import initialize_ai_stack
-from chat_workflow import ChatWorkflowManager
-from backend.utils.background_llm_sync import background_llm_sync
 from autobot_shared.logging_manager import get_logger
+from backend.initialization.ai_stack_init import initialize_ai_stack
+from backend.utils.background_llm_sync import background_llm_sync
 
 logger = get_logger(__name__, "backend")
 
@@ -70,7 +70,9 @@ async def _init_redis(update_status_fn, append_error_fn):
         await append_error_fn(f"Redis: {str(e)}")
 
 
-async def _init_knowledge_base(app: FastAPI, update_status_fn, append_error_fn, get_status_fn):
+async def _init_knowledge_base(
+    app: FastAPI, update_status_fn, append_error_fn, get_status_fn
+):
     """
     Initialize knowledge base with optional AI Stack integration.
 
@@ -91,7 +93,9 @@ async def _init_knowledge_base(app: FastAPI, update_status_fn, append_error_fn, 
         # Enhanced: Check if AI Stack integration is available
         ai_stack_status = await get_status_fn("ai_stack")
         if hasattr(app.state, "ai_stack_client") and ai_stack_status == "ready":
-            logger.info("Knowledge Base initialized with AI Stack enhancement available")
+            logger.info(
+                "Knowledge Base initialized with AI Stack enhancement available"
+            )
         else:
             logger.info("Knowledge Base initialized in standalone mode")
     else:

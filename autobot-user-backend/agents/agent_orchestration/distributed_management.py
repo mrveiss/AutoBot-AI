@@ -178,9 +178,7 @@ class DistributedAgentManager:
                 f"Distributed agent {agent_id} health issue: {health.status.value}"
             )
 
-    async def _run_health_checks(
-        self, agents_snapshot: list
-    ) -> None:
+    async def _run_health_checks(self, agents_snapshot: list) -> None:
         """Run parallel health checks on agents (Issue #334 - extracted helper)."""
         results = await asyncio.gather(
             *[

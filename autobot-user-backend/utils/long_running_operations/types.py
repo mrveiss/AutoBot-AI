@@ -307,9 +307,7 @@ class LongRunningTimeoutConfig:
     }
 
     @classmethod
-    def get_timeout_config(
-        cls, operation_type: OperationType
-    ) -> Dict[str, float]:
+    def get_timeout_config(cls, operation_type: OperationType) -> Dict[str, float]:
         """Get timeout configuration for an operation type."""
         return cls.TIMEOUT_PROFILES.get(
             operation_type,

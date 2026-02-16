@@ -28,11 +28,11 @@ from auth_middleware import get_current_user
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
-from backend.utils.request_utils import generate_request_id
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.services.graph_rag_service import GraphRAGService
 from backend.type_defs.common import Metadata
+from backend.utils.request_utils import generate_request_id
 
 # ====================================================================
 # Router Configuration

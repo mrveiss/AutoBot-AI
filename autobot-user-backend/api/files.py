@@ -19,17 +19,17 @@ from pathlib import Path
 from typing import List, Optional
 
 import aiofiles
+from auth_middleware import auth_middleware
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
 from pydantic import BaseModel, field_validator
-
-from backend.utils.io_executor import run_in_file_executor
-from backend.utils.paths_manager import ensure_data_directory, get_data_path
-from auth_middleware import auth_middleware
 from security_layer import SecurityLayer
+
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.utils.io_executor import run_in_file_executor
 from backend.utils.path_validation import is_invalid_name
+from backend.utils.paths_manager import ensure_data_directory, get_data_path
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

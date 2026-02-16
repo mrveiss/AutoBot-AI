@@ -17,8 +17,8 @@ from typing import Dict, Optional
 import structlog
 from fastapi import HTTPException, Request
 
-from backend.utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 from autobot_shared.redis_client import get_redis_client
+from backend.utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 
 logger = structlog.get_logger()
 
@@ -52,7 +52,9 @@ class ServiceAuthManager:
         # Store in Redis with 90-day expiration
         await self.redis.set(f"service:key:{service_id}", key_hex, ex=86400 * 90)
 
-        logger.info("Generated service key for %s", service_id, extra={"service_id": service_id})
+        logger.info(
+            "Generated service key for %s", service_id, extra={"service_id": service_id}
+        )
         return key_hex
 
     async def get_service_key(self, service_id: str) -> Optional[str]:
@@ -92,9 +94,7 @@ class ServiceAuthManager:
         ).hexdigest()
         return signature
 
-    def _extract_auth_headers(
-        self, request: Request
-    ) -> tuple[str, str, str]:
+    def _extract_auth_headers(self, request: Request) -> tuple[str, str, str]:
         """
         Extract and validate presence of authentication headers (Issue #665: extracted helper).
 

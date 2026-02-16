@@ -16,6 +16,7 @@ from typing import Optional
 from sqlalchemy import Boolean, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
+
 from backend.user_management.models.base import Base, TimestampMixin
 
 

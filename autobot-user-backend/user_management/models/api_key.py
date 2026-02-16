@@ -18,8 +18,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from user_management.models.user import User
     from user_management.models.team import Team
+    from user_management.models.user import User
 
 
 class APIKey(Base, TimestampMixin):

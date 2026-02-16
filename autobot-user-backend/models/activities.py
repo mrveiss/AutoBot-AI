@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, Tuple
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from backend.user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:

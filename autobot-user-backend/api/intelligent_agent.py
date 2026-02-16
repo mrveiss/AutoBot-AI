@@ -12,17 +12,17 @@ import logging
 import time
 from typing import TYPE_CHECKING, Dict, List
 
+from auth_middleware import check_admin_permission, get_current_user
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from backend.type_defs.common import Metadata
-from auth_middleware import check_admin_permission, get_current_user
 
 if TYPE_CHECKING:
     from intelligence.intelligent_agent import IntelligentAgent
 
-from backend.monitoring.prometheus_metrics import get_metrics_manager
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.monitoring.prometheus_metrics import get_metrics_manager
 
 # CRITICAL FIX: Use lazy loading to prevent startup deadlock
 logger = logging.getLogger(__name__)

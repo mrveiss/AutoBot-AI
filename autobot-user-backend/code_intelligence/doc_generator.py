@@ -35,6 +35,21 @@ import logging
 import os
 from typing import List, Optional, Set
 
+# Issue #394: Import refactored modules for delegation
+from backend.code_intelligence.doc_generation.docstring_parser import DocstringParser
+from backend.code_intelligence.doc_generation.markdown_generator import (
+    MarkdownGenerator,
+)
+from backend.code_intelligence.doc_generation.models import (
+    ClassDoc,
+    DiagramSpec,
+    FunctionDoc,
+    GeneratedDoc,
+    ModuleDoc,
+    PackageDoc,
+)
+from backend.code_intelligence.doc_generation.module_analyzer import ModuleAnalyzer
+
 # Import types and models from the doc_generation package (Issue #381 refactoring)
 from backend.code_intelligence.doc_generation.types import (
     DiagramType,
@@ -47,19 +62,6 @@ from backend.code_intelligence.doc_generation.types import (
     ParameterDoc,
     ReturnDoc,
 )
-from backend.code_intelligence.doc_generation.models import (
-    ClassDoc,
-    DiagramSpec,
-    FunctionDoc,
-    GeneratedDoc,
-    ModuleDoc,
-    PackageDoc,
-)
-
-# Issue #394: Import refactored modules for delegation
-from backend.code_intelligence.doc_generation.docstring_parser import DocstringParser
-from backend.code_intelligence.doc_generation.markdown_generator import MarkdownGenerator
-from backend.code_intelligence.doc_generation.module_analyzer import ModuleAnalyzer
 
 logger = logging.getLogger(__name__)
 

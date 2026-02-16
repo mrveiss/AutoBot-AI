@@ -23,14 +23,15 @@ from typing import Dict, List
 
 import psutil
 import redis
+from config import UnifiedConfigManager
+from constants import PATH
+
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 # Import models from dedicated module (Issue #185)
 from backend.api.analytics_models import CodeAnalysisRequest, CommunicationPattern
-from backend.type_defs.common import Metadata
-from config import UnifiedConfigManager
-from constants import PATH
 from backend.constants.threshold_constants import TimingConstants
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from backend.type_defs.common import Metadata
 from backend.utils.system_metrics import get_metrics_collector
 
 # Import existing monitoring infrastructure

@@ -16,13 +16,14 @@ from typing import TYPE_CHECKING, List, Optional
 
 import aioredis
 import redis
-from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from config import UnifiedConfigManager
 from llama_index.core import Settings, VectorStoreIndex
 from llama_index.core.storage.storage_context import StorageContext
 from llama_index.embeddings.ollama import OllamaEmbedding as LlamaIndexOllamaEmbedding
 from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
 from llama_index.vector_stores.chroma import ChromaVectorStore
+
+from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from backend.utils.chromadb_client import get_chromadb_client as create_chromadb_client
 from backend.utils.chromadb_client import wrap_collection_async
 from backend.utils.knowledge_base_timeouts import kb_timeouts

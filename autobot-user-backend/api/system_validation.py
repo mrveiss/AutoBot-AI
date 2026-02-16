@@ -12,9 +12,12 @@ from typing import Dict, List
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
-from backend.type_defs.common import Metadata
-from backend.utils.catalog_http_exceptions import raise_not_found_error, raise_server_error
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.type_defs.common import Metadata
+from backend.utils.catalog_http_exceptions import (
+    raise_not_found_error,
+    raise_server_error,
+)
 from backend.utils.system_validator import get_system_validator
 
 logger = logging.getLogger(__name__)

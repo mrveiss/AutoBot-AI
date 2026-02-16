@@ -44,10 +44,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.threshold_constants import TimingConstants
 from event_manager import event_manager
 from playwright.async_api import Page
+
+from backend.constants.network_constants import NetworkConstants
+from backend.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 

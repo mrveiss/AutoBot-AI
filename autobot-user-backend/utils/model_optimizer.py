@@ -25,7 +25,9 @@ import threading
 from typing import Any, Dict, List, Optional
 
 from config import UnifiedConfigManager
+
 from autobot_shared.http_client import get_http_client
+from autobot_shared.redis_client import get_redis_client
 
 # Re-export all public API from the package for backward compatibility
 from backend.utils.model_optimization import (
@@ -41,7 +43,6 @@ from backend.utils.model_optimization import (
     TaskComplexity,
     TaskRequest,
 )
-from autobot_shared.redis_client import get_redis_client
 
 # Create singleton config instance
 config = UnifiedConfigManager()

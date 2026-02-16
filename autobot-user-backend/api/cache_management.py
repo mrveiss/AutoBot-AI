@@ -10,12 +10,12 @@ import asyncio
 import logging
 from typing import Dict, List, Optional
 
+from auth_middleware import check_admin_permission, get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from auth_middleware import check_admin_permission, get_current_user
-from backend.utils.advanced_cache_manager import advanced_cache
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.utils.advanced_cache_manager import advanced_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cache", tags=["cache_management"])

@@ -29,8 +29,6 @@ from datetime import datetime
 from typing import Awaitable, Callable, Dict, Optional
 
 from chat_history import ChatHistoryManager
-from backend.constants.path_constants import PATH
-from backend.constants.threshold_constants import TimingConstants
 from fastapi import WebSocket
 
 # Import models from dedicated module (Issue #185)
@@ -40,6 +38,8 @@ from backend.api.terminal_models import (
     CommandRiskLevel,
     SecurityLevel,
 )
+from backend.constants.path_constants import PATH
+from backend.constants.threshold_constants import TimingConstants
 from backend.services.simple_pty import simple_pty_manager
 
 # Import extracted modules (Issue #290)

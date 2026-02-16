@@ -41,7 +41,7 @@ Usage:
 """
 
 from backend.extensions.base import Extension, HookContext
-from backend.extensions.hooks import HookPoint, get_hook_metadata, HOOK_METADATA
+from backend.extensions.hooks import HOOK_METADATA, HookPoint, get_hook_metadata
 from backend.extensions.manager import (
     ExtensionManager,
     get_extension_manager,
