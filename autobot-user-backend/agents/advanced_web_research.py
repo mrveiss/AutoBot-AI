@@ -16,7 +16,8 @@ from urllib.parse import urlparse
 
 from constants.security_constants import SecurityConstants
 from constants.threshold_constants import TimingConstants
-from services.captcha_human_loop import get_captcha_human_loop
+
+from backend.services.captcha_human_loop import get_captcha_human_loop
 
 # Issue #380: Module-level frozenset for CAPTCHA detection keywords
 _CAPTCHA_KEYWORDS: frozenset = frozenset({"captcha", "challenge", "verification"})

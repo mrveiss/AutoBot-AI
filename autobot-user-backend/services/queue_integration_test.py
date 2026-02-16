@@ -11,8 +11,8 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from models.command_execution import CommandExecution, CommandState, RiskLevel
-from services.command_execution_queue import get_command_queue
+from backend.models.command_execution import CommandExecution, CommandState, RiskLevel
+from backend.services.command_execution_queue import get_command_queue
 
 
 async def test_queue_integration():

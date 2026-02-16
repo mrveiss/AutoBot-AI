@@ -23,7 +23,8 @@ from agents.graph_entity_extractor import (
     GraphEntityExtractor,
     RelationCandidate,
 )
-from models.atomic_fact import AtomicFact, FactType, TemporalType
+
+from backend.models.atomic_fact import AtomicFact, FactType, TemporalType
 
 # ============================================================================
 # Fixtures

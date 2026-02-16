@@ -14,7 +14,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from advanced_rag_optimizer import RAGMetrics, SearchResult
-from services.chat_knowledge_service import (
+
+from backend.services.chat_knowledge_service import (
     ChatKnowledgeService,
     ConversationContextEnhancer,
     QueryKnowledgeIntent,

@@ -6,14 +6,14 @@
 from unittest.mock import patch
 
 import pytest
-from services.permission_matcher import (
+
+from autobot_shared.ssot_config import PermissionAction, PermissionMode
+from backend.services.permission_matcher import (
     MatchResult,
     PermissionMatcher,
     PermissionRule,
     get_permission_matcher,
 )
-
-from autobot_shared.ssot_config import PermissionAction, PermissionMode
 
 # =============================================================================
 # PermissionRule Tests

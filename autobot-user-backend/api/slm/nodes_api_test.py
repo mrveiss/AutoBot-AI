@@ -6,11 +6,11 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-# Import the FastAPI app - we'll need to create a test app fixture
-from api.slm.nodes import router as nodes_router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+# Import the FastAPI app - we'll need to create a test app fixture
+from backend.api.slm.nodes import router as nodes_router
 
 
 @pytest.fixture

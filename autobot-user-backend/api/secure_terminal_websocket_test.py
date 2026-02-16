@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 # Import the modules to test
-from api.secure_terminal_websocket import (
+from backend.api.secure_terminal_websocket import (
     SecureTerminalSession,
     get_secure_session,
     handle_secure_terminal_websocket,

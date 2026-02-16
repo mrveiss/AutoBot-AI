@@ -29,7 +29,7 @@ class TestTerminalBufferRace:
     async def test_concurrent_buffer_access(self):
         """Test that concurrent output writes don't corrupt buffer"""
         # Mock terminal with buffer and lock
-        from api.terminal import ConsolidatedTerminalWebSocket
+        from backend.api.terminal import ConsolidatedTerminalWebSocket
 
         mock_websocket = AsyncMock()
         mock_redis = Mock()
@@ -55,7 +55,7 @@ class TestTerminalBufferRace:
     @pytest.mark.asyncio
     async def test_buffer_lock_prevents_interleaving(self):
         """Test that lock prevents output interleaving"""
-        from api.terminal import ConsolidatedTerminalWebSocket
+        from backend.api.terminal import ConsolidatedTerminalWebSocket
 
         mock_websocket = AsyncMock()
         mock_redis = Mock()
@@ -163,7 +163,7 @@ class TestChatSaveRace:
     @pytest.mark.asyncio
     async def test_merge_preserves_backend_messages(self):
         """Test that merge preserves backend-added terminal messages"""
-        from api.chat import merge_messages
+        from backend.api.chat import merge_messages
 
         existing = [
             {"timestamp": "2025-01-01 10:00:00", "sender": "user", "text": "Hello"},
@@ -197,7 +197,7 @@ class TestChatSaveRace:
     @pytest.mark.asyncio
     async def test_merge_deduplicates_messages(self):
         """Test that merge removes duplicate messages"""
-        from api.chat import merge_messages
+        from backend.api.chat import merge_messages
 
         existing = [
             {"timestamp": "2025-01-01 10:00:00", "sender": "user", "text": "Message 1"},
@@ -218,7 +218,7 @@ class TestChatSaveRace:
     @pytest.mark.asyncio
     async def test_merge_sorts_by_timestamp(self):
         """Test that merged messages are sorted chronologically"""
-        from api.chat import merge_messages
+        from backend.api.chat import merge_messages
 
         existing = [
             {
@@ -243,7 +243,7 @@ class TestChatSaveRace:
     @pytest.mark.asyncio
     async def test_merge_handles_large_messages(self):
         """Test merge with large message lists (performance test)"""
-        from api.chat import merge_messages
+        from backend.api.chat import merge_messages
 
         # Create 1000 existing messages
         existing = [
@@ -290,7 +290,7 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_concurrent_terminal_and_save(self):
         """Test concurrent terminal output + chat save (real-world scenario)"""
-        from api.chat import merge_messages
+        from backend.api.chat import merge_messages
 
         # Simulate real scenario: terminal adding messages while frontend saves
         # Initial chat state
@@ -330,7 +330,7 @@ class TestPerformance:
     @pytest.mark.asyncio
     async def test_terminal_lock_overhead(self):
         """Measure asyncio.Lock overhead in terminal buffer"""
-        from api.terminal import ConsolidatedTerminalWebSocket
+        from backend.api.terminal import ConsolidatedTerminalWebSocket
 
         mock_websocket = AsyncMock()
         terminal = ConsolidatedTerminalWebSocket(

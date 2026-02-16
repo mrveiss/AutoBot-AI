@@ -9,8 +9,9 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from api.slm.websockets import SLMWebSocketManager, create_reconciler_callbacks
 from starlette.websockets import WebSocketState
+
+from backend.api.slm.websockets import SLMWebSocketManager, create_reconciler_callbacks
 
 
 class TestSLMWebSocketManager:

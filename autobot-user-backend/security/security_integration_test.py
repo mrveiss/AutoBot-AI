@@ -244,7 +244,7 @@ class TestTerminalSecurityIntegration:
     @pytest.mark.asyncio
     async def test_secure_terminal_session_integration(self):
         """Test secure terminal session with security layer integration"""
-        from api.secure_terminal_websocket import SecureTerminalSession
+        from backend.api.secure_terminal_websocket import SecureTerminalSession
 
         # Create mock security layer
         mock_security = MagicMock()
@@ -268,7 +268,7 @@ class TestTerminalSecurityIntegration:
     @pytest.mark.asyncio
     async def test_terminal_risk_assessment_integration(self):
         """Test terminal risk assessment integration"""
-        from api.secure_terminal_websocket import SecureTerminalSession
+        from backend.api.secure_terminal_websocket import SecureTerminalSession
 
         # Mock security layer with command executor
         mock_security = MagicMock()

@@ -195,7 +195,7 @@ async def initialize_critical_services(app: FastAPI):
         # Issue #881: TEMP DISABLED - testing if Gateway blocks event loop
         logger.info("✅ [ 17%] Gateway: SKIPPED (testing event loop deadlock)")
         # try:
-        #     from services.gateway import ChannelType, Gateway, WebSocketAdapter
+        #     from backend.services.gateway import ChannelType, Gateway, WebSocketAdapter
         #
         #     gateway = Gateway()
         #     await gateway.start()
@@ -411,8 +411,7 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
     """
     logger.info("✅ [ 87%] Graph-RAG: Initializing graph-aware RAG service...")
     try:
-        from services.graph_rag_service import GraphRAGService
-
+        from backend.services.graph_rag_service import GraphRAGService
         from backend.services.rag_config import RAGConfig
         from backend.services.rag_service import RAGService
 
@@ -541,7 +540,7 @@ async def _init_metrics_collection():
         # Import here to avoid circular dependency
         from datetime import datetime
 
-        from api.analytics import analytics_controller
+        from backend.api.analytics import analytics_controller
 
         # Initialize session tracking
         analytics_state = {}

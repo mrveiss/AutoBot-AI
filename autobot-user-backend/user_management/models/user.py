@@ -17,19 +17,20 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from models.activities import (
-        BrowserActivityModel,
-        DesktopActivityModel,
-        FileActivityModel,
-        SecretUsageModel,
-        TerminalActivityModel,
-    )
     from user_management.models.api_key import APIKey
     from user_management.models.mfa import UserMFA
     from user_management.models.organization import Organization
     from user_management.models.role import UserRole
     from user_management.models.sso import UserSSOLink
     from user_management.models.team import TeamMembership
+
+    from backend.models.activities import (
+        BrowserActivityModel,
+        DesktopActivityModel,
+        FileActivityModel,
+        SecretUsageModel,
+        TerminalActivityModel,
+    )
 
 
 class User(Base, TimestampMixin):

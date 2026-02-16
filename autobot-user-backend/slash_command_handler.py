@@ -417,7 +417,7 @@ class ScanCommand(Command):
         scan_params = self._parse_scan_params(self.args)
 
         try:
-            from services.security_workflow_manager import (
+            from backend.services.security_workflow_manager import (
                 get_security_workflow_manager,
             )
 
@@ -551,7 +551,7 @@ class SecurityCommand(Command):
         sub_args = parts[1] if len(parts) > 1 else None
 
         try:
-            from services.security_workflow_manager import (
+            from backend.services.security_workflow_manager import (
                 PHASE_DESCRIPTIONS,
                 get_security_workflow_manager,
             )

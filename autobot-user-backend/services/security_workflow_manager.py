@@ -22,8 +22,9 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, List, Optional
 
-from autobot_shared.redis_client import get_redis_client
 from redis.exceptions import RedisError
+
+from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ async def _get_memory_integration():
             # Double-check after acquiring lock
             if _memory_integration is None:
                 try:
-                    from services.security_memory_integration import (
+                    from backend.services.security_memory_integration import (
                         get_security_memory_integration,
                     )
 
@@ -1038,7 +1039,9 @@ class SecurityWorkflowManager:
                 )
 
             # Issue #319: Use request object to reduce parameter count
-            from services.security_memory_integration import VulnerabilityRequest
+            from backend.services.security_memory_integration import (
+                VulnerabilityRequest,
+            )
 
             vuln_request = VulnerabilityRequest(
                 assessment_id=assessment_id,

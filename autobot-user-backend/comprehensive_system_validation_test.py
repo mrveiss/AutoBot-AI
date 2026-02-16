@@ -246,7 +246,7 @@ class AutoBotSystemValidator:
         print("\n=== ROUTER REGISTRY VALIDATION ===")
 
         try:
-            from api.registry import registry
+            from backend.api.registry import registry
 
             enabled = registry.get_enabled_routers()
             disabled = {

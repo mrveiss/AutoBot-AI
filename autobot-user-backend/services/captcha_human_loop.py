@@ -17,7 +17,7 @@ Features:
 - Graceful timeout fallback
 
 Usage:
-    from services.captcha_human_loop import CaptchaHumanLoop
+    from backend.services.captcha_human_loop import CaptchaHumanLoop
 
     captcha_service = CaptchaHumanLoop(timeout_seconds=120)
     result = await captcha_service.request_human_intervention(
@@ -44,11 +44,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from playwright.async_api import Page
-
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 from event_manager import event_manager
+from playwright.async_api import Page
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +121,7 @@ class CaptchaHumanLoop:
         """Lazy load the automatic CAPTCHA solver."""
         if self._auto_solver is None and self.enable_auto_solve:
             try:
-                from services.captcha_solver import get_captcha_solver
+                from backend.services.captcha_solver import get_captcha_solver
 
                 self._auto_solver = get_captcha_solver()
             except ImportError as e:
@@ -572,7 +571,7 @@ class CaptchaHumanLoop:
             return None
 
         try:
-            from services.captcha_solver import CaptchaType
+            from backend.services.captcha_solver import CaptchaType
 
             # Map string type to enum
             type_map = {

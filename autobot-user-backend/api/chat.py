@@ -18,9 +18,13 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+from auth_middleware import get_current_user
+from constants.threshold_constants import CategoryDefaults, TimingConstants
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import dependencies and utilities - Using available dependencies
 from backend.dependencies import get_config, get_knowledge_base
@@ -44,13 +48,10 @@ from backend.utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-from auth_middleware import get_current_user
-from constants.threshold_constants import CategoryDefaults, TimingConstants
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import models - DISABLED: Models don't exist yet
-# from models.conversation import ConversationModel
-# from models.message import MessageModel
+# from backend.models.conversation import ConversationModel
+# from backend.models.message import MessageModel
 
 
 # Wrapper dependency to validate chat ownership using chat_id

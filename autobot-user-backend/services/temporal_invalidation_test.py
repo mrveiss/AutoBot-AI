@@ -11,8 +11,8 @@ from datetime import datetime, timedelta
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from models.atomic_fact import AtomicFact, FactType, TemporalType
-from services.temporal_invalidation_service import (
+from backend.models.atomic_fact import AtomicFact, FactType, TemporalType
+from backend.services.temporal_invalidation_service import (
     InvalidationRule,
     TemporalInvalidationService,
 )

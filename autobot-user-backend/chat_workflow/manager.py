@@ -19,6 +19,7 @@ from typing import Any, Dict, FrozenSet, List, Optional
 
 from async_chat_workflow import WorkflowMessage
 from slash_command_handler import get_slash_command_handler
+
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.redis_client import get_redis_client as get_redis_manager
 
@@ -120,8 +121,8 @@ class ChatWorkflowManager(
         """Initialize knowledge service for RAG (Issue #249)."""
         try:
             from backend.knowledge_factory import get_knowledge_base_async
+            from backend.services.chat_knowledge_service import ChatKnowledgeService
             from backend.services.rag_service import RAGService
-            from services.chat_knowledge_service import ChatKnowledgeService
 
             kb = await get_knowledge_base_async()
             if kb:

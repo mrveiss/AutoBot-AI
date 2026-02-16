@@ -25,7 +25,7 @@ class TestMCPToolCache:
     def cache(self):
         """Create fresh cache instance for each test"""
         # Import here to avoid module-level import issues
-        from api.mcp_registry import MCPToolCache
+        from backend.api.mcp_registry import MCPToolCache
 
         return MCPToolCache(ttl_seconds=2)  # Short TTL for testing
 
@@ -222,7 +222,7 @@ class TestMCPToolCache:
 
     def test_ttl_configuration(self):
         """Test that TTL can be configured"""
-        from api.mcp_registry import MCPToolCache
+        from backend.api.mcp_registry import MCPToolCache
 
         cache_short = MCPToolCache(ttl_seconds=10)
         cache_long = MCPToolCache(ttl_seconds=300)
@@ -294,7 +294,7 @@ class TestMCPCacheIntegration:
 
     def test_global_cache_instance_exists(self):
         """Test that global cache instance is created"""
-        from api.mcp_registry import mcp_cache
+        from backend.api.mcp_registry import mcp_cache
 
         assert mcp_cache is not None
         assert hasattr(mcp_cache, "get_tools")
@@ -308,7 +308,7 @@ class TestMCPCacheEdgeCases:
     @pytest.fixture
     def cache(self):
         """Create fresh cache instance"""
-        from api.mcp_registry import MCPToolCache
+        from backend.api.mcp_registry import MCPToolCache
 
         return MCPToolCache(ttl_seconds=5)
 

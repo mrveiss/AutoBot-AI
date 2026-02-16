@@ -247,7 +247,7 @@ class TestAlertManagerWebhook:
 
     def test_alert_instance_model_validation(self):
         """Test AlertInstance Pydantic model validation"""
-        from api.alertmanager_webhook import AlertInstance
+        from backend.api.alertmanager_webhook import AlertInstance
 
         alert = AlertInstance(
             status="firing",
@@ -265,7 +265,7 @@ class TestAlertManagerWebhook:
 
     def test_alertmanager_webhook_model_validation(self):
         """Test AlertManagerWebhook Pydantic model validation"""
-        from api.alertmanager_webhook import AlertInstance, AlertManagerWebhook
+        from backend.api.alertmanager_webhook import AlertInstance, AlertManagerWebhook
 
         alert = AlertInstance(
             status="firing",
@@ -297,7 +297,7 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_circuit_breaker_alert(self, sample_circuit_breaker_alert):
         """Test processing circuit breaker OPEN alert"""
-        from api.alertmanager_webhook import AlertInstance, _process_alert
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
         with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
@@ -321,7 +321,7 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_redis_alert(self, sample_redis_alert):
         """Test processing Redis server down alert"""
-        from api.alertmanager_webhook import AlertInstance, _process_alert
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
         with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
@@ -339,7 +339,7 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_npu_alert(self, sample_npu_alert):
         """Test processing NPU circuit breaker alert"""
-        from api.alertmanager_webhook import AlertInstance, _process_alert
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
         with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
@@ -357,7 +357,7 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_security_alert(self, sample_security_alert):
         """Test processing security violation alert"""
-        from api.alertmanager_webhook import AlertInstance, _process_alert
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
         with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
@@ -375,7 +375,7 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_resolved_alert(self, sample_resolved_alert):
         """Test processing resolved alert"""
-        from api.alertmanager_webhook import AlertInstance, _process_alert
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
         with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
@@ -393,7 +393,7 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_alert_with_missing_optional_fields(self):
         """Test processing alert with minimal fields"""
-        from api.alertmanager_webhook import AlertInstance, _process_alert
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
         with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
@@ -417,7 +417,7 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_alert_handles_broadcast_error(self):
         """Test that alert processing handles WebSocket errors gracefully"""
-        from api.alertmanager_webhook import AlertInstance, _process_alert
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
         with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock(side_effect=Exception("WS Error"))
@@ -449,7 +449,7 @@ class TestAlertManagerWebhook:
     )
     async def test_alert_severity_levels(self, severity, expected_type):
         """Test different severity levels are handled correctly"""
-        from api.alertmanager_webhook import AlertInstance, _process_alert
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
         with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
@@ -474,7 +474,7 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_alert_tags_generation(self):
         """Test that alert tags are correctly generated from labels"""
-        from api.alertmanager_webhook import AlertInstance, _process_alert
+        from backend.api.alertmanager_webhook import AlertInstance, _process_alert
 
         with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
@@ -506,7 +506,7 @@ class TestAlertManagerWebhook:
     @pytest.mark.asyncio
     async def test_process_multiple_alerts_in_batch(self, sample_circuit_breaker_alert):
         """Test processing multiple alerts in a single webhook call"""
-        from api.alertmanager_webhook import AlertManagerWebhook, _process_alert
+        from backend.api.alertmanager_webhook import AlertManagerWebhook, _process_alert
 
         with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.broadcast_update = AsyncMock()
@@ -534,7 +534,7 @@ class TestAlertManagerWebhook:
 
             webhook = AlertManagerWebhook(**sample_circuit_breaker_alert)
 
-            from api.alertmanager_webhook import AlertInstance
+            from backend.api.alertmanager_webhook import AlertInstance
 
             for alert_data in sample_circuit_breaker_alert["alerts"]:
                 alert = AlertInstance(**alert_data)
@@ -550,7 +550,7 @@ class TestAlertManagerHealth:
     @pytest.mark.asyncio
     async def test_health_check_returns_healthy(self):
         """Test health check returns healthy status"""
-        from api.alertmanager_webhook import alertmanager_webhook_health
+        from backend.api.alertmanager_webhook import alertmanager_webhook_health
 
         with patch("backend.api.alertmanager_webhook.ws_manager") as mock_ws:
             mock_ws.__bool__ = lambda self: True
@@ -564,7 +564,7 @@ class TestAlertManagerHealth:
     @pytest.mark.asyncio
     async def test_health_check_with_unavailable_ws(self):
         """Test health check when WebSocket manager is unavailable"""
-        from api.alertmanager_webhook import alertmanager_webhook_health
+        from backend.api.alertmanager_webhook import alertmanager_webhook_health
 
         with patch("backend.api.alertmanager_webhook.ws_manager", None):
             result = await alertmanager_webhook_health()

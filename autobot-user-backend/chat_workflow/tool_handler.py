@@ -100,8 +100,10 @@ def _detect_and_store_security_output(
         if not _SECURITY_TOOL_PATTERN.search(command):
             return
 
-        from services.security_tool_parsers import parse_tool_output
-        from services.security_workflow_manager import get_security_workflow_manager
+        from backend.services.security_tool_parsers import parse_tool_output
+        from backend.services.security_workflow_manager import (
+            get_security_workflow_manager,
+        )
 
         parsed = parse_tool_output(output)
         if not parsed or not parsed.get("hosts"):
@@ -195,8 +197,9 @@ class ToolHandlerMixin:
     def _init_terminal_tool(self):
         """Initialize terminal tool for command execution."""
         try:
-            import backend.api.agent_terminal as agent_terminal_api
             from tools.terminal_tool import TerminalTool
+
+            import backend.api.agent_terminal as agent_terminal_api
 
             # CRITICAL: Access the global singleton instance directly
             # This ensures sessions created here are visible to the approval API

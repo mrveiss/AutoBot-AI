@@ -24,8 +24,8 @@ from typing import Any, Dict, List, Optional, Set
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from backend.knowledge_factory import get_or_create_knowledge_base
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)
 
@@ -224,7 +224,7 @@ def get_documentation_searcher():
             return _documentation_searcher
 
         try:
-            from services.chat_knowledge_service import DocumentationSearcher
+            from backend.services.chat_knowledge_service import DocumentationSearcher
 
             _documentation_searcher = DocumentationSearcher()
             if _documentation_searcher.initialize():

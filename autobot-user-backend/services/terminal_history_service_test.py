@@ -29,7 +29,7 @@ class TestTerminalHistoryService:
             "src.services.terminal_history_service.get_redis_client",
             return_value=mock_redis,
         ):
-            from services.terminal_history_service import TerminalHistoryService
+            from backend.services.terminal_history_service import TerminalHistoryService
 
             svc = TerminalHistoryService()
             svc.redis = mock_redis

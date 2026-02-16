@@ -24,7 +24,12 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from advanced_rag_optimizer import RAGMetrics, SearchResult
-from services.graph_rag_service import EntityMatch, GraphRAGMetrics, GraphRAGService
+
+from backend.services.graph_rag_service import (
+    EntityMatch,
+    GraphRAGMetrics,
+    GraphRAGService,
+)
 
 # ============================================================================
 # Fixtures

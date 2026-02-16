@@ -26,7 +26,7 @@ Key Features:
 Usage:
     from backend.services.rag_service import RAGService
     from autobot_memory_graph import AutoBotMemoryGraph
-    from services.graph_rag_service import GraphRAGService
+    from backend.services.graph_rag_service import GraphRAGService
 
     # Initialize dependencies
     rag_service = RAGService(knowledge_base)
@@ -52,11 +52,12 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from backend.services.rag_service import RAGService
 from advanced_rag_optimizer import RAGMetrics, SearchResult
 from autobot_memory_graph import AutoBotMemoryGraph
+
 from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.logging_manager import get_llm_logger
+from backend.services.rag_service import RAGService
 
 logger = get_llm_logger("graph_rag_service")
 

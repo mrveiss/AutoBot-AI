@@ -13,11 +13,11 @@ Tests the following functionality:
 
 import ast
 
-from api.codebase_analytics.endpoints.call_graph import (
+from backend.api.codebase_analytics.endpoints.call_graph import (
     _extract_import_context,
     _resolve_callee_id,
 )
-from api.codebase_analytics.endpoints.shared import (
+from backend.api.codebase_analytics.endpoints.shared import (
     COMMON_THIRD_PARTY,
     STDLIB_MODULES,
     ImportContext,

@@ -17,7 +17,7 @@ For complex CAPTCHAs (reCAPTCHA v2/v3, hCaptcha, Cloudflare):
 Falls back to human-in-the-loop system (captcha_human_loop.py)
 
 Usage:
-    from services.captcha_solver import CaptchaSolver
+    from backend.services.captcha_solver import CaptchaSolver
 
     solver = CaptchaSolver()
     result = await solver.attempt_solve(page, captcha_type="text")

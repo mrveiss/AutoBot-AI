@@ -17,7 +17,8 @@ Issue: #260
 from unittest.mock import AsyncMock
 
 import pytest
-from services.security_workflow_manager import (
+
+from backend.services.security_workflow_manager import (
     PHASE_DESCRIPTIONS,
     VALID_TRANSITIONS,
     AssessmentPhase,

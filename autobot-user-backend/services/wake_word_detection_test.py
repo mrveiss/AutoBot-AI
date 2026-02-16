@@ -6,7 +6,8 @@ Issue #54 - Advanced Wake Word Detection Optimization
 import time
 
 import pytest
-from services.wake_word_service import (
+
+from backend.services.wake_word_service import (
     WakeWordConfig,
     WakeWordDetector,
     WakeWordEvent,

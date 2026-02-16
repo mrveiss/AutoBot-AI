@@ -63,7 +63,7 @@ class ServiceTimeoutError(NetworkError):
 
 
 class HTTPClientError(NetworkError):
-    """Raised for HTTP 4xx client errors from services."""
+    """Raised for HTTP 4xx client errors from backend.services."""
 
     def __init__(
         self,
@@ -79,7 +79,7 @@ class HTTPClientError(NetworkError):
 
 
 class HTTPServerError(NetworkError):
-    """Raised for HTTP 5xx server errors from services."""
+    """Raised for HTTP 5xx server errors from backend.services."""
 
     def __init__(
         self,
