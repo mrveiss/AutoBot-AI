@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.pool import NullPool
 
 from backend.user_management.config import get_deployment_config
 
@@ -52,7 +51,9 @@ def get_async_engine() -> AsyncEngine:
 
     _async_engine = create_async_engine(
         config.postgres_url,
-        poolclass=NullPool,  # Use NullPool for async engines (Issue #888)
+        pool_size=5,  # Number of connections to maintain
+        max_overflow=10,  # Max additional connections under load
+        pool_pre_ping=True,  # Verify connections before use
         echo=False,  # Set to True for SQL debugging
         future=True,
     )
@@ -145,10 +146,12 @@ async def init_database() -> None:
         return
 
     try:
+        from sqlalchemy import text
+
         engine = get_async_engine()
         async with engine.begin() as conn:
             # Simple connectivity check
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
         logger.info("PostgreSQL connection verified successfully")
     except Exception as e:
         logger.error("Failed to connect to PostgreSQL: %s", e)

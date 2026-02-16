@@ -17,7 +17,6 @@ from contextlib import asynccontextmanager
 
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
-from config import UnifiedConfigManager
 from fastapi import FastAPI
 from security_layer import SecurityLayer
 
@@ -29,7 +28,9 @@ from autobot_shared.tracing import (
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.services.slm_client import init_slm_client, shutdown_slm_client
 from backend.type_defs.common import Metadata
+from backend.user_management.database import init_database
 from backend.utils.background_llm_sync import BackgroundLLMSync
+from config import UnifiedConfigManager
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -190,6 +191,15 @@ async def initialize_critical_services(app: FastAPI):
         app.state.security_layer = security_layer
         await update_app_state("security_layer", security_layer)
         logger.info("✅ [ 15%] Security: Security layer initialized successfully")
+
+        # Issue #898: Initialize PostgreSQL database - CRITICAL
+        logger.info("✅ [ 16%] Database: Initializing PostgreSQL async engine...")
+        try:
+            await init_database()
+            logger.info("✅ [ 16%] Database: PostgreSQL async engine initialized")
+        except Exception as db_error:
+            logger.error(f"❌ CRITICAL: Database initialization failed: {db_error}")
+            raise RuntimeError(f"Database initialization failed: {db_error}")
 
         # Issue #732: Initialize Gateway - CRITICAL
         # Issue #881: TEMP DISABLED - testing if Gateway blocks event loop

@@ -199,7 +199,7 @@ async def login(request: Request, login_data: LoginRequest):
             user_data = {
                 "username": user.username,
                 "user_id": str(user.id),
-                "role": "admin" if user.is_superuser else "user",
+                "role": "admin" if user.is_platform_admin else "user",
                 "email": user.email,
                 "last_login": user.updated_at.isoformat() if user.updated_at else None,
             }
