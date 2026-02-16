@@ -16,6 +16,7 @@ from typing import Optional
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
+
 from backend.user_management.models.base import Base, TimestampMixin
 
 
@@ -36,7 +37,7 @@ class SessionCollaboration(Base, TimestampMixin):
         owner_id: User ID who owns the session
         collaborators: JSONB dict mapping user_id -> permission_level
         invitations: JSONB array of pending invitations
-        metadata: Additional collaboration metadata
+        collaboration_metadata: Additional collaboration metadata
     """
 
     __tablename__ = "session_collaborations"
@@ -73,7 +74,7 @@ class SessionCollaboration(Base, TimestampMixin):
         comment="Pending collaboration invitations",
     )
 
-    metadata: Mapped[dict] = mapped_column(
+    collaboration_metadata: Mapped[dict] = mapped_column(
         JSONB,
         default=dict,
         nullable=False,
