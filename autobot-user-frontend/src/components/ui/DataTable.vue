@@ -22,12 +22,19 @@
               :key="column.key"
               :class="{ sortable: column.sortable }"
               @click="column.sortable ? handleSort(column.key) : null"
+              :role="column.sortable ? 'button' : undefined"
+              :tabindex="column.sortable ? 0 : undefined"
+              :aria-sort="column.sortable && sortKey === column.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : (column.sortable ? 'none' : undefined)"
+              :aria-label="column.sortable ? `Sort by ${column.label}` : undefined"
+              @keydown.enter="column.sortable ? handleSort(column.key) : null"
+              @keydown.space.prevent="column.sortable ? handleSort(column.key) : null"
             >
               {{ column.label }}
               <i
                 v-if="column.sortable"
                 class="fas"
                 :class="getSortIcon(column.key)"
+                aria-hidden="true"
               ></i>
             </th>
             <th v-if="$slots.actions" class="actions-column">Actions</th>

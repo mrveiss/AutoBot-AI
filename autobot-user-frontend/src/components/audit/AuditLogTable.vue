@@ -9,21 +9,31 @@
         </span>
       </div>
       <div class="table-actions">
-        <button class="btn btn-icon" @click="$emit('refresh')" title="Refresh">
-          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
+        <button
+          class="btn btn-icon"
+          @click="$emit('refresh')"
+          title="Refresh"
+          aria-label="Refresh audit log entries"
+        >
+          <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }" aria-hidden="true"></i>
         </button>
         <div class="export-dropdown">
-          <button class="btn btn-secondary" @click="toggleExportMenu">
-            <i class="fas fa-download"></i>
+          <button
+            class="btn btn-secondary"
+            @click="toggleExportMenu"
+            aria-label="Export audit logs"
+            :aria-expanded="showExportMenu"
+          >
+            <i class="fas fa-download" aria-hidden="true"></i>
             Export
           </button>
-          <div v-if="showExportMenu" class="dropdown-menu">
-            <button @click="exportLogs('json')">
-              <i class="fas fa-file-code"></i>
+          <div v-if="showExportMenu" class="dropdown-menu" role="menu">
+            <button @click="exportLogs('json')" role="menuitem" aria-label="Export as JSON">
+              <i class="fas fa-file-code" aria-hidden="true"></i>
               Export JSON
             </button>
-            <button @click="exportLogs('csv')">
-              <i class="fas fa-file-csv"></i>
+            <button @click="exportLogs('csv')" role="menuitem" aria-label="Export as CSV">
+              <i class="fas fa-file-csv" aria-hidden="true"></i>
               Export CSV
             </button>
           </div>
@@ -36,13 +46,31 @@
       <table>
         <thead>
           <tr>
-            <th class="col-timestamp" @click="sortBy('timestamp')">
+            <th
+              class="col-timestamp"
+              @click="sortBy('timestamp')"
+              role="button"
+              tabindex="0"
+              :aria-sort="sortField === 'timestamp' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"
+              aria-label="Sort by timestamp"
+              @keydown.enter="sortBy('timestamp')"
+              @keydown.space.prevent="sortBy('timestamp')"
+            >
               <span>Timestamp</span>
-              <i v-if="sortField === 'timestamp'" :class="sortIcon"></i>
+              <i v-if="sortField === 'timestamp'" :class="sortIcon" aria-hidden="true"></i>
             </th>
-            <th class="col-operation" @click="sortBy('operation')">
+            <th
+              class="col-operation"
+              @click="sortBy('operation')"
+              role="button"
+              tabindex="0"
+              :aria-sort="sortField === 'operation' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"
+              aria-label="Sort by operation"
+              @keydown.enter="sortBy('operation')"
+              @keydown.space.prevent="sortBy('operation')"
+            >
               <span>Operation</span>
-              <i v-if="sortField === 'operation'" :class="sortIcon"></i>
+              <i v-if="sortField === 'operation'" :class="sortIcon" aria-hidden="true"></i>
             </th>
             <th class="col-result">Result</th>
             <th class="col-user">User</th>

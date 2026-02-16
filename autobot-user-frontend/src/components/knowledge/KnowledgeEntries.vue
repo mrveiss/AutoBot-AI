@@ -57,6 +57,7 @@
           type="text"
           placeholder="Search entries..."
           class="search-input"
+          aria-label="Search knowledge base entries"
           @input="filterEntries"
         />
       </div>
@@ -83,8 +84,14 @@
     <!-- Filter bar -->
     <div class="filter-bar">
       <div class="filter-group">
-        <label>Category:</label>
-        <select v-model="filterCategory" @change="filterEntries" class="filter-select">
+        <label for="category-filter">Category:</label>
+        <select
+          id="category-filter"
+          v-model="filterCategory"
+          @change="filterEntries"
+          class="filter-select"
+          aria-label="Filter by category"
+        >
           <option value="">All Categories</option>
           <option v-for="cat in store.categories" :key="cat.id" :value="cat.name">
             {{ cat.name }} ({{ cat.documentCount }})
@@ -93,8 +100,14 @@
       </div>
 
       <div class="filter-group">
-        <label>Type:</label>
-        <select v-model="filterType" @change="filterEntries" class="filter-select">
+        <label for="type-filter">Type:</label>
+        <select
+          id="type-filter"
+          v-model="filterType"
+          @change="filterEntries"
+          class="filter-select"
+          aria-label="Filter by entry type"
+        >
           <option value="">All Types</option>
           <option value="document">Documents</option>
           <option value="webpage">Web Pages</option>
@@ -104,8 +117,14 @@
       </div>
 
       <div class="filter-group">
-        <label>Sort by:</label>
-        <select v-model="sortBy" @change="sortEntries" class="filter-select">
+        <label for="sort-filter">Sort by:</label>
+        <select
+          id="sort-filter"
+          v-model="sortBy"
+          @change="sortEntries"
+          class="filter-select"
+          aria-label="Sort entries by"
+        >
           <option value="updatedAt">Last Updated</option>
           <option value="createdAt">Date Created</option>
           <option value="title">Title</option>
