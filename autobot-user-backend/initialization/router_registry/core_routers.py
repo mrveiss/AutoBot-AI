@@ -12,6 +12,7 @@ and are imported at module level to fail fast if missing.
 # Core router imports - these are required for basic functionality
 from backend.api.agent import router as agent_router
 from backend.api.agent_config import router as agent_config_router
+from backend.api.auth import router as auth_router
 from backend.api.browser_mcp import router as browser_mcp_router
 from backend.api.chat import router as chat_router
 from backend.api.collaboration import router as collaboration_router
@@ -62,6 +63,7 @@ from backend.api.wake_word import router as wake_word_router
 def _get_system_routers() -> list:
     """Get system and settings routers (Issue #560: extracted)."""
     return [
+        (auth_router, "/auth", ["auth"], "auth"),
         (chat_router, "", ["chat"], "chat"),
         (collaboration_router, "", ["collaboration"], "collaboration"),
         (system_router, "/system", ["system"], "system"),
