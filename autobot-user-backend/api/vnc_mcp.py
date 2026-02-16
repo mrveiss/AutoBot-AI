@@ -34,6 +34,7 @@ vnc_observations = {
 }
 
 # Issue #281: MCP tool definitions extracted from get_vnc_mcp_tools
+# Issue #74: Extended with desktop interaction controls for agent use
 # Tuple of (name, description, input_schema) for each VNC tool
 VNC_MCP_TOOL_DEFINITIONS = (
     (
@@ -91,6 +92,102 @@ VNC_MCP_TOOL_DEFINITIONS = (
         {
             "type": "object",
             "properties": {},
+            "required": [],
+        },
+    ),
+    # Issue #74: Agent Desktop Interaction Tools
+    (
+        "desktop_mouse_click",
+        (
+            "Click the mouse at specific coordinates on the desktop. Use this to interact with "
+            "GUI applications, buttons, menus, and other clickable elements. Requires desktop VNC connection."
+        ),
+        {
+            "type": "object",
+            "properties": {
+                "x": {
+                    "type": "integer",
+                    "description": "X coordinate to click",
+                    "minimum": 0,
+                },
+                "y": {
+                    "type": "integer",
+                    "description": "Y coordinate to click",
+                    "minimum": 0,
+                },
+                "button": {
+                    "type": "string",
+                    "enum": ["left", "middle", "right"],
+                    "description": "Mouse button to click",
+                    "default": "left",
+                },
+            },
+            "required": ["x", "y"],
+        },
+    ),
+    (
+        "desktop_keyboard_type",
+        (
+            "Type text on the desktop keyboard. Use this to fill forms, enter commands, "
+            "or input text into applications. Text is typed at the current cursor position."
+        ),
+        {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "Text to type on the keyboard",
+                }
+            },
+            "required": ["text"],
+        },
+    ),
+    (
+        "desktop_special_key",
+        (
+            "Send special keys or key combinations (e.g., Return, Escape, ctrl+c, alt+tab). "
+            "Use this for keyboard shortcuts, navigation, and special commands."
+        ),
+        {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "description": "Key name or combination (e.g., 'Return', 'Escape', 'ctrl+c', 'alt+F4')",
+                }
+            },
+            "required": ["key"],
+        },
+    ),
+    (
+        "desktop_screenshot",
+        (
+            "Capture a screenshot of the entire desktop. Returns base64-encoded PNG image. "
+            "Use this to observe the current state of the desktop, analyze GUI elements, "
+            "or verify the results of desktop actions."
+        ),
+        {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    ),
+    (
+        "desktop_observe_state",
+        (
+            "Observe the current desktop state with detailed information. Captures screenshot "
+            "and provides metadata about active windows, running processes, and screen resolution. "
+            "Use this to understand what's happening on the desktop before taking actions."
+        ),
+        {
+            "type": "object",
+            "properties": {
+                "include_screenshot": {
+                    "type": "boolean",
+                    "description": "Include base64 screenshot in response",
+                    "default": True,
+                }
+            },
             "required": [],
         },
     ),
@@ -356,3 +453,236 @@ async def record_vnc_observation(vnc_type: str, observation: Metadata):
     )
 
     return {"success": True, "recorded": True}
+
+
+# Issue #74: Agent Desktop Interaction MCP Endpoints
+# These endpoints allow AI agents to interact with the desktop via MCP tools
+
+
+class DesktopMouseClickRequest(BaseModel):
+    """Agent mouse click request"""
+
+    x: int = Field(..., ge=0)
+    y: int = Field(..., ge=0)
+    button: str = Field(default="left")
+
+
+class DesktopKeyboardTypeRequest(BaseModel):
+    """Agent keyboard type request"""
+
+    text: str
+
+
+class DesktopSpecialKeyRequest(BaseModel):
+    """Agent special key request"""
+
+    key: str
+
+
+class DesktopObserveStateRequest(BaseModel):
+    """Agent desktop observation request"""
+
+    include_screenshot: bool = Field(default=True)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="desktop_mouse_click_mcp",
+    error_code_prefix="VNC_MCP",
+)
+@router.post("/mcp/desktop_mouse_click")
+async def desktop_mouse_click_mcp(request: DesktopMouseClickRequest) -> Metadata:
+    """
+    MCP tool: Click mouse at coordinates on desktop.
+    Issue #74: Agent desktop interaction.
+    """
+    from api.vnc_manager import _run_xdotool_cmd
+
+    button_map = {"left": "1", "middle": "2", "right": "3"}
+    button_num = button_map.get(request.button, "1")
+
+    result = _run_xdotool_cmd(
+        ["mousemove", str(request.x), str(request.y), "click", button_num]
+    )
+
+    return {
+        "success": result["status"] == "success",
+        "message": result["message"],
+        "action": "mouse_click",
+        "coordinates": {"x": request.x, "y": request.y},
+        "button": request.button,
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="desktop_keyboard_type_mcp",
+    error_code_prefix="VNC_MCP",
+)
+@router.post("/mcp/desktop_keyboard_type")
+async def desktop_keyboard_type_mcp(request: DesktopKeyboardTypeRequest) -> Metadata:
+    """
+    MCP tool: Type text on desktop keyboard.
+    Issue #74: Agent desktop interaction.
+    """
+    from api.vnc_manager import _run_xdotool_cmd
+
+    result = _run_xdotool_cmd(["type", "--", request.text])
+
+    return {
+        "success": result["status"] == "success",
+        "message": result["message"],
+        "action": "keyboard_type",
+        "text_length": len(request.text),
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="desktop_special_key_mcp",
+    error_code_prefix="VNC_MCP",
+)
+@router.post("/mcp/desktop_special_key")
+async def desktop_special_key_mcp(request: DesktopSpecialKeyRequest) -> Metadata:
+    """
+    MCP tool: Send special key or key combination.
+    Issue #74: Agent desktop interaction.
+    """
+    from api.vnc_manager import _run_xdotool_cmd
+
+    result = _run_xdotool_cmd(["key", request.key])
+
+    return {
+        "success": result["status"] == "success",
+        "message": result["message"],
+        "action": "special_key",
+        "key": request.key,
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="desktop_screenshot_mcp",
+    error_code_prefix="VNC_MCP",
+)
+@router.post("/mcp/desktop_screenshot")
+async def desktop_screenshot_mcp() -> Metadata:
+    """
+    MCP tool: Capture desktop screenshot.
+    Issue #74: Agent desktop observation.
+    """
+    import base64
+    import subprocess  # nosec B404
+    import tempfile
+    from pathlib import Path
+
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+
+        # Use scrot to capture screenshot
+        result = subprocess.run(  # nosec B607
+            ["scrot", "-o", tmp_path],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env={"DISPLAY": ":1"},
+        )
+
+        if result.returncode != 0:
+            # Fallback to import command
+            result = subprocess.run(  # nosec B607
+                ["import", "-window", "root", tmp_path],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env={"DISPLAY": ":1"},
+            )
+
+        if result.returncode != 0:
+            return {
+                "success": False,
+                "message": "Screenshot capture failed",
+                "action": "screenshot",
+            }
+
+        # Read and encode image
+        with open(tmp_path, "rb") as f:
+            image_data = base64.b64encode(f.read()).decode("utf-8")
+
+        # Cleanup
+        Path(tmp_path).unlink(missing_ok=True)
+
+        return {
+            "success": True,
+            "message": "Screenshot captured",
+            "action": "screenshot",
+            "image_data": image_data,
+            "format": "png",
+        }
+
+    except Exception as e:
+        logger.error("Screenshot capture failed: %s", e)
+        return {"success": False, "message": str(e), "action": "screenshot"}
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="desktop_observe_state_mcp",
+    error_code_prefix="VNC_MCP",
+)
+@router.post("/mcp/desktop_observe_state")
+async def desktop_observe_state_mcp(request: DesktopObserveStateRequest) -> Metadata:
+    """
+    MCP tool: Observe current desktop state with metadata.
+    Issue #74: Agent desktop observation.
+    """
+    import subprocess  # nosec B404
+
+    state = {
+        "success": True,
+        "action": "observe_state",
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    # Get screen resolution
+    try:
+        result = subprocess.run(  # nosec B607
+            ["xdpyinfo"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            env={"DISPLAY": ":1"},
+        )
+        if result.returncode == 0:
+            for line in result.stdout.split("\n"):
+                if "dimensions:" in line:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        state["resolution"] = parts[1]
+                        break
+    except Exception as e:
+        logger.warning("Failed to get screen resolution: %s", e)
+
+    # Get active window info
+    try:
+        result = subprocess.run(  # nosec B607
+            ["xdotool", "getactivewindow", "getwindowname"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            env={"DISPLAY": ":1"},
+        )
+        if result.returncode == 0:
+            state["active_window"] = result.stdout.strip()
+    except Exception as e:
+        logger.warning("Failed to get active window: %s", e)
+
+    # Capture screenshot if requested
+    if request.include_screenshot:
+        screenshot_result = await desktop_screenshot_mcp()
+        if screenshot_result.get("success"):
+            state["screenshot"] = screenshot_result.get("image_data")
+            state["screenshot_format"] = "png"
+
+    return state
