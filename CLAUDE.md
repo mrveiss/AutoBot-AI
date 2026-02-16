@@ -702,6 +702,81 @@ ansible-playbook playbooks/deploy-full.yml --limit slm_server
 1. Edit in `/home/kali/Desktop/AutoBot/`
 2. Deploy via Ansible or sync: `./infrastructure/shared/scripts/sync-to-vm.sh <vm> <component>/`
 
+### Infrastructure as Code (MANDATORY)
+
+**ALL configuration changes MUST go through Ansible - NO exceptions.**
+
+This ensures:
+- Configuration is version-controlled and tracked in git
+- Changes are reproducible across all environments
+- No configuration drift between VMs
+- Easy rollback if something breaks
+- Documentation built-in (playbooks are self-documenting)
+
+**FORBIDDEN: Direct config changes on VMs**
+
+❌ **NEVER do this:**
+```bash
+# Editing config files directly on VMs
+ssh autobot@172.16.168.20 "vim /etc/systemd/system/autobot-backend.service"
+ssh autobot@172.16.168.20 "echo 'NEW_VAR=value' >> /opt/autobot/.env"
+ssh autobot@172.16.168.20 "systemctl daemon-reload && systemctl restart autobot-backend"
+```
+
+These changes will be LOST when:
+- VM is rebuilt or replaced
+- Ansible playbook runs (overwrites manual changes)
+- Someone else deploys from clean Ansible state
+
+✅ **ALWAYS do this instead:**
+
+```bash
+# 1. Edit Ansible configuration locally
+vim autobot-slm-backend/ansible/roles/backend/templates/autobot-backend.service.j2
+vim autobot-slm-backend/ansible/roles/backend/defaults/main.yml
+
+# 2. Commit the change
+git add ansible/
+git commit -m "feat(ansible): update backend service configuration"
+
+# 3. Deploy via Ansible
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/deploy-full.yml --tags backend
+
+# 4. Verify change took effect
+ssh autobot@172.16.168.20 "systemctl status autobot-backend"
+```
+
+**Configuration Change Workflow:**
+
+| Change Type | Ansible Location | Deployment Command |
+|-------------|------------------|-------------------|
+| Service files (systemd) | `roles/*/templates/*.service.j2` | `ansible-playbook deploy-full.yml --tags backend` |
+| Environment variables | `roles/*/templates/.env.j2` or `defaults/main.yml` | `ansible-playbook deploy-full.yml --tags backend` |
+| Nginx config | `roles/frontend/templates/nginx.conf.j2` | `ansible-playbook deploy-full.yml --tags frontend,nginx` |
+| System packages | `roles/common/tasks/main.yml` | `ansible-playbook deploy-full.yml --tags common` |
+| Database credentials | `roles/postgresql/defaults/main.yml` | `ansible-playbook deploy-full.yml --tags postgresql` |
+| Redis config | `roles/redis/templates/redis.conf.j2` | `ansible-playbook deploy-full.yml --tags redis` |
+| TLS certificates | `roles/slm_manager/tasks/tls.yml` | `ansible-playbook deploy-full.yml --tags tls` |
+
+**Emergency Override (use ONLY in critical production incidents):**
+
+If you MUST make a direct change in an emergency:
+
+1. Make the temporary change to fix the incident
+2. **IMMEDIATELY** create a GitHub issue documenting what was changed
+3. Within 24 hours, replicate the change in Ansible
+4. Deploy Ansible to overwrite the manual change
+5. Close the issue once Ansible matches production
+
+**Red Flags (STOP if you see these):**
+- "Let me quickly edit this config on the VM..."
+- "Just a small change, I'll update Ansible later..."
+- "Ansible is too slow, I'll do it manually..."
+- "This is just for testing, I won't forget..."
+
+Every manual change creates **configuration debt** that will cause problems later.
+
 ### Deployment Verification Checklist (MANDATORY)
 
 **After deploying changes to ANY remote server, ALWAYS verify:**

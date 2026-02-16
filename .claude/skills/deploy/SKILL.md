@@ -19,7 +19,30 @@ Complete deployment workflow from local machine to remote VMs with mandatory ver
 
 Before deploying anything:
 
-1. **Verify no uncommitted changes:**
+1. **Verify Infrastructure as Code compliance:**
+
+   **CRITICAL: ALL config changes MUST be in Ansible, not manual VM edits.**
+
+   If the user asks to make config changes directly on VMs, STOP and redirect:
+
+   ```
+   ❌ Direct VM config changes are not allowed.
+
+   Instead, follow Infrastructure as Code workflow:
+   1. Edit Ansible role/template locally
+   2. Commit the change
+   3. Deploy via ansible-playbook
+   4. Verify change took effect
+
+   This ensures changes are:
+   - Version controlled
+   - Reproducible
+   - Won't be lost on VM rebuild
+
+   Which config do you want to change? I'll show you the correct Ansible file.
+   ```
+
+2. **Verify no uncommitted changes:**
    ```bash
    git status
    ```
@@ -213,20 +236,81 @@ ssh autobot@{target_ip} "sudo journalctl -u autobot-backend --since '30 seconds 
 ## Common Issues & Fixes
 
 **Issue: .env overriding dynamic config**
-- Fix: `ssh {target} "mv /opt/autobot/.env /opt/autobot/.env.backup"`
+- **WRONG FIX:** `ssh {target} "mv /opt/autobot/.env /opt/autobot/.env.backup"`
+- **RIGHT FIX:** Remove .env from Ansible template or set correct precedence in playbook
 
 **Issue: Wrong Python interpreter**
-- Fix: `ssh {target} "cd /opt/autobot && python3 -m venv venv --upgrade-deps"`
+- **WRONG FIX:** `ssh {target} "cd /opt/autobot && python3 -m venv venv --upgrade-deps"`
+- **RIGHT FIX:** Update Ansible role to recreate venv with correct Python
 
 **Issue: Service won't start**
 - Check: `ssh {target} "sudo journalctl -u autobot-backend -n 100"`
 - Common causes: Port already in use, missing dependencies, config errors
+- **FIX:** Update systemd template in Ansible, redeploy
 
 **Issue: Endpoint returns 500**
 - Check application logs for stack traces
 - Verify database connection and migrations
 - Check Redis connectivity
+- **FIX:** Update application config in Ansible, redeploy
 
 **Issue: Frontend build errors**
 - Verify Node.js version: `ssh {target} "node --version"` (should be 20.x)
 - Check build logs: `ssh {target} "cd /opt/autobot && npm run build"`
+- **FIX:** Update Node.js installation in Ansible role, redeploy
+
+## Dealing with Manual Changes (Emergency Cleanup)
+
+**If manual changes were made on VMs (against policy):**
+
+1. **Document what was changed:**
+   ```bash
+   # Compare deployed files against Ansible templates
+   ssh {target} "cat /etc/systemd/system/autobot-backend.service" > /tmp/deployed.service
+   cat autobot-slm-backend/ansible/roles/backend/templates/autobot-backend.service.j2 > /tmp/template.service
+   diff /tmp/deployed.service /tmp/template.service
+   ```
+
+2. **Update Ansible to match the manual change:**
+   ```bash
+   # Edit the Ansible template/config
+   vim autobot-slm-backend/ansible/roles/backend/templates/autobot-backend.service.j2
+
+   # Commit the fix
+   git add ansible/
+   git commit -m "feat(ansible): replicate manual production change to service file
+
+   Manual change made to fix [incident description].
+   Now codified in Ansible to prevent configuration drift."
+   ```
+
+3. **Deploy Ansible to overwrite manual change:**
+   ```bash
+   cd autobot-slm-backend/ansible
+   ansible-playbook playbooks/deploy-full.yml --tags backend
+   ```
+
+4. **Verify Ansible now controls the config:**
+   ```bash
+   # Compare again - should be identical now
+   ssh {target} "cat /etc/systemd/system/autobot-backend.service" > /tmp/deployed.service
+   # Process template to compare
+   diff /tmp/deployed.service <(ansible all -i inventory -m template -a "src=roles/backend/templates/autobot-backend.service.j2 dest=/tmp/test.service" --limit {target})
+   ```
+
+**Configuration Drift Prevention:**
+
+Run this periodically to detect manual changes:
+
+```bash
+# Compare all key config files against Ansible
+cd autobot-slm-backend/ansible
+
+# Check systemd services
+ansible all -m shell -a "md5sum /etc/systemd/system/autobot-*.service"
+
+# Check nginx configs
+ansible all -m shell -a "md5sum /etc/nginx/sites-available/autobot*"
+
+# If MD5 sums don't match templates, investigate
+```
