@@ -3,9 +3,10 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
-# Grafana Dashboard Sync Script (Issue #697)
-# Syncs local Grafana dashboards to the Redis VM where Grafana runs.
-# Can be run standalone or called from run_autobot.sh startup.
+# Grafana Dashboard Sync Script (Issue #697, #859)
+# Syncs local Grafana dashboards to the SLM server where Grafana runs.
+# Grafana is deployed via Ansible playbooks (slm_manager role).
+# Can be run standalone or called from startup scripts.
 
 set -e
 
@@ -28,7 +29,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/ssot-config.sh" 2>/dev/null || true
 
 # Configuration (from SSOT)
-TARGET_HOST="${AUTOBOT_REDIS_HOST:-172.16.168.23}"
+TARGET_HOST="${AUTOBOT_SLM_HOST:-172.16.168.19}"
 TARGET_USER="${AUTOBOT_SSH_USER:-autobot}"
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 LOCAL_DASHBOARDS="$PROJECT_ROOT/config/grafana/dashboards"
@@ -42,7 +43,7 @@ show_usage() {
     cat << EOF
 Usage: $0 [OPTIONS]
 
-Syncs Grafana dashboards from local config to the Redis VM.
+Syncs Grafana dashboards from local config to the SLM server.
 
 Options:
   --check       Check sync status without syncing

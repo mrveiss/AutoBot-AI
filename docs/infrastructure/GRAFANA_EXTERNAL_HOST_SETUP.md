@@ -2,6 +2,15 @@
 
 **AutoBot SLM Monitoring - External Grafana Configuration**
 
+> **⚠️ IMPORTANT NOTE:**
+>
+> **Current Production Configuration (Issue #859):**
+> - Grafana is deployed on **SLM Server (172.16.168.19)** via Ansible playbooks (`slm_manager` role)
+> - Prometheus and AlertManager also run on SLM Server (172.16.168.19)
+> - Redis VM (172.16.168.23) runs only Redis Stack
+>
+> **This document covers OPTIONAL external deployment** for advanced use cases requiring dedicated monitoring infrastructure. For standard deployments, Grafana remains colocated with the SLM backend on 172.16.168.19.
+
 This document describes how to deploy Grafana on a dedicated external host for AutoBot SLM monitoring, instead of running it locally on the SLM server.
 
 ---

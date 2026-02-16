@@ -189,10 +189,12 @@ Navigate: AutoBot UI → Monitoring → Dashboards
 ```
 
 **Components:**
-- **Prometheus** (172.16.168.23:9090) - Metrics collection & storage (30-day retention)
-- **Grafana** (172.16.168.23:3000) - Dashboard visualization (admin/autobot)
-- **AlertManager** (172.16.168.23:9093) - Alert routing & notifications
+- **Prometheus** (172.16.168.19:9090) - Metrics collection & storage (30-day retention)
+- **Grafana** (172.16.168.19:3000) - Dashboard visualization (admin/autobot)
+- **AlertManager** (172.16.168.19:9093) - Alert routing & notifications
 - **Backend Metrics** (172.16.168.20:8443) - `/api/monitoring/metrics` endpoint
+
+**Note:** Monitoring stack (Prometheus, Grafana, AlertManager) is deployed on SLM Server via Ansible playbooks (`slm_manager` role), not manually or via scripts.
 
 **Dashboards:**
 1. AutoBot Overview - System-wide health

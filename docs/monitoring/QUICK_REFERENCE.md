@@ -16,9 +16,11 @@ Navigate: **AutoBot UI → Monitoring → Dashboards**
 ### Direct Service Access
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| Grafana | http://172.16.168.23:3000 | admin / autobot |
-| Prometheus | http://172.16.168.23:9090 | (no auth) |
-| AlertManager | http://172.16.168.23:9093 | (no auth) |
+| Grafana | http://172.16.168.19:3000 | admin / autobot |
+| Prometheus | http://172.16.168.19:9090 | (no auth) |
+| AlertManager | http://172.16.168.19:9093 | (no auth) |
+
+**Note:** Monitoring stack is deployed on SLM Server via Ansible playbooks (`slm_manager` role).
 
 ---
 
@@ -56,7 +58,7 @@ Navigate: **AutoBot UI → Monitoring → Dashboards**
 ### Check Service Status
 ```bash
 # All monitoring services
-ssh autobot@172.16.168.23 'systemctl status prometheus grafana-server alertmanager'
+ssh autobot@172.16.168.19 'systemctl status prometheus grafana-server alertmanager'
 
 # Backend metrics endpoint
 curl http://172.16.168.20:8001/api/monitoring/metrics | head
@@ -65,22 +67,22 @@ curl http://172.16.168.20:8001/api/monitoring/metrics | head
 ### Restart Services
 ```bash
 # Restart all monitoring services
-ssh autobot@172.16.168.23 'sudo systemctl restart prometheus alertmanager grafana-server'
+ssh autobot@172.16.168.19 'sudo systemctl restart prometheus alertmanager grafana-server'
 
 # Restart individual service
-ssh autobot@172.16.168.23 'sudo systemctl restart grafana-server'
+ssh autobot@172.16.168.19 'sudo systemctl restart grafana-server'
 ```
 
 ### View Logs
 ```bash
 # Prometheus logs
-ssh autobot@172.16.168.23 'sudo journalctl -u prometheus -f'
+ssh autobot@172.16.168.19 'sudo journalctl -u prometheus -f'
 
 # Grafana logs
-ssh autobot@172.16.168.23 'sudo journalctl -u grafana-server -f'
+ssh autobot@172.16.168.19 'sudo journalctl -u grafana-server -f'
 
 # AlertManager logs
-ssh autobot@172.16.168.23 'sudo journalctl -u alertmanager -f'
+ssh autobot@172.16.168.19 'sudo journalctl -u alertmanager -f'
 ```
 
 ### Check Metrics
@@ -89,10 +91,10 @@ ssh autobot@172.16.168.23 'sudo journalctl -u alertmanager -f'
 curl http://172.16.168.20:8001/api/monitoring/metrics
 
 # Check Prometheus targets
-curl http://172.16.168.23:9090/api/v1/targets | python3 -m json.tool
+curl http://172.16.168.19:9090/api/v1/targets | python3 -m json.tool
 
 # Query specific metric
-curl "http://172.16.168.23:9090/api/v1/query?query=autobot_cpu_usage_percent"
+curl "http://172.16.168.19:9090/api/v1/query?query=autobot_cpu_usage_percent"
 ```
 
 ---
@@ -103,15 +105,15 @@ curl "http://172.16.168.23:9090/api/v1/query?query=autobot_cpu_usage_percent"
 ```bash
 # One-liner to check all services
 echo "Backend:"; curl -s http://172.16.168.20:8001/api/health > /dev/null && echo "✅ UP" || echo "❌ DOWN"; \
-echo "Prometheus:"; curl -s http://172.16.168.23:9090/-/healthy > /dev/null && echo "✅ UP" || echo "❌ DOWN"; \
-echo "Grafana:"; curl -s http://172.16.168.23:3000/api/health > /dev/null && echo "✅ UP" || echo "❌ DOWN"; \
-echo "AlertManager:"; curl -s http://172.16.168.23:9093/-/healthy > /dev/null && echo "✅ UP" || echo "❌ DOWN"
+echo "Prometheus:"; curl -s http://172.16.168.19:9090/-/healthy > /dev/null && echo "✅ UP" || echo "❌ DOWN"; \
+echo "Grafana:"; curl -s http://172.16.168.19:3000/api/health > /dev/null && echo "✅ UP" || echo "❌ DOWN"; \
+echo "AlertManager:"; curl -s http://172.16.168.19:9093/-/healthy > /dev/null && echo "✅ UP" || echo "❌ DOWN"
 ```
 
 ### Detailed Status
 ```bash
 # Check scraping status
-curl -s http://172.16.168.23:9090/api/v1/targets | \
+curl -s http://172.16.168.19:9090/api/v1/targets | \
   python3 -c "import sys, json; data = json.load(sys.stdin); \
   [print(f\"{r['labels']['job']}: {'✅ UP' if r['health'] == 'up' else '❌ DOWN'}\") \
   for r in data['data']['activeTargets']]"
@@ -131,13 +133,13 @@ curl http://172.16.168.20:8001/api/monitoring/metrics
 
 **Check 2**: Prometheus scraping
 ```bash
-curl http://172.16.168.23:9090/api/v1/targets | grep autobot-backend -A 10
+curl http://172.16.168.19:9090/api/v1/targets | grep autobot-backend -A 10
 # Look for "health": "up"
 ```
 
 **Check 3**: Grafana datasource
 ```bash
-curl http://172.16.168.23:3000/api/datasources
+curl http://172.16.168.19:3000/api/datasources
 # Should show Prometheus datasource
 ```
 
@@ -150,30 +152,30 @@ bash run_autobot.sh --restart
 
 **Check**: Service status
 ```bash
-ssh autobot@172.16.168.23 'sudo systemctl status grafana-server'
+ssh autobot@172.16.168.19 'sudo systemctl status grafana-server'
 ```
 
 **Fix**: Restart Grafana
 ```bash
-ssh autobot@172.16.168.23 'sudo systemctl restart grafana-server'
+ssh autobot@172.16.168.19 'sudo systemctl restart grafana-server'
 ```
 
 ### High Prometheus Memory
 
 **Check**: Data size
 ```bash
-ssh autobot@172.16.168.23 'du -sh /var/lib/prometheus/'
+ssh autobot@172.16.168.19 'du -sh /var/lib/prometheus/'
 ```
 
 **Fix**: Reduce retention (if > 5GB)
 ```bash
 # Edit prometheus service
-ssh autobot@172.16.168.23 'sudo nano /etc/systemd/system/prometheus.service'
+ssh autobot@172.16.168.19 'sudo nano /etc/systemd/system/prometheus.service'
 # Change: --storage.tsdb.retention.time=30d
 # To:     --storage.tsdb.retention.time=15d
 
 # Reload and restart
-ssh autobot@172.16.168.23 'sudo systemctl daemon-reload && sudo systemctl restart prometheus'
+ssh autobot@172.16.168.19 'sudo systemctl daemon-reload && sudo systemctl restart prometheus'
 ```
 
 ---
