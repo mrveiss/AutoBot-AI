@@ -28,6 +28,35 @@ security:
       src: "172.16.168.0/24"
       comment: "Redis Insight UI"
 
+  # Redis security
+  redis_security:
+    # Authentication enabled for security
+    auth_enabled: true
+    password: "{{ vault_redis_password }}"
+
+    # Access control (Redis 6.0+)
+    acl_enabled: false
+
+    # Network security
+    protected_mode: false  # Internal network only
+    bind_all_interfaces: true
+
+  # File system security
+  filesystem:
+    # Model storage permissions
+    model_storage_permissions:
+      owner: "{{ autobot.user }}"
+      group: "{{ autobot.group }}"
+      directories: "755"
+      files: "644"
+
+    # Redis data permissions
+    redis_data_permissions:
+      owner: "autobot"
+      group: "autobot"
+      directories: "750"
+      files: "640"
+
 # ==========================================
 # REDIS CONFIGURATION
 # ==========================================
@@ -396,38 +425,8 @@ monitoring:
       interval: 300
 
 # ==========================================
-# SECURITY CONFIGURATION
+# PERFORMANCE TUNING (continued after security section)
 # ==========================================
-
-security:
-  # Redis security
-  redis_security:
-    # Authentication enabled for security
-    auth_enabled: true
-    password: "{{ vault_redis_password }}"
-
-    # Access control (Redis 6.0+)
-    acl_enabled: false
-
-    # Network security
-    protected_mode: false  # Internal network only
-    bind_all_interfaces: true
-
-  # File system security
-  filesystem:
-    # Model storage permissions
-    model_storage_permissions:
-      owner: "{{ autobot.user }}"
-      group: "{{ autobot.group }}"
-      directories: "755"
-      files: "644"
-
-    # Redis data permissions
-    redis_data_permissions:
-      owner: "autobot"
-      group: "autobot"
-      directories: "750"
-      files: "640"
 
 # ==========================================
 # PERFORMANCE TUNING
