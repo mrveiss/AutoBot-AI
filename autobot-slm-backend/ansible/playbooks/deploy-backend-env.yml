@@ -1,0 +1,108 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Deploy backend environment configuration and restart service
+- name: Deploy Backend Environment Configuration
+  hosts: backend
+  become: true
+  gather_facts: true
+
+  vars:
+    backend_user: autobot
+    backend_group: autobot
+    backend_install_dir: /opt/autobot/autobot-user-backend
+    backend_code_dir: /opt/autobot/autobot-user-backend
+    backend_log_dir: /var/log/autobot
+    backend_data_dir: /var/lib/autobot
+    backend_host: "0.0.0.0"
+    backend_port: 8443
+    backend_workers: 1  # Issue #876: Single worker to prevent deadlock
+    backend_redis_host: 172.16.168.23
+    backend_redis_port: 6379
+    backend_redis_password: ""
+    backend_secret_key: "{{ lookup('env', 'AUTOBOT_SECRET_KEY') | default('autobot-dev-secret-' + (9999999999 | random | string), true) }}"
+    backend_cors_origins: "http://172.16.168.21,https://172.16.168.21,http://172.16.168.19,https://172.16.168.19"
+    backend_llm_provider: "ollama"
+    backend_llm_endpoint: "http://127.0.0.1:11434"
+    backend_llm_model: "mistral:7b-instruct"
+    service_auth_service_id: "main-backend"
+    service_auth_keys_dir: "/etc/autobot/service-keys"
+    service_auth_enforcement_mode: false  # Disabled for testing
+    service_auth_override_token: ""
+    service_auth_circuit_breaker_percentage: 100
+    service_auth_timestamp_window: 300
+    service_auth_rate_limit_window: 300
+    service_auth_rate_limit_max_failures: 10
+
+  tasks:
+    - name: Create backend directories if they don't exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+        owner: "{{ backend_user }}"
+        group: "{{ backend_group }}"
+      loop:
+        - "{{ backend_install_dir }}"
+        - "{{ backend_log_dir }}"
+        - "{{ backend_data_dir }}"
+        - "{{ backend_data_dir }}/conversation_files"
+
+    - name: Deploy backend environment file
+      ansible.builtin.template:
+        src: ../roles/backend/templates/backend.env.j2
+        dest: "{{ backend_code_dir }}/.env"
+        mode: "0600"
+        owner: "{{ backend_user }}"
+        group: "{{ backend_group }}"
+      notify: restart backend
+
+    - name: Ensure autobot_shared symlink exists
+      ansible.builtin.file:
+        src: "{{ backend_install_dir }}/../autobot-shared"
+        dest: "{{ backend_code_dir }}/autobot_shared"
+        state: link
+        force: yes
+        owner: "{{ backend_user }}"
+        group: "{{ backend_group }}"
+
+    - name: Restart backend service
+      ansible.builtin.systemd:
+        name: autobot-backend
+        state: restarted
+        daemon_reload: true
+
+    - name: Wait for backend to start
+      ansible.builtin.wait_for:
+        port: "{{ backend_port }}"
+        host: 127.0.0.1
+        delay: 2
+        timeout: 60
+      ignore_errors: true
+
+    - name: Check backend service status
+      ansible.builtin.systemd:
+        name: autobot-backend
+      register: backend_status
+
+    - name: Display backend service status
+      ansible.builtin.debug:
+        msg: "Backend service is {{ backend_status.status.ActiveState }}"
+
+    - name: Get backend logs if service failed
+      ansible.builtin.command: journalctl -u autobot-backend -n 50 --no-pager
+      register: backend_logs
+      when: backend_status.status.ActiveState != "active"
+
+    - name: Display backend logs if failed
+      ansible.builtin.debug:
+        var: backend_logs.stdout_lines
+      when: backend_status.status.ActiveState != "active"
+
+  handlers:
+    - name: restart backend
+      ansible.builtin.systemd:
+        name: autobot-backend
+        state: restarted
+        daemon_reload: true
