@@ -56,6 +56,7 @@
         mode: "0600"
         owner: "{{ backend_user }}"
         group: "{{ backend_group }}"
+      become_user: "{{ backend_user }}"
       notify: restart backend
 
     - name: Ensure autobot_shared symlink exists
@@ -67,14 +68,20 @@
         owner: "{{ backend_user }}"
         group: "{{ backend_group }}"
 
+    - name: Install Python requirements (including aiofiles)
+      ansible.builtin.shell:
+        cmd: "{{ backend_code_dir }}/venv/bin/pip install -r {{ backend_code_dir }}/requirements.txt"
+        chdir: "{{ backend_code_dir }}"
+      become_user: "{{ backend_user }}"
+      environment:
+        PIP_NO_BINARY: ":none:"
+        PIP_USE_DEPRECATED: "legacy-resolver"
+
     - name: Deploy backend systemd service
       ansible.builtin.template:
         src: ../roles/backend/templates/autobot-backend.service.j2
         dest: /etc/systemd/system/autobot-backend.service
         mode: "0644"
-      notify:
-        - reload systemd
-        - restart backend
 
     - name: Remove inner backend symlink if it exists (Issue #891)
       ansible.builtin.file:
@@ -89,7 +96,6 @@
       ansible.builtin.systemd:
         name: autobot-backend
         state: restarted
-        daemon_reload: true
 
     - name: Wait for backend to start
       ansible.builtin.wait_for:
