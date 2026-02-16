@@ -37,6 +37,43 @@
 
 ---
 
+## PROJECT STACK
+
+**Primary Languages & Verification:**
+
+- **Python (Backend, Ansible, SLM):**
+  - After ANY Python changes: `ruff check <file>` to verify linting
+  - Run tests: `python -m pytest <test-file> -v`
+  - Common issues: E501 (line length), F821 (undefined names), bare excepts
+
+- **TypeScript (Frontend - Vue 3):**
+  - After ANY TypeScript changes: `npm run type-check` or `npx tsc --noEmit`
+  - After ANY Vue changes: `npm run lint`
+  - Build verification: `npm run build` (must succeed before deployment)
+  - Common issues: Type mismatches, unused imports, missing interface definitions
+
+- **YAML (Ansible, Config):**
+  - Syntax check: `ansible-playbook --syntax-check <playbook>`
+  - Lint: `ansible-lint <playbook>`
+  - Common issues: Indentation, missing required keys, invalid variable references
+
+**Build Check Pattern:**
+
+```bash
+# Before committing backend changes
+ruff check autobot-user-backend/path/to/changed/file.py
+
+# Before committing frontend changes
+cd autobot-user-frontend && npm run type-check && npm run lint
+
+# Before committing Ansible changes
+cd autobot-slm-backend/ansible && ansible-playbook playbooks/<playbook>.yml --syntax-check
+```
+
+**If build/lint checks fail, fix them BEFORE committing. Never commit broken code.**
+
+---
+
 ## GENERAL WORKFLOW
 
 **Implementation First:**
@@ -60,6 +97,65 @@
 - When a session is getting long, commit completed work incrementally rather than waiting until everything is done
 - If implementation has 10+ tasks, commit after each logical group (e.g., every 2-3 tasks)
 - Incremental commits protect progress and simplify recovery if sessions need to end
+
+---
+
+## IMPLEMENTATION PRINCIPLES (MANDATORY)
+
+### Simplicity First
+
+**Always prefer the simplest approach:**
+
+- When the user asks to remove/fix something, do NOT add extra validation, stat checks, or defensive code unless specifically requested
+- If the scope is unclear, ASK for clarification rather than assuming a more complex approach
+- Solve the stated problem - don't over-engineer for hypothetical edge cases
+- Simple solutions are easier to maintain, debug, and verify
+
+**Examples of over-engineering to AVOID:**
+
+❌ User says "remove X" → You add existence checks, logging, backups, rollback mechanisms
+✅ User says "remove X" → You remove X
+
+❌ User says "fix bug Y" → You refactor surrounding code, add new abstractions
+✅ User says "fix bug Y" → You fix bug Y with minimal changes
+
+### Architecture Confirmation
+
+**Before implementing, confirm assumptions with the user:**
+
+- Startup methods: Do NOT assume `systemd` vs `bash run_autobot.sh` vs `docker-compose` - ask or check CLAUDE.md
+- Deployment strategies: Do NOT assume Ansible vs manual sync vs Docker - verify the correct method
+- Architectural patterns: Do NOT create separate "modes" when extending existing code - ask if a new mode is actually needed
+- Service restart methods: Do NOT guess - check existing infrastructure or ask
+
+**Common mistakes to avoid:**
+
+- Assuming systemd when the project uses custom bash scripts
+- Creating a new "partition mode" when the existing mode just needs extension
+- Adding unnecessary reboots to workflows
+- Implementing manual approaches when Ansible playbooks exist
+- Assuming docker when services run directly via systemd
+
+**Required confirmation format:**
+
+Before implementing, state:
+1. **Approach:** What method/pattern you'll use
+2. **Assumptions:** What you're assuming about architecture, startup, deployment
+3. **Scope:** What will change and what will stay the same
+
+Wait for user confirmation before writing code.
+
+### Fix Already-Implemented Work
+
+**Always check if work already exists:**
+
+Before implementing a fix or feature:
+1. Check GitHub: `gh issue view <number>` - is it already closed?
+2. Check PRs: `gh pr list | grep <keywords>` - does a PR already exist?
+3. Check recent commits: `git log --oneline -20 --grep="<keywords>"` - was it recently done?
+4. Grep the codebase: Search for function names, error messages, or related code
+
+If you find existing work, USE IT - don't reimplement from scratch.
 
 ---
 
@@ -606,6 +702,64 @@ ansible-playbook playbooks/deploy-full.yml --limit slm_server
 1. Edit in `/home/kali/Desktop/AutoBot/`
 2. Deploy via Ansible or sync: `./infrastructure/shared/scripts/sync-to-vm.sh <vm> <component>/`
 
+### Deployment Verification Checklist (MANDATORY)
+
+**After deploying changes to ANY remote server, ALWAYS verify:**
+
+1. **No .env override conflicts:**
+   ```bash
+   # Check if .env is overriding dynamic config
+   grep -E "(HOST|PORT|PASSWORD)" /path/to/.env
+   ```
+   - If .env has static values that should be dynamic, STOP and fix
+
+2. **Correct Python interpreter:**
+   ```bash
+   # Verify which Python is being used
+   which python3
+   /opt/autobot/venv/bin/python --version
+   ```
+   - Wrong Python path = missing modules, version mismatches
+
+3. **Database migrations current:**
+   ```bash
+   # Check migration status
+   cd /opt/autobot && source venv/bin/activate
+   alembic current  # or your migration command
+   ```
+   - Out-of-sync migrations = 500 errors, schema mismatches
+
+4. **Service actually restarted:**
+   ```bash
+   # Don't trust "systemctl restart" success
+   sudo systemctl status autobot-backend --no-pager
+   journalctl -u autobot-backend -n 50 --no-pager
+   ```
+   - Check logs for startup errors, not just systemd status
+
+5. **Endpoints responding correctly:**
+   ```bash
+   # Hit affected endpoints
+   curl -s http://localhost:8001/api/health | jq
+   curl -s https://172.16.168.19/api/nodes | jq '.[] | .status'
+   ```
+   - Verify actual response, not just HTTP 200
+
+6. **No errors in recent logs:**
+   ```bash
+   # Check for errors in last 30 seconds
+   journalctl -u autobot-backend --since "30 seconds ago" | grep -i error
+   ```
+   - Silent failures are common - logs reveal truth
+
+**Only proceed to next task if ALL six checks pass.**
+
+**If ANY check fails:**
+- ❌ Do NOT move on hoping it will fix itself
+- ❌ Do NOT deploy more changes on top of broken state
+- ✅ DO stop and fix the issue immediately
+- ✅ DO re-run all six checks after fixing
+
 ---
 
 ## AGENT DELEGATION
@@ -624,6 +778,31 @@ ansible-playbook playbooks/deploy-full.yml --limit slm_server
 - If a subagent task is interrupted or rejected by the user, switch to **direct implementation immediately**
 - Do NOT retry subagent dispatch after rejection
 - Break large tasks into smaller subagent units (prefer 3 small tasks over 1 large task)
+
+### Subagent Safety Guidelines
+
+**Before spawning parallel subagents:**
+
+1. **Verify worktree permissions:** Run `ls -la ../worktrees/ 2>/dev/null || mkdir -p ../worktrees/` to ensure directory exists and is writable
+2. **Test single agent first:** Before dispatching 4-6 parallel agents, spawn ONE agent to verify the workflow works
+3. **Set timeouts:** If an agent appears to hang for >5 minutes, fail fast and report back rather than blocking indefinitely
+4. **Have fallback plan:** If worktree/permission approach fails, immediately switch to sequential branch-based implementation
+
+**If subagent fails:**
+
+- ❌ Do NOT retry the same subagent approach multiple times
+- ❌ Do NOT spawn more agents hoping they'll succeed
+- ✅ DO switch to direct implementation in the main repo
+- ✅ DO document what failed for future improvement
+
+**Subagent success pattern:**
+
+```
+1. Pre-flight: Verify worktree setup, test with one agent
+2. Dispatch: Launch parallel agents with clear scoped tasks
+3. Monitor: Check for hangs, permission errors, or timeouts
+4. Fallback: Switch to sequential if parallel fails
+```
 
 ### R-P-I Workflow (ONLY for these agents)
 
