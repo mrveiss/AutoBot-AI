@@ -14,7 +14,7 @@ Tests verify:
 """
 
 import pytest
-from chat_workflow.models import StreamingMessage, StreamingOperation
+from backend.chat_workflow.models import StreamingMessage, StreamingOperation
 
 
 class TestStreamingMessageBasics:

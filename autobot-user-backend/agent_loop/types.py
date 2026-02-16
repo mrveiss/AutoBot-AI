@@ -13,7 +13,7 @@ from datetime import datetime
 from enum import Enum, auto
 from typing import Any, Optional
 
-from constants.threshold_constants import BatchConfig, RetryConfig
+from backend.constants.threshold_constants import BatchConfig, RetryConfig
 
 
 # =============================================================================

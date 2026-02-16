@@ -10,7 +10,7 @@ import json
 import pytest
 from fastapi import status
 from fastapi.responses import JSONResponse
-from utils.api_responses import (
+from backend.utils.api_responses import (
     ErrorResponse,
     PaginatedResponse,
     StandardResponse,

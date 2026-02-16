@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from backend.type_defs.common import Metadata
-from monitoring.prometheus_metrics import get_metrics_manager
+from backend.monitoring.prometheus_metrics import get_metrics_manager
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()

@@ -28,7 +28,7 @@ import pytest
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from code_intelligence.code_fingerprinting import (
+from backend.code_intelligence.code_fingerprinting import (
     ASTHasher,
     ASTNormalizer,
     CloneDetectionReport,

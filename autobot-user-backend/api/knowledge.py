@@ -9,7 +9,7 @@ import logging
 from typing import List, Optional
 
 from auth_middleware import check_admin_permission
-from constants.threshold_constants import CategoryDefaults, QueryDefaults
+from backend.constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
 from fastapi import (
     APIRouter,
@@ -21,7 +21,7 @@ from fastapi import (
     Request,
 )
 from pydantic import BaseModel, Field, field_validator
-from utils.path_validation import contains_path_traversal
+from backend.utils.path_validation import contains_path_traversal
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

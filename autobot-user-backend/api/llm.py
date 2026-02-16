@@ -7,12 +7,12 @@ import logging
 from auth_middleware import check_admin_permission, get_current_user
 
 # Import unified configuration system - NO HARDCODED VALUES
-from constants.model_constants import ModelConstants
+from backend.constants.model_constants import ModelConstants
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 # Import caching utilities from unified cache manager (P4 Cache Consolidation)
-from utils.advanced_cache_manager import cache_response
+from backend.utils.advanced_cache_manager import cache_response
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.services.config_service import ConfigService

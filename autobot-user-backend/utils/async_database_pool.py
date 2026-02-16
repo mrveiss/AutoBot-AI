@@ -18,8 +18,8 @@ from typing import Any, Dict
 import aiosqlite
 
 # Import shared database helpers (Issue #292 - Eliminate duplicate code)
-from constants.threshold_constants import TimingConstants
-from utils.database_helpers import join_results  # noqa: F401 - re-export
+from backend.constants.threshold_constants import TimingConstants
+from backend.utils.database_helpers import join_results  # noqa: F401 - re-export
 
 logger = logging.getLogger(__name__)
 

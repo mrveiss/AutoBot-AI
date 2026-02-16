@@ -15,9 +15,9 @@ import uuid
 from typing import Optional
 
 from backend.type_defs.common import Metadata
-from constants.path_constants import PATH
-from constants.threshold_constants import TimingConstants
-from utils.encoding_utils import strip_ansi_codes
+from backend.constants.path_constants import PATH
+from backend.constants.threshold_constants import TimingConstants
+from backend.utils.encoding_utils import strip_ansi_codes
 
 from .models import AgentTerminalSession
 

@@ -33,7 +33,7 @@ warnings.warn(
 )
 
 # Re-export everything from advanced_cache_manager for backward compatibility
-from utils.advanced_cache_manager import (
+from backend.utils.advanced_cache_manager import (
     cache_knowledge_results,
     clear_knowledge_cache,
     get_cached_knowledge_results,

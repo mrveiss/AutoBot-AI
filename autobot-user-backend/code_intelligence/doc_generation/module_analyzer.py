@@ -14,19 +14,19 @@ import ast
 import os
 from typing import List, Optional, Set, Union
 
-from code_intelligence.doc_generation.types import (
+from backend.code_intelligence.doc_generation.types import (
     ElementType,
     ParameterDoc,
     ReturnDoc,
 )
-from code_intelligence.doc_generation.models import (
+from backend.code_intelligence.doc_generation.models import (
     ClassDoc,
     FunctionDoc,
     ModuleDoc,
     PackageDoc,
 )
-from code_intelligence.doc_generation import helpers
-from code_intelligence.doc_generation.docstring_parser import DocstringParser
+from backend.code_intelligence.doc_generation import helpers
+from backend.code_intelligence.doc_generation.docstring_parser import DocstringParser
 
 # Re-export constants for internal use
 _FUNCTION_DEF_TYPES = helpers.FUNCTION_DEF_TYPES

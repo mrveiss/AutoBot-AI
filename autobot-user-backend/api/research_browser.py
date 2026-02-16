@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from config import UnifiedConfigManager
-from constants.network_constants import NetworkConstants
+from backend.constants.network_constants import NetworkConstants
 from research_browser_manager import research_browser_manager
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

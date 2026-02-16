@@ -11,8 +11,8 @@ New code should import directly from constants.status_enums.
 # Re-export from centralized location for backward compatibility
 from enum import Enum
 
-from constants.status_enums import Priority as TaskPriority
-from constants.status_enums import TaskStatus
+from backend.constants.status_enums import Priority as TaskPriority
+from backend.constants.status_enums import TaskStatus
 
 
 class MemoryCategory(Enum):

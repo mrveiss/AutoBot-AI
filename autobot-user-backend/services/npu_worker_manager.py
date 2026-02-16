@@ -21,7 +21,7 @@ from backend.models.npu_models import (LoadBalancingConfig, NPUWorkerConfig,
                                        NPUWorkerDetails, NPUWorkerMetrics,
                                        NPUWorkerStatus, WorkerStatus,
                                        WorkerTestResult)
-from constants.threshold_constants import TimingConstants
+from backend.constants.threshold_constants import TimingConstants
 from event_manager import event_manager
 from npu_integration import NPUWorkerClient
 

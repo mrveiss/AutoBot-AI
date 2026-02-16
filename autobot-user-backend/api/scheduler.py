@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from backend.type_defs.common import Metadata
-from constants.threshold_constants import RetryConfig
+from backend.constants.threshold_constants import RetryConfig
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from workflow_scheduler import WorkflowPriority
 from workflow_scheduler import WorkflowScheduleRequest as InternalScheduleRequest

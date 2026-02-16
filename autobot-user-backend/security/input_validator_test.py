@@ -4,7 +4,7 @@
 """Tests for Input Validator - Issue #712."""
 
 
-from security.input_validator import (
+from backend.security.input_validator import (
     WebResearchInputValidator,
     get_input_validator,
     sanitize_web_content,

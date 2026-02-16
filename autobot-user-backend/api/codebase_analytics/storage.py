@@ -11,7 +11,7 @@ import logging
 import re
 from pathlib import Path
 
-from utils.chromadb_client import get_async_chromadb_client, get_chromadb_client
+from backend.utils.chromadb_client import get_async_chromadb_client, get_chromadb_client
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
 import pytest
-from knowledge.pipeline.registry import TaskRegistry
+from backend.knowledge.pipeline.registry import TaskRegistry
 
 
 @pytest.fixture(autouse=True)

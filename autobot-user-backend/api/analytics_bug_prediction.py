@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from auth_middleware import check_admin_permission
-from constants.threshold_constants import TimingConstants
+from backend.constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 

@@ -12,7 +12,7 @@ import socket
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from constants.network_constants import NetworkConstants
+from backend.constants.network_constants import NetworkConstants
 from autobot_shared.logging_manager import get_logger
 
 # Get centralized logger

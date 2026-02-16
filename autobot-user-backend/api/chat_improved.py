@@ -24,7 +24,7 @@ from exceptions import (
 )
 
 # Issue #756: Consolidated from src/utils/request_utils.py
-from utils.request_utils import generate_request_id
+from backend.utils.request_utils import generate_request_id
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

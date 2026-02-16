@@ -38,7 +38,7 @@ except ImportError:
     MinHash = Any  # type: ignore[misc, assignment]
     MinHashLSH = Any  # type: ignore[misc, assignment]
 
-from utils.file_categorization import (
+from backend.utils.file_categorization import (
     JS_EXTENSIONS,
     PYTHON_EXTENSIONS,
     SKIP_DIRS,

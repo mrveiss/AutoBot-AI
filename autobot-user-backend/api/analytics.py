@@ -16,8 +16,8 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 
 import httpx
-from constants.network_constants import NetworkConstants
-from constants.threshold_constants import TimingConstants
+from backend.constants.network_constants import NetworkConstants
+from backend.constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

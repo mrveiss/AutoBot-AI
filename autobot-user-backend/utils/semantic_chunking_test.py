@@ -10,7 +10,7 @@ import sys
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from utils.semantic_chunker import AutoBotSemanticChunker, SemanticChunk
+from backend.utils.semantic_chunker import AutoBotSemanticChunker, SemanticChunk
 
 
 class TestSemanticChunking:

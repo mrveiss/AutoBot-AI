@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Re-export all public API from the package
-from utils.long_running_operations import (  # Types and dataclasses; Managers
+from backend.utils.long_running_operations import (  # Types and dataclasses; Managers
     LongRunningOperation,
     LongRunningOperationManager,
     LongRunningTimeoutConfig,

@@ -26,13 +26,13 @@ Usage:
         await planner.complete_step(plan.plan_id, step.step_id)
 """
 
-from planner.types import (
+from backend.planner.types import (
     StepStatus,
     PlanStatus,
     PlanStep,
     ExecutionPlan,
 )
-from planner.planner import PlannerModule, LLMPlannerModule
+from backend.planner.planner import PlannerModule, LLMPlannerModule
 
 __all__ = [
     # Types

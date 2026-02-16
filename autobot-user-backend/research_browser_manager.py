@@ -18,11 +18,11 @@ import aiofiles
 from playwright.async_api import Browser, BrowserContext, Page, async_playwright
 
 from config import UnifiedConfigManager
-from constants.network_constants import ServiceURLs
-from constants.security_constants import SecurityConstants
-from constants.threshold_constants import TimingConstants
+from backend.constants.network_constants import ServiceURLs
+from backend.constants.security_constants import SecurityConstants
+from backend.constants.threshold_constants import TimingConstants
 from source_attribution import SourceType, track_source
-from utils.display_utils import get_playwright_config
+from backend.utils.display_utils import get_playwright_config
 
 logger = logging.getLogger(__name__)
 

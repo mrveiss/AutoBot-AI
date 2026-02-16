@@ -17,7 +17,7 @@ from autobot_shared.ssot_config import (
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
-from constants.path_constants import PATH
+from backend.constants.path_constants import PATH
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 

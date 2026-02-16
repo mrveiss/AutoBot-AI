@@ -40,19 +40,19 @@ import logging
 import threading
 from typing import Optional
 
-from knowledge.base import KnowledgeBaseCore
-from knowledge.bulk import BulkOperationsMixin
-from knowledge.categories import CategoriesMixin
-from knowledge.collections import CollectionsMixin
-from knowledge.documents import DocumentsMixin
-from knowledge.suggestions import SuggestionsMixin
-from knowledge.metadata import MetadataMixin
-from knowledge.versioning import VersioningMixin
-from knowledge.facts import FactsMixin
-from knowledge.index import IndexMixin
-from knowledge.search import SearchMixin
-from knowledge.stats import StatsMixin
-from knowledge.tags import TagsMixin
+from backend.knowledge.base import KnowledgeBaseCore
+from backend.knowledge.bulk import BulkOperationsMixin
+from backend.knowledge.categories import CategoriesMixin
+from backend.knowledge.collections import CollectionsMixin
+from backend.knowledge.documents import DocumentsMixin
+from backend.knowledge.suggestions import SuggestionsMixin
+from backend.knowledge.metadata import MetadataMixin
+from backend.knowledge.versioning import VersioningMixin
+from backend.knowledge.facts import FactsMixin
+from backend.knowledge.index import IndexMixin
+from backend.knowledge.search import SearchMixin
+from backend.knowledge.stats import StatsMixin
+from backend.knowledge.tags import TagsMixin
 
 logger = logging.getLogger(__name__)
 

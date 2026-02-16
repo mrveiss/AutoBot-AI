@@ -29,7 +29,7 @@ from backend.utils.paths_manager import ensure_data_directory, get_data_path
 from auth_middleware import auth_middleware
 from security_layer import SecurityLayer
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from utils.path_validation import is_invalid_name
+from backend.utils.path_validation import is_invalid_name
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

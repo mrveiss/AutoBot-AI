@@ -16,7 +16,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstr
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from user_management.models.base import Base, TenantMixin, TimestampMixin
+from backend.user_management.models.base import Base, TenantMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from user_management.models.organization import Organization

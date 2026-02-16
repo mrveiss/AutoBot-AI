@@ -17,7 +17,7 @@ import tempfile
 import textwrap
 
 import pytest
-from code_intelligence.redis_optimizer import (
+from backend.code_intelligence.redis_optimizer import (
     OptimizationSeverity,
     OptimizationType,
     RedisOptimizer,

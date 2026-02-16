@@ -12,7 +12,7 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from user_management.services.session_service import SessionService
+from backend.user_management.services.session_service import SessionService
 
 
 @pytest.fixture

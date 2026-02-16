@@ -14,11 +14,11 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional
 
-from constants.status_enums import TaskStatus
-from constants.threshold_constants import BatchConfig, RetryConfig
-from events.types import create_action_event, create_observation_event
-from tools.parallel.analyzer import DependencyAnalyzer
-from tools.parallel.types import ExecutionMetrics, ToolCall
+from backend.constants.status_enums import TaskStatus
+from backend.constants.threshold_constants import BatchConfig, RetryConfig
+from backend.events.types import create_action_event, create_observation_event
+from backend.tools.parallel.analyzer import DependencyAnalyzer
+from backend.tools.parallel.types import ExecutionMetrics, ToolCall
 
 logger = logging.getLogger(__name__)
 

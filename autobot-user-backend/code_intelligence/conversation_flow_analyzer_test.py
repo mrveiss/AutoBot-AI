@@ -18,7 +18,7 @@ Part of EPIC #217 - Advanced Code Intelligence Methods (Issue #227)
 from datetime import datetime
 
 import pytest
-from code_intelligence.conversation_flow_analyzer import (
+from backend.code_intelligence.conversation_flow_analyzer import (
     AnalysisResult,
     Bottleneck,
     BottleneckType,

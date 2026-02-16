@@ -12,7 +12,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from autobot_types import TaskComplexity
-from utils.advanced_cache_manager import smart_cache
+from backend.utils.advanced_cache_manager import smart_cache
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from workflow_templates import TemplateCategory, workflow_template_manager
 

@@ -14,8 +14,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from constants.path_constants import PATH
-from constants.threshold_constants import QueryDefaults
+from backend.constants.path_constants import PATH
+from backend.constants.threshold_constants import QueryDefaults
 
 logger = logging.getLogger(__name__)
 

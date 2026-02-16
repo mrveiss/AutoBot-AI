@@ -40,9 +40,9 @@ from enum import Enum
 from typing import List, Optional
 
 from backend.type_defs.common import Metadata
-from constants.threshold_constants import CategoryDefaults, QueryDefaults
+from backend.constants.threshold_constants import CategoryDefaults, QueryDefaults
 from pydantic import BaseModel, Field, validator
-from utils.path_validation import contains_path_traversal
+from backend.utils.path_validation import contains_path_traversal
 
 # Issue #380: Module-level frozenset for tag operations
 _VALID_TAG_OPERATIONS = frozenset({"add", "remove"})

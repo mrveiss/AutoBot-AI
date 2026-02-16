@@ -8,6 +8,6 @@ Provides specialized logging for different components:
 - TerminalLogger: Terminal command logging with AUTOBOT/MANUAL markers
 """
 
-from autobot_logging.terminal_logger import TerminalLogger
+from backend.autobot_logging.terminal_logger import TerminalLogger
 
 __all__ = ["TerminalLogger"]

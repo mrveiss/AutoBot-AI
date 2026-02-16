@@ -17,9 +17,9 @@ from typing import List, Optional
 
 from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from knowledge.ownership import VisibilityLevel
+from backend.knowledge.ownership import VisibilityLevel
 from pydantic import BaseModel, Field
-from user_management.models.user import User
+from backend.user_management.models.user import User
 
 from backend.knowledge_factory import get_or_create_knowledge_base
 

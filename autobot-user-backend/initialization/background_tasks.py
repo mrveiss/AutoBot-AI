@@ -14,7 +14,7 @@ from fastapi import FastAPI
 
 from backend.initialization.ai_stack_init import initialize_ai_stack
 from chat_workflow import ChatWorkflowManager
-from utils.background_llm_sync import background_llm_sync
+from backend.utils.background_llm_sync import background_llm_sync
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__, "backend")

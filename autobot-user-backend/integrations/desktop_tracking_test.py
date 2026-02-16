@@ -11,7 +11,7 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from integrations.desktop_tracking import (
+from backend.integrations.desktop_tracking import (
     track_desktop_action,
     track_keyboard_input,
     track_mouse_click,

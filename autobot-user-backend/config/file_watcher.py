@@ -10,7 +10,7 @@ import asyncio
 import logging
 from typing import Any, Callable, Dict
 
-from constants.threshold_constants import FileWatcherConfig
+from backend.constants.threshold_constants import FileWatcherConfig
 
 logger = logging.getLogger(__name__)
 

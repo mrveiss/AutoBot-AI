@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission, get_current_user
-from utils.advanced_cache_manager import advanced_cache
+from backend.utils.advanced_cache_manager import advanced_cache
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

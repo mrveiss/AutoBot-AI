@@ -10,8 +10,8 @@ import logging
 import os
 from typing import Any, Dict
 
-from constants.network_constants import NetworkConstants
-from constants.path_constants import PATH
+from backend.constants.network_constants import NetworkConstants
+from backend.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 

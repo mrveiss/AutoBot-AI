@@ -19,19 +19,19 @@ from backend.api.user_management.dependencies import (
     get_user_service,
     require_user_management_enabled,
 )
-from user_management.middleware.rate_limit import (
+from backend.user_management.middleware.rate_limit import (
     PasswordChangeRateLimiter,
     RateLimitExceeded,
 )
-from user_management.schemas import (
+from backend.user_management.schemas import (
     PasswordChange,
     UserCreate,
     UserListResponse,
     UserResponse,
     UserUpdate,
 )
-from user_management.services import UserService
-from user_management.services.user_service import (
+from backend.user_management.services import UserService
+from backend.user_management.services.user_service import (
     DuplicateUserError,
     InvalidCredentialsError,
     UserNotFoundError,

@@ -46,7 +46,7 @@ from backend.type_defs.common import Metadata
 
 import redis.asyncio as async_redis
 
-from constants.network_constants import NetworkConstants
+from backend.constants.network_constants import NetworkConstants
 from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)

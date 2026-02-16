@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from constants.threshold_constants import TimingConstants
+from backend.constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
 from llm_interface import ChatMessage, LLMResponse
 

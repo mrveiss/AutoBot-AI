@@ -15,7 +15,7 @@ from typing import Any, Dict, List
 
 from backend.dependencies import global_config_manager
 from async_chat_workflow import WorkflowMessage
-from constants.model_constants import ModelConstants
+from backend.constants.model_constants import ModelConstants
 from prompt_manager import get_prompt
 from autobot_shared.http_client import get_http_client
 

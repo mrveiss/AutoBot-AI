@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 # Import centralized logging
-from constants.threshold_constants import RetryConfig, TimingConstants
+from backend.constants.threshold_constants import RetryConfig, TimingConstants
 from autobot_shared.logging_manager import get_llm_logger
 
 logger = get_llm_logger("semantic_chunker")

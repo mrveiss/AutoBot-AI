@@ -13,8 +13,8 @@ Extracted from llm_pattern_analyzer.py as part of Issue #381 refactoring.
 
 from typing import List
 
-from code_intelligence.llm_pattern_analysis.data_models import PromptAnalysisResult
-from code_intelligence.llm_pattern_analysis.types import (
+from backend.code_intelligence.llm_pattern_analysis.data_models import PromptAnalysisResult
+from backend.code_intelligence.llm_pattern_analysis.types import (
     EXCESSIVE_CONTEXT_PATTERNS,
     FORMAT_INEFFICIENCY_PATTERNS,
     PromptIssueType,

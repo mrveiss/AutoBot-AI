@@ -7,7 +7,7 @@ import os
 from unittest.mock import patch
 
 import pytest
-from utils.config_manager import ConfigManager, config_manager
+from backend.utils.config_manager import ConfigManager, config_manager
 
 
 class TestConfigurationMigration:

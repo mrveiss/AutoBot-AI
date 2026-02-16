@@ -19,7 +19,7 @@ from autobot_shared.ssot_config import (
     get_agent_model_explicit,
     get_agent_provider_explicit,
 )
-from constants.threshold_constants import LLMDefaults
+from backend.constants.threshold_constants import LLMDefaults
 from llm_interface import LLMInterface
 
 from .base_agent import AgentRequest

@@ -18,7 +18,7 @@ from urllib.parse import urljoin
 import aiohttp
 
 from backend.type_defs.common import Metadata
-from constants.network_constants import NetworkConstants
+from backend.constants.network_constants import NetworkConstants
 from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)

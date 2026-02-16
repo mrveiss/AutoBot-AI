@@ -15,10 +15,10 @@ Tests verify:
 from typing import Optional
 
 import pytest
-from extensions.base import Extension, HookContext
-from extensions.builtin import LoggingExtension, SecretMaskingExtension
-from extensions.hooks import HookPoint, get_hook_metadata
-from extensions.manager import (
+from backend.extensions.base import Extension, HookContext
+from backend.extensions.builtin import LoggingExtension, SecretMaskingExtension
+from backend.extensions.hooks import HookPoint, get_hook_metadata
+from backend.extensions.manager import (
     ExtensionManager,
     get_extension_manager,
     reset_extension_manager,

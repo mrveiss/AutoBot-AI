@@ -28,11 +28,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from code_intelligence.llm_pattern_analysis.calculators import (
+from backend.code_intelligence.llm_pattern_analysis.calculators import (
     CostCalculator,
     TokenTracker,
 )
-from code_intelligence.llm_pattern_analysis.data_models import (
+from backend.code_intelligence.llm_pattern_analysis.data_models import (
     AnalysisResult,
     BatchingOpportunity,
     CacheOpportunity,
@@ -44,18 +44,18 @@ from code_intelligence.llm_pattern_analysis.data_models import (
     TokenUsage,
     UsagePattern,
 )
-from code_intelligence.llm_pattern_analysis.prompt_analyzer import PromptAnalyzer
-from code_intelligence.llm_pattern_analysis.recommendation_engine import (
+from backend.code_intelligence.llm_pattern_analysis.prompt_analyzer import PromptAnalyzer
+from backend.code_intelligence.llm_pattern_analysis.recommendation_engine import (
     RecommendationEngine,
 )
-from code_intelligence.llm_pattern_analysis.scanners import (
+from backend.code_intelligence.llm_pattern_analysis.scanners import (
     BatchingAnalyzer,
     CacheOpportunityDetector,
     CodePatternScanner,
 )
 
 # Import all types, data models, and classes from the package (Issue #381 refactoring)
-from code_intelligence.llm_pattern_analysis.types import (
+from backend.code_intelligence.llm_pattern_analysis.types import (
     EXCESSIVE_CONTEXT_PATTERNS,
     FORMAT_INEFFICIENCY_PATTERNS,
     HIGH_PRIORITY_LEVELS,

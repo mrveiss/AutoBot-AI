@@ -18,15 +18,15 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from code_intelligence.base_analyzer import (
+from backend.code_intelligence.base_analyzer import (
     AnalysisIssue,
     AnalysisResult,
     Language,
     MultiLanguageAnalyzer,
 )
-from code_intelligence.shell_analyzer import ShellAnalyzer
-from code_intelligence.typescript_analyzer import TypeScriptAnalyzer
-from code_intelligence.vue_analyzer import VueAnalyzer
+from backend.code_intelligence.shell_analyzer import ShellAnalyzer
+from backend.code_intelligence.typescript_analyzer import TypeScriptAnalyzer
+from backend.code_intelligence.vue_analyzer import VueAnalyzer
 
 logger = logging.getLogger(__name__)
 

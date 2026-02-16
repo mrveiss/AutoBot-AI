@@ -6,7 +6,7 @@ Target coverage: ≥90%
 """
 
 import pytest
-from monitoring.prometheus_metrics import PrometheusMetricsManager, get_metrics_manager
+from backend.monitoring.prometheus_metrics import PrometheusMetricsManager, get_metrics_manager
 from prometheus_client import CollectorRegistry
 
 

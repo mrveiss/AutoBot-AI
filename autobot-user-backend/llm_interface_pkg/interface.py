@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 import xxhash
-from constants.model_constants import ModelConstants
+from backend.constants.model_constants import ModelConstants
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.http_client import get_http_client

@@ -7,7 +7,7 @@ User Management Middleware
 Middleware components for authentication and authorization.
 """
 
-from user_management.middleware.rbac_middleware import (
+from backend.user_management.middleware.rbac_middleware import (
     RBACMiddleware,
     require_permission,
     require_any_permission,

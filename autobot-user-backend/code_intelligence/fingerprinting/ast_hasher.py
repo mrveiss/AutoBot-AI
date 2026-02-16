@@ -16,7 +16,7 @@ import hashlib
 import logging
 from typing import Any, Dict, Tuple
 
-from code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
+from backend.code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
 
 logger = logging.getLogger(__name__)
 

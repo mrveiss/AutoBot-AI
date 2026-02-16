@@ -11,7 +11,7 @@ Contains individual optimization strategy implementations.
 import logging
 from typing import Any, Dict, List, Optional
 
-from utils.performance_monitor import performance_monitor
+from backend.utils.performance_monitor import performance_monitor
 
 from .types import GPUCapabilities, GPUOptimizationConfig
 

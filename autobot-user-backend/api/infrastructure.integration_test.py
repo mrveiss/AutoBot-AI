@@ -12,7 +12,7 @@ import requests
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from constants.network_constants import ServiceURLs
+from backend.constants.network_constants import ServiceURLs
 
 BASE_URL = f"{ServiceURLs.BACKEND_API}/api/iac"
 

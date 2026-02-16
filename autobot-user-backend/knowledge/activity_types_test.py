@@ -18,7 +18,7 @@ import uuid
 from datetime import datetime
 
 import pytest
-from knowledge.activity_types import (
+from backend.knowledge.activity_types import (
     BrowserActivity,
     DesktopActivity,
     FileActivity,

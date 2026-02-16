@@ -6,7 +6,7 @@ Test suite for model_optimizer.py refactoring (Issue #353)
 Verifies backward compatibility and Feature Envy fixes
 """
 
-from utils.model_optimizer import (
+from backend.utils.model_optimizer import (
     ModelInfo,
     ModelOptimizer,
     ModelPerformanceLevel,

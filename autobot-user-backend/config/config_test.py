@@ -14,7 +14,7 @@ import pytest
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.terminal_input_handler import (
+from backend.utils.terminal_input_handler import (
     configure_testing_defaults,
     get_terminal_input_handler,
     patch_builtin_input,

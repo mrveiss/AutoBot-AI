@@ -14,9 +14,9 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from agents.interactive_terminal_agent import InteractiveTerminalAgent
-from constants.threshold_constants import TimingConstants
+from backend.constants.threshold_constants import TimingConstants
 from event_manager import event_manager
-from security.command_patterns import (
+from backend.security.command_patterns import (
     SENSITIVE_REDIRECT_PATHS,
     UNRESTRICTED_ROOT_COMMANDS,
     is_dangerous_command,

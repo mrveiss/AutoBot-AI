@@ -29,7 +29,7 @@ DEPRECATED: Import directly from code_intelligence.performance_analysis instead.
 """
 
 # Re-export everything from the new package for backward compatibility
-from code_intelligence.performance_analysis import (
+from backend.code_intelligence.performance_analysis import (
     # Types
     COMPLEXITY_LEVELS,
     PerformanceIssue,

@@ -26,7 +26,7 @@ from autobot_shared.error_boundaries import (
     get_error_statistics,
     with_error_handling,
 )
-from utils.error_metrics import get_metrics_collector
+from backend.utils.error_metrics import get_metrics_collector
 
 # Create singleton config instance
 config = UnifiedConfigManager()

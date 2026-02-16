@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 import redis
 
 from autobot_types import TaskComplexity
-from constants.threshold_constants import StringParsingConstants
+from backend.constants.threshold_constants import StringParsingConstants
 from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)

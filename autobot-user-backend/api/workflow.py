@@ -18,9 +18,9 @@ from backend.models.task_context import WorkflowStepContext
 from backend.type_defs.common import Metadata
 from auth_middleware import check_admin_permission
 from event_manager import event_manager
-from metrics.system_monitor import system_monitor
-from metrics.workflow_metrics import workflow_metrics
-from monitoring.prometheus_metrics import get_metrics_manager
+from backend.metrics.system_monitor import system_monitor
+from backend.metrics.workflow_metrics import workflow_metrics
+from backend.monitoring.prometheus_metrics import get_metrics_manager
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()

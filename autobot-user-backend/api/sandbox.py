@@ -19,7 +19,7 @@ from backend.utils.response_builder import (
     success_response,
 )
 from auth_middleware import check_admin_permission, get_current_user
-from constants.network_constants import NetworkConstants
+from backend.constants.network_constants import NetworkConstants
 from secure_sandbox_executor import (
     SandboxConfig,
     SandboxExecutionMode,

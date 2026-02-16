@@ -13,7 +13,7 @@ Tests the AI-powered code review automation functionality including:
 """
 
 import pytest
-from code_intelligence.code_review_engine import (
+from backend.code_intelligence.code_review_engine import (
     BUILTIN_PATTERNS,
     CodeReviewEngine,
     DiffFile,

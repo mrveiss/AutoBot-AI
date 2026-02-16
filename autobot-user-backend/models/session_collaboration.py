@@ -16,7 +16,7 @@ from typing import Optional
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
-from user_management.models.base import Base, TimestampMixin
+from backend.user_management.models.base import Base, TimestampMixin
 
 
 class PermissionLevel(str, Enum):

@@ -21,8 +21,8 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import models to register with SQLAlchemy
-from user_management.models import Base
-from user_management.config import get_deployment_config
+from backend.user_management.models import Base
+from backend.user_management.config import get_deployment_config
 
 # this is the Alembic Config object
 config = context.config

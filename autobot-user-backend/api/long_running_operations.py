@@ -27,8 +27,8 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from constants.path_constants import PATH
-from constants.threshold_constants import TimingConstants
+from backend.constants.path_constants import PATH
+from backend.constants.threshold_constants import TimingConstants
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Add AutoBot paths

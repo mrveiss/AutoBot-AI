@@ -17,9 +17,9 @@ from typing import Dict, List, Optional, Tuple
 
 import aiohttp
 
-from constants.network_constants import NetworkConstants
-from constants.path_constants import PATH
-from constants.threshold_constants import RetryConfig, ServiceDiscoveryConfig
+from backend.constants.network_constants import NetworkConstants
+from backend.constants.path_constants import PATH
+from backend.constants.threshold_constants import RetryConfig, ServiceDiscoveryConfig
 from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)

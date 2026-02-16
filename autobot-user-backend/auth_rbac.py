@@ -36,7 +36,7 @@ from fastapi import Request
 
 from auth_middleware import auth_middleware
 from security_layer import SecurityLayer
-from utils.catalog_http_exceptions import raise_auth_error
+from backend.utils.catalog_http_exceptions import raise_auth_error
 
 logger = logging.getLogger(__name__)
 

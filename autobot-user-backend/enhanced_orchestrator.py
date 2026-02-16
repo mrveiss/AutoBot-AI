@@ -21,7 +21,7 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from circuit_breaker import circuit_breaker_async
-from constants.threshold_constants import (
+from backend.constants.threshold_constants import (
     AgentThresholds,
     CircuitBreakerDefaults,
     RetryConfig,
@@ -48,10 +48,10 @@ from orchestrator import Orchestrator, TaskComplexity
 from retry_mechanism import RetryStrategy, retry_async
 
 # Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
-from utils.agent_selection import find_best_agent_for_task as _find_best_agent
-from utils.agent_selection import release_agent as _release_agent
-from utils.agent_selection import reserve_agent as _reserve_agent
-from utils.agent_selection import update_agent_performance as _update_performance
+from backend.utils.agent_selection import find_best_agent_for_task as _find_best_agent
+from backend.utils.agent_selection import release_agent as _release_agent
+from backend.utils.agent_selection import reserve_agent as _reserve_agent
+from backend.utils.agent_selection import update_agent_performance as _update_performance
 
 # Re-export for backward compatibility
 __all__ = [

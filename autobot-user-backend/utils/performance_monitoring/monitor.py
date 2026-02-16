@@ -19,21 +19,21 @@ from dataclasses import asdict
 from typing import Any, Callable, Dict, List
 
 # Issue #469: Import Prometheus metrics manager
-from monitoring.prometheus_metrics import get_metrics_manager
-from utils.performance_monitoring.analyzers import (
+from backend.monitoring.prometheus_metrics import get_metrics_manager
+from backend.utils.performance_monitoring.analyzers import (
     AlertAnalyzer,
     RecommendationGenerator,
 )
-from utils.performance_monitoring.collectors import (
+from backend.utils.performance_monitoring.collectors import (
     GPUCollector,
     MultiModalCollector,
     NPUCollector,
     ServiceCollector,
     SystemCollector,
 )
-from utils.performance_monitoring.decorator import set_redis_client
-from utils.performance_monitoring.hardware import HardwareDetector
-from utils.performance_monitoring.types import (
+from backend.utils.performance_monitoring.decorator import set_redis_client
+from backend.utils.performance_monitoring.hardware import HardwareDetector
+from backend.utils.performance_monitoring.types import (
     DEFAULT_COLLECTION_INTERVAL,
     DEFAULT_PERFORMANCE_BASELINES,
     DEFAULT_RETENTION_HOURS,

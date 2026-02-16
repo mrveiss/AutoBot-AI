@@ -14,7 +14,7 @@ import logging
 import aiofiles
 
 from task_execution_tracker import task_tracker
-from voice_processing.models import SpeechSynthesisRequest
+from backend.voice_processing.models import SpeechSynthesisRequest
 
 logger = logging.getLogger(__name__)
 

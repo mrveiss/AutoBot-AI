@@ -12,7 +12,7 @@ Extracted from llm_pattern_analyzer.py as part of Issue #381 refactoring.
 
 from typing import List
 
-from code_intelligence.llm_pattern_analysis.data_models import (
+from backend.code_intelligence.llm_pattern_analysis.data_models import (
     BatchingOpportunity,
     CacheOpportunity,
     CostEstimate,
@@ -20,7 +20,7 @@ from code_intelligence.llm_pattern_analysis.data_models import (
     RetryPattern,
     UsagePattern,
 )
-from code_intelligence.llm_pattern_analysis.types import (
+from backend.code_intelligence.llm_pattern_analysis.types import (
     OptimizationCategory,
     OptimizationPriority,
 )

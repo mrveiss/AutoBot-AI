@@ -19,8 +19,8 @@ from typing import Dict, List, Optional, Tuple
 from fastapi import HTTPException
 
 from backend.type_defs.common import Metadata
-from constants.path_constants import PATH
-from utils.file_categorization import (
+from backend.constants.path_constants import PATH
+from backend.utils.file_categorization import (
     ALL_CODE_EXTENSIONS,
     CONFIG_EXTENSIONS,
     CSS_EXTENSIONS,
@@ -41,7 +41,7 @@ from utils.file_categorization import (
     TS_EXTENSIONS,
     VUE_EXTENSIONS,
 )
-from utils.file_categorization import (
+from backend.utils.file_categorization import (
     get_file_category as _get_file_category,  # Category constants; Extension sets; Directory sets; Functions
 )
 

@@ -17,7 +17,7 @@ from multimodal_processor import (
     VisionProcessor,
     VoiceProcessor,
 )
-from utils.config_manager import ConfigManager
+from backend.utils.config_manager import ConfigManager
 
 
 class TestUnifiedMultiModalSystem:

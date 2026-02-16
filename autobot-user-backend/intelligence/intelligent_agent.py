@@ -14,28 +14,28 @@ import time
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Dict, FrozenSet, List, Optional
 
-from intelligence.goal_processor import GoalProcessor, ProcessedGoal
+from backend.intelligence.goal_processor import GoalProcessor, ProcessedGoal
 
 # Issue #380: Module-level frozenset for package managers requiring sudo
 _SUDO_PACKAGE_MANAGERS: FrozenSet[str] = frozenset(
     {"apt", "yum", "dn", "pacman", "zypper"}
 )
 
-from constants.threshold_constants import TimingConstants
+from backend.constants.threshold_constants import TimingConstants
 
 # Import our new intelligent agent components
-from intelligence.os_detector import OSDetector, OSInfo, get_os_detector
-from intelligence.streaming_executor import (
+from backend.intelligence.os_detector import OSDetector, OSInfo, get_os_detector
+from backend.intelligence.streaming_executor import (
     ChunkType,
     StreamChunk,
     StreamingCommandExecutor,
 )
-from intelligence.tool_selector import OSAwareToolSelector
+from backend.intelligence.tool_selector import OSAwareToolSelector
 from knowledge_base import KnowledgeBase
 
 # Import existing AutoBot components
 from llm_interface import LLMInterface
-from utils.command_validator import CommandValidator
+from backend.utils.command_validator import CommandValidator
 from worker_node import WorkerNode
 
 logger = logging.getLogger(__name__)

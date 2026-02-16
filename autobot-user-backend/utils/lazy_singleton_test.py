@@ -9,7 +9,7 @@ import asyncio
 from unittest.mock import Mock
 
 import pytest
-from utils.lazy_singleton import (
+from backend.utils.lazy_singleton import (
     SingletonStorage,
     _global_singleton_storage,
     global_lazy_singleton,

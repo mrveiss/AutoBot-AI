@@ -29,22 +29,22 @@ from typing import Any, Dict, List, Optional, Union
 
 import redis
 import redis.asyncio as async_redis
-from constants.network_constants import NetworkConstants
-from constants.threshold_constants import RetryConfig, TimingConstants
-from monitoring.prometheus_metrics import get_metrics_manager
+from backend.constants.network_constants import NetworkConstants
+from backend.constants.threshold_constants import RetryConfig, TimingConstants
+from backend.monitoring.prometheus_metrics import get_metrics_manager
 from redis.asyncio.connection import SSLConnection as AsyncSSLConnection
 from redis.backoff import ExponentialBackoff
 from redis.connection import ConnectionPool, SSLConnection
 from redis.exceptions import ConnectionError, ResponseError
 from redis.retry import Retry
-from utils.redis_management.config import PoolConfig, RedisConfig, RedisConfigLoader
-from utils.redis_management.statistics import (
+from backend.utils.redis_management.config import PoolConfig, RedisConfig, RedisConfigLoader
+from backend.utils.redis_management.statistics import (
     ConnectionMetrics,
     ManagerStats,
     PoolStatistics,
     RedisStats,
 )
-from utils.redis_management.types import DATABASE_MAPPING, ConnectionState
+from backend.utils.redis_management.types import DATABASE_MAPPING, ConnectionState
 
 from config import config as config_manager
 

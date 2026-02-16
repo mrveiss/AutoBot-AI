@@ -11,9 +11,9 @@ import logging
 import time
 from typing import Optional
 
-from autobot_logging.terminal_logger import TerminalLogger
+from backend.autobot_logging.terminal_logger import TerminalLogger
 from chat_history import ChatHistoryManager
-from monitoring.prometheus_metrics import get_metrics_manager
+from backend.monitoring.prometheus_metrics import get_metrics_manager
 from secure_command_executor import SecureCommandExecutor, SecurityPolicy
 
 from backend.services.command_approval_manager import AgentRole, CommandApprovalManager

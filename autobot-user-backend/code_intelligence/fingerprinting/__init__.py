@@ -28,7 +28,7 @@ still exports all classes directly.
 """
 
 # Types and data classes
-from code_intelligence.fingerprinting.types import (
+from backend.code_intelligence.fingerprinting.types import (
     CloneType,
     FingerprintType,
     CloneSeverity,
@@ -40,19 +40,19 @@ from code_intelligence.fingerprinting.types import (
 )
 
 # AST Normalizer
-from code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
+from backend.code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
 
 # AST Hasher
-from code_intelligence.fingerprinting.ast_hasher import ASTHasher
+from backend.code_intelligence.fingerprinting.ast_hasher import ASTHasher
 
 # Semantic Hasher
-from code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
+from backend.code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
 
 # Similarity Calculator
-from code_intelligence.fingerprinting.similarity import SimilarityCalculator
+from backend.code_intelligence.fingerprinting.similarity import SimilarityCalculator
 
 # Clone Detector
-from code_intelligence.fingerprinting.detector import CloneDetector
+from backend.code_intelligence.fingerprinting.detector import CloneDetector
 
 # Re-export for convenience
 __all__ = [

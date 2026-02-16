@@ -20,7 +20,7 @@ from backend.services.playwright_service import (
     test_frontend_embedded,
 )
 from config import UnifiedConfigManager
-from constants.network_constants import NetworkConstants
+from backend.constants.network_constants import NetworkConstants
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 

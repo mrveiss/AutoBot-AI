@@ -28,7 +28,7 @@ DEPRECATED: Import directly from code_intelligence.code_generation instead.
 """
 
 # Re-export everything from the new package for backward compatibility
-from code_intelligence.code_generation import (
+from backend.code_intelligence.code_generation import (
     # Types and constants
     CODE_BLOCK_RE,
     CONTROL_FLOW_TYPES,

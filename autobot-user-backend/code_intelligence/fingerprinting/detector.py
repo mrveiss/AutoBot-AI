@@ -20,10 +20,10 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from code_intelligence.fingerprinting.ast_hasher import ASTHasher
-from code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
-from code_intelligence.fingerprinting.similarity import SimilarityCalculator
-from code_intelligence.fingerprinting.types import (
+from backend.code_intelligence.fingerprinting.ast_hasher import ASTHasher
+from backend.code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
+from backend.code_intelligence.fingerprinting.similarity import SimilarityCalculator
+from backend.code_intelligence.fingerprinting.types import (
     CloneDetectionReport,
     CloneGroup,
     CloneInstance,

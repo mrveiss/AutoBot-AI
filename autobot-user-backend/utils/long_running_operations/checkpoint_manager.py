@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import redis.asyncio as redis
 
-from constants.path_constants import PATH
+from backend.constants.path_constants import PATH
 
 from .types import OperationCheckpoint
 

@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from backend.type_defs.common import Metadata
 from ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
 from auth_middleware import get_current_user
-from constants.threshold_constants import QueryDefaults
+from backend.constants.threshold_constants import QueryDefaults
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,

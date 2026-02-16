@@ -26,7 +26,7 @@ from typing import Any, Optional
 
 import websockets
 
-from constants.threshold_constants import TimingConstants
+from backend.constants.threshold_constants import TimingConstants
 from task_execution_tracker import TaskPriority, task_tracker
 from config import config_manager
 

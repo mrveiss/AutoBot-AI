@@ -26,8 +26,8 @@ import httpx
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind
 
-from constants.network_constants import NetworkConstants
-from constants.threshold_constants import TimingConstants
+from backend.constants.network_constants import NetworkConstants
+from backend.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 

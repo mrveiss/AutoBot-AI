@@ -8,7 +8,7 @@ idempotency, locking, error handling, cleanup, metrics, and retry logic.
 import asyncio
 
 import pytest
-from utils.async_initializable import AsyncInitializable, SyncInitializable
+from backend.utils.async_initializable import AsyncInitializable, SyncInitializable
 
 
 # Test implementations

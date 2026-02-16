@@ -10,7 +10,7 @@ from typing import List, Optional
 # Add the project root to Python path for absolute imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from constants.network_constants import (  # noqa: F401 - used in docstring example
+from backend.constants.network_constants import (  # noqa: F401 - used in docstring example
     NetworkConstants,
 )
 from fastapi import FastAPI

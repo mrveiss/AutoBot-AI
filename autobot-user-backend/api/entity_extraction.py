@@ -33,7 +33,7 @@ from backend.type_defs.common import Metadata
 from agents.graph_entity_extractor import ExtractionResult, GraphEntityExtractor
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from utils.request_utils import generate_request_id
+from backend.utils.request_utils import generate_request_id
 
 # Issue #380: Module-level frozenset for valid message roles
 _VALID_ROLES = frozenset({"user", "assistant", "system"})

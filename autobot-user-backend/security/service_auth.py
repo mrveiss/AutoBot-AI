@@ -17,7 +17,7 @@ from typing import Dict, Optional
 import structlog
 from fastapi import HTTPException, Request
 
-from utils.catalog_http_exceptions import raise_auth_error, raise_server_error
+from backend.utils.catalog_http_exceptions import raise_auth_error, raise_server_error
 from autobot_shared.redis_client import get_redis_client
 
 logger = structlog.get_logger()

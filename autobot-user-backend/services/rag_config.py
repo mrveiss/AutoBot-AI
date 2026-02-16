@@ -14,7 +14,7 @@ from typing import Any, Optional
 
 from autobot_shared.logging_manager import get_llm_logger
 from backend.type_defs.common import Metadata
-from constants.model_constants import model_config
+from backend.constants.model_constants import model_config
 
 logger = get_llm_logger("rag_config")
 

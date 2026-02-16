@@ -29,7 +29,7 @@ Usage:
     events = await manager.get_latest(count=10)
 """
 
-from events.types import (
+from backend.events.types import (
     EventType,
     AgentEvent,
     MessageContent,
@@ -38,7 +38,7 @@ from events.types import (
     PlanContent,
     KnowledgeContent,
 )
-from events.stream_manager import EventStreamManager, RedisEventStreamManager
+from backend.events.stream_manager import EventStreamManager, RedisEventStreamManager
 
 __all__ = [
     # Types

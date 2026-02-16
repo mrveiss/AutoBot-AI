@@ -29,9 +29,9 @@ from backend.api.analytics_models import CodeAnalysisRequest, CommunicationPatte
 from backend.type_defs.common import Metadata
 from config import UnifiedConfigManager
 from constants import PATH
-from constants.threshold_constants import TimingConstants
+from backend.constants.threshold_constants import TimingConstants
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from utils.system_metrics import get_metrics_collector
+from backend.utils.system_metrics import get_metrics_collector
 
 # Import existing monitoring infrastructure
 from .monitoring_hardware import hardware_monitor

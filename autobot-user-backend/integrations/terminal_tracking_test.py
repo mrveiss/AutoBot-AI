@@ -11,7 +11,7 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from integrations.terminal_tracking import (
+from backend.integrations.terminal_tracking import (
     track_command_execution,
     track_pty_session_creation,
 )

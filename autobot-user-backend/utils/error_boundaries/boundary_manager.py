@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from constants.threshold_constants import RetryConfig
+from backend.constants.threshold_constants import RetryConfig
 
 try:
     from autobot_shared.redis_client import get_redis_client

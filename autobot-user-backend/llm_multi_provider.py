@@ -34,7 +34,7 @@ except ImportError:
 import aiohttp
 from dotenv import load_dotenv
 
-from utils.config_manager import config_manager
+from backend.utils.config_manager import config_manager
 from autobot_shared.logging_manager import get_llm_logger
 
 load_dotenv()

@@ -8,7 +8,7 @@ import tempfile
 from unittest.mock import patch
 
 import pytest
-from utils.config_manager import (
+from backend.utils.config_manager import (
     ConfigManager,
     get_config,
     get_config_section,

@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 
 from memory import EnhancedMemoryManager, TaskPriority
 from task_execution_tracker import task_tracker
-from utils.service_registry import get_service_url
+from backend.utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
 

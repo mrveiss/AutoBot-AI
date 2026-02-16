@@ -14,8 +14,8 @@ from typing import Dict
 from fastapi import APIRouter, Depends
 
 from auth_middleware import check_admin_permission
-from constants.network_constants import NetworkConstants
-from constants.threshold_constants import TimingConstants
+from backend.constants.network_constants import NetworkConstants
+from backend.constants.threshold_constants import TimingConstants
 from autobot_shared.error_boundaries import with_error_handling
 
 logger = logging.getLogger(__name__)

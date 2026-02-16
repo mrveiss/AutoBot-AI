@@ -16,7 +16,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from agents.advanced_web_research import AdvancedWebResearcher
-from constants.network_constants import NetworkConstants
+from backend.constants.network_constants import NetworkConstants
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 

@@ -20,8 +20,8 @@ from pydantic import BaseModel, Field
 
 from backend.type_defs.common import Metadata
 from enhanced_security_layer import EnhancedSecurityLayer
-from security.domain_security import get_domain_security_manager
-from security.threat_intelligence import (
+from backend.security.domain_security import get_domain_security_manager
+from backend.security.threat_intelligence import (
     ThreatLevel,
     get_threat_intelligence_service,
 )

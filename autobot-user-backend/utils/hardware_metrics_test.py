@@ -16,7 +16,7 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from utils.gpu_acceleration_optimizer import (
+from backend.utils.gpu_acceleration_optimizer import (
     benchmark_gpu,
     get_gpu_capabilities,
     gpu_optimizer,
@@ -26,7 +26,7 @@ from utils.gpu_acceleration_optimizer import (
 )
 
 # Import Phase 9 monitoring components
-from utils.hardware_metrics import (
+from backend.utils.hardware_metrics import (
     add_phase9_alert_callback,
     collect_phase9_metrics,
     get_phase9_performance_dashboard,

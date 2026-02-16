@@ -25,7 +25,7 @@ from pydantic import BaseModel, Field
 
 from backend.services.audit_logger import AuditResult, get_audit_logger
 from auth_middleware import auth_middleware
-from utils.catalog_http_exceptions import (
+from backend.utils.catalog_http_exceptions import (
     raise_auth_error,
     raise_server_error,
     raise_validation_error,

@@ -11,7 +11,7 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from integrations.browser_tracking import (
+from backend.integrations.browser_tracking import (
     track_browser_action,
     track_browser_navigation,
     track_element_click,

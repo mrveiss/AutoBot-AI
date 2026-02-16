@@ -14,7 +14,7 @@ import torch
 # Add AutoBot to path
 sys.path.insert(0, "/home/kali/Desktop/AutoBot")
 
-from utils.semantic_chunker import AutoBotSemanticChunker
+from backend.utils.semantic_chunker import AutoBotSemanticChunker
 
 # Sample text for performance testing
 TEST_TEXT = (

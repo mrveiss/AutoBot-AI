@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from knowledge.embedding_cache import get_embedding_cache
+from backend.knowledge.embedding_cache import get_embedding_cache
 from autobot_shared.logging_manager import get_llm_logger
 from worker_node import WorkerNode
 

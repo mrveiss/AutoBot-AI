@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from constants.threshold_constants import RetryConfig, TimingConstants
+from backend.constants.threshold_constants import RetryConfig, TimingConstants
 
 from .conversation_rate_limiter import ConversationRateLimiter
 from .payload_optimizer import PayloadOptimizer

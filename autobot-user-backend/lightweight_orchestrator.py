@@ -14,7 +14,7 @@ import re
 from typing import Any, Dict, Optional
 
 from autobot_types import TaskComplexity
-from patterns.conversation_patterns import ConversationPatterns, ConversationType
+from backend.patterns.conversation_patterns import ConversationPatterns, ConversationType
 
 logger = logging.getLogger(__name__)
 

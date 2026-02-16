@@ -9,7 +9,7 @@ import sys
 import time
 
 import redis
-from utils.redis_client import get_redis_client
+from backend.utils.redis_client import get_redis_client
 
 from config import config as global_config_manager
 

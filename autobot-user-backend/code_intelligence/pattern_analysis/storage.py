@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from utils.chromadb_client import get_async_chromadb_client, get_chromadb_client
+from backend.utils.chromadb_client import get_async_chromadb_client, get_chromadb_client
 
 logger = logging.getLogger(__name__)
 

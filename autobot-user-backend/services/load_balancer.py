@@ -31,7 +31,7 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 from backend.type_defs.common import Metadata
-from constants.threshold_constants import RetryConfig, TimingConstants
+from backend.constants.threshold_constants import RetryConfig, TimingConstants
 from event_manager import event_manager
 from npu_integration import NPUWorkerClient
 

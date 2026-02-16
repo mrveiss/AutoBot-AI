@@ -23,16 +23,16 @@ import time
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
-from config.async_ops import AsyncOperationsMixin
-from config.file_watcher import FileWatcherMixin
-from config.loader import load_configuration
-from config.model_config import ModelConfigMixin
-from config.service_config import ServiceConfigMixin
-from config.settings import UnifiedConfigSettings
-from config.sync_ops import SyncOperationsMixin
-from config.timeout_config import TimeoutConfigMixin
-from config.validation import ValidationMixin
-from constants.path_constants import PATH
+from backend.config.async_ops import AsyncOperationsMixin
+from backend.config.file_watcher import FileWatcherMixin
+from backend.config.loader import load_configuration
+from backend.config.model_config import ModelConfigMixin
+from backend.config.service_config import ServiceConfigMixin
+from backend.config.settings import UnifiedConfigSettings
+from backend.config.sync_ops import SyncOperationsMixin
+from backend.config.timeout_config import TimeoutConfigMixin
+from backend.config.validation import ValidationMixin
+from backend.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 

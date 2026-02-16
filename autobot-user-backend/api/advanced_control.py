@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from backend.type_defs.common import Metadata
 from auth_middleware import check_admin_permission
-from constants.threshold_constants import TimingConstants
+from backend.constants.threshold_constants import TimingConstants
 from desktop_streaming_manager import desktop_streaming
 from enhanced_memory_manager_async import TaskPriority
 from takeover_manager import TakeoverTrigger, takeover_manager

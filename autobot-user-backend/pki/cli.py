@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from pki.manager import PKIManager, setup_pki
+from backend.pki.manager import PKIManager, setup_pki
 
 logging.basicConfig(
     level=logging.INFO,

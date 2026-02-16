@@ -26,13 +26,13 @@ from ai_hardware_accelerator import (
 from config import cfg
 
 # Import existing AutoBot components
-from constants.threshold_constants import TimingConstants
-from knowledge.embedding_cache import get_embedding_cache
+from backend.constants.threshold_constants import TimingConstants
+from backend.knowledge.embedding_cache import get_embedding_cache
 from knowledge_base import KnowledgeBase
-from utils.chromadb_client import get_chromadb_client
+from backend.utils.chromadb_client import get_chromadb_client
 
 # Issue #387: GPU-accelerated vector search
-from utils.gpu_vector_search import (
+from backend.utils.gpu_vector_search import (
     FAISS_AVAILABLE,
     FAISS_GPU_AVAILABLE,
     HybridVectorSearch,

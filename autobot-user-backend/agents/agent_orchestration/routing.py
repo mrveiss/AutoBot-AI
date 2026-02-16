@@ -12,7 +12,7 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-from constants.threshold_constants import LLMDefaults
+from backend.constants.threshold_constants import LLMDefaults
 
 from .types import (
     GREETING_PATTERNS,

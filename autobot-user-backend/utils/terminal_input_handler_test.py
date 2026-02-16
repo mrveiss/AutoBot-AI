@@ -13,7 +13,7 @@ from unittest.mock import patch
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from utils.terminal_input_handler import (
+from backend.utils.terminal_input_handler import (
     InputTimeoutError,
     TerminalInputHandler,
     configure_testing_defaults,

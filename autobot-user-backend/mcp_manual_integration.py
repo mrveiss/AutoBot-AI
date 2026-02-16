@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 
 import aiofiles
 
-from constants.path_constants import PATH
+from backend.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 

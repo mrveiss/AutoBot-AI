@@ -14,7 +14,7 @@ import uuid
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from utils.activity_tracker import track_terminal_activity
+from backend.utils.activity_tracker import track_terminal_activity
 
 logger = logging.getLogger(__name__)
 

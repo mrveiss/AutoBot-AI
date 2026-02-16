@@ -11,24 +11,24 @@ import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
-from llm_interface_pkg.optimization.cloud_batcher import CloudRequestBatcher
-from llm_interface_pkg.optimization.prompt_compressor import (
+from backend.llm_interface_pkg.optimization.cloud_batcher import CloudRequestBatcher
+from backend.llm_interface_pkg.optimization.prompt_compressor import (
     CompressionConfig,
     CompressionResult,
     PromptCompressor,
 )
-from llm_interface_pkg.optimization.rate_limiter import (
+from backend.llm_interface_pkg.optimization.rate_limiter import (
     RateLimitConfig,
     RateLimitError,
     RateLimitHandler,
     RetryStrategy,
 )
-from llm_interface_pkg.optimization.router import (
+from backend.llm_interface_pkg.optimization.router import (
     OptimizationCategory,
     OptimizationConfig,
     OptimizationRouter,
 )
-from llm_interface_pkg.types import ProviderType
+from backend.llm_interface_pkg.types import ProviderType
 
 
 class TestOptimizationRouter:

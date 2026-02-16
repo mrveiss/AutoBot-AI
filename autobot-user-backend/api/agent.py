@@ -32,8 +32,8 @@ from backend.utils.response_helpers import (
     handle_ai_stack_error,
 )
 from auth_middleware import check_admin_permission, get_current_user
-from constants.threshold_constants import TimingConstants
-from monitoring.prometheus_metrics import get_metrics_manager
+from backend.constants.threshold_constants import TimingConstants
+from backend.monitoring.prometheus_metrics import get_metrics_manager
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()

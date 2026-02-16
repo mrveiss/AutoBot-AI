@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Test the command validator security implementation"""
 
-from utils.command_validator import command_validator
+from backend.utils.command_validator import command_validator
 
 
 def test_command_validator():

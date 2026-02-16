@@ -22,7 +22,7 @@ from backend.services.config_service import ConfigService
 from backend.services.slm_client import get_slm_client
 from backend.utils.connection_utils import ModelManager
 from auth_middleware import check_admin_permission
-from constants.model_constants import ModelConstants
+from backend.constants.model_constants import ModelConstants
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

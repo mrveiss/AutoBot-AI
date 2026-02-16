@@ -21,9 +21,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from constants.model_constants import model_config
+from backend.constants.model_constants import model_config
 from autobot_shared.logging_manager import get_llm_logger
-from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
+from backend.utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("advanced_rag_optimizer")
 

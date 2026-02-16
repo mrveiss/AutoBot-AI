@@ -25,7 +25,7 @@ from backend.type_defs.common import Metadata
 from autobot_shared.ssot_config import get_config as get_ssot_config
 
 # Legacy import for backward compatibility - these now read from SSOT
-from constants.network_constants import NetworkConstants
+from backend.constants.network_constants import NetworkConstants
 
 # Get SSOT config
 _ssot = get_ssot_config()

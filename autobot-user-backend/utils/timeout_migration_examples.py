@@ -24,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from constants.path_constants import PATH
+from backend.constants.path_constants import PATH
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))

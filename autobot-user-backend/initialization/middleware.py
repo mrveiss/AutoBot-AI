@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from constants.network_constants import NetworkConstants  # noqa: F401 - used in docstring example
+from backend.constants.network_constants import NetworkConstants  # noqa: F401 - used in docstring example
 from config import UnifiedConfigManager
 
 logger = logging.getLogger(__name__)

@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from constants.path_constants import PATH
+from backend.constants.path_constants import PATH
 
 
 class IndexCodebaseRequest(BaseModel):

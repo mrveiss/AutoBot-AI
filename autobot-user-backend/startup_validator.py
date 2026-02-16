@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 from config import UnifiedConfigManager
-from constants.path_constants import PATH
+from backend.constants.path_constants import PATH
 from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)

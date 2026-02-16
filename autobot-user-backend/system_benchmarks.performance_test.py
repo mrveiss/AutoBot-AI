@@ -16,7 +16,7 @@ from multimodal_processor import (
     ProcessingIntent,
     UnifiedMultiModalProcessor,
 )
-from utils.config_manager import ConfigManager
+from backend.utils.config_manager import ConfigManager
 
 from backend.services.config_service import ConfigService
 

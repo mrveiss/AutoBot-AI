@@ -19,7 +19,7 @@ import tempfile
 import textwrap
 
 import pytest
-from code_intelligence.security_analyzer import (
+from backend.code_intelligence.security_analyzer import (
     SecurityAnalyzer,
     SecuritySeverity,
     VulnerabilityType,

@@ -17,7 +17,7 @@ import threading
 from typing import Optional
 
 from autobot_memory_graph import AutoBotMemoryGraph
-from constants.network_constants import NetworkConstants
+from backend.constants.network_constants import NetworkConstants
 from context_window_manager import ContextWindowManager
 from encryption_service import get_encryption_service, is_encryption_enabled
 from config import config as global_config_manager

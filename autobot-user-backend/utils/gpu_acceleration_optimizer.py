@@ -24,7 +24,7 @@ from dataclasses import asdict
 from typing import Any, Dict, List
 
 # Re-export all public API from the package for backward compatibility
-from utils.gpu_optimization import (
+from backend.utils.gpu_optimization import (
     DEFAULT_PERFORMANCE_BASELINES,
     GPUCapabilities,
     GPUOptimizationConfig,
@@ -41,14 +41,14 @@ from utils.gpu_optimization import (
 )
 
 # Re-export benchmarking functions for backward compatibility (used by external code)
-from utils.gpu_optimization import (  # noqa: F401
+from backend.utils.gpu_optimization import (  # noqa: F401
     benchmark_compute_performance,
     benchmark_memory_bandwidth,
     benchmark_mixed_precision,
     benchmark_tensor_cores,
     generate_benchmark_recommendations,
 )
-from utils.performance_monitor import performance_monitor
+from backend.utils.performance_monitor import performance_monitor
 
 logger = logging.getLogger(__name__)
 

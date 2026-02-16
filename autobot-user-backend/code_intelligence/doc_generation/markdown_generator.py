@@ -13,15 +13,15 @@ Part of god class refactoring initiative.
 import re
 from typing import List, Pattern
 
-from code_intelligence.doc_generation.helpers import SKIP_INHERITANCE_BASES
-from code_intelligence.doc_generation.models import (
+from backend.code_intelligence.doc_generation.helpers import SKIP_INHERITANCE_BASES
+from backend.code_intelligence.doc_generation.models import (
     ClassDoc,
     DiagramSpec,
     FunctionDoc,
     GeneratedDoc,
     ModuleDoc,
 )
-from code_intelligence.doc_generation.types import (
+from backend.code_intelligence.doc_generation.types import (
     DiagramType,
     DocCompleteness,
     DocFormat,

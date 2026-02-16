@@ -20,7 +20,7 @@ from typing import Dict, Optional
 
 import asyncssh
 
-from pki.config import VM_DEFINITIONS, TLSConfig
+from backend.pki.config import VM_DEFINITIONS, TLSConfig
 
 logger = logging.getLogger(__name__)
 

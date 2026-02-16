@@ -22,8 +22,8 @@ from urllib.parse import urlparse
 import aiohttp
 import yaml
 
-from constants.security_constants import SecurityConstants
-from security.threat_intelligence import (
+from backend.constants.security_constants import SecurityConstants
+from backend.security.threat_intelligence import (
     ThreatIntelligenceService,
     get_threat_intelligence_service,
 )

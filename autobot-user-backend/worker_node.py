@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 
 import psutil
 
-from constants.threshold_constants import TimingConstants
+from backend.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 

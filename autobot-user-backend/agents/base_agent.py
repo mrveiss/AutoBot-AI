@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 import threading
 
 # Import communication protocol
-from protocols.agent_communication import (
+from backend.protocols.agent_communication import (
     AgentIdentity,
     MessageHeader,
     MessagePayload,

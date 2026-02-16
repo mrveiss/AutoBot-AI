@@ -24,8 +24,8 @@ from PIL import Image
 from config import cfg
 
 # Import centralized components
-from constants.model_constants import model_config
-from constants.threshold_constants import (
+from backend.constants.model_constants import model_config
+from backend.constants.threshold_constants import (
     HardwareAcceleratorConfig,
     ResourceThresholds,
     TimingConstants,

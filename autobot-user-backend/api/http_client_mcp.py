@@ -36,10 +36,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 from backend.type_defs.common import JSONObject, Metadata
-from constants.network_constants import NetworkConstants
+from backend.constants.network_constants import NetworkConstants
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
-from utils.template_loader import load_mcp_tools, mcp_tools_exist
+from backend.utils.template_loader import load_mcp_tools, mcp_tools_exist
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["http_client_mcp", "mcp"])

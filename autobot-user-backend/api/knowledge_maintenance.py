@@ -39,7 +39,7 @@ from backend.api.knowledge_models import (
 )
 from backend.knowledge_factory import get_or_create_knowledge_base
 from auth_middleware import check_admin_permission
-from constants.threshold_constants import QueryDefaults
+from backend.constants.threshold_constants import QueryDefaults
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Set up logging

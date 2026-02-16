@@ -38,11 +38,11 @@ from backend.type_defs.common import Metadata
 from auth_middleware import check_admin_permission
 
 # Issue #474: Import ServiceURLs for AlertManager integration
-from constants.network_constants import ServiceURLs
+from backend.constants.network_constants import ServiceURLs
 
 # Import AutoBot monitoring system
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from utils.performance_monitor import (
+from backend.utils.performance_monitor import (
     add_alert_callback,
     collect_metrics,
     get_optimization_recommendations,
@@ -887,7 +887,7 @@ async def test_performance_monitoring(
 
 # ===== PROMETHEUS METRICS ENDPOINTS =====
 
-from monitoring.prometheus_metrics import get_metrics_manager
+from backend.monitoring.prometheus_metrics import get_metrics_manager
 
 
 @with_error_handling(

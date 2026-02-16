@@ -18,9 +18,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 import yaml
-from constants.network_constants import NetworkConstants
-from constants.redis_constants import REDIS_CONFIG
-from constants.threshold_constants import RetryConfig
+from backend.constants.network_constants import NetworkConstants
+from backend.constants.redis_constants import REDIS_CONFIG
+from backend.constants.threshold_constants import RetryConfig
 
 logger = logging.getLogger(__name__)
 

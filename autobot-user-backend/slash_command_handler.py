@@ -33,7 +33,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from constants.network_constants import NetworkConstants
+from backend.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 

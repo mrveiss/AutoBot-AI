@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
-from security.enterprise.threat_detection import (
+from backend.security.enterprise.threat_detection import (
     AnalysisContext,
     EventHistory,
     SecurityEvent,

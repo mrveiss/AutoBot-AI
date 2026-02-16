@@ -15,7 +15,7 @@ import logging
 import time
 from typing import Any, Dict, List
 
-from utils.performance_monitoring.types import (
+from backend.utils.performance_monitoring.types import (
     CRITICAL_SERVICE_STATUSES,
     DEFAULT_PERFORMANCE_BASELINES,
 )

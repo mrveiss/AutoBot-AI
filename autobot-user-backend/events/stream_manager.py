@@ -40,7 +40,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, Optional
 
-from events.types import AgentEvent, EventType
+from backend.events.types import AgentEvent, EventType
 
 logger = logging.getLogger(__name__)
 

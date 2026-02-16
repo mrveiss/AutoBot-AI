@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiohttp
-from constants.network_constants import ServiceURLs
+from backend.constants.network_constants import ServiceURLs
 
 # Configure logging
 logging.basicConfig(

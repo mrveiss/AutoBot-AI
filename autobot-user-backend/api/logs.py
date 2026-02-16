@@ -24,8 +24,8 @@ from fastapi.responses import StreamingResponse
 from backend.type_defs.common import Metadata
 from backend.utils.io_executor import run_in_log_executor
 from auth_middleware import check_admin_permission
-from constants.path_constants import PATH
-from constants.threshold_constants import TimingConstants
+from backend.constants.path_constants import PATH
+from backend.constants.threshold_constants import TimingConstants
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)

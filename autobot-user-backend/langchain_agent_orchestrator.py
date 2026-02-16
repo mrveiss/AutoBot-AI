@@ -24,11 +24,11 @@ except ImportError:
                 "package for Ollama support."
             )
 
-from constants.model_constants import ModelConstants
+from backend.constants.model_constants import ModelConstants
 from event_manager import event_manager
 from knowledge_base import KnowledgeBase
 from tools import ToolRegistry
-from utils.service_registry import get_service_url
+from backend.utils.service_registry import get_service_url
 from worker_node import WorkerNode
 
 

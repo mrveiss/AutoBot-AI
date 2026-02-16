@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from auth_middleware import get_current_user
-from constants.threshold_constants import CategoryDefaults, TimingConstants
+from backend.constants.threshold_constants import CategoryDefaults, TimingConstants
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field

@@ -11,10 +11,10 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 from auth_middleware import check_admin_permission
 from config import UnifiedConfigManager
-from constants.model_constants import ModelConstants as ModelConsts
+from backend.constants.model_constants import ModelConstants as ModelConsts
 
 # Add caching support from unified cache manager (P4 Cache Consolidation)
-from utils.advanced_cache_manager import cache_manager, cache_response
+from backend.utils.advanced_cache_manager import cache_manager, cache_response
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Create singleton config instance

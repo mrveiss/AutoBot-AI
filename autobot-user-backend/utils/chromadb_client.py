@@ -25,7 +25,7 @@ import chromadb
 from chromadb.config import Settings as ChromaSettings
 
 # Re-export async utilities for convenient imports
-from utils.async_chromadb_client import (
+from backend.utils.async_chromadb_client import (
     AsyncChromaClient,
     AsyncChromaCollection,
     get_async_chromadb_client,

@@ -167,7 +167,7 @@ class TestExtractImportContext:
         code = """
 import json
 from pathlib import Path
-from utils.helper import helper_func as hf
+from backend.utils.helper import helper_func as hf
 
 def my_function():
     data = json.loads("{}")

@@ -11,9 +11,9 @@ import logging
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from constants.network_constants import NetworkConstants
-from intelligence.goal_processor import GoalCategory, ProcessedGoal
-from intelligence.os_detector import LinuxDistro, OSDetector, OSType
+from backend.constants.network_constants import NetworkConstants
+from backend.intelligence.goal_processor import GoalCategory, ProcessedGoal
+from backend.intelligence.os_detector import LinuxDistro, OSDetector, OSType
 
 logger = logging.getLogger(__name__)
 

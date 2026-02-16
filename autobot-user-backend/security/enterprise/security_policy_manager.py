@@ -20,7 +20,7 @@ from uuid import uuid4
 
 import yaml
 
-from constants.path_constants import PATH
+from backend.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 

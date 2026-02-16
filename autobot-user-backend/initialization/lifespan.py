@@ -19,7 +19,7 @@ from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
 from fastapi import FastAPI
 from security_layer import SecurityLayer
-from utils.background_llm_sync import BackgroundLLMSync
+from backend.utils.background_llm_sync import BackgroundLLMSync
 
 from autobot_shared.tracing import (
     instrument_aiohttp,

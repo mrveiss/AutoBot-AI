@@ -16,7 +16,7 @@ import time
 from datetime import datetime
 from typing import Optional
 
-from constants.threshold_constants import TimingConstants
+from backend.constants.threshold_constants import TimingConstants
 
 # Embedding analytics integration (Issue #285)
 try:

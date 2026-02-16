@@ -13,11 +13,11 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from knowledge.pipeline.base import BaseCognifier, PipelineContext
-from knowledge.pipeline.models.chunk import ProcessedChunk
-from knowledge.pipeline.models.entity import Entity
-from knowledge.pipeline.models.event import EventType, TemporalEvent, TemporalType
-from knowledge.pipeline.registry import TaskRegistry
+from backend.knowledge.pipeline.base import BaseCognifier, PipelineContext
+from backend.knowledge.pipeline.models.chunk import ProcessedChunk
+from backend.knowledge.pipeline.models.entity import Entity
+from backend.knowledge.pipeline.models.event import EventType, TemporalEvent, TemporalType
+from backend.knowledge.pipeline.registry import TaskRegistry
 from llm_interface_pkg import LLMInterface
 
 logger = logging.getLogger(__name__)

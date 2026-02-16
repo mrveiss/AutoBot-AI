@@ -89,7 +89,7 @@ except ImportError:
     openai = None
 
 # Re-export get_llm_interface from resource_factory for backward compatibility
-from utils.resource_factory import ResourceFactory
+from backend.utils.resource_factory import ResourceFactory
 
 get_llm_interface = ResourceFactory.get_llm_interface
 

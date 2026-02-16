@@ -20,7 +20,7 @@ from typing import Any, Dict, FrozenSet, List, Optional
 import aiofiles
 
 # Issue #765: Use centralized strip_ansi_codes from encoding_utils
-from utils.encoding_utils import strip_ansi_codes
+from backend.utils.encoding_utils import strip_ansi_codes
 
 logger = logging.getLogger(__name__)
 

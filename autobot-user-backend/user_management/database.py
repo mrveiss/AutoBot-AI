@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.pool import QueuePool
 
-from user_management.config import get_deployment_config
+from backend.user_management.config import get_deployment_config
 
 logger = logging.getLogger(__name__)
 

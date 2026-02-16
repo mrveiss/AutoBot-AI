@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import status
-from user_management.middleware.rate_limit import RateLimitExceeded
-from user_management.services.user_service import (
+from backend.user_management.middleware.rate_limit import RateLimitExceeded
+from backend.user_management.services.user_service import (
     InvalidCredentialsError,
     UserNotFoundError,
 )

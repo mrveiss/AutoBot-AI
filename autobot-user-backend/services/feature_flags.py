@@ -35,7 +35,7 @@ from typing import Optional
 
 from backend.type_defs.common import Metadata
 
-from constants.threshold_constants import StringParsingConstants
+from backend.constants.threshold_constants import StringParsingConstants
 from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)

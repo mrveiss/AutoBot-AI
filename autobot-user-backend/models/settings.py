@@ -19,8 +19,8 @@ import yaml
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from constants.model_constants import Models
-from constants.network_constants import NetworkConstants, ServiceURLs
+from backend.constants.model_constants import Models
+from backend.constants.network_constants import NetworkConstants, ServiceURLs
 
 # Issue #380: Module-level tuples for validation constants
 _VALID_LOG_LEVELS = ("debug", "info", "warning", "error", "critical")

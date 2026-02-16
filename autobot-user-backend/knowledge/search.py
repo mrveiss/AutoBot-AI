@@ -32,7 +32,7 @@ from backend.models.task_context import EnhancedSearchContext
 from autobot_shared.error_boundaries import error_boundary
 
 # Import components from the search_components package
-from knowledge.search_components import (
+from backend.knowledge.search_components import (
     KeywordSearcher,
     QueryProcessor,
     ResponseBuilder,
@@ -40,13 +40,13 @@ from knowledge.search_components import (
     get_analytics,
     get_reranker,
 )
-from knowledge.search_components.helpers import (
+from backend.knowledge.search_components.helpers import (
     build_search_result,
     decode_redis_hash,
     matches_category,
     score_fact_by_terms,
 )
-from knowledge.search_components.hybrid_search import HybridSearcher
+from backend.knowledge.search_components.hybrid_search import HybridSearcher
 
 if TYPE_CHECKING:
     import aioredis

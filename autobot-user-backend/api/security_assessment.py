@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 # Issue #756: Consolidated from src/utils/request_utils.py
-from utils.request_utils import generate_request_id
+from backend.utils.request_utils import generate_request_id
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.services.security_tool_parsers import parse_tool_output

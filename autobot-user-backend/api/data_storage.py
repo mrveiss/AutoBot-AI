@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from auth_middleware import check_admin_permission
-from utils.catalog_http_exceptions import raise_server_error
+from backend.utils.catalog_http_exceptions import raise_server_error
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter(prefix="/data-storage", tags=["Data Storage"])

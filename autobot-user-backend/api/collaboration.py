@@ -16,7 +16,7 @@ from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from user_management.database import get_async_db
+from backend.user_management.database import get_async_db
 
 from backend.models.session_collaboration import PermissionLevel, SessionCollaboration
 

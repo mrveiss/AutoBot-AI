@@ -18,9 +18,9 @@ from typing import List, Optional
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from user_management.models import Organization, Team, User
-from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
-from user_management.services.base_service import BaseService, TenantContext
+from backend.user_management.models import Organization, Team, User
+from backend.user_management.models.audit import AuditAction, AuditLog, AuditResourceType
+from backend.user_management.services.base_service import BaseService, TenantContext
 
 logger = logging.getLogger(__name__)
 

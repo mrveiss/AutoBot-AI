@@ -13,7 +13,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from utils.redis_client import RedisConnectionManager
+from backend.utils.redis_client import RedisConnectionManager
 
 
 class TestPoolStatisticsThreadSafety:

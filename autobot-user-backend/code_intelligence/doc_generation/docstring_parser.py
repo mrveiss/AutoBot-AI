@@ -13,12 +13,12 @@ Part of god class refactoring initiative.
 import re
 from typing import Dict, List, Optional, Pattern
 
-from code_intelligence.doc_generation.types import (
+from backend.code_intelligence.doc_generation.types import (
     ExampleDoc,
     ExceptionDoc,
     ReturnDoc,
 )
-from code_intelligence.doc_generation.models import FunctionDoc
+from backend.code_intelligence.doc_generation.models import FunctionDoc
 
 
 class DocstringParser:

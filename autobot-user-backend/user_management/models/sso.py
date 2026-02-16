@@ -17,9 +17,9 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from constants.threshold_constants import CategoryDefaults
+from backend.constants.threshold_constants import CategoryDefaults
 
-from user_management.models.base import Base, TimestampMixin
+from backend.user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from user_management.models.organization import Organization

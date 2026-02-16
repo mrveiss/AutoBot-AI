@@ -11,7 +11,7 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from integrations.file_tracking import (
+from backend.integrations.file_tracking import (
     track_file_download,
     track_file_operation,
     track_file_upload,

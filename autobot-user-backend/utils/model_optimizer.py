@@ -28,7 +28,7 @@ from config import UnifiedConfigManager
 from autobot_shared.http_client import get_http_client
 
 # Re-export all public API from the package for backward compatibility
-from utils.model_optimization import (
+from backend.utils.model_optimization import (
     CODE_COMPLEXITY_KEYWORDS,
     CODE_TASK_TYPES,
     ModelClassifier,

@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from constants.threshold_constants import QueryDefaults
+from backend.constants.threshold_constants import QueryDefaults
 
 logger = logging.getLogger(__name__)
 

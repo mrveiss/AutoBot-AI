@@ -14,7 +14,7 @@ from enhanced_memory_manager_async import (
     TaskPriority,
     get_async_enhanced_memory_manager,
 )
-from utils.config_manager import get_config_section
+from backend.utils.config_manager import get_config_section
 
 logger = logging.getLogger(__name__)
 

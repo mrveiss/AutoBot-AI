@@ -14,8 +14,8 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-from constants.network_constants import NetworkConstants
-from security.command_patterns import (
+from backend.constants.network_constants import NetworkConstants
+from backend.security.command_patterns import (
     FORBIDDEN_COMMANDS,
     HIGH_RISK_COMMANDS,
     MODERATE_RISK_COMMANDS,
@@ -24,7 +24,7 @@ from security.command_patterns import (
     SYSTEM_PATHS,
     check_dangerous_patterns,
 )
-from utils.command_utils import execute_shell_command
+from backend.utils.command_utils import execute_shell_command
 
 # Permission system imports (lazy to avoid circular imports)
 if TYPE_CHECKING:

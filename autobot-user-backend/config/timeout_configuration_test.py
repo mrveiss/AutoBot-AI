@@ -12,7 +12,7 @@ Validates:
 import os
 
 import pytest
-from utils.knowledge_base_timeouts import KnowledgeBaseTimeouts
+from backend.utils.knowledge_base_timeouts import KnowledgeBaseTimeouts
 
 from config import UnifiedConfigManager
 

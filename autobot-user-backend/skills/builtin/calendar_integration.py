@@ -11,7 +11,7 @@ and availability checking via CalDAV or API integrations.
 import logging
 from typing import Any, Dict
 
-from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
+from backend.skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 
 logger = logging.getLogger(__name__)
 

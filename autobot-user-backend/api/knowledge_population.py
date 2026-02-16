@@ -23,9 +23,9 @@ import re
 from pathlib import Path as PathLib
 
 import aiofiles
-from constants.threshold_constants import TimingConstants
+from backend.constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, BackgroundTasks, Request
-from utils.template_loader import knowledge_data_exists, load_knowledge_data
+from backend.utils.template_loader import knowledge_data_exists, load_knowledge_data
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.knowledge_factory import get_or_create_knowledge_base

@@ -17,7 +17,7 @@ import bcrypt
 import jwt
 from fastapi import Request
 from security_layer import SecurityLayer
-from utils.catalog_http_exceptions import raise_auth_error
+from backend.utils.catalog_http_exceptions import raise_auth_error
 
 from config import UnifiedConfigManager
 

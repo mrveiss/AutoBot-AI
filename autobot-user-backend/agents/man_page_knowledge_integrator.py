@@ -18,8 +18,8 @@ from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 import aiofiles
 import yaml
 
-from intelligence.os_detector import get_os_detector
-from utils.command_utils import execute_command
+from backend.intelligence.os_detector import get_os_detector
+from backend.utils.command_utils import execute_command
 
 logger = logging.getLogger(__name__)
 

@@ -35,7 +35,7 @@ still exports all classes directly.
 """
 
 # Types and constants
-from code_intelligence.llm_pattern_analysis.types import (
+from backend.code_intelligence.llm_pattern_analysis.types import (
     CacheOpportunityType,
     EXCESSIVE_CONTEXT_PATTERNS,
     FORMAT_INEFFICIENCY_PATTERNS,
@@ -53,7 +53,7 @@ from code_intelligence.llm_pattern_analysis.types import (
 )
 
 # Data models
-from code_intelligence.llm_pattern_analysis.data_models import (
+from backend.code_intelligence.llm_pattern_analysis.data_models import (
     AnalysisResult,
     BatchingOpportunity,
     CacheOpportunity,
@@ -67,17 +67,17 @@ from code_intelligence.llm_pattern_analysis.data_models import (
 )
 
 # Analyzers and scanners
-from code_intelligence.llm_pattern_analysis.prompt_analyzer import PromptAnalyzer
-from code_intelligence.llm_pattern_analysis.scanners import (
+from backend.code_intelligence.llm_pattern_analysis.prompt_analyzer import PromptAnalyzer
+from backend.code_intelligence.llm_pattern_analysis.scanners import (
     BatchingAnalyzer,
     CacheOpportunityDetector,
     CodePatternScanner,
 )
-from code_intelligence.llm_pattern_analysis.calculators import (
+from backend.code_intelligence.llm_pattern_analysis.calculators import (
     CostCalculator,
     TokenTracker,
 )
-from code_intelligence.llm_pattern_analysis.recommendation_engine import (
+from backend.code_intelligence.llm_pattern_analysis.recommendation_engine import (
     RecommendationEngine,
 )
 

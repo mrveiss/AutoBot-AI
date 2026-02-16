@@ -11,7 +11,7 @@ import uuid
 from unittest.mock import AsyncMock
 
 import pytest
-from utils.activity_tracker import (
+from backend.utils.activity_tracker import (
     detect_secret_usage,
     track_browser_activity,
     track_desktop_activity,

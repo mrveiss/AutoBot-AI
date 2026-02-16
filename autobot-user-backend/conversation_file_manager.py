@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import aiosqlite
 import redis.asyncio as async_redis
-from constants.threshold_constants import TimingConstants
+from backend.constants.threshold_constants import TimingConstants
 
 # Module-level project root constant (Issue #380 - avoid repeated Path computation)
 _PROJECT_ROOT = Path(__file__).parent.parent
