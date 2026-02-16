@@ -642,7 +642,27 @@ function savePatternPrefs(): void {
   localStorage.setItem(PATTERN_PREFS_KEY, JSON.stringify(disabled));
 }
 
-function applyPatternPrefs(): void {
+async function applyPatternPrefs(): Promise<void> {
+  // Issue #638: Load preferences from backend first, fallback to localStorage
+  try {
+    const response = await api.get<ApiDataResponse>('/api/analytics/code-review/patterns/preferences');
+    const prefs = (response as ApiDataResponse).patterns || (response as ApiDataResponse).data?.patterns;
+
+    if (prefs) {
+      // Apply backend preferences
+      for (const p of patterns.value) {
+        if (prefs[p.id]) {
+          p.enabled = prefs[p.id].enabled;
+        }
+      }
+      logger.debug('Loaded pattern preferences from backend');
+      return;
+    }
+  } catch (error) {
+    logger.warn('Failed to load preferences from backend, falling back to localStorage:', error);
+  }
+
+  // Fallback to localStorage if backend fails
   try {
     const raw = localStorage.getItem(PATTERN_PREFS_KEY);
     if (!raw) return;
@@ -650,15 +670,31 @@ function applyPatternPrefs(): void {
     for (const p of patterns.value) {
       if (disabled.includes(p.id)) p.enabled = false;
     }
+    logger.debug('Loaded pattern preferences from localStorage');
   } catch {
     logger.warn('Failed to parse pattern preferences from localStorage');
   }
 }
 
-function togglePattern(pattern: Pattern) {
-  pattern.enabled = !pattern.enabled;
-  savePatternPrefs();
-  logger.debug('Pattern toggled:', { id: pattern.id, enabled: pattern.enabled });
+async function togglePattern(pattern: Pattern): Promise<void> {
+  // Issue #638: Save to backend first, fallback to localStorage
+  const newState = !pattern.enabled;
+
+  try {
+    await api.post('/api/analytics/code-review/patterns/toggle', {
+      pattern_id: pattern.id,
+      enabled: newState
+    });
+    pattern.enabled = newState;
+    // Also save to localStorage as backup
+    savePatternPrefs();
+    logger.debug('Pattern toggled:', { id: pattern.id, enabled: pattern.enabled });
+  } catch (error) {
+    logger.warn('Failed to save pattern preference to backend, using localStorage only:', error);
+    // Fallback to localStorage-only mode
+    pattern.enabled = newState;
+    savePatternPrefs();
+  }
 }
 
 async function markResolved(issue: ReviewIssue) {

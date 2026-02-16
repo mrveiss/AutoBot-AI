@@ -687,6 +687,114 @@ async def get_review_categories(
     ]
 
 
+class PatternToggleRequest(BaseModel):
+    """Request model for toggling pattern preference."""
+
+    pattern_id: str
+    enabled: bool
+
+
+@router.post("/patterns/toggle")
+async def toggle_pattern_preference(
+    request: PatternToggleRequest,
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict[str, Any]:
+    """
+    Toggle a code review pattern on/off.
+
+    Issue #638: Persists pattern preferences to Redis.
+
+    Stores user pattern preferences that persist across sessions.
+    """
+    try:
+        from autobot_shared.redis_client import get_redis_client
+
+        redis = get_redis_client(async_client=False, database="analytics")
+        if not redis:
+            raise HTTPException(
+                status_code=503, detail="Analytics database unavailable"
+            )
+
+        # Validate pattern exists
+        if request.pattern_id not in REVIEW_PATTERNS:
+            raise HTTPException(
+                status_code=404, detail=f"Pattern {request.pattern_id} not found"
+            )
+
+        # Store preference in Redis hash
+        key = "code_review:pattern_prefs"
+        await asyncio.to_thread(
+            redis.hset, key, request.pattern_id, str(request.enabled).lower()
+        )
+
+        logger.info(
+            "Pattern preference updated: %s = %s", request.pattern_id, request.enabled
+        )
+
+        return {
+            "status": "success",
+            "pattern_id": request.pattern_id,
+            "enabled": request.enabled,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to toggle pattern preference: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to save preference")
+
+
+@router.get("/patterns/preferences")
+async def get_pattern_preferences(
+    admin_check: bool = Depends(check_admin_permission),
+) -> dict[str, Any]:
+    """
+    Get all pattern preferences.
+
+    Issue #638: Retrieves pattern preferences from Redis.
+
+    Returns user pattern preferences with all patterns enabled by default.
+    """
+    try:
+        from autobot_shared.redis_client import get_redis_client
+
+        redis = get_redis_client(async_client=False, database="analytics")
+        if not redis:
+            # Return default (all enabled) if Redis unavailable
+            return {
+                "patterns": {
+                    pattern_id: {"enabled": True}
+                    for pattern_id in REVIEW_PATTERNS.keys()
+                }
+            }
+
+        # Get all preferences from Redis hash
+        key = "code_review:pattern_prefs"
+        prefs_raw = await asyncio.to_thread(redis.hgetall, key)
+
+        # Build preferences dict with defaults
+        patterns = {}
+        for pattern_id in REVIEW_PATTERNS.keys():
+            # Check if preference exists in Redis
+            if pattern_id.encode() in prefs_raw:
+                enabled_str = prefs_raw[pattern_id.encode()].decode()
+                enabled = enabled_str.lower() == "true"
+            else:
+                # Default to enabled
+                enabled = True
+
+            patterns[pattern_id] = {"enabled": enabled}
+
+        return {"patterns": patterns}
+    except Exception as e:
+        logger.warning("Failed to load pattern preferences: %s", e)
+        # Return default (all enabled) on error
+        return {
+            "patterns": {
+                pattern_id: {"enabled": True} for pattern_id in REVIEW_PATTERNS.keys()
+            }
+        }
+
+
 def _get_category_description(category: ReviewCategory) -> str:
     """Get description for a category."""
     descriptions = {
