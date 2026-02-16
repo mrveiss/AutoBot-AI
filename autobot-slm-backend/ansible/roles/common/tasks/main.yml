@@ -98,6 +98,25 @@
   when: lookup('file', '~/.ssh/autobot_key.pub', errors='ignore') is not none
   tags: ['common', 'ssh']
 
+- name: "Common | Reset UFW to clean state (Issue #895)"
+  block:
+    - name: "Common | Disable UFW temporarily"
+      ufw:
+        state: disabled
+      become: yes
+
+    - name: "Common | Reset UFW rules to defaults"
+      command: ufw --force reset
+      become: yes
+      changed_when: true
+
+    - name: "Common | Re-enable UFW"
+      ufw:
+        state: enabled
+      become: yes
+  when: ufw_reset_rules | default(false) | bool
+  tags: ['common', 'firewall', 'firewall-reset']
+
 - name: "Common | Configure firewall - Set default policies"
   ufw:
     state: enabled

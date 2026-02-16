@@ -1,0 +1,47 @@
+---
+# Reset UFW Firewall and Reapply Clean Rules (Issue #895)
+# This playbook resets UFW to clean state and reapplies only current Ansible rules
+# Removes legacy broad rules and duplicate entries
+
+- name: Reset UFW Firewall to Clean State
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    # Enable UFW reset for this playbook
+    ufw_reset_rules: true
+
+  tasks:
+    - name: Display pre-reset firewall status
+      shell: ufw status numbered
+      register: pre_reset_status
+      changed_when: false
+      failed_when: false
+
+    - name: Show current rules (before reset)
+      debug:
+        msg: "{{ pre_reset_status.stdout_lines }}"
+      when: pre_reset_status.stdout_lines is defined
+
+    - name: Apply common role (includes UFW reset + rule application)
+      include_role:
+        name: common
+        tasks_from: main
+      tags: ['firewall', 'firewall-reset']
+
+    - name: Display post-reset firewall status
+      shell: ufw status verbose
+      register: post_reset_status
+      changed_when: false
+
+    - name: Show final rules (after reset)
+      debug:
+        msg: "{{ post_reset_status.stdout_lines }}"
+
+    - name: Verify firewall is active
+      assert:
+        that:
+          - "'Status: active' in post_reset_status.stdout"
+        fail_msg: "UFW is not active after reset!"
+        success_msg: "UFW successfully reset and reapplied with clean rules"
