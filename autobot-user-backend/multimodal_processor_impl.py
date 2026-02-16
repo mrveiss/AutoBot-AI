@@ -1,6 +1,11 @@
 """
 Unified Multi-Modal AI Processor for AutoBot Phase 9
 Consolidates vision, voice, and context processing with consistent interfaces
+
+DEPRECATED: This module now delegates to media.* pipelines (Issue #735).
+Use media.manager.get_media_pipeline_manager() for new code.
+
+Maintained for backward compatibility only.
 """
 
 import asyncio
@@ -14,8 +19,12 @@ from enhanced_memory_manager_async import (
     TaskPriority,
     get_async_enhanced_memory_manager,
 )
+from media.core.types import MediaInput as NewMediaInput
+from media.core.types import MediaType as NewMediaType
+from media.core.types import ProcessingIntent as NewProcessingIntent
+from media.manager import get_media_pipeline_manager
 
-from backend.utils.config_manager import get_config_section
+from autobot_shared.config_manager import get_config_section
 
 logger = logging.getLogger(__name__)
 
@@ -277,15 +286,22 @@ class ContextProcessor(BaseModalProcessor):
 
 class UnifiedMultiModalProcessor:
     """
-    Main multi-modal processor that coordinates all modal-specific processors
+    Main multi-modal processor that coordinates all modal-specific processors.
+
+    DEPRECATED: Now delegates to media.manager.MediaPipelineManager (Issue #735).
+    Maintained for backward compatibility.
     """
 
     def __init__(self):
+        # Legacy processors (for backward compatibility)
         self.vision_processor = VisionProcessor()
         self.voice_processor = VoiceProcessor()
         self.context_processor = ContextProcessor()
         self.memory_manager = get_async_enhanced_memory_manager()
         self.logger = logging.getLogger(__name__)
+
+        # New pipeline manager (Issue #735)
+        self.pipeline_manager = get_media_pipeline_manager()
 
         # Processing statistics
         self.stats = {
@@ -296,9 +312,41 @@ class UnifiedMultiModalProcessor:
             "modality_counts": {modality.value: 0 for modality in ModalityType},
         }
 
+    def _convert_to_new_types(self, input_data: MultiModalInput) -> NewMediaInput:
+        """Convert legacy MultiModalInput to new MediaInput. Helper for process()."""
+        # Map legacy ModalityType to new MediaType
+        modality_map = {
+            ModalityType.IMAGE: NewMediaType.IMAGE,
+            ModalityType.AUDIO: NewMediaType.AUDIO,
+            ModalityType.VIDEO: NewMediaType.VIDEO,
+            ModalityType.TEXT: NewMediaType.TEXT,
+            ModalityType.COMBINED: NewMediaType.COMBINED,
+        }
+
+        # Map legacy ProcessingIntent to new ProcessingIntent
+        intent_map = {
+            ProcessingIntent.SCREEN_ANALYSIS: NewProcessingIntent.ANALYSIS,
+            ProcessingIntent.VOICE_COMMAND: NewProcessingIntent.TRANSCRIPTION,
+            ProcessingIntent.VISUAL_QA: NewProcessingIntent.ANALYSIS,
+            ProcessingIntent.AUTOMATION_TASK: NewProcessingIntent.AUTOMATION,
+            ProcessingIntent.CONTENT_GENERATION: NewProcessingIntent.EXTRACTION,
+            ProcessingIntent.DECISION_MAKING: NewProcessingIntent.DECISION_MAKING,
+        }
+
+        return NewMediaInput(
+            media_id=input_data.input_id,
+            media_type=modality_map.get(input_data.modality_type, NewMediaType.TEXT),
+            intent=intent_map.get(input_data.intent, NewProcessingIntent.ANALYSIS),
+            data=input_data.data,
+            metadata=input_data.metadata,
+        )
+
     async def process(self, input_data: MultiModalInput) -> ProcessingResult:
         """
-        Main processing method that routes input to appropriate processor
+        Main processing method that routes input to appropriate processor.
+
+        Now delegates to new pipeline architecture (Issue #735) while
+        maintaining backward compatibility.
         """
         self.logger.info(
             "Processing %s input with intent %s",
@@ -307,17 +355,28 @@ class UnifiedMultiModalProcessor:
         )
 
         try:
-            # Route to appropriate processor based on modality
-            if input_data.modality_type in [ModalityType.IMAGE, ModalityType.VIDEO]:
-                result = await self.vision_processor.process(input_data)
-            elif input_data.modality_type == ModalityType.AUDIO:
-                result = await self.voice_processor.process(input_data)
-            elif input_data.modality_type == ModalityType.TEXT:
-                result = await self.context_processor.process(input_data)
-            elif input_data.modality_type == ModalityType.COMBINED:
-                result = await self._process_combined(input_data)
+            # Use new pipeline architecture for supported types
+            if input_data.modality_type != ModalityType.COMBINED:
+                # Convert to new types and use pipeline manager
+                new_input = self._convert_to_new_types(input_data)
+                new_result = await self.pipeline_manager.process(new_input)
+
+                # Convert result back to legacy format
+                result = ProcessingResult(
+                    result_id=new_result.result_id,
+                    input_id=input_data.input_id,
+                    modality_type=input_data.modality_type,
+                    intent=input_data.intent,
+                    success=new_result.success,
+                    confidence=new_result.confidence,
+                    result_data=new_result.result_data,
+                    processing_time=new_result.processing_time,
+                    error_message=new_result.error_message,
+                    metadata=new_result.metadata,
+                )
             else:
-                raise ValueError(f"Unknown modality type: {input_data.modality_type}")
+                # COMBINED type uses legacy implementation
+                result = await self._process_combined(input_data)
 
             # Update statistics
             self._update_stats(result)
@@ -328,7 +387,7 @@ class UnifiedMultiModalProcessor:
             return result
 
         except Exception as e:
-            self.logger.error(f"Multi-modal processing failed: {e}")
+            self.logger.error("Multi-modal processing failed: %s", e)
             return ProcessingResult(
                 result_id=f"unified_{input_data.input_id}",
                 input_id=input_data.input_id,
