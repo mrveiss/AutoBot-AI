@@ -141,8 +141,9 @@ const createRipple = (event: TouchEvent) => {
   align-items: center;
   justify-content: center;
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid transparent;
+  font-family: var(--font-sans);
   cursor: pointer;
   user-select: none;
 }
@@ -152,148 +153,169 @@ const createRipple = (event: TouchEvent) => {
 }
 
 .base-button:focus-visible {
-  outline: 2px solid var(--indigo-500);
+  outline: 2px solid var(--color-info);
   outline-offset: 2px;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
+  box-shadow: var(--shadow-focus);
 }
 
+/* Issue #901: Removed scaling animation - too playful for professional theme */
 .base-button:active:not(.btn-disabled):not(.btn-loading) {
-  transform: scale(0.98);
+  opacity: 0.9;
 }
 
-/* Size variants */
+/* Size variants - Issue #901: Technical Precision sizing */
 .btn-xs {
-  padding: 0.375rem 0.625rem;
-  font-size: 0.75rem;
-  border-radius: 0.25rem;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 11px;
+  border-radius: 2px;
 }
 
 .btn-sm {
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  border-radius: 0.25rem;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: 2px;
 }
 
 .btn-md {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  border-radius: 0.375rem;
+  height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+  border-radius: 2px;
 }
 
 .btn-lg {
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
-  border-radius: 0.375rem;
+  height: 48px;
+  padding: 0 24px;
+  font-size: 16px;
+  border-radius: 4px;
 }
 
 .btn-xl {
-  padding: 1rem 2rem;
-  font-size: 1.125rem;
-  border-radius: 0.5rem;
+  height: 56px;
+  padding: 0 32px;
+  font-size: 18px;
+  border-radius: 4px;
 }
 
-/* Color variants */
+/* Color variants - Issue #901: Professional electric blue primary */
 .btn-primary {
-  background-color: var(--indigo-500);
-  color: white;
+  background-color: var(--color-info);
+  color: var(--text-on-primary);
+  font-weight: 500;
 }
 
 .btn-primary:hover {
-  background-color: var(--indigo-700);
+  background-color: var(--color-info-hover);
 }
 
 .btn-secondary {
-  background-color: var(--blue-gray-600);
-  color: white;
+  background-color: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  font-weight: 500;
 }
 
 .btn-secondary:hover {
-  background-color: var(--blue-gray-700);
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
 }
 
 .btn-success {
-  background-color: var(--emerald-500);
-  color: white;
+  background-color: var(--color-success);
+  color: var(--text-on-success);
+  font-weight: 500;
 }
 
 .btn-success:hover {
-  background-color: var(--emerald-700);
+  background-color: var(--color-success-hover);
 }
 
 .btn-danger {
-  background-color: var(--red-500);
-  color: white;
+  background-color: var(--color-error);
+  color: var(--text-on-error);
+  font-weight: 500;
 }
 
 .btn-danger:hover {
-  background-color: var(--red-700);
+  background-color: var(--color-error-hover);
 }
 
 .btn-warning {
-  background-color: var(--yellow-500);
-  color: white;
+  background-color: var(--color-warning);
+  color: var(--text-on-warning);
+  font-weight: 600;
 }
 
 .btn-warning:hover {
-  background-color: var(--orange-500);
+  background-color: var(--color-warning-hover);
 }
 
 .btn-info {
-  background-color: var(--indigo-500);
-  color: white;
+  background-color: var(--color-info);
+  color: var(--text-on-primary);
+  font-weight: 500;
 }
 
 .btn-info:hover {
-  background-color: var(--indigo-600);
+  background-color: var(--color-info-hover);
 }
 
 .btn-light {
-  background-color: var(--blue-gray-100);
-  color: var(--blue-gray-900);
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .btn-light:hover {
-  background-color: var(--blue-gray-200);
+  background-color: var(--bg-tertiary);
 }
 
 .btn-dark {
-  background-color: var(--blue-gray-800);
-  color: white;
+  background-color: var(--bg-primary);
+  color: var(--text-inverse);
+  border: 1px solid var(--border-default);
 }
 
 .btn-dark:hover {
-  background-color: var(--blue-gray-900);
+  background-color: var(--bg-secondary);
 }
 
 .btn-outline {
   background-color: transparent;
-  color: var(--blue-gray-700);
-  border: 1px solid var(--blue-gray-500);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
 }
 
 .btn-outline:hover {
-  background-color: var(--blue-gray-500);
-  color: white;
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
 }
 
 .btn-ghost {
   background-color: transparent;
-  color: var(--blue-gray-700);
+  color: var(--text-secondary);
+  border: 1px solid transparent;
 }
 
 .btn-ghost:hover {
-  background-color: var(--blue-gray-100);
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .btn-link {
   background-color: transparent;
-  color: var(--indigo-600);
-  text-decoration: underline;
+  color: var(--color-info);
+  text-decoration: none;
+  padding-left: 0;
+  padding-right: 0;
+  border: none;
 }
 
 .btn-link:hover {
-  color: var(--indigo-700);
-  text-decoration: none;
+  color: var(--color-info-hover);
+  text-decoration: underline;
 }
 
 /* State variants */
@@ -344,10 +366,7 @@ const createRipple = (event: TouchEvent) => {
   height: 1rem;
 }
 
-/* Hover animations */
-.base-button:hover:not(.btn-disabled):not(.btn-loading) {
-  transform: scale(1.02);
-}
+/* Issue #901: Removed hover scale - professional aesthetic prefers subtle state changes */
 
 /* Responsive adjustments */
 @media (max-width: 640px) {
