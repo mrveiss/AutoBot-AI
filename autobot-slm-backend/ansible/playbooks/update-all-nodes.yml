@@ -1,0 +1,248 @@
+---
+# AutoBot - Update All Fleet Nodes
+# Syncs latest code from development machine to all fleet VMs
+# Rebuilds frontends and restarts services
+
+- name: Update All Fleet Nodes with Latest Code
+  hosts: localhost
+  gather_facts: false
+  vars:
+    local_autobot_root: "/home/kali/Desktop/AutoBot"
+
+  tasks:
+    - name: Display update start
+      debug:
+        msg:
+          - "╔═══════════════════════════════════════════════════╗"
+          - "║  AutoBot Fleet Code Update                       ║"
+          - "╚═══════════════════════════════════════════════════╝"
+          - ""
+          - "Syncing latest code to all 9 fleet nodes..."
+
+- name: "Play 1 - Update SLM Server First"
+  hosts: slm_server
+  gather_facts: false
+  serial: 1
+  vars:
+    local_autobot_root: "/home/kali/Desktop/AutoBot"
+
+  tasks:
+    - name: "[PLAY 1] Starting SLM Server Update"
+      debug:
+        msg:
+          - "╔═══════════════════════════════════════════════════════════════╗"
+          - "║  PLAY 1: SLM Server Update (Issue #880)                      ║"
+          - "╚═══════════════════════════════════════════════════════════════╝"
+          - "Target: {{ inventory_hostname }} ({{ ansible_host }})"
+          - "Action: Code sync + service restart"
+          - "═══════════════════════════════════════════════════════════════"
+
+    - name: "[PLAY 1] SLM | Sync autobot-slm-backend code"
+      ansible.posix.synchronize:
+        src: "{{ local_autobot_root }}/autobot-slm-backend/"
+        dest: "/opt/autobot/autobot-slm-backend/"
+        delete: false
+        rsync_opts:
+          - "--exclude=venv"
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=.git"
+          - "--exclude=node_modules"
+          - "--exclude=*.log"
+      become: true
+
+    - name: "[PLAY 1] SLM | Sync autobot-slm-frontend code"
+      ansible.posix.synchronize:
+        src: "{{ local_autobot_root }}/autobot-slm-frontend/"
+        dest: "/opt/autobot/autobot-slm-frontend/"
+        delete: false
+        rsync_opts:
+          - "--exclude=node_modules"
+          - "--exclude=dist"
+          - "--exclude=.git"
+      become: true
+
+    - name: "[PLAY 1] SLM | Sync autobot-shared code"
+      ansible.posix.synchronize:
+        src: "{{ local_autobot_root }}/autobot-shared/"
+        dest: "/opt/autobot/autobot-shared/"
+        delete: false
+        rsync_opts:
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=.git"
+      become: true
+
+    - name: "[PLAY 1] SLM | Rebuild frontend production build"
+      command:
+        cmd: npm run build
+        chdir: /opt/autobot/autobot-slm-frontend
+      register: slm_build
+
+    - name: "[PLAY 1] SLM | Restart backend service"
+      systemd:
+        name: autobot-slm-backend
+        state: restarted
+        daemon_reload: true
+      become: true
+
+    - name: "[PLAY 1] SLM | Restart nginx"
+      systemd:
+        name: nginx
+        state: restarted
+      become: true
+
+    - name: "[PLAY 1] SLM Update Complete"
+      debug:
+        msg:
+          - "✅ SLM Server Updated Successfully"
+          - "   - Backend synced and restarted"
+          - "   - Frontend built and nginx restarted"
+
+- name: "Play 2 - Update Other Infrastructure Nodes"
+  hosts: infrastructure:!slm_server
+  gather_facts: false
+  serial: 3  # Process up to 3 nodes at a time
+  vars:
+    local_autobot_root: "/home/kali/Desktop/AutoBot"
+
+  tasks:
+    - name: "[PLAY 2] Starting Node Update"
+      debug:
+        msg:
+          - "╔═══════════════════════════════════════════════════════════════╗"
+          - "║  PLAY 2: Infrastructure Node Update (Issue #880)             ║"
+          - "╚═══════════════════════════════════════════════════════════════╝"
+          - "Target: {{ inventory_hostname }} ({{ ansible_host }})"
+          - "Action: Code sync + service restart"
+          - "Batch: Processing up to 3 nodes at a time"
+          - "═══════════════════════════════════════════════════════════════"
+
+    # Backend (172.16.168.20)
+    - name: "[PLAY 2] Backend | Sync autobot-user-backend code"
+      ansible.posix.synchronize:
+        src: "{{ local_autobot_root }}/autobot-user-backend/"
+        dest: "/opt/autobot/autobot-user-backend/"
+        delete: false
+        rsync_opts:
+          - "--exclude=venv"
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=.git"
+          - "--exclude=data"
+          - "--exclude=logs"
+      become: true
+      when: "'01-Backend' in inventory_hostname"
+
+    - name: "[PLAY 2] Backend | Restart service"
+      systemd:
+        name: autobot-backend
+        state: restarted
+        daemon_reload: true
+      become: true
+      when: "'01-Backend' in inventory_hostname"
+
+    # Frontend (172.16.168.21)
+    - name: "[PLAY 2] Frontend | Sync autobot-user-frontend code"
+      ansible.posix.synchronize:
+        src: "{{ local_autobot_root }}/autobot-user-frontend/"
+        dest: "/opt/autobot/autobot-user-frontend/"
+        delete: false
+        rsync_opts:
+          - "--exclude=node_modules"
+          - "--exclude=dist"
+          - "--exclude=.git"
+      become: true
+      when: "'02-Frontend' in inventory_hostname"
+
+    - name: "[PLAY 2] Frontend | Rebuild production dist"
+      command:
+        cmd: npx vite build
+        chdir: /opt/autobot/autobot-user-frontend
+      when: "'02-Frontend' in inventory_hostname"
+      register: frontend_build
+
+    - name: "[PLAY 2] Frontend | Restart nginx"
+      systemd:
+        name: nginx
+        state: restarted
+      become: true
+      when: "'02-Frontend' in inventory_hostname"
+
+    # NPU Worker (172.16.168.22)
+    - name: "[PLAY 2] NPU | Sync autobot-npu-worker code"
+      ansible.posix.synchronize:
+        src: "{{ local_autobot_root }}/autobot-npu-worker/"
+        dest: "/opt/autobot/autobot-npu-worker/"
+        delete: false
+        rsync_opts:
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=.git"
+      become: true
+      when: "'03-NPU' in inventory_hostname"
+
+    # Browser (172.16.168.25)
+    - name: "[PLAY 2] Browser | Sync autobot-browser-worker code"
+      ansible.posix.synchronize:
+        src: "{{ local_autobot_root }}/autobot-browser-worker/"
+        dest: "/opt/autobot/autobot-browser-worker/"
+        delete: false
+        rsync_opts:
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=.git"
+      become: true
+      when: "'05-Browser' in inventory_hostname"
+
+    # Shared (all nodes)
+    - name: "[PLAY 2] All Nodes | Sync autobot-shared code"
+      ansible.posix.synchronize:
+        src: "{{ local_autobot_root }}/autobot-shared/"
+        dest: "/opt/autobot/autobot-shared/"
+        delete: false
+        rsync_opts:
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=.git"
+      become: true
+
+    - name: "[PLAY 2] Node Update Complete"
+      debug:
+        msg: "✅ {{ inventory_hostname }} updated successfully"
+
+- name: "Play 3 - Verify All Services"
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Wait for services to stabilize
+      pause:
+        seconds: 5
+
+    - name: Check SLM health
+      uri:
+        url: "https://172.16.168.19/api/health"
+        validate_certs: false
+      register: slm_health
+      ignore_errors: true
+
+    - name: Display update summary
+      debug:
+        msg:
+          - ""
+          - "╔═══════════════════════════════════════════════════════════════╗"
+          - "║  Fleet Update Complete (Issue #880)                          ║"
+          - "╚═══════════════════════════════════════════════════════════════╝"
+          - ""
+          - "✅ Code synced to all nodes"
+          - "✅ Frontends rebuilt (SLM + User)"
+          - "✅ Services restarted"
+          - ""
+          - "SLM Health: {{ slm_health.json.status | default('Check manually') }}"
+          - "Nodes Online: {{ slm_health.json.nodes_online | default('?') }}/{{ slm_health.json.nodes_total | default('9') }}"
+          - ""
+          - "Access points:"
+          - "  - SLM Admin: https://172.16.168.19/"
+          - "  - User Frontend: https://172.16.168.21/"
+          - ""
