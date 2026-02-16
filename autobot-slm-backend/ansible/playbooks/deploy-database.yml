@@ -112,10 +112,6 @@
         - "{{ model_storage.directories.cache_dir }}"
         - "{{ model_storage.directories.versions_dir }}"
         - "{{ model_storage.directories.temp_dir }}"
-      loop_control:
-        loop_var: item
-      with_items: "{{ model_storage.categories.values() | map(attribute='path') | list }}"
-      when: item is defined
 
     # ==========================================
     # REDIS CONFIGURATION

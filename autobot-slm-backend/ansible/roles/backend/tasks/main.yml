@@ -4,30 +4,94 @@
 #
 # Backend Role - FastAPI backend deployment for AutoBot
 ---
-- name: Install Python and dependencies
+- name: Install Python and build dependencies for pyenv
   ansible.builtin.apt:
     name:
       - python3
       - python3-pip
       - python3-venv
       - git
-      - software-properties-common
+      - curl
+      - build-essential
+      - libssl-dev
+      - zlib1g-dev
+      - libbz2-dev
+      - libreadline-dev
+      - libsqlite3-dev
+      - libncursesw5-dev
+      - xz-utils
+      - tk-dev
+      - libxml2-dev
+      - libxmlsec1-dev
+      - libffi-dev
+      - liblzma-dev
     state: present
     update_cache: true
 
-- name: Add deadsnakes PPA for Python 3.12
-  ansible.builtin.apt_repository:
-    repo: ppa:deadsnakes/ppa
-    state: present
-    update_cache: true
+- name: Check if pyenv is already installed
+  ansible.builtin.stat:
+    path: "/home/{{ backend_user }}/.pyenv"
+  register: pyenv_exists
+  become_user: "{{ backend_user }}"
 
-- name: Install Python 3.12 for GPU package compatibility
-  ansible.builtin.apt:
-    name:
-      - python3.12
-      - python3.12-venv
-      - python3.12-dev
-    state: present
+- name: Install pyenv for Python 3.12 management
+  ansible.builtin.shell: |
+    curl https://pyenv.run | bash
+  args:
+    creates: "/home/{{ backend_user }}/.pyenv/bin/pyenv"
+  become_user: "{{ backend_user }}"
+  when: not pyenv_exists.stat.exists
+
+- name: Add pyenv to backend user's bashrc
+  ansible.builtin.blockinfile:
+    path: "/home/{{ backend_user }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK - PYENV"
+    block: |
+      export PYENV_ROOT="$HOME/.pyenv"
+      export PATH="$PYENV_ROOT/bin:$PATH"
+      eval "$(pyenv init --path)"
+      eval "$(pyenv init -)"
+    create: yes
+  become_user: "{{ backend_user }}"
+
+- name: Install Python 3.12.7 via pyenv
+  ansible.builtin.shell: |
+    export PYENV_ROOT="/home/{{ backend_user }}/.pyenv"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init --path)"
+    pyenv install 3.12.7 --skip-existing
+  args:
+    executable: /bin/bash
+  become_user: "{{ backend_user }}"
+  register: pyenv_install
+  changed_when: "'Installed' in pyenv_install.stdout"
+
+- name: Check if miniconda is already installed
+  ansible.builtin.stat:
+    path: "/home/{{ backend_user }}/miniconda3"
+  register: miniconda_exists
+
+- name: Download miniconda installer
+  ansible.builtin.get_url:
+    url: https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+    dest: /tmp/miniconda_installer.sh
+    mode: '0755'
+  when: not miniconda_exists.stat.exists
+
+- name: Install miniconda for faiss-gpu
+  ansible.builtin.shell: |
+    bash /tmp/miniconda_installer.sh -b -p /home/{{ backend_user }}/miniconda3
+  args:
+    creates: "/home/{{ backend_user }}/miniconda3/bin/conda"
+  become_user: "{{ backend_user }}"
+  when: not miniconda_exists.stat.exists
+
+- name: Initialize conda for bash
+  ansible.builtin.shell: |
+    /home/{{ backend_user }}/miniconda3/bin/conda init bash
+  args:
+    creates: "/home/{{ backend_user }}/.conda"
+  become_user: "{{ backend_user }}"
 
 - name: Create autobot user
   ansible.builtin.user:
@@ -66,10 +130,23 @@
   become_user: "{{ backend_user }}"
   when: backend_deploy_from_git | default(true)
 
-- name: Create Python virtual environment with Python 3.12
-  ansible.builtin.command:
-    cmd: python3.12 -m venv {{ backend_code_dir }}/venv
-    creates: "{{ backend_code_dir }}/venv/bin/python"
+- name: Create conda environment with Python 3.12 and faiss-gpu
+  ansible.builtin.shell: |
+    eval "$(/home/{{ backend_user }}/miniconda3/bin/conda shell.bash hook)"
+    conda config --set channel_priority strict
+    conda create -n autobot-backend python=3.12 faiss-gpu -c conda-forge --override-channels -y
+  args:
+    creates: "/home/{{ backend_user }}/miniconda3/envs/autobot-backend"
+    executable: /bin/bash
+  become_user: "{{ backend_user }}"
+
+- name: Create venv symlink to conda environment for compatibility
+  ansible.builtin.file:
+    src: "/home/{{ backend_user }}/miniconda3/envs/autobot-backend"
+    dest: "{{ backend_code_dir }}/venv"
+    state: link
+    force: yes
+  become_user: "{{ backend_user }}"
 
 - name: Fix venv ownership
   ansible.builtin.file:
