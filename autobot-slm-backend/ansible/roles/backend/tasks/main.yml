@@ -229,10 +229,13 @@
 
 - name: Set certificate key permissions
   ansible.builtin.file:
-    path: /etc/autobot/certs/server-key.pem
+    path: "{{ item }}"
     mode: "0600"
-    owner: root
-    group: root
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+  loop:
+    - /etc/autobot/certs/server-key.pem
+    - /etc/autobot/certs/server-cert.pem
   when: not backend_cert_stat.stat.exists or (backend_cert_valid.rc | default(1)) != 0
 
 - name: Deploy backend environment file
