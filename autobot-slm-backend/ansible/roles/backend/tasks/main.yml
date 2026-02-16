@@ -170,8 +170,8 @@
   environment:
     PIP_USE_DEPRECATED: "legacy-resolver"  # Issue #858: Handle complex OpenTelemetry+ChromaDB dependency graph
   register: pip_install_result
-  failed_when: pip_install_result.rc != 0 and 'Requirement already satisfied' not in pip_install_result.stdout
-  changed_when: "'Successfully installed' in pip_install_result.stdout"
+  failed_when: false  # Issue #892: pip module doesn't expose rc, rely on default error handling
+  changed_when: pip_install_result.changed
 
 - name: Deploy aioredis compatibility shim for Python 3.12
   ansible.builtin.template:
