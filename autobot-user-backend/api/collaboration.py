@@ -12,13 +12,13 @@ import logging
 import uuid
 from typing import List, Optional
 
-from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from backend.user_management.database import get_async_db
 
+from backend.auth_middleware import get_current_user
 from backend.models.session_collaboration import PermissionLevel, SessionCollaboration
+from backend.user_management.database import get_async_session
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +161,7 @@ async def _get_or_create_collab(
 async def invite_user(
     session_id: str,
     invite: InviteRequest,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -214,7 +214,7 @@ async def invite_user(
 async def remove_collaborator(
     session_id: str,
     remove: RemoveRequest,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -277,7 +277,7 @@ async def remove_collaborator(
 @router.get("/{session_id}/participants", response_model=SessionParticipantsResponse)
 async def get_participants(
     session_id: str,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -341,7 +341,7 @@ async def get_participants(
 async def share_secret_with_session(
     session_id: str,
     share: ShareSecretRequest,
-    db: AsyncSession = Depends(get_async_db),
+    db: AsyncSession = Depends(get_async_session),
     current_user: dict = Depends(get_current_user),
 ):
     """
