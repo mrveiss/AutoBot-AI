@@ -890,13 +890,23 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
   color: var(--text-secondary);
 }
 
+/* Issue #901: Technical Precision search input */
 .search-input {
   padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-9);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: 2px;
   width: 250px;
   background: var(--bg-primary);
   color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--color-info);
+  box-shadow: 0 0 0 3px var(--color-info-bg);
 }
 
 /* Filter bar */
@@ -906,7 +916,7 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
   gap: var(--spacing-4);
   padding: var(--spacing-4);
   background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
+  border-radius: 4px;
   margin-bottom: var(--spacing-4);
   flex-wrap: wrap;
 }
@@ -926,10 +936,18 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
 .filter-select {
   padding: var(--spacing-1-5) var(--spacing-3);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border-radius: 2px;
   font-size: var(--text-sm);
+  font-family: var(--font-sans);
   background: var(--bg-card);
   color: var(--text-primary);
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: var(--color-info);
+  box-shadow: 0 0 0 3px var(--color-info-bg);
 }
 
 /* Loading and empty states */
@@ -942,7 +960,7 @@ watch([debouncedSearchQuery, filterCategory, filterType], () => {
 /* Table styles */
 .entries-table {
   background: var(--bg-card);
-  border-radius: var(--radius-lg);
+  border-radius: 4px;
   overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
@@ -971,8 +989,9 @@ tr:hover {
   background: var(--bg-hover);
 }
 
+/* Issue #901: Electric blue for selected rows */
 tr.selected {
-  background: var(--color-primary-bg);
+  background: var(--color-info-bg);
 }
 
 .checkbox-column {
@@ -984,23 +1003,29 @@ tr.selected {
   cursor: pointer;
 }
 
+/* Issue #901: Electric blue for entry titles */
 .entry-title {
-  color: var(--color-primary);
+  color: var(--color-info);
   font-weight: var(--font-medium);
 }
 
 .entry-title:hover {
   text-decoration: underline;
+  color: var(--color-info-dark);
 }
 
+/* Issue #901: Technical Precision badges */
 .category-badge {
   display: inline-block;
   padding: var(--spacing-1) var(--spacing-3);
-  border-radius: var(--radius-full);
-  font-size: var(--text-xs);
-  font-weight: var(--font-medium);
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: var(--font-sans);
   background: var(--bg-tertiary);
   color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .type-badge {
@@ -1021,8 +1046,10 @@ tr.selected {
   display: inline-block;
   padding: var(--spacing-0-5) var(--spacing-2);
   background: var(--bg-tertiary);
-  border-radius: var(--radius-full);
-  font-size: var(--text-xs);
+  border-radius: 2px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 400;
   color: var(--text-secondary);
 }
 
@@ -1031,8 +1058,12 @@ tr.selected {
   color: var(--text-secondary);
 }
 
+/* Issue #901: Monospace for dates */
 .date-cell {
-  font-size: var(--text-sm);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
   color: var(--text-secondary);
 }
 
@@ -1064,7 +1095,7 @@ tr.selected {
   margin-bottom: var(--spacing-8);
   padding: var(--spacing-4);
   background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
+  border-radius: 4px;
 }
 
 .meta-item {
