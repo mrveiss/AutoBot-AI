@@ -136,7 +136,11 @@ async def init_database() -> None:
 
     Call this during application startup.
     """
+    logger.info("🔍 DEBUG: init_database() called")
     config = get_deployment_config()
+    logger.info(
+        f"🔍 DEBUG: Got deployment config - postgres_enabled={config.postgres_enabled}"
+    )
 
     if not config.postgres_enabled:
         logger.info(
@@ -145,16 +149,34 @@ async def init_database() -> None:
         )
         return
 
+    logger.info("🔍 DEBUG: PostgreSQL enabled, proceeding with initialization")
+    logger.info(
+        "🔍 DEBUG: Connection string: postgresql+asyncpg://"
+        f"{config.postgres_user}@{config.postgres_host}:"
+        f"{config.postgres_port}/{config.postgres_db}"
+    )
+
     try:
         from sqlalchemy import text
 
+        logger.info("🔍 DEBUG: About to call get_async_engine()")
         engine = get_async_engine()
+        logger.info(f"🔍 DEBUG: Engine created: {engine}")
+
+        logger.info(
+            "🔍 DEBUG: About to begin connection (this may hang if DB unreachable)"
+        )
         async with engine.begin() as conn:
+            logger.info("🔍 DEBUG: Connection established, executing SELECT 1")
             # Simple connectivity check
             await conn.execute(text("SELECT 1"))
+            logger.info("🔍 DEBUG: SELECT 1 executed successfully")
         logger.info("PostgreSQL connection verified successfully")
     except Exception as e:
         logger.error("Failed to connect to PostgreSQL: %s", e)
+        import traceback
+
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise
 
 

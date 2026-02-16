@@ -194,11 +194,31 @@ async def initialize_critical_services(app: FastAPI):
 
         # Issue #898: Initialize PostgreSQL database - CRITICAL
         logger.info("✅ [ 16%] Database: Initializing PostgreSQL async engine...")
+        logger.info("🔍 DEBUG: About to call get_deployment_config()")
         try:
+            from backend.user_management.config import get_deployment_config
+
+            config = get_deployment_config()
+            logger.info(
+                f"🔍 DEBUG: Deployment config loaded - "
+                f"mode={config.mode.value}, "
+                f"postgres_enabled={config.postgres_enabled}"
+            )
+            logger.info(
+                f"🔍 DEBUG: PostgreSQL - "
+                f"host={config.postgres_host}, "
+                f"port={config.postgres_port}, "
+                f"db={config.postgres_db}"
+            )
+
+            logger.info("🔍 DEBUG: About to call init_database()")
             await init_database()
             logger.info("✅ [ 16%] Database: PostgreSQL async engine initialized")
         except Exception as db_error:
             logger.error(f"❌ CRITICAL: Database initialization failed: {db_error}")
+            import traceback
+
+            logger.error(f"❌ TRACEBACK: {traceback.format_exc()}")
             raise RuntimeError(f"Database initialization failed: {db_error}")
 
         # Issue #732: Initialize Gateway - CRITICAL

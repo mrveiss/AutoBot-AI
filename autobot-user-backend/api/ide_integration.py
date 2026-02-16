@@ -19,6 +19,7 @@ Key Features:
 import ast
 import asyncio
 import hashlib
+import json
 import logging
 import re
 import time
@@ -28,7 +29,22 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from autobot_shared.redis_client import get_redis_client
+from backend.models.completion_context import CompletionContext
+from backend.services.context_analyzer import ContextAnalyzer
+from backend.services.pattern_extractor import PatternExtractor
+
 logger = logging.getLogger(__name__)
+
+# Optional ML dependencies (Issue #906)
+try:
+    from backend.training.completion_trainer import CompletionTrainer
+
+    HAS_ML = True
+except ImportError:
+    logger.warning("ML dependencies not available, using pattern-only completions")
+    CompletionTrainer = None  # type: ignore
+    HAS_ML = False
 
 router = APIRouter()
 
@@ -36,6 +52,12 @@ router = APIRouter()
 _FUNCTION_DEF_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
 _CONTROL_FLOW_TYPES = (ast.If, ast.For, ast.While, ast.With)
 _NESTING_TYPES = (ast.If, ast.For, ast.While, ast.With, ast.Try)
+
+# Issue #906: Module-level instances for code completion
+redis_client = get_redis_client(async_client=False, database="main")
+context_analyzer = ContextAnalyzer()
+pattern_extractor = PatternExtractor()
+trainer = CompletionTrainer() if HAS_ML else None
 
 
 # =============================================================================
@@ -374,6 +396,62 @@ class ConfigurationUpdate(BaseModel):
     disabled_rules: Optional[List[str]] = None
     severity_overrides: Optional[Dict[str, DiagnosticSeverity]] = None
     categories: Optional[List[PatternCategory]] = None
+
+
+class CompletionItemKind(str, Enum):
+    """LSP-compatible completion item kinds."""
+
+    TEXT = "Text"
+    METHOD = "Method"
+    FUNCTION = "Function"
+    CONSTRUCTOR = "Constructor"
+    FIELD = "Field"
+    VARIABLE = "Variable"
+    CLASS = "Class"
+    INTERFACE = "Interface"
+    MODULE = "Module"
+    PROPERTY = "Property"
+    UNIT = "Unit"
+    VALUE = "Value"
+    ENUM = "Enum"
+    CONSTANT = "Constant"
+    KEYWORD = "Keyword"
+    SNIPPET = "Snippet"
+
+
+class CompletionItem(BaseModel):
+    """LSP-compatible completion item."""
+
+    label: str = Field(..., description="Display text")
+    kind: CompletionItemKind = Field(
+        default=CompletionItemKind.TEXT, description="Item kind"
+    )
+    detail: Optional[str] = Field(None, description="Additional details")
+    documentation: Optional[str] = Field(None, description="Documentation")
+    insert_text: Optional[str] = Field(None, description="Text to insert")
+    sort_text: Optional[str] = Field(None, description="Sort order")
+    filter_text: Optional[str] = Field(None, description="Filter text")
+    score: float = Field(default=0.0, description="Relevance score")
+
+
+class CompletionRequest(BaseModel):
+    """Request for code completion."""
+
+    file_path: str = Field(..., description="Path to the file")
+    content: str = Field(..., description="File content")
+    cursor_line: int = Field(..., ge=0, description="Cursor line (0-indexed)")
+    cursor_position: int = Field(..., ge=0, description="Cursor column position")
+    language: str = Field(default="python", description="Programming language")
+    max_completions: int = Field(default=20, ge=1, le=100, description="Max results")
+
+
+class CompletionResponse(BaseModel):
+    """Response with code completions."""
+
+    completions: List[CompletionItem]
+    completion_time_ms: float
+    source: str  # "ml", "patterns", "hybrid"
+    cached: bool = False
 
 
 # =============================================================================
@@ -783,6 +861,248 @@ class IDEIntegrationEngine:
             for rule in self.rules
         ]
 
+    async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        """
+        Generate intelligent code completions.
+
+        Issue #906: ML-based completions with pattern fallback.
+
+        Args:
+            request: Completion request with file context
+
+        Returns:
+            Ranked list of completion items
+        """
+        import time
+
+        start_time = time.time()
+
+        # Check cache first
+        cache_key = f"completion:{request.file_path}:{request.cursor_line}:{request.cursor_position}"
+        cached_result = redis_client.get(cache_key)
+        if cached_result:
+            completions_data = json.loads(cached_result.decode())
+            elapsed_ms = (time.time() - start_time) * 1000
+            return CompletionResponse(
+                completions=[CompletionItem(**c) for c in completions_data],
+                completion_time_ms=elapsed_ms,
+                source="hybrid",
+                cached=True,
+            )
+
+        # Analyze context
+        context = context_analyzer.analyze(
+            file_content=request.content,
+            cursor_line=request.cursor_line,
+            cursor_position=request.cursor_position,
+            file_path=request.file_path,
+        )
+
+        completions: List[CompletionItem] = []
+        source = "patterns"
+
+        # Try ML-based completions first (50ms timeout)
+        try:
+            model_start = time.time()
+            ml_completions = await self._get_ml_completions(context, request)
+            ml_elapsed = (time.time() - model_start) * 1000
+
+            if ml_elapsed < 50 and ml_completions:
+                completions.extend(ml_completions)
+                source = "ml"
+        except Exception as e:
+            logger.warning(f"ML completion failed: {e}")
+
+        # Add pattern-based completions
+        pattern_completions = await self._get_pattern_completions(context, request)
+        completions.extend(pattern_completions)
+
+        # Merge and rank
+        completions = self._rank_completions(completions, context)
+
+        # Limit results
+        completions = completions[: request.max_completions]
+
+        # Cache results (10s TTL)
+        redis_client.setex(
+            cache_key,
+            10,
+            json.dumps([c.model_dump() for c in completions]),
+        )
+
+        elapsed_ms = (time.time() - start_time) * 1000
+        return CompletionResponse(
+            completions=completions,
+            completion_time_ms=elapsed_ms,
+            source=source,
+            cached=False,
+        )
+
+    async def _get_ml_completions(
+        self, context: CompletionContext, request: CompletionRequest
+    ) -> List[CompletionItem]:
+        """Get ML-based completions. (Issue #906 - helper)"""
+        # Check if ML is available
+        if not HAS_ML or trainer is None:
+            return []
+
+        # Load trained model (cached)
+        model = trainer.load_model()
+        if not model:
+            return []
+
+        # Prepare input features from context
+        features = {
+            "file_path": context.file_path,
+            "language": context.language,
+            "current_function": context.current_function or "",
+            "partial_statement": context.partial_statement,
+            "frameworks": list(context.detected_frameworks),
+            "imports": context.imports[:10],  # Top 10 imports
+        }
+
+        # Get predictions
+        predictions = model.predict(features)
+
+        # Convert to CompletionItems
+        items = []
+        for pred in predictions[: request.max_completions]:
+            items.append(
+                CompletionItem(
+                    label=pred["text"],
+                    kind=self._infer_completion_kind(pred["text"], context),
+                    detail=f"ML (score: {pred['score']:.2f})",
+                    insert_text=pred["text"],
+                    score=pred["score"],
+                )
+            )
+
+        return items
+
+    async def _get_pattern_completions(
+        self, context: CompletionContext, request: CompletionRequest
+    ) -> List[CompletionItem]:
+        """Get pattern-based completions. (Issue #906 - helper)"""
+        items = []
+
+        # Framework-specific completions
+        if "fastapi" in context.detected_frameworks:
+            items.extend(self._get_fastapi_completions(context))
+
+        if "pydantic" in context.detected_frameworks:
+            items.extend(self._get_pydantic_completions(context))
+
+        if "logging" in " ".join(context.imports):
+            items.extend(self._get_logging_completions(context))
+
+        # Context-based suggestions
+        if context.current_function:
+            items.extend(self._get_function_completions(context))
+
+        return items[:10]  # Limit pattern completions
+
+    def _rank_completions(
+        self, completions: List[CompletionItem], context: CompletionContext
+    ) -> List[CompletionItem]:
+        """Rank completions by relevance. (Issue #906 - helper)"""
+        # Sort by score (descending), then by label
+        return sorted(
+            completions,
+            key=lambda c: (-c.score, c.label),
+        )
+
+    def _get_fastapi_completions(
+        self, context: CompletionContext
+    ) -> List[CompletionItem]:
+        """Get FastAPI-specific completions. (Issue #906 - helper)"""
+        return [
+            CompletionItem(
+                label="@router.get",
+                kind=CompletionItemKind.SNIPPET,
+                detail="FastAPI GET endpoint",
+                insert_text='@router.get("/")\nasync def endpoint():\n    return {}',
+                score=0.7,
+            ),
+            CompletionItem(
+                label="@router.post",
+                kind=CompletionItemKind.SNIPPET,
+                detail="FastAPI POST endpoint",
+                insert_text='@router.post("/")\nasync def endpoint(request: BaseModel):\n    return {}',
+                score=0.7,
+            ),
+        ]
+
+    def _get_pydantic_completions(
+        self, context: CompletionContext
+    ) -> List[CompletionItem]:
+        """Get Pydantic-specific completions. (Issue #906 - helper)"""
+        return [
+            CompletionItem(
+                label="Field(...)",
+                kind=CompletionItemKind.SNIPPET,
+                detail="Pydantic field",
+                insert_text='Field(..., description="")',
+                score=0.6,
+            ),
+        ]
+
+    def _get_logging_completions(
+        self, context: CompletionContext
+    ) -> List[CompletionItem]:
+        """Get logging completions. (Issue #906 - helper)"""
+        return [
+            CompletionItem(
+                label='logger.info("")',
+                kind=CompletionItemKind.SNIPPET,
+                detail="Log info message",
+                insert_text='logger.info("")',
+                score=0.5,
+            ),
+            CompletionItem(
+                label='logger.error("")',
+                kind=CompletionItemKind.SNIPPET,
+                detail="Log error message",
+                insert_text='logger.error("")',
+                score=0.5,
+            ),
+        ]
+
+    def _get_function_completions(
+        self, context: CompletionContext
+    ) -> List[CompletionItem]:
+        """Get function-specific completions. (Issue #906 - helper)"""
+        items = []
+
+        # Suggest return statement if in function
+        if context.function_return_type and context.function_return_type != "None":
+            items.append(
+                CompletionItem(
+                    label="return",
+                    kind=CompletionItemKind.KEYWORD,
+                    detail=f"Return {context.function_return_type}",
+                    insert_text="return ",
+                    score=0.4,
+                )
+            )
+
+        return items
+
+    def _infer_completion_kind(
+        self, text: str, context: CompletionContext
+    ) -> CompletionItemKind:
+        """Infer completion kind from text. (Issue #906 - helper)"""
+        if text.startswith("def ") or text.endswith("()"):
+            return CompletionItemKind.FUNCTION
+        if text.startswith("class "):
+            return CompletionItemKind.CLASS
+        if text.startswith("import ") or text.startswith("from "):
+            return CompletionItemKind.MODULE
+        if text.isupper() and "_" in text:
+            return CompletionItemKind.CONSTANT
+        if text in context.variables_in_scope:
+            return CompletionItemKind.VARIABLE
+        return CompletionItemKind.TEXT
+
 
 # =============================================================================
 # Global Instance
@@ -898,6 +1218,20 @@ async def batch_analyze(
         "total_issues": total_issues,
         "errors": len(results) - len(valid_results),
     }
+
+
+@router.post("/completion", summary="Get code completions")
+async def get_completions(request: CompletionRequest) -> CompletionResponse:
+    """
+    Get intelligent code completions.
+
+    Issue #906: ML-based completions with pattern fallback.
+
+    Returns:
+        Ranked list of completion items
+    """
+    engine = await get_engine()
+    return await engine.complete(request)
 
 
 @router.get("/health", summary="Health check")
