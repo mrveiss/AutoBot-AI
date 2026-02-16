@@ -191,6 +191,50 @@
   become_user: "{{ backend_user }}"
   when: backend_install_dir is defined
 
+# ==========================================================
+# TLS Certificate Generation (Issue #892)
+# ==========================================================
+- name: Create TLS certificate directory
+  ansible.builtin.file:
+    path: /etc/autobot/certs
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Check if TLS certificate exists
+  ansible.builtin.stat:
+    path: /etc/autobot/certs/server-cert.pem
+  register: backend_cert_stat
+
+- name: Check certificate expiry
+  ansible.builtin.command:
+    cmd: openssl x509 -checkend 604800 -noout -in /etc/autobot/certs/server-cert.pem
+  register: backend_cert_valid
+  changed_when: false
+  failed_when: false
+  when: backend_cert_stat.stat.exists
+
+- name: Generate self-signed TLS certificate
+  ansible.builtin.command:
+    cmd: >-
+      openssl req -x509 -nodes -days 365 -newkey rsa:2048
+      -keyout /etc/autobot/certs/server-key.pem
+      -out /etc/autobot/certs/server-cert.pem
+      -subj '/C=US/ST=State/L=City/O=AutoBot/CN=autobot-backend'
+  when: >-
+    not backend_cert_stat.stat.exists
+    or (backend_cert_valid.rc | default(1)) != 0
+  notify: restart backend
+
+- name: Set certificate key permissions
+  ansible.builtin.file:
+    path: /etc/autobot/certs/server-key.pem
+    mode: "0600"
+    owner: root
+    group: root
+  when: not backend_cert_stat.stat.exists or (backend_cert_valid.rc | default(1)) != 0
+
 - name: Deploy backend environment file
   ansible.builtin.template:
     src: backend.env.j2
