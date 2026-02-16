@@ -3,398 +3,335 @@
 // Author: mrveiss
 
 /**
- * Code Intelligence API composable
- * Issue #772 - Code Intelligence & Repository Analysis
+ * Code Intelligence Composable
+ * Issue #899 - Code Intelligence Tools
  */
 
-import { ref } from 'vue'
-import appConfig from '@/config/AppConfig.js'
+import { ref, onMounted } from 'vue'
+import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
-import type {
-  HealthScoreResponse,
-  SecurityScoreResponse,
-  PerformanceScoreResponse,
-  RedisHealthScoreResponse,
-  AntiPatternType,
-  VulnerabilityType,
-  PerformanceIssueType,
-  RedisOptimizationType,
-  ReportResponse,
-  SecurityFinding,
-  PerformanceFinding,
-  RedisOptimizationFinding,
-  SecurityAnalysisResponse,
-  PerformanceAnalysisResponse,
-  RedisAnalysisResponse
-} from '@/types/codeIntelligence'
 
 const logger = createLogger('useCodeIntelligence')
 
-export function useCodeIntelligence() {
-  const loading = ref(false)
+// ===== Type Definitions =====
+
+export interface CodeAnalysisRequest {
+  code: string
+  language?: string
+  filename?: string
+  include_suggestions?: boolean
+}
+
+export interface CodeAnalysisResult {
+  id: string
+  code: string
+  language: string
+  filename?: string
+  metrics: CodeMetrics
+  quality_score: number
+  issues: CodeIssue[]
+  suggestions: CodeSuggestion[]
+  timestamp: string
+}
+
+export interface CodeMetrics {
+  lines_of_code: number
+  cyclomatic_complexity: number
+  maintainability_index: number
+  code_duplication_percent: number
+  comment_ratio: number
+  function_count: number
+  class_count: number
+}
+
+export interface CodeIssue {
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info'
+  category: 'security' | 'quality' | 'style' | 'performance' | 'documentation'
+  message: string
+  line_number?: number
+  column?: number
+  suggestion?: string
+}
+
+export interface CodeSuggestion {
+  id: string
+  type: 'refactoring' | 'optimization' | 'security' | 'style' | 'documentation'
+  priority: 'high' | 'medium' | 'low'
+  title: string
+  description: string
+  before?: string
+  after?: string
+  impact: string
+}
+
+export interface QualityScore {
+  overall_score: number
+  metrics: {
+    complexity: number
+    maintainability: number
+    documentation: number
+    testing: number
+    security: number
+  }
+  grade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'F'
+  trend: 'improving' | 'stable' | 'declining'
+}
+
+export interface CodeHealthScore {
+  health_score: number
+  total_files: number
+  issues_count: {
+    critical: number
+    high: number
+    medium: number
+    low: number
+  }
+  coverage_percent: number
+  technical_debt_hours: number
+  timestamp: string
+}
+
+export interface AnalysisTrend {
+  date: string
+  quality_score: number
+  health_score: number
+  issues_count: number
+}
+
+export interface ComparisonResult {
+  file1: string
+  file2: string
+  similarity_percent: number
+  differences: {
+    added_lines: number
+    removed_lines: number
+    modified_lines: number
+  }
+  quality_change: number
+}
+
+export interface UseCodeIntelligenceOptions {
+  autoFetch?: boolean
+}
+
+// ===== Composable Implementation =====
+
+export function useCodeIntelligence(options: UseCodeIntelligenceOptions = {}) {
+  const { autoFetch = false } = options
+
+  // State
+  const currentAnalysis = ref<CodeAnalysisResult | null>(null)
+  const analysisHistory = ref<CodeAnalysisResult[]>([])
+  const qualityScore = ref<QualityScore | null>(null)
+  const healthScore = ref<CodeHealthScore | null>(null)
+  const suggestions = ref<CodeSuggestion[]>([])
+  const trends = ref<AnalysisTrend[]>([])
+  const isLoading = ref(false)
   const error = ref<string | null>(null)
 
-  // Health scores
-  const healthScore = ref<HealthScoreResponse | null>(null)
-  const securityScore = ref<SecurityScoreResponse | null>(null)
-  const performanceScore = ref<PerformanceScoreResponse | null>(null)
-  const redisScore = ref<RedisHealthScoreResponse | null>(null)
+  // ===== API Methods =====
 
-  // Type definitions
-  const patternTypes = ref<Record<string, AntiPatternType> | null>(null)
-  const vulnerabilityTypes = ref<VulnerabilityType[] | null>(null)
-  const performanceIssueTypes = ref<PerformanceIssueType[] | null>(null)
-  const redisOptimizationTypes = ref<Record<string, RedisOptimizationType> | null>(null)
-
-  // Detailed findings
-  const securityFindings = ref<SecurityFinding[]>([])
-  const performanceFindings = ref<PerformanceFinding[]>([])
-  const redisFindings = ref<RedisOptimizationFinding[]>([])
-
-  async function getBackendUrl(): Promise<string> {
-    return await appConfig.getServiceUrl('backend')
-  }
-
-  async function fetchHealthScore(path: string): Promise<void> {
-    loading.value = true
+  async function analyzeCode(request: CodeAnalysisRequest): Promise<CodeAnalysisResult | null> {
+    isLoading.value = true
     error.value = null
     try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(
-        `${backendUrl}/api/code-intelligence/health-score?path=${encodeURIComponent(path)}`
-      )
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      healthScore.value = await response.json()
-    } catch (e) {
-      error.value = `Failed to fetch health score: ${e}`
-      logger.error('fetchHealthScore failed:', e)
+      const data = await ApiClient.post('/api/code-intelligence/analyze', request)
+      currentAnalysis.value = data
+      logger.debug('Code analysis complete:', data)
+      return data
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to analyze code'
+      logger.error('Code analysis failed:', err)
+      error.value = message
+      return null
     } finally {
-      loading.value = false
+      isLoading.value = false
     }
   }
 
-  async function fetchSecurityScore(path: string): Promise<void> {
-    loading.value = true
+  async function getAnalysis(analysisId: string): Promise<CodeAnalysisResult | null> {
+    isLoading.value = true
     error.value = null
     try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(
-        `${backendUrl}/api/code-intelligence/security/score?path=${encodeURIComponent(path)}`
-      )
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      securityScore.value = await response.json()
-    } catch (e) {
-      error.value = `Failed to fetch security score: ${e}`
-      logger.error('fetchSecurityScore failed:', e)
+      const data = await ApiClient.get(`/api/code-intelligence/analysis/${analysisId}`)
+      currentAnalysis.value = data
+      logger.debug('Fetched analysis:', data)
+      return data
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch analysis'
+      logger.error('Failed to fetch analysis:', err)
+      error.value = message
+      return null
     } finally {
-      loading.value = false
+      isLoading.value = false
     }
   }
 
-  async function fetchPerformanceScore(path: string): Promise<void> {
-    loading.value = true
+  async function getQualityScore(code: string, language?: string): Promise<QualityScore | null> {
+    isLoading.value = true
     error.value = null
     try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(
-        `${backendUrl}/api/code-intelligence/performance/score?path=${encodeURIComponent(path)}`
-      )
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      performanceScore.value = await response.json()
-    } catch (e) {
-      error.value = `Failed to fetch performance score: ${e}`
-      logger.error('fetchPerformanceScore failed:', e)
+      const data = await ApiClient.post('/api/code-intelligence/quality-score', { code, language })
+      qualityScore.value = data
+      logger.debug('Quality score:', data)
+      return data
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to get quality score'
+      logger.error('Failed to get quality score:', err)
+      error.value = message
+      return null
     } finally {
-      loading.value = false
+      isLoading.value = false
     }
   }
 
-  async function fetchRedisScore(path: string): Promise<void> {
-    loading.value = true
+  async function getSuggestions(code: string, language?: string): Promise<void> {
+    isLoading.value = true
     error.value = null
     try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(
-        `${backendUrl}/api/code-intelligence/redis/health-score?path=${encodeURIComponent(path)}`
-      )
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      redisScore.value = await response.json()
-    } catch (e) {
-      error.value = `Failed to fetch Redis score: ${e}`
-      logger.error('fetchRedisScore failed:', e)
+      const data = await ApiClient.post('/api/code-intelligence/suggestions', { code, language })
+      suggestions.value = data.suggestions || []
+      logger.debug('Fetched suggestions:', suggestions.value)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch suggestions'
+      logger.error('Failed to fetch suggestions:', err)
+      error.value = message
     } finally {
-      loading.value = false
+      isLoading.value = false
     }
   }
 
-  async function fetchSecurityFindings(path: string): Promise<SecurityFinding[]> {
-    loading.value = true
+  async function getHealthScore(): Promise<void> {
+    isLoading.value = true
     error.value = null
     try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/code-intelligence/security/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path })
-      })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data: SecurityAnalysisResponse = await response.json()
-      securityFindings.value = data.findings
-      return data.findings
-    } catch (e) {
-      error.value = `Failed to fetch security findings: ${e}`
-      logger.error('fetchSecurityFindings failed:', e)
+      const data = await ApiClient.get('/api/code-intelligence/health-score')
+      healthScore.value = data
+      logger.debug('Health score:', healthScore.value)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch health score'
+      logger.error('Failed to fetch health score:', err)
+      error.value = message
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function getTrends(days: number = 30): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const data = await ApiClient.get(`/api/code-intelligence/trends?days=${days}`)
+      trends.value = data.trends || []
+      logger.debug('Fetched trends:', trends.value)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch trends'
+      logger.error('Failed to fetch trends:', err)
+      error.value = message
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function compareCode(file1: string, file2: string): Promise<ComparisonResult | null> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const data = await ApiClient.post('/api/code-intelligence/compare', { file1, file2 })
+      logger.debug('Comparison result:', data)
+      return data
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to compare code'
+      logger.error('Failed to compare code:', err)
+      error.value = message
+      return null
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function getAnalysisHistory(limit: number = 50): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const data = await ApiClient.get(`/api/code-intelligence/history?limit=${limit}`)
+      analysisHistory.value = data.analyses || []
+      logger.debug('Fetched analysis history:', analysisHistory.value.length)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch history'
+      logger.error('Failed to fetch history:', err)
+      error.value = message
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function deleteAnalysis(analysisId: string): Promise<boolean> {
+    isLoading.value = true
+    error.value = null
+    try {
+      await ApiClient.delete(`/api/code-intelligence/analysis/${analysisId}`)
+      analysisHistory.value = analysisHistory.value.filter(a => a.id !== analysisId)
+      logger.debug('Deleted analysis:', analysisId)
+      return true
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete analysis'
+      logger.error('Failed to delete analysis:', err)
+      error.value = message
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function batchAnalyze(files: Array<{ code: string; filename: string; language?: string }>): Promise<CodeAnalysisResult[]> {
+    isLoading.value = true
+    error.value = null
+    try {
+      const data = await ApiClient.post('/api/code-intelligence/batch-analyze', { files })
+      logger.debug('Batch analysis complete:', data.results?.length)
+      return data.results || []
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to batch analyze'
+      logger.error('Failed to batch analyze:', err)
+      error.value = message
       return []
     } finally {
-      loading.value = false
+      isLoading.value = false
     }
   }
 
-  async function fetchPerformanceFindings(path: string): Promise<PerformanceFinding[]> {
-    loading.value = true
-    error.value = null
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/code-intelligence/performance/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path })
-      })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data: PerformanceAnalysisResponse = await response.json()
-      performanceFindings.value = data.findings
-      return data.findings
-    } catch (e) {
-      error.value = `Failed to fetch performance findings: ${e}`
-      logger.error('fetchPerformanceFindings failed:', e)
-      return []
-    } finally {
-      loading.value = false
+  // ===== Lifecycle =====
+
+  onMounted(() => {
+    if (autoFetch) {
+      Promise.all([getHealthScore(), getAnalysisHistory()])
     }
-  }
-
-  async function fetchRedisFindings(path: string): Promise<RedisOptimizationFinding[]> {
-    loading.value = true
-    error.value = null
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/code-intelligence/redis/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path })
-      })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data: RedisAnalysisResponse = await response.json()
-      redisFindings.value = data.optimizations
-      return data.optimizations
-    } catch (e) {
-      error.value = `Failed to fetch Redis findings: ${e}`
-      logger.error('fetchRedisFindings failed:', e)
-      return []
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function scanFileSecurity(filePath: string): Promise<SecurityFinding[]> {
-    loading.value = true
-    error.value = null
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/code-intelligence/security/scan-file`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file_path: filePath })
-      })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data: SecurityAnalysisResponse = await response.json()
-      securityFindings.value = data.findings
-      return data.findings
-    } catch (e) {
-      error.value = `Failed to scan file for security issues: ${e}`
-      logger.error('scanFileSecurity failed:', e)
-      return []
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function scanFilePerformance(filePath: string): Promise<PerformanceFinding[]> {
-    loading.value = true
-    error.value = null
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/code-intelligence/performance/scan-file`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file_path: filePath })
-      })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data: PerformanceAnalysisResponse = await response.json()
-      performanceFindings.value = data.findings
-      return data.findings
-    } catch (e) {
-      error.value = `Failed to scan file for performance issues: ${e}`
-      logger.error('scanFilePerformance failed:', e)
-      return []
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function scanFileRedis(filePath: string): Promise<RedisOptimizationFinding[]> {
-    loading.value = true
-    error.value = null
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/code-intelligence/redis/scan-file`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file_path: filePath })
-      })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data: RedisAnalysisResponse = await response.json()
-      redisFindings.value = data.optimizations
-      return data.optimizations
-    } catch (e) {
-      error.value = `Failed to scan file for Redis optimizations: ${e}`
-      logger.error('scanFileRedis failed:', e)
-      return []
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function fetchPatternTypes(): Promise<void> {
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/code-intelligence/pattern-types`)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
-      patternTypes.value = data.pattern_types
-    } catch (e) {
-      logger.error('fetchPatternTypes failed:', e)
-    }
-  }
-
-  async function fetchVulnerabilityTypes(): Promise<void> {
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/code-intelligence/security/vulnerability-types`)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
-      vulnerabilityTypes.value = data.vulnerability_types
-    } catch (e) {
-      logger.error('fetchVulnerabilityTypes failed:', e)
-    }
-  }
-
-  async function fetchPerformanceIssueTypes(): Promise<void> {
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/code-intelligence/performance/issue-types`)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
-      performanceIssueTypes.value = data.issue_types
-    } catch (e) {
-      logger.error('fetchPerformanceIssueTypes failed:', e)
-    }
-  }
-
-  async function fetchRedisOptimizationTypes(): Promise<void> {
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/code-intelligence/redis/optimization-types`)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data = await response.json()
-      redisOptimizationTypes.value = data.optimization_types
-    } catch (e) {
-      logger.error('fetchRedisOptimizationTypes failed:', e)
-    }
-  }
-
-  async function downloadReport(
-    path: string,
-    type: 'security' | 'performance',
-    format: 'json' | 'markdown'
-  ): Promise<void> {
-    try {
-      const backendUrl = await getBackendUrl()
-      const response = await fetch(
-        `${backendUrl}/api/code-intelligence/${type}/report?path=${encodeURIComponent(path)}&format=${format}`
-      )
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const data: ReportResponse = await response.json()
-
-      // Create download
-      const content = format === 'json'
-        ? JSON.stringify(data.report, null, 2)
-        : data.report as string
-      const blob = new Blob([content], {
-        type: format === 'json' ? 'application/json' : 'text/markdown'
-      })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${type}-report-${new Date().toISOString().split('T')[0]}.${format === 'json' ? 'json' : 'md'}`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      error.value = `Failed to download report: ${e}`
-      logger.error('downloadReport failed:', e)
-    }
-  }
-
-  async function fetchAllScores(path: string): Promise<void> {
-    await Promise.all([
-      fetchHealthScore(path),
-      fetchSecurityScore(path),
-      fetchPerformanceScore(path),
-      fetchRedisScore(path)
-    ])
-  }
-
-  async function fetchAllTypes(): Promise<void> {
-    await Promise.all([
-      fetchPatternTypes(),
-      fetchVulnerabilityTypes(),
-      fetchPerformanceIssueTypes(),
-      fetchRedisOptimizationTypes()
-    ])
-  }
+  })
 
   return {
     // State
-    loading,
-    error,
+    currentAnalysis,
+    analysisHistory,
+    qualityScore,
     healthScore,
-    securityScore,
-    performanceScore,
-    redisScore,
-    patternTypes,
-    vulnerabilityTypes,
-    performanceIssueTypes,
-    redisOptimizationTypes,
-    securityFindings,
-    performanceFindings,
-    redisFindings,
-    // Actions
-    fetchHealthScore,
-    fetchSecurityScore,
-    fetchPerformanceScore,
-    fetchRedisScore,
-    fetchSecurityFindings,
-    fetchPerformanceFindings,
-    fetchRedisFindings,
-    scanFileSecurity,
-    scanFilePerformance,
-    scanFileRedis,
-    fetchPatternTypes,
-    fetchVulnerabilityTypes,
-    fetchPerformanceIssueTypes,
-    fetchRedisOptimizationTypes,
-    fetchAllScores,
-    fetchAllTypes,
-    downloadReport
+    suggestions,
+    trends,
+    isLoading,
+    error,
+
+    // Methods
+    analyzeCode,
+    getAnalysis,
+    getQualityScore,
+    getSuggestions,
+    getHealthScore,
+    getTrends,
+    compareCode,
+    getAnalysisHistory,
+    deleteAnalysis,
+    batchAnalyze,
   }
 }
+
+export default useCodeIntelligence

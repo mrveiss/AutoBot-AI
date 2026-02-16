@@ -384,6 +384,18 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
+  // Issue #899: Code Intelligence Tools
+  {
+    path: '/code-intelligence',
+    name: 'code-intelligence',
+    component: () => import('@/views/CodeIntelligenceView.vue'),
+    meta: {
+      title: 'Code Intelligence',
+      icon: 'fas fa-code',
+      description: 'Code analysis, quality monitoring, and suggestions',
+      requiresAuth: true
+    }
+  },
   // Issue #729: Infrastructure routes redirected to slm-admin
   // These routes are kept as redirects for backwards compatibility
   {
