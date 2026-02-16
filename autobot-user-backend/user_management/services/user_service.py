@@ -235,7 +235,7 @@ class UserService(BaseService):
         """
         query = (
             select(User)
-            .options(selectinload(User.roles).selectinload(UserRole.role))
+            .options(selectinload(User.user_roles).selectinload(UserRole.role))
             .where(User.id == user_id)
             .where(User.deleted_at.is_(None))
         )
@@ -256,7 +256,7 @@ class UserService(BaseService):
         """
         query = (
             select(User)
-            .options(selectinload(User.roles).selectinload(UserRole.role))
+            .options(selectinload(User.user_roles).selectinload(UserRole.role))
             .where(func.lower(User.email) == email.lower())
             .where(User.deleted_at.is_(None))
         )
@@ -277,7 +277,7 @@ class UserService(BaseService):
         """
         query = (
             select(User)
-            .options(selectinload(User.roles).selectinload(UserRole.role))
+            .options(selectinload(User.user_roles).selectinload(UserRole.role))
             .where(func.lower(User.username) == username.lower())
             .where(User.deleted_at.is_(None))
         )
