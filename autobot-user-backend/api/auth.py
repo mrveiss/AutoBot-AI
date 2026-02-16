@@ -180,21 +180,33 @@ async def login(request: Request, login_data: LoginRequest):
     try:
         ip_address = request.client.host if request.client else "unknown"
 
-        # Authenticate user
-        user_data = auth_middleware.authenticate_user(
-            username=login_data.username,
-            password=login_data.password,
-            ip_address=ip_address,
-        )
+        # Authenticate user against PostgreSQL database (Issue #888)
+        async with db_session_context() as session:
+            user_service = UserService(session)
+            user = await user_service.authenticate(
+                username_or_email=login_data.username,
+                password=login_data.password,
+                ip_address=ip_address,
+            )
 
-        if not user_data:
-            # Generic error message to prevent username enumeration
-            raise HTTPException(status_code=401, detail="Invalid username or password")
+            if not user:
+                # Generic error message to prevent username enumeration
+                raise HTTPException(
+                    status_code=401, detail="Invalid username or password"
+                )
 
-        # Issue #684: Enrich with org hierarchy from PostgreSQL
-        user_data = await _enrich_user_with_org_context(user_data)
+            # Build user data dict for JWT token
+            user_data = {
+                "username": user.username,
+                "user_id": str(user.id),
+                "role": "admin" if user.is_superuser else "user",
+                "email": user.email,
+                "last_login": user.updated_at.isoformat() if user.updated_at else None,
+            }
+            if user.org_id:
+                user_data["org_id"] = str(user.org_id)
 
-        # Create JWT token (now includes user_id/org_id if available)
+        # Create JWT token
         jwt_token = auth_middleware.create_jwt_token(user_data)
 
         # Create session
