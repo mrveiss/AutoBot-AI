@@ -384,6 +384,19 @@ const routes: RouteRecordRaw[] = [
       requiresAuth: true
     }
   },
+  // Issue #901: Component Showcase - Technical Precision Design System
+  {
+    path: '/components',
+    name: 'components',
+    component: () => import('@/views/ComponentShowcaseView.vue'),
+    meta: {
+      title: 'Component Showcase',
+      icon: 'fas fa-palette',
+      description: 'Technical Precision component library',
+      hideInNav: false, // Set to true to hide from navigation
+      requiresAuth: false
+    }
+  },
   // Issue #897: LLM Configuration Panel
   {
     path: '/llm-config',
