@@ -22,6 +22,41 @@ security:
       src: "172.16.168.0/24"
       comment: "Playwright Debug"
 
+  # VNC security
+  vnc_security:
+    # Authentication
+    password_required: true
+    password_length: 8
+
+    # Access control
+    allowed_hosts:
+      - "172.16.168.0/24"
+
+    # Encryption (if supported)
+    encryption_enabled: false  # TightVNC doesn't support encryption
+
+  # Browser security
+  browser_security:
+    # Sandbox configuration
+    sandbox_enabled: true
+
+    # Content security
+    block_malicious_sites: true
+    disable_plugins: true
+    disable_extensions: true
+
+    # Download security
+    scan_downloads: false  # Can be enabled with antivirus
+    quarantine_suspicious: true
+
+  # Network security
+  network_security:
+    # Proxy configuration (if needed)
+    proxy_enabled: false
+
+    # DNS filtering
+    dns_filtering: false
+
 # ==========================================
 # DESKTOP ENVIRONMENT CONFIGURATION
 # ==========================================
@@ -401,44 +436,8 @@ monitoring:
     - "navigation_success_rate"
 
 # ==========================================
-# SECURITY CONFIGURATION
+# BACKUP CONFIGURATION (continued after security section)
 # ==========================================
-
-security:
-  # VNC security
-  vnc_security:
-    # Authentication
-    password_required: true
-    password_length: 8
-
-    # Access control
-    allowed_hosts:
-      - "172.16.168.0/24"
-
-    # Encryption (if supported)
-    encryption_enabled: false  # TightVNC doesn't support encryption
-
-  # Browser security
-  browser_security:
-    # Sandbox configuration
-    sandbox_enabled: true
-
-    # Content security
-    block_malicious_sites: true
-    disable_plugins: true
-    disable_extensions: true
-
-    # Download security
-    scan_downloads: false  # Can be enabled with antivirus
-    quarantine_suspicious: true
-
-  # Network security
-  network_security:
-    # Proxy configuration (if needed)
-    proxy_enabled: false
-
-    # DNS filtering
-    dns_filtering: false
 
 # ==========================================
 # BACKUP CONFIGURATION
