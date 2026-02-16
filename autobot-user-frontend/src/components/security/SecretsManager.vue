@@ -310,27 +310,72 @@
             </div>
           </div>
 
-          <div class="form-row">
+          <!-- Issue #685: Hierarchical Access Controls -->
+          <div class="form-row two-col">
             <div class="form-group">
-              <label>Scope <span class="required">*</span></label>
-              <div class="scope-selector">
-                <label class="scope-option" :class="{ active: secretForm.scope === 'general' }">
-                  <input type="radio" v-model="secretForm.scope" value="general" />
-                  <i class="fas fa-globe"></i>
-                  <div>
-                    <span>General</span>
-                    <small>Available across all conversations</small>
-                  </div>
-                </label>
-                <label class="scope-option" :class="{ active: secretForm.scope === 'chat' }">
-                  <input type="radio" v-model="secretForm.scope" value="chat" />
-                  <i class="fas fa-comments"></i>
-                  <div>
-                    <span>Chat-scoped</span>
-                    <small>Only in current conversation</small>
-                  </div>
-                </label>
-              </div>
+              <label for="secret-scope">Legacy Scope <span class="required">*</span></label>
+              <select id="secret-scope" v-model="secretForm.scope" class="form-input">
+                <option value="general">General</option>
+                <option value="chat">Chat-scoped</option>
+                <option value="user">User</option>
+                <option value="session">Session</option>
+                <option value="shared">Shared</option>
+              </select>
+              <small class="input-hint">Original scope field (maintained for backward compatibility)</small>
+            </div>
+            <div class="form-group">
+              <label for="secret-visibility">Visibility <span class="required">*</span></label>
+              <select id="secret-visibility" v-model="secretForm.visibility" class="form-input">
+                <option value="private">Private (only me)</option>
+                <option value="shared">Shared (specific users)</option>
+                <option value="group">Group (team members)</option>
+                <option value="organization">Organization (all org members)</option>
+                <option value="system">System (all authenticated users)</option>
+              </select>
+              <small class="input-hint">Who can access this credential</small>
+            </div>
+          </div>
+
+          <!-- Conditional Organization/Team Fields -->
+          <div class="form-row two-col" v-if="secretForm.visibility === 'organization' || secretForm.visibility === 'group'">
+            <div class="form-group" v-if="secretForm.visibility === 'organization'">
+              <label for="secret-org-id">Organization ID</label>
+              <input
+                id="secret-org-id"
+                type="text"
+                v-model="secretForm.org_id"
+                placeholder="org-uuid-here"
+                class="form-input"
+              />
+              <small class="input-hint">Organization UUID for org-level access</small>
+            </div>
+            <div class="form-group" v-if="secretForm.visibility === 'group'">
+              <label for="secret-team-ids">Team IDs</label>
+              <input
+                id="secret-team-ids"
+                type="text"
+                v-model="teamIdsInput"
+                placeholder="team-id-1, team-id-2"
+                class="form-input"
+                @input="updateTeamIds"
+              />
+              <small class="input-hint">Comma-separated team IDs</small>
+            </div>
+          </div>
+
+          <!-- Shared With Field (for visibility=shared) -->
+          <div class="form-row" v-if="secretForm.visibility === 'shared'">
+            <div class="form-group">
+              <label for="secret-shared-with">Share With Users</label>
+              <input
+                id="secret-shared-with"
+                type="text"
+                v-model="sharedWithInput"
+                placeholder="user-id-1, user-id-2"
+                class="form-input"
+                @input="updateSharedWith"
+              />
+              <small class="input-hint">Comma-separated user IDs to share with</small>
             </div>
           </div>
 
@@ -812,6 +857,12 @@ const secretForm = reactive({
   description: '',
   expires_at: '',
   tags: [] as string[],
+  // Issue #685: Hierarchical access fields
+  visibility: 'private',
+  owner_id: '',
+  org_id: '',
+  team_ids: [] as string[],
+  shared_with: [] as string[],
   // Infrastructure host specific fields
   host: '',
   ssh_port: 22,
@@ -826,6 +877,8 @@ const secretForm = reactive({
   purpose: ''
 });
 const tagsInput = ref('');
+const teamIdsInput = ref('');
+const sharedWithInput = ref('');
 const viewingSecret = ref<any>(null);
 const transferringSecret = ref<any>(null);
 const deletingSecret = ref<any>(null);
@@ -1129,6 +1182,15 @@ const editSecret = (secret: any) => {
   secretForm.tags = [...(secret.tags || [])];
   tagsInput.value = secretForm.tags.join(', ');
 
+  // Issue #685: Populate hierarchical access fields
+  secretForm.visibility = secret.visibility || 'private';
+  secretForm.owner_id = secret.owner_id || '';
+  secretForm.org_id = secret.org_id || '';
+  secretForm.team_ids = [...(secret.team_ids || [])];
+  secretForm.shared_with = [...(secret.shared_with || [])];
+  teamIdsInput.value = secretForm.team_ids.join(', ');
+  sharedWithInput.value = secretForm.shared_with.join(', ');
+
   // Populate infrastructure host specific fields from metadata
   if (secret.type === 'infrastructure_host' && secret.metadata) {
     const meta = secret.metadata;
@@ -1218,7 +1280,13 @@ const saveSecret = async () => {
       chat_id: secretForm.scope === 'chat' ? (secretForm.chat_id || appStore.currentSessionId) : null,
       description: secretForm.description,
       expires_at: secretForm.expires_at ? new Date(secretForm.expires_at).toISOString() : null,
-      tags: secretForm.tags
+      tags: secretForm.tags,
+      // Issue #685: Hierarchical access fields
+      visibility: secretForm.visibility,
+      owner_id: secretForm.owner_id || null,
+      org_id: secretForm.org_id || null,
+      team_ids: secretForm.team_ids.length > 0 ? secretForm.team_ids : [],
+      shared_with: secretForm.shared_with.length > 0 ? secretForm.shared_with : []
     };
 
     // Handle infrastructure_host type - store host info in metadata, credential in value
@@ -1292,6 +1360,12 @@ const resetForm = () => {
     description: '',
     expires_at: '',
     tags: [],
+    // Issue #685: Hierarchical access fields
+    visibility: 'private',
+    owner_id: '',
+    org_id: '',
+    team_ids: [],
+    shared_with: [],
     // Infrastructure host specific fields
     host: '',
     ssh_port: 22,
@@ -1306,6 +1380,8 @@ const resetForm = () => {
     purpose: ''
   });
   tagsInput.value = '';
+  teamIdsInput.value = '';
+  sharedWithInput.value = '';
   showValue.value = false;
 };
 
@@ -1314,6 +1390,20 @@ const updateTags = () => {
     .split(',')
     .map(tag => tag.trim())
     .filter(tag => tag.length > 0);
+};
+
+const updateTeamIds = () => {
+  secretForm.team_ids = teamIdsInput.value
+    .split(',')
+    .map(id => id.trim())
+    .filter(id => id.length > 0);
+};
+
+const updateSharedWith = () => {
+  secretForm.shared_with = sharedWithInput.value
+    .split(',')
+    .map(id => id.trim())
+    .filter(id => id.length > 0);
 };
 
 const toggleValueVisibility = () => {
