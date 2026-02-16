@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy.pool import QueuePool
+from sqlalchemy.pool import NullPool
 
 from backend.user_management.config import get_deployment_config
 
@@ -52,11 +52,7 @@ def get_async_engine() -> AsyncEngine:
 
     _async_engine = create_async_engine(
         config.postgres_url,
-        poolclass=QueuePool,
-        pool_size=20,  # Match Redis pool size
-        max_overflow=10,
-        pool_pre_ping=True,  # Health check on checkout
-        pool_recycle=3600,  # Recycle connections after 1 hour
+        poolclass=NullPool,  # Use NullPool for async engines (Issue #888)
         echo=False,  # Set to True for SQL debugging
         future=True,
     )
