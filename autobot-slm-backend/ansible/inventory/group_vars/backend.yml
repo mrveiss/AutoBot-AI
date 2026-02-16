@@ -34,6 +34,21 @@ security:
     # Redis connection (outbound, stateful firewall handles return)
     # PostgreSQL connection (outbound, stateful firewall handles return)
 
+  # API security
+  api:
+    rate_limiting: true
+    cors_enabled: true
+    cors_origins:
+      - "http://172.16.168.21"  # Frontend VM
+      - "http://autobot.internal"
+
+  # File permissions
+  file_permissions:
+    app_files: "644"
+    config_files: "600"
+    log_files: "644"
+    data_files: "600"
+
 # ==========================================
 # BACKEND SERVICE CONFIGURATION
 # ==========================================
@@ -313,24 +328,8 @@ ufw_rules:
     comment: "WebSocket connections"
 
 # ==========================================
-# SECURITY CONFIGURATION
+# BACKUP CONFIGURATION (continued after security section)
 # ==========================================
-
-security:
-  # API security
-  api:
-    rate_limiting: true
-    cors_enabled: true
-    cors_origins:
-      - "http://172.16.168.21"  # Frontend VM
-      - "http://autobot.internal"
-
-  # File permissions
-  file_permissions:
-    app_files: "644"
-    config_files: "600"
-    log_files: "644"
-    data_files: "600"
 
 # ==========================================
 # BACKUP CONFIGURATION
