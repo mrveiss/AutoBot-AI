@@ -229,12 +229,13 @@ const formatCell = (value: any, column: Column) => {
 <style scoped>
 /**
  * Issue #704: CSS Design System - Using design tokens
+ * Issue #901: Technical Precision Design
  * All colors reference CSS custom properties from design-tokens.css
  */
 
 .data-table-container {
   background: var(--bg-card);
-  border-radius: var(--radius-lg);
+  border-radius: 4px;
   border: 1px solid var(--border-default);
   overflow: hidden;
 }
@@ -338,14 +339,17 @@ const formatCell = (value: any, column: Column) => {
   border-top: 1px solid var(--border-default);
 }
 
+/* Issue #901: Technical Precision pagination buttons */
 .pagination-btn {
   padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
   background: var(--bg-card);
-  border-radius: var(--radius-md);
+  border-radius: 2px;
   color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
   cursor: pointer;
-  transition: all var(--duration-200);
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .pagination-btn:hover:not(:disabled) {
@@ -358,8 +362,11 @@ const formatCell = (value: any, column: Column) => {
   cursor: not-allowed;
 }
 
+/* Issue #901: Monospace for page numbers */
 .pagination-info {
-  font-size: var(--text-sm);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
 }
 </style>
