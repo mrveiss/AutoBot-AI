@@ -1,5 +1,5 @@
 <template>
-  <div class="z-10 flex border-b border-gray-200 bg-white flex-shrink-0 overflow-x-auto">
+  <div class="z-10 flex border-b border-autobot-border bg-autobot-bg-card flex-shrink-0 overflow-x-auto">
     <button
       v-for="tab in tabs"
       :key="tab.key"
@@ -7,8 +7,8 @@
       :class="[
         'px-6 py-3 text-sm font-medium transition-colors whitespace-nowrap',
         activeTab === tab.key
-          ? 'border-b-2 border-indigo-500 text-indigo-600 bg-indigo-50'
-          : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+          ? 'border-b-2 border-electric-500 text-electric-600 bg-electric-50'
+          : 'text-autobot-text-secondary hover:text-autobot-text-primary hover:bg-autobot-bg-secondary'
       ]"
     >
       <i :class="`${tab.icon} mr-2`"></i>

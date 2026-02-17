@@ -1,5 +1,5 @@
 <template>
-  <div id="app" class="h-screen bg-gray-100 flex flex-col overflow-hidden">
+  <div id="app" class="h-screen bg-autobot-bg-primary flex flex-col overflow-hidden">
     <!-- Skip Navigation Links -->
     <div v-if="!isLoginPage" class="skip-links">
       <a href="#main-content" class="skip-link sr-only-focusable">Skip to main content</a>
@@ -373,23 +373,23 @@
         @click="showSystemStatus = false"
       >
         <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-          <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+          <div class="fixed inset-0 bg-black bg-opacity-75 transition-opacity"></div>
 
           <div
             @click.stop
-            class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6"
+            class="relative transform overflow-hidden rounded-lg bg-autobot-bg-card px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6"
           >
             <!-- Header -->
-            <div class="flex items-center justify-between border-b border-gray-200 pb-3 mb-4">
-              <h3 class="text-lg font-medium text-gray-900 flex items-center">
-                <div class="w-6 h-6 bg-indigo-600 rounded flex items-center justify-center mr-2">
+            <div class="flex items-center justify-between border-b border-autobot-border pb-3 mb-4">
+              <h3 class="text-lg font-medium text-autobot-text-primary flex items-center">
+                <div class="w-6 h-6 bg-electric-600 rounded flex items-center justify-center mr-2">
                   <span class="text-white text-xs font-bold">AB</span>
                 </div>
                 AutoBot System Status
               </h3>
               <button
                 @click="showSystemStatus = false"
-                class="rounded-md text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                class="rounded-md text-autobot-text-muted hover:text-autobot-text-primary focus:outline-none focus:ring-2 focus:ring-electric-500"
               >
                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -401,9 +401,9 @@
             <div class="mb-4">
               <div
                 :class="{
-                  'bg-green-50 border-green-200': systemStatus.isHealthy && !systemStatus.hasIssues,
-                  'bg-yellow-50 border-yellow-200': !systemStatus.isHealthy && !systemStatus.hasIssues,
-                  'bg-red-50 border-red-200': systemStatus.hasIssues
+                  'bg-green-900 bg-opacity-20 border-green-700': systemStatus.isHealthy && !systemStatus.hasIssues,
+                  'bg-yellow-900 bg-opacity-20 border-yellow-700': !systemStatus.isHealthy && !systemStatus.hasIssues,
+                  'bg-red-900 bg-opacity-20 border-red-700': systemStatus.hasIssues
                 }"
                 class="rounded-lg border p-3 flex items-center"
               >
@@ -417,15 +417,15 @@
                   class="w-3 h-3 rounded-full mr-3"
                 ></div>
                 <div>
-                  <p class="font-medium text-gray-900">{{ getSystemStatusText() }}</p>
-                  <p class="text-sm text-gray-600">{{ getSystemStatusDescription() }}</p>
+                  <p class="font-medium text-autobot-text-primary">{{ getSystemStatusText() }}</p>
+                  <p class="text-sm text-autobot-text-secondary">{{ getSystemStatusDescription() }}</p>
                 </div>
               </div>
             </div>
 
             <!-- Services Status -->
             <div class="space-y-3">
-              <h4 class="font-medium text-gray-900">Services</h4>
+              <h4 class="font-medium text-autobot-text-primary">Services</h4>
               <div class="space-y-2">
                 <div
                   v-for="service in systemServices"
@@ -461,7 +461,7 @@
             <div class="mt-6 flex justify-between">
               <button
                 @click="refreshSystemStatus"
-                class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                class="inline-flex items-center px-3 py-2 border border-autobot-border shadow-sm text-sm leading-4 font-medium rounded-md text-autobot-text-primary bg-autobot-bg-secondary hover:bg-autobot-bg-tertiary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-electric-500"
               >
                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -470,7 +470,7 @@
               </button>
               <button
                 @click="showSystemStatus = false"
-                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-electric-600 hover:bg-electric-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-electric-500"
               >
                 Close
               </button>

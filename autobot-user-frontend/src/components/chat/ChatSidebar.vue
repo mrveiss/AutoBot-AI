@@ -53,10 +53,10 @@
             :class="[
               selectionMode ? 'cursor-default' : 'cursor-pointer',
               store.currentSessionId === session.id && !selectionMode
-                ? 'bg-indigo-100 border border-indigo-200'
+                ? 'bg-electric-100 border border-electric-200'
                 : selectedSessions.has(session.id)
                 ? 'bg-red-50 border border-red-200'
-                : 'bg-white hover:bg-blueGray-50 border border-blueGray-200'
+                : 'bg-autobot-bg-card hover:bg-autobot-bg-secondary border border-autobot-border'
             ]"
             :tabindex="index === focusedIndex ? 0 : -1"
             :aria-selected="index === focusedIndex"
@@ -71,7 +71,7 @@
                 type="checkbox"
                 :checked="selectedSessions.has(session.id)"
                 @click.stop="toggleSelection(session.id)"
-                class="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                class="w-4 h-4 rounded border-autobot-border text-red-600 focus:ring-red-500"
               />
             </div>
 
@@ -199,7 +199,7 @@
               type="checkbox"
               :checked="getSetting(setting.key as keyof DisplaySettings)"
               @change="toggleSetting(setting.key as keyof DisplaySettings, ($event.target as HTMLInputElement)?.checked)"
-              class="mr-2 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              class="mr-2 rounded border-autobot-border text-electric-600 focus:ring-electric-500"
             />
             <span class="text-xs text-blueGray-600">{{ setting.label }}</span>
           </label>
@@ -261,7 +261,7 @@
     <input
       v-model="editingName"
       type="text"
-      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      class="w-full px-3 py-2 border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-electric-500"
       placeholder="Enter chat name..."
       @keyup.enter="saveSessionName"
       @keyup.escape="cancelEdit"

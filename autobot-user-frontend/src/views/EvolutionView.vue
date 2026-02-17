@@ -262,7 +262,7 @@
 
     <!-- Empty State -->
     <div v-if="!evolution.loading.value && !evolution.hasAnalysisResult.value" class="empty-state">
-      <i class="fas fa-chart-line fa-3x text-gray-400"></i>
+      <i class="fas fa-chart-line fa-3x text-autobot-text-muted"></i>
       <h3 class="empty-title">No Evolution Data</h3>
       <p class="empty-text">
         Click "Analyze Repository" to start analyzing git history and track code evolution

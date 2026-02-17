@@ -11,6 +11,6 @@ import DesktopInterface from '@/components/desktop/DesktopInterface.vue'
 <style scoped>
 /* View-specific styles - layout provided by .view-container-full (Issue #548) */
 .desktop-view {
-  @apply bg-gray-50;
+  @apply bg-autobot-bg-secondary;
 }
 </style>

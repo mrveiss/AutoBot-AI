@@ -1,15 +1,15 @@
 <template>
-  <div class="chat-header bg-white border-b border-gray-200 px-6 py-4">
+  <div class="chat-header bg-autobot-bg-card border-b border-autobot-border px-6 py-4">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center">
+        <div class="w-8 h-8 bg-electric-600 rounded-full flex items-center justify-center">
           <i class="fas fa-robot text-white text-sm"></i>
         </div>
         <div>
-          <h1 class="text-lg font-semibold text-gray-900">
+          <h1 class="text-lg font-semibold text-autobot-text-primary">
             {{ currentSessionTitle }}
           </h1>
-          <p class="text-sm text-gray-500">
+          <p class="text-sm text-autobot-text-muted">
             {{ sessionInfo }}
           </p>
         </div>
@@ -87,10 +87,10 @@ const connectionStatusIcon = computed(() => {
 }
 
 .header-btn {
-  @apply w-8 h-8 flex items-center justify-center rounded-md transition-colors text-gray-600 hover:bg-gray-100;
+  @apply w-8 h-8 flex items-center justify-center rounded-md transition-colors text-autobot-text-secondary hover:bg-autobot-bg-tertiary;
 }
 
 .connection-status {
-  @apply flex items-center gap-2 px-3 py-1.5 rounded-md bg-gray-100;
+  @apply flex items-center gap-2 px-3 py-1.5 rounded-md bg-autobot-bg-tertiary;
 }
 </style>

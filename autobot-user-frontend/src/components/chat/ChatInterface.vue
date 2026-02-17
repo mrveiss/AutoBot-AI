@@ -1,6 +1,6 @@
 <template>
   <ErrorBoundary fallback="Chat interface failed to load. Please refresh the page.">
-    <div class="chat-interface flex h-full bg-white overflow-hidden">
+    <div class="chat-interface flex h-full bg-autobot-bg-card overflow-hidden">
 
       <!-- Chat Sidebar with Unified Loading -->
       <UnifiedLoadingView
@@ -35,7 +35,7 @@
               v-if="store.currentSessionId"
               @click="toggleFilePanel"
               class="header-btn"
-              :class="{ 'bg-indigo-100 text-indigo-600': showFilePanel }"
+              :class="{ 'bg-electric-100 text-electric-600': showFilePanel }"
               title="Toggle file panel"
             >
               <i class="fas fa-paperclip"></i>
@@ -806,6 +806,6 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
 
 /* Header button styling for file panel toggle */
 .header-btn {
-  @apply w-8 h-8 flex items-center justify-center rounded-md transition-colors text-gray-600 hover:bg-gray-100;
+  @apply w-8 h-8 flex items-center justify-center rounded-md transition-colors text-autobot-text-secondary hover:bg-autobot-bg-tertiary;
 }
 </style>

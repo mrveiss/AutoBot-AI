@@ -36,7 +36,7 @@
     <!-- Attached Files Display -->
     <div v-if="attachedFiles.length > 0" class="attached-files mb-4">
       <div class="attached-files-header">
-        <h4 class="text-sm font-medium text-gray-700">
+        <h4 class="text-sm font-medium text-autobot-text-secondary">
           <i class="fas fa-paperclip mr-1" aria-hidden="true"></i>
           {{ attachedFiles.length }} file{{ attachedFiles.length > 1 ? 's' : '' }} attached
         </h4>

@@ -472,14 +472,14 @@
   >
     <textarea
       v-model="editingContent"
-      class="flex-1 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+      class="flex-1 w-full px-3 py-2 border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-electric-500 resize-none"
       placeholder="Enter your message..."
       @keydown.ctrl.enter="saveEditedMessage"
       @keydown.meta.enter="saveEditedMessage"
       ref="editTextarea"
       rows="6"
     ></textarea>
-    <div class="text-xs text-gray-500 mt-2">
+    <div class="text-xs text-autobot-text-muted mt-2">
       Press Ctrl+Enter (Cmd+Enter on Mac) to save
     </div>
 
