@@ -365,6 +365,16 @@ async def _sync_slm_from_code_source(db: AsyncSession, node_id: str) -> None:
             all_ok = False
 
     if all_ok:
+        # Mark SLM node as up-to-date in DB before restarting (session closes on restart)
+        try:
+            slm_result = await db.execute(select(Node).where(Node.node_id == node_id))
+            slm_node = slm_result.scalar_one_or_none()
+            if slm_node:
+                slm_node.code_version = source.last_known_commit or ""
+                slm_node.code_status = CodeStatus.UP_TO_DATE.value
+                await db.commit()
+        except Exception as db_err:
+            logger.warning("SLM self-sync: could not update node status: %s", db_err)
         await _restart_slm_service("autobot-slm-backend")
         await _restart_slm_service("nginx")
         logger.info("SLM self-sync complete and services restarted")
