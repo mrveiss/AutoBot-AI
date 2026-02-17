@@ -81,7 +81,19 @@ export default class ServiceDiscovery {
    * Internal URL resolution logic using SSOT config
    */
   async _resolveServiceUrl(serviceName, options = {}) {
-    // First try SSOT helper function for known services
+    // For backend service, check proxy mode FIRST before any SSOT/env lookup (#919)
+    // When VITE_API_BASE_URL is not set, all API calls go through nginx proxy (relative URLs)
+    if (serviceName === 'backend') {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+      if (!apiBaseUrl) {
+        this.log('Backend service using proxy mode (empty URL) - requests via nginx at .21');
+        return '';
+      }
+      this.log(`Using VITE_API_BASE_URL for backend:`, apiBaseUrl);
+      return apiBaseUrl;
+    }
+
+    // Try SSOT helper function for non-backend services
     const ssotUrl = ssotGetServiceUrl(serviceName);
     if (ssotUrl) {
       this.log(`Using SSOT URL for ${serviceName}:`, ssotUrl);
@@ -101,17 +113,6 @@ export default class ServiceDiscovery {
     if (envUrl) {
       this.log(`Using environment variable ${serviceConfig.envVar}:`, envUrl);
       return envUrl;
-    }
-
-    // CRITICAL FIX: For backend service, check if we should use proxy mode
-    if (serviceName === 'backend') {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
-
-      // If VITE_API_BASE_URL is empty, use proxy mode (Vite dev server will proxy /api requests)
-      if (!apiBaseUrl) {
-        this.log('Backend service using proxy mode (empty URL) - requests will go through Vite proxy');
-        return '';
-      }
     }
 
     // Build URL from SSOT config values

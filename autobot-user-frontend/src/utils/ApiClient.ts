@@ -1,5 +1,4 @@
 import appConfig from '@/config/AppConfig.js';
-import { NetworkConstants } from '@/constants/network';
 import { createLogger } from '@/utils/debugUtils';
 
 // Create scoped logger for ApiClient
@@ -118,7 +117,7 @@ export class ApiClient {
     try {
       this.baseUrl = await appConfig.getApiUrl('');
     } catch (_error) {
-      logger.warn('AppConfig initialization failed, using NetworkConstants fallback');
+      logger.warn('AppConfig initialization failed, using proxy mode fallback');
       this.baseUrl = this._detectBaseUrl();
     }
   }
@@ -138,7 +137,8 @@ export class ApiClient {
       return `${protocol}://${backendHost}:${backendPort}`;
     }
 
-    return `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`;
+    // Default to proxy mode (empty = relative URLs via nginx) (#919)
+    return '';
   }
 
   private async ensureBaseUrl(): Promise<string> {

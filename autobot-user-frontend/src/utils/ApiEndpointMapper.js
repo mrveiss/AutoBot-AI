@@ -3,7 +3,6 @@
  * Provides graceful fallback handling and caching for API endpoint calls
  */
 
-import { NetworkConstants } from '@/constants/network';
 import { createLogger } from '@/utils/debugUtils';
 
 // Create scoped logger for ApiEndpointMapper
@@ -13,8 +12,9 @@ class ApiEndpointMapper {
   constructor() {
     this.cache = new Map()
     this.fallbackData = new Map()
-    // Use NetworkConstants instead of hardcoded IP
-    this.baseUrl = import.meta.env.VITE_API_BASE_URL || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`
+    // Use proxy mode (empty base URL) so requests go through nginx (#919)
+    // VITE_API_BASE_URL can override if direct backend access is needed
+    this.baseUrl = import.meta.env.VITE_API_BASE_URL || ''
   }
 
   /**
