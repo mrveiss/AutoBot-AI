@@ -1,8 +1,8 @@
 <template>
   <div class="host-selector">
     <div class="selector-label">
-      <i class="fas fa-server text-gray-600 mr-2"></i>
-      <span class="text-sm font-medium text-gray-700">Host:</span>
+      <i class="fas fa-server text-autobot-text-secondary mr-2"></i>
+      <span class="text-sm font-medium text-autobot-text-primary">Host:</span>
     </div>
     <select
       v-model="selectedHostId"
@@ -33,7 +33,7 @@
     </select>
     <div v-if="showDescription && selectedHostConfig" class="host-description">
       <i class="fas fa-info-circle text-blue-500 mr-1"></i>
-      <span class="text-xs text-gray-600">{{ selectedHostConfig.description }}</span>
+      <span class="text-xs text-autobot-text-secondary">{{ selectedHostConfig.description }}</span>
     </div>
   </div>
 </template>
@@ -177,50 +177,29 @@ onMounted(() => {
 }
 
 .selector-label {
-  @apply flex items-center text-sm font-medium text-gray-700;
+  @apply flex items-center text-sm font-medium text-autobot-text-primary;
 }
 
 .host-select {
-  @apply w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm;
+  @apply w-full px-3 py-2 border border-autobot-border rounded-lg shadow-sm;
   @apply focus:ring-2 focus:ring-blue-500 focus:border-blue-500;
-  @apply bg-white text-gray-900;
+  @apply bg-autobot-bg-card text-autobot-text-primary;
   @apply transition-colors duration-200;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 0.875rem;
 }
 
 .host-select:disabled {
-  @apply bg-gray-100 text-gray-500 cursor-not-allowed;
+  @apply bg-autobot-bg-tertiary text-autobot-text-muted cursor-not-allowed;
 }
 
 .host-select:hover:not(:disabled) {
-  @apply border-gray-400;
+  @apply border-autobot-border;
 }
 
 .host-description {
-  @apply flex items-center text-xs text-gray-600 px-2;
+  @apply flex items-center text-xs text-autobot-text-secondary px-2;
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .selector-label {
-    @apply text-gray-300;
-  }
 
-  .host-select {
-    @apply bg-gray-800 text-gray-200 border-gray-600;
-  }
-
-  .host-select:hover:not(:disabled) {
-    @apply border-gray-500;
-  }
-
-  .host-select:disabled {
-    @apply bg-gray-900 text-gray-600;
-  }
-
-  .host-description {
-    @apply text-gray-400;
-  }
-}
 </style>

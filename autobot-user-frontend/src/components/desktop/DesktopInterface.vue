@@ -208,19 +208,19 @@ const loadVncUrl = async () => {
 const connectionStatusClass = computed(() => {
   switch (connectionStatus.value) {
     case 'Connected':
-      return 'text-green-600 dark:text-green-400'
+      return 'text-green-600'
     case 'Disconnected':
-      return 'text-red-600 dark:text-red-400'
+      return 'text-red-600'
     case 'Connecting...':
-      return 'text-yellow-600 dark:text-yellow-400'
+      return 'text-yellow-600'
     case 'Configuration Error':
-      return 'text-red-600 dark:text-red-400'
+      return 'text-red-600'
     case 'Network Error':
-      return 'text-red-600 dark:text-red-400'
+      return 'text-red-600'
     case 'Timeout':
-      return 'text-orange-600 dark:text-orange-400'
+      return 'text-orange-600'
     default:
-      return 'text-gray-600 dark:text-gray-400'
+      return 'text-autobot-text-secondary'
   }
 })
 

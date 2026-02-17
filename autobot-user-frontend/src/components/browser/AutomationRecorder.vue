@@ -5,8 +5,8 @@
       <div class="flex items-center space-x-3">
         <i class="fas fa-record-vinyl text-red-600 text-xl"></i>
         <div>
-          <h3 class="text-lg font-semibold text-gray-800">Automation Recorder</h3>
-          <p class="text-sm text-gray-500">Record, playback, and export browser actions</p>
+          <h3 class="text-lg font-semibold text-autobot-text-primary">Automation Recorder</h3>
+          <p class="text-sm text-autobot-text-muted">Record, playback, and export browser actions</p>
         </div>
       </div>
 
@@ -59,8 +59,8 @@
         <i class="fas fa-circle text-red-600"></i>
       </div>
       <div class="flex-1">
-        <h4 class="text-lg font-semibold text-gray-800">{{ currentRecording?.name }}</h4>
-        <p class="text-sm text-gray-500">Recording in progress...</p>
+        <h4 class="text-lg font-semibold text-autobot-text-primary">{{ currentRecording?.name }}</h4>
+        <p class="text-sm text-autobot-text-muted">Recording in progress...</p>
       </div>
       <div class="recording-timer">
         <i class="fas fa-clock mr-2"></i>
@@ -117,8 +117,8 @@
         </div>
 
         <div v-if="currentRecording.actions.length === 0" class="empty-actions">
-          <i class="fas fa-info-circle text-gray-400 text-2xl mb-2"></i>
-          <p class="text-gray-500">No actions recorded yet</p>
+          <i class="fas fa-info-circle text-autobot-text-muted text-2xl mb-2"></i>
+          <p class="text-autobot-text-secondary">No actions recorded yet</p>
         </div>
       </div>
     </div>
@@ -127,7 +127,7 @@
     <div class="recordings-list">
       <div class="list-header">
         <h4 class="text-lg font-semibold">Saved Recordings</h4>
-        <span class="text-sm text-gray-500">{{ recordings.length }} recordings</span>
+        <span class="text-sm text-autobot-text-muted">{{ recordings.length }} recordings</span>
       </div>
 
       <div v-if="recordings.length === 0" class="empty-state">
@@ -208,7 +208,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h3 class="text-lg font-semibold">New Recording</h3>
-          <button @click="showNewRecordingModal = false" class="text-gray-400 hover:text-gray-600">
+          <button @click="showNewRecordingModal = false" class="text-autobot-text-muted hover:text-autobot-text-secondary">
             <i class="fas fa-times"></i>
           </button>
         </div>
@@ -393,9 +393,9 @@ export default {
         case 'click': return 'bg-green-100 text-green-600'
         case 'type': return 'bg-purple-100 text-purple-600'
         case 'scroll': return 'bg-yellow-100 text-yellow-600'
-        case 'wait': return 'bg-gray-100 text-gray-600'
+        case 'wait': return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
         case 'screenshot': return 'bg-indigo-100 text-indigo-600'
-        default: return 'bg-gray-100 text-gray-600'
+        default: return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
       }
     }
 

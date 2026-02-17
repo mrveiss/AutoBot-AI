@@ -5,7 +5,7 @@
 <template>
   <div class="connection-settings-panel">
     <div class="panel-header">
-      <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Connection Quality</h3>
+      <h3 class="text-sm font-semibold text-autobot-text-primary">Connection Quality</h3>
     </div>
 
     <div v-if="error" class="error-message">
@@ -15,7 +15,7 @@
     <div v-else-if="settings" class="settings-content">
       <!-- Quality Presets -->
       <div class="presets-section">
-        <label class="text-xs text-gray-600 dark:text-gray-400 mb-2 block">Quality Preset</label>
+        <label class="text-xs text-autobot-text-secondary mb-2 block">Quality Preset</label>
         <div class="preset-buttons">
           <button
             v-for="preset in presets"
@@ -26,7 +26,7 @@
             {{ preset.label }}
           </button>
         </div>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+        <p class="text-xs text-autobot-text-muted mt-2">
           {{ presetDescription }}
         </p>
       </div>
@@ -40,23 +40,23 @@
             @change="saveSettings"
             class="checkbox"
           />
-          <span class="text-sm text-gray-700 dark:text-gray-300">Auto-reconnect on disconnect</span>
+          <span class="text-sm text-autobot-text-primary">Auto-reconnect on disconnect</span>
         </label>
         <div v-if="settings.auto_reconnect" class="reconnect-details">
           <div class="detail-item">
-            <span class="text-xs text-gray-600 dark:text-gray-400">Delay:</span>
-            <span class="text-xs text-gray-900 dark:text-gray-100">{{ settings.reconnect_delay_ms }}ms</span>
+            <span class="text-xs text-autobot-text-secondary">Delay:</span>
+            <span class="text-xs text-autobot-text-primary">{{ settings.reconnect_delay_ms }}ms</span>
           </div>
           <div class="detail-item">
-            <span class="text-xs text-gray-600 dark:text-gray-400">Max attempts:</span>
-            <span class="text-xs text-gray-900 dark:text-gray-100">{{ settings.max_reconnect_attempts }}</span>
+            <span class="text-xs text-autobot-text-secondary">Max attempts:</span>
+            <span class="text-xs text-autobot-text-primary">{{ settings.max_reconnect_attempts }}</span>
           </div>
         </div>
       </div>
 
       <!-- Connection Metrics -->
       <div v-if="metrics" class="metrics-section">
-        <h4 class="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">Connection Status</h4>
+        <h4 class="text-xs font-semibold text-autobot-text-primary mb-2">Connection Status</h4>
         <div class="metrics-grid">
           <div class="metric-item">
             <span class="metric-label">VNC Server</span>
@@ -123,19 +123,19 @@ onMounted(async () => {
 
 <style scoped>
 .connection-settings-panel {
-  @apply bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4;
+  @apply bg-autobot-bg-secondary rounded-lg border border-autobot-border p-4;
 }
 
 .panel-header {
-  @apply mb-4 pb-2 border-b border-gray-200 dark:border-gray-700;
+  @apply mb-4 pb-2 border-b border-autobot-border;
 }
 
 .error-message {
-  @apply text-sm text-red-600 dark:text-red-400 p-2 bg-red-50 dark:bg-red-900/20 rounded;
+  @apply text-sm text-red-600 p-2 bg-red-50 rounded;
 }
 
 .loading-state {
-  @apply text-sm text-gray-500 dark:text-gray-400 text-center py-4;
+  @apply text-sm text-autobot-text-muted text-center py-4;
 }
 
 .settings-content {
@@ -152,9 +152,9 @@ onMounted(async () => {
 
 .preset-btn {
   @apply px-2 py-1.5 text-xs font-medium rounded border transition-colors;
-  @apply bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600;
-  @apply text-gray-700 dark:text-gray-300;
-  @apply hover:bg-gray-200 dark:hover:bg-gray-600;
+  @apply bg-autobot-bg-tertiary border-autobot-border;
+  @apply text-autobot-text-primary;
+  @apply hover:bg-autobot-bg-secondary;
 }
 
 .preset-btn.active {
@@ -163,7 +163,7 @@ onMounted(async () => {
 }
 
 .reconnect-section {
-  @apply space-y-2 pt-2 border-t border-gray-200 dark:border-gray-700;
+  @apply space-y-2 pt-2 border-t border-autobot-border;
 }
 
 .checkbox {
@@ -179,7 +179,7 @@ onMounted(async () => {
 }
 
 .metrics-section {
-  @apply pt-2 border-t border-gray-200 dark:border-gray-700;
+  @apply pt-2 border-t border-autobot-border;
 }
 
 .metrics-grid {
@@ -191,7 +191,7 @@ onMounted(async () => {
 }
 
 .metric-label {
-  @apply text-gray-600 dark:text-gray-400;
+  @apply text-autobot-text-secondary;
 }
 
 .metric-value {

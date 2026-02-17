@@ -5,7 +5,7 @@
 <template>
   <div class="desktop-context-panel">
     <div class="panel-header">
-      <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Desktop Context</h3>
+      <h3 class="text-sm font-semibold text-autobot-text-primary">Desktop Context</h3>
       <button @click="refresh" :disabled="loading" class="refresh-btn" title="Refresh">
         <svg class="w-4 h-4" :class="{ 'animate-spin': loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -166,23 +166,23 @@ onUnmounted(() => {
 
 <style scoped>
 .desktop-context-panel {
-  @apply bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4;
+  @apply bg-autobot-bg-secondary rounded-lg border border-autobot-border p-4;
 }
 
 .panel-header {
-  @apply flex items-center justify-between mb-4 pb-2 border-b border-gray-200 dark:border-gray-700;
+  @apply flex items-center justify-between mb-4 pb-2 border-b border-autobot-border;
 }
 
 .refresh-btn {
-  @apply p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors;
+  @apply p-1 text-autobot-text-muted hover:text-autobot-text-primary transition-colors;
 }
 
 .error-message {
-  @apply text-sm text-red-600 dark:text-red-400 p-2 bg-red-50 dark:bg-red-900/20 rounded;
+  @apply text-sm text-red-600 p-2 bg-red-50 rounded;
 }
 
 .loading-state {
-  @apply text-sm text-gray-500 dark:text-gray-400 text-center py-4;
+  @apply text-sm text-autobot-text-muted text-center py-4;
 }
 
 .context-sections {
@@ -194,7 +194,7 @@ onUnmounted(() => {
 }
 
 .section-title {
-  @apply text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide;
+  @apply text-xs font-semibold text-autobot-text-primary uppercase tracking-wide;
 }
 
 .info-grid {
@@ -206,11 +206,11 @@ onUnmounted(() => {
 }
 
 .info-label {
-  @apply text-gray-600 dark:text-gray-400 font-medium;
+  @apply text-autobot-text-secondary font-medium;
 }
 
 .info-value {
-  @apply text-gray-900 dark:text-gray-100 font-mono text-right;
+  @apply text-autobot-text-primary font-mono text-right;
 }
 
 .text-truncate {
@@ -222,7 +222,7 @@ onUnmounted(() => {
 }
 
 .process-item {
-  @apply flex items-center justify-between text-xs p-2 bg-gray-50 dark:bg-gray-700/50 rounded;
+  @apply flex items-center justify-between text-xs p-2 bg-autobot-bg-tertiary rounded;
 }
 
 .process-info {
@@ -230,15 +230,15 @@ onUnmounted(() => {
 }
 
 .process-pid {
-  @apply text-gray-500 dark:text-gray-400 font-mono text-[10px];
+  @apply text-autobot-text-muted font-mono text-[10px];
 }
 
 .process-command {
-  @apply text-gray-900 dark:text-gray-100 truncate;
+  @apply text-autobot-text-primary truncate;
 }
 
 .process-stats {
-  @apply flex gap-2 text-gray-600 dark:text-gray-300 font-mono;
+  @apply flex gap-2 text-autobot-text-secondary font-mono;
 }
 
 .process-cpu, .process-mem {
@@ -246,6 +246,6 @@ onUnmounted(() => {
 }
 
 .update-time {
-  @apply text-[10px] text-gray-500 dark:text-gray-400 text-center mt-2 pt-2 border-t border-gray-200 dark:border-gray-700;
+  @apply text-[10px] text-autobot-text-muted text-center mt-2 pt-2 border-t border-autobot-border;
 }
 </style>

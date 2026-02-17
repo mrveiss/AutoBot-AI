@@ -5,8 +5,8 @@
       <div class="flex items-center space-x-3">
         <i class="fas fa-window-restore text-green-600 text-xl"></i>
         <div>
-          <h3 class="text-lg font-semibold text-gray-800">Browser Sessions</h3>
-          <p class="text-sm text-gray-500">Manage persistent browser sessions</p>
+          <h3 class="text-lg font-semibold text-autobot-text-primary">Browser Sessions</h3>
+          <p class="text-sm text-autobot-text-muted">Manage persistent browser sessions</p>
         </div>
       </div>
 
@@ -55,7 +55,7 @@
       </div>
 
       <div class="stat-card">
-        <div class="stat-icon bg-gray-100 text-gray-600">
+        <div class="stat-icon bg-autobot-bg-tertiary text-autobot-text-secondary">
           <i class="fas fa-window-restore"></i>
         </div>
         <div>
@@ -116,16 +116,16 @@
           <div class="session-info">
             <div class="info-grid">
               <div class="info-item">
-                <i class="fas fa-calendar text-gray-400"></i>
-                <span class="text-sm text-gray-600">Created {{ formatDate(session.createdAt) }}</span>
+                <i class="fas fa-calendar text-autobot-text-muted"></i>
+                <span class="text-sm text-autobot-text-secondary">Created {{ formatDate(session.createdAt) }}</span>
               </div>
               <div class="info-item">
-                <i class="fas fa-clock text-gray-400"></i>
-                <span class="text-sm text-gray-600">Active {{ formatTimeAgo(session.lastActivityAt) }}</span>
+                <i class="fas fa-clock text-autobot-text-muted"></i>
+                <span class="text-sm text-autobot-text-secondary">Active {{ formatTimeAgo(session.lastActivityAt) }}</span>
               </div>
               <div v-if="session.cookies" class="info-item">
-                <i class="fas fa-cookie text-gray-400"></i>
-                <span class="text-sm text-gray-600">{{ session.cookies.length }} cookies</span>
+                <i class="fas fa-cookie text-autobot-text-muted"></i>
+                <span class="text-sm text-autobot-text-secondary">{{ session.cookies.length }} cookies</span>
               </div>
             </div>
           </div>
@@ -203,7 +203,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h3 class="text-lg font-semibold">Create Browser Session</h3>
-          <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600">
+          <button @click="showCreateModal = false" class="text-autobot-text-muted hover:text-autobot-text-secondary">
             <i class="fas fa-times"></i>
           </button>
         </div>
@@ -237,9 +237,9 @@
                 type="checkbox"
                 class="form-checkbox"
               />
-              <span class="text-sm font-medium text-gray-700">Make this session persistent</span>
+              <span class="text-sm font-medium text-autobot-text-secondary">Make this session persistent</span>
             </label>
-            <p class="text-xs text-gray-500 mt-1">
+            <p class="text-xs text-autobot-text-muted mt-1">
               Persistent sessions will be saved and restored across browser restarts
             </p>
           </div>
@@ -440,8 +440,8 @@ export default {
       switch (status) {
         case 'active': return 'bg-green-100 text-green-600'
         case 'idle': return 'bg-yellow-100 text-yellow-600'
-        case 'closed': return 'bg-gray-100 text-gray-600'
-        default: return 'bg-gray-100 text-gray-600'
+        case 'closed': return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
+        default: return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
       }
     }
 

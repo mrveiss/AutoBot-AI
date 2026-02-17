@@ -103,11 +103,11 @@ const getPathUpTo = (index: number): string => {
 
 <style scoped>
 .file-browser-header {
-  @apply flex flex-wrap items-center gap-4 mb-6 pb-4 border-b border-gray-200;
+  @apply flex flex-wrap items-center gap-4 mb-6 pb-4 border-b border-autobot-border;
 }
 
 .file-browser-header h2 {
-  @apply text-2xl font-bold text-gray-900 flex-shrink-0;
+  @apply text-2xl font-bold text-autobot-text-primary flex-shrink-0;
 }
 
 .path-navigation-inline {
@@ -128,7 +128,7 @@ const getPathUpTo = (index: number): string => {
 }
 
 .breadcrumb-separator {
-  @apply text-gray-400 mx-1;
+  @apply text-autobot-text-muted mx-1;
 }
 
 .path-input {
@@ -136,7 +136,7 @@ const getPathUpTo = (index: number): string => {
 }
 
 .path-field {
-  @apply px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px];
+  @apply px-3 py-1.5 text-sm border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px];
 }
 
 .file-actions {

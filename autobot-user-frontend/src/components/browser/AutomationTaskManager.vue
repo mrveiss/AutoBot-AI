@@ -5,8 +5,8 @@
       <div class="flex items-center space-x-3">
         <i class="fas fa-tasks text-blue-600 text-xl"></i>
         <div>
-          <h3 class="text-lg font-semibold text-gray-800">Automation Tasks</h3>
-          <p class="text-sm text-gray-500">Manage and monitor browser automation tasks</p>
+          <h3 class="text-lg font-semibold text-autobot-text-primary">Automation Tasks</h3>
+          <p class="text-sm text-autobot-text-muted">Manage and monitor browser automation tasks</p>
         </div>
       </div>
 
@@ -162,13 +162,13 @@
 
             <!-- Task Parameters -->
             <div v-if="Object.keys(task.params).length > 0" class="mt-3">
-              <h5 class="text-sm font-medium text-gray-700 mb-2">Parameters:</h5>
+              <h5 class="text-sm font-medium text-autobot-text-secondary mb-2">Parameters:</h5>
               <pre class="params-display">{{ JSON.stringify(task.params, null, 2) }}</pre>
             </div>
 
             <!-- Task Result -->
             <div v-if="task.result" class="mt-3">
-              <h5 class="text-sm font-medium text-gray-700 mb-2">Result:</h5>
+              <h5 class="text-sm font-medium text-autobot-text-secondary mb-2">Result:</h5>
               <pre class="result-display">{{ JSON.stringify(task.result, null, 2) }}</pre>
             </div>
 
@@ -189,7 +189,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h3 class="text-lg font-semibold">Create Automation Task</h3>
-          <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600">
+          <button @click="showCreateModal = false" class="text-autobot-text-muted hover:text-autobot-text-secondary">
             <i class="fas fa-times"></i>
           </button>
         </div>
@@ -402,7 +402,7 @@ export default {
         case 'search': return 'bg-green-100 text-green-600'
         case 'test': return 'bg-yellow-100 text-yellow-600'
         case 'script': return 'bg-indigo-100 text-indigo-600'
-        default: return 'bg-gray-100 text-gray-600'
+        default: return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
       }
     }
 

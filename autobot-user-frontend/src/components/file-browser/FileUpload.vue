@@ -65,7 +65,7 @@ defineExpose({
 
 <style scoped>
 .file-upload-section {
-  @apply mb-6 p-0 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 hover:border-gray-400 transition-colors;
+  @apply mb-6 p-0 border-2 border-dashed border-autobot-border rounded-lg bg-autobot-bg-secondary hover:border-autobot-border transition-colors;
 }
 
 .file-upload-inline-wrapper {
@@ -73,15 +73,15 @@ defineExpose({
 }
 
 .file-input-label {
-  @apply flex items-center gap-2 text-gray-600 font-medium cursor-pointer text-sm flex-shrink-0;
+  @apply flex items-center gap-2 text-autobot-text-secondary font-medium cursor-pointer text-sm flex-shrink-0;
 }
 
 .file-input-label:hover {
-  @apply text-gray-800;
+  @apply text-autobot-text-primary;
 }
 
 .visible-file-input {
-  @apply flex-1 min-w-[150px] text-sm text-gray-500 py-0 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100;
+  @apply flex-1 min-w-[150px] text-sm text-autobot-text-muted py-0 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100;
 }
 
 /* Drag and drop styling */

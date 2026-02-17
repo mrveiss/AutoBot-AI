@@ -141,19 +141,19 @@ const downloadFile = () => {
 }
 
 .modal-content {
-  @apply bg-white rounded-lg shadow-xl max-w-4xl max-h-[90vh] w-full mx-4 overflow-hidden;
+  @apply bg-autobot-bg-card rounded-lg shadow-xl max-w-4xl max-h-[90vh] w-full mx-4 overflow-hidden;
 }
 
 .modal-header {
-  @apply flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50;
+  @apply flex justify-between items-center p-4 border-b border-autobot-border bg-autobot-bg-secondary;
 }
 
 .modal-header h3 {
-  @apply text-lg font-semibold text-gray-900 truncate;
+  @apply text-lg font-semibold text-autobot-text-primary truncate;
 }
 
 .close-btn {
-  @apply text-gray-400 hover:text-gray-600 text-2xl font-bold leading-none p-1;
+  @apply text-autobot-text-muted hover:text-autobot-text-secondary text-2xl font-bold leading-none p-1;
 }
 
 .modal-body {
@@ -162,7 +162,7 @@ const downloadFile = () => {
 
 /* Preview styles */
 .preview-frame {
-  @apply w-full h-96 border border-gray-200 rounded;
+  @apply w-full h-96 border border-autobot-border rounded;
 }
 
 .preview-image {
@@ -171,7 +171,7 @@ const downloadFile = () => {
 
 .text-preview,
 .json-preview {
-  @apply bg-gray-100 rounded p-4 overflow-auto max-h-96;
+  @apply bg-autobot-bg-tertiary rounded p-4 overflow-auto max-h-96;
 }
 
 .text-preview code,
@@ -188,7 +188,7 @@ const downloadFile = () => {
 }
 
 .no-preview-message {
-  @apply text-gray-600 mt-4 mb-6;
+  @apply text-autobot-text-secondary mt-4 mb-6;
 }
 
 .download-btn {

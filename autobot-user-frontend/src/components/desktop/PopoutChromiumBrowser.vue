@@ -1,7 +1,7 @@
 <template>
   <div class="chromium-browser-container">
     <!-- Browser Header -->
-    <div class="browser-header bg-gray-100 border-b border-gray-300 p-2 flex items-center justify-between">
+    <div class="browser-header bg-autobot-bg-tertiary border-b border-autobot-border p-2 flex items-center justify-between">
       <div class="flex items-center space-x-3">
         <div class="flex space-x-1">
           <div class="w-3 h-3 bg-red-500 rounded-full"></div>
@@ -11,7 +11,7 @@
         <div class="flex items-center space-x-2 text-sm">
           <i class="fab fa-chrome text-blue-600"></i>
           <span class="font-medium">Research Browser</span>
-          <span v-if="sessionId" class="text-xs text-gray-500">Session: {{ sessionId.slice(0, 8) }}...</span>
+          <span v-if="sessionId" class="text-xs text-autobot-text-muted">Session: {{ sessionId.slice(0, 8) }}...</span>
         </div>
       </div>
 
@@ -36,7 +36,7 @@
         </div>
 
         <!-- Playwright Automation Controls -->
-        <div class="border-l border-gray-300 pl-2 flex items-center space-x-1">
+        <div class="border-l border-autobot-border pl-2 flex items-center space-x-1">
           <button @click="showPlaywrightPanel = !showPlaywrightPanel" class="browser-btn" title="Playwright Automation">
             <i class="fas fa-robot" :class="{ 'text-blue-600': showPlaywrightPanel }"></i>
           </button>
@@ -54,7 +54,7 @@
           </button>
         </div>
 
-        <div class="border-l border-gray-300 pl-2">
+        <div class="border-l border-autobot-border pl-2">
           <button @click="$emit('close')" class="browser-btn text-red-600" title="Close">
             <i class="fas fa-times"></i>
           </button>
@@ -63,14 +63,14 @@
     </div>
 
     <!-- Address Bar -->
-    <div class="address-bar bg-white border-b border-gray-200 p-3 flex items-center space-x-3">
+    <div class="address-bar bg-autobot-bg-secondary border-b border-autobot-border p-3 flex items-center space-x-3">
       <button @click="goBack" :disabled="!canGoBack || isGoingBack" class="nav-btn" title="Back">
         <i class="fas fa-arrow-left" :class="{ 'fa-pulse': isGoingBack }"></i>
       </button>
       <button @click="goForward" :disabled="!canGoForward || isGoingForward" class="nav-btn" title="Forward">
         <i class="fas fa-arrow-right" :class="{ 'fa-pulse': isGoingForward }"></i>
       </button>
-      <div class="flex-1 flex items-center bg-gray-50 rounded-lg px-3 py-2" :class="{ 'opacity-50': isNavigating }">
+      <div class="flex-1 flex items-center bg-autobot-bg-tertiary rounded-lg px-3 py-2" :class="{ 'opacity-50': isNavigating }">
         <i class="fas fa-lock text-green-500 text-sm mr-2" v-if="isSecure"></i>
         <input
           v-model="addressBarUrl"
@@ -82,7 +82,7 @@
           <i class="fas fa-search"></i>
         </button>
       </div>
-      <div class="text-xs text-gray-500">
+      <div class="text-xs text-autobot-text-muted">
         {{ Math.round(zoomLevel) }}% | {{ pageLoadTime }}ms
       </div>
     </div>
@@ -111,7 +111,7 @@
             <input
               v-model="searchQuery"
               @keyup.enter="performWebSearch"
-              class="w-full px-3 py-1 text-sm border border-gray-300 rounded"
+              class="w-full px-3 py-1 text-sm border border-autobot-border rounded"
               placeholder="Search the web..."
             />
             <button @click="performWebSearch" :disabled="isSearching" class="w-full btn-sm btn-primary">
@@ -139,7 +139,7 @@
             <i class="fas fa-chart-bar text-purple-500"></i>
             <span class="text-sm font-medium">Results</span>
           </div>
-          <div class="text-xs text-gray-600 space-y-1">
+          <div class="text-xs text-autobot-text-secondary space-y-1">
             <div v-if="automationResults.lastSearch">
               Search: {{ (automationResults.lastSearch as SearchData).results?.length || 0 }} results
             </div>
@@ -167,10 +167,10 @@
           @loading-complete="handlePlaywrightConnected"
           @loading-error="handlePlaywrightError"
           @loading-timeout="handlePlaywrightTimeout"
-          class="absolute inset-0 bg-gray-100 z-10"
+          class="absolute inset-0 bg-autobot-bg-tertiary z-10"
         >
           <template #loading-message>
-            <p class="text-sm text-gray-600">Connecting to Playwright service...</p>
+            <p class="text-sm text-autobot-text-secondary">Connecting to Playwright service...</p>
           </template>
         </UnifiedLoadingView>
 
@@ -221,13 +221,13 @@
 
       <!-- Playwright Automation Status Panel -->
       <div v-if="showPlaywrightPanel && browserStatus === 'connected'" class="playwright-status-panel">
-        <div class="bg-white rounded-lg shadow-lg p-4 border border-gray-200">
+        <div class="bg-autobot-bg-secondary rounded-lg shadow-lg p-4 border border-autobot-border">
           <div class="mb-4">
             <div class="flex items-center justify-between mb-2">
-              <h4 class="text-sm font-medium text-gray-800">Browser Session</h4>
+              <h4 class="text-sm font-medium text-autobot-text-primary">Browser Session</h4>
               <StatusBadge variant="success" size="small">Connected</StatusBadge>
             </div>
-            <div class="text-xs text-gray-600">
+            <div class="text-xs text-autobot-text-secondary">
               <div class="flex items-center space-x-2">
                 <i class="fas fa-link text-blue-500"></i>
                 <span class="text-sm text-blue-600">{{ currentUrl }}</span>
@@ -236,15 +236,15 @@
           </div>
 
           <!-- Recent results -->
-          <div v-if="automationResults.lastSearch || automationResults.lastTest" class="bg-white rounded-lg p-4 shadow-sm border">
-            <h4 class="text-sm font-medium text-gray-700 mb-3">Recent Automation Results</h4>
+          <div v-if="automationResults.lastSearch || automationResults.lastTest" class="bg-autobot-bg-secondary rounded-lg p-4 shadow-sm border border-autobot-border">
+            <h4 class="text-sm font-medium text-autobot-text-primary mb-3">Recent Automation Results</h4>
 
             <div v-if="automationResults.lastSearch" class="mb-3 p-3 bg-blue-50 rounded">
               <div class="flex items-center space-x-2 mb-1">
                 <i class="fas fa-search text-blue-500"></i>
                 <span class="text-sm font-medium">Web Search</span>
               </div>
-              <p class="text-xs text-gray-600">Found {{ (automationResults.lastSearch as SearchData).results?.length || 0 }} results</p>
+              <p class="text-xs text-autobot-text-secondary">Found {{ (automationResults.lastSearch as SearchData).results?.length || 0 }} results</p>
             </div>
 
             <div v-if="automationResults.lastTest" class="p-3 bg-green-50 rounded">
@@ -252,7 +252,7 @@
                 <i class="fas fa-vials text-green-500"></i>
                 <span class="text-sm font-medium">Frontend Test</span>
               </div>
-              <p class="text-xs text-gray-600">{{ (automationResults.lastTest as TestData).passed }}/{{ (automationResults.lastTest as TestData).total }} tests passed</p>
+              <p class="text-xs text-autobot-text-secondary">{{ (automationResults.lastTest as TestData).passed }}/{{ (automationResults.lastTest as TestData).total }} tests passed</p>
             </div>
           </div>
 
@@ -267,7 +267,7 @@
       </div>
 
       <!-- Manual Browser View (No Session) -->
-      <div v-if="!sessionId || sessionId === 'manual-browser'" class="flex items-center justify-center h-full bg-gray-50">
+      <div v-if="!sessionId || sessionId === 'manual-browser'" class="flex items-center justify-center h-full bg-autobot-bg-tertiary">
         <EmptyState
           icon="fas fa-globe"
           title="Manual Browser Mode"
@@ -278,7 +278,7 @@
               <i class="fas fa-rocket mr-2"></i>
               {{ isInitializingBrowser ? 'Launching...' : 'Launch Browser Session' }}
             </BaseButton>
-            <p class="text-sm text-gray-500 mt-3">
+            <p class="text-sm text-autobot-text-muted mt-3">
               This will open a live browser that you can control directly
             </p>
           </template>
@@ -298,8 +298,8 @@
       >
         <template #loading-message>
           <div class="text-center">
-            <p class="text-gray-600">Initializing browser session...</p>
-            <p class="text-sm text-gray-500 mt-2">Session ID: {{ sessionId || 'Not available' }}</p>
+            <p class="text-autobot-text-secondary">Initializing browser session...</p>
+            <p class="text-sm text-autobot-text-muted mt-2">Session ID: {{ sessionId || 'Not available' }}</p>
           </div>
         </template>
       </UnifiedLoadingView>
@@ -314,7 +314,7 @@
         </div>
         <div class="h-full overflow-auto p-2 text-green-400 font-mono text-xs bg-black">
           <div v-for="(log, index) in consoleLogs" :key="index" class="mb-1">
-            <span class="text-gray-500">{{ log.timestamp }}</span>
+            <span class="text-autobot-text-muted">{{ log.timestamp }}</span>
             <span :class="getLogColor(log.level)">{{ log.message }}</span>
           </div>
         </div>
@@ -327,7 +327,7 @@
             <i class="fas fa-exclamation-triangle text-yellow-500 text-2xl mr-3"></i>
             <h3 class="text-lg font-semibold">User Interaction Required</h3>
           </div>
-          <p class="text-gray-700 mb-4">{{ interactionMessage }}</p>
+          <p class="text-autobot-text-primary mb-4">{{ interactionMessage }}</p>
           <div class="flex space-x-3">
             <BaseButton variant="primary" @click="handleInteraction('wait')">
               <i class="fas fa-clock mr-1"></i>

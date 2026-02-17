@@ -64,7 +64,7 @@ const getPathUpTo = (index: number): string => {
 
 <style scoped>
 .path-navigation {
-  @apply bg-gray-50 border rounded-lg p-4 mb-4 flex flex-wrap items-center gap-4;
+  @apply bg-autobot-bg-secondary border border-autobot-border rounded-lg p-4 mb-4 flex flex-wrap items-center gap-4;
 }
 
 .breadcrumb {
@@ -80,7 +80,7 @@ const getPathUpTo = (index: number): string => {
 }
 
 .breadcrumb-separator {
-  @apply text-gray-400 mx-1;
+  @apply text-autobot-text-muted mx-1;
 }
 
 .path-input {
@@ -88,7 +88,7 @@ const getPathUpTo = (index: number): string => {
 }
 
 .path-field {
-  @apply flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500;
+  @apply flex-1 px-3 py-2 border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500;
 }
 
 .path-go-btn {
