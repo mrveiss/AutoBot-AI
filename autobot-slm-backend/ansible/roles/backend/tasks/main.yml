@@ -95,6 +95,26 @@
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
 
+# Issue #912: Deploy error catalog so it is always available on the VM.
+# path_constants.py resolves PROJECT_ROOT as 3 levels up from constants/,
+# putting CONFIG_DIR at /opt/autobot/infrastructure/shared/config/ which is
+# not synced by default. Deploying via Ansible ensures it is always present.
+- name: Create infrastructure shared config directory  # Issue #912
+  ansible.builtin.file:
+    path: "{{ backend_install_dir | dirname }}/infrastructure/shared/config"
+    state: directory
+    mode: "0755"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+
+- name: Deploy error catalog to infrastructure config path  # Issue #912
+  ansible.builtin.copy:
+    src: error_messages.yaml
+    dest: "{{ backend_install_dir | dirname }}/infrastructure/shared/config/error_messages.yaml"
+    mode: "0644"
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+
 - name: Clone/update AutoBot repository
   ansible.builtin.git:
     repo: "{{ backend_repo_url }}"

@@ -23,6 +23,339 @@ logger = logging.getLogger(__name__)
 # Issue #380: Module-level frozenset for metadata field filtering
 _METADATA_FIELDS = frozenset({"version", "last_updated"})
 
+# Issue #912: Builtin fallback — used when error_messages.yaml is not found on the VM.
+# Mirrors infrastructure/shared/config/error_messages.yaml exactly.
+_BUILTIN_FALLBACK_ERRORS: dict = {
+    # AUTH errors
+    "AUTH_0001": {
+        "category": "authentication",
+        "message": "Invalid or expired session",
+        "status_code": 401,
+        "retry": False,
+        "details": "User session has expired or is invalid",
+    },
+    "AUTH_0002": {
+        "category": "authentication",
+        "message": "Authentication required",
+        "status_code": 401,
+        "retry": False,
+        "details": "This endpoint requires authentication",
+    },
+    "AUTH_0003": {
+        "category": "authorization",
+        "message": "Insufficient permissions",
+        "status_code": 403,
+        "retry": False,
+        "details": "User does not have required permissions",
+    },
+    "AUTH_0004": {
+        "category": "authentication",
+        "message": "Invalid credentials",
+        "status_code": 401,
+        "retry": False,
+        "details": "Username or password is incorrect",
+    },
+    # API errors
+    "API_0001": {
+        "category": "validation",
+        "message": "Invalid request parameters",
+        "status_code": 400,
+        "retry": False,
+        "details": "Check request body and parameters",
+    },
+    "API_0002": {
+        "category": "not_found",
+        "message": "Endpoint not found",
+        "status_code": 404,
+        "retry": False,
+        "details": "The requested API endpoint does not exist",
+    },
+    "API_0003": {
+        "category": "server_error",
+        "message": "Internal server error",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 5,
+        "details": "An unexpected error occurred",
+    },
+    "API_0004": {
+        "category": "rate_limit",
+        "message": "Rate limit exceeded",
+        "status_code": 429,
+        "retry": True,
+        "retry_after": 60,
+        "details": "Too many requests from this client",
+    },
+    "API_0005": {
+        "category": "service_unavailable",
+        "message": "Service temporarily unavailable",
+        "status_code": 503,
+        "retry": True,
+        "retry_after": 30,
+        "details": "Service is under maintenance or overloaded",
+    },
+    # KB errors
+    "KB_0001": {
+        "category": "server_error",
+        "message": "Failed to initialize knowledge base",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 30,
+        "details": "Check Redis connection and ChromaDB availability",
+    },
+    "KB_0002": {
+        "category": "not_found",
+        "message": "Knowledge base fact not found",
+        "status_code": 404,
+        "retry": False,
+        "details": "The requested fact ID does not exist",
+    },
+    "KB_0003": {
+        "category": "server_error",
+        "message": "Failed to add fact to knowledge base",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 5,
+        "details": "Error during fact vectorization or storage",
+    },
+    "KB_0004": {
+        "category": "server_error",
+        "message": "Failed to search knowledge base",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 5,
+        "details": "Vector search operation failed",
+    },
+    "KB_0005": {
+        "category": "server_error",
+        "message": "Failed to delete fact from knowledge base",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 5,
+        "details": "Could not remove fact from vector store",
+    },
+    "KB_0006": {
+        "category": "validation",
+        "message": "Invalid fact content or metadata",
+        "status_code": 400,
+        "retry": False,
+        "details": "Fact content must be non-empty string",
+    },
+    "KB_0007": {
+        "category": "server_error",
+        "message": "ChromaDB connection failed",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 10,
+        "details": "Cannot connect to vector database",
+    },
+    "KB_0008": {
+        "category": "server_error",
+        "message": "Embedding generation failed",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 5,
+        "details": "Ollama embedding service unavailable",
+    },
+    # LLM errors
+    "LLM_0001": {
+        "category": "service_unavailable",
+        "message": "LLM service unavailable",
+        "status_code": 503,
+        "retry": True,
+        "retry_after": 10,
+        "details": "Ollama service is not responding",
+    },
+    "LLM_0002": {
+        "category": "external_service",
+        "message": "LLM request timeout",
+        "status_code": 504,
+        "retry": True,
+        "retry_after": 5,
+        "details": "LLM took too long to respond",
+    },
+    "LLM_0003": {
+        "category": "validation",
+        "message": "Invalid prompt or parameters",
+        "status_code": 400,
+        "retry": False,
+        "details": "Check prompt format and model parameters",
+    },
+    "LLM_0004": {
+        "category": "rate_limit",
+        "message": "LLM rate limit exceeded",
+        "status_code": 429,
+        "retry": True,
+        "retry_after": 60,
+        "details": "Too many requests to LLM service",
+    },
+    "LLM_0005": {
+        "category": "server_error",
+        "message": "LLM generation failed",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 5,
+        "details": "Error during text generation",
+    },
+    "LLM_0006": {
+        "category": "not_found",
+        "message": "LLM model not found",
+        "status_code": 404,
+        "retry": False,
+        "details": "The requested model is not available",
+    },
+    # CHAT errors
+    "CHAT_0001": {
+        "category": "server_error",
+        "message": "Failed to initialize chat workflow",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 10,
+        "details": "Could not initialize chat session",
+    },
+    "CHAT_0002": {
+        "category": "not_found",
+        "message": "Chat session not found",
+        "status_code": 404,
+        "retry": False,
+        "details": "The requested session ID does not exist",
+    },
+    "CHAT_0003": {
+        "category": "server_error",
+        "message": "Failed to process chat message",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 5,
+        "details": "Error during message processing",
+    },
+    "CHAT_0004": {
+        "category": "server_error",
+        "message": "Failed to load conversation history",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 5,
+        "details": "Could not retrieve conversation from Redis",
+    },
+    "CHAT_0005": {
+        "category": "server_error",
+        "message": "Failed to save conversation history",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 5,
+        "details": "Could not persist conversation to Redis",
+    },
+    "CHAT_0006": {
+        "category": "validation",
+        "message": "Invalid message format",
+        "status_code": 400,
+        "retry": False,
+        "details": "Message must be non-empty string",
+    },
+    # DB errors
+    "DB_0001": {
+        "category": "database",
+        "message": "Redis connection failed",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 10,
+        "details": "Cannot connect to Redis server",
+    },
+    "DB_0002": {
+        "category": "database",
+        "message": "Database operation timeout",
+        "status_code": 504,
+        "retry": True,
+        "retry_after": 5,
+        "details": "Database operation took too long",
+    },
+    "DB_0003": {
+        "category": "database",
+        "message": "Database query failed",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 5,
+        "details": "Error executing database query",
+    },
+    "DB_0004": {
+        "category": "conflict",
+        "message": "Duplicate key violation",
+        "status_code": 409,
+        "retry": False,
+        "details": "Record with this key already exists",
+    },
+    # MEM errors
+    "MEM_0001": {
+        "category": "server_error",
+        "message": "Failed to initialize memory graph",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 10,
+        "details": "Could not initialize memory graph connections",
+    },
+    "MEM_0002": {
+        "category": "server_error",
+        "message": "Failed to create entity",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 5,
+        "details": "Could not create memory graph entity",
+    },
+    "MEM_0003": {
+        "category": "not_found",
+        "message": "Entity not found",
+        "status_code": 404,
+        "retry": False,
+        "details": "The requested entity does not exist",
+    },
+    "MEM_0004": {
+        "category": "server_error",
+        "message": "Failed to create relationship",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 5,
+        "details": "Could not create entity relationship",
+    },
+    "MEM_0005": {
+        "category": "validation",
+        "message": "Invalid entity type",
+        "status_code": 400,
+        "retry": False,
+        "details": "Entity type must be one of the supported types",
+    },
+    # SYS errors
+    "SYS_0001": {
+        "category": "system",
+        "message": "System initialization failed",
+        "status_code": 500,
+        "retry": True,
+        "retry_after": 30,
+        "details": "Critical system component failed to initialize",
+    },
+    "SYS_0002": {
+        "category": "system",
+        "message": "Configuration error",
+        "status_code": 500,
+        "retry": False,
+        "details": "Invalid or missing configuration",
+    },
+    "SYS_0003": {
+        "category": "system",
+        "message": "Resource exhausted",
+        "status_code": 503,
+        "retry": True,
+        "retry_after": 60,
+        "details": "System resources (memory/CPU) exhausted",
+    },
+    "SYS_0004": {
+        "category": "system",
+        "message": "Dependency unavailable",
+        "status_code": 503,
+        "retry": True,
+        "retry_after": 20,
+        "details": "Required system dependency is unavailable",
+    },
+}
+
 
 def _parse_error_category(category_str: str, error_code: str) -> ErrorCategory:
     """Parse error category string to enum. (Issue #315 - extracted)"""
@@ -94,7 +427,7 @@ class ErrorCatalog:
         catalog = ErrorCatalog.get_instance()
         error = catalog.get_error("KB_0001")
         if error:
-            print(f"{error.message} - Retry: {error.retry}")
+            logger.info("%s - Retry: %s", error.message, error.retry)
     """
 
     _instance: Optional["ErrorCatalog"] = None
@@ -113,6 +446,46 @@ class ErrorCatalog:
             cls._instance = cls()
         return cls._instance
 
+    def _resolve_catalog_path(self) -> Optional[Path]:
+        """Find error_messages.yaml searching backend static dir then infrastructure.
+
+        Helper for load_catalog (Issue #912).
+        """
+        # Try backend-bundled static dir first (always present when backend is synced)
+        backend_local = PATH.STATIC_DIR / "error_messages.yaml"
+        if backend_local.exists():
+            return backend_local
+
+        # Fall back to infrastructure path (works on dev machine / full-repo deploys)
+        infra_path = PATH.CONFIG_DIR / "error_messages.yaml"
+        if infra_path.exists():
+            return infra_path
+
+        return None
+
+    def _load_builtin_fallback(self) -> None:
+        """Populate catalog from hardcoded fallback when YAML is unavailable.
+
+        Helper for load_catalog (Issue #912).
+        """
+        self._catalog.clear()
+        for error_code, data in _BUILTIN_FALLBACK_ERRORS.items():
+            category = _parse_error_category(data["category"], error_code)
+            self._catalog[error_code] = ErrorDefinition(
+                code=error_code,
+                category=category,
+                message=data["message"],
+                status_code=data["status_code"],
+                retry=data["retry"],
+                retry_after=data.get("retry_after"),
+                details=data.get("details"),
+            )
+        self._initialized = True
+        logger.warning(
+            "Error catalog YAML not found; using built-in fallback (%d errors)",
+            len(self._catalog),
+        )
+
     def load_catalog(self, catalog_path: Optional[Path] = None) -> bool:
         """
         Load error catalog from YAML file
@@ -127,13 +500,14 @@ class ErrorCatalog:
             # Already loaded from default path
             return True
 
-        # Auto-detect catalog path using centralized PathConstants (Issue #380)
+        # Auto-detect catalog path (Issue #912: try multiple locations)
         if catalog_path is None:
-            catalog_path = PATH.CONFIG_DIR / "error_messages.yaml"
+            catalog_path = self._resolve_catalog_path()
 
-        if not catalog_path.exists():
-            logger.error("Error catalog not found: %s", catalog_path)
-            return False
+        if catalog_path is None or not catalog_path.exists():
+            # Issue #912: graceful fallback — prevents HTTP 500 when YAML is missing
+            self._load_builtin_fallback()
+            return True
 
         try:
             # Load YAML catalog
@@ -145,13 +519,16 @@ class ErrorCatalog:
             self._initialized = True
 
             logger.info(
-                f"Loaded error catalog: {len(self._catalog)} errors from {catalog_path}"
+                "Loaded error catalog: %d errors from %s",
+                len(self._catalog),
+                catalog_path,
             )
             return True
 
         except Exception as e:
             logger.error("Failed to load error catalog: %s", e, exc_info=True)
-            return False
+            self._load_builtin_fallback()
+            return True
 
     def _parse_catalog(self):
         """Parse raw YAML data into ErrorDefinition objects (Issue #315 - uses helpers)"""
@@ -293,7 +670,7 @@ def get_error(error_code: str) -> Optional[ErrorDefinition]:
     Example:
         error = get_error("KB_0001")
         if error:
-            print(f"{error.message} - Status: {error.status_code}")
+            logger.info("%s - Status: %s", error.message, error.status_code)
     """
     catalog = ErrorCatalog.get_instance()
     return catalog.get_error(error_code)
@@ -329,7 +706,7 @@ def validate_error_code(error_code: str) -> bool:
 
     Example:
         if validate_error_code("AUTH_0001"):
-            print("Valid error code")
+            logger.info("Valid error code")
     """
     catalog = ErrorCatalog.get_instance()
     return catalog.validate_code(error_code)

@@ -22,6 +22,8 @@ class PathConstants:
 
     # Core directories (updated for #781 reorganization)
     CONFIG_DIR: Path = PROJECT_ROOT / "infrastructure" / "shared" / "config"
+    # Static assets bundled with the backend (Issue #912: error catalog fallback)
+    STATIC_DIR: Path = Path(__file__).parent.parent / "static"
     DATA_DIR: Path = PROJECT_ROOT / "data"
     LOGS_DIR: Path = PROJECT_ROOT / "logs"
     DOCS_DIR: Path = PROJECT_ROOT / "docs"
