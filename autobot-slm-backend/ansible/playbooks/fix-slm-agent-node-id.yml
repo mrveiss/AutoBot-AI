@@ -1,0 +1,68 @@
+---
+- name: Fix SLM Agent on 01-Backend
+  hosts: 01-Backend
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Sync SLM agent code from local repo
+      ansible.builtin.synchronize:
+        src: /home/kali/Desktop/AutoBot/autobot-slm-backend/slm/
+        dest: /opt/autobot/slm/
+        delete: false
+        recursive: true
+
+    - name: Write corrected autobot-agent.service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/autobot-agent.service
+        content: |
+          [Unit]
+          Description=AutoBot SLM Agent
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=autobot
+          Group=autobot
+          WorkingDirectory=/opt/autobot
+          ExecStart=/usr/bin/python3 -m slm.agent.agent \
+              --admin-url https://172.16.168.19 \
+              --node-id 01-Backend \
+              --interval 30 \
+              --services autobot-backend ollama
+          Restart=always
+          RestartSec=10
+          Environment=PYTHONPATH=/opt/autobot
+          Environment=SLM_NODE_ID=01-Backend
+          Environment=SLM_ADMIN_URL=https://172.16.168.19
+          Environment=PYTHONUNBUFFERED=1
+          StandardOutput=journal
+          StandardError=journal
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Restart autobot-agent
+      ansible.builtin.systemd:
+        name: autobot-agent
+        state: restarted
+
+    - name: Wait for agent to settle
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Check agent status
+      ansible.builtin.command: systemctl status autobot-agent --no-pager
+      register: agent_status
+      changed_when: false
+
+    - name: Show agent status
+      ansible.builtin.debug:
+        var: agent_status.stdout_lines
