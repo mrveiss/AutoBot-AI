@@ -154,6 +154,15 @@
       become: true
       when: "'02-Frontend' in inventory_hostname"
 
+    - name: "[PLAY 2] Frontend | Fix ownership of frontend directory"
+      file:
+        path: /opt/autobot/autobot-user-frontend
+        owner: autobot
+        group: autobot
+        recurse: true
+      become: true
+      when: "'02-Frontend' in inventory_hostname"
+
     - name: "[PLAY 2] Frontend | Rebuild production dist"
       command:
         cmd: npx vite build

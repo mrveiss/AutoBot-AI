@@ -124,8 +124,8 @@
                 <router-link
                   to="/vision"
                   :class="{
-                    'bg-electric-600 text-white': $route.path.startsWith('/vision'),
-                    'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/vision')
+                    'bg-autobot-primary text-white': $route.path.startsWith('/vision'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/vision')
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
@@ -142,8 +142,8 @@
                 <router-link
                   to="/preferences"
                   :class="{
-                    'bg-electric-600 text-white': $route.path.startsWith('/preferences'),
-                    'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/preferences')
+                    'bg-autobot-primary text-white': $route.path.startsWith('/preferences'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/preferences')
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
@@ -159,7 +159,7 @@
                 <a
                   :href="slmAdminUrl"
                   target="_blank"
-                  class="px-3 py-2 rounded text-sm font-medium transition-colors duration-150 text-slate-200 hover:bg-slate-700 hover:text-white"
+                  class="px-3 py-2 rounded text-sm font-medium transition-colors duration-150 text-autobot-text-primary hover:bg-autobot-bg-tertiary"
                   title="Open SLM Admin for infrastructure management"
                 >
                   <div class="flex items-center space-x-1">
@@ -185,7 +185,7 @@
             <!-- Mobile menu button -->
             <button
               @click="toggleMobileNav"
-              class="lg:hidden inline-flex items-center justify-center p-2 rounded text-slate-200 hover:bg-slate-700 hover:text-white focus:outline-none focus:ring-2 focus:ring-electric-500"
+              class="lg:hidden inline-flex items-center justify-center p-2 rounded text-autobot-text-primary hover:bg-autobot-bg-tertiary focus:outline-none focus:ring-2 focus:ring-autobot-primary"
               aria-controls="mobile-nav"
               aria-expanded="false"
             >
@@ -210,15 +210,15 @@
         <div
           v-show="showMobileNav"
           id="mobile-nav"
-          class="lg:hidden absolute top-full left-0 right-0 bg-slate-800 border-b border-slate-700 shadow-lg z-20"
+          class="lg:hidden absolute top-full left-0 right-0 bg-autobot-bg-secondary border-b border-autobot-border shadow-lg z-20"
         >
           <div class="px-4 py-3 space-y-2">
             <router-link
               to="/chat"
               @click="closeMobileNav"
               :class="{
-                'bg-electric-600 text-white': $route.path.startsWith('/chat'),
-                'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/chat')
+                'bg-autobot-primary text-white': $route.path.startsWith('/chat'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/chat')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
@@ -234,8 +234,8 @@
               to="/knowledge"
               @click="closeMobileNav"
               :class="{
-                'bg-electric-600 text-white': $route.path.startsWith('/knowledge'),
-                'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/knowledge')
+                'bg-autobot-primary text-white': $route.path.startsWith('/knowledge'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/knowledge')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
@@ -251,8 +251,8 @@
               to="/automation"
               @click="closeMobileNav"
               :class="{
-                'bg-electric-600 text-white': $route.path.startsWith('/automation'),
-                'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/automation')
+                'bg-autobot-primary text-white': $route.path.startsWith('/automation'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/automation')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
@@ -268,8 +268,8 @@
               to="/analytics"
               @click="closeMobileNav"
               :class="{
-                'bg-electric-600 text-white': $route.path.startsWith('/analytics'),
-                'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/analytics')
+                'bg-autobot-primary text-white': $route.path.startsWith('/analytics'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/analytics')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
@@ -286,8 +286,8 @@
               to="/secrets"
               @click="closeMobileNav"
               :class="{
-                'bg-electric-600 text-white': $route.path.startsWith('/secrets'),
-                'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/secrets')
+                'bg-autobot-primary text-white': $route.path.startsWith('/secrets'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/secrets')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
@@ -304,8 +304,8 @@
               to="/vision"
               @click="closeMobileNav"
               :class="{
-                'bg-electric-600 text-white': $route.path.startsWith('/vision'),
-                'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/vision')
+                'bg-autobot-primary text-white': $route.path.startsWith('/vision'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/vision')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
@@ -323,8 +323,8 @@
               to="/preferences"
               @click="closeMobileNav"
               :class="{
-                'bg-electric-600 text-white': $route.path.startsWith('/preferences'),
-                'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/preferences')
+                'bg-autobot-primary text-white': $route.path.startsWith('/preferences'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/preferences')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
