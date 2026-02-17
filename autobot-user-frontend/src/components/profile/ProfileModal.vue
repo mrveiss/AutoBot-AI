@@ -110,7 +110,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .modal-content {
-  background: white;
+  background: var(--bg-card);
   border-radius: 12px;
   width: 90%;
   max-width: 600px;
@@ -124,21 +124,21 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   justify-content: space-between;
   align-items: center;
   padding: 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-default);
 }
 
 .modal-header h2 {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .close-button {
   background: none;
   border: none;
   font-size: 32px;
-  color: #6b7280;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 0;
   width: 32px;
@@ -151,7 +151,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .close-button:hover {
-  background: #f3f4f6;
+  background: var(--bg-secondary);
 }
 
 .modal-body {
@@ -169,7 +169,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 .profile-section h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
   margin-bottom: 16px;
 }
 
@@ -183,17 +183,17 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   display: flex;
   justify-content: space-between;
   padding: 12px;
-  background: #f9fafb;
+  background: var(--bg-secondary);
   border-radius: 6px;
 }
 
 .info-row label {
   font-weight: 500;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .info-row span {
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .toast {
