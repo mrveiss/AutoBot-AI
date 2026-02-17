@@ -92,6 +92,14 @@
         state: restarted
       become: true
 
+    - name: "[PLAY 1] SLM | Wait for backend to be ready"
+      wait_for:
+        host: 172.16.168.19
+        port: 443
+        timeout: 60
+        delay: 5
+      delegate_to: localhost
+
     - name: "[PLAY 1] SLM | Login to get auth token"
       uri:
         url: "https://172.16.168.19/api/auth/login"
