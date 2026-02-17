@@ -91,15 +91,15 @@ const typeOptions = [
 </script>
 
 <template>
-  <div class="activity-timeline h-full flex flex-col bg-gray-800 rounded-lg">
+  <div class="activity-timeline h-full flex flex-col bg-autobot-bg-secondary rounded-lg">
     <!-- Header -->
-    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-      <h3 class="text-sm font-semibold text-gray-200">Activity Timeline</h3>
-      <span class="text-xs text-gray-500">{{ activities.length }} activities</span>
+    <div class="flex items-center justify-between px-4 py-3 border-b border-autobot-border">
+      <h3 class="text-sm font-semibold text-autobot-text-primary">Activity Timeline</h3>
+      <span class="text-xs text-autobot-text-muted">{{ activities.length }} activities</span>
     </div>
 
     <!-- Filter -->
-    <div class="px-4 py-2 border-b border-gray-700">
+    <div class="px-4 py-2 border-b border-autobot-border">
       <div class="flex gap-1">
         <button
           v-for="option in typeOptions"
@@ -108,7 +108,7 @@ const typeOptions = [
             'px-2 py-1 text-xs rounded transition-colors',
             filterType === option.value
               ? 'bg-blue-500 text-white'
-              : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+              : 'bg-autobot-bg-tertiary text-autobot-text-muted hover:bg-autobot-bg-secondary'
           ]"
           @click="filterType = option.value as SessionActivity['type'] | 'all'"
         >
@@ -122,7 +122,7 @@ const typeOptions = [
       <!-- No session selected -->
       <div
         v-if="!currentSession"
-        class="flex flex-col items-center justify-center h-full text-gray-500 p-4"
+        class="flex flex-col items-center justify-center h-full text-autobot-text-muted p-4"
       >
         <i class="bi bi-chat-square-dots text-3xl mb-2" />
         <span class="text-sm text-center">Select a chat session to view activity timeline</span>
@@ -131,11 +131,11 @@ const typeOptions = [
       <!-- No activities -->
       <div
         v-else-if="!hasActivities"
-        class="flex flex-col items-center justify-center h-full text-gray-500 p-4"
+        class="flex flex-col items-center justify-center h-full text-autobot-text-muted p-4"
       >
         <i class="bi bi-clock-history text-3xl mb-2" />
         <span class="text-sm text-center">No activities recorded yet</span>
-        <span class="text-xs text-gray-600 mt-1">Activities will appear here as you work</span>
+        <span class="text-xs text-autobot-text-muted mt-1">Activities will appear here as you work</span>
       </div>
 
       <!-- Activity groups by date -->
@@ -146,8 +146,8 @@ const typeOptions = [
           class="mb-4"
         >
           <!-- Date header -->
-          <div class="sticky top-0 bg-gray-800 py-1 mb-2">
-            <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <div class="sticky top-0 bg-autobot-bg-secondary py-1 mb-2">
+            <span class="text-xs font-medium text-autobot-text-muted uppercase tracking-wide">
               {{ group.date }}
             </span>
           </div>
@@ -160,7 +160,7 @@ const typeOptions = [
               class="relative pl-6"
             >
               <!-- Timeline line -->
-              <div class="absolute left-2 top-0 bottom-0 w-px bg-gray-700" />
+              <div class="absolute left-2 top-0 bottom-0 w-px bg-autobot-border" />
 
               <!-- Timeline dot -->
               <div
@@ -173,26 +173,26 @@ const typeOptions = [
               </div>
 
               <!-- Activity card -->
-              <div class="bg-gray-700/50 rounded-lg p-3 hover:bg-gray-700 transition-colors">
+              <div class="bg-autobot-bg-tertiary/50 rounded-lg p-3 hover:bg-autobot-bg-tertiary transition-colors">
                 <!-- Header -->
                 <div class="flex items-center justify-between mb-1">
-                  <span class="text-xs font-medium text-gray-400">
+                  <span class="text-xs font-medium text-autobot-text-muted">
                     {{ getTypeStyle(activity.type).label }}
                   </span>
-                  <span class="text-xs text-gray-500">
+                  <span class="text-xs text-autobot-text-muted">
                     {{ formatTime(activity.timestamp) }}
                   </span>
                 </div>
 
                 <!-- Content -->
-                <div class="text-sm text-gray-200">
+                <div class="text-sm text-autobot-text-primary">
                   {{ truncate(activity.content) }}
                 </div>
 
                 <!-- User attribution -->
                 <div
                   v-if="activity.userId && activity.userId !== 'anonymous'"
-                  class="mt-1 text-xs text-gray-500"
+                  class="mt-1 text-xs text-autobot-text-muted"
                 >
                   by {{ activity.userId }}
                 </div>
@@ -211,11 +211,11 @@ const typeOptions = [
                 <!-- Metadata (expandable in future) -->
                 <div
                   v-if="activity.metadata && Object.keys(activity.metadata).length > 0"
-                  class="mt-2 text-xs text-gray-500"
+                  class="mt-2 text-xs text-autobot-text-muted"
                 >
                   <details class="cursor-pointer">
-                    <summary class="hover:text-gray-400">Details</summary>
-                    <pre class="mt-1 p-2 bg-gray-800 rounded text-xs overflow-x-auto">{{ JSON.stringify(activity.metadata, null, 2) }}</pre>
+                    <summary class="hover:text-autobot-text-secondary">Details</summary>
+                    <pre class="mt-1 p-2 bg-autobot-bg-secondary rounded text-xs overflow-x-auto">{{ JSON.stringify(activity.metadata, null, 2) }}</pre>
                   </details>
                 </div>
               </div>

@@ -63,18 +63,18 @@ const dismissAll = () => {
 <template>
   <div v-if="hasNotifications" class="secret-notifications">
     <!-- Notification container -->
-    <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+    <div class="bg-autobot-bg-secondary rounded-lg border border-autobot-border overflow-hidden">
       <!-- Header -->
-      <div class="flex items-center justify-between px-4 py-2 bg-gray-750 border-b border-gray-700">
+      <div class="flex items-center justify-between px-4 py-2 bg-autobot-bg-tertiary border-b border-autobot-border">
         <div class="flex items-center gap-2">
           <i class="bi bi-shield-lock text-yellow-400" />
-          <span class="text-sm font-medium text-gray-200">Secret Updates</span>
+          <span class="text-sm font-medium text-autobot-text-primary">Secret Updates</span>
           <span class="px-1.5 py-0.5 text-xs rounded-full bg-yellow-500/20 text-yellow-400">
             {{ secretNotifications.length }}
           </span>
         </div>
         <button
-          class="text-xs text-gray-400 hover:text-gray-200 transition-colors"
+          class="text-xs text-autobot-text-muted hover:text-autobot-text-primary transition-colors"
           @click="dismissAll"
         >
           Clear all
@@ -88,7 +88,7 @@ const dismissAll = () => {
             v-for="notification in visibleNotifications"
             :key="`${notification.secretId}-${notification.timestamp.getTime()}`"
             :class="[
-              'flex items-start gap-3 px-4 py-3 border-b border-gray-700/50 last:border-b-0',
+              'flex items-start gap-3 px-4 py-3 border-b border-autobot-border last:border-b-0',
               getActionStyle(notification.action)
             ]"
           >
@@ -153,7 +153,5 @@ const dismissAll = () => {
   transform: translateX(20px);
 }
 
-.bg-gray-750 {
-  background-color: var(--bg-tertiary);
-}
+
 </style>

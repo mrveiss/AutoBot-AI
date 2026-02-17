@@ -66,12 +66,12 @@ const props = defineProps<{
         class="relative"
         :title="`You (${myPresence.status})`"
       >
-        <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-medium text-white ring-2 ring-gray-800">
+        <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-medium text-white ring-2 ring-autobot-bg-secondary">
           {{ getInitials(myPresence.username) }}
         </div>
         <span
           :class="[
-            'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-gray-800',
+            'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-autobot-bg-secondary',
             getStatusColor(myPresence.status)
           ]"
         />
@@ -86,12 +86,12 @@ const props = defineProps<{
           :style="{ zIndex: 3 - index }"
           :title="`${collaborator.username} (${collaborator.status}) - ${collaborator.currentTab || 'unknown'} tab`"
         >
-          <div class="w-7 h-7 rounded-full bg-gray-600 flex items-center justify-center text-xs font-medium text-gray-200 ring-2 ring-gray-800">
+          <div class="w-7 h-7 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-xs font-medium text-autobot-text-primary ring-2 ring-autobot-bg-secondary">
             {{ getInitials(collaborator.username) }}
           </div>
           <span
             :class="[
-              'absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-gray-800',
+              'absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-autobot-bg-secondary',
               getStatusColor(collaborator.status)
             ]"
           />
@@ -101,7 +101,7 @@ const props = defineProps<{
       <!-- Overflow indicator -->
       <div
         v-if="otherCollaborators.length > 3"
-        class="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center text-xs font-medium text-gray-400 ring-2 ring-gray-800"
+        class="w-7 h-7 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-xs font-medium text-autobot-text-muted ring-2 ring-autobot-bg-secondary"
       >
         +{{ otherCollaborators.length - 3 }}
       </div>
@@ -118,7 +118,7 @@ const props = defineProps<{
 
     <!-- Expanded View -->
     <div v-else class="space-y-2">
-      <div class="text-xs font-medium text-gray-400 mb-2">
+      <div class="text-xs font-medium text-autobot-text-muted mb-2">
         Participants ({{ sessionPresence.length }})
       </div>
 
@@ -133,19 +133,19 @@ const props = defineProps<{
           </div>
           <span
             :class="[
-              'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-gray-800',
+              'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-autobot-bg-secondary',
               getStatusColor(myPresence.status)
             ]"
           />
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
-            <span class="text-sm font-medium text-gray-200 truncate">
+            <span class="text-sm font-medium text-autobot-text-primary truncate">
               {{ myPresence.username }}
             </span>
             <span class="text-xs text-blue-400">(you)</span>
           </div>
-          <div class="flex items-center gap-1 text-xs text-gray-400">
+          <div class="flex items-center gap-1 text-xs text-autobot-text-muted">
             <i :class="`bi bi-${getTabIcon(myPresence.currentTab)}`" />
             <span>{{ myPresence.currentTab || 'unknown' }} tab</span>
           </div>
@@ -156,29 +156,29 @@ const props = defineProps<{
       <div
         v-for="collaborator in otherCollaborators"
         :key="collaborator.userId"
-        class="flex items-center gap-3 p-2 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors"
+        class="flex items-center gap-3 p-2 bg-autobot-bg-tertiary/50 rounded-lg hover:bg-autobot-bg-tertiary transition-colors"
       >
         <div class="relative">
-          <div class="w-9 h-9 rounded-full bg-gray-600 flex items-center justify-center text-sm font-medium text-gray-200">
+          <div class="w-9 h-9 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-sm font-medium text-autobot-text-primary">
             {{ getInitials(collaborator.username) }}
           </div>
           <span
             :class="[
-              'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-gray-800',
+              'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-autobot-bg-secondary',
               getStatusColor(collaborator.status)
             ]"
           />
         </div>
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-medium text-gray-200 truncate">
+          <div class="text-sm font-medium text-autobot-text-primary truncate">
             {{ collaborator.username }}
           </div>
-          <div class="flex items-center gap-1 text-xs text-gray-400">
+          <div class="flex items-center gap-1 text-xs text-autobot-text-muted">
             <i :class="`bi bi-${getTabIcon(collaborator.currentTab)}`" />
             <span>{{ collaborator.currentTab || 'unknown' }} tab</span>
           </div>
         </div>
-        <div class="text-xs text-gray-500">
+        <div class="text-xs text-autobot-text-muted">
           {{ collaborator.status }}
         </div>
       </div>
@@ -186,7 +186,7 @@ const props = defineProps<{
       <!-- Empty state -->
       <div
         v-if="sessionPresence.length === 0"
-        class="text-center py-4 text-gray-500"
+        class="text-center py-4 text-autobot-text-muted"
       >
         <i class="bi bi-people text-lg mb-1" />
         <div class="text-xs">No participants yet</div>

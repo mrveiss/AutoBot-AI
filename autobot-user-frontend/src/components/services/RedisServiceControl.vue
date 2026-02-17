@@ -1,18 +1,18 @@
 <template>
-  <div class="redis-service-control bg-white rounded-lg shadow-md overflow-hidden">
+  <div class="redis-service-control bg-autobot-bg-card rounded-lg shadow-md overflow-hidden">
     <!-- Service Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-red-50 to-red-100">
       <div class="flex items-center space-x-3">
         <i class="fas fa-database text-2xl text-red-600"></i>
         <div>
-          <h3 class="text-lg font-semibold text-gray-900">Redis Service</h3>
-          <p class="text-sm text-gray-600">VM3: {{ serviceStatus.vm_info?.host || NetworkConstants.REDIS_VM_IP }}</p>
+          <h3 class="text-lg font-semibold text-autobot-text-primary">Redis Service</h3>
+          <p class="text-sm text-autobot-text-secondary">VM3: {{ serviceStatus.vm_info?.host || NetworkConstants.REDIS_VM_IP }}</p>
         </div>
       </div>
 
       <!-- Status Badge -->
       <div class="flex items-center space-x-3">
-        <span class="text-xs text-gray-500">
+        <span class="text-xs text-autobot-text-muted">
           Last check: {{ formatLastCheck(serviceStatus.last_check) }}
         </span>
         <StatusBadge :variant="statusVariant" class="inline-flex items-center">
@@ -28,23 +28,23 @@
     <!-- Service Details (when running) -->
     <div
       v-if="serviceStatus.status === 'running'"
-      class="grid grid-cols-1 md:grid-cols-4 gap-4 px-6 py-4 bg-gray-50 border-b"
+      class="grid grid-cols-1 md:grid-cols-4 gap-4 px-6 py-4 bg-autobot-bg-secondary border-b"
     >
       <div class="detail-item">
-        <span class="text-xs text-gray-500 uppercase tracking-wide">Uptime</span>
-        <span class="text-lg font-semibold text-gray-900">{{ formatUptime(serviceStatus.uptime_seconds) }}</span>
+        <span class="text-xs text-autobot-text-muted uppercase tracking-wide">Uptime</span>
+        <span class="text-lg font-semibold text-autobot-text-primary">{{ formatUptime(serviceStatus.uptime_seconds) }}</span>
       </div>
       <div class="detail-item">
-        <span class="text-xs text-gray-500 uppercase tracking-wide">Memory</span>
-        <span class="text-lg font-semibold text-gray-900">{{ serviceStatus.memory_mb || 0 }} MB</span>
+        <span class="text-xs text-autobot-text-muted uppercase tracking-wide">Memory</span>
+        <span class="text-lg font-semibold text-autobot-text-primary">{{ serviceStatus.memory_mb || 0 }} MB</span>
       </div>
       <div class="detail-item">
-        <span class="text-xs text-gray-500 uppercase tracking-wide">Connections</span>
-        <span class="text-lg font-semibold text-gray-900">{{ serviceStatus.connections || 0 }}</span>
+        <span class="text-xs text-autobot-text-muted uppercase tracking-wide">Connections</span>
+        <span class="text-lg font-semibold text-autobot-text-primary">{{ serviceStatus.connections || 0 }}</span>
       </div>
       <div class="detail-item">
-        <span class="text-xs text-gray-500 uppercase tracking-wide">PID</span>
-        <span class="text-lg font-semibold text-gray-900">{{ serviceStatus.pid || 'N/A' }}</span>
+        <span class="text-xs text-autobot-text-muted uppercase tracking-wide">PID</span>
+        <span class="text-lg font-semibold text-autobot-text-primary">{{ serviceStatus.pid || 'N/A' }}</span>
       </div>
     </div>
 
@@ -97,7 +97,7 @@
 
     <!-- Health Status Section -->
     <div v-if="healthStatus" class="px-6 py-4">
-      <h4 class="text-md font-semibold text-gray-900 mb-3">Health Status</h4>
+      <h4 class="text-md font-semibold text-autobot-text-primary mb-3">Health Status</h4>
 
       <!-- Overall Health Indicator -->
       <StatusBadge :variant="healthVariant" size="medium" class="font-semibold mb-4">
@@ -113,13 +113,13 @@
           :class="getHealthCheckCardClass(check.status)"
         >
           <div class="flex items-center justify-between mb-2">
-            <span class="text-sm font-medium text-gray-700 capitalize">{{ name }}</span>
+            <span class="text-sm font-medium text-autobot-text-secondary capitalize">{{ name }}</span>
             <StatusBadge :variant="getHealthCheckVariant(check.status)" size="small" class="font-bold">
               {{ check.status }}
             </StatusBadge>
           </div>
-          <p class="text-xs text-gray-600 mb-1">{{ check.message }}</p>
-          <p class="text-xs text-gray-500">{{ check.duration_ms }}ms</p>
+          <p class="text-xs text-autobot-text-secondary mb-1">{{ check.message }}</p>
+          <p class="text-xs text-autobot-text-muted">{{ check.duration_ms }}ms</p>
         </div>
       </div>
 
@@ -170,10 +170,10 @@
     </div>
 
     <!-- Loading Overlay -->
-    <div v-if="loading" class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center">
+    <div v-if="loading" class="absolute inset-0 bg-autobot-bg-card bg-opacity-75 flex items-center justify-center">
       <div class="text-center">
         <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-2"></i>
-        <p class="text-sm text-gray-600">Processing...</p>
+        <p class="text-sm text-autobot-text-secondary">Processing...</p>
       </div>
     </div>
 
@@ -183,7 +183,7 @@
       :title="confirmDialog.title"
       size="medium"
     >
-      <p class="text-sm text-gray-700 mb-4">{{ confirmDialog.message }}</p>
+      <p class="text-sm text-autobot-text-secondary mb-4">{{ confirmDialog.message }}</p>
       <div
         v-if="confirmDialog.warning"
         class="p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded"

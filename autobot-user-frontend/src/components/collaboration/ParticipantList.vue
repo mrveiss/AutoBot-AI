@@ -121,12 +121,12 @@ const inviteParticipant = () => {
     <!-- Header -->
     <div class="flex items-center justify-between mb-3">
       <div class="flex items-center gap-2">
-        <h3 class="text-sm font-semibold text-gray-200">
+        <h3 class="text-sm font-semibold text-autobot-text-primary">
           Participants
         </h3>
         <span
           v-if="isConnected"
-          class="px-2 py-0.5 text-xs rounded-full bg-gray-700 text-gray-400"
+          class="px-2 py-0.5 text-xs rounded-full bg-autobot-bg-tertiary text-autobot-text-muted"
         >
           {{ participantsWithRoles.length }}
         </span>
@@ -162,7 +162,7 @@ const inviteParticipant = () => {
             'participant-item rounded-lg p-3 transition-all',
             participant.userId === myPresence?.userId
               ? 'bg-blue-500/10 border border-blue-500/20'
-              : 'bg-gray-700/50 hover:bg-gray-700',
+              : 'bg-autobot-bg-tertiary/50 hover:bg-autobot-bg-tertiary',
             removingUserId === participant.userId && 'opacity-50'
           ]"
         >
@@ -171,13 +171,13 @@ const inviteParticipant = () => {
             <div class="relative flex-shrink-0">
               <div
                 class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium"
-                :class="participant.userId === myPresence?.userId ? 'bg-blue-600 text-white' : 'bg-gray-600 text-gray-200'"
+                :class="participant.userId === myPresence?.userId ? 'bg-blue-600 text-white' : 'bg-autobot-bg-tertiary text-autobot-text-primary'"
               >
                 {{ getInitials(participant.username) }}
               </div>
               <span
                 :class="[
-                  'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-gray-800',
+                  'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-autobot-bg-secondary',
                   getStatusColor(participant.status)
                 ]"
                 :title="participant.status"
@@ -187,7 +187,7 @@ const inviteParticipant = () => {
             <!-- Info -->
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-1">
-                <span class="text-sm font-medium text-gray-200 truncate">
+                <span class="text-sm font-medium text-autobot-text-primary truncate">
                   {{ participant.username }}
                 </span>
                 <span
@@ -197,7 +197,7 @@ const inviteParticipant = () => {
                   (you)
                 </span>
               </div>
-              <div v-if="!compact" class="text-xs text-gray-400 truncate mb-1">
+              <div v-if="!compact" class="text-xs text-autobot-text-muted truncate mb-1">
                 {{ participant.email }}
               </div>
               <div class="flex items-center gap-2 flex-wrap">
@@ -221,14 +221,14 @@ const inviteParticipant = () => {
                 </button>
 
                 <!-- Status badge -->
-                <span class="text-xs text-gray-500">
+                <span class="text-xs text-autobot-text-muted">
                   {{ participant.status }}
                 </span>
 
                 <!-- Current tab indicator -->
                 <span
                   v-if="participant.currentTab"
-                  class="text-xs text-gray-500 flex items-center gap-1"
+                  class="text-xs text-autobot-text-muted flex items-center gap-1"
                 >
                   <i :class="`bi bi-${participant.currentTab === 'chat' ? 'chat-dots' : participant.currentTab}`" />
                   <span v-if="!compact">{{ participant.currentTab }}</span>
@@ -238,20 +238,20 @@ const inviteParticipant = () => {
               <!-- Role menu dropdown -->
               <div
                 v-if="showRoleMenu === participant.userId"
-                class="mt-2 bg-gray-800 border border-gray-600 rounded-lg shadow-lg overflow-hidden"
+                class="mt-2 bg-autobot-bg-secondary border border-autobot-border rounded-lg shadow-lg overflow-hidden"
                 role="menu"
               >
                 <button
                   v-for="role in ['collaborator', 'viewer'] as const"
                   :key="role"
-                  class="w-full px-3 py-2 text-left text-xs hover:bg-gray-700 transition-colors text-gray-200"
-                  :class="{ 'bg-gray-700': participant.role === role }"
+                  class="w-full px-3 py-2 text-left text-xs hover:bg-autobot-bg-tertiary transition-colors text-autobot-text-primary"
+                  :class="{ 'bg-autobot-bg-tertiary': participant.role === role }"
                   role="menuitem"
                   @click="changeRole(participant.userId, role)"
                 >
                   {{ getRoleBadge(role).label }}
                 </button>
-                <hr class="border-gray-700">
+                <hr class="border-autobot-border">
                 <button
                   class="w-full px-3 py-2 text-left text-xs hover:bg-red-500/10 transition-colors text-red-400"
                   role="menuitem"
@@ -269,7 +269,7 @@ const inviteParticipant = () => {
       <!-- Empty state -->
       <div
         v-if="participantsWithRoles.length === 0"
-        class="text-center py-6 text-gray-500"
+        class="text-center py-6 text-autobot-text-muted"
       >
         <i class="bi bi-people text-2xl mb-2" />
         <div class="text-sm">No participants yet</div>

@@ -155,18 +155,18 @@ const roleOptions = [
       <Transition name="modal-content">
         <div
           v-if="props.modelValue"
-          class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-md border border-gray-700"
+          class="bg-autobot-bg-secondary rounded-lg shadow-2xl w-full max-w-md border border-autobot-border"
           role="dialog"
           aria-labelledby="invite-dialog-title"
           aria-modal="true"
         >
           <!-- Header -->
-          <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-            <h2 id="invite-dialog-title" class="text-lg font-semibold text-gray-100">
+          <div class="flex items-center justify-between px-6 py-4 border-b border-autobot-border">
+            <h2 id="invite-dialog-title" class="text-lg font-semibold text-autobot-text-primary">
               Invite to Session
             </h2>
             <button
-              class="text-gray-400 hover:text-gray-200 transition-colors"
+              class="text-autobot-text-muted hover:text-autobot-text-primary transition-colors"
               aria-label="Close dialog"
               @click="closeDialog"
             >
@@ -178,17 +178,17 @@ const roleOptions = [
           <div class="px-6 py-4 space-y-4">
             <!-- Search input -->
             <div>
-              <label for="user-search" class="block text-sm font-medium text-gray-300 mb-2">
+              <label for="user-search" class="block text-sm font-medium text-autobot-text-secondary mb-2">
                 Search users
               </label>
               <div class="relative">
-                <i class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <i class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-autobot-text-muted" />
                 <input
                   id="user-search"
                   v-model="searchQuery"
                   type="text"
                   placeholder="Search by username or email..."
-                  class="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  class="w-full pl-10 pr-4 py-2 bg-autobot-bg-tertiary border border-autobot-border rounded-lg text-autobot-text-primary placeholder-autobot-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   autocomplete="off"
                 >
               </div>
@@ -198,7 +198,7 @@ const roleOptions = [
             <div class="max-h-60 overflow-y-auto custom-scrollbar space-y-1">
               <!-- Available users -->
               <div v-if="availableUsers.length > 0">
-                <div class="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">
+                <div class="text-xs font-medium text-autobot-text-muted uppercase tracking-wide mb-2">
                   Available ({{ availableUsers.length }})
                 </div>
                 <button
@@ -208,18 +208,18 @@ const roleOptions = [
                     'w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left',
                     selectedUserId === user.id
                       ? 'bg-blue-500/20 border border-blue-500/30'
-                      : 'bg-gray-700/50 hover:bg-gray-700 border border-transparent'
+                      : 'bg-autobot-bg-tertiary/50 hover:bg-autobot-bg-tertiary border border-transparent'
                   ]"
                   @click="selectUser(user.id)"
                 >
-                  <div class="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-sm font-medium text-gray-200">
+                  <div class="w-10 h-10 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-sm font-medium text-autobot-text-primary">
                     {{ getInitials(user.username) }}
                   </div>
                   <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-gray-200 truncate">
+                    <div class="text-sm font-medium text-autobot-text-primary truncate">
                       {{ user.username }}
                     </div>
-                    <div class="text-xs text-gray-400 truncate">
+                    <div class="text-xs text-autobot-text-muted truncate">
                       {{ user.email }}
                     </div>
                   </div>
@@ -232,26 +232,26 @@ const roleOptions = [
 
               <!-- Already in session -->
               <div v-if="alreadyInSession.length > 0" class="mt-3">
-                <div class="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">
+                <div class="text-xs font-medium text-autobot-text-muted uppercase tracking-wide mb-2">
                   Already in session ({{ alreadyInSession.length }})
                 </div>
                 <div
                   v-for="user in alreadyInSession"
                   :key="user.id"
-                  class="w-full flex items-center gap-3 p-3 rounded-lg bg-gray-700/30 opacity-50 cursor-not-allowed"
+                  class="w-full flex items-center gap-3 p-3 rounded-lg bg-autobot-bg-tertiary/30 opacity-50 cursor-not-allowed"
                 >
-                  <div class="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-sm font-medium text-gray-200">
+                  <div class="w-10 h-10 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-sm font-medium text-autobot-text-primary">
                     {{ getInitials(user.username) }}
                   </div>
                   <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-gray-200 truncate">
+                    <div class="text-sm font-medium text-autobot-text-primary truncate">
                       {{ user.username }}
                     </div>
-                    <div class="text-xs text-gray-400 truncate">
+                    <div class="text-xs text-autobot-text-muted truncate">
                       {{ user.email }}
                     </div>
                   </div>
-                  <span class="text-xs text-gray-500">
+                  <span class="text-xs text-autobot-text-muted">
                     In session
                   </span>
                 </div>
@@ -260,7 +260,7 @@ const roleOptions = [
               <!-- No results -->
               <div
                 v-if="filteredUsers.length === 0"
-                class="text-center py-8 text-gray-500"
+                class="text-center py-8 text-autobot-text-muted"
               >
                 <i class="bi bi-search text-2xl mb-2" />
                 <div class="text-sm">No users found</div>
@@ -269,7 +269,7 @@ const roleOptions = [
 
             <!-- Role selection -->
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-2">
+              <label class="block text-sm font-medium text-autobot-text-secondary mb-2">
                 Permission level
               </label>
               <div class="space-y-2">
@@ -280,7 +280,7 @@ const roleOptions = [
                     'w-full flex items-start gap-3 p-3 rounded-lg border transition-all text-left',
                     selectedRole === role.value
                       ? 'bg-blue-500/20 border-blue-500/50'
-                      : 'bg-gray-700/50 border-gray-600 hover:bg-gray-700'
+                      : 'bg-autobot-bg-tertiary/50 border-autobot-border hover:bg-autobot-bg-tertiary'
                   ]"
                   @click="selectedRole = role.value"
                 >
@@ -289,7 +289,7 @@ const roleOptions = [
                       'w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5',
                       selectedRole === role.value
                         ? 'border-blue-500 bg-blue-500'
-                        : 'border-gray-500 bg-transparent'
+                        : 'border-autobot-border bg-transparent'
                     ]"
                   >
                     <i
@@ -299,12 +299,12 @@ const roleOptions = [
                   </div>
                   <div class="flex-1">
                     <div class="flex items-center gap-2 mb-1">
-                      <i :class="`bi bi-${role.icon} text-gray-400`" />
-                      <span class="text-sm font-medium text-gray-200">
+                      <i :class="`bi bi-${role.icon} text-autobot-text-muted`" />
+                      <span class="text-sm font-medium text-autobot-text-primary">
                         {{ role.label }}
                       </span>
                     </div>
-                    <div class="text-xs text-gray-400">
+                    <div class="text-xs text-autobot-text-muted">
                       {{ role.description }}
                     </div>
                   </div>
@@ -324,9 +324,9 @@ const roleOptions = [
           </div>
 
           <!-- Footer -->
-          <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700">
+          <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-autobot-border">
             <button
-              class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
+              class="px-4 py-2 text-sm rounded bg-autobot-bg-tertiary hover:bg-autobot-bg-secondary text-autobot-text-primary transition-colors"
               @click="closeDialog"
             >
               Cancel

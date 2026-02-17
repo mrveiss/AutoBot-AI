@@ -67,10 +67,10 @@ const onlineCount = computed(() => {
 </script>
 
 <template>
-  <div class="activity-feed bg-gray-800 rounded-lg p-4 h-full flex flex-col">
+  <div class="activity-feed bg-autobot-bg-secondary rounded-lg p-4 h-full flex flex-col">
     <!-- Header -->
     <div class="flex items-center justify-between mb-3">
-      <h3 class="text-sm font-semibold text-gray-200">Activity Feed</h3>
+      <h3 class="text-sm font-semibold text-autobot-text-primary">Activity Feed</h3>
       <div class="flex items-center gap-2">
         <span
           :class="[
@@ -78,7 +78,7 @@ const onlineCount = computed(() => {
             isConnected ? 'bg-green-500' : 'bg-red-500'
           ]"
         />
-        <span class="text-xs text-gray-400">
+        <span class="text-xs text-autobot-text-muted">
           {{ onlineCount }} online
         </span>
       </div>
@@ -90,14 +90,14 @@ const onlineCount = computed(() => {
         <div
           v-for="activity in visibleActivities"
           :key="activity.activity.id"
-          class="activity-item bg-gray-700/50 rounded px-3 py-2 hover:bg-gray-700 transition-colors"
+          class="activity-item bg-autobot-bg-tertiary/50 rounded px-3 py-2 hover:bg-autobot-bg-tertiary transition-colors"
         >
           <!-- User and Time -->
           <div class="flex items-center justify-between mb-1">
-            <span class="text-xs font-medium text-gray-300">
+            <span class="text-xs font-medium text-autobot-text-secondary">
               {{ activity.username }}
             </span>
-            <span class="text-xs text-gray-500">
+            <span class="text-xs text-autobot-text-muted">
               {{ formatTime(activity.timestamp) }}
             </span>
           </div>
@@ -107,7 +107,7 @@ const onlineCount = computed(() => {
             <span :class="['text-sm', getActivityColor(activity.activity.type)]">
               <i :class="`bi bi-${getActivityIcon(activity.activity.type)}`" />
             </span>
-            <span class="text-xs text-gray-400 break-all">
+            <span class="text-xs text-autobot-text-muted break-all">
               {{ truncateContent(activity.activity.content) }}
             </span>
           </div>
@@ -128,7 +128,7 @@ const onlineCount = computed(() => {
       <!-- Empty State -->
       <div
         v-if="visibleActivities.length === 0"
-        class="flex flex-col items-center justify-center py-8 text-gray-500"
+        class="flex flex-col items-center justify-center py-8 text-autobot-text-muted"
       >
         <i class="bi bi-activity text-2xl mb-2" />
         <span class="text-sm">No recent activity</span>
