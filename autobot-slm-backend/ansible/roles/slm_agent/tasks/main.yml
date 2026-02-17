@@ -13,6 +13,33 @@
     fail_msg: "slm_node_id must be defined for each host"
   tags: ['slm_agent', 'validate']
 
+# Clean up legacy autobot-agent.service that predated this role (#917)
+- name: "SLM Agent | Check if legacy autobot-agent.service exists"
+  ansible.builtin.stat:
+    path: /etc/systemd/system/autobot-agent.service
+  register: legacy_agent_unit
+  tags: ['slm_agent', 'cleanup']
+
+- name: "SLM Agent | Stop and disable legacy autobot-agent.service"
+  ansible.builtin.systemd:
+    name: autobot-agent
+    state: stopped
+    enabled: false
+    daemon_reload: true
+  when: legacy_agent_unit.stat.exists
+  failed_when: false
+  become: yes
+  tags: ['slm_agent', 'cleanup']
+
+- name: "SLM Agent | Remove legacy autobot-agent.service unit file"
+  ansible.builtin.file:
+    path: /etc/systemd/system/autobot-agent.service
+    state: absent
+  when: legacy_agent_unit.stat.exists
+  become: yes
+  notify: Reload systemd
+  tags: ['slm_agent', 'cleanup']
+
 - name: "SLM Agent | Create agent directories"
   file:
     path: "{{ item }}"
