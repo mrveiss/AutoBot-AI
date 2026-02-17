@@ -272,6 +272,7 @@ async def _rsync_component(
         "--delete",
         "-e",
         ssh_opts,
+        "--rsync-path=sudo rsync",  # source may need root to read e.g. /home/kali/
     ]
     for exc in excludes:
         cmd.append(f"--exclude={exc}")
