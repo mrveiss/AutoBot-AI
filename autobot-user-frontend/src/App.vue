@@ -8,14 +8,14 @@
 
     <!-- Header - Issue #901: Professional solid color (no gradients) -->
     <!-- Hide navigation bar on login page -->
-    <header v-if="!isLoginPage" class="bg-slate-800 border-b border-slate-700 relative z-30" style="height: 56px;">
+    <header v-if="!isLoginPage" class="bg-autobot-bg-secondary border-b border-autobot-border relative z-30" style="height: 56px;">
       <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between" style="height: 56px;">
           <!-- Logo/Brand with System Status -->
           <div class="flex-shrink-0 flex items-center">
             <button
               @click="toggleSystemStatus"
-              class="flex items-center space-x-3 hover:bg-slate-700 rounded-md px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-electric-500 focus:ring-opacity-50"
+              class="flex items-center space-x-3 hover:bg-autobot-bg-tertiary rounded-md px-2 py-1 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-autobot-primary focus:ring-opacity-50"
               :title="getSystemStatusTooltip()"
             >
               <div class="relative w-8 h-8 bg-white rounded flex items-center justify-center">
@@ -42,8 +42,8 @@
                 <router-link
                   to="/chat"
                   :class="{
-                    'bg-electric-600 text-white': $route.path.startsWith('/chat'),
-                    'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/chat')
+                    'bg-autobot-primary text-white': $route.path.startsWith('/chat'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/chat')
                   }"
                   class="px-3 py-2 rounded text-sm font-medium transition-colors duration-150"
                 >
@@ -58,8 +58,8 @@
                 <router-link
                   to="/knowledge"
                   :class="{
-                    'bg-electric-600 text-white': $route.path.startsWith('/knowledge'),
-                    'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/knowledge')
+                    'bg-autobot-primary text-white': $route.path.startsWith('/knowledge'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/knowledge')
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
@@ -74,8 +74,8 @@
                 <router-link
                   to="/automation"
                   :class="{
-                    'bg-electric-600 text-white': $route.path.startsWith('/automation'),
-                    'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/automation')
+                    'bg-autobot-primary text-white': $route.path.startsWith('/automation'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/automation')
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
@@ -90,8 +90,8 @@
                 <router-link
                   to="/analytics"
                   :class="{
-                    'bg-electric-600 text-white': $route.path.startsWith('/analytics'),
-                    'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/analytics')
+                    'bg-autobot-primary text-white': $route.path.startsWith('/analytics'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/analytics')
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >
@@ -107,8 +107,8 @@
                 <router-link
                   to="/secrets"
                   :class="{
-                    'bg-electric-600 text-white': $route.path.startsWith('/secrets'),
-                    'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/secrets')
+                    'bg-autobot-primary text-white': $route.path.startsWith('/secrets'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/secrets')
                   }"
                   class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
                 >

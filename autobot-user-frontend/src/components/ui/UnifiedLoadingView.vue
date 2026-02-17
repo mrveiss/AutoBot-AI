@@ -192,7 +192,8 @@ const cancelLoading = () => {
 
 /* Updating Indicator */
 .updating-indicator {
-  @apply absolute top-4 right-4 flex items-center gap-2 bg-autobot-bg-card/90 px-3 py-1.5 rounded-full shadow-sm;
+  @apply absolute top-4 right-4 flex items-center gap-2 bg-autobot-bg-card px-3 py-1.5 rounded-full shadow-sm;
+  opacity: 0.9;
 }
 
 .updating-pulse {
