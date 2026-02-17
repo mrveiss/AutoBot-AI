@@ -1,6 +1,7 @@
 # === PYTHON VIRTUAL ENVIRONMENT ===
 # Virtual environment directories (created by setup_agent.sh)
 AutoBot/
+venv/
 venvs/
 bin/
 lib/
