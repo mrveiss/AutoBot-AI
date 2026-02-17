@@ -17,7 +17,22 @@
         <DocumentChangeFeed />
       </div>
 
-      <div class="main-categories-grid">
+      <!-- Categories loading state -->
+      <div v-if="isLoadingCategories" class="loading-state">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Loading categories...</p>
+      </div>
+
+      <!-- Categories error state -->
+      <div v-else-if="categoriesError" class="categories-error-state">
+        <i class="fas fa-exclamation-triangle"></i>
+        <p>{{ categoriesError }}</p>
+        <button class="retry-btn" @click="loadMainCategories">
+          <i class="fas fa-redo"></i> Retry
+        </button>
+      </div>
+
+      <div v-else class="main-categories-grid">
         <div
           v-for="category in mainCategories"
           :key="category.id"
@@ -189,6 +204,8 @@ const selectedMainCategory = ref<string | null>(null)
 const isLoadingKBStats = ref(false)
 const kbStats = ref<any>(null)
 const mainCategories = ref<any[]>([])
+const isLoadingCategories = ref(false)
+const categoriesError = ref<string | null>(null)
 
 // Category documents state
 const isLoadingCategoryDocs = ref(false)
@@ -263,13 +280,40 @@ const closeDocumentModal = () => {
 
 // Main category methods
 const loadMainCategories = async () => {
+  isLoadingCategories.value = true
+  categoriesError.value = null
   try {
     const response = await apiClient.get('/api/knowledge_base/categories/main')
+    if (response && typeof response === 'object' && 'status' in response) {
+      const status = (response as { status: number }).status
+      if (status === 401) {
+        categoriesError.value = 'Authentication required. Please log in to view categories.'
+        return
+      }
+      if (status === 403) {
+        categoriesError.value = 'You do not have permission to view knowledge categories.'
+        return
+      }
+    }
     const data = await parseApiResponse(response)
-    mainCategories.value = data?.categories || []
-  } catch (error) {
+    if (!data?.categories || !Array.isArray(data.categories)) {
+      categoriesError.value = 'Invalid response from server. Please try again.'
+      return
+    }
+    mainCategories.value = data.categories
+  } catch (error: unknown) {
     logger.error('Failed to load main categories:', error)
-    mainCategories.value = []
+    const status = (error as { status?: number; response?: { status?: number } })?.status
+      ?? (error as { response?: { status?: number } })?.response?.status
+    if (status === 401) {
+      categoriesError.value = 'Authentication required. Please log in to view categories.'
+    } else if (status === 403) {
+      categoriesError.value = 'You do not have permission to view knowledge categories.'
+    } else {
+      categoriesError.value = 'Failed to load categories. Please try again.'
+    }
+  } finally {
+    isLoadingCategories.value = false
   }
 }
 
@@ -921,6 +965,43 @@ onUnmounted(() => {
   text-align: center;
   padding: 3rem;
   color: var(--text-secondary);
+}
+
+.categories-error-state {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: var(--color-error-dark);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  border-radius: 0.75rem;
+  max-width: 500px;
+  margin: 2rem auto;
+}
+
+.categories-error-state i {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  display: block;
+}
+
+.categories-error-state p {
+  font-size: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.retry-btn {
+  padding: 0.5rem 1.25rem;
+  background: var(--color-error-dark);
+  color: #fff;
+  border: none;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.retry-btn:hover {
+  opacity: 0.85;
 }
 
 .categories-grid {

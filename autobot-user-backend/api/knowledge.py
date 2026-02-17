@@ -8,7 +8,7 @@ import json
 import logging
 from typing import List, Optional
 
-from auth_middleware import check_admin_permission
+from auth_middleware import check_admin_permission, get_current_user
 from exceptions import InternalError
 from fastapi import (
     APIRouter,
@@ -360,12 +360,13 @@ def _build_main_categories(CATEGORY_METADATA, category_counts: dict) -> list:
 )
 @router.get("/categories/main")
 async def get_main_categories(
-    admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
     req: Request = None,
 ):
     """Get the 3 main knowledge base categories with their metadata and stats.
 
-    Issue #744: Requires admin authentication.
+    Issue #910: Available to all authenticated users (not admin-only).
+    The 3 top-level categories are non-sensitive public metadata.
     """
     from backend.knowledge_categories import (
         CATEGORY_METADATA,
