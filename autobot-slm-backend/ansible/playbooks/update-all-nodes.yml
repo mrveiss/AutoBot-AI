@@ -92,6 +92,34 @@
         state: restarted
       become: true
 
+    - name: "[PLAY 1] SLM | Login to get auth token"
+      uri:
+        url: "https://172.16.168.19/api/auth/login"
+        method: POST
+        body_format: json
+        body:
+          username: "admin"
+          password: "{{ slm_admin_password | default('admin') }}"
+        validate_certs: false
+        status_code: 200
+      register: slm_login_play1
+      delegate_to: localhost
+      no_log: true
+
+    - name: "[PLAY 1] SLM | Mark node as synced in DB"
+      uri:
+        url: "https://172.16.168.19/api/code-sync/nodes/00-SLM-Manager/mark-synced"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ slm_login_play1.json.access_token }}"
+          Content-Type: "application/json"
+        body: "{}"
+        body_format: json
+        validate_certs: false
+        status_code: [200, 404]
+      delegate_to: localhost
+      ignore_errors: true
+
     - name: "[PLAY 1] SLM Update Complete"
       debug:
         msg:
@@ -105,6 +133,28 @@
   serial: 3  # Process up to 3 nodes at a time
   vars:
     local_autobot_root: "/home/kali/Desktop/AutoBot"
+
+  pre_tasks:
+    - name: "[PLAY 2] Login to SLM API to get auth token"
+      uri:
+        url: "https://172.16.168.19/api/auth/login"
+        method: POST
+        body_format: json
+        body:
+          username: "admin"
+          password: "{{ slm_admin_password | default('admin') }}"
+        validate_certs: false
+        status_code: 200
+      register: slm_login
+      delegate_to: localhost
+      run_once: true
+      no_log: true
+
+    - name: "[PLAY 2] Set SLM auth token"
+      set_fact:
+        slm_token: "{{ slm_login.json.access_token }}"
+      delegate_to: localhost
+      run_once: true
 
   tasks:
     - name: "[PLAY 2] Starting Node Update"
@@ -227,6 +277,20 @@
           - "--exclude=.git"
       become: true
       when: "'01-Backend' not in inventory_hostname"
+
+    - name: "[PLAY 2] Mark node as synced in SLM DB"
+      uri:
+        url: "https://172.16.168.19/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ slm_token }}"
+          Content-Type: "application/json"
+        body: "{}"
+        body_format: json
+        validate_certs: false
+        status_code: [200, 404]  # 404 = node not in SLM yet, that's ok
+      delegate_to: localhost
+      ignore_errors: true
 
     - name: "[PLAY 2] Node Update Complete"
       debug:

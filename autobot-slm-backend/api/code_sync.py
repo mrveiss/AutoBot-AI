@@ -44,6 +44,7 @@ from models.schemas import (
     ScheduleRunResponse,
     ScheduleUpdate,
 )
+from pydantic import BaseModel
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
@@ -587,6 +588,55 @@ async def _sync_single_node(executor, node_state: NodeSyncState, restart: bool) 
         node_state.message = str(e)
         node_state.completed_at = datetime.utcnow()
         logger.error("Node sync failed for %s: %s", node_state.node_id, e)
+
+
+class MarkSyncedRequest(BaseModel):
+    """Request to mark a node as synced without running rsync."""
+
+    version: Optional[str] = None  # commit hash; defaults to slm_agent_latest_commit
+
+
+class MarkSyncedResponse(BaseModel):
+    """Response for mark-synced endpoint."""
+
+    success: bool
+    node_id: str
+    version: str
+
+
+@router.post("/nodes/{node_id}/mark-synced", response_model=MarkSyncedResponse)
+async def mark_node_synced(
+    node_id: str,
+    request: MarkSyncedRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> MarkSyncedResponse:
+    """Mark a node as up-to-date without triggering rsync.
+
+    Called by Ansible after it has synced code to a node externally,
+    so the SLM DB reflects the actual state of the fleet.
+    """
+    node_result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = node_result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+
+    version = request.version
+    if not version:
+        setting_result = await db.execute(
+            select(Setting).where(Setting.key == "slm_agent_latest_commit")
+        )
+        setting = setting_result.scalar_one_or_none()
+        version = setting.value if setting else ""
+
+    node.code_version = version
+    node.code_status = CodeStatus.UP_TO_DATE.value
+    await db.commit()
+
+    logger.info("Marked node %s as synced at %s", node_id, version[:12])
+    return MarkSyncedResponse(success=True, node_id=node_id, version=version)
 
 
 @router.post("/fleet/sync", response_model=FleetSyncResponse)
