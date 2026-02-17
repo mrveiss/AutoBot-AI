@@ -340,7 +340,7 @@
             <a
               :href="slmAdminUrl"
               @click="closeMobileNav"
-              class="w-full text-left px-3 py-2 rounded text-sm font-medium transition-colors duration-150 block text-slate-200 hover:bg-slate-700 hover:text-white"
+              class="w-full text-left px-3 py-2 rounded text-sm font-medium transition-colors duration-150 block text-autobot-text-primary hover:bg-autobot-bg-tertiary"
             >
               <div class="flex items-center space-x-2">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -382,14 +382,14 @@
             <!-- Header -->
             <div class="flex items-center justify-between border-b border-autobot-border pb-3 mb-4">
               <h3 class="text-lg font-medium text-autobot-text-primary flex items-center">
-                <div class="w-6 h-6 bg-electric-600 rounded flex items-center justify-center mr-2">
+                <div class="w-6 h-6 bg-autobot-primary rounded flex items-center justify-center mr-2">
                   <span class="text-white text-xs font-bold">AB</span>
                 </div>
                 AutoBot System Status
               </h3>
               <button
                 @click="showSystemStatus = false"
-                class="rounded-md text-autobot-text-muted hover:text-autobot-text-primary focus:outline-none focus:ring-2 focus:ring-electric-500"
+                class="rounded-md text-autobot-text-muted hover:text-autobot-text-primary focus:outline-none focus:ring-2 focus:ring-autobot-primary"
               >
                 <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -461,7 +461,7 @@
             <div class="mt-6 flex justify-between">
               <button
                 @click="refreshSystemStatus"
-                class="inline-flex items-center px-3 py-2 border border-autobot-border shadow-sm text-sm leading-4 font-medium rounded-md text-autobot-text-primary bg-autobot-bg-secondary hover:bg-autobot-bg-tertiary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-electric-500"
+                class="inline-flex items-center px-3 py-2 border border-autobot-border shadow-sm text-sm leading-4 font-medium rounded-md text-autobot-text-primary bg-autobot-bg-secondary hover:bg-autobot-bg-tertiary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-autobot-primary"
               >
                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -470,7 +470,7 @@
               </button>
               <button
                 @click="showSystemStatus = false"
-                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-electric-600 hover:bg-electric-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-electric-500"
+                class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-autobot-primary hover:bg-autobot-primary-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-autobot-primary"
               >
                 Close
               </button>

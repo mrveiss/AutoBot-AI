@@ -78,7 +78,7 @@ _SERVICE_DEFINITIONS = {
         ),
         stop_command="pkill -f 'python.*backend/main.py'",
         health_check_path="/api/health",
-        health_check_type="http",
+        health_check_type="https",  # Backend requires HTTPS on port 8443 (#915)
         requires_sudo=False,
         working_dir="/opt/autobot/autobot-user-backend",
         description="FastAPI backend API server",
@@ -782,7 +782,9 @@ class ServiceOrchestrator:
     ) -> bool:
         """Check if a service is healthy."""
         try:
-            if check_type == "http" and path:
+            if check_type == "https" and path:
+                return await self._check_https_health(host, port, path)
+            elif check_type == "http" and path:
                 return await self._check_http_health(host, port, path)
             elif check_type == "redis":
                 return await self._check_redis_health(host, port)
@@ -794,6 +796,17 @@ class ServiceOrchestrator:
         except Exception as e:
             logger.debug("Health check failed for %s:%d - %s", host, port, e)
             return False
+
+    async def _check_https_health(self, host: str, port: int, path: str) -> bool:
+        """Check HTTPS health endpoint (skips cert verification for self-signed certs)."""
+        cmd = ["curl", "-skf", "--max-time", "5", f"https://{host}:{port}{path}"]
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await process.wait()
+        return process.returncode == 0
 
     async def _check_http_health(self, host: str, port: int, path: str) -> bool:
         """Check HTTP health endpoint."""
