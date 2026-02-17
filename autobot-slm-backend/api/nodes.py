@@ -891,15 +891,15 @@ async def node_heartbeat(
     latest_setting = latest_result.scalar_one_or_none()
     latest_version = latest_setting.value if latest_setting else None
 
-    # Compare and update code_status (Issue #741)
-    if heartbeat.code_version and latest_version:
-        if heartbeat.code_version == latest_version:
+    # Compare node.code_version (DB, set by mark-synced) against latest (Issue #918)
+    # Do NOT use heartbeat.code_version — agents report stale values (Issue #889).
+    if latest_version:
+        if node.code_version == latest_version:
             node.code_status = CodeStatus.UP_TO_DATE.value
-        else:
+        elif node.code_version:
             node.code_status = CodeStatus.OUTDATED.value
-    elif heartbeat.code_version:
-        # No latest version configured yet
-        node.code_status = CodeStatus.UNKNOWN.value
+        else:
+            node.code_status = CodeStatus.UNKNOWN.value
 
     # Commit changes to database
     await db.commit()
