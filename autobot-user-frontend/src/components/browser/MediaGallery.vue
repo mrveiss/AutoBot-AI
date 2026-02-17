@@ -645,7 +645,7 @@ export default {
 
 .overlay-btn {
   padding: var(--spacing-2-5);
-  background: white;
+  background: var(--bg-card);
   border: none;
   border-radius: var(--radius-md);
   color: var(--text-primary);

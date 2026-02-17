@@ -163,39 +163,41 @@ const handleGroupChange = () => {
   align-items: center;
   gap: 0.5rem;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-secondary);
 }
 
 .label-help {
   cursor: pointer;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .label-help:hover {
-  color: #3b82f6;
+  color: var(--color-electric-500, #3b82f6);
 }
 
 .scope-dropdown {
   padding: 0.5rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   font-size: 0.875rem;
   cursor: pointer;
   transition: border-color 0.2s;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .scope-dropdown:hover {
-  border-color: #9ca3af;
+  border-color: var(--text-muted);
 }
 
 .scope-dropdown:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--color-electric-500, #3b82f6);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .scope-dropdown:disabled {
-  background-color: #f3f4f6;
+  background-color: var(--bg-secondary);
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -203,8 +205,8 @@ const handleGroupChange = () => {
 .scope-help {
   margin-top: 0.5rem;
   padding: 0.75rem;
-  background-color: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   font-size: 0.813rem;
 }
@@ -218,22 +220,22 @@ const handleGroupChange = () => {
 }
 
 .help-item strong {
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .group-selector {
   margin-top: 0.75rem;
   padding: 0.75rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
-  background-color: #f9fafb;
+  background-color: var(--bg-secondary);
 }
 
 .group-selector label {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-secondary);
 }
 
 .group-list {
@@ -253,7 +255,7 @@ const handleGroupChange = () => {
 }
 
 .group-item:hover {
-  background-color: #f3f4f6;
+  background-color: var(--bg-tertiary);
 }
 
 .group-item input[type="checkbox"] {

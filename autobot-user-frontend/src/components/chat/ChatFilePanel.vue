@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-file-panel h-full flex flex-col bg-white border-l border-blueGray-200">
+  <div class="chat-file-panel h-full flex flex-col bg-autobot-bg-card border-l border-blueGray-200">
     <!-- Header -->
     <div class="flex items-center justify-between p-3 border-b border-blueGray-200 flex-shrink-0">
       <div class="flex items-center gap-2">
@@ -140,7 +140,7 @@
       <div
         v-for="file in sortedFiles"
         :key="file.file_id"
-        class="file-item group p-2 bg-white border rounded-lg hover:shadow-sm transition-all"
+        class="file-item group p-2 bg-autobot-bg-card border rounded-lg hover:shadow-sm transition-all"
         :class="selectedFileIds.has(file.file_id)
           ? 'border-indigo-400 bg-indigo-50'
           : 'border-blueGray-200 hover:border-indigo-300'"
@@ -233,7 +233,7 @@
     <Teleport to="body">
       <div
         v-if="contextMenu"
-        class="fixed z-50 bg-white border border-blueGray-200 rounded-lg shadow-lg py-1 min-w-[140px]"
+        class="fixed z-50 bg-autobot-bg-card border border-blueGray-200 rounded-lg shadow-lg py-1 min-w-[140px]"
         :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
         @click.stop
       >
@@ -256,7 +256,7 @@
     <!-- Create File Dialog -->
     <Teleport to="body">
       <div v-if="showCreateDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showCreateDialog = false">
-        <div class="bg-white rounded-lg shadow-xl w-80 p-4">
+        <div class="bg-autobot-bg-card rounded-lg shadow-xl w-80 p-4">
           <h4 class="text-sm font-semibold text-blueGray-700 mb-3">Create New File</h4>
           <input
             v-model="newFileName"
@@ -281,7 +281,7 @@
     <!-- Edit File Dialog -->
     <Teleport to="body">
       <div v-if="editingFileId" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="editingFileId = null">
-        <div class="bg-white rounded-lg shadow-xl w-[480px] max-h-[80vh] flex flex-col p-4">
+        <div class="bg-autobot-bg-card rounded-lg shadow-xl w-[480px] max-h-[80vh] flex flex-col p-4">
           <div class="flex items-center justify-between mb-3">
             <h4 class="text-sm font-semibold text-blueGray-700 truncate">{{ editingFileName }}</h4>
             <button @click="editingFileId = null" class="action-btn"><i class="fas fa-times text-xs"></i></button>

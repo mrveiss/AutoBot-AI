@@ -284,7 +284,7 @@ const closeDialog = () => {
 }
 
 .modal-dialog {
-  background: white;
+  background: var(--bg-card);
   border-radius: 0.5rem;
   width: 90%;
   max-width: 600px;
@@ -296,7 +296,7 @@ const closeDialog = () => {
 
 .modal-header {
   padding: 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-default);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -306,7 +306,7 @@ const closeDialog = () => {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .close-button {
@@ -314,7 +314,7 @@ const closeDialog = () => {
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--text-muted);
   padding: 0;
   width: 2rem;
   height: 2rem;
@@ -326,8 +326,8 @@ const closeDialog = () => {
 }
 
 .close-button:hover {
-  background-color: #f3f4f6;
-  color: #111827;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .modal-body {
@@ -344,7 +344,7 @@ const closeDialog = () => {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-secondary);
 }
 
 .search-input-wrapper {
@@ -356,26 +356,28 @@ const closeDialog = () => {
   left: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .search-input {
   width: 100%;
   padding: 0.5rem 0.75rem 0.5rem 2.5rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   font-size: 0.875rem;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .search-input:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--color-electric-500, #3b82f6);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .search-results {
   margin-bottom: 1.5rem;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
   max-height: 200px;
   overflow-y: auto;
@@ -391,22 +393,22 @@ const closeDialog = () => {
 }
 
 .search-result-item:hover {
-  background-color: #f3f4f6;
+  background-color: var(--bg-secondary);
 }
 
 .search-result-item i {
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .result-name {
   flex: 1;
   font-weight: 500;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .result-type {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 
@@ -414,18 +416,18 @@ const closeDialog = () => {
   margin: 0 0 1rem 0;
   font-size: 1rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .empty-state {
   padding: 2rem;
   text-align: center;
-  color: #6b7280;
+  color: var(--text-muted);
   font-style: italic;
 }
 
 .access-list {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-default);
   border-radius: 0.375rem;
 }
 
@@ -434,7 +436,7 @@ const closeDialog = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-default);
 }
 
 .access-item:last-child {
@@ -449,17 +451,17 @@ const closeDialog = () => {
 }
 
 .access-info i {
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .access-name {
   font-weight: 500;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .access-type {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 
@@ -471,10 +473,12 @@ const closeDialog = () => {
 
 .permission-select {
   padding: 0.25rem 0.5rem;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-default);
   border-radius: 0.25rem;
   font-size: 0.875rem;
   cursor: pointer;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .remove-button {
@@ -493,7 +497,7 @@ const closeDialog = () => {
 
 .modal-footer {
   padding: 1.5rem;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border-default);
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
@@ -511,13 +515,13 @@ const closeDialog = () => {
 }
 
 .btn-secondary {
-  background-color: white;
-  color: #374151;
-  border: 1px solid #d1d5db;
+  background-color: var(--bg-card);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
 }
 
 .btn-secondary:hover {
-  background-color: #f9fafb;
+  background-color: var(--bg-secondary);
 }
 
 .btn-primary {

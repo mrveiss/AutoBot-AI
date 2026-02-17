@@ -484,7 +484,7 @@ export default {
   justify-content: center;
   width: 48px;
   height: 48px;
-  background: white;
+  background: var(--bg-card);
   border-radius: var(--radius-full);
 }
 
@@ -502,7 +502,7 @@ export default {
   display: flex;
   align-items: center;
   padding: var(--spacing-2) var(--spacing-3);
-  background: white;
+  background: var(--bg-card);
   border-radius: var(--radius-md);
   font-weight: 600;
   font-size: 14px;

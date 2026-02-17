@@ -20,7 +20,7 @@
           </div>
         </div>
 
-        <div class="text-xs text-gray-500">
+        <div class="text-xs text-autobot-text-muted">
           Chat: {{ chatSessionId?.slice(-8) || 'None' }} | Browser: {{ browserSessionId?.slice(-8) || 'Not Connected' }}
         </div>
       </div>
@@ -32,7 +32,7 @@
             class="w-2 h-2 rounded-full"
             :class="connectionStatusClass"
           ></div>
-          <span class="text-xs text-gray-600">{{ connectionStatusText }}</span>
+          <span class="text-xs text-autobot-text-secondary">{{ connectionStatusText }}</span>
         </div>
 
         <!-- Refresh Session Button -->
@@ -56,10 +56,10 @@
         :chat-context="true"
         class="flex-1"
       />
-      <div v-else class="flex-1 flex items-center justify-center bg-gray-100">
+      <div v-else class="flex-1 flex items-center justify-center bg-autobot-bg-secondary">
         <div class="text-center">
           <i class="fas fa-spinner fa-spin text-4xl text-gray-400 mb-4"></i>
-          <p class="text-gray-500">{{ isConnecting ? 'Connecting to browser session...' : 'No chat session' }}</p>
+          <p class="text-autobot-text-muted">{{ isConnecting ? 'Connecting to browser session...' : 'No chat session' }}</p>
         </div>
       </div>
     </div>

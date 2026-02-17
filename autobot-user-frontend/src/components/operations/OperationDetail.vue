@@ -480,7 +480,7 @@ async function copyId() {
 }
 
 .refresh-btn {
-  background-color: white;
+  background-color: var(--bg-card);
   color: var(--blue-gray-700);
   border: 1px solid var(--blue-gray-300);
 }

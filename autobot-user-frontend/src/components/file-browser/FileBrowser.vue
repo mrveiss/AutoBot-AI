@@ -565,7 +565,7 @@ onMounted(() => {
 }
 
 .modal-content {
-  background: white;
+  background: var(--bg-card);
   border-radius: 8px;
   max-width: 90vw;
   max-height: 90vh;
@@ -579,17 +579,17 @@ onMounted(() => {
 
 .modal-header {
   padding: 16px 24px;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--border-default);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #f8f9fa;
+  background-color: var(--bg-secondary);
 }
 
 .modal-header h3 {
   margin: 0;
   font-size: 18px;
-  color: #333;
+  color: var(--text-primary);
   word-break: break-all;
 }
 
@@ -597,7 +597,7 @@ onMounted(() => {
   background: none;
   border: none;
   font-size: 24px;
-  color: #666;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 0;
   width: 30px;
@@ -610,8 +610,8 @@ onMounted(() => {
 }
 
 .close-btn:hover {
-  background-color: #e9ecef;
-  color: #333;
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .modal-body {
@@ -640,7 +640,7 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   padding: 20px;
-  background-color: #f8f9fa;
+  background-color: var(--bg-secondary);
 }
 
 .preview-image {
@@ -665,15 +665,16 @@ onMounted(() => {
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
-  background-color: #f8f9fa;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
   padding: 16px;
   border-radius: 4px;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--border-default);
 }
 
 .json-preview pre {
-  background-color: #f1f8ff;
-  border-color: #c8e1ff;
+  background-color: var(--bg-tertiary);
+  border-color: var(--border-default);
 }
 
 /* PDF Preview */
@@ -697,23 +698,23 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   text-align: center;
-  background-color: #f8f9fa;
+  background-color: var(--bg-secondary);
 }
 
 .file-info p {
   margin: 8px 0;
   font-size: 16px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .file-info p strong {
-  color: #007bff;
+  color: var(--color-electric-500, #3b82f6);
 }
 
 .download-btn {
   margin-top: 20px;
   padding: 10px 20px;
-  background-color: #007bff;
+  background-color: var(--color-electric-600, #2563eb);
   color: white;
   border: none;
   border-radius: 4px;
@@ -723,7 +724,7 @@ onMounted(() => {
 }
 
 .download-btn:hover {
-  background-color: #0056b3;
+  background-color: var(--color-electric-700, #1d4ed8);
 }
 
 /* Responsive Design */

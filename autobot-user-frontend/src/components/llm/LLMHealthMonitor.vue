@@ -123,7 +123,7 @@ function formatTimestamp(timestamp: string): string {
       </div>
 
       <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
+        <table class="min-w-full divide-y divide-autobot-border">
           <thead class="bg-autobot-bg-secondary">
             <tr>
               <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
@@ -143,14 +143,14 @@ function formatTimestamp(timestamp: string): string {
               </th>
             </tr>
           </thead>
-          <tbody class="bg-autobot-bg-card divide-y divide-gray-200">
+          <tbody class="bg-autobot-bg-card divide-y divide-autobot-border">
             <tr v-for="provider in healthSummary.providers" :key="provider.provider">
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="flex items-center">
                   <div
                     :class="[
                       'w-3 h-3 rounded-sm mr-3',
-                      provider.is_available ? 'bg-success-500' : 'bg-gray-400'
+                      provider.is_available ? 'bg-success-500' : 'bg-autobot-text-muted'
                     ]"
                   ></div>
                   <div class="text-sm font-medium text-primary">
@@ -178,7 +178,7 @@ function formatTimestamp(timestamp: string): string {
                 <span v-if="provider.last_successful_request">
                   {{ formatTimestamp(provider.last_successful_request) }}
                 </span>
-                <span v-else class="text-gray-400">Never</span>
+                <span v-else class="text-autobot-text-muted">Never</span>
               </td>
             </tr>
           </tbody>

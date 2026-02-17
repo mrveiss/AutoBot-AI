@@ -36,7 +36,7 @@
     <div v-else-if="activeTab === 'novnc'" class="flex-1 flex flex-col min-h-0">
       <div class="flex-1 flex flex-col bg-black">
         <!-- Host selector header for VNC -->
-        <div class="vnc-header flex justify-between items-center bg-gray-800 text-white px-4 py-2 text-sm">
+        <div class="vnc-header flex justify-between items-center bg-autobot-bg-secondary text-autobot-text-primary px-4 py-2 text-sm">
           <div class="flex items-center gap-3">
             <i class="fas fa-desktop"></i>
             <HostSelector
@@ -70,11 +70,11 @@
           ></iframe>
         </template>
         <!-- Empty state when no host selected -->
-        <div v-else class="flex-1 flex items-center justify-center text-gray-400">
+        <div v-else class="flex-1 flex items-center justify-center text-autobot-text-muted">
           <div class="text-center">
             <i class="fas fa-desktop text-5xl mb-4 opacity-50"></i>
             <p class="text-lg mb-2">Select a VNC Host</p>
-            <p class="text-sm text-gray-500">
+            <p class="text-sm text-autobot-text-muted">
               Choose a host with VNC capability from your configured infrastructure hosts.
             </p>
           </div>
@@ -89,7 +89,7 @@
       class="absolute inset-0 flex flex-col min-h-0"
     >
       <!-- SSH Host selector header for terminal -->
-      <div class="terminal-host-header flex items-center gap-3 px-3 py-2 bg-gray-800 border-b border-gray-700">
+      <div class="terminal-host-header flex items-center gap-3 px-3 py-2 bg-autobot-bg-secondary border-b border-autobot-border">
         <HostSelector
           ref="sshHostSelectorRef"
           v-model="selectedSshHost"
@@ -98,7 +98,7 @@
           @host-selected="onSshHostSelected"
           @open-secrets-manager="emit('open-secrets-manager')"
         />
-        <span v-if="selectedSshHost" class="text-xs text-gray-400">
+        <span v-if="selectedSshHost" class="text-xs text-autobot-text-muted">
           Connected to: {{ selectedSshHost.name }}
         </span>
       </div>
@@ -111,11 +111,11 @@
         class="flex-1"
       />
       <!-- Empty state when no host selected -->
-      <div v-else class="flex-1 flex items-center justify-center bg-gray-900 text-gray-400">
+      <div v-else class="flex-1 flex items-center justify-center bg-autobot-bg-secondary text-autobot-text-muted">
         <div class="text-center">
           <i class="fas fa-terminal text-5xl mb-4 opacity-50"></i>
           <p class="text-lg mb-2">Select an SSH Host</p>
-          <p class="text-sm text-gray-500">
+          <p class="text-sm text-autobot-text-muted">
             Choose a host to connect via SSH from your configured infrastructure hosts.
           </p>
         </div>
