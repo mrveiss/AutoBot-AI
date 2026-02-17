@@ -308,7 +308,7 @@ export const useUserStore = defineStore('user', () => {
   async function checkAuthFromBackend(): Promise<boolean> {
     try {
       // Issue #869: Use absolute URL to backend, not relative (which hits frontend nginx)
-      const backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://172.16.168.20:8443'
+      const backendUrl = import.meta.env.VITE_API_BASE_URL || 'https://172.16.168.20:8443'
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000) // 5s timeout
 

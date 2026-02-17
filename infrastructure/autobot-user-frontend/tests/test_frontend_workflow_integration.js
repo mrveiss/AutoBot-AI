@@ -20,7 +20,7 @@ async function testFrontendWorkflowIntegration() {
 
         try {
             // Exact same call as ChatInterface.vue makes
-            const workflowResponse = await fetch('http://localhost:8001/api/workflow/execute', {
+            const workflowResponse = await fetch('https://172.16.168.20:8443/api/workflow/execute', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -73,7 +73,7 @@ async function testFrontendWorkflowIntegration() {
                     console.log(`   🔄 Checking workflow status...`);
                     await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
 
-                    const statusResponse = await fetch(`http://localhost:8001/api/workflow/workflow/${workflowResult.workflow_id}/status`);
+                    const statusResponse = await fetch(`https://172.16.168.20:8443/api/workflow/workflow/${workflowResult.workflow_id}/status`);
                     if (statusResponse.ok) {
                         const statusData = await statusResponse.json();
                         console.log(`   ✅ Workflow status: ${statusData.status}`);

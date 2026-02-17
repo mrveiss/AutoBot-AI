@@ -436,8 +436,8 @@ export function usePrometheusMetrics(
     if (websocket) return // Already connected
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsHost = import.meta.env.VITE_API_URL?.replace(/^https?:\/\//, '') ||
-                   `${window.location.hostname}:8001`
+    const wsHost = import.meta.env.VITE_API_BASE_URL?.replace(/^https?:\/\//, '') ||
+                   `${import.meta.env.VITE_BACKEND_HOST || window.location.hostname}:${import.meta.env.VITE_BACKEND_PORT || '8443'}`
     const wsUrl = `${wsProtocol}//${wsHost}/api/monitoring/realtime`
 
     logger.debug(`Connecting WebSocket to: ${wsUrl}`)

@@ -50,7 +50,8 @@
   tasks:
     - name: Wait for backend to be ready
       ansible.builtin.uri:
-        url: "http://{{ ansible_host }}:8001/api/health"
+        url: "{{ backend_protocol | default('https') }}://{{ ansible_host }}:{{ backend_port | default(8443) }}/api/health"
+        validate_certs: "{{ validate_backend_certs | default(false) }}"
         return_content: true
       register: health_check
       retries: 6

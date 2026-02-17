@@ -65,7 +65,7 @@ class FixValidationManager {
   async testBackendHealth() {
     console.log('🔍 Testing backend health and ChatHistoryManager...');
     try {
-      const response = await this.makeHttpRequest('http://172.16.168.20:8001/api/system/health', {
+      const response = await this.makeHttpRequest('https://172.16.168.20:8443/api/system/health', {
         method: 'GET',
         timeout: 10000
       });
@@ -119,7 +119,7 @@ class FixValidationManager {
         timestamp: new Date().toISOString()
       });
 
-      const response = await this.makeHttpRequest('http://172.16.168.20:8001/api/chat/chats/new', {
+      const response = await this.makeHttpRequest('https://172.16.168.20:8443/api/chat/chats/new', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
