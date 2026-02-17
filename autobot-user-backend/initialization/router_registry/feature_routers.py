@@ -324,6 +324,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["knowledge-graph", "ecl-pipeline"],
         "knowledge_graph",
     ),
+    # Natural language database queries - Vanna.ai integration (Issue #723)
+    (
+        "backend.api.nl_database",
+        "/nl-database",
+        ["nl-database", "vanna", "natural-language-sql"],
+        "nl_database",
+    ),
 ]
 
 
