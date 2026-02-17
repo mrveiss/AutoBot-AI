@@ -17,13 +17,12 @@ import '@fontsource/inter/latin-500.css'
 import '@fontsource/inter/latin-600.css'
 import '@fontsource/inter/latin-700.css'
 
-// Import CSS Design System (Issue #704) - SSOT for all design tokens
-// This provides centralized theming with dark/light mode support
-import './assets/css/index.css'
-
-// Import legacy theme system (Issue #548) - will be migrated to design system
+// Import legacy theme system (Issue #548) - loaded BEFORE design system so tokens win
 import './assets/styles/theme.css'
 import './assets/styles/view.css'
+
+// Import CSS Design System (Issue #704/#901) - SSOT - must come AFTER legacy to override
+import './assets/css/index.css'
 
 // Initialize theme early to prevent flash of unstyled content
 import { initializeTheme } from '@/composables/useTheme'

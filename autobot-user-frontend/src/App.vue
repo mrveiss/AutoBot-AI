@@ -217,7 +217,7 @@
               to="/chat"
               @click="closeMobileNav"
               :class="{
-                'bg-white text-indigo-700': $route.path.startsWith('/chat'),
+                'bg-electric-600 text-white': $route.path.startsWith('/chat'),
                 'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/chat')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
@@ -234,7 +234,7 @@
               to="/knowledge"
               @click="closeMobileNav"
               :class="{
-                'bg-white text-indigo-700': $route.path.startsWith('/knowledge'),
+                'bg-electric-600 text-white': $route.path.startsWith('/knowledge'),
                 'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/knowledge')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
@@ -251,7 +251,7 @@
               to="/automation"
               @click="closeMobileNav"
               :class="{
-                'bg-white text-indigo-700': $route.path.startsWith('/automation'),
+                'bg-electric-600 text-white': $route.path.startsWith('/automation'),
                 'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/automation')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
@@ -268,7 +268,7 @@
               to="/analytics"
               @click="closeMobileNav"
               :class="{
-                'bg-white text-indigo-700': $route.path.startsWith('/analytics'),
+                'bg-electric-600 text-white': $route.path.startsWith('/analytics'),
                 'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/analytics')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
@@ -286,7 +286,7 @@
               to="/secrets"
               @click="closeMobileNav"
               :class="{
-                'bg-white text-indigo-700': $route.path.startsWith('/secrets'),
+                'bg-electric-600 text-white': $route.path.startsWith('/secrets'),
                 'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/secrets')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
@@ -304,7 +304,7 @@
               to="/vision"
               @click="closeMobileNav"
               :class="{
-                'bg-white text-indigo-700': $route.path.startsWith('/vision'),
+                'bg-electric-600 text-white': $route.path.startsWith('/vision'),
                 'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/vision')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
@@ -323,7 +323,7 @@
               to="/preferences"
               @click="closeMobileNav"
               :class="{
-                'bg-white text-indigo-700': $route.path.startsWith('/preferences'),
+                'bg-electric-600 text-white': $route.path.startsWith('/preferences'),
                 'text-slate-200 hover:bg-slate-700 hover:text-white': !$route.path.startsWith('/preferences')
               }"
               class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
