@@ -38,6 +38,7 @@ import asyncio
 import base64
 import logging
 import os
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -610,8 +611,6 @@ class CaptchaHumanLoop:
 
 
 # Global singleton instance (thread-safe)
-import threading
-
 _captcha_human_loop: Optional[CaptchaHumanLoop] = None
 _captcha_human_loop_lock = threading.Lock()
 

@@ -34,6 +34,7 @@ Related: Issue #206
 import io
 import logging
 import re
+import threading
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional
@@ -588,8 +589,6 @@ class CaptchaSolver:
 
 
 # Global solver instance (thread-safe)
-import threading
-
 _captcha_solver: Optional[CaptchaSolver] = None
 _captcha_solver_lock = threading.Lock()
 
