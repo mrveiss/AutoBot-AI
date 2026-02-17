@@ -403,7 +403,9 @@ async def notify_new_commit(
     node = node_result.scalar_one_or_none()
     if node:
         node.code_version = notification.commit
-        node.code_status = CodeStatus.UP_TO_DATE.value
+        # Mark as OUTDATED: the deployed service at /opt/autobot/ still needs
+        # to be synced from the git repo. Only mark UP_TO_DATE after a sync (#913).
+        node.code_status = CodeStatus.OUTDATED.value
 
     # Update code-sync status and mark fleet nodes outdated (#829)
     outdated_count = await _update_code_sync_state(

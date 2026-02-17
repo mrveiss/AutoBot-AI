@@ -9,10 +9,12 @@ Provides endpoints for code version tracking and sync operations.
 
 import asyncio
 import logging
+import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
@@ -233,6 +235,142 @@ async def get_pending_nodes(
     )
 
 
+_SLM_COMPONENTS = [
+    (
+        "autobot-slm-backend",
+        ["venv", "__pycache__", "*.pyc", ".git", "*.log"],
+    ),
+    (
+        "autobot-slm-frontend",
+        ["node_modules", "dist", ".git"],
+    ),
+    (
+        "autobot-shared",
+        ["__pycache__", "*.pyc", ".git"],
+    ),
+]
+
+
+async def _rsync_component(
+    source_user: str,
+    source_ip: str,
+    source_path: str,
+    component: str,
+    excludes: List[str],
+    ssh_key: str,
+) -> Tuple[bool, str]:
+    """Rsync a single component from source node to local /opt/autobot/.
+
+    Helper for _sync_slm_from_code_source (#913).
+    """
+    ssh_opts = (
+        f"ssh -i {ssh_key} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+    )
+    cmd = [
+        "rsync",
+        "-avz",
+        "--delete",
+        "-e",
+        ssh_opts,
+    ]
+    for exc in excludes:
+        cmd.append(f"--exclude={exc}")
+    cmd.append(f"{source_user}@{source_ip}:{source_path}/{component}/")
+    cmd.append(f"/opt/autobot/{component}/")
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120.0)
+        output = stdout.decode("utf-8", errors="replace")
+        if proc.returncode != 0:
+            logger.error("rsync failed for %s: %s", component, output[:500])
+            return False, f"rsync failed for {component}: {output[:200]}"
+        logger.info("rsync succeeded for %s", component)
+        return True, ""
+    except asyncio.TimeoutError:
+        return False, f"rsync timed out for {component}"
+    except Exception as exc:
+        return False, f"rsync error for {component}: {exc}"
+
+
+async def _restart_slm_service(service: str) -> None:
+    """Restart a systemd service on the local SLM server.
+
+    Helper for _sync_slm_from_code_source (#913).
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "sudo",
+            "systemctl",
+            "restart",
+            service,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        await asyncio.wait_for(proc.communicate(), timeout=60.0)
+        logger.info("Restarted service: %s", service)
+    except Exception as exc:
+        logger.warning("Failed to restart %s: %s", service, exc)
+
+
+async def _sync_slm_from_code_source(db: AsyncSession, node_id: str) -> None:
+    """Pull SLM components from the code source node and restart services.
+
+    Used when the GUI triggers a sync for the SLM server itself (#913).
+    The Ansible playbook cannot be used because it runs rsync FROM the
+    controller (SLM server) but the source path only exists on the dev machine.
+    This function reverses the direction: SLM server PULLS from the code source.
+    """
+    from models.database import CodeSource, Node  # avoid circular import
+
+    source_result = await db.execute(
+        select(CodeSource).where(CodeSource.is_active.is_(True))
+    )
+    source = source_result.scalar_one_or_none()
+    if not source:
+        logger.error("SLM self-sync failed: no active code source")
+        return
+
+    node_result = await db.execute(select(Node).where(Node.node_id == source.node_id))
+    source_node = node_result.scalar_one_or_none()
+    if not source_node:
+        logger.error("SLM self-sync failed: code source node not found in DB")
+        return
+
+    ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
+    if not Path(ssh_key).exists():
+        logger.error("SLM self-sync failed: SSH key not found at %s", ssh_key)
+        return
+
+    source_ip = source_node.ip_address
+    source_user = source_node.ssh_user or "autobot"
+    repo_path = source.repo_path  # e.g. /home/kali/Desktop/AutoBot
+
+    logger.info(
+        "SLM self-sync: pulling from %s@%s:%s", source_user, source_ip, repo_path
+    )
+
+    all_ok = True
+    for component, excludes in _SLM_COMPONENTS:
+        ok, msg = await _rsync_component(
+            source_user, source_ip, repo_path, component, excludes, ssh_key
+        )
+        if not ok:
+            logger.error("SLM self-sync component %s failed: %s", component, msg)
+            all_ok = False
+
+    if all_ok:
+        await _restart_slm_service("autobot-slm-backend")
+        await _restart_slm_service("nginx")
+        logger.info("SLM self-sync complete and services restarted")
+    else:
+        logger.error("SLM self-sync had failures; services NOT restarted")
+
+
 async def _broadcast_sync_progress(node_id: str, progress: Dict[str, str]) -> None:
     """
     Broadcast sync progress via WebSocket (Issue #880).
@@ -316,22 +454,18 @@ async def sync_node(
     )
 
     if is_slm_server and request.restart:
-        # Fire-and-forget for SLM server self-restart to avoid HTTP connection issues
-        logger.info(
-            "Executing playbook for SLM server %s in fire-and-forget mode",
-            node_id,
-        )
-        asyncio.create_task(
-            executor.execute_playbook(
-                playbook_name="update-all-nodes.yml",
-                limit=limit,
-                tags=tags if tags else None,
-                progress_callback=progress_callback,
-            )
-        )
+        # SLM server cannot self-sync via the Ansible playbook because
+        # ansible.posix.synchronize runs rsync FROM the controller (SLM server),
+        # but the source path /home/kali/Desktop/AutoBot only exists on the dev
+        # machine. Instead, pull code FROM the code source node directly (#913).
+        logger.info("SLM self-sync: pulling from code source (fire-and-forget)")
+        asyncio.create_task(_sync_slm_from_code_source(db, node_id))
         return NodeSyncResponse(
             success=True,
-            message="Playbook queued (self-restart mode - check backend health after 30s)",
+            message=(
+                "SLM update queued: pulling from code source + restarting services. "
+                "Check backend health in ~30s."
+            ),
             node_id=node_id,
         )
     else:

@@ -119,18 +119,17 @@
           - "═══════════════════════════════════════════════════════════════"
 
     # Backend (172.16.168.20)
-    - name: "[PLAY 2] Backend | Sync autobot-user-backend code"
-      ansible.posix.synchronize:
-        src: "{{ local_autobot_root }}/autobot-user-backend/"
-        dest: "/opt/autobot/autobot-user-backend/"
-        delete: false
-        rsync_opts:
-          - "--exclude=venv"
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
-          - "--exclude=data"
-          - "--exclude=logs"
+    # NOTE: Use shell rsync (runs ON the target) rather than synchronize (runs
+    # FROM the SLM controller). The git repo at local_autobot_root only exists
+    # on the dev machine (.20), not on the SLM server (.19). Running as root
+    # (become: true) gives access to /home/kali/Desktop/AutoBot. (#913)
+    - name: "[PLAY 2] Backend | Sync autobot-user-backend (local rsync on target)"
+      shell: |
+        rsync -avz --delete \
+          --exclude=venv --exclude=__pycache__ --exclude='*.pyc' \
+          --exclude=.git --exclude=data --exclude=logs \
+          {{ local_autobot_root }}/autobot-user-backend/ \
+          /opt/autobot/autobot-user-backend/
       become: true
       when: "'01-Backend' in inventory_hostname"
 
@@ -196,9 +195,21 @@
       when: "'05-Browser' in inventory_hostname"
 
     # Shared (all nodes)
-    - name: "[PLAY 2] All Nodes | Sync autobot-shared code"
+    # NOTE: For 01-Backend (.20), the git repo exists locally so we use a shell
+    # rsync. For other nodes, synchronize pushes from the SLM controller which
+    # already has /opt/autobot/autobot-shared/ (synced via sync-to-slm.sh). (#913)
+    - name: "[PLAY 2] Backend | Sync autobot-shared (local rsync on target)"
+      shell: |
+        rsync -avz --delete \
+          --exclude=__pycache__ --exclude='*.pyc' --exclude=.git \
+          {{ local_autobot_root }}/autobot-shared/ \
+          /opt/autobot/autobot-shared/
+      become: true
+      when: "'01-Backend' in inventory_hostname"
+
+    - name: "[PLAY 2] Other Nodes | Sync autobot-shared from SLM cache"
       ansible.posix.synchronize:
-        src: "{{ local_autobot_root }}/autobot-shared/"
+        src: "/opt/autobot/autobot-shared/"
         dest: "/opt/autobot/autobot-shared/"
         delete: false
         rsync_opts:
@@ -206,6 +217,7 @@
           - "--exclude=*.pyc"
           - "--exclude=.git"
       become: true
+      when: "'01-Backend' not in inventory_hostname"
 
     - name: "[PLAY 2] Node Update Complete"
       debug:
