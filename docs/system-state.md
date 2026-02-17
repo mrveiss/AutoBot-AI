@@ -1543,7 +1543,7 @@ All major issues have been resolved:
 
 The application is now fully functional with:
 
-- Backend responding on port 8443 (main machine)
+- Backend responding on port 8443 (main machine) — **Note**: test from .19/.21, not from within .20 (WSL2 loopback limitation, see [WSL2_NETWORKING.md](developer/WSL2_NETWORKING.md))
 - **Single Frontend VM** running on 172.16.168.21:5173 with proxy to backend
 - **VNC desktop access on port 6080 (enabled by default)**
 - All VM services healthy

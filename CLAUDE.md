@@ -909,7 +909,8 @@ Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
 # Direct: sudo systemctl start autobot-backend
 
 # Health checks
-curl http://localhost:8001/api/health
+# NOTE: .20 backend must be tested from another VM (WSL2 loopback limitation - see docs/developer/WSL2_NETWORKING.md)
+ssh autobot@172.16.168.19 'curl --insecure https://172.16.168.20:8443/api/health'
 redis-cli -h 172.16.168.23 ping
 
 # Ansible Deployment (production)
