@@ -8,7 +8,6 @@ import sys
 from datetime import datetime
 
 from auth_middleware import check_admin_permission
-from config import UnifiedConfigManager
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -16,6 +15,7 @@ from backend.constants.model_constants import ModelConstants as ModelConsts
 
 # Add caching support from unified cache manager (P4 Cache Consolidation)
 from backend.utils.advanced_cache_manager import cache_manager, cache_response
+from config import UnifiedConfigManager
 
 # Create singleton config instance
 config = UnifiedConfigManager()
@@ -172,11 +172,12 @@ async def get_frontend_config(admin_check: bool = Depends(check_admin_permission
 @router.get("/system/health")  # Frontend compatibility alias
 @cache_response(cache_key="system_health", ttl=30)  # Cache for 30 seconds
 async def get_system_health(
-    request: Request = None, admin_check: bool = Depends(check_admin_permission)
+    request: Request = None,
 ):
-    """Get system health status
+    """Get system health status.
 
-    Issue #744: Requires admin authentication.
+    Public endpoint — no auth required. Frontend health monitors check this
+    before login. Issue #916: removed admin_check to allow unauthenticated access.
     """
     try:
         # Import app_state to get initialization status

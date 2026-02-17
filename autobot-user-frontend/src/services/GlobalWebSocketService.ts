@@ -140,8 +140,10 @@ class GlobalWebSocketService {
         return wsUrl
       }
 
-      const wsUrl = `${wsProtocol}//${backendHost}:${backendPort}/api/ws`
-      logger.debug('Production WebSocket URL (direct to backend):', wsUrl)
+      // Issue #916: Use window.location.host so WebSocket goes through nginx proxy at .21
+      // Nginx proxies /api/ws to backend with proxy_ssl_verify off (handles self-signed cert)
+      const wsUrl = `${wsProtocol}//${window.location.host}/api/ws`
+      logger.debug('Production WebSocket URL (via nginx proxy):', wsUrl)
       return wsUrl
     } catch (error: unknown) {
       logger.error('Failed to construct WebSocket URL:', error)
