@@ -52,7 +52,7 @@
             v-if="selectedVncHost && dynamicVncUrl"
             :href="dynamicVncUrl"
             target="_blank"
-            class="text-indigo-300 hover:text-indigo-100 underline"
+            class="text-autobot-text-muted hover:text-autobot-text-secondary underline"
             title="Open noVNC in new window"
           >
             <i class="fas fa-external-link-alt mr-1"></i>

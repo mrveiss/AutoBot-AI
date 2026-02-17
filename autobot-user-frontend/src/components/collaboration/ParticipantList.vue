@@ -65,7 +65,7 @@ const getRoleBadge = (role: ParticipantWithRole['role']): { color: string; label
     case 'collaborator':
       return { color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', label: 'Editor' }
     case 'viewer':
-      return { color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', label: 'Viewer' }
+      return { color: 'bg-autobot-bg-tertiary text-autobot-text-muted border-autobot-border', label: 'Viewer' }
   }
 }
 
@@ -74,7 +74,7 @@ const getStatusColor = (status: UserPresence['status']): string => {
   switch (status) {
     case 'online': return 'bg-green-500'
     case 'away': return 'bg-yellow-500'
-    case 'offline': return 'bg-gray-500'
+    case 'offline': return 'bg-autobot-text-muted'
   }
 }
 

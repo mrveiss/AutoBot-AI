@@ -622,10 +622,10 @@ const getFileIcon = (type: string): string => {
     'fas fa-file-pdf': 'text-red-600',
     'fas fa-file-word': 'text-blue-600',
     'fas fa-file-excel': 'text-green-600',
-    'fas fa-file-alt': 'text-gray-600'
+    'fas fa-file-alt': 'text-autobot-text-secondary'
   }
 
-  const color = colorMap[icon] || 'text-gray-600'
+  const color = colorMap[icon] || 'text-autobot-text-secondary'
   return `${icon} ${color}`
 }
 
@@ -778,11 +778,11 @@ onUnmounted(() => {
 <style scoped>
 /* CRITICAL FIX: Enforce sticky positioning with !important and solid background */
 .chat-input-container {
-  @apply relative bg-white border-t border-gray-200 p-4;
+  @apply relative bg-autobot-bg-card border-t border-autobot-border p-4;
   position: sticky !important;
   bottom: 0 !important;
   z-index: 10 !important;
-  background-color: white !important;
+  background-color: var(--autobot-bg-card, white) !important;
   box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
 }
 
@@ -809,7 +809,7 @@ onUnmounted(() => {
 
 /* Attached Files */
 .attached-files {
-  @apply border border-gray-200 rounded-lg p-3;
+  @apply border border-autobot-border rounded-lg p-3;
 }
 
 .attached-files-header {
@@ -821,7 +821,7 @@ onUnmounted(() => {
 }
 
 .attached-file-item {
-  @apply flex items-center gap-3 p-2 bg-gray-50 rounded-lg;
+  @apply flex items-center gap-3 p-2 bg-autobot-bg-tertiary rounded-lg;
 }
 
 .file-icon {
@@ -833,11 +833,11 @@ onUnmounted(() => {
 }
 
 .file-name {
-  @apply block text-sm font-medium text-gray-900 truncate;
+  @apply block text-sm font-medium text-autobot-text-primary truncate;
 }
 
 .file-size {
-  @apply block text-xs text-gray-500;
+  @apply block text-xs text-autobot-text-muted;
 }
 
 /* Input Wrapper */
@@ -850,13 +850,13 @@ onUnmounted(() => {
 }
 
 .message-input-wrapper {
-  @apply flex-1 border border-gray-300 rounded-lg overflow-hidden transition-all duration-200;
+  @apply flex-1 border border-autobot-border rounded-lg overflow-hidden transition-all duration-200;
   position: relative;
   z-index: 1;
 }
 
 .message-input-wrapper.focused {
-  @apply border-indigo-500 ring-1 ring-indigo-500;
+  @apply border-autobot-primary ring-1 ring-autobot-primary;
 }
 
 .message-input {
@@ -865,33 +865,33 @@ onUnmounted(() => {
 }
 
 .message-input:disabled {
-  @apply bg-gray-50 text-gray-500;
+  @apply bg-autobot-bg-tertiary text-autobot-text-muted;
 }
 
 .input-actions {
-  @apply flex items-center gap-1 px-2 py-2 border-t border-gray-200 bg-gray-50;
+  @apply flex items-center gap-1 px-2 py-2 border-t border-autobot-border bg-autobot-bg-tertiary;
 }
 
 .action-divider {
-  @apply w-px h-6 bg-gray-300 mx-2;
+  @apply w-px h-6 bg-autobot-border mx-2;
   flex-shrink: 0;
 }
 
 /* Issue #249: Knowledge Base Toggle Styles */
 .knowledge-toggle {
-  @apply flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all duration-200 text-gray-500;
+  @apply flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all duration-200 text-autobot-text-muted;
 }
 
 .knowledge-toggle:hover {
-  @apply bg-gray-100 text-gray-700;
+  @apply bg-autobot-bg-tertiary text-autobot-text-secondary;
 }
 
 .knowledge-toggle.active {
-  @apply bg-indigo-100 text-indigo-600;
+  @apply bg-autobot-bg-tertiary text-autobot-primary;
 }
 
 .knowledge-toggle.active i {
-  @apply text-indigo-600;
+  @apply text-autobot-primary;
 }
 
 .knowledge-toggle .toggle-label {
@@ -900,11 +900,11 @@ onUnmounted(() => {
 
 /* Issue #690: Overseer Toggle Styles */
 .overseer-toggle {
-  @apply flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all duration-200 text-gray-500;
+  @apply flex items-center gap-1 px-2 py-1 rounded cursor-pointer transition-all duration-200 text-autobot-text-muted;
 }
 
 .overseer-toggle:hover {
-  @apply bg-gray-100 text-gray-700;
+  @apply bg-autobot-bg-tertiary text-autobot-text-secondary;
 }
 
 .overseer-toggle.active {
@@ -946,7 +946,7 @@ onUnmounted(() => {
 
 /* Status Bar */
 .input-status-bar {
-  @apply flex items-center justify-between text-xs text-gray-500;
+  @apply flex items-center justify-between text-xs text-autobot-text-muted;
 }
 
 .status-left {
@@ -958,7 +958,7 @@ onUnmounted(() => {
 }
 
 .typing-indicator {
-  @apply flex items-center gap-1 text-indigo-600;
+  @apply flex items-center gap-1 text-autobot-primary;
 }
 
 .character-count {
@@ -979,20 +979,20 @@ onUnmounted(() => {
 
 /* Quick Actions */
 .quick-actions {
-  @apply flex flex-wrap gap-2 pt-3 border-t border-gray-100;
+  @apply flex flex-wrap gap-2 pt-3 border-t border-autobot-border;
 }
 
 /* Emoji Picker */
 .emoji-picker {
-  @apply absolute bottom-full right-0 mb-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50;
+  @apply absolute bottom-full right-0 mb-2 w-80 bg-autobot-bg-card border border-autobot-border rounded-lg shadow-lg z-50;
 }
 
 .emoji-header {
-  @apply flex items-center justify-between p-3 border-b border-gray-200;
+  @apply flex items-center justify-between p-3 border-b border-autobot-border;
 }
 
 .emoji-title {
-  @apply font-medium text-gray-900;
+  @apply font-medium text-autobot-text-primary;
 }
 
 .emoji-grid {

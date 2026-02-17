@@ -275,15 +275,15 @@ onUnmounted(() => {
 }
 
 .loading-title {
-  @apply text-xl font-semibold text-gray-700 mb-2;
+  @apply text-xl font-semibold text-autobot-text-secondary mb-2;
 }
 
 .loading-message {
-  @apply text-gray-600 mb-4;
+  @apply text-autobot-text-secondary mb-4;
 }
 
 .loading-progress {
-  @apply w-full bg-gray-200 rounded-full h-2 mb-4;
+  @apply w-full bg-autobot-bg-tertiary rounded-full h-2 mb-4;
 }
 
 .progress-bar {
@@ -291,7 +291,7 @@ onUnmounted(() => {
 }
 
 .loading-time {
-  @apply text-sm text-gray-500;
+  @apply text-sm text-autobot-text-muted;
 }
 
 @keyframes spin {

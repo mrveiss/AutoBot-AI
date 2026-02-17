@@ -58,7 +58,7 @@
       />
       <div v-else class="flex-1 flex items-center justify-center bg-autobot-bg-secondary">
         <div class="text-center">
-          <i class="fas fa-spinner fa-spin text-4xl text-gray-400 mb-4"></i>
+          <i class="fas fa-spinner fa-spin text-4xl text-autobot-text-muted mb-4"></i>
           <p class="text-autobot-text-muted">{{ isConnecting ? 'Connecting to browser session...' : 'No chat session' }}</p>
         </div>
       </div>
@@ -279,15 +279,15 @@ onUnmounted(async () => {
 
 <style scoped>
 .chat-browser-container {
-  @apply flex flex-col h-full bg-white border border-gray-300 overflow-hidden rounded-lg;
+  @apply flex flex-col h-full bg-autobot-bg-card border border-autobot-border overflow-hidden rounded-lg;
 }
 
 .browser-header {
-  @apply bg-gray-100 border-b border-gray-300 p-2 flex items-center justify-between;
+  @apply bg-autobot-bg-tertiary border-b border-autobot-border p-2 flex items-center justify-between;
 }
 
 .browser-btn {
-  @apply px-2 py-1 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors duration-200;
+  @apply px-2 py-1 text-autobot-text-secondary hover:text-autobot-text-primary hover:bg-autobot-bg-tertiary rounded transition-colors duration-200;
 }
 
 .browser-btn:disabled {

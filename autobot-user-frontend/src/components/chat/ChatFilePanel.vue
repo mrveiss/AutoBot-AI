@@ -32,7 +32,7 @@
           v-model="searchQuery"
           type="text"
           placeholder="Search files..."
-          class="w-full pl-7 pr-2 py-1.5 text-xs border border-blueGray-200 rounded-md focus:outline-none focus:border-indigo-400 bg-blueGray-50"
+          class="w-full pl-7 pr-2 py-1.5 text-xs border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary bg-autobot-bg-tertiary"
         />
       </div>
       <!-- Sort -->
@@ -43,18 +43,18 @@
           :key="opt.field"
           @click="setSort(opt.field)"
           class="px-1.5 py-0.5 rounded transition-colors"
-          :class="sortField === opt.field ? 'bg-indigo-100 text-indigo-700' : 'text-blueGray-500 hover:bg-blueGray-100'"
+          :class="sortField === opt.field ? 'bg-autobot-bg-tertiary text-autobot-primary' : 'text-autobot-text-muted hover:bg-autobot-bg-secondary'"
         >
           {{ opt.label }}
           <i v-if="sortField === opt.field" :class="sortDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down'" class="text-xs ml-0.5"></i>
         </button>
       </div>
       <!-- Bulk actions -->
-      <div v-if="selectedCount > 0" class="flex items-center justify-between bg-indigo-50 rounded-md px-2 py-1">
-        <span class="text-xs text-indigo-700">{{ selectedCount }} selected</span>
+      <div v-if="selectedCount > 0" class="flex items-center justify-between bg-autobot-bg-tertiary rounded-md px-2 py-1">
+        <span class="text-xs text-autobot-text-secondary">{{ selectedCount }} selected</span>
         <div class="flex gap-1">
           <button @click="handleBulkDelete" class="text-xs text-red-600 hover:text-red-800 px-1">Delete</button>
-          <button @click="selectAllFiles" class="text-xs text-indigo-600 hover:text-indigo-800 px-1">
+          <button @click="selectAllFiles" class="text-xs text-autobot-primary hover:text-autobot-text-secondary px-1">
             {{ allSelected ? 'Deselect' : 'Select all' }}
           </button>
         </div>
@@ -67,15 +67,15 @@
         class="upload-area border-2 border-dashed rounded-lg p-3 text-center transition-colors cursor-pointer"
         :class="[
           isDragging
-            ? 'border-indigo-500 bg-indigo-50'
-            : 'border-blueGray-300 bg-blueGray-50 hover:border-blueGray-400 hover:bg-blueGray-100'
+            ? 'border-autobot-primary bg-autobot-bg-tertiary'
+            : 'border-autobot-border bg-autobot-bg-secondary hover:border-autobot-text-muted hover:bg-autobot-bg-tertiary'
         ]"
         @click="triggerFileInput"
         @dragover.prevent="isDragging = true"
         @dragleave.prevent="isDragging = false"
         @drop.prevent="handleDrop"
       >
-        <i class="fas fa-cloud-upload-alt text-2xl mb-1" :class="isDragging ? 'text-indigo-600' : 'text-blueGray-400'"></i>
+        <i class="fas fa-cloud-upload-alt text-2xl mb-1" :class="isDragging ? 'text-autobot-primary' : 'text-autobot-text-muted'"></i>
         <p class="text-xs text-blueGray-600">
           {{ isDragging ? 'Drop files here' : 'Click or drag files' }}
         </p>
@@ -95,9 +95,9 @@
           <span>Uploading...</span>
           <span>{{ uploadProgress }}%</span>
         </div>
-        <div class="w-full bg-blueGray-200 rounded-full h-1.5">
-          <div
-            class="bg-indigo-600 h-1.5 rounded-full transition-all duration-300"
+        <div class="w-full bg-autobot-bg-tertiary rounded-full h-1.5">
+        <div
+        class="bg-autobot-primary h-1.5 rounded-full transition-all duration-300"
             :style="{ width: `${uploadProgress}%` }"
           ></div>
         </div>
@@ -142,8 +142,8 @@
         :key="file.file_id"
         class="file-item group p-2 bg-autobot-bg-card border rounded-lg hover:shadow-sm transition-all"
         :class="selectedFileIds.has(file.file_id)
-          ? 'border-indigo-400 bg-indigo-50'
-          : 'border-blueGray-200 hover:border-indigo-300'"
+          ? 'border-autobot-primary bg-autobot-bg-tertiary'
+          : 'border-autobot-border hover:border-autobot-primary'"
         @contextmenu="showContextMenu($event, file)"
       >
         <div class="flex items-start gap-2">
@@ -152,7 +152,7 @@
             type="checkbox"
             :checked="selectedFileIds.has(file.file_id)"
             @change="toggleFileSelection(file.file_id)"
-            class="mt-1 flex-shrink-0 rounded border-blueGray-300 text-indigo-600 focus:ring-indigo-500"
+            class="mt-1 flex-shrink-0 rounded border-autobot-border text-autobot-primary focus:ring-autobot-primary"
           />
 
           <!-- File Icon -->
@@ -168,7 +168,7 @@
                 v-model="renameValue"
                 @keyup.enter="handleRename"
                 @keyup.escape="renamingFileId = null"
-                class="w-full text-xs px-1 py-0.5 border border-indigo-400 rounded focus:outline-none"
+                class="w-full text-xs px-1 py-0.5 border border-autobot-primary rounded focus:outline-none"
               />
               <button @click="handleRename" class="action-btn" title="Save">
                 <i class="fas fa-check text-xs text-green-600"></i>
@@ -261,18 +261,18 @@
           <input
             v-model="newFileName"
             placeholder="filename.txt"
-            class="w-full text-xs px-2 py-1.5 border border-blueGray-200 rounded-md focus:outline-none focus:border-indigo-400 mb-2"
+            class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary mb-2"
             @keyup.enter="handleCreateFile"
           />
           <textarea
             v-model="newFileContent"
             placeholder="File content (optional)"
             rows="4"
-            class="w-full text-xs px-2 py-1.5 border border-blueGray-200 rounded-md focus:outline-none focus:border-indigo-400 mb-3 resize-none font-mono"
+            class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary mb-3 resize-none font-mono"
           ></textarea>
           <div class="flex justify-end gap-2">
             <button @click="showCreateDialog = false" class="px-3 py-1 text-xs text-blueGray-600 hover:bg-blueGray-100 rounded">Cancel</button>
-            <button @click="handleCreateFile" :disabled="!newFileName.trim()" class="px-3 py-1 text-xs text-white bg-indigo-600 hover:bg-indigo-700 rounded disabled:opacity-50">Create</button>
+            <button @click="handleCreateFile" :disabled="!newFileName.trim()" class="px-3 py-1 text-xs text-white bg-autobot-primary hover:bg-autobot-primary-hover rounded disabled:opacity-50">Create</button>
           </div>
         </div>
       </div>
@@ -288,11 +288,11 @@
           </div>
           <textarea
             v-model="editingContent"
-            class="flex-1 w-full text-xs px-2 py-1.5 border border-blueGray-200 rounded-md focus:outline-none focus:border-indigo-400 resize-none font-mono min-h-[200px]"
+            class="flex-1 w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary resize-none font-mono min-h-[200px]"
           ></textarea>
           <div class="flex justify-end gap-2 mt-3">
             <button @click="editingFileId = null" class="px-3 py-1 text-xs text-blueGray-600 hover:bg-blueGray-100 rounded">Cancel</button>
-            <button @click="handleSaveEdit" class="px-3 py-1 text-xs text-white bg-indigo-600 hover:bg-indigo-700 rounded">Save</button>
+            <button @click="handleSaveEdit" class="px-3 py-1 text-xs text-white bg-autobot-primary hover:bg-autobot-primary-hover rounded">Save</button>
           </div>
         </div>
       </div>

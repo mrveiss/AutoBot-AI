@@ -83,7 +83,7 @@
                 <BaseButton
                   variant="ghost"
                   size="xs"
-                  class="text-indigo-400 p-1"
+                  class="text-autobot-primary p-1"
                   @click.stop="openShareDialog(session.id)"
                   title="Share"
                   tabindex="-1"

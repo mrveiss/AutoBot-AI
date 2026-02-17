@@ -149,7 +149,7 @@
           >
             <div class="citations-header" @click="toggleCitations(message.id)">
               <div class="citations-header-left">
-                <i class="fas fa-brain text-indigo-600" aria-hidden="true"></i>
+                <i class="fas fa-brain text-autobot-primary" aria-hidden="true"></i>
                 <span class="citations-label">Knowledge Sources</span>
                 <span class="citations-count">{{ message.metadata.citations.length }}</span>
               </div>
@@ -1187,7 +1187,7 @@ const getRiskClass = (riskLevel: string): string => {
     'HIGH': 'text-orange-600',
     'DANGEROUS': 'text-red-600'
   }
-  return riskClasses[riskLevel] || 'text-gray-600'
+  return riskClasses[riskLevel] || 'text-autobot-text-secondary'
 }
 
 // Comment functionality methods
@@ -1339,27 +1339,27 @@ onMounted(async () => {
   @apply text-white;
 }
 
-/* ASSISTANT MESSAGES - Left side, gray theme */
+/* ASSISTANT MESSAGES - Left side, design token theme */
 .message-wrapper.assistant-message {
-  @apply bg-gray-100 text-gray-900 border-gray-300 mr-auto ml-0;
+  @apply bg-autobot-bg-tertiary text-autobot-text-primary border-autobot-border mr-auto ml-0;
   border-radius: 18px 18px 18px 4px;
 }
 
 .message-wrapper.assistant-message .sender-name {
-  @apply text-gray-900;
+  @apply text-autobot-text-primary;
 }
 
 .message-wrapper.assistant-message .message-time {
-  @apply text-gray-600;
+  @apply text-autobot-text-secondary;
 }
 
 .message-wrapper.assistant-message .message-content {
-  @apply text-gray-900;
+  @apply text-autobot-text-primary;
 }
 
 /* SYSTEM MESSAGES - Centered, subtle */
 .message-wrapper.system-message {
-  @apply bg-gray-50 border-gray-200 mx-auto text-gray-700;
+  @apply bg-autobot-bg-tertiary border-autobot-border mx-auto text-autobot-text-secondary;
   max-width: 70%;
   border-radius: 12px;
 }
@@ -1397,22 +1397,22 @@ onMounted(async () => {
   @apply absolute top-2 right-2 w-2 h-2 rounded-full bg-purple-400;
 }
 
-/* PLANNING MESSAGES - Indigo theme for task planning */
+/* PLANNING MESSAGES - Primary theme for task planning */
 .message-wrapper.type-planning {
-  @apply bg-indigo-50 border-indigo-300 text-indigo-900;
+  @apply bg-autobot-bg-tertiary border-autobot-border text-autobot-text-primary;
   border-left: 4px solid theme('colors.indigo.500');
 }
 
 .message-wrapper.type-planning .message-avatar {
-  @apply bg-indigo-600;
+  @apply bg-autobot-primary;
 }
 
 .message-wrapper.type-planning .sender-name {
-  @apply text-indigo-800;
+  @apply text-autobot-text-primary;
 }
 
 .message-wrapper.type-planning .message-time {
-  @apply text-indigo-600;
+  @apply text-autobot-text-secondary;
 }
 
 /* DEBUG MESSAGES - Orange/Amber theme for debug output */
@@ -1536,7 +1536,7 @@ onMounted(async () => {
 
 .message-wrapper.type-planning::after {
   content: 'Planning';
-  @apply bg-indigo-200 text-indigo-800;
+  @apply bg-autobot-bg-secondary text-autobot-primary;
 }
 
 .message-wrapper.type-debug::after {
@@ -1562,7 +1562,7 @@ onMounted(async () => {
 /* Issue #690: Overseer Agent Message Styles */
 .message-wrapper.type-overseer_plan::after {
   content: 'Plan';
-  @apply bg-indigo-700 text-indigo-100;
+  @apply bg-autobot-primary text-white;
 }
 
 .message-wrapper.type-overseer_step::after {
@@ -1572,7 +1572,7 @@ onMounted(async () => {
 
 .message-wrapper.type-overseer_plan,
 .message-wrapper.type-overseer_step {
-  @apply bg-gray-800/50 border-indigo-600/50;
+  @apply bg-autobot-bg-secondary border-autobot-border;
 }
 
 .message-wrapper.error {
@@ -1596,11 +1596,11 @@ onMounted(async () => {
 }
 
 .message-avatar.assistant {
-  @apply bg-gray-600;
+  @apply bg-autobot-bg-secondary;
 }
 
 .message-avatar.system {
-  @apply bg-gray-500;
+  @apply bg-autobot-bg-secondary;
 }
 
 .message-info {
@@ -1653,7 +1653,7 @@ onMounted(async () => {
 
 /* Assistant message code styling - standard colors for light background */
 .assistant-message .message-text :deep(code) {
-  @apply bg-gray-200 text-gray-800 px-1.5 py-0.5 rounded text-xs font-mono;
+  @apply bg-autobot-bg-tertiary text-autobot-text-primary px-1.5 py-0.5 rounded text-xs font-mono;
 }
 
 .assistant-message .message-text :deep(pre) {
@@ -1675,11 +1675,11 @@ onMounted(async () => {
 
 /* Assistant message metadata - standard styling */
 .assistant-message .message-metadata {
-  @apply mt-1.5 pt-1 border-t border-gray-300;
+  @apply mt-1.5 pt-1 border-t border-autobot-border;
 }
 
 .assistant-message .metadata-items {
-  @apply flex flex-wrap gap-1.5 text-xs text-gray-600;
+  @apply flex flex-wrap gap-1.5 text-xs text-autobot-text-secondary;
 }
 
 .metadata-item {
@@ -1687,11 +1687,11 @@ onMounted(async () => {
 }
 
 .message-attachments {
-  @apply mt-2 pt-1.5 border-t border-gray-200;
+  @apply mt-2 pt-1.5 border-t border-autobot-border;
 }
 
 .attachment-header {
-  @apply flex items-center gap-1.5 text-xs text-gray-600 mb-1.5;
+  @apply flex items-center gap-1.5 text-xs text-autobot-text-secondary mb-1.5;
 }
 
 .attachment-list {
@@ -1699,15 +1699,15 @@ onMounted(async () => {
 }
 
 .attachment-item {
-  @apply flex items-center gap-1.5 p-1.5 bg-gray-50 rounded cursor-pointer hover:bg-gray-100 transition-colors;
+  @apply flex items-center gap-1.5 p-1.5 bg-autobot-bg-tertiary rounded cursor-pointer hover:bg-autobot-bg-secondary transition-colors;
 }
 
 .attachment-name {
-  @apply flex-1 text-xs text-gray-700 truncate;
+  @apply flex-1 text-xs text-autobot-text-secondary truncate;
 }
 
 .attachment-size {
-  @apply text-xs text-gray-500;
+  @apply text-xs text-autobot-text-muted;
 }
 
 .typing-indicator {
@@ -1723,7 +1723,7 @@ onMounted(async () => {
 }
 
 .typing-dots span {
-  @apply w-1.5 h-1.5 bg-gray-400 rounded-full animate-pulse;
+  @apply w-1.5 h-1.5 bg-autobot-text-muted rounded-full animate-pulse;
   animation-delay: calc(var(--index) * 0.2s);
 }
 
@@ -1732,7 +1732,7 @@ onMounted(async () => {
 .typing-dots span:nth-child(3) { --index: 2; }
 
 .typing-text {
-  @apply text-xs text-gray-500;
+  @apply text-xs text-autobot-text-muted;
 }
 
 .streaming-content {
@@ -1885,15 +1885,15 @@ onMounted(async () => {
 }
 
 .detail-label {
-  @apply font-medium text-gray-700 min-w-24;
+  @apply font-medium text-autobot-text-secondary min-w-24;
 }
 
 .detail-value {
-  @apply flex-1 text-gray-900;
+  @apply flex-1 text-autobot-text-primary;
 }
 
 .detail-value code {
-  @apply bg-gray-200 px-2 py-1 rounded text-xs font-mono;
+  @apply bg-autobot-bg-tertiary px-2 py-1 rounded text-xs font-mono;
 }
 
 /* Interactive Command Warning Styles (Issue #33) */
@@ -1920,7 +1920,7 @@ onMounted(async () => {
 /* Button styling handled by BaseButton component */
 
 .approval-processing {
-  @apply flex items-center gap-2 mt-2 text-sm text-gray-600;
+  @apply flex items-center gap-2 mt-2 text-sm text-autobot-text-secondary;
 }
 
 /* Responsive adjustments */
@@ -1958,11 +1958,11 @@ onMounted(async () => {
 
 /* Comment Input Section Styles */
 .comment-input-section {
-  @apply mt-3 mb-3 p-3 bg-white border border-gray-300 rounded-lg;
+  @apply mt-3 mb-3 p-3 bg-autobot-bg-card border border-autobot-border rounded-lg;
 }
 
 .comment-textarea {
-  @apply w-full px-3 py-2 border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500;
+  @apply w-full px-3 py-2 border border-autobot-border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500;
 }
 
 .comment-actions {
@@ -1981,11 +1981,11 @@ onMounted(async () => {
 }
 
 .checkbox-input {
-  @apply w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer;
+  @apply w-4 h-4 rounded border-autobot-border text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer;
 }
 
 .checkbox-label {
-  @apply flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer select-none;
+  @apply flex items-center gap-2 text-sm font-medium text-autobot-text-secondary cursor-pointer select-none;
 }
 
 .checkbox-label i {
@@ -2023,7 +2023,7 @@ onMounted(async () => {
 
 /* Issue #249: Knowledge Citations Styles */
 .knowledge-citations {
-  @apply mt-3 border border-indigo-200 rounded-lg overflow-hidden bg-indigo-50;
+  @apply mt-3 border border-autobot-border rounded-lg overflow-hidden bg-autobot-bg-tertiary;
 }
 
 .citations-header {
@@ -2031,7 +2031,7 @@ onMounted(async () => {
 }
 
 .citations-header:hover {
-  @apply bg-indigo-100;
+  @apply bg-autobot-bg-secondary;
 }
 
 .citations-header-left {
@@ -2039,23 +2039,23 @@ onMounted(async () => {
 }
 
 .citations-label {
-  @apply text-sm font-medium text-indigo-700;
+  @apply text-sm font-medium text-autobot-primary;
 }
 
 .citations-count {
-  @apply px-1.5 py-0.5 text-xs font-semibold bg-indigo-600 text-white rounded-full;
+  @apply px-1.5 py-0.5 text-xs font-semibold bg-autobot-primary text-white rounded-full;
 }
 
 .citations-list {
-  @apply border-t border-indigo-200 bg-white;
+  @apply border-t border-autobot-border bg-autobot-bg-card;
 }
 
 .citation-item {
-  @apply flex gap-2 px-3 py-2 border-b border-indigo-100 last:border-b-0;
+  @apply flex gap-2 px-3 py-2 border-b border-autobot-border last:border-b-0;
 }
 
 .citation-rank {
-  @apply text-sm font-mono font-semibold text-indigo-600 flex-shrink-0;
+  @apply text-sm font-mono font-semibold text-autobot-primary flex-shrink-0;
 }
 
 .citation-content {
@@ -2063,11 +2063,11 @@ onMounted(async () => {
 }
 
 .citation-text {
-  @apply text-sm text-gray-700 leading-snug mb-1;
+  @apply text-sm text-autobot-text-secondary leading-snug mb-1;
 }
 
 .citation-meta {
-  @apply flex flex-wrap gap-3 text-xs text-gray-500;
+  @apply flex flex-wrap gap-3 text-xs text-autobot-text-muted;
 }
 
 .citation-score {
@@ -2087,11 +2087,11 @@ onMounted(async () => {
 }
 
 .citation-score.score-low {
-  @apply text-gray-500;
+  @apply text-autobot-text-muted;
 }
 
 .citation-source {
-  @apply flex items-center gap-1 text-gray-500;
+  @apply flex items-center gap-1 text-autobot-text-muted;
 }
 
 /* Citation slide transition */

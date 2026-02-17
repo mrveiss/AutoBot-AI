@@ -24,7 +24,7 @@
             <span
               v-for="r in recipients"
               :key="r"
-              class="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded-full"
+              class="inline-flex items-center gap-1 px-2 py-0.5 bg-autobot-bg-tertiary text-autobot-text-secondary text-xs rounded-full"
             >
               {{ r }}
               <button
@@ -42,7 +42,7 @@
           <input
             v-model="includeKnowledge"
             type="checkbox"
-            class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            class="rounded border-autobot-border text-autobot-primary focus:ring-autobot-primary"
           />
           <span class="text-sm text-blueGray-700">Include knowledge created in this conversation</span>
         </label>
@@ -64,7 +64,7 @@
                 {{ selectedFactIds.size }} of {{ facts.length }} facts selected
               </p>
               <button
-                class="text-xs text-indigo-600 hover:text-indigo-800"
+                class="text-xs text-autobot-primary hover:text-autobot-text-secondary"
                 @click="toggleAllFacts"
               >
                 {{ selectedFactIds.size === facts.length ? 'Deselect All' : 'Select All' }}
@@ -75,13 +75,13 @@
               <div
                 v-for="fact in facts"
                 :key="fact.id"
-                class="flex items-start gap-2 p-2 rounded hover:bg-indigo-50 transition-colors cursor-pointer"
+                class="flex items-start gap-2 p-2 rounded hover:bg-autobot-bg-tertiary transition-colors cursor-pointer"
                 @click="toggleFact(fact.id)"
               >
                 <input
                   type="checkbox"
                   :checked="selectedFactIds.has(fact.id)"
-                  class="mt-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  class="mt-1 rounded border-autobot-border text-autobot-primary focus:ring-autobot-primary"
                   @click.stop="toggleFact(fact.id)"
                 />
                 <div class="flex-1 min-w-0">

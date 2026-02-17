@@ -66,7 +66,7 @@ const getTypeStyle = (type: SessionActivity['type']): { icon: string; color: str
     case 'desktop':
       return { icon: 'display', color: 'text-orange-400 bg-orange-400/10', label: 'Desktop' }
     default:
-      return { icon: 'activity', color: 'text-gray-400 bg-gray-400/10', label: 'Activity' }
+      return { icon: 'activity', color: 'text-autobot-text-muted bg-autobot-bg-tertiary', label: 'Activity' }
   }
 }
 

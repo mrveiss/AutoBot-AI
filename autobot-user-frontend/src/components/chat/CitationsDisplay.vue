@@ -2,7 +2,7 @@
   <div class="knowledge-citations">
     <div class="citations-header" @click="toggleExpanded">
       <div class="citations-header-left">
-        <i class="fas fa-brain text-indigo-600" aria-hidden="true"></i>
+        <i class="fas fa-brain text-autobot-primary" aria-hidden="true"></i>
         <span class="citations-label">Knowledge Sources</span>
         <span class="citations-count">{{ citations.length }}</span>
       </div>

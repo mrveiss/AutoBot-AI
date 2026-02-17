@@ -69,7 +69,7 @@
               >
                 Select All
               </button>
-              <span class="text-gray-300">|</span>
+              <span class="text-autobot-border">|</span>
               <button
                 @click="deselectAllFacts"
                 class="px-2 py-1 text-autobot-text-muted hover:bg-autobot-bg-secondary rounded transition-colors"
@@ -129,7 +129,7 @@
               </label>
 
               <label class="flex items-start p-3 border rounded-lg cursor-pointer transition-colors"
-                     :class="fileAction === 'transfer_kb' ? 'border-indigo-500 bg-indigo-50' : 'border-autobot-border hover:border-autobot-text-muted'">
+                     :class="fileAction === 'transfer_kb' ? 'border-autobot-primary bg-autobot-bg-tertiary' : 'border-autobot-border hover:border-autobot-text-muted'">
                 <input
                   type="radio"
                   v-model="fileAction"
@@ -138,7 +138,7 @@
                 />
                 <div class="flex-1">
                   <div class="flex items-center gap-2">
-                    <i class="fas fa-book text-indigo-600"></i>
+                    <i class="fas fa-book text-autobot-primary"></i>
                     <span class="text-sm font-medium text-autobot-text-primary">Transfer to Knowledge Base</span>
                   </div>
                   <p class="text-xs text-autobot-text-secondary mt-1">
@@ -168,17 +168,17 @@
             </div>
 
             <!-- Transfer Options (shown when KB transfer selected) -->
-            <div v-if="fileAction === 'transfer_kb'" class="space-y-3 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
-              <p class="text-sm font-medium text-indigo-900">Knowledge Base Options</p>
+            <div v-if="fileAction === 'transfer_kb'" class="space-y-3 p-3 bg-autobot-bg-tertiary rounded-lg border border-autobot-border">
+              <p class="text-sm font-medium text-autobot-text-primary">Knowledge Base Options</p>
 
               <div>
-                <label class="block text-xs font-medium text-indigo-700 mb-1">
+                <label class="block text-xs font-medium text-autobot-text-secondary mb-1">
                   Categories (comma-separated)
                 </label>
                 <input
                   v-model="kbCategories"
                   type="text"
-                  class="w-full px-3 py-2 text-sm border border-indigo-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  class="w-full px-3 py-2 text-sm border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-autobot-primary"
                   placeholder="e.g., research, documentation"
                 />
               </div>
@@ -187,9 +187,9 @@
                 <input
                   type="checkbox"
                   v-model="extractText"
-                  class="rounded border-indigo-300 text-indigo-600 focus:ring-indigo-500"
+                  class="rounded border-autobot-border text-autobot-primary focus:ring-autobot-primary"
                 />
-                <span class="text-xs text-indigo-700">Extract text content from documents</span>
+                <span class="text-xs text-autobot-text-secondary">Extract text content from documents</span>
               </label>
             </div>
 
@@ -409,6 +409,6 @@ input[type="radio"] {
 }
 
 input[type="radio"]:checked {
-  @apply accent-indigo-600;
+  @apply accent-autobot-primary;
 }
 </style>
