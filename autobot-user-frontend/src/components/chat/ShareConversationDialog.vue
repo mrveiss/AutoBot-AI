@@ -16,7 +16,7 @@
           <input
             v-model="recipientInput"
             type="text"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            class="w-full px-3 py-2 border border-autobot-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-electric-500"
             placeholder="Enter user ID and press Enter"
             @keyup.enter="addRecipient"
           />
@@ -54,7 +54,7 @@
             Loading knowledge facts...
           </div>
 
-          <div v-else-if="facts.length === 0" class="text-sm text-blueGray-500 p-3 bg-gray-50 rounded-lg">
+          <div v-else-if="facts.length === 0" class="text-sm text-blueGray-500 p-3 bg-autobot-bg-secondary rounded-lg">
             No knowledge facts found in this conversation.
           </div>
 
@@ -71,7 +71,7 @@
               </button>
             </div>
 
-            <div class="space-y-1.5 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2 bg-white">
+            <div class="space-y-1.5 max-h-48 overflow-y-auto border border-autobot-border rounded-lg p-2 bg-autobot-bg-card">
               <div
                 v-for="fact in facts"
                 :key="fact.id"
@@ -85,7 +85,7 @@
                   @click.stop="toggleFact(fact.id)"
                 />
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm text-gray-800 line-clamp-2">{{ fact.content }}</p>
+                  <p class="text-sm text-autobot-text-primary line-clamp-2">{{ fact.content }}</p>
                 </div>
               </div>
             </div>

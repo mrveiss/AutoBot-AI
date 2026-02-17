@@ -111,7 +111,7 @@ async function slmFetch(
 
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    ...(options.headers || {}),
+    ...options.headers,
   }
 
   if (authToken.value) {

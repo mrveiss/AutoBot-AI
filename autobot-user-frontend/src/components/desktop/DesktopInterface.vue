@@ -1,10 +1,10 @@
 <template>
   <div class="desktop-interface">
     <div class="desktop-header">
-      <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
+      <h2 class="text-lg font-semibold text-autobot-text-primary">
         Remote Desktop Access
       </h2>
-      <p class="text-sm text-gray-600 dark:text-gray-400">
+      <p class="text-sm text-autobot-text-secondary">
         Access the full XFCE desktop environment for system administration and GUI applications
       </p>
     </div>
@@ -21,8 +21,8 @@
       >
         <template #loading-message>
           <div class="text-center">
-            <p class="text-gray-600 dark:text-gray-400">Connecting to desktop...</p>
-            <p class="text-sm text-gray-500 mt-2">{{ connectionStatus }}</p>
+            <p class="text-autobot-text-secondary">Connecting to desktop...</p>
+            <p class="text-sm text-autobot-text-muted mt-2">{{ connectionStatus }}</p>
           </div>
         </template>
 
@@ -30,8 +30,8 @@
           <div class="text-center p-6">
             <div class="text-4xl mb-4">⚠️</div>
             <h3 class="text-lg font-semibold mb-2">Desktop Connection Error</h3>
-            <p class="text-gray-600 mb-4">{{ error }}</p>
-            <button @click="reconnect" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            <p class="text-autobot-text-secondary mb-4">{{ error }}</p>
+            <button @click="reconnect" class="px-4 py-2 bg-electric-600 text-white rounded hover:bg-electric-700">
               Reconnect
             </button>
           </div>
@@ -66,7 +66,7 @@
 
     <!-- Desktop Actions Toolbar (Issue #74) -->
     <div class="desktop-actions">
-      <div class="actions-label text-sm font-medium text-gray-700 dark:text-gray-300">
+      <div class="actions-label text-sm font-medium text-autobot-text-secondary">
         Desktop Actions:
       </div>
       <div class="actions-buttons">
@@ -90,7 +90,7 @@
       <div v-if="showScreenshotModal" class="screenshot-modal" @click="showScreenshotModal = false">
         <div class="screenshot-content" @click.stop>
           <div class="screenshot-header">
-            <h3 class="text-lg font-semibold text-gray-900">Desktop Screenshot</h3>
+            <h3 class="text-lg font-semibold text-autobot-text-primary">Desktop Screenshot</h3>
             <button @click="showScreenshotModal = false" class="close-btn">×</button>
           </div>
           <div class="screenshot-body">
@@ -111,7 +111,7 @@
       <div v-if="showTypeDialog" class="type-dialog-modal" @click="showTypeDialog = false">
         <div class="type-dialog-content" @click.stop>
           <div class="type-dialog-header">
-            <h3 class="text-lg font-semibold text-gray-900">Type Text on Desktop</h3>
+            <h3 class="text-lg font-semibold text-autobot-text-primary">Type Text on Desktop</h3>
             <button @click="showTypeDialog = false" class="close-btn">×</button>
           </div>
           <div class="type-dialog-body">
@@ -410,120 +410,268 @@ onUnmounted(() => {
 
 <style scoped>
 .desktop-interface {
-  @apply flex flex-col h-full bg-gray-50 dark:bg-gray-900;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--bg-primary);
 }
 
 .desktop-header {
-  @apply px-6 py-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700;
+  padding: 1rem 1.5rem;
+  background-color: var(--bg-card);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .desktop-container {
-  @apply flex-1 relative overflow-hidden;
+  flex: 1;
+  position: relative;
+  overflow: hidden;
 }
 
 .vnc-wrapper {
-  @apply w-full h-full;
+  width: 100%;
+  height: 100%;
 }
 
 .vnc-iframe {
-  @apply w-full h-full border-0;
+  width: 100%;
+  height: 100%;
+  border: none;
   min-height: 600px;
 }
 
 /* Loading and error styles moved to UnifiedLoadingView */
 
 .desktop-controls {
-  @apply px-6 py-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--bg-card);
+  border-top: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .control-btn {
-  @apply px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded border transition-colors;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.control-btn:hover {
+  background-color: var(--bg-tertiary);
 }
 
 .connection-status {
-  @apply text-sm font-medium;
+  font-size: 0.875rem;
+  font-weight: 500;
 }
 
 /* Desktop Actions Toolbar (Issue #74) */
 .desktop-actions {
-  @apply px-6 py-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex items-center gap-4;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--bg-card);
+  border-top: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 .actions-label {
-  @apply shrink-0;
+  flex-shrink: 0;
 }
 
 .actions-buttons {
-  @apply flex items-center gap-2 flex-wrap;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .action-btn {
-  @apply px-3 py-1.5 text-sm bg-blue-100 hover:bg-blue-200 dark:bg-blue-900 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 rounded border border-blue-300 dark:border-blue-700 transition-colors;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary-light);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.action-btn:hover {
+  background-color: var(--color-primary-bg-hover);
 }
 
 /* Screenshot Modal (Issue #74) */
 .screenshot-modal {
-  @apply fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
 }
 
 .screenshot-content {
-  @apply bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl max-h-[90vh] flex flex-col;
+  background-color: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2xl);
+  max-width: 56rem;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .screenshot-header {
-  @apply px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .screenshot-body {
-  @apply p-6 overflow-auto flex-1;
+  padding: 1.5rem;
+  overflow: auto;
+  flex: 1;
 }
 
 .screenshot-image {
-  @apply max-w-full h-auto rounded-lg shadow-lg;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
 }
 
 .screenshot-footer {
-  @apply px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-2;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .download-btn {
-  @apply px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors;
+  padding: 0.5rem 1rem;
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.download-btn:hover {
+  background-color: var(--color-primary-hover);
 }
 
 .cancel-btn {
-  @apply px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors;
+  padding: 0.5rem 1rem;
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cancel-btn:hover {
+  background-color: var(--bg-tertiary);
 }
 
 .close-btn {
-  @apply text-2xl text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors;
+  font-size: 1.5rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.close-btn:hover {
+  color: var(--text-primary);
 }
 
 /* Type Dialog (Issue #74) */
 .type-dialog-modal {
-  @apply fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
 }
 
 .type-dialog-content {
-  @apply bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md;
+  background-color: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2xl);
+  width: 100%;
+  max-width: 28rem;
 }
 
 .type-dialog-header {
-  @apply px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .type-dialog-body {
-  @apply p-6;
+  padding: 1.5rem;
 }
 
 .type-textarea {
-  @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-gray-200 resize-none;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  resize: none;
+  transition: border-color 0.15s ease;
+}
+
+.type-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-bg);
 }
 
 .type-dialog-footer {
-  @apply px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-2;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .type-btn {
-  @apply px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  padding: 0.5rem 1rem;
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.type-btn:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.type-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

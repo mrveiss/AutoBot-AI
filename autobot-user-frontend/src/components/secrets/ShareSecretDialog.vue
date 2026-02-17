@@ -80,17 +80,17 @@ const getInitials = (username: string): string => {
       <Transition name="modal-content">
         <div
           v-if="props.modelValue"
-          class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-md border border-gray-700"
+          class="bg-autobot-bg-card rounded-lg shadow-2xl w-full max-w-md border border-autobot-border"
           role="dialog"
           aria-modal="true"
         >
           <!-- Header -->
-          <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-            <h2 class="text-lg font-semibold text-gray-100">
+          <div class="flex items-center justify-between px-6 py-4 border-b border-autobot-border">
+            <h2 class="text-lg font-semibold text-autobot-text-primary">
               Share Secret
             </h2>
             <button
-              class="text-gray-400 hover:text-gray-200 transition-colors"
+              class="text-autobot-text-muted hover:text-autobot-text-primary transition-colors"
               @click="closeDialog"
             >
               <i class="bi bi-x-lg" />
@@ -100,15 +100,15 @@ const getInitials = (username: string): string => {
           <!-- Body -->
           <div class="px-6 py-4 space-y-4">
             <!-- Secret info -->
-            <div class="px-3 py-2 bg-gray-700/50 rounded border border-gray-600">
-              <div class="text-xs text-gray-400 mb-1">Secret</div>
-              <div class="text-sm font-medium text-gray-200">{{ props.secretName }}</div>
-              <div class="text-xs text-gray-500">{{ props.secretType }}</div>
+            <div class="px-3 py-2 bg-autobot-bg-secondary rounded border border-autobot-border">
+              <div class="text-xs text-autobot-text-muted mb-1">Secret</div>
+              <div class="text-sm font-medium text-autobot-text-primary">{{ props.secretName }}</div>
+              <div class="text-xs text-autobot-text-muted">{{ props.secretType }}</div>
             </div>
 
             <!-- Participant selection -->
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-2">
+              <label class="block text-sm font-medium text-autobot-text-secondary mb-2">
                 Share with participants
               </label>
               <div class="max-h-48 overflow-y-auto space-y-2 custom-scrollbar">
@@ -119,18 +119,18 @@ const getInitials = (username: string): string => {
                     'w-full flex items-center gap-3 p-3 rounded-lg transition-colors border',
                     selectedParticipants.has(participant.userId)
                       ? 'bg-blue-500/20 border-blue-500/30'
-                      : 'bg-gray-700/50 border-gray-600 hover:bg-gray-700'
+                      : 'bg-autobot-bg-secondary border-autobot-border hover:bg-autobot-bg-tertiary'
                   ]"
                   @click="toggleParticipant(participant.userId)"
                 >
-                  <div class="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-xs font-medium text-gray-200">
+                  <div class="w-8 h-8 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-xs font-medium text-autobot-text-primary">
                     {{ getInitials(participant.username) }}
                   </div>
                   <div class="flex-1 text-left">
-                    <div class="text-sm font-medium text-gray-200">
+                    <div class="text-sm font-medium text-autobot-text-primary">
                       {{ participant.username }}
                     </div>
-                    <div class="text-xs text-gray-500">
+                    <div class="text-xs text-autobot-text-muted">
                       {{ participant.status }}
                     </div>
                   </div>
@@ -143,7 +143,7 @@ const getInitials = (username: string): string => {
                 <!-- Empty state -->
                 <div
                   v-if="participants.length === 0"
-                  class="text-center py-6 text-gray-500"
+                  class="text-center py-6 text-autobot-text-muted"
                 >
                   <i class="bi bi-people text-2xl mb-2" />
                   <div class="text-sm">No participants in session</div>
@@ -153,12 +153,12 @@ const getInitials = (username: string): string => {
 
             <!-- Expiry -->
             <div>
-              <label class="block text-sm font-medium text-gray-300 mb-2">
+              <label class="block text-sm font-medium text-autobot-text-secondary mb-2">
                 Access expires in
               </label>
               <select
                 v-model="expiresIn"
-                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                class="w-full px-3 py-2 bg-autobot-bg-secondary border border-autobot-border rounded-lg text-autobot-text-primary focus:outline-none focus:ring-2 focus:ring-electric-500"
               >
                 <option :value="1">1 hour</option>
                 <option :value="6">6 hours</option>
@@ -170,9 +170,9 @@ const getInitials = (username: string): string => {
           </div>
 
           <!-- Footer -->
-          <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700">
+          <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-autobot-border">
             <button
-              class="px-4 py-2 text-sm rounded bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
+              class="px-4 py-2 text-sm rounded bg-autobot-bg-secondary hover:bg-autobot-bg-tertiary text-autobot-text-primary transition-colors"
               @click="closeDialog"
             >
               Cancel

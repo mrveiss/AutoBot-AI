@@ -36,7 +36,7 @@
             </div>
 
             <!-- Facts List with Selection -->
-            <div class="space-y-2 max-h-48 overflow-y-auto border border-purple-200 rounded-lg p-2 bg-white">
+            <div class="space-y-2 max-h-48 overflow-y-auto border border-purple-200 rounded-lg p-2 bg-autobot-bg-card">
               <div
                 v-for="fact in kbFacts"
                 :key="fact.id"
@@ -50,9 +50,9 @@
                   @click.stop="toggleFactSelection(fact.id)"
                 />
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm text-gray-800 line-clamp-2">{{ fact.content }}</p>
+                  <p class="text-sm text-autobot-text-primary line-clamp-2">{{ fact.content }}</p>
                   <div class="flex items-center gap-2 mt-1">
-                    <span class="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">{{ fact.category }}</span>
+                    <span class="text-xs px-2 py-0.5 bg-autobot-bg-tertiary text-autobot-text-muted rounded">{{ fact.category }}</span>
                     <span v-if="fact.important" class="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded">
                       <i class="fas fa-star text-xs"></i> Important
                     </span>
@@ -72,12 +72,12 @@
               <span class="text-gray-300">|</span>
               <button
                 @click="deselectAllFacts"
-                class="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                class="px-2 py-1 text-autobot-text-muted hover:bg-autobot-bg-secondary rounded transition-colors"
               >
                 Deselect All
               </button>
               <span class="flex-1"></span>
-              <span class="text-gray-500">
+              <span class="text-autobot-text-muted">
                 {{ selectedFactIds.size }} selected for preservation
               </span>
             </div>
@@ -107,10 +107,10 @@
 
             <!-- File Action Options -->
             <div class="space-y-2">
-              <p class="text-sm font-medium text-gray-700">What should we do with the attached files?</p>
+              <p class="text-sm font-medium text-autobot-text-secondary">What should we do with the attached files?</p>
 
               <label class="flex items-start p-3 border rounded-lg cursor-pointer transition-colors"
-                     :class="fileAction === 'delete' ? 'border-red-500 bg-red-50' : 'border-gray-300 hover:border-gray-400'">
+                     :class="fileAction === 'delete' ? 'border-red-500 bg-red-50' : 'border-autobot-border hover:border-autobot-text-muted'">
                 <input
                   type="radio"
                   v-model="fileAction"
@@ -120,16 +120,16 @@
                 <div class="flex-1">
                   <div class="flex items-center gap-2">
                     <i class="fas fa-trash text-red-600"></i>
-                    <span class="text-sm font-medium text-gray-900">Delete files</span>
+                    <span class="text-sm font-medium text-autobot-text-primary">Delete files</span>
                   </div>
-                  <p class="text-xs text-gray-600 mt-1">
+                  <p class="text-xs text-autobot-text-secondary mt-1">
                     Permanently delete all attached files
                   </p>
                 </div>
               </label>
 
               <label class="flex items-start p-3 border rounded-lg cursor-pointer transition-colors"
-                     :class="fileAction === 'transfer_kb' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-gray-400'">
+                     :class="fileAction === 'transfer_kb' ? 'border-indigo-500 bg-indigo-50' : 'border-autobot-border hover:border-autobot-text-muted'">
                 <input
                   type="radio"
                   v-model="fileAction"
@@ -139,16 +139,16 @@
                 <div class="flex-1">
                   <div class="flex items-center gap-2">
                     <i class="fas fa-book text-indigo-600"></i>
-                    <span class="text-sm font-medium text-gray-900">Transfer to Knowledge Base</span>
+                    <span class="text-sm font-medium text-autobot-text-primary">Transfer to Knowledge Base</span>
                   </div>
-                  <p class="text-xs text-gray-600 mt-1">
+                  <p class="text-xs text-autobot-text-secondary mt-1">
                     Move files to knowledge base for future use
                   </p>
                 </div>
               </label>
 
               <label class="flex items-start p-3 border rounded-lg cursor-pointer transition-colors"
-                     :class="fileAction === 'transfer_shared' ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'">
+                     :class="fileAction === 'transfer_shared' ? 'border-green-500 bg-green-50' : 'border-autobot-border hover:border-autobot-text-muted'">
                 <input
                   type="radio"
                   v-model="fileAction"
@@ -158,9 +158,9 @@
                 <div class="flex-1">
                   <div class="flex items-center gap-2">
                     <i class="fas fa-share-alt text-green-600"></i>
-                    <span class="text-sm font-medium text-gray-900">Transfer to Shared Storage</span>
+                    <span class="text-sm font-medium text-autobot-text-primary">Transfer to Shared Storage</span>
                   </div>
-                  <p class="text-xs text-gray-600 mt-1">
+                  <p class="text-xs text-autobot-text-secondary mt-1">
                     Move files to shared storage for team access
                   </p>
                 </div>
@@ -212,17 +212,17 @@
           </div>
 
           <!-- No Files Message -->
-          <div v-else class="p-3 bg-gray-50 rounded-lg">
-            <p class="text-sm text-gray-600">
+          <div v-else class="p-3 bg-autobot-bg-secondary rounded-lg">
+            <p class="text-sm text-autobot-text-secondary">
               <i class="fas fa-info-circle mr-2"></i>
               This conversation has no attached files.
             </p>
           </div>
 
           <!-- Confirmation Summary -->
-          <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <p class="text-sm font-medium text-gray-900 mb-2">Action Summary:</p>
-            <ul class="text-xs text-gray-700 space-y-1">
+          <div class="p-3 bg-autobot-bg-secondary rounded-lg border border-autobot-border">
+            <p class="text-sm font-medium text-autobot-text-primary mb-2">Action Summary:</p>
+            <ul class="text-xs text-autobot-text-secondary space-y-1">
               <li><i class="fas fa-check text-green-600 mr-2"></i>Delete conversation and all messages</li>
               <li v-if="kbFacts && kbFacts.length > 0">
                 <i class="fas fa-check text-green-600 mr-2"></i>
@@ -240,7 +240,7 @@
     <template #actions>
       <button
         @click="handleCancel"
-        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+        class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-card border border-autobot-border rounded-md hover:bg-autobot-bg-secondary transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-autobot-border"
         :disabled="isDeleting"
       >
         Cancel
