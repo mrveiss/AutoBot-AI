@@ -3,7 +3,7 @@
   Copyright (c) 2025 mrveiss
   Author: mrveiss
 
-  EvolutionView.vue - Code Evolution Mining Dashboard (Issue #243 - Phase 2)
+  EvolutionView.vue - Code Evolution Mining Dashboard (Issue #243 - Phase 2, #247 - Timeline Visualization)
 -->
 <template>
   <div class="evolution-view">
@@ -74,6 +74,105 @@
       </div>
     </div>
 
+    <!-- Filter Controls (Issue #247) -->
+    <div class="filter-panel">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label class="filter-label">Start Date</label>
+          <input v-model="filters.startDate" type="date" class="form-input filter-input" />
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">End Date</label>
+          <input v-model="filters.endDate" type="date" class="form-input filter-input" />
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Granularity</label>
+          <select v-model="filters.granularity" class="form-input filter-input">
+            <option value="hourly">Hourly</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Trend Period</label>
+          <select v-model="filters.trendDays" class="form-input filter-input">
+            <option :value="7">7 days</option>
+            <option :value="30">30 days</option>
+            <option :value="90">90 days</option>
+            <option :value="180">180 days</option>
+            <option :value="365">1 year</option>
+          </select>
+        </div>
+        <div class="filter-actions">
+          <button
+            @click="applyFilters"
+            class="btn btn-primary"
+            :disabled="evolution.loading.value"
+          >
+            <i class="fas fa-filter"></i>
+            Apply Filters
+          </button>
+          <div class="export-group">
+            <button
+              @click="evolution.exportData('json', filters.startDate, filters.endDate)"
+              class="btn btn-secondary"
+              title="Export as JSON"
+            >
+              <i class="fas fa-file-code"></i>
+              JSON
+            </button>
+            <button
+              @click="evolution.exportData('csv', filters.startDate, filters.endDate)"
+              class="btn btn-secondary"
+              title="Export as CSV"
+            >
+              <i class="fas fa-file-csv"></i>
+              CSV
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- Metric Selector -->
+      <div class="metric-selector">
+        <span class="filter-label">Metrics:</span>
+        <label v-for="m in availableMetrics" :key="m.value" class="metric-checkbox">
+          <input type="checkbox" :value="m.value" v-model="filters.selectedMetrics" />
+          {{ m.label }}
+        </label>
+      </div>
+    </div>
+
+    <!-- Quality Trends (Issue #247) -->
+    <div v-if="evolution.hasTrendsData.value" class="trends-section">
+      <h2 class="section-title">Quality Trends ({{ filters.trendDays }} days)</h2>
+      <div class="trends-grid">
+        <div
+          v-for="(trend, metric) in evolution.trendsData.value"
+          :key="metric"
+          class="trend-card"
+        >
+          <div class="trend-metric">{{ formatMetricName(String(metric)) }}</div>
+          <div class="trend-value" :class="trend.direction">
+            {{ trend.last_value.toFixed(1) }}
+          </div>
+          <div class="trend-change" :class="trend.direction">
+            <i
+              :class="
+                trend.direction === 'improving'
+                  ? 'fas fa-arrow-up'
+                  : trend.direction === 'declining'
+                    ? 'fas fa-arrow-down'
+                    : 'fas fa-minus'
+              "
+            ></i>
+            {{ trend.percent_change > 0 ? '+' : '' }}{{ trend.percent_change.toFixed(1) }}%
+          </div>
+          <div class="trend-label">{{ trend.direction }}</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Charts Section -->
     <div class="charts-section">
       <!-- Timeline Chart -->
@@ -82,6 +181,7 @@
           :data="evolution.timelineData.value"
           :loading="evolution.loading.value"
           :error="evolution.error.value || undefined"
+          :metrics="filters.selectedMetrics"
         />
       </div>
 
@@ -256,12 +356,49 @@ import PatternEvolutionChart from '@/components/charts/PatternEvolutionChart.vue
 const evolution = useEvolution()
 const showAnalysisModal = ref(false)
 
+// Filter state (Issue #247)
+const filters = ref({
+  startDate: '',
+  endDate: '',
+  granularity: 'daily',
+  trendDays: 30,
+  selectedMetrics: ['overall_score', 'maintainability', 'complexity'],
+})
+
+const availableMetrics = [
+  { value: 'overall_score', label: 'Overall' },
+  { value: 'maintainability', label: 'Maintainability' },
+  { value: 'complexity', label: 'Complexity' },
+  { value: 'testability', label: 'Testability' },
+  { value: 'documentation', label: 'Documentation' },
+  { value: 'security', label: 'Security' },
+  { value: 'performance', label: 'Performance' },
+]
+
 const analysisForm = ref({
   repo_path: '/opt/autobot',
   start_date: '',
   end_date: '',
   commit_limit: 100,
 })
+
+async function applyFilters() {
+  const metrics = filters.value.selectedMetrics.join(',')
+  await Promise.all([
+    evolution.fetchTimeline(
+      filters.value.startDate || undefined,
+      filters.value.endDate || undefined,
+      filters.value.granularity,
+      metrics
+    ),
+    evolution.fetchPatternEvolution(
+      undefined,
+      filters.value.startDate || undefined,
+      filters.value.endDate || undefined
+    ),
+    evolution.fetchTrends(filters.value.trendDays),
+  ])
+}
 
 async function runAnalysis() {
   const request: any = {
@@ -291,6 +428,13 @@ function formatPatternName(pattern: string): string {
     .join(' ')
 }
 
+function formatMetricName(metric: string): string {
+  return metric
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
 function formatDate(dateString: string): string {
   if (!dateString) return 'N/A'
   try {
@@ -304,10 +448,14 @@ function formatDate(dateString: string): string {
   }
 }
 
-// Load existing data on mount
+// Load all data on mount
 onMounted(async () => {
-  await evolution.fetchTimeline()
-  await evolution.fetchPatternEvolution()
+  await Promise.all([
+    evolution.fetchTimeline(),
+    evolution.fetchPatternEvolution(),
+    evolution.fetchTrends(filters.value.trendDays),
+    evolution.fetchSummary(),
+  ])
 })
 </script>
 
@@ -396,6 +544,151 @@ onMounted(async () => {
   font-size: 0.875rem;
   color: var(--color-text-secondary);
   margin-top: 0.25rem;
+}
+
+/* Filter Panel (Issue #247) */
+.filter-panel {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.filter-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 140px;
+}
+
+.filter-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.filter-input {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.filter-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.export-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.metric-selector {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+.metric-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.metric-checkbox input[type='checkbox'] {
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+/* Trends Section (Issue #247) */
+.trends-section {
+  margin-bottom: 2rem;
+}
+
+.trends-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.trend-card {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  padding: 1.25rem;
+  text-align: center;
+}
+
+.trend-metric {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.trend-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+
+.trend-value.improving {
+  color: #10b981;
+}
+.trend-value.declining {
+  color: #ef4444;
+}
+.trend-value.stable {
+  color: var(--color-text);
+}
+
+.trend-change {
+  font-size: 0.875rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.trend-change.improving {
+  color: #10b981;
+}
+.trend-change.declining {
+  color: #ef4444;
+}
+.trend-change.stable {
+  color: var(--color-text-secondary);
+}
+
+.trend-label {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  text-transform: capitalize;
 }
 
 /* Charts Section */

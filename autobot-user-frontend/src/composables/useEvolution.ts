@@ -2,7 +2,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 /**
- * Code Evolution Composable (Issue #243 - Phase 2)
+ * Code Evolution Composable (Issue #243 - Phase 2, #247 - Timeline Visualization)
  *
  * Provides reactive state and methods for code evolution mining and analysis.
  */
@@ -57,6 +57,27 @@ export interface PatternEvolutionData {
   }>
 }
 
+export interface TrendEntry {
+  first_value: number
+  last_value: number
+  change: number
+  percent_change: number
+  direction: 'improving' | 'declining' | 'stable'
+  data_points: number
+}
+
+export interface TrendsData {
+  [metric: string]: TrendEntry
+}
+
+export interface EvolutionSummary {
+  total_snapshots: number
+  date_range: { first: string | null; last: string | null }
+  latest_scores: { overall_score?: number; maintainability?: number; complexity?: number }
+  trend_direction: string
+  pattern_counts: Record<string, number>
+}
+
 export function useEvolution() {
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -64,6 +85,8 @@ export function useEvolution() {
   const analysisResult = ref<EvolutionAnalysisResponse | null>(null)
   const timelineData = ref<TimelineData[]>([])
   const patternData = ref<PatternEvolutionData>({})
+  const trendsData = ref<TrendsData>({})
+  const summary = ref<EvolutionSummary | null>(null)
 
   // API client with auth token
   const api = axios.create({
@@ -177,12 +200,89 @@ export function useEvolution() {
   }
 
   /**
+   * Fetch quality trend analysis (Issue #247)
+   */
+  async function fetchTrends(days: number = 30): Promise<void> {
+    try {
+      const response = await api.get<{ trends: TrendsData }>('/trends', { params: { days } })
+      if (response.data.trends) {
+        trendsData.value = response.data.trends
+      }
+      logger.info('Trends data fetched', Object.keys(trendsData.value).length, 'metrics')
+    } catch (e: any) {
+      logger.error('Failed to fetch trends:', e)
+    }
+  }
+
+  /**
+   * Fetch evolution summary stats (Issue #247)
+   */
+  async function fetchSummary(): Promise<void> {
+    try {
+      const response = await api.get<{ summary: EvolutionSummary }>('/summary')
+      if (response.data.summary) {
+        summary.value = response.data.summary
+      }
+      logger.info('Evolution summary fetched')
+    } catch (e: any) {
+      logger.error('Failed to fetch summary:', e)
+    }
+  }
+
+  /**
+   * Export evolution data as JSON or CSV (Issue #247)
+   */
+  async function exportData(
+    format: 'json' | 'csv' = 'json',
+    start_date?: string,
+    end_date?: string
+  ): Promise<void> {
+    try {
+      const params: any = { format }
+      if (start_date) params.start_date = start_date
+      if (end_date) params.end_date = end_date
+
+      const response = await api.get('/export', {
+        params,
+        responseType: format === 'csv' ? 'blob' : 'json',
+      })
+
+      if (format === 'csv') {
+        const blob = new Blob([response.data], { type: 'text/csv' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `evolution_data_${new Date().toISOString().slice(0, 10)}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+      } else {
+        const blob = new Blob([JSON.stringify(response.data, null, 2)], {
+          type: 'application/json',
+        })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `evolution_data_${new Date().toISOString().slice(0, 10)}.json`
+        a.click()
+        URL.revokeObjectURL(url)
+      }
+      logger.info('Evolution data exported as', format)
+    } catch (e: any) {
+      const errorMsg = e.response?.data?.message || e.message || 'Export failed'
+      error.value = errorMsg
+      logger.error('Export failed:', e)
+    }
+  }
+
+  /**
    * Clear all data
    */
   function clearData(): void {
     analysisResult.value = null
     timelineData.value = []
     patternData.value = {}
+    trendsData.value = {}
+    summary.value = null
     error.value = null
   }
 
@@ -190,6 +290,7 @@ export function useEvolution() {
   const hasTimelineData = computed(() => timelineData.value.length > 0)
   const hasPatternData = computed(() => Object.keys(patternData.value).length > 0)
   const hasAnalysisResult = computed(() => analysisResult.value !== null)
+  const hasTrendsData = computed(() => Object.keys(trendsData.value).length > 0)
 
   return {
     // State
@@ -198,16 +299,22 @@ export function useEvolution() {
     analysisResult,
     timelineData,
     patternData,
+    trendsData,
+    summary,
 
     // Computed
     hasTimelineData,
     hasPatternData,
     hasAnalysisResult,
+    hasTrendsData,
 
     // Methods
     analyzeEvolution,
     fetchTimeline,
     fetchPatternEvolution,
+    fetchTrends,
+    fetchSummary,
+    exportData,
     clearData,
   }
 }
