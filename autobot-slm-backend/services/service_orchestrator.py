@@ -69,7 +69,7 @@ _SERVICE_DEFINITIONS = {
         service_type=AutoBotServiceType.BACKEND,
         default_host_env="AUTOBOT_BACKEND_HOST",
         default_port_env="AUTOBOT_BACKEND_PORT",
-        default_host="0.0.0.0",  # nosec B104 - intentional for VM network access
+        default_host="172.16.168.20",  # Main WSL backend host
         default_port=8443,  # Issue #858/#861: HTTPS port
         start_command=(
             "cd /opt/autobot/autobot-user-backend && "
@@ -177,7 +177,7 @@ _SERVICE_DEFINITIONS = {
         service_type=AutoBotServiceType.SLM_BACKEND,
         default_host_env="SLM_HOST",
         default_port_env="SLM_PORT",
-        default_host="172.16.168.19",
+        default_host="127.0.0.1",  # Self-check: uvicorn binds localhost-only
         default_port=8000,
         systemd_service="slm-backend",
         health_check_path="/api/health",
