@@ -374,7 +374,7 @@ const getStatusDotClass = (status) => {
     case 'running':
       return 'bg-green-500'
     case 'stopped':
-      return 'bg-gray-500'
+      return 'bg-autobot-text-muted'
     case 'failed':
       return 'bg-red-500'
     default:
@@ -394,7 +394,7 @@ const getHealthCheckCardClass = (status) => {
     case 'fail':
       return 'border-red-300 bg-red-50'
     default:
-      return 'border-gray-300 bg-gray-50'
+      return 'border-autobot-border bg-autobot-bg-tertiary'
   }
 }
 

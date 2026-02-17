@@ -485,7 +485,7 @@ function getPatternTrendIcon(data: PatternPoint[]): string {
   const trend = getPatternTrend(data)
   if (trend === 'declining') return 'fas fa-arrow-down text-green-500'
   if (trend === 'increasing') return 'fas fa-arrow-up text-red-500'
-  return 'fas fa-minus text-gray-500'
+  return 'fas fa-minus text-autobot-text-muted'
 }
 
 function getPatternTrendText(data: PatternPoint[]): string {

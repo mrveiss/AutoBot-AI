@@ -134,11 +134,11 @@ const cancelLoading = () => {
 }
 
 .error-title {
-  @apply text-xl font-semibold text-gray-900 mb-2;
+  @apply text-xl font-semibold text-autobot-text-primary mb-2;
 }
 
 .error-message {
-  @apply text-gray-600 mb-6;
+  @apply text-autobot-text-secondary mb-6;
 }
 
 .error-actions {
@@ -150,7 +150,7 @@ const cancelLoading = () => {
 }
 
 .btn-dismiss {
-  @apply px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors;
+  @apply px-4 py-2 bg-autobot-bg-secondary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-tertiary transition-colors;
 }
 
 /* Loading Container */
@@ -167,7 +167,7 @@ const cancelLoading = () => {
 }
 
 .loading-message {
-  @apply text-gray-600 mb-4;
+  @apply text-autobot-text-secondary mb-4;
 }
 
 .timeout-warning {
@@ -192,7 +192,7 @@ const cancelLoading = () => {
 
 /* Updating Indicator */
 .updating-indicator {
-  @apply absolute top-4 right-4 flex items-center gap-2 bg-white/90 px-3 py-1.5 rounded-full shadow-sm;
+  @apply absolute top-4 right-4 flex items-center gap-2 bg-autobot-bg-card/90 px-3 py-1.5 rounded-full shadow-sm;
 }
 
 .updating-pulse {
@@ -200,6 +200,6 @@ const cancelLoading = () => {
 }
 
 .updating-text {
-  @apply text-sm text-gray-600;
+  @apply text-sm text-autobot-text-secondary;
 }
 </style>

@@ -87,9 +87,9 @@ const getFileIcon = (item: TreeItem): string => {
 
   // Map extensions to color classes for visual distinction
   const colorMap: Record<string, string> = {
-    'txt': 'text-gray-500',
-    'md': 'text-gray-500',
-    'readme': 'text-gray-500',
+    'txt': 'text-autobot-text-muted',
+    'md': 'text-autobot-text-muted',
+    'readme': 'text-autobot-text-muted',
     'js': 'text-green-500',
     'ts': 'text-green-500',
     'jsx': 'text-green-500',
@@ -112,22 +112,22 @@ const getFileIcon = (item: TreeItem): string => {
     'rar': 'text-orange-500'
   }
 
-  const color = colorMap[extension || ''] || 'text-gray-400'
+  const color = colorMap[extension || ''] || 'text-autobot-text-muted'
   return `${icon} ${color}`
 }
 </script>
 
 <style scoped>
 .tree-panel {
-  @apply bg-white border border-gray-200 rounded-lg flex flex-col h-full;
+  @apply bg-autobot-bg-card border border-autobot-border rounded-lg flex flex-col h-full;
 }
 
 .tree-header {
-  @apply flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50 flex-shrink-0;
+  @apply flex justify-between items-center p-4 border-b border-autobot-border bg-autobot-bg-tertiary flex-shrink-0;
 }
 
 .tree-header h3 {
-  @apply text-lg font-semibold text-gray-900 flex items-center gap-2;
+  @apply text-lg font-semibold text-autobot-text-primary flex items-center gap-2;
 }
 
 .tree-controls {
@@ -135,7 +135,7 @@ const getFileIcon = (item: TreeItem): string => {
 }
 
 .tree-controls button {
-  @apply w-8 h-8 flex items-center justify-center rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100;
+  @apply w-8 h-8 flex items-center justify-center rounded text-autobot-text-muted hover:text-autobot-text-secondary hover:bg-autobot-bg-secondary;
 }
 
 .tree-content {
@@ -147,7 +147,7 @@ const getFileIcon = (item: TreeItem): string => {
 }
 
 .tree-node-content {
-  @apply flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-gray-100;
+  @apply flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-autobot-bg-secondary;
 }
 
 .tree-node.selected .tree-node-content {
@@ -155,7 +155,7 @@ const getFileIcon = (item: TreeItem): string => {
 }
 
 .tree-toggle {
-  @apply w-4 text-xs text-gray-400;
+  @apply w-4 text-xs text-autobot-text-muted;
 }
 
 .tree-icon {

@@ -80,7 +80,7 @@ const progressBarClasses = computed(() => {
     case 'running':
       return 'bg-blue-500 animate-pulse'
     default:
-      return 'bg-gray-400'
+      return 'bg-autobot-text-muted'
   }
 })
 </script>
@@ -188,8 +188,8 @@ const progressBarClasses = computed(() => {
   background-color: #3b82f6;
 }
 
-.bg-gray-400 {
-  background-color: #9ca3af;
+.bg-autobot-text-muted {
+  background-color: var(--text-muted, #9ca3af);
 }
 
 .animate-pulse {

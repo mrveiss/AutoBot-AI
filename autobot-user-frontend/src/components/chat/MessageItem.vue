@@ -343,25 +343,25 @@ const formattedContent = computed(() => {
 
 /* ASSISTANT MESSAGES - Left side, gray theme */
 .message-wrapper.assistant-message {
-  @apply bg-gray-100 text-gray-900 border-gray-300 mr-auto ml-0;
+  @apply bg-autobot-bg-secondary text-autobot-text-primary border-autobot-border mr-auto ml-0;
   border-radius: 18px 18px 18px 4px;
 }
 
 .message-wrapper.assistant-message .sender-name {
-  @apply text-gray-900;
+  @apply text-autobot-text-primary;
 }
 
 .message-wrapper.assistant-message .message-time {
-  @apply text-gray-600;
+  @apply text-autobot-text-secondary;
 }
 
 .message-wrapper.assistant-message .message-content {
-  @apply text-gray-900;
+  @apply text-autobot-text-primary;
 }
 
 /* SYSTEM MESSAGES - Centered, subtle */
 .message-wrapper.system-message {
-  @apply bg-gray-50 border-gray-200 mx-auto text-gray-700;
+  @apply bg-autobot-bg-tertiary border-autobot-border mx-auto text-autobot-text-secondary;
   max-width: 70%;
   border-radius: 12px;
 }
@@ -387,11 +387,11 @@ const formattedContent = computed(() => {
 }
 
 .message-avatar.assistant {
-  @apply bg-gray-600;
+  @apply bg-autobot-bg-tertiary;
 }
 
 .message-avatar.system {
-  @apply bg-gray-500;
+  @apply bg-autobot-text-muted;
 }
 
 .message-info {
@@ -463,11 +463,11 @@ const formattedContent = computed(() => {
 }
 
 .assistant-message .message-metadata {
-  @apply mt-1.5 pt-1 border-t border-gray-300;
+  @apply mt-1.5 pt-1 border-t border-autobot-border;
 }
 
 .assistant-message .metadata-items {
-  @apply flex flex-wrap gap-1.5 text-xs text-gray-600;
+  @apply flex flex-wrap gap-1.5 text-xs text-autobot-text-secondary;
 }
 
 .metadata-item {
@@ -487,7 +487,7 @@ const formattedContent = computed(() => {
 }
 
 .typing-dots span {
-  @apply w-1.5 h-1.5 bg-gray-400 rounded-full animate-pulse;
+  @apply w-1.5 h-1.5 bg-autobot-text-muted rounded-full animate-pulse;
   animation-delay: calc(var(--index) * 0.2s);
 }
 

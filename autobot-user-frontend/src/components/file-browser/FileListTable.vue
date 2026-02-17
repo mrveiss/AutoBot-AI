@@ -209,7 +209,7 @@ const handleRowKeydown = (event: KeyboardEvent, file: FileItem, index: number) =
 
 // Methods
 const getSortIcon = (field: string): string => {
-  if (props.sortField !== field) return 'fas fa-sort text-gray-400'
+  if (props.sortField !== field) return 'fas fa-sort text-autobot-text-muted'
   return props.sortOrder === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down'
 }
 
@@ -226,9 +226,9 @@ const getFileIcon = (file: FileItem): string => {
   // Map extensions to color classes for visual distinction
   const colorMap: Record<string, string> = {
     // Text files
-    'txt': 'text-gray-500',
-    'md': 'text-gray-500',
-    'readme': 'text-gray-500',
+    'txt': 'text-autobot-text-muted',
+    'md': 'text-autobot-text-muted',
+    'readme': 'text-autobot-text-muted',
     // Code files
     'js': 'text-green-500',
     'ts': 'text-green-500',
@@ -263,7 +263,7 @@ const getFileIcon = (file: FileItem): string => {
     'ogg': 'text-indigo-500'
   }
 
-  const color = colorMap[extension || ''] || 'text-gray-400'
+  const color = colorMap[extension || ''] || 'text-autobot-text-muted'
   return `${icon} ${color}`
 }
 
@@ -312,27 +312,27 @@ const formatDate = formatDateTime
 }
 
 .file-table {
-  @apply w-full border-collapse bg-white shadow-sm rounded-lg overflow-hidden;
+  @apply w-full border-collapse bg-autobot-bg-card shadow-sm rounded-lg overflow-hidden;
 }
 
 .file-table thead {
-  @apply bg-gray-50;
+  @apply bg-autobot-bg-tertiary;
 }
 
 .file-table th {
-  @apply px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b border-gray-200;
+  @apply px-4 py-3 text-left text-xs font-medium text-autobot-text-muted uppercase tracking-wider border-b border-autobot-border;
 }
 
 .file-table th.sortable {
-  @apply cursor-pointer hover:bg-gray-100 select-none;
+  @apply cursor-pointer hover:bg-autobot-bg-secondary select-none;
 }
 
 .file-table td {
-  @apply px-4 py-3 text-sm text-gray-900 border-b border-gray-100;
+  @apply px-4 py-3 text-sm text-autobot-text-primary border-b border-autobot-border;
 }
 
 .file-table tbody tr:hover {
-  @apply bg-gray-50;
+  @apply bg-autobot-bg-tertiary;
 }
 
 .file-table tbody tr:focus {

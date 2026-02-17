@@ -120,11 +120,11 @@ const osBadgeClass = computed(() => {
 }
 
 .info-item label {
-  @apply text-sm font-medium text-gray-500 mb-1;
+  @apply text-sm font-medium text-autobot-text-muted mb-1;
 }
 
 .info-item span {
-  @apply text-gray-900;
+  @apply text-autobot-text-primary;
 }
 
 .mono {
@@ -144,11 +144,11 @@ const osBadgeClass = computed(() => {
 }
 
 .badge-macos {
-  @apply bg-gray-100 text-gray-800;
+  @apply bg-autobot-bg-secondary text-autobot-text-primary;
 }
 
 .badge-unknown {
-  @apply bg-gray-100 text-gray-600;
+  @apply bg-autobot-bg-secondary text-autobot-text-secondary;
 }
 
 .highlight {

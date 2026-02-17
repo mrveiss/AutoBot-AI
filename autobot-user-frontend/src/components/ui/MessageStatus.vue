@@ -115,7 +115,7 @@ const statusTooltip = computed(() => {
 }
 
 .retry-button {
-  @apply ml-1 p-0.5 rounded hover:bg-gray-100 transition-colors;
+  @apply ml-1 p-0.5 rounded hover:bg-autobot-bg-secondary transition-colors;
 }
 
 /* Status-specific styles */
@@ -124,7 +124,7 @@ const statusTooltip = computed(() => {
 }
 
 .status-sent {
-  @apply text-gray-400;
+  @apply text-autobot-text-muted;
 }
 
 .status-delivered {

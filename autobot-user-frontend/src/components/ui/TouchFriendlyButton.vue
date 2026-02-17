@@ -200,39 +200,39 @@ const createRipple = (event: TouchEvent) => {
 }
 
 .button-secondary {
-  @apply bg-gray-600 text-white border border-transparent;
+  @apply bg-autobot-bg-primary text-autobot-text-primary border border-transparent;
 }
 
 .button-secondary:hover:not(.button-disabled):not(.button-loading) {
-  @apply bg-gray-700;
+  @apply bg-autobot-bg-secondary;
 }
 
 .button-secondary:focus {
-  @apply ring-gray-500;
+  @apply ring-autobot-border;
 }
 
 .button-outline {
-  @apply bg-transparent text-gray-700 border border-gray-300;
+  @apply bg-transparent text-autobot-text-secondary border border-autobot-border;
 }
 
 .button-outline:hover:not(.button-disabled):not(.button-loading) {
-  @apply bg-gray-50 border-gray-400;
+  @apply bg-autobot-bg-tertiary border-autobot-border;
 }
 
 .button-outline:focus {
-  @apply ring-gray-500;
+  @apply ring-autobot-border;
 }
 
 .button-ghost {
-  @apply bg-transparent text-gray-600 border border-transparent;
+  @apply bg-transparent text-autobot-text-secondary border border-transparent;
 }
 
 .button-ghost:hover:not(.button-disabled):not(.button-loading) {
-  @apply bg-gray-100 text-gray-900;
+  @apply bg-autobot-bg-secondary text-autobot-text-primary;
 }
 
 .button-ghost:focus {
-  @apply ring-gray-400;
+  @apply ring-autobot-border;
 }
 
 .button-danger {
@@ -260,24 +260,8 @@ const createRipple = (event: TouchEvent) => {
   @apply opacity-50 cursor-not-allowed;
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .button-outline {
-    @apply text-gray-300 border-gray-600;
-  }
-
-  .button-outline:hover:not(.button-disabled):not(.button-loading) {
-    @apply bg-gray-800 border-gray-500;
-  }
-
-  .button-ghost {
-    @apply text-gray-400;
-  }
-
-  .button-ghost:hover:not(.button-disabled):not(.button-loading) {
-    @apply bg-gray-800 text-gray-100;
-  }
-}
+/* Dark mode support — project uses data-theme attribute, not prefers-color-scheme */
+/* Design tokens (autobot-*) handle theming via CSS custom properties on [data-theme] */
 
 /* High contrast mode support */
 @media (prefers-contrast: high) {

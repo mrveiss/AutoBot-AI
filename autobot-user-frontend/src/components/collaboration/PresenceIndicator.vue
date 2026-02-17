@@ -17,8 +17,8 @@ const getStatusColor = (status: UserPresence['status']): string => {
   switch (status) {
     case 'online': return 'bg-green-500'
     case 'away': return 'bg-yellow-500'
-    case 'offline': return 'bg-gray-500'
-    default: return 'bg-gray-500'
+    case 'offline': return 'bg-autobot-text-muted'
+    default: return 'bg-autobot-text-muted'
   }
 }
 

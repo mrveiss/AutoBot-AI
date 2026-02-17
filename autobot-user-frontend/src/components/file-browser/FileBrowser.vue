@@ -486,7 +486,7 @@ onMounted(() => {
 
 <style scoped>
 .file-browser {
-  @apply h-full flex flex-col bg-gray-50 p-6;
+  @apply h-full flex flex-col bg-autobot-bg-tertiary p-6;
 }
 
 .file-content-container {
@@ -498,15 +498,15 @@ onMounted(() => {
 }
 
 .files-panel {
-  @apply flex-1 bg-white border border-gray-200 rounded-lg;
+  @apply flex-1 bg-autobot-bg-card border border-autobot-border rounded-lg;
 }
 
 .files-header {
-  @apply p-4 border-b border-gray-200 bg-gray-50 flex flex-wrap items-center gap-4;
+  @apply p-4 border-b border-autobot-border bg-autobot-bg-tertiary flex flex-wrap items-center gap-4;
 }
 
 .files-header h3 {
-  @apply text-lg font-semibold text-gray-900 flex items-center gap-2 flex-shrink-0;
+  @apply text-lg font-semibold text-autobot-text-primary flex items-center gap-2 flex-shrink-0;
 }
 
 .file-upload-inline {
@@ -515,7 +515,7 @@ onMounted(() => {
 
 /* Style FileUpload component when used inline */
 .file-upload-inline :deep(.file-upload-section) {
-  @apply mb-0 p-0 border border-gray-300 rounded-md bg-white hover:border-gray-400;
+  @apply mb-0 p-0 border border-autobot-border rounded-md bg-autobot-bg-card hover:border-autobot-border;
 }
 
 .file-upload-inline :deep(.file-upload-inline-wrapper) {
@@ -535,7 +535,7 @@ onMounted(() => {
 }
 
 .file-actions-inline button {
-  @apply px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-2;
+  @apply px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-card border border-autobot-border rounded-md hover:bg-autobot-bg-secondary focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-2;
 }
 
 .file-actions-inline button:hover {

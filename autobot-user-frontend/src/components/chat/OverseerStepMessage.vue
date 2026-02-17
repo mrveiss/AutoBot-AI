@@ -209,7 +209,7 @@ const formatDuration = (seconds: number): string => {
 
 <style scoped>
 .overseer-step {
-  @apply bg-gray-800 border border-gray-700 rounded-lg p-4 mb-4;
+  @apply bg-autobot-bg-secondary border border-autobot-border rounded-lg p-4 mb-4;
   transition: all 0.3s ease;
 }
 
@@ -229,7 +229,7 @@ const formatDuration = (seconds: number): string => {
 
 /* Step Header */
 .step-header {
-  @apply flex items-center justify-between mb-3 pb-2 border-b border-gray-700;
+  @apply flex items-center justify-between mb-3 pb-2 border-b border-autobot-border;
 }
 
 .step-indicator {
@@ -244,7 +244,7 @@ const formatDuration = (seconds: number): string => {
   @apply flex items-center gap-1.5 text-sm;
 }
 
-.step-status.pending { @apply text-gray-400; }
+.step-status.pending { @apply text-autobot-text-muted; }
 .step-status.running { @apply text-blue-400; }
 .step-status.streaming { @apply text-cyan-400; }
 .step-status.explaining { @apply text-purple-400; }
@@ -252,12 +252,12 @@ const formatDuration = (seconds: number): string => {
 .step-status.failed { @apply text-red-400; }
 
 .step-time {
-  @apply text-gray-500 text-xs flex items-center gap-1;
+  @apply text-autobot-text-muted text-xs flex items-center gap-1;
 }
 
 /* Step Description */
 .step-description {
-  @apply flex items-center gap-2 text-gray-300 mb-4;
+  @apply flex items-center gap-2 text-autobot-text-secondary mb-4;
 }
 
 .step-description i {
@@ -270,7 +270,7 @@ const formatDuration = (seconds: number): string => {
 }
 
 .command-line {
-  @apply flex items-center gap-2 bg-gray-900 rounded-t-lg px-3 py-2 border border-gray-700;
+  @apply flex items-center gap-2 bg-autobot-bg-primary rounded-t-lg px-3 py-2 border border-autobot-border;
 }
 
 .command-prompt {
@@ -278,12 +278,12 @@ const formatDuration = (seconds: number): string => {
 }
 
 .command-text {
-  @apply flex-1 text-gray-100 font-mono text-sm;
+  @apply flex-1 text-autobot-text-primary font-mono text-sm;
   word-break: break-all;
 }
 
 .copy-btn {
-  @apply text-gray-500 hover:text-gray-300 p-1 rounded transition-colors;
+  @apply text-autobot-text-muted hover:text-autobot-text-secondary p-1 rounded transition-colors;
 }
 
 /* Command Explanation (Part 1) */
@@ -296,7 +296,7 @@ const formatDuration = (seconds: number): string => {
 }
 
 .explanation-summary {
-  @apply text-gray-300 text-sm mb-3;
+  @apply text-autobot-text-secondary text-sm mb-3;
 }
 
 .command-breakdown {
@@ -308,11 +308,11 @@ const formatDuration = (seconds: number): string => {
 }
 
 .breakdown-part {
-  @apply bg-gray-700 text-cyan-300 px-1.5 py-0.5 rounded font-mono text-xs whitespace-nowrap;
+  @apply bg-autobot-bg-secondary text-cyan-300 px-1.5 py-0.5 rounded font-mono text-xs whitespace-nowrap;
 }
 
 .breakdown-explanation {
-  @apply text-gray-400;
+  @apply text-autobot-text-muted;
 }
 
 .security-notes {
@@ -340,11 +340,11 @@ const formatDuration = (seconds: number): string => {
 .streaming-dots span:nth-child(3) { animation-delay: 0.4s; }
 
 .output-content {
-  @apply bg-gray-900 border border-gray-700 rounded-lg overflow-hidden;
+  @apply bg-autobot-bg-primary border border-autobot-border rounded-lg overflow-hidden;
 }
 
 .output-header {
-  @apply flex items-center gap-2 px-3 py-2 bg-gray-800 border-b border-gray-700;
+  @apply flex items-center gap-2 px-3 py-2 bg-autobot-bg-secondary border-b border-autobot-border;
 }
 
 .output-header i {
@@ -352,7 +352,7 @@ const formatDuration = (seconds: number): string => {
 }
 
 .output-header span {
-  @apply text-gray-400 text-sm;
+  @apply text-autobot-text-muted text-sm;
 }
 
 .return-code {
@@ -365,7 +365,7 @@ const formatDuration = (seconds: number): string => {
 }
 
 .output-text {
-  @apply p-3 text-gray-100 font-mono text-sm whitespace-pre-wrap overflow-x-auto max-h-96;
+  @apply p-3 text-autobot-text-primary font-mono text-sm whitespace-pre-wrap overflow-x-auto max-h-96;
 }
 
 /* Output Explanation (Part 2) */
@@ -382,7 +382,7 @@ const formatDuration = (seconds: number): string => {
 }
 
 .key-findings li {
-  @apply flex items-start gap-2 text-sm text-gray-300;
+  @apply flex items-start gap-2 text-sm text-autobot-text-secondary;
 }
 
 .key-findings li i {
@@ -390,7 +390,7 @@ const formatDuration = (seconds: number): string => {
 }
 
 .details-section {
-  @apply text-gray-400 text-sm mb-3;
+  @apply text-autobot-text-muted text-sm mb-3;
 }
 
 .next-steps {
@@ -402,7 +402,7 @@ const formatDuration = (seconds: number): string => {
 }
 
 .next-steps ul {
-  @apply list-disc list-inside text-sm text-gray-400 ml-4;
+  @apply list-disc list-inside text-sm text-autobot-text-muted ml-4;
 }
 
 /* Error Display */

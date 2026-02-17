@@ -91,7 +91,7 @@ const getStepClass = (step: { step_number: number }): Record<string, boolean> =>
 const getStepIcon = (step: { step_number: number }): string => {
   const status = getStepStatus(step)
   const icons: Record<string, string> = {
-    pending: 'fas fa-circle text-gray-500',
+    pending: 'fas fa-circle text-autobot-text-muted',
     running: 'fas fa-spinner fa-spin text-blue-400',
     streaming: 'fas fa-stream text-cyan-400',
     explaining: 'fas fa-brain text-purple-400',
@@ -104,11 +104,11 @@ const getStepIcon = (step: { step_number: number }): string => {
 
 <style scoped>
 .overseer-plan {
-  @apply bg-gray-800/80 border border-indigo-600/50 rounded-lg p-4 mb-4;
+  @apply bg-autobot-bg-secondary border border-indigo-600/50 rounded-lg p-4 mb-4;
 }
 
 .plan-header {
-  @apply flex items-center gap-4 mb-3 pb-3 border-b border-gray-700;
+  @apply flex items-center gap-4 mb-3 pb-3 border-b border-autobot-border;
 }
 
 .plan-title {
@@ -116,7 +116,7 @@ const getStepIcon = (step: { step_number: number }): string => {
 }
 
 .plan-progress {
-  @apply flex-1 h-2 bg-gray-700 rounded-full overflow-hidden;
+  @apply flex-1 h-2 bg-autobot-bg-secondary rounded-full overflow-hidden;
 }
 
 .progress-bar {
@@ -124,11 +124,11 @@ const getStepIcon = (step: { step_number: number }): string => {
 }
 
 .progress-text {
-  @apply text-gray-400 text-sm;
+  @apply text-autobot-text-muted text-sm;
 }
 
 .plan-analysis {
-  @apply flex items-start gap-2 text-gray-300 text-sm mb-4 bg-indigo-900/30 px-3 py-2 rounded;
+  @apply flex items-start gap-2 text-autobot-text-secondary text-sm mb-4 bg-indigo-900/30 px-3 py-2 rounded;
 }
 
 .plan-analysis i {
@@ -140,7 +140,7 @@ const getStepIcon = (step: { step_number: number }): string => {
 }
 
 .step-preview {
-  @apply flex items-center gap-3 px-3 py-2 rounded bg-gray-900/50 border border-gray-700;
+  @apply flex items-center gap-3 px-3 py-2 rounded bg-autobot-bg-primary border border-autobot-border;
   transition: all 0.2s ease;
 }
 
@@ -157,7 +157,7 @@ const getStepIcon = (step: { step_number: number }): string => {
 }
 
 .step-number {
-  @apply w-6 h-6 flex items-center justify-center bg-gray-700 text-gray-300 rounded-full text-xs font-semibold;
+  @apply w-6 h-6 flex items-center justify-center bg-autobot-bg-secondary text-autobot-text-secondary rounded-full text-xs font-semibold;
 }
 
 .step-preview.completed .step-number {
@@ -173,11 +173,11 @@ const getStepIcon = (step: { step_number: number }): string => {
 }
 
 .step-desc {
-  @apply block text-gray-300 text-sm truncate;
+  @apply block text-autobot-text-secondary text-sm truncate;
 }
 
 .step-command {
-  @apply block text-gray-500 text-xs font-mono mt-0.5 truncate;
+  @apply block text-autobot-text-muted text-xs font-mono mt-0.5 truncate;
 }
 
 .step-status-icon {

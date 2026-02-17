@@ -617,7 +617,7 @@ const copyDocument = async () => {
 
 <style scoped>
 .knowledge-search {
-  @apply p-4 bg-white rounded-lg shadow-sm border;
+  @apply p-4 bg-autobot-bg-card rounded-lg shadow-sm border;
 }
 
 .search-header {
@@ -625,11 +625,11 @@ const copyDocument = async () => {
 }
 
 .search-header h3 {
-  @apply text-lg font-semibold text-gray-900 mb-1;
+  @apply text-lg font-semibold text-autobot-text-primary mb-1;
 }
 
 .search-header p {
-  @apply text-sm text-gray-600;
+  @apply text-sm text-autobot-text-secondary;
 }
 
 /* Search Mode Toggle */
@@ -639,15 +639,15 @@ const copyDocument = async () => {
 
 /* Category Filter */
 .category-filter {
-  @apply mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200;
+  @apply mb-4 p-3 bg-autobot-bg-tertiary rounded-lg border border-autobot-border;
 }
 
 .filter-label {
-  @apply text-sm font-medium text-gray-700 flex items-center gap-2 mb-2;
+  @apply text-sm font-medium text-autobot-text-secondary flex items-center gap-2 mb-2;
 }
 
 .filter-label i {
-  @apply text-gray-500;
+  @apply text-autobot-text-muted;
 }
 
 .filter-controls {
@@ -655,19 +655,19 @@ const copyDocument = async () => {
 }
 
 .category-select {
-  @apply flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white;
+  @apply flex-1 px-3 py-2 border border-autobot-border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-autobot-bg-card;
 }
 
 .category-select:disabled {
-  @apply bg-gray-100 cursor-not-allowed;
+  @apply bg-autobot-bg-secondary cursor-not-allowed;
 }
 
 .clear-filter-button {
-  @apply p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors;
+  @apply p-2 text-autobot-text-muted hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors;
 }
 
 .loading-indicator {
-  @apply text-gray-400 text-sm;
+  @apply text-autobot-text-muted text-sm;
 }
 
 .active-filter-badge {
@@ -688,7 +688,7 @@ const copyDocument = async () => {
 
 /* Issue #685: Access Level Filter */
 .access-level-filter {
-  @apply mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200;
+  @apply mb-4 p-3 bg-autobot-bg-tertiary rounded-lg border border-autobot-border;
 }
 
 .filter-chips {
@@ -697,7 +697,7 @@ const copyDocument = async () => {
 
 .filter-chip {
   @apply px-3 py-1.5 text-sm font-medium rounded-full border-2 transition-all flex items-center gap-1.5;
-  @apply border-gray-300 bg-white text-gray-700 hover:bg-gray-50;
+  @apply border-autobot-border bg-autobot-bg-card text-autobot-text-secondary hover:bg-autobot-bg-secondary;
 }
 
 .filter-chip.active {
@@ -714,7 +714,7 @@ const copyDocument = async () => {
 }
 
 .toggle-container {
-  @apply flex bg-gray-100 rounded-lg p-1 mb-2;
+  @apply flex bg-autobot-bg-secondary rounded-lg p-1 mb-2;
 }
 
 .mode-button {
@@ -722,11 +722,11 @@ const copyDocument = async () => {
 }
 
 .mode-button:not(.active) {
-  @apply text-gray-600 hover:text-gray-900;
+  @apply text-autobot-text-secondary hover:text-autobot-text-primary;
 }
 
 .mode-button.active {
-  @apply bg-white text-gray-900 shadow-sm;
+  @apply bg-autobot-bg-card text-autobot-text-primary shadow-sm;
 }
 
 .mode-button.rag-button.active {
@@ -734,7 +734,7 @@ const copyDocument = async () => {
 }
 
 .mode-description {
-  @apply text-xs text-gray-500 px-2;
+  @apply text-xs text-autobot-text-muted px-2;
 }
 
 .rag-desc {
@@ -747,7 +747,7 @@ const copyDocument = async () => {
 }
 
 .option-group {
-  @apply flex items-center gap-2 text-sm text-gray-700;
+  @apply flex items-center gap-2 text-sm text-autobot-text-secondary;
 }
 
 .option-group + .option-group {
@@ -755,7 +755,7 @@ const copyDocument = async () => {
 }
 
 .limit-select {
-  @apply ml-2 px-2 py-1 border border-gray-300 rounded text-xs;
+  @apply ml-2 px-2 py-1 border border-autobot-border rounded text-xs;
 }
 
 .reranking-label {
@@ -776,7 +776,7 @@ const copyDocument = async () => {
 }
 
 .search-input {
-  @apply flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  @apply flex-1 px-4 py-2 border border-autobot-border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent;
 }
 
 .search-button {
@@ -846,7 +846,7 @@ const copyDocument = async () => {
 }
 
 .results-header h4 {
-  @apply text-base font-medium text-gray-900 flex items-center gap-2;
+  @apply text-base font-medium text-autobot-text-primary flex items-center gap-2;
 }
 
 .rag-enhanced-label {
@@ -858,7 +858,7 @@ const copyDocument = async () => {
 }
 
 .result-item {
-  @apply p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer;
+  @apply p-4 border border-autobot-border rounded-lg hover:bg-autobot-bg-secondary cursor-pointer;
 }
 
 .result-header {
@@ -866,7 +866,7 @@ const copyDocument = async () => {
 }
 
 .result-title {
-  @apply font-medium text-gray-900;
+  @apply font-medium text-autobot-text-primary;
 }
 
 .score-badges {
@@ -898,7 +898,7 @@ const copyDocument = async () => {
 }
 
 .result-meta {
-  @apply flex gap-4 text-xs text-gray-500 mb-2;
+  @apply flex gap-4 text-xs text-autobot-text-muted mb-2;
 }
 
 /* Issue #685: Access level badge styles */
@@ -919,7 +919,7 @@ const copyDocument = async () => {
 }
 
 .access-level-badge.access-user {
-  @apply bg-gray-100 text-gray-700;
+  @apply bg-autobot-bg-secondary text-autobot-text-secondary;
 }
 
 .access-level-badge i {
@@ -927,12 +927,12 @@ const copyDocument = async () => {
 }
 
 .result-content p {
-  @apply text-sm text-gray-700 line-clamp-2;
+  @apply text-sm text-autobot-text-secondary line-clamp-2;
 }
 
 /* No Results */
 .no-results-hint {
-  @apply text-sm text-gray-500 mt-2;
+  @apply text-sm text-autobot-text-muted mt-2;
 }
 
 .initialization-help {
@@ -970,7 +970,7 @@ const copyDocument = async () => {
 
 /* Result Footer with Click Hint */
 .result-footer {
-  @apply mt-3 pt-2 border-t border-gray-100;
+  @apply mt-3 pt-2 border-t border-autobot-border;
 }
 
 .click-hint {
@@ -983,7 +983,7 @@ const copyDocument = async () => {
 
 /* Document Viewer Modal - Content Styles */
 .document-modal-meta {
-  @apply flex gap-4 text-sm text-gray-600;
+  @apply flex gap-4 text-sm text-autobot-text-secondary;
 }
 
 .modal-meta-item {
@@ -991,11 +991,11 @@ const copyDocument = async () => {
 }
 
 .modal-meta-item i {
-  @apply text-gray-400;
+  @apply text-autobot-text-muted;
 }
 
 .modal-loading {
-  @apply flex flex-col items-center justify-center py-12 text-gray-500;
+  @apply flex flex-col items-center justify-center py-12 text-autobot-text-muted;
 }
 
 .modal-loading i {
@@ -1003,11 +1003,11 @@ const copyDocument = async () => {
 }
 
 .document-text {
-  @apply prose prose-sm max-w-none text-gray-800 whitespace-pre-wrap;
+  @apply prose prose-sm max-w-none text-autobot-text-primary whitespace-pre-wrap;
 }
 
 .modal-no-content {
-  @apply flex flex-col items-center justify-center py-12 text-gray-400;
+  @apply flex flex-col items-center justify-center py-12 text-autobot-text-muted;
 }
 
 .modal-no-content i {
@@ -1015,7 +1015,7 @@ const copyDocument = async () => {
 }
 
 .modal-no-content p {
-  @apply text-gray-500;
+  @apply text-autobot-text-muted;
 }
 
 .modal-action-button {
@@ -1027,7 +1027,7 @@ const copyDocument = async () => {
 }
 
 .modal-close-action {
-  @apply bg-gray-200 text-gray-700 hover:bg-gray-300;
+  @apply bg-autobot-bg-secondary text-autobot-text-secondary hover:bg-autobot-bg-secondary;
 }
 
 .modal-action-button i {

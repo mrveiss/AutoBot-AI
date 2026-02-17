@@ -93,7 +93,7 @@ const placeholderStyle = computed(() => {
 }
 
 .loading-content {
-  @apply bg-white rounded-lg shadow-sm border border-gray-200 p-4;
+  @apply bg-autobot-bg-primary rounded-lg shadow-sm border border-autobot-border p-4;
 }
 
 .loading-header {
@@ -101,7 +101,7 @@ const placeholderStyle = computed(() => {
 }
 
 .loading-avatar {
-  @apply w-8 h-8 bg-gray-300 rounded-full;
+  @apply w-8 h-8 bg-autobot-bg-secondary rounded-full;
 }
 
 .loading-info {
@@ -109,11 +109,11 @@ const placeholderStyle = computed(() => {
 }
 
 .loading-name {
-  @apply h-4 bg-gray-300 rounded w-24;
+  @apply h-4 bg-autobot-bg-secondary rounded w-24;
 }
 
 .loading-time {
-  @apply h-3 bg-gray-200 rounded w-16;
+  @apply h-3 bg-autobot-bg-tertiary rounded w-16;
 }
 
 .loading-text {
@@ -121,7 +121,7 @@ const placeholderStyle = computed(() => {
 }
 
 .loading-line {
-  @apply h-4 bg-gray-200 rounded;
+  @apply h-4 bg-autobot-bg-tertiary rounded;
 }
 
 .loading-line.short {
