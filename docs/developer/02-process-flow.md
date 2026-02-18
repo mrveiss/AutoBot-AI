@@ -4,7 +4,7 @@ Comprehensive process flow documentation for AutoBot enterprise AI platform, det
 
 ## System Process Overview
 
-AutoBot operates through a sophisticated multi-layer process flow that handles user interactions, task orchestration, and AI-powered responses. The system has evolved through 4 development phases to achieve enterprise-grade processing capabilities.
+AutoBot operates through a sophisticated multi-layer process flow that handles user interactions, task orchestration, and AI-powered responses. The system has evolved through 4 development phases to achieve processing capabilities.
 
 ## High-Level Process Flow
 
@@ -624,4 +624,4 @@ graph TD
 
 ---
 
-This comprehensive process flow documentation provides detailed insights into AutoBot's enterprise-grade processing architecture. Each flow represents real production patterns that have been tested and optimized through the 4-phase development cycle.
+This comprehensive process flow documentation provides detailed insights into AutoBot's processing architecture. Each flow represents real production patterns that have been tested and optimized through the 4-phase development cycle.

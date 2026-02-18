@@ -701,7 +701,7 @@ profiling_info = infer_request.get_profiling_info()
 2. ✅ Windows native provides 15-25% better performance
 3. ✅ Simpler driver management (automatic updates)
 4. ✅ Network latency overhead is negligible (2-5ms)
-5. ✅ More stable and production-ready
+5. ✅ More stable and functional
 
 **Trade-offs:**
 - ⚠️ Requires maintaining code in two environments (WSL2 + Windows)

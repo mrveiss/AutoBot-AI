@@ -175,7 +175,7 @@ git commit -m "feat(frontend): merge unified design system from Dev_new_gui (#75
 
 ### Rationale
 1. **Code Quality**: Dev_new_gui maintains superior development practices
-2. **Feature Complete**: All #753 work is production-ready with 10/10 quality score
+2. **Feature Complete**: All #753 work is functional with 10/10 quality score
 3. **Traceability**: Every change is tied to GitHub issues
 4. **Maintainability**: Clean history enables future development
 5. **Risk**: Config consolidation (#767) can be cherry-picked if critical
@@ -212,7 +212,7 @@ If force-push is not acceptable, proceed with **Option 4** (feature-only merge):
 
 The merge conflict represents a fundamental divergence between two development philosophies. **Dev_new_gui represents best practices** with structured development, while **main shows bulk commits** with minimal traceability.
 
-Accepting Dev_new_gui as the primary codebase preserves quality, enables future development, and completes issue #753 with production-ready code.
+Accepting Dev_new_gui as the primary codebase preserves quality, enables future development, and completes issue #753 with functional code.
 
 **Decision Required**: Owner approval for Option 1 (reset to Dev_new_gui) or fallback to Option 4 (cherry-pick #753 only).
 

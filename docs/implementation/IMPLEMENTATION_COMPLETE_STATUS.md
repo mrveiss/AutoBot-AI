@@ -77,7 +77,7 @@ Session Takeover:
 - No file context → **File-aware conversational AI**
 - Manual organization → **AI-assisted knowledge curation**
 
-## 🔒 **Enterprise-Grade Security**
+## 🔒 **Security**
 
 ### **Multi-Layer Protection**
 - **Sandboxed Execution**: Commands run in controlled environments

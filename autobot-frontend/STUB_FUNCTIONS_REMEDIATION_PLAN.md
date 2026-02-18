@@ -718,7 +718,7 @@ const retryUpload = async (uploadId: string) => {
 - [ ] Hardware stats show real system data
 - [ ] Tab completion works in terminal
 - [ ] File uploads tracked with real progress
-- [ ] All stubs replaced with production-ready code
+- [ ] All stubs replaced with functional code
 - [ ] Test coverage ≥80% for remediated code
 
 ---
