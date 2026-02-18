@@ -4,76 +4,42 @@
  */
 
 .change-feed-section-wrapper {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border-radius: 0.75rem;
-  padding: 2rem;
-  margin-bottom: 2rem;
-  box-shadow: 0 10px 40px rgba(16, 185, 129, 0.3);
-  animation: fade-in-up 0.5s ease-out;
-}
-
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-8);
+  margin-bottom: var(--spacing-8);
 }
 
 .change-feed-section-wrapper .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--spacing-6);
 }
 
 .change-feed-section-wrapper .section-header.prominent h3 {
-  color: white;
-  font-size: 1.5rem;
-  font-weight: 700;
+  color: var(--text-primary);
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  gap: var(--spacing-3);
 }
 
 .section-badge {
-  background: rgba(255, 255, 255, 0.25);
-  backdrop-filter: blur(10px);
-  color: white;
-  padding: 0.375rem 0.875rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  padding: var(--spacing-1) var(--spacing-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  animation: pulse-badge 2s ease-in-out infinite;
-}
-
-@keyframes pulse-badge {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.9;
-  }
+  border: 1px solid var(--border-default);
 }
 
 .change-feed-section-wrapper .document-change-feed {
-  background: white;
-  border-radius: 0.5rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .change-feed-section-wrapper {
-    background: linear-gradient(135deg, #059669 0%, #047857 100%);
-  }
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
 }

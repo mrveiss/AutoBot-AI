@@ -1224,12 +1224,11 @@ onMounted(() => {
 
 /* Vector Database Statistics Section */
 .vector-stats-section {
-  background: var(--chart-purple);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   padding: var(--spacing-8);
   margin-bottom: var(--spacing-8);
-  color: var(--text-on-primary);
-  box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
 }
 
 /* Document change feed wrapper styles now in shared CSS: @/styles/document-feed-wrapper.css */
@@ -1268,21 +1267,21 @@ onMounted(() => {
 }
 
 .notice-content h4 {
-  color: var(--text-on-primary);
+  color: var(--text-primary);
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   margin-bottom: var(--spacing-3);
 }
 
 .notice-content p {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-primary);
   font-size: var(--text-sm);
   line-height: var(--leading-relaxed);
   margin-bottom: var(--spacing-2);
 }
 
 .notice-content strong {
-  color: var(--color-warning-light);
+  color: var(--color-warning);
   font-weight: var(--font-bold);
 }
 
@@ -1291,15 +1290,15 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-3);
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-secondary);
   border-radius: var(--radius-lg);
   margin-top: var(--spacing-3);
   font-size: 0.8125rem;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-secondary);
 }
 
 .notice-hint i {
-  color: var(--color-warning-light);
+  color: var(--color-warning);
 }
 
 .vector-stats-section .section-header {
@@ -1310,7 +1309,7 @@ onMounted(() => {
 }
 
 .vector-stats-section .section-header h3 {
-  color: var(--text-on-primary);
+  color: var(--text-primary);
   font-size: var(--text-2xl);
   font-weight: var(--font-bold);
   display: flex;
@@ -1400,16 +1399,15 @@ onMounted(() => {
 
 /* Vector Chart Section */
 .vector-chart-section {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   padding: var(--spacing-6);
   margin-bottom: var(--spacing-8);
 }
 
 .vector-chart-section h4 {
-  color: var(--text-on-primary);
+  color: var(--text-primary);
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   margin-bottom: var(--spacing-6);
@@ -1438,18 +1436,18 @@ onMounted(() => {
 }
 
 .category-name {
-  color: var(--text-on-primary);
+  color: var(--text-primary);
   font-weight: var(--font-medium);
 }
 
 .category-count {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
   font-size: var(--text-xs);
 }
 
 .category-progress {
   height: 1.5rem;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--bg-primary);
   border-radius: var(--radius-xl);
   overflow: hidden;
   position: relative;
@@ -1459,20 +1457,18 @@ onMounted(() => {
   height: 100%;
   border-radius: var(--radius-xl);
   transition: width var(--duration-500) var(--ease-out);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
 }
 
 /* Vector Health Section */
 .vector-health-section {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   padding: var(--spacing-6);
 }
 
 .vector-health-section h4 {
-  color: var(--text-on-primary);
+  color: var(--text-primary);
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
   margin-bottom: var(--spacing-6);
@@ -1493,10 +1489,10 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-3) var(--spacing-4);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--text-secondary);
   font-size: var(--text-sm);
   transition: var(--transition-all);
 }
@@ -1504,7 +1500,7 @@ onMounted(() => {
 .health-item.active {
   background: var(--color-success-bg);
   border-color: var(--color-success);
-  color: var(--text-on-primary);
+  color: var(--text-primary);
 }
 
 .health-item.active i {
@@ -1516,7 +1512,7 @@ onMounted(() => {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--spacing-4);
   padding-top: var(--spacing-4);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--border-default);
 }
 
 .detail-item {
@@ -1527,18 +1523,18 @@ onMounted(() => {
 
 .detail-item label {
   font-size: var(--text-xs);
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-secondary);
   font-weight: var(--font-medium);
 }
 
 .detail-item span {
   font-size: var(--text-sm);
-  color: var(--text-on-primary);
+  color: var(--text-primary);
 }
 
 .detail-item .mono {
   font-family: var(--font-mono);
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-secondary);
   padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-default);
 }
