@@ -11,7 +11,11 @@
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
-import { useSkills, type SkillInfo, type SkillDetail } from '@/composables/useSkills'
+import { useSkills, useSkillGovernance, type SkillInfo, type SkillDetail } from '@/composables/useSkills'
+import GovernanceModeSelector from '@/components/skills/GovernanceModeSelector.vue'
+import ApprovalsTab from '@/components/skills/ApprovalsTab.vue'
+import ReposTab from '@/components/skills/ReposTab.vue'
+import DraftsTab from '@/components/skills/DraftsTab.vue'
 
 const {
   skills,
@@ -31,6 +35,25 @@ const {
   updateConfig,
   initializeSkills,
 } = useSkills()
+
+const {
+  repos,
+  approvals,
+  drafts,
+  governanceConfig,
+  fetchRepos,
+  syncRepo,
+  addRepo,
+  fetchApprovals,
+  decideApproval,
+  fetchDrafts,
+  testDraft,
+  promoteDraft,
+  fetchGovernance,
+  setGovernanceMode,
+} = useSkillGovernance()
+
+const activeTab = ref<'active' | 'approvals' | 'repos' | 'drafts'>('active')
 
 const activeCategory = ref<string | null>(null)
 const searchQuery = ref('')
@@ -98,7 +121,13 @@ function selectCategory(cat: string | null): void {
 // --- Lifecycle ---
 
 onMounted(async () => {
-  await initializeSkills()
+  await Promise.all([
+    initializeSkills(),
+    fetchGovernance(),
+    fetchApprovals(),
+    fetchRepos(),
+    fetchDrafts(),
+  ])
 })
 
 watch(searchQuery, (val) => {
@@ -168,7 +197,91 @@ function categoryIcon(category: string): string {
       </div>
     </div>
 
-    <!-- Error Banner -->
+    <!-- Tab Bar + Governance Mode Selector -->
+    <div class="flex flex-col gap-3 mb-6">
+      <div class="flex items-center justify-between">
+        <div class="flex gap-1">
+          <button
+            :class="[
+              'px-4 py-2 rounded text-sm border transition-colors',
+              activeTab === 'active'
+                ? 'bg-blue-600 border-blue-500 text-white'
+                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600',
+            ]"
+            @click="activeTab = 'active'"
+          >
+            Active Skills
+          </button>
+          <button
+            :class="[
+              'px-4 py-2 rounded text-sm border transition-colors flex items-center gap-2',
+              activeTab === 'approvals'
+                ? 'bg-blue-600 border-blue-500 text-white'
+                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600',
+            ]"
+            @click="activeTab = 'approvals'"
+          >
+            Pending
+            <span
+              v-if="approvals.length > 0"
+              class="px-1.5 py-0.5 bg-amber-500 text-white text-xs rounded-full"
+            >
+              {{ approvals.length }}
+            </span>
+          </button>
+          <button
+            :class="[
+              'px-4 py-2 rounded text-sm border transition-colors',
+              activeTab === 'repos'
+                ? 'bg-blue-600 border-blue-500 text-white'
+                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600',
+            ]"
+            @click="activeTab = 'repos'"
+          >
+            Repos
+          </button>
+          <button
+            :class="[
+              'px-4 py-2 rounded text-sm border transition-colors',
+              activeTab === 'drafts'
+                ? 'bg-blue-600 border-blue-500 text-white'
+                : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600',
+            ]"
+            @click="activeTab = 'drafts'"
+          >
+            Drafts
+          </button>
+        </div>
+        <GovernanceModeSelector
+          v-if="governanceConfig"
+          :model-value="governanceConfig.mode"
+          @update:model-value="setGovernanceMode"
+        />
+      </div>
+    </div>
+
+    <!-- Non-active-tab panels -->
+    <ApprovalsTab
+      v-if="activeTab === 'approvals'"
+      :approvals="approvals"
+      @approve="(id, trust) => decideApproval(id, true, trust)"
+      @reject="(id) => decideApproval(id, false)"
+    />
+    <ReposTab
+      v-if="activeTab === 'repos'"
+      :repos="repos"
+      @sync="syncRepo"
+      @add="addRepo"
+    />
+    <DraftsTab
+      v-if="activeTab === 'drafts'"
+      :drafts="drafts"
+      @test="testDraft"
+      @promote="promoteDraft"
+    />
+
+    <!-- Error Banner (active skills tab) -->
+    <template v-if="activeTab === 'active'">
     <div
       v-if="error"
       class="mb-4 p-3 bg-red-900/30 border border-red-500/30 rounded text-red-300 text-sm"
@@ -307,6 +420,7 @@ function categoryIcon(category: string): string {
         </div>
       </div>
     </div>
+    </template><!-- end activeTab === 'active' -->
 
     <!-- Skill Detail Modal -->
     <div
