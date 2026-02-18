@@ -36,9 +36,7 @@
 
 - name: "Node Exporter | Download archive"
   ansible.builtin.get_url:
-    url: >-
-      https://github.com/prometheus/node_exporter/releases/download/
-      v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
+    url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
     dest: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
     mode: "0644"
   when: not _node_exporter_binary.stat.exists

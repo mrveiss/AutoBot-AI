@@ -41,9 +41,9 @@
 
   tasks:
     - name: "Agent | Deploy SLM agent"
-      ansible.builtin.include_role:
+      ansible.builtin.import_role:
         name: slm_agent
-      tags: ['slm-agent', 'provision']
+      tags: ['slm-agent', 'slm_agent', 'provision']
 
 # -------------------------------------------------------------------
 # Phase 3: Data layer (Redis, PostgreSQL)
