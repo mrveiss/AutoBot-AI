@@ -166,7 +166,7 @@
           - "=== Fleet Auto-Provisioning Complete ==="
           - ""
           - "Provisioned nodes:"
-          - "  01-Backend      : autobot-backend, vnc, autobot-slm-agent"
+          - "  01-Backend      : autobot-backend, llm, vnc, autobot-slm-agent"
           - "  02-Frontend     : autobot-frontend, autobot-slm-agent"
           - "  npu-worker      : autobot-npu-worker, autobot-slm-agent"
           - "  03-AI-Stack     : autobot-ai-stack, llm, autobot-slm-agent"

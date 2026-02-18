@@ -46,6 +46,7 @@
       01-Backend:
         - autobot-slm-agent
         - autobot-backend
+        - llm
         - vnc
       02-Frontend:
         - autobot-slm-agent
