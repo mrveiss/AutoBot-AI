@@ -14,7 +14,7 @@
  * Provides single interface for all orchestration operations.
  */
 
-import { ref, computed, readonly } from 'vue'
+import { ref, computed, readonly, reactive } from 'vue'
 import axios, { type AxiosInstance } from 'axios'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
@@ -517,8 +517,8 @@ export function useOrchestrationManagement() {
   // Return Public API
   // ===========================================================================
 
-  return {
-    // State (readonly)
+  return reactive({
+    // State (auto-unwrapped via reactive() so template/computed can access values directly)
     serviceDefinitions: readonly(serviceDefinitions),
     fleetStatus: readonly(fleetStatus),
     fleetServices: readonly(fleetServices),
@@ -576,5 +576,5 @@ export function useOrchestrationManagement() {
 
     // Fleet store access
     fleetStore,
-  }
+  })
 }

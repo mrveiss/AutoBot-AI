@@ -12,6 +12,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     Column,
     DateTime,
@@ -380,7 +381,7 @@ class Service(Base):
     active_state = Column(String(32), nullable=True)  # active, inactive, failed
     sub_state = Column(String(32), nullable=True)  # running, dead, exited
     main_pid = Column(Integer, nullable=True)
-    memory_bytes = Column(Integer, nullable=True)
+    memory_bytes = Column(BigInteger, nullable=True)
     last_checked = Column(DateTime, nullable=True)
     extra_data = Column(JSON, default=dict)
 
