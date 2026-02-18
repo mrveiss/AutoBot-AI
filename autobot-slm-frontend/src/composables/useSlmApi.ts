@@ -1537,6 +1537,13 @@ export function useSlmApi() {
     return response.data
   }
 
+  // Fleet cert expiry (Issue #926 Phase 7)
+  async function getFleetCerts(nodeId?: string): Promise<any[]> {
+    const params = nodeId ? `?node_id=${nodeId}` : ''
+    const response = await client.get<any[]>(`/security/certificates${params}`)
+    return response.data
+  }
+
   // Node Reboot (Issue #813)
   async function rebootNode(
     nodeId: string
@@ -1690,6 +1697,8 @@ export function useSlmApi() {
     getSecurityPolicies,
     activateSecurityPolicy,
     deactivateSecurityPolicy,
+    // Fleet cert expiry (Issue #926 Phase 7)
+    getFleetCerts,
     // Node Reboot (Issue #813)
     rebootNode,
   }

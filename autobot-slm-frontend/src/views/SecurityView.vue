@@ -81,6 +81,19 @@ interface ThreatSummary {
   by_type: Record<string, number>
 }
 
+interface FleetCert {
+  cert_id: string
+  node_id: string
+  subject: string | null
+  issuer: string | null
+  serial_number: string | null
+  fingerprint: string | null
+  not_before: string | null
+  not_after: string | null
+  status: string
+  days_until_expiry: number | null
+}
+
 interface TLSEndpoint {
   credential_id: string
   node_id: string
@@ -107,6 +120,10 @@ const eventsTotal = ref(0)
 const threatSummary = ref<ThreatSummary | null>(null)
 const policies = ref<SecurityPolicy[]>([])
 const policiesTotal = ref(0)
+
+// Fleet cert expiry data (Issue #926 Phase 7)
+const fleetCerts = ref<FleetCert[]>([])
+const fleetCertsLoading = ref(false)
 
 // TLS Certificates Data (Issue #725)
 const tlsEndpoints = ref<TLSEndpoint[]>([])
@@ -262,6 +279,27 @@ async function fetchPolicies() {
   } finally {
     loading.value = false
   }
+}
+
+// Fleet cert expiry (Issue #926 Phase 7)
+async function fetchFleetCerts() {
+  fleetCertsLoading.value = true
+  try {
+    const data = await slmApi.getFleetCerts()
+    fleetCerts.value = data
+  } catch (err) {
+    logger.error('Failed to fetch fleet cert expiry:', err)
+  } finally {
+    fleetCertsLoading.value = false
+  }
+}
+
+function certExpiryBadge(days: number | null): { text: string; cls: string } {
+  if (days === null) return { text: 'Unknown', cls: 'bg-gray-100 text-gray-700' }
+  if (days <= 0) return { text: 'Expired', cls: 'bg-red-100 text-red-700' }
+  if (days <= 14) return { text: `${days}d`, cls: 'bg-red-100 text-red-700' }
+  if (days <= 30) return { text: `${days}d`, cls: 'bg-yellow-100 text-yellow-800' }
+  return { text: `${days}d`, cls: 'bg-green-100 text-green-700' }
 }
 
 // TLS Certificates functions (Issue #725)
@@ -514,6 +552,7 @@ function onTabChange(tabId: string) {
       break
     case 'certificates':
       fetchTlsEndpoints()
+      fetchFleetCerts()
       break
     case 'audit':
       fetchAuditLogs()
@@ -801,6 +840,66 @@ const scoreColor = computed(() => {
 
     <!-- TLS Certificates (Issue #725) -->
     <div v-else-if="activeTab === 'certificates'" role="tabpanel" aria-label="TLS Certificates">
+
+      <!-- Fleet Cert Expiry Panel (Issue #926 Phase 7) -->
+      <div class="card mb-6">
+        <div class="px-4 pt-4 pb-2 flex items-center justify-between">
+          <h3 class="font-semibold text-gray-900">Fleet Deployed Cert Expiry</h3>
+          <button
+            class="btn btn-sm btn-secondary"
+            :disabled="fleetCertsLoading"
+            @click="fetchFleetCerts"
+            aria-label="Refresh fleet cert expiry"
+          >
+            {{ fleetCertsLoading ? 'Loading…' : 'Refresh' }}
+          </button>
+        </div>
+        <div v-if="fleetCerts.length === 0 && !fleetCertsLoading" class="p-4 text-sm text-gray-500">
+          No cert records yet. Run
+          <code class="text-xs bg-gray-100 px-1 rounded">setup-internal-ca.yml</code>
+          to issue CA-signed certs and populate this list.
+        </div>
+        <table v-else class="min-w-full divide-y divide-gray-200 text-sm">
+          <thead class="bg-gray-50">
+            <tr>
+              <th scope="col" class="px-4 py-2 text-left font-medium text-gray-500">Node</th>
+              <th scope="col" class="px-4 py-2 text-left font-medium text-gray-500">Subject</th>
+              <th scope="col" class="px-4 py-2 text-left font-medium text-gray-500">Expires</th>
+              <th scope="col" class="px-4 py-2 text-left font-medium text-gray-500">Days Left</th>
+              <th scope="col" class="px-4 py-2 text-left font-medium text-gray-500">Status</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-100">
+            <tr v-for="cert in fleetCerts" :key="cert.cert_id">
+              <td class="px-4 py-2 font-mono text-xs">{{ cert.node_id }}</td>
+              <td class="px-4 py-2 text-gray-700 truncate max-w-xs">{{ cert.subject || '—' }}</td>
+              <td class="px-4 py-2 text-gray-600">
+                {{ cert.not_after ? new Date(cert.not_after).toLocaleDateString() : '—' }}
+              </td>
+              <td class="px-4 py-2">
+                <span
+                  :class="['px-2 py-0.5 rounded text-xs font-medium', certExpiryBadge(cert.days_until_expiry).cls]"
+                >
+                  {{ certExpiryBadge(cert.days_until_expiry).text }}
+                </span>
+              </td>
+              <td class="px-4 py-2">
+                <span
+                  :class="[
+                    'px-2 py-0.5 rounded text-xs font-medium',
+                    cert.status === 'active' ? 'bg-green-100 text-green-700' :
+                    cert.status === 'expired' ? 'bg-red-100 text-red-700' :
+                    'bg-gray-100 text-gray-600'
+                  ]"
+                >
+                  {{ cert.status }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <!-- Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div class="card p-4">

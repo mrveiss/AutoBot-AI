@@ -1,0 +1,441 @@
+---
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Internal CA + Per-Node Certificate Generation (Issue #926 Phase 7)
+#
+# Creates an internal Certificate Authority on the SLM server, signs per-node
+# TLS certificates, deploys them to each fleet node, and records cert metadata
+# in the SLM database via POST /api/security/certificates/report.
+#
+# CA lives at:    /etc/autobot/ca/             (on 00-SLM-Manager only)
+# Node certs at:  /etc/autobot/certs/          (on each node)
+#
+# Idempotency: existing certs with >30 days remaining are skipped unless
+#              --tags force is passed.
+#
+# Usage:
+#   cd autobot-slm-backend/ansible
+#
+#   # Full run — generate CA if missing, issue certs to all nodes
+#   ansible-playbook playbooks/setup-internal-ca.yml -i inventory/slm-nodes.yml
+#
+#   # Force re-issue even if certs are still valid
+#   ansible-playbook playbooks/setup-internal-ca.yml -i inventory/slm-nodes.yml \
+#     --tags force
+#
+#   # Single node only
+#   ansible-playbook playbooks/setup-internal-ca.yml -i inventory/slm-nodes.yml \
+#     --limit 02-Frontend
+#
+#   # CA setup only (no node certs)
+#   ansible-playbook playbooks/setup-internal-ca.yml -i inventory/slm-nodes.yml \
+#     --tags ca_only
+#
+# Variables (set via -e or in group_vars):
+#   ca_days            CA cert validity (default: 3650 = 10 years)
+#   node_cert_days     Node cert validity (default: 365)
+#   cert_renew_threshold_days  Re-issue if expiring within N days (default: 30)
+#   slm_admin_url      SLM API URL (default: https://172.16.168.19)
+#   slm_admin_password SLM admin password (default: reads from env)
+
+# ---------------------------------------------------------------------------
+# Play 0: Authenticate with SLM API (for cert reporting)
+# ---------------------------------------------------------------------------
+- name: "Authenticate with SLM"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    slm_admin_url: "{{ lookup('env', 'AUTOBOT_SLM_URL') | default('https://172.16.168.19', true) }}"
+    slm_admin_password: "{{ lookup('env', 'AUTOBOT_SLM_ADMIN_PASSWORD') | default('admin', true) }}"
+
+  tasks:
+    - name: "Auth | Login to SLM API"
+      ansible.builtin.uri:
+        url: "{{ slm_admin_url }}/api/auth/login"
+        method: POST
+        body_format: json
+        body:
+          username: "admin"
+          password: "{{ slm_admin_password }}"
+        validate_certs: false
+        status_code: 200
+      register: _slm_auth
+      no_log: true
+
+    - name: "Auth | Store SLM token"
+      ansible.builtin.set_fact:
+        slm_token: "{{ _slm_auth.json.access_token }}"
+        slm_api_url: "{{ slm_admin_url }}"
+
+# ---------------------------------------------------------------------------
+# Play 1: Set up Internal CA on SLM server (00-SLM-Manager, .19)
+# ---------------------------------------------------------------------------
+- name: "CA Setup: Create Internal CA on SLM Server"
+  hosts: 00-SLM-Manager
+  gather_facts: false
+  become: true
+  vars:
+    ca_dir: /etc/autobot/ca
+    ca_key: /etc/autobot/ca/ca-key.pem
+    ca_cert: /etc/autobot/ca/ca-cert.pem
+    ca_days: "{{ _ca_days | default(3650) }}"
+    ca_subject: "/CN=AutoBot-CA/O=AutoBot/OU=Fleet/C=US"
+
+  tags: ['ca_setup', 'ca_only']
+
+  tasks:
+    - name: "CA | Create CA directory"
+      ansible.builtin.file:
+        path: "{{ ca_dir }}"
+        state: directory
+        mode: "0700"
+        owner: root
+        group: root
+
+    - name: "CA | Check existing CA cert"
+      ansible.builtin.stat:
+        path: "{{ ca_cert }}"
+      register: _ca_stat
+
+    - name: "CA | Check CA cert expiry (if exists)"
+      ansible.builtin.command:
+        cmd: >-
+          openssl x509 -noout -checkend
+          {{ (ca_days | int * 86400 / 2) | int }}
+          -in {{ ca_cert }}
+      register: _ca_valid
+      changed_when: false
+      failed_when: false
+      when: _ca_stat.stat.exists
+
+    - name: "CA | Generate CA private key"
+      ansible.builtin.command:
+        cmd: openssl genrsa -out {{ ca_key }} 4096
+      args:
+        creates: "{{ ca_key }}"
+      changed_when: true
+
+    - name: "CA | Restrict CA key permissions"
+      ansible.builtin.file:
+        path: "{{ ca_key }}"
+        mode: "0600"
+        owner: root
+        group: root
+
+    - name: "CA | Generate CA self-signed certificate"
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -new -nodes
+          -key {{ ca_key }}
+          -sha256
+          -days {{ ca_days }}
+          -out {{ ca_cert }}
+          -subj '{{ ca_subject }}'
+      when: >-
+        not _ca_stat.stat.exists
+        or (_ca_valid.rc | default(1)) != 0
+      changed_when: true
+
+    - name: "CA | Set CA cert permissions"
+      ansible.builtin.file:
+        path: "{{ ca_cert }}"
+        mode: "0644"
+        owner: root
+        group: root
+
+    - name: "CA | Display CA fingerprint"
+      ansible.builtin.command:
+        cmd: openssl x509 -noout -fingerprint -sha256 -in {{ ca_cert }}
+      register: _ca_fingerprint
+      changed_when: false
+
+    - name: "CA | Show CA info"
+      ansible.builtin.debug:
+        msg:
+          - "Internal CA ready on 00-SLM-Manager"
+          - "CA cert: {{ ca_cert }}"
+          - "Fingerprint: {{ _ca_fingerprint.stdout }}"
+
+# ---------------------------------------------------------------------------
+# Play 2: Issue per-node certificates signed by the CA
+# ---------------------------------------------------------------------------
+- name: "Node Certs: Issue Per-Node Certificates"
+  hosts: slm_nodes
+  gather_facts: true
+  become: true
+  serial: 1
+  vars:
+    ca_cert: /etc/autobot/ca/ca-cert.pem
+    ca_key: /etc/autobot/ca/ca-key.pem
+    cert_dir: /etc/autobot/certs
+    node_cert: /etc/autobot/certs/server-cert.pem
+    node_key: /etc/autobot/certs/server-key.pem
+    node_csr: /tmp/autobot-node.csr
+    node_cert_days: "{{ _node_cert_days | default(365) }}"
+    cert_renew_threshold_days: "{{ _renew_threshold | default(30) }}"
+    node_cn: "autobot-{{ inventory_hostname | lower | replace(' ', '-') }}"
+
+  tags: ['node_certs']
+
+  tasks:
+    - name: "Node [{{ inventory_hostname }}] | Ensure cert directory"
+      ansible.builtin.file:
+        path: "{{ cert_dir }}"
+        state: directory
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: "Node [{{ inventory_hostname }}] | Check existing cert"
+      ansible.builtin.stat:
+        path: "{{ node_cert }}"
+      register: _node_cert_stat
+
+    - name: "Node [{{ inventory_hostname }}] | Check if cert is expiring"
+      ansible.builtin.command:
+        cmd: >-
+          openssl x509 -noout -checkend
+          {{ (cert_renew_threshold_days | int * 86400) | int }}
+          -in {{ node_cert }}
+      register: _cert_valid
+      changed_when: false
+      failed_when: false
+      when: _node_cert_stat.stat.exists
+
+    - name: "Node [{{ inventory_hostname }}] | Skip — cert valid with threshold days remaining"
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}: cert valid for >{{ cert_renew_threshold_days }}
+          days — skipping (use --tags force to override)
+      when: >-
+        _node_cert_stat.stat.exists
+        and (_cert_valid.rc | default(1)) == 0
+        and 'force' not in ansible_run_tags
+
+    - name: "Node [{{ inventory_hostname }}] | Generate node private key"
+      ansible.builtin.command:
+        cmd: openssl genrsa -out {{ node_key }} 2048
+      when: >-
+        not _node_cert_stat.stat.exists
+        or (_cert_valid.rc | default(1)) != 0
+        or 'force' in ansible_run_tags
+      changed_when: true
+      register: _key_gen
+
+    - name: "Node [{{ inventory_hostname }}] | Restrict node key permissions"
+      ansible.builtin.file:
+        path: "{{ node_key }}"
+        mode: "0600"
+        owner: root
+        group: root
+      when: _key_gen is not skipped
+
+    - name: "Node [{{ inventory_hostname }}] | Generate CSR"
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -new
+          -key {{ node_key }}
+          -out {{ node_csr }}
+          -subj '/CN={{ node_cn }}/O=AutoBot/OU=Fleet'
+      when: _key_gen is not skipped
+      changed_when: true
+
+    - name: "Node [{{ inventory_hostname }}] | Fetch CSR from node"
+      ansible.builtin.slurp:
+        src: "{{ node_csr }}"
+      register: _csr_b64
+      when: _key_gen is not skipped
+
+    - name: "Node [{{ inventory_hostname }}] | Write CSR to SLM for signing"
+      ansible.builtin.copy:
+        content: "{{ _csr_b64.content | b64decode }}"
+        dest: "/tmp/ansible-sign-{{ inventory_hostname }}.csr"
+        mode: "0600"
+      delegate_to: 00-SLM-Manager
+      become: true
+      when: _key_gen is not skipped
+
+    - name: "Node [{{ inventory_hostname }}] | Sign CSR with internal CA on SLM"
+      ansible.builtin.command:
+        cmd: >-
+          openssl x509 -req
+          -in /tmp/ansible-sign-{{ inventory_hostname }}.csr
+          -CA {{ ca_cert }}
+          -CAkey {{ ca_key }}
+          -CAcreateserial
+          -out /tmp/ansible-sign-{{ inventory_hostname }}.crt
+          -days {{ node_cert_days }}
+          -sha256
+      delegate_to: 00-SLM-Manager
+      become: true
+      when: _key_gen is not skipped
+      changed_when: true
+
+    - name: "Node [{{ inventory_hostname }}] | Read signed cert from SLM"
+      ansible.builtin.slurp:
+        src: "/tmp/ansible-sign-{{ inventory_hostname }}.crt"
+      register: _signed_cert_b64
+      delegate_to: 00-SLM-Manager
+      become: true
+      when: _key_gen is not skipped
+
+    - name: "Node [{{ inventory_hostname }}] | Deploy signed cert to node"
+      ansible.builtin.copy:
+        content: "{{ _signed_cert_b64.content | b64decode }}"
+        dest: "{{ node_cert }}"
+        mode: "0644"
+        owner: root
+        group: root
+      when: _key_gen is not skipped
+
+    - name: "Node [{{ inventory_hostname }}] | Get cert metadata (fingerprint)"
+      ansible.builtin.command:
+        cmd: openssl x509 -noout -fingerprint -sha256 -in {{ node_cert }}
+      register: _cert_fp
+      changed_when: false
+      when: _key_gen is not skipped
+
+    - name: "Node [{{ inventory_hostname }}] | Get cert serial number"
+      ansible.builtin.command:
+        cmd: openssl x509 -noout -serial -in {{ node_cert }}
+      register: _cert_serial
+      changed_when: false
+      when: _key_gen is not skipped
+
+    - name: "Node [{{ inventory_hostname }}] | Get cert not-before"
+      ansible.builtin.command:
+        cmd: >-
+          openssl x509 -noout
+          -startdate -in {{ node_cert }}
+      register: _cert_notbefore
+      changed_when: false
+      when: _key_gen is not skipped
+
+    - name: "Node [{{ inventory_hostname }}] | Get cert not-after"
+      ansible.builtin.command:
+        cmd: >-
+          openssl x509 -noout
+          -enddate -in {{ node_cert }}
+      register: _cert_notafter
+      changed_when: false
+      when: _key_gen is not skipped
+
+    - name: "Node [{{ inventory_hostname }}] | Report cert to SLM API"
+      ansible.builtin.uri:
+        url: "{{ hostvars['localhost']['slm_api_url'] }}/api/security/certificates/report"
+        method: POST
+        body_format: json
+        body:
+          node_id: "{{ inventory_hostname }}"
+          subject: "/CN={{ node_cn }}/O=AutoBot/OU=Fleet"
+          issuer: "/CN=AutoBot-CA/O=AutoBot/OU=Fleet/C=US"
+          serial_number: "{{ _cert_serial.stdout | regex_replace('^serial=', '') }}"
+          fingerprint: "{{ _cert_fp.stdout | regex_replace('^SHA256 Fingerprint=', '') }}"
+          not_before: "{{ _cert_notbefore.stdout | regex_replace('^notBefore=', '') }}"
+          not_after: "{{ _cert_notafter.stdout | regex_replace('^notAfter=', '') }}"
+        headers:
+          Authorization: "Bearer {{ hostvars['localhost']['slm_token'] }}"
+          Content-Type: "application/json"
+        validate_certs: false
+        status_code: [200, 201]
+      delegate_to: localhost
+      register: _report_result
+      ignore_errors: true
+      when: _key_gen is not skipped
+
+    - name: "Node [{{ inventory_hostname }}] | Clean up temp files on SLM"
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/ansible-sign-{{ inventory_hostname }}.csr"
+        - "/tmp/ansible-sign-{{ inventory_hostname }}.crt"
+      delegate_to: 00-SLM-Manager
+      become: true
+      failed_when: false
+      when: _key_gen is not skipped
+
+    - name: "Node [{{ inventory_hostname }}] | Clean up CSR on node"
+      ansible.builtin.file:
+        path: "{{ node_csr }}"
+        state: absent
+      failed_when: false
+      when: _key_gen is not skipped
+
+    - name: "Node [{{ inventory_hostname }}] | Reload nginx (if present)"
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+      failed_when: false
+      when: _key_gen is not skipped
+
+# ---------------------------------------------------------------------------
+# Play 3: Distribute CA cert to all nodes (for client trust)
+# ---------------------------------------------------------------------------
+- name: "Distribute CA cert to fleet nodes"
+  hosts: slm_nodes
+  gather_facts: false
+  become: true
+  tags: ['distribute_ca']
+
+  tasks:
+    - name: "CA Dist | Fetch CA cert from SLM"
+      ansible.builtin.slurp:
+        src: /etc/autobot/ca/ca-cert.pem
+      register: _ca_cert_b64
+      delegate_to: 00-SLM-Manager
+
+    - name: "CA Dist | Deploy CA cert to /etc/autobot/certs/ca-cert.pem"
+      ansible.builtin.copy:
+        content: "{{ _ca_cert_b64.content | b64decode }}"
+        dest: /etc/autobot/certs/ca-cert.pem
+        mode: "0644"
+        owner: root
+        group: root
+
+    - name: "CA Dist | Add CA cert to system trust store"
+      ansible.builtin.copy:
+        content: "{{ _ca_cert_b64.content | b64decode }}"
+        dest: /usr/local/share/ca-certificates/autobot-ca.crt
+        mode: "0644"
+        owner: root
+        group: root
+      notify: update-ca-certificates
+
+  handlers:
+    - name: update-ca-certificates
+      ansible.builtin.command:
+        cmd: update-ca-certificates
+      changed_when: true
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+- name: "Setup Internal CA — Summary"
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: "Summary | Display result"
+      ansible.builtin.debug:
+        msg:
+          - ""
+          - "╔═══════════════════════════════════════════════════════════════╗"
+          - "║  AutoBot Internal CA Setup Complete (Issue #926 Phase 7)     ║"
+          - "╚═══════════════════════════════════════════════════════════════╝"
+          - ""
+          - "CA location  : 00-SLM-Manager (172.16.168.19)"
+          - "CA key       : /etc/autobot/ca/ca-key.pem  (root:root 0600)"
+          - "CA cert      : /etc/autobot/ca/ca-cert.pem (root:root 0644)"
+          - ""
+          - "Node certs   : /etc/autobot/certs/server-cert.pem (all fleet nodes)"
+          - "Node keys    : /etc/autobot/certs/server-key.pem  (root:root 0600)"
+          - "CA cert copy : /etc/autobot/certs/ca-cert.pem     (all fleet nodes)"
+          - ""
+          - "Cert metadata has been reported to SLM API."
+          - ""
+          - "To rotate certificates: ansible-playbook playbooks/rotate-certs.yml"
+          - "To view expiry status : check Security > TLS Certificates in SLM UI"
+          - ""

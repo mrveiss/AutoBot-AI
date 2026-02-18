@@ -11,13 +11,9 @@ and security policy management. Related to Issue #728.
 import logging
 import uuid
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
 from models.database import (
     AuditLog,
     Certificate,
@@ -30,6 +26,7 @@ from models.database import (
 from models.schemas import (
     AuditLogListResponse,
     AuditLogResponse,
+    CertificateResponse,
     SecurityEventAcknowledge,
     SecurityEventCreate,
     SecurityEventListResponse,
@@ -42,8 +39,12 @@ from models.schemas import (
     SecurityPolicyUpdate,
     ThreatSummary,
 )
+from pydantic import BaseModel
 from services.auth import get_current_user
 from services.database import get_db
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/security", tags=["security"])
@@ -811,3 +812,149 @@ async def deactivate_security_policy(
 
     logger.info("Security policy deactivated: %s", policy_id)
     return SecurityPolicyResponse.model_validate(policy)
+
+
+# =============================================================================
+# Certificate Expiry Monitoring (Issue #926 Phase 7)
+# =============================================================================
+
+
+class CertificateReport(BaseModel):
+    """Incoming cert report from Ansible after deployment."""
+
+    node_id: str
+    subject: Optional[str] = None
+    issuer: Optional[str] = None
+    serial_number: Optional[str] = None
+    fingerprint: Optional[str] = None
+    not_before: Optional[str] = None
+    not_after: Optional[str] = None
+
+
+def _parse_openssl_date(raw: Optional[str]) -> Optional[datetime]:
+    """Parse openssl date strings like 'Jan  1 00:00:00 2025 GMT'."""
+    if not raw:
+        return None
+    raw = raw.strip()
+    for fmt in ("%b %d %H:%M:%S %Y %Z", "%b  %d %H:%M:%S %Y %Z"):
+        try:
+            return datetime.strptime(raw, fmt)
+        except ValueError:
+            continue
+    # Last resort: try ISO-8601 for already-formatted inputs
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
+def _days_until(dt: Optional[datetime]) -> Optional[int]:
+    """Return days until datetime from now (negative = already expired)."""
+    if dt is None:
+        return None
+    return (dt - datetime.utcnow()).days
+
+
+@router.get("/certificates", response_model=List[CertificateResponse])
+async def list_certificates(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    node_id: Optional[str] = Query(None, description="Filter by node"),
+    status_filter: Optional[str] = Query(None, alias="status"),
+) -> List[CertificateResponse]:
+    """List all fleet node certificates with expiry status."""
+    query = select(Certificate)
+    if node_id:
+        query = query.where(Certificate.node_id == node_id)
+    if status_filter:
+        query = query.where(Certificate.status == status_filter)
+    query = query.order_by(Certificate.not_after.asc())
+
+    result = await db.execute(query)
+    certs = result.scalars().all()
+
+    responses = []
+    now = datetime.utcnow()
+    for cert in certs:
+        resp = CertificateResponse.model_validate(cert)
+        resp.days_until_expiry = _days_until(cert.not_after)
+        # Auto-update status if expired
+        if cert.not_after and cert.not_after < now and cert.status == "active":
+            cert.status = "expired"
+        responses.append(resp)
+
+    await db.commit()
+    return responses
+
+
+@router.get("/certificates/expiring", response_model=List[CertificateResponse])
+async def list_expiring_certificates(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    days: int = Query(30, ge=1, le=365, description="Expiring within N days"),
+) -> List[CertificateResponse]:
+    """List certificates expiring within the given number of days."""
+    now = datetime.utcnow()
+    threshold = now + timedelta(days=days)
+
+    result = await db.execute(
+        select(Certificate)
+        .where(Certificate.not_after <= threshold)
+        .where(Certificate.not_after > now)
+        .where(Certificate.status == "active")
+        .order_by(Certificate.not_after.asc())
+    )
+    certs = result.scalars().all()
+
+    return [
+        CertificateResponse.model_validate(
+            cert, update={"days_until_expiry": _days_until(cert.not_after)}
+        )
+        for cert in certs
+    ]
+
+
+@router.post(
+    "/certificates/report",
+    response_model=CertificateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def report_certificate(
+    report: CertificateReport,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> CertificateResponse:
+    """Record or update a node certificate (called by Ansible after deployment)."""
+    not_before_dt = _parse_openssl_date(report.not_before)
+    not_after_dt = _parse_openssl_date(report.not_after)
+
+    # Upsert: find existing cert for this node or create new
+    existing = await db.execute(
+        select(Certificate).where(Certificate.node_id == report.node_id)
+    )
+    cert = existing.scalar_one_or_none()
+
+    if cert is None:
+        cert = Certificate(
+            cert_id=f"{report.node_id}-{int(datetime.utcnow().timestamp())}"
+        )
+        db.add(cert)
+
+    cert.node_id = report.node_id
+    cert.subject = report.subject
+    cert.issuer = report.issuer
+    cert.serial_number = report.serial_number
+    cert.fingerprint = report.fingerprint
+    cert.not_before = not_before_dt
+    cert.not_after = not_after_dt
+    cert.status = "active"
+
+    await db.commit()
+    await db.refresh(cert)
+
+    logger.info(
+        "Cert reported for node %s (expires %s)", report.node_id, report.not_after
+    )
+    resp = CertificateResponse.model_validate(cert)
+    resp.days_until_expiry = _days_until(cert.not_after)
+    return resp
