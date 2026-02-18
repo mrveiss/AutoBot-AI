@@ -33,7 +33,8 @@ all:
     slm_host: "{{ hostvars['autobot-slm']['ansible_host'] }}"
     slm_port: 8000
     backend_host: "{{ hostvars['autobot-host']['network_address'] }}"
-    backend_port: 8001
+    backend_port: 8443
+    backend_protocol: "https"
     frontend_host: "{{ hostvars['autobot-frontend']['ansible_host'] }}"
     frontend_port: 5173
     npu_worker_host: "{{ hostvars['autobot-npu']['ansible_host'] }}"
@@ -103,7 +104,8 @@ all:
             - desktop-access
       vars:
         # WSL machine configuration (local)
-        backend_port: 8001
+        backend_port: 8443
+        backend_protocol: "https"
         terminal_port: 7681
         novnc_port: 6080
         vnc_port: 5900
