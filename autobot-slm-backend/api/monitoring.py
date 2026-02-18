@@ -13,11 +13,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
 from models.database import (
     Deployment,
     DeploymentStatus,
@@ -29,8 +24,12 @@ from models.database import (
     Service,
     ServiceStatus,
 )
+from pydantic import BaseModel, Field
 from services.auth import get_current_user
 from services.database import get_db
+from sqlalchemy import delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
@@ -406,6 +405,30 @@ async def get_alerts(
         info_count=sum(1 for a in alerts if a.severity == EventSeverity.INFO.value),
         alerts=alerts[:MAX_ALERTS_RETURNED],
     )
+
+
+@router.delete("/alerts", status_code=status.HTTP_200_OK)
+async def clear_alerts(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    hours: int = Query(24, ge=1, le=168),
+) -> dict:
+    """Delete all warning/error node events within the time window."""
+    cutoff = datetime.utcnow() - timedelta(hours=hours)
+    result = await db.execute(
+        delete(NodeEvent).where(
+            NodeEvent.created_at >= cutoff,
+            NodeEvent.severity.in_(
+                [
+                    EventSeverity.WARNING.value,
+                    EventSeverity.ERROR.value,
+                    EventSeverity.CRITICAL.value,
+                ]
+            ),
+        )
+    )
+    await db.commit()
+    return {"deleted": result.rowcount}
 
 
 # Health check constants (Issue #729 - avoid magic numbers)
