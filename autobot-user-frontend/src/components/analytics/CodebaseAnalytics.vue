@@ -3374,8 +3374,9 @@ const redisHealth = ref<RedisHealthResult | null>(null)
 const loadingRedisHealth = ref(false)
 const redisHealthError = ref('')
 
-// Issue #566: Detailed findings interfaces and state
-interface SecurityFinding {
+// Issue #566: Detailed findings interfaces for expandable panels (field names from API)
+// Distinct from code-intelligence SecurityFinding/PerformanceFinding types (#920)
+interface SecurityFindingDetail {
   severity: string
   vulnerability_type: string
   description: string
@@ -3385,7 +3386,7 @@ interface SecurityFinding {
   recommendation?: string
   owasp_category?: string
 }
-interface PerformanceFinding {
+interface PerformanceFindingDetail {
   severity: string
   issue_type: string
   description: string
@@ -3406,11 +3407,11 @@ interface RedisOptimization {
 }
 
 // Issue #566: Detailed findings state
-const securityFindings = ref<SecurityFinding[]>([])
+const securityFindings = ref<SecurityFindingDetail[]>([])
 const loadingSecurityFindings = ref(false)
 const showSecurityDetails = ref(false)
 
-const performanceFindings = ref<PerformanceFinding[]>([])
+const performanceFindings = ref<PerformanceFindingDetail[]>([])
 const loadingPerformanceFindings = ref(false)
 const showPerformanceDetails = ref(false)
 
@@ -6616,7 +6617,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .analytics-header {
-  background: linear-gradient(135deg, var(--color-info-dark) 0%, var(--color-info-hover) 100%);
+  background: var(--bg-card);
   border-radius: var(--radius-xl);
   padding: var(--spacing-5);
   margin-bottom: var(--spacing-6);
@@ -6768,7 +6769,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--chart-green) 0%, var(--color-success-dark) 100%);
+  background: var(--color-success);
   transition: width 0.3s ease;
   border-radius: var(--radius-default);
 }
@@ -6792,7 +6793,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .code-smells-progress .progress-fill {
-  background: linear-gradient(90deg, var(--chart-pink) 0%, var(--chart-purple) 100%);
+  background: var(--chart-purple);
 }
 
 .progress-status {
@@ -6881,7 +6882,7 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .batch-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--chart-green) 0%, var(--color-success-dark) 100%);
+  background: var(--color-success);
   transition: width 0.3s ease;
   border-radius: 3px;
 }
@@ -8553,10 +8554,9 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .category-tab.active {
-  background: linear-gradient(135deg, var(--chart-blue) 0%, var(--color-info-dark) 100%);
-  border-color: var(--chart-blue);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
   color: var(--text-on-primary);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
 
 .category-tab i {
@@ -9024,10 +9024,10 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   transition: width 0.3s ease;
 }
 
-.coverage-fill.success { background: linear-gradient(90deg, var(--chart-green), var(--color-success-dark)); }
-.coverage-fill.info { background: linear-gradient(90deg, var(--chart-blue), var(--color-info-dark)); }
-.coverage-fill.warning { background: linear-gradient(90deg, var(--color-warning), var(--color-warning-dark)); }
-.coverage-fill.critical { background: linear-gradient(90deg, var(--color-error), var(--color-error-hover)); }
+.coverage-fill.success { background: var(--color-success); }
+.coverage-fill.info { background: var(--color-primary); }
+.coverage-fill.warning { background: var(--color-warning); }
+.coverage-fill.critical { background: var(--color-error); }
 
 /* HTTP Method Badges */
 .method-badge {
@@ -9800,9 +9800,9 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .factor-row.medium-value .factor-label { color: var(--color-warning-light); }
 .factor-row .factor-bar-container { flex: 1; height: 8px; background: rgba(71, 85, 105, 0.3); border-radius: 4px; overflow: hidden; }
 .factor-row .factor-bar { height: 100%; border-radius: 4px; transition: width 0.3s; }
-.factor-row .factor-bar.bar-critical { background: linear-gradient(90deg, var(--color-error), var(--color-error-light)); }
-.factor-row .factor-bar.bar-warning { background: linear-gradient(90deg, var(--color-warning), var(--color-warning-light)); }
-.factor-row .factor-bar.bar-ok { background: linear-gradient(90deg, var(--chart-green), var(--color-success-light)); }
+.factor-row .factor-bar.bar-critical { background: var(--color-error); }
+.factor-row .factor-bar.bar-warning { background: var(--color-warning); }
+.factor-row .factor-bar.bar-ok { background: var(--color-success); }
 .factor-row .factor-value { width: 40px; text-align: right; font-weight: 600; font-size: 0.85em; color: var(--text-secondary); }
 .factor-row.high-value .factor-value { color: var(--color-error-light); }
 .factor-row.medium-value .factor-value { color: var(--color-warning-light); }
@@ -10689,15 +10689,15 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .ownership-metrics .metric-bar-fill.ok {
-  background: linear-gradient(90deg, var(--chart-green), var(--color-success-light));
+  background: var(--color-success);
 }
 
 .ownership-metrics .metric-bar-fill.warning {
-  background: linear-gradient(90deg, var(--color-warning), var(--color-warning-light));
+  background: var(--color-warning);
 }
 
 .ownership-metrics .metric-bar-fill.critical {
-  background: linear-gradient(90deg, var(--color-error), var(--color-error-light));
+  background: var(--color-error);
 }
 
 /* Top Contributors Preview */
@@ -10841,8 +10841,8 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .expert-score {
-  background: linear-gradient(135deg, var(--chart-purple-light), var(--chart-indigo-light));
-  color: white;
+  background: var(--chart-purple);
+  color: var(--text-on-primary);
   padding: 4px 10px;
   border-radius: 12px;
   font-weight: 700;
@@ -10899,11 +10899,11 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 }
 
 .score-fill.impact {
-  background: linear-gradient(90deg, var(--chart-blue), var(--color-info));
+  background: var(--color-primary);
 }
 
 .score-fill.recency {
-  background: linear-gradient(90deg, var(--chart-green), var(--color-success-light));
+  background: var(--color-success);
 }
 
 .score-value {
