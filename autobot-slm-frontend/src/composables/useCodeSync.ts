@@ -9,7 +9,7 @@
  * and sync operations across the SLM fleet.
  */
 
-import { ref, computed, readonly } from 'vue'
+import { ref, computed, readonly, toRef } from 'vue'
 import axios, { type AxiosInstance } from 'axios'
 import { useRoles, type Role, type SyncResult } from './useRoles'
 import { formatCommitHash } from '@/utils/commitHashUtils'
@@ -444,6 +444,13 @@ export function useCodeSync() {
   }
 
   /**
+   * Set the error message.
+   */
+  function setError(message: string): void {
+    error.value = message
+  }
+
+  /**
    * Reset all state to initial values.
    */
   function reset(): void {
@@ -615,6 +622,7 @@ export function useCodeSync() {
     getJobStatus,
     getRecentJobs,
     clearError,
+    setError,
     reset,
 
     // Schedule methods (Issue #741 - Phase 7)
@@ -626,7 +634,10 @@ export function useCodeSync() {
     runSchedule,
 
     // Role-based sync methods (Issue #779)
-    roles: rolesComposable.roles,
+    // useRoles() returns reactive() which auto-unwraps the inner roles ref, so
+    // rolesComposable.roles is a plain array. toRef() restores the ref shape so
+    // callers can use .value as expected in templates.
+    roles: toRef(rolesComposable, 'roles'),
     fetchRoles: rolesComposable.fetchRoles,
     syncRole: rolesComposable.syncRole,
     pullFromSource: rolesComposable.pullFromSource,

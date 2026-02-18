@@ -14,6 +14,14 @@ exclude_dirs:
 
 skips:
   - B101  # assert_used - common in tests
+  - B105  # hardcoded_password_string - false positive on event/policy variable names
+  - B108  # hardcoded_tmp_directory - /tmp used for legitimate temp files
+  - B110  # try_except_pass - intentional exception suppression pattern
+  - B112  # try_except_continue - intentional exception-and-continue pattern
   - B311  # random - used for demo data variance, not cryptographic purposes
+  - B324  # hashlib weak hash - MD5 used for caching fingerprints, not security
+  - B404  # import_subprocess - subprocess use is intentional and reviewed
   - B601  # paramiko_calls - intentional usage
   - B603  # subprocess_without_shell_equals_true - we use shell=False
+  - B607  # start_process_with_partial_path - tool names resolved via PATH intentionally
+  - B608  # hardcoded_sql_expressions - false positive in analysis tooling

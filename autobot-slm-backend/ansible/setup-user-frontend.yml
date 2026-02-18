@@ -6,7 +6,7 @@
 #
 # This playbook provisions a complete user frontend server with:
 # - nginx with HTTPS (port 443)
-# - autobot-user-frontend production build
+# - autobot-frontend production build
 # - TLS certificates
 # - API proxy to backend
 # - WebSocket support
@@ -22,7 +22,7 @@
 
   vars:
     frontend_install_dir: /opt/autobot
-    frontend_code_dir: "{{ frontend_install_dir }}/autobot-user-frontend"
+    frontend_code_dir: "{{ frontend_install_dir }}/autobot-frontend"
     frontend_dist_dir: "{{ frontend_code_dir }}/dist"
     frontend_user: autobot
     frontend_group: autobot

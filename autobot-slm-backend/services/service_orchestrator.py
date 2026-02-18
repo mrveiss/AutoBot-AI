@@ -72,7 +72,7 @@ _SERVICE_DEFINITIONS = {
         default_host="172.16.168.20",  # Main WSL backend host
         default_port=8443,  # Issue #858/#861: HTTPS port
         start_command=(
-            "cd /opt/autobot/autobot-user-backend && "
+            "cd /opt/autobot/autobot-backend && "
             "source venv/bin/activate && "
             "nohup python backend/main.py > logs/backend.log 2>&1 &"
         ),
@@ -80,7 +80,7 @@ _SERVICE_DEFINITIONS = {
         health_check_path="/api/health",
         health_check_type="https",  # Backend requires HTTPS on port 8443 (#915)
         requires_sudo=False,
-        working_dir="/opt/autobot/autobot-user-backend",
+        working_dir="/opt/autobot/autobot-backend",
         description="FastAPI backend API server",
     ),
     # Frontend (Vue.js on frontend VM)

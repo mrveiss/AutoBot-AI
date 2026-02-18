@@ -61,10 +61,10 @@
 
 ```bash
 # Before committing backend changes
-ruff check autobot-user-backend/path/to/changed/file.py
+ruff check autobot-backend/path/to/changed/file.py
 
 # Before committing frontend changes
-cd autobot-user-frontend && npm run type-check && npm run lint
+cd autobot-frontend && npm run type-check && npm run lint
 
 # Before committing Ansible changes
 cd autobot-slm-backend/ansible && ansible-playbook playbooks/<playbook>.yml --syntax-check
@@ -574,8 +574,8 @@ No `console.*` or `print()` - pre-commit blocks these.
 | Service | IP:Port | Component | Purpose |
 |---------|---------|-----------|---------|
 | SLM Server | 172.16.168.19:443 | `autobot-slm-backend/` + `autobot-slm-frontend/` | SLM backend + admin UI (nginx+SSL) |
-| Main (WSL) | 172.16.168.20:8001 | `autobot-user-backend/` | Backend API + VNC (6080) |
-| Frontend VM | 172.16.168.21:443 | `autobot-user-frontend/` | User frontend (nginx+SSL, production build) |
+| Main (WSL) | 172.16.168.20:8001 | `autobot-backend/` | Backend API + VNC (6080) |
+| Frontend VM | 172.16.168.21:443 | `autobot-frontend/` | User frontend (nginx+SSL, production build) |
 | NPU VM | 172.16.168.22:8081 | `autobot-npu-worker/` | Hardware AI acceleration |
 | Redis VM | 172.16.168.23:6379 | - | Data layer (Redis Stack) |
 | AI Stack VM | 172.16.168.24:8080 | - | AI processing |
@@ -587,18 +587,18 @@ No `console.*` or `print()` - pre-commit blocks these.
 
 | Directory | Deploys To | Description |
 |-----------|------------|-------------|
-| `autobot-user-backend/` | 172.16.168.20 (Main) | Core AutoBot backend - AI agents, chat, tools |
-| `autobot-user-frontend/` | 172.16.168.21 (Frontend VM) | User chat interface (Vue 3, nginx+SSL) |
+| `autobot-backend/` | 172.16.168.20 (Main) | Core AutoBot backend - AI agents, chat, tools |
+| `autobot-frontend/` | 172.16.168.21 (Frontend VM) | User chat interface (Vue 3, nginx+SSL) |
 | `autobot-slm-backend/` | 172.16.168.19 (SLM) | **SLM backend** - Fleet management, monitoring |
 | `autobot-slm-frontend/` | 172.16.168.19 (SLM) | **SLM admin dashboard** - Vue 3 UI (nginx+SSL) |
 | `autobot-npu-worker/` | 172.16.168.22 (NPU) | NPU acceleration worker |
 | `autobot-browser-worker/` | 172.16.168.25 (Browser) | Playwright automation worker |
 | `autobot-shared/` | All backends | Common utilities (redis, config, logging) |
-| `infrastructure/` | Dev machine | Per-role infrastructure (not deployed) |
+| `autobot-infrastructure/` | Dev machine | Per-role infrastructure (not deployed) |
 
 **Before editing, verify:**
 
-- `autobot-user-*` is for Main AutoBot functionality
+- `autobot-backend/` and `autobot-frontend/` are for Main AutoBot functionality
 - `autobot-slm-*` is for SLM fleet management (different system!)
 - `autobot-shared/` is for Shared code deployed with each backend
 
@@ -607,7 +607,7 @@ No `console.*` or `print()` - pre-commit blocks these.
 - The frontend is in `autobot-slm-frontend/`, NOT `autobot-vue`
 - Worktrees should be created in `../worktrees/issue-<number>/` (check existing pattern first)
 - Never assume directory structure - verify with `ls` before creating paths
-- Ansible playbooks and roles are in `autobot-slm-backend/ansible/`, NOT `infrastructure/ansible/`
+- Ansible playbooks and roles are in `autobot-slm-backend/ansible/`, NOT `autobot-infrastructure/ansible/`
 - The primary working branch is `Dev_new_gui`
 - Test files are colocated next to their source files, not in a separate `tests/` directory
 - Import paths use the colocated structure - never use stale `from src.` imports for migrated modules
@@ -617,9 +617,9 @@ No `console.*` or `print()` - pre-commit blocks these.
 The infrastructure folder uses a per-role organization:
 
 ```text
-infrastructure/
-├── autobot-user-backend/       # User backend: docker, tests, config, scripts, templates
-├── autobot-user-frontend/      # User frontend infra
+autobot-infrastructure/
+├── autobot-backend/            # User backend: docker, tests, config, scripts, templates
+├── autobot-frontend/           # User frontend infra
 ├── autobot-slm-backend/        # SLM backend infra
 ├── autobot-slm-frontend/       # SLM frontend infra
 ├── autobot-npu-worker/         # NPU worker infra
@@ -639,20 +639,20 @@ infrastructure/
 
 ```bash
 # User backend to Main server
-./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/
+./autobot-infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/
 
 # User frontend to Frontend VM
-./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-user-frontend/
+./autobot-infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-frontend/
 
 # SLM backend + frontend to SLM server
-./infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-backend/
-./infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-frontend/
+./autobot-infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-backend/
+./autobot-infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-frontend/
 
 # NPU worker to NPU VM
-./infrastructure/shared/scripts/sync-to-vm.sh npu autobot-npu-worker/
+./autobot-infrastructure/shared/scripts/sync-to-vm.sh npu autobot-npu-worker/
 
 # Browser worker to Browser VM
-./infrastructure/shared/scripts/sync-to-vm.sh browser autobot-browser-worker/
+./autobot-infrastructure/shared/scripts/sync-to-vm.sh browser autobot-browser-worker/
 ```
 
 ### Ansible Deployment (PRIMARY METHOD)
@@ -693,14 +693,14 @@ ansible-playbook playbooks/deploy-full.yml --limit slm_server
 - `.21` serves User frontend via nginx+SSL (production build)
 - **FORBIDDEN**: `npm run dev` on any VM — production builds only
 - **Ansible deployment:** `ansible-playbook playbooks/deploy-full.yml --tags frontend`
-- **Manual sync:** `./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-user-frontend/`
+- **Manual sync:** `./autobot-infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-frontend/`
 
 ### Local-Only Development (ZERO TOLERANCE)
 
 **NEVER edit on remote VMs** - No version control, no backup, VMs are ephemeral.
 
 1. Edit in `/home/kali/Desktop/AutoBot/`
-2. Deploy via Ansible or sync: `./infrastructure/shared/scripts/sync-to-vm.sh <vm> <component>/`
+2. Deploy via Ansible or sync: `./autobot-infrastructure/shared/scripts/sync-to-vm.sh <vm> <component>/`
 
 ### Infrastructure as Code (MANDATORY)
 
@@ -919,9 +919,9 @@ ansible-playbook playbooks/deploy-full.yml                    # Full deployment
 ansible-playbook playbooks/slm-service-control.yml -e "service=autobot-backend action=restart"
 
 # Manual sync to VMs (dev/manual operations)
-./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/
-./infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/
-./infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-backend/
+./autobot-infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/
+./autobot-infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/
+./autobot-infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-backend/
 
 # Memory MCP
 mcp__memory__search_nodes --query "keywords"

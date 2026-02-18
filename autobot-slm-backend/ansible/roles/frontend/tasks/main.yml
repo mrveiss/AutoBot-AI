@@ -1,5 +1,5 @@
 ---
-# Frontend role - User frontend (autobot-user-frontend) deployment
+# Frontend role - User frontend (autobot-frontend) deployment
 # Serves production build via nginx + SSL on Frontend VM (.21)
 
 - name: "Frontend | Check if Node.js is already installed"
@@ -64,7 +64,7 @@
 
 - name: "Frontend | Ensure frontend directory exists"
   file:
-    path: "{{ frontend_install_dir }}/autobot-user-frontend"
+    path: "{{ frontend_install_dir }}/autobot-frontend"
     state: directory
     owner: "{{ frontend_user }}"
     group: "{{ frontend_group }}"
@@ -113,13 +113,13 @@
 
 - name: "Frontend | Check if package.json exists"
   stat:
-    path: "{{ frontend_install_dir }}/autobot-user-frontend/package.json"
+    path: "{{ frontend_install_dir }}/autobot-frontend/package.json"
   register: package_json_path
   tags: ['frontend', 'npm']
 
 - name: "Frontend | Install npm dependencies"
   community.general.npm:
-    path: "{{ frontend_install_dir }}/autobot-user-frontend"
+    path: "{{ frontend_install_dir }}/autobot-frontend"
     state: present
   become: yes
   become_user: "{{ frontend_user }}"
@@ -132,7 +132,7 @@
 - name: "Frontend | Build production frontend"
   command: npx vite build
   args:
-    chdir: "{{ frontend_install_dir }}/autobot-user-frontend"
+    chdir: "{{ frontend_install_dir }}/autobot-frontend"
   become: yes
   become_user: "{{ frontend_user }}"
   when: package_json_path.stat.exists

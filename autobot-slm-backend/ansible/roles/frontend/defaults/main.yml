@@ -34,4 +34,4 @@ frontend_tls_cert: "{{ frontend_tls_cert_dir }}/server-cert.pem"
 frontend_tls_key: "{{ frontend_tls_cert_dir }}/server-key.pem"
 
 # Frontend app directory
-frontend_dist_dir: "{{ frontend_install_dir }}/autobot-user-frontend/dist"
+frontend_dist_dir: "{{ frontend_install_dir }}/autobot-frontend/dist"

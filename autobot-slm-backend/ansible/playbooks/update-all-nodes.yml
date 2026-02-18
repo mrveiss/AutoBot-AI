@@ -181,13 +181,13 @@
     # FROM the SLM controller). The git repo at local_autobot_root only exists
     # on the dev machine (.20), not on the SLM server (.19). Running as root
     # (become: true) gives access to /home/kali/Desktop/AutoBot. (#913)
-    - name: "[PLAY 2] Backend | Sync autobot-user-backend (local rsync on target)"
+    - name: "[PLAY 2] Backend | Sync autobot-backend (local rsync on target)"
       shell: |
         rsync -avz --delete \
           --exclude=venv --exclude=__pycache__ --exclude='*.pyc' \
           --exclude=.git --exclude=data --exclude=logs \
-          {{ local_autobot_root }}/autobot-user-backend/ \
-          /opt/autobot/autobot-user-backend/
+          {{ local_autobot_root }}/autobot-backend/ \
+          /opt/autobot/autobot-backend/
       become: true
       when: "'01-Backend' in inventory_hostname"
 
@@ -200,10 +200,10 @@
       when: "'01-Backend' in inventory_hostname"
 
     # Frontend (172.16.168.21)
-    - name: "[PLAY 2] Frontend | Sync autobot-user-frontend code"
+    - name: "[PLAY 2] Frontend | Sync autobot-frontend code"
       ansible.posix.synchronize:
-        src: "{{ local_autobot_root }}/autobot-user-frontend/"
-        dest: "/opt/autobot/autobot-user-frontend/"
+        src: "{{ local_autobot_root }}/autobot-frontend/"
+        dest: "/opt/autobot/autobot-frontend/"
         delete: false
         rsync_opts:
           - "--exclude=node_modules"
@@ -214,7 +214,7 @@
 
     - name: "[PLAY 2] Frontend | Fix ownership of frontend directory"
       file:
-        path: /opt/autobot/autobot-user-frontend
+        path: /opt/autobot/autobot-frontend
         owner: autobot
         group: autobot
         recurse: true
@@ -224,7 +224,7 @@
     - name: "[PLAY 2] Frontend | Rebuild production dist"
       command:
         cmd: npx vite build
-        chdir: /opt/autobot/autobot-user-frontend
+        chdir: /opt/autobot/autobot-frontend
       when: "'02-Frontend' in inventory_hostname"
       register: frontend_build
 

@@ -10,7 +10,7 @@ repos:
       - id: black
         args: [--line-length=88]
         language_version: python3
-        exclude: ^infrastructure/
+        exclude: ^autobot-infrastructure/
 
   # Python import sorting with isort
   - repo: https://github.com/pycqa/isort
@@ -18,7 +18,7 @@ repos:
     hooks:
       - id: isort
         args: [--profile=black, --line-length=88]
-        exclude: ^infrastructure/
+        exclude: ^autobot-infrastructure/
 
   # Python linting with flake8
   # Uses .flake8 config file for consistent settings across local dev and CI
@@ -28,8 +28,8 @@ repos:
       - id: flake8
         # Uses .flake8 config file in repo root via args
         args: [--config=.flake8]
-        # Exclude tests and infrastructure (non-production code)
-        exclude: ^(tests/|infrastructure/)
+        # Exclude tests, infrastructure, and code analysis tools (non-production code)
+        exclude: ^(tests/|autobot-infrastructure/|autobot-backend/code_analysis/)
 
   # Remove unused imports and variables with autoflake
   - repo: https://github.com/PyCQA/autoflake
@@ -43,7 +43,7 @@ repos:
           --expand-star-imports,
           --ignore-init-module-imports
         ]
-        exclude: ^infrastructure/
+        exclude: ^autobot-infrastructure/
 
   # Trailing whitespace removal
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -72,7 +72,7 @@ repos:
       - id: name-tests-test  # Ensure test files are named correctly
         args: [--pytest-test-first]
         # Exclude colocated tests (*_test.py convention) and special test files
-        exclude: (_test\.py$|^(tests/|infrastructure/.*/tests/|autobot-.*/tests/).*(results/|benchmarks/|fixtures/|conftest\.py|mock_llm_interface\.py|ci_cd_integration\.py|integration_test_infrastructure\.py|security_port_audit\.py|frontend_comprehensive_corrected\.py|phase9_comprehensive_test_suite\.py|benchmark_base\.py|api_benchmarks\.py|rag_benchmarks\.py|mocks\.py|system_assessment_report\.py))
+        exclude: (_test\.py$|^(tests/|autobot-infrastructure/.*/tests/|autobot-.*/tests/).*(results/|benchmarks/|fixtures/|conftest\.py|mock_llm_interface\.py|ci_cd_integration\.py|integration_test_infrastructure\.py|security_port_audit\.py|frontend_comprehensive_corrected\.py|phase9_comprehensive_test_suite\.py|benchmark_base\.py|api_benchmarks\.py|rag_benchmarks\.py|mocks\.py|system_assessment_report\.py))
 
   # Security checks with bandit
   - repo: https://github.com/PyCQA/bandit
@@ -80,8 +80,8 @@ repos:
     hooks:
       - id: bandit
         args: [-c, .bandit]
-        files: ^(autobot-user-backend/|autobot-slm-backend/|autobot-shared/)
-        exclude: (_test\.py|\.e2e_test\.py|\.integration_test\.py|\.performance_test\.py|conftest\.py)$
+        files: ^(autobot-backend/|autobot-slm-backend/|autobot-shared/)
+        exclude: (code_analysis/|_test\.py|\.e2e_test\.py|\.integration_test\.py|\.performance_test\.py|conftest\.py)$
         additional_dependencies: ["bandit[toml]"]
 
   # Hardcoded value detection (Issue #694)
@@ -89,7 +89,7 @@ repos:
     hooks:
       - id: detect-hardcoded-values
         name: Detect Hardcoded Values (Strict)
-        entry: infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-hardcoded-values
         language: script
         types: [python, ts, vue]
         pass_filenames: false
@@ -101,7 +101,7 @@ repos:
     hooks:
       - id: function-length-check
         name: Function Length Check (Issue #620)
-        entry: infrastructure/shared/scripts/hooks/pre-commit-function-length
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-function-length
         language: script
         types: [python]
         pass_filenames: false

@@ -133,8 +133,8 @@ AutoBot now includes comprehensive Redis service management capabilities:
 
 ### Core Documentation
 - [**System Configuration**](CLAUDE.md) - Complete development notes, fixes, and architecture
-- [**Infrastructure**](infrastructure/README.md) - Per-role infrastructure and deployment scripts
-- [**Scripts & Utilities**](infrastructure/shared/scripts/README.md) - All scripts and utilities documentation
+- [**Infrastructure**](autobot-infrastructure/README.md) - Per-role infrastructure and deployment scripts
+- [**Scripts & Utilities**](autobot-infrastructure/shared/scripts/README.md) - All scripts and utilities documentation
 - [**Troubleshooting Guide**](docs/troubleshooting/INDEX.md) - Searchable index of 15+ troubleshooting guides organized by component and symptom
 
 ### MCP & Agent Integration

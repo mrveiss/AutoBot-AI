@@ -42,13 +42,15 @@ exclude =
     debug,
     docker,
     code-analysis-suite,
+    code_analysis,
     resources,
     analysis,
     # Separate deployable components with own standards
     slm-server,
     slm-admin,
     # Infrastructure contains tests, analysis, tools (not production code)
-    infrastructure
+    infrastructure,
+    autobot-infrastructure
 
 # Per-file ignores for intentional patterns
 per-file-ignores =
@@ -59,26 +61,30 @@ per-file-ignores =
     *.performance_test.py:E501,E303,W291,W293,E741,F841
     *_benchmarks.py:E501,E303,W291,W293,E741,F841
     # Agent config contains long documentation strings for each agent
-    backend/api/agent_config.py:E501
+    autobot-backend/api/agent_config.py:E501
     # Agent files with LLM prompt templates (intentionally long strings)
-    src/agents/knowledge_retrieval_agent.py:E501
-    src/agents/librarian_assistant_agent.py:E501
-    src/agents/rag_agent.py:E501
+    autobot-backend/agents/knowledge_retrieval_agent.py:E501
+    autobot-backend/agents/librarian_assistant_agent.py:E501
+    autobot-backend/agents/rag_agent.py:E501
     # Judge files with LLM prompt templates (intentionally long strings)
-    src/judges/__init__.py:E501
-    src/judges/agent_response_judge.py:E501
-    src/judges/multi_agent_arbitrator.py:E501
-    src/judges/security_risk_judge.py:E501
-    src/judges/workflow_step_judge.py:E501
+    autobot-backend/judges/__init__.py:E501
+    autobot-backend/judges/agent_response_judge.py:E501
+    autobot-backend/judges/multi_agent_arbitrator.py:E501
+    autobot-backend/judges/security_risk_judge.py:E501
+    autobot-backend/judges/workflow_step_judge.py:E501
     # Intent detection and prompt management (intentionally long prompt strings)
-    src/chat_intent_detector.py:E501
-    src/llm_self_awareness.py:E501
-    src/middleware/llm_awareness_middleware.py:E501
-    src/planner/planner.py:E501
-    src/prompt_manager.py:E501
+    autobot-backend/chat_intent_detector.py:E501
+    autobot-backend/llm_self_awareness.py:E501
+    autobot-backend/middleware/llm_awareness_middleware.py:E501
+    autobot-backend/planner/planner.py:E501
+    autobot-backend/prompt_manager.py:E501
     # Dashboard/monitoring files with long command strings and JS templates
     autobot-slm-backend/monitoring/performance_dashboard.py:E501
     autobot-slm-backend/monitoring/performance_optimizer.py:E501
+    # Backward-compatibility re-export shims (intentionally long inline comments)
+    autobot-backend/context_aware_decision_system.py:E501
+    autobot-backend/enhanced_project_state_tracker.py:E501
+    autobot-backend/workflow_templates.py:E501
 
 # Statistics and verbosity
 statistics = True

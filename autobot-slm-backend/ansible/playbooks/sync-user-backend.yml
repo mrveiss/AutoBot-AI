@@ -1,6 +1,6 @@
 ---
 # Sync User Backend Code to Main Server
-# Syncs autobot-user-backend and autobot-shared from local machine to /opt/autobot
+# Syncs autobot-backend and autobot-shared from local machine to /opt/autobot
 # This playbook runs locally on the WSL machine (172.16.168.20)
 
 - name: Sync User Backend Code
@@ -22,7 +22,7 @@
 
     - name: Clean up problematic symlinks
       ansible.builtin.file:
-        path: "/opt/autobot/autobot-user-backend/{{ item }}"
+        path: "/opt/autobot/autobot-backend/{{ item }}"
         state: absent
       loop:
         - autobot_shared
@@ -41,8 +41,8 @@
           --exclude=.env \
           --exclude=data \
           --exclude=logs \
-          {{ local_autobot_root }}/autobot-user-backend/ \
-          {{ backend_install_dir }}/autobot-user-backend/
+          {{ local_autobot_root }}/autobot-backend/ \
+          {{ backend_install_dir }}/autobot-backend/
 
         sudo rsync -a --delete \
           --exclude=.git \
@@ -60,7 +60,7 @@
         group: "{{ backend_user }}"
         recurse: yes
       loop:
-        - "{{ backend_install_dir }}/autobot-user-backend"
+        - "{{ backend_install_dir }}/autobot-backend"
         - "{{ backend_install_dir }}/autobot-shared"
       become: yes
 

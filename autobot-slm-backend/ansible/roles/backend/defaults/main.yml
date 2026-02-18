@@ -5,7 +5,7 @@
 # Backend configuration defaults
 backend_user: autobot
 backend_group: autobot
-backend_install_dir: /opt/autobot/autobot-user-backend
+backend_install_dir: /opt/autobot/autobot-backend
 backend_code_dir: "{{ backend_install_dir }}"  # Actual code location (can be overridden by playbook)
 backend_log_dir: /var/log/autobot
 backend_data_dir: /var/lib/autobot
