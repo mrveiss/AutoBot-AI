@@ -4,7 +4,7 @@ A comprehensive code quality analysis system with Redis caching and NPU accelera
 
 ## 🎯 Overview
 
-The Code Analysis Suite provides enterprise-grade code quality monitoring with 9 specialized analyzers supporting both backend and frontend technologies:
+The Code Analysis Suite provides code quality monitoring with 9 specialized analyzers supporting both backend and frontend technologies:
 
 - **Code Duplication Analyzer** - Finds duplicate code blocks using AST and embedding similarity
 - **Environment Variable Analyzer** - Identifies hardcoded configurations that should be externalized

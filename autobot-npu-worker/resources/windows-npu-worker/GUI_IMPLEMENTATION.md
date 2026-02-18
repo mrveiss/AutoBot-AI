@@ -433,7 +433,7 @@ launch-gui.bat
 
 ## Conclusion
 
-The Windows NPU Worker GUI is a complete, production-ready desktop application that provides comprehensive management and monitoring capabilities for the NPU worker service. Built with PySide6 following Qt best practices, it offers a professional, user-friendly interface that integrates seamlessly with Windows 11.
+The Windows NPU Worker GUI provides management and monitoring capabilities for the NPU worker service. Built with PySide6 following Qt best practices, it offers a desktop interface for Windows 11.
 
 ### Key Achievements
 

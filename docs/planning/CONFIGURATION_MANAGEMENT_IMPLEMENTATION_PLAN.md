@@ -1218,7 +1218,7 @@ VM_HOSTNAME=vm1-frontend                  # VM identifier for distributed reload
 ### Low Risks
 
 **Risk:** File watcher memory leak
-**Mitigation:** Proper cleanup in shutdown, watchdog battle-tested
+**Mitigation:** Proper cleanup in shutdown, watchdog validated
 **Impact:** Memory consumption
 
 **Risk:** Debouncing delay too long

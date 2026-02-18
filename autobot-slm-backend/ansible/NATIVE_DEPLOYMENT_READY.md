@@ -138,7 +138,7 @@ Each of the 5 original Docker services now has dedicated VM resources:
 4. NPU Worker has hardware access
 5. Backend connects to all VM services
 
-**🚀 Ready to deploy your enterprise-grade AutoBot infrastructure!**
+Run the deploy command below once the checklist above is satisfied.
 
 ---
 
