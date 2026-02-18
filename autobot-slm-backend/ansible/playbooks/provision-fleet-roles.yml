@@ -55,9 +55,9 @@
 
   tasks:
     - name: "Data | Deploy Redis role"
-      ansible.builtin.include_role:
+      ansible.builtin.import_role:
         name: redis
-      tags: ['redis', 'provision']
+      tags: ['redis', 'redis_exporter', 'provision']
 
 # -------------------------------------------------------------------
 # Phase 4: Application layer (Backend, Frontend)
