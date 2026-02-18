@@ -187,6 +187,27 @@
   changed_when: true
   tags: ['slm', 'backend']
 
+# Issue #937: Sync and install autobot-shared before requirements (prometheus metrics)
+- name: "SLM | Sync autobot-shared to SLM server"
+  ansible.posix.synchronize:
+    src: "{{ playbook_dir }}/../../autobot-shared/"
+    dest: "{{ slm_base_dir }}/autobot-shared/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=*.egg-info"
+      - "--exclude=.git"
+  when: slm_requirements_stat.stat.exists
+  tags: ['slm', 'backend']
+
+- name: "SLM | Install autobot-shared in venv (editable)"
+  ansible.builtin.command:
+    cmd: "{{ slm_backend_dir }}/venv/bin/pip install -e {{ slm_base_dir }}/autobot-shared"
+  become_user: "{{ slm_user }}"
+  when: slm_requirements_stat.stat.exists
+  changed_when: true
+  tags: ['slm', 'backend']
+
 - name: "SLM | Install Python requirements"
   ansible.builtin.pip:
     requirements: "{{ slm_backend_dir }}/requirements.txt"
