@@ -35,3 +35,12 @@ llama-index-embeddings-ollama>=0.1.0,<0.2.0  # Ollama embeddings (older API)
 llama-index-vector-stores-chroma>=0.1.0,<0.2.0  # ChromaDB vector store (older API)
 langchain>=0.1.0,<0.2.0       # LangChain with Tool API (not 0.3+)
 markdownify>=0.11.0  # HTML to Markdown conversion
+
+# Media processing pipelines (Issue #932)
+aiohttp>=3.9.0          # Async HTTP client for link pipeline
+beautifulsoup4>=4.12.0  # HTML parsing for link pipeline
+Pillow>=10.0.0          # Image loading and EXIF extraction for image pipeline
+# Optional (install separately for full media support):
+# opencv-python>=4.8.0   # Frame extraction for video pipeline
+# transformers>=4.30.0   # Whisper transcription for audio pipeline
+# librosa>=0.10.0        # Audio decoding (used with transformers)
