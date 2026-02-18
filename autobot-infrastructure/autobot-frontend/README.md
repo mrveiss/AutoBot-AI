@@ -8,7 +8,7 @@
 
 Vue 3 user-facing chat interface. Served as a production nginx build. All backend API calls are proxied through nginx — the frontend never talks directly to the backend IP.
 
-Conflicts with `autobot-slm-frontend`: both bind port 443. Must be on separate nodes.
+Can coexist with `autobot-slm-frontend` on the same node — nginx serves both via separate `server_name` virtual host blocks on port 443, each proxying to its own backend.
 
 ---
 
@@ -82,7 +82,7 @@ nginx on .21 proxies `/api/` and `/ws/` to `https://172.16.168.20:8443`. This me
 - **Never `npm run dev`** on the VM — production builds only.
 - **nginx dir ownership**: `/var/www/html/` is owned by `www-data`. Fix with `sudo chown -R autobot:autobot /var/www/html/` before rsync.
 - **`VITE_API_BASE_URL` must NOT be set** in `.env` — if set, it bakes a hardcoded IP into the bundle bypassing nginx proxy mode.
-- **Conflicts with slm-frontend**: Both bind port 443. They live on different nodes (.21 vs .19).
+- **nginx virtual hosts**: Can coexist with `autobot-slm-frontend` via separate `server_name` blocks. Default fleet keeps them on different nodes (.21 vs .19) for isolation, not necessity.
 
 ---
 

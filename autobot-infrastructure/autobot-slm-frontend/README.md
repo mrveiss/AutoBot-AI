@@ -8,7 +8,7 @@
 
 SLM admin dashboard — Vue 3 UI for fleet management. 30 pages, 15 composables, 66 Vue components. Served as a production nginx build alongside the SLM backend on .19.
 
-Does **not** have its own nginx instance — served by the same nginx that proxies `autobot-slm-backend`. Conflicts with `autobot-frontend` (both bind port 443 via nginx).
+Does **not** have its own nginx instance — served by the same nginx that proxies `autobot-slm-backend`. Can coexist with `autobot-frontend` on the same node via nginx `server_name` virtual hosts.
 
 ---
 
@@ -60,7 +60,7 @@ ssh autobot@172.16.168.19 'sudo rsync -a --delete dist/ /var/www/html/slm/'
 ## Known Gotchas
 
 - **Never `npm run dev`** on the VM — production builds only.
-- **Conflicts with autobot-frontend**: Both bind port 443 (via nginx). They are on separate nodes (.19 vs .21).
+- **nginx virtual hosts**: Can coexist with `autobot-frontend` via separate `server_name` blocks on the same port 443 nginx instance. Default fleet keeps them on different nodes (.19 vs .21) for isolation.
 - **Shares nginx with slm-backend**: The nginx config for slm-frontend is part of the `slm_manager` role.
 - **API base URL**: All SLM API calls use relative URLs proxied by nginx. No hardcoded IPs allowed.
 

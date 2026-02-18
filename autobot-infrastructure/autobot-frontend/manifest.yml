@@ -59,9 +59,10 @@ system_updates:
   reboot_strategy: immediate
 
 coexistence:
-  conflicts_with:
-    - autobot-slm-frontend   # both bind port 443
+  conflicts_with: []
   compatible_with:
+    - autobot-slm-frontend   # nginx virtual hosts — different server_name on same port 443
+    - autobot-slm-backend
     - autobot-slm-agent
     - autobot-shared
   warns_with: []
@@ -73,5 +74,7 @@ ansible_role: frontend
 notes: |
   Production build only — never run npm run dev on this node.
   nginx serves built dist/ from /var/www/html/.
-  All /api/* requests are proxied to autobot-backend (.20:8443).
+  All /api/* and /ws/* requests are proxied to autobot-backend (.20:8443).
   nginx dir owned by www-data; rsync fix: chown -R autobot:autobot /var/www/html/
+  Can coexist with autobot-slm-frontend on the same node via nginx server_name virtual hosts.
+  Each role gets its own server block (e.g. autobot.example.com vs slm.example.com).

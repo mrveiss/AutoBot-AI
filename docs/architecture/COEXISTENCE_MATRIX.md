@@ -23,9 +23,9 @@ Rows and columns are the same role set. Read as: "Can **row role** and **column 
 | | backend | frontend | slm-backend | slm-frontend | slm-database | monitoring | npu-worker | browser-worker | ai-stack | database | ollama | slm-agent | shared |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | **backend** | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **frontend** | ✅ | — | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **frontend** | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **slm-backend** | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **slm-frontend** | ✅ | ❌ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **slm-frontend** | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **slm-database** | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **monitoring** | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **npu-worker** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | — | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -38,17 +38,31 @@ Rows and columns are the same role set. Read as: "Can **row role** and **column 
 
 ---
 
-## Conflict Details
+## Notes on `autobot-frontend` ↔ `autobot-slm-frontend`
 
-### ❌ `autobot-frontend` ↔ `autobot-slm-frontend`
+Both roles use nginx on port 443 — but nginx supports multiple `server_name` virtual hosts on the same port, each proxying to a different backend endpoint.
 
-**Reason:** Both roles bind port 443 (HTTPS) via nginx. Two nginx instances cannot share the same port on the same node.
+**When colocated on the same node**, a single nginx instance serves both:
 
-**Hard block:** SLM prevents assigning both to the same node. No override available.
+```nginx
+# autobot-frontend block
+server {
+    listen 443 ssl;
+    server_name autobot.example.com;
+    # ... proxy to autobot-backend at .20:8443
+}
 
-**Canonical split:**
-- `autobot-frontend` → Frontend VM (.21)
-- `autobot-slm-frontend` → SLM VM (.19)
+# autobot-slm-frontend block
+server {
+    listen 443 ssl;
+    server_name slm.example.com;
+    # ... proxy to autobot-slm-backend at localhost:8000
+}
+```
+
+Each role's Ansible role renders its own `server` block into `/etc/nginx/sites-available/`. Both can be active simultaneously with no conflict.
+
+**Default fleet layout** still keeps them on separate nodes (.21 and .19) for isolation, but there is no technical restriction.
 
 ---
 

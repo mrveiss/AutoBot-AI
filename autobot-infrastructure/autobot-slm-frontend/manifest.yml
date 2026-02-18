@@ -42,14 +42,14 @@ system_updates:
   reboot_strategy: scheduled
 
 coexistence:
+  conflicts_with: []
   compatible_with:
+    - autobot-frontend     # nginx virtual hosts — different server_name on same port 443
     - autobot-slm-backend
     - autobot-slm-database
     - autobot-monitoring
     - autobot-slm-agent
     - autobot-shared
-  conflicts_with:
-    - autobot-frontend   # both would try port 443 if on different nodes
   warns_with: []
 
 depends_on:
@@ -59,4 +59,5 @@ ansible_role: slm_manager
 notes: |
   Built dist/ is served by nginx configured by autobot-slm-backend role.
   Co-deployed with autobot-slm-backend (same Ansible role: slm_manager).
-  Never deploy autobot-slm-frontend to .21 (conflicts with autobot-frontend on port 443).
+  Can coexist with autobot-frontend on the same node via nginx server_name virtual hosts —
+  each frontend gets its own server block proxying to the correct backend endpoint.
