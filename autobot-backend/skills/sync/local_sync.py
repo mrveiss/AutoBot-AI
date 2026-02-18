@@ -2,11 +2,14 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """Local directory skill repo sync (Phase 3)."""
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
 from skills.models import SkillState
 from skills.sync.base_sync import BaseRepoSync
+
+logger = logging.getLogger(__name__)
 
 
 class LocalDirSync(BaseRepoSync):
@@ -22,7 +25,12 @@ class LocalDirSync(BaseRepoSync):
     async def discover(self) -> List[Dict[str, Any]]:
         """Scan path for directories containing SKILL.md."""
         packages = []
-        for entry in os.scandir(self.path):
+        try:
+            entries = list(os.scandir(self.path))
+        except (FileNotFoundError, PermissionError) as exc:
+            logger.error("Cannot scan skill repo path %s: %s", self.path, exc)
+            return []
+        for entry in entries:
             if not entry.is_dir():
                 continue
             package = self._load_skill_package(entry)
@@ -38,8 +46,12 @@ class LocalDirSync(BaseRepoSync):
         skill_md_path = os.path.join(entry.path, "SKILL.md")
         if not os.path.exists(skill_md_path):
             return None
-        with open(skill_md_path, encoding="utf-8") as f:
-            skill_md = f.read()
+        try:
+            with open(skill_md_path, encoding="utf-8") as f:
+                skill_md = f.read()
+        except OSError as exc:
+            logger.warning("Cannot read SKILL.md at %s: %s", skill_md_path, exc)
+            return None
         skill_py = self._read_skill_py(entry.path)
         manifest = self._parse_skill_md(skill_md)
         return {
@@ -57,5 +69,8 @@ class LocalDirSync(BaseRepoSync):
         skill_py_path = os.path.join(skill_dir, "skill.py")
         if not os.path.exists(skill_py_path):
             return None
-        with open(skill_py_path, encoding="utf-8") as f:
-            return f.read()
+        try:
+            with open(skill_py_path, encoding="utf-8") as f:
+                return f.read()
+        except OSError:
+            return None

@@ -69,12 +69,16 @@ class MCPClientSync(BaseRepoSync):
         """Convert a remote MCP tool descriptor to a local skill package dict."""
         name = tool.get("name", "unknown")
         desc = tool.get("description", "")
+        # Escape braces so str.format() does not choke on tool names/descriptions
+        # that contain literal '{' or '}' characters from MCP server responses.
+        safe_name = name.replace("{", "{{").replace("}", "}}")
+        safe_desc = desc.replace("{", "{{").replace("}", "}}")
         skill_md = _SKILL_MD_TEMPLATE.format(
-            name=name,
-            description=desc,
-            tools=[name],
+            name=safe_name,
+            description=safe_desc,
+            tools=[safe_name],
             server_url=self.server_url,
-            tool_list=f"- {name}: {desc}",
+            tool_list=f"- {safe_name}: {safe_desc}",
         )
         return {
             "name": name,
