@@ -276,7 +276,7 @@ export class ApiClient {
   }
 
   // GET with retry logic and exponential backoff
-  async get(endpoint: string, options: RequestOptions = {}): Promise<any> {
+  async get<T = any>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     let lastError: Error | undefined;
     const maxRetries = options.maxRetries !== undefined ? options.maxRetries : 3;
 
@@ -318,7 +318,7 @@ export class ApiClient {
   }
 
   // POST — returns parsed JSON (handles 204 No Content: #822)
-  async post(endpoint: string, data?: any, options: RequestOptions = {}): Promise<any> {
+  async post<T = any>(endpoint: string, data?: any, options: RequestOptions = {}): Promise<T> {
     const response = await this.rawRequest(endpoint, {
       method: 'POST', body: data, ...options,
     });
@@ -328,16 +328,16 @@ export class ApiClient {
       throw new Error(`HTTP ${response.status}: ${errorData.message}`);
     }
 
-    if (response.status === 204) return {};
+    if (response.status === 204) return {} as T;
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      return await response.json();
+      return await response.json() as T;
     }
-    return {};
+    return {} as T;
   }
 
   // PUT — returns parsed JSON (handles 204 No Content: #822)
-  async put(endpoint: string, data?: any, options: RequestOptions = {}): Promise<any> {
+  async put<T = any>(endpoint: string, data?: any, options: RequestOptions = {}): Promise<T> {
     const response = await this.rawRequest(endpoint, {
       method: 'PUT', body: data, ...options,
     });
@@ -347,16 +347,16 @@ export class ApiClient {
       throw new Error(`HTTP ${response.status}: ${errorData.message}`);
     }
 
-    if (response.status === 204) return {};
+    if (response.status === 204) return {} as T;
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      return await response.json();
+      return await response.json() as T;
     }
-    return {};
+    return {} as T;
   }
 
   // DELETE — returns parsed JSON (handles empty responses)
-  async delete(endpoint: string, options: RequestOptions = {}): Promise<any> {
+  async delete<T = any>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const response = await this.rawRequest(endpoint, {
       method: 'DELETE', ...options,
     });
@@ -368,9 +368,28 @@ export class ApiClient {
 
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      return await response.json();
+      return await response.json() as T;
     }
-    return {};
+    return {} as T;
+  }
+
+  // PATCH — partial update, returns parsed JSON (handles 204 No Content)
+  async patch<T = any>(endpoint: string, data?: any, options: RequestOptions = {}): Promise<T> {
+    const response = await this.rawRequest(endpoint, {
+      method: 'PATCH', body: data, ...options,
+    });
+
+    if (!response.ok) {
+      const errorData = await this._extractErrorInfo(response);
+      throw new Error(`HTTP ${response.status}: ${errorData.message}`);
+    }
+
+    if (response.status === 204) return {} as T;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return await response.json() as T;
+    }
+    return {} as T;
   }
 
   // ==================================================================================
