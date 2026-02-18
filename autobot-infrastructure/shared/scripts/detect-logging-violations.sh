@@ -96,6 +96,8 @@ for file in $PY_FILES; do
             continue ;;
         *"scripts/hooks/"*)  # Pre-commit hook scripts need terminal output
             continue ;;
+        *"code_analysis/"*)  # Code analysis tools use print() for CLI output
+            continue ;;
     esac
 
     # Check if file has if __name__ == "__main__"
