@@ -66,13 +66,16 @@ class SkillPromoter:
             await _run_cmd(["ruff", "check", "--fix", skill_py_path])
         ref = f" (#{issue_ref})" if issue_ref else ""
         msg = f"feat(skills): promote {name} skill to builtin{ref}"
-        await _run_cmd(["git", "add", dest])
-        await _run_cmd(["git", "commit", "-m", msg])
+        await _run_cmd(["git", "add", dest], must_succeed=True)
+        await _run_cmd(["git", "commit", "-m", msg], must_succeed=True)
         logger.info("Committed promoted skill: %s", name)
 
 
-async def _run_cmd(cmd: List[str]) -> None:
-    """Run a subprocess command; log stderr on failure."""
+async def _run_cmd(cmd: List[str], must_succeed: bool = False) -> None:
+    """Run a subprocess command; log stderr on failure.
+
+    Raises RuntimeError if must_succeed is True and command fails.
+    """
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
@@ -80,8 +83,7 @@ async def _run_cmd(cmd: List[str]) -> None:
     )
     _, stderr = await proc.communicate()
     if proc.returncode != 0:
-        logger.warning(
-            "Command %s failed: %s",
-            cmd[0],
-            stderr.decode("utf-8", errors="replace"),
-        )
+        msg = f"Command {cmd[0]} failed: {stderr.decode('utf-8', errors='replace')}"
+        if must_succeed:
+            raise RuntimeError(msg)
+        logger.warning(msg)
