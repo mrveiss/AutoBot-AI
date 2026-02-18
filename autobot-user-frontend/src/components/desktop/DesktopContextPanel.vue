@@ -89,7 +89,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import ApiClient from '@/api/ApiClient'
+import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('DesktopContextPanel')

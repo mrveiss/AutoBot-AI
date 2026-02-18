@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
-import TerminalWindow from '../TerminalWindow.vue'
+import TerminalWindow from '../terminal/TerminalWindow.vue'
 import {
   renderComponent,
   createMockTerminalSession,

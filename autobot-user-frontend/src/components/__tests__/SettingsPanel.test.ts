@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
-import SettingsPanel from '../SettingsPanel.vue'
+import SettingsPanel from '../settings/SettingsPanel.vue'
 import {
   renderComponent,
   createMockSettings,

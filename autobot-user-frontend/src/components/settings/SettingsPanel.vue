@@ -1,12 +1,6 @@
 <template>
   <ErrorBoundary fallback="Settings panel failed to load.">
 <div class="settings-panel-layout">
-  <!-- Sidebar Navigation -->
-  <SettingsTabNavigation
-    :hasUnsavedChanges="hasUnsavedChanges"
-    :tabs="tabs"
-  />
-
   <!-- Main Content -->
   <main class="settings-content">
     <!-- Loading indicator -->
@@ -83,8 +77,7 @@ import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { useToast } from '@/composables/useToast'
 
 // Import sub-components
-import ErrorBoundary from './ErrorBoundary.vue'
-import SettingsTabNavigation from './settings/SettingsTabNavigation.vue'
+import ErrorBoundary from '../common/ErrorBoundary.vue'
 
 // Import services and types
 import cacheService from '@/services/CacheService'
@@ -92,7 +85,7 @@ import {
   createDefaultSettings,
   createDefaultCacheConfig,
   createCacheActivityItem
-} from '../types/settings'
+} from '@/types/settings'
 import type {
   SettingsStructure,
   SettingsTab,
@@ -107,7 +100,7 @@ import type {
   CacheStats,
   CacheConfig,
   Prompt
-} from '../types/settings'
+} from '@/types/settings'
 
 // Initialize settings with proper structure to prevent undefined props
 const getDefaultSettings = (): SettingsStructure => createDefaultSettings()
