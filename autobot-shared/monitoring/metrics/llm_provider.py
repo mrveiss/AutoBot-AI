@@ -247,17 +247,17 @@ class LLMProviderMetricsRecorder(BaseMetricsRecorder):
         output_tokens: int,
     ) -> None:
         """Record token usage for a request."""
-        self.tokens_total.labels(
-            provider=provider, model=model, token_type="input"  # nosec B106
+        self.tokens_total.labels(  # nosec B106
+            provider=provider, model=model, token_type="input"
         ).inc(input_tokens)
-        self.tokens_total.labels(
-            provider=provider, model=model, token_type="output"  # nosec B106
+        self.tokens_total.labels(  # nosec B106
+            provider=provider, model=model, token_type="output"
         ).inc(output_tokens)
-        self.tokens_per_request.labels(
-            provider=provider, model=model, token_type="input"  # nosec B106
+        self.tokens_per_request.labels(  # nosec B106
+            provider=provider, model=model, token_type="input"
         ).observe(input_tokens)
-        self.tokens_per_request.labels(
-            provider=provider, model=model, token_type="output"  # nosec B106
+        self.tokens_per_request.labels(  # nosec B106
+            provider=provider, model=model, token_type="output"
         ).observe(output_tokens)
 
     def set_context_window_usage(
