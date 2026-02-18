@@ -1,0 +1,365 @@
+AutoBot Software License
+========================
+
+Copyright (c) 2025-2026 mrveiss. All rights reserved.
+
+
+PREAMBLE
+--------
+
+This software is shared openly and without restriction. You are free to use
+it, build with it, modify it, distribute it, and profit from it — no
+permission needed, no fees, no gatekeeping.
+
+This project exists because of time, effort, and a genuine desire to build
+something useful and share it with the world. If it helps you build something
+profitable, we simply ask that you consider giving something back — whether
+that's code, financial support, or anything else that helps keep the project
+alive and moving forward.
+
+Every contribution, however small, directly supports the continuity of
+AutoBot. It funds future development, keeps the project maintained, and
+ensures that the Software remains available, improved, and free for everyone.
+When you support the project, you are not just giving back — you are helping
+guarantee that AutoBot continues to exist and grow for yourself and for
+everyone else who depends on it.
+
+There is no mandated amount. There is no enforcement mechanism for honest
+people. This is an appeal to fairness, not a legal trap. If you profit from
+this software and you choose to contribute something — however small — you
+are doing the right thing and it is appreciated.
+
+Everything below is there to make the terms clear and to protect both parties.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 1 — DEFINITIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"Software" means the AutoBot source code, compiled binaries, configuration
+files, Ansible playbooks, shell scripts, frontend assets, backend services,
+AI agent frameworks, documentation, and any other files included in or
+distributed alongside this repository, in whole or in part, in original or
+modified form.
+
+"You" (or "Your") means any individual, organization, company, or legal
+entity obtaining or using the Software in any way.
+
+"Derivative Work" means any work that is based on or derived from the
+Software, including modifications, adaptations, translations, ports,
+extensions, wrappers, or works that incorporate a substantial portion of
+the Software.
+
+"Profit" means any net monetary gain — revenue minus directly associated
+operating costs — derived from a product, service, offering, or activity
+in which the Software or a Derivative Work plays a material role. This
+includes, without limitation:
+
+  - Net revenue from subscriptions, licenses, or sales of a product or
+    service built using the Software;
+  - Net fees received for consulting, integration, deployment, or managed
+    services delivered using the Software;
+  - Net advertising, sponsorship, or affiliate revenue generated through a
+    platform that materially relies on the Software;
+  - Net proceeds from licensing or sublicensing a Derivative Work;
+  - Any other net financial gain in which the Software is a meaningful
+    contributing factor.
+
+  "Profit" does NOT include:
+  - Gross revenue before deduction of reasonable, documented operating costs
+    directly attributable to delivering the product or service;
+  - Grants, scholarships, or non-profit funding for research or education;
+  - Internal productivity gains or cost savings within a non-profit entity;
+  - Pre-profit development, prototyping, or testing activity, regardless of
+    future commercial intent;
+  - Incidental, one-off, or de minimis revenue below a threshold of
+    USD $1,000 in a calendar year.
+
+"Copyright Holder" means mrveiss, the sole author and owner of all AutoBot
+intellectual property.
+
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 2 — UNRESTRICTED GRANT OF RIGHTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Subject to the profit-sharing obligation in Section 3 and the attribution
+requirement in Section 4, the Copyright Holder grants You a worldwide,
+perpetual, royalty-free, non-exclusive license to do anything with the
+Software, including but not limited to:
+
+  a) Use the Software for any purpose — personal, academic, research,
+     internal, commercial, or otherwise;
+  b) Copy and reproduce the Software, in whole or in part;
+  c) Modify, adapt, extend, and create Derivative Works;
+  d) Merge the Software into other projects, products, or systems;
+  e) Publish, distribute, sublicense, and share the Software or Derivative
+     Works, in source or binary form, to any party;
+  f) Build and sell products and services that incorporate the Software;
+  g) Use the Software to compete directly with the original project.
+
+No prior permission is required. No fee is due upfront. No use case is
+forbidden. The only condition is Section 3: if you profit, you share.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 3 — SUPPORTING DEVELOPMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If You generate Profit from any product, service, or activity in which the
+Software plays a material role, we ask that You consider contributing back
+to the project to support its continued development.
+
+This is not a royalty, a tax, or a fee. It is an appeal to fairness from one
+builder to another.
+
+3.1 — YOU DECIDE HOW MUCH
+
+The amount, form, and frequency of Your contribution is entirely Your choice.
+You know your business and your situation better than anyone. Consider:
+
+  - How central the Software is to what you built;
+  - How much Profit you are generating because of it;
+  - What you can reasonably afford to give back.
+
+Contributions can take any form that genuinely helps the project:
+
+  a) Financial: Any amount you consider fair, paid to the Copyright Holder
+     or via the project's designated contribution channels;
+
+  b) Code: Bug fixes, features, improvements, documentation, or tests
+     submitted as pull requests to https://github.com/mrveiss/AutoBot-AI;
+
+  c) Other: Infrastructure, promotion, tooling, mentorship, or any other
+     support that helps sustain and grow the project.
+
+No minimum. No ceiling. No approval needed. Just act honestly.
+
+3.2 — WHEN THIS APPLIES
+
+This ask applies once Your cumulative annual Profit attributable to the
+Software exceeds USD $5,000 in a calendar year. Below that threshold, no
+contribution is expected — go build freely.
+
+Contributions are most meaningful when ongoing, reflecting a continuing
+benefit rather than a one-time acknowledgment.
+
+3.3 — LET US KNOW
+
+If you are using the Software to build something profitable, we would love
+to hear about it. Reach out via https://github.com/mrveiss/AutoBot-AI — not
+because you are required to, but because it helps the maintainer understand
+how the Software is being used, recognize contributors, and prioritize future
+development.
+
+3.4 — GOOD FAITH AND CONTINUITY
+
+The only thing asked of you is honesty. If this Software helped you succeed,
+do something — however small — to help it keep going.
+
+By supporting the project, you directly ensure AutoBot's continuity. Open
+software does not sustain itself. It requires ongoing work, maintenance,
+and investment. Users who profit from AutoBot and choose to contribute back
+are the reason the project can keep growing — and the reason it will still
+be here, free and open, for the next person who needs it.
+
+The project depends on the goodwill of those who benefit from it. Deliberately
+and indefinitely profiting from the Software with no intent whatsoever to
+contribute anything back is contrary to the spirit of this license. In such
+cases, the Copyright Holder reserves the right to revoke the rights granted
+under Section 2.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 4 — ATTRIBUTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+4.1 All copies or substantial portions of the Software — original or modified,
+public or private — must retain:
+
+  a) This complete license text, unmodified;
+  b) The copyright notice: "Copyright (c) 2025-2026 mrveiss";
+  c) Where reasonably practical, a reference to the original project at
+     https://github.com/mrveiss/AutoBot-AI.
+
+4.2 You may not misrepresent the origin or authorship of the Software. If You
+distribute a Derivative Work, You must clearly identify what changes You made
+to the original.
+
+4.3 You may not use the name "AutoBot" or "mrveiss" to endorse or promote Your
+products without prior written permission from the Copyright Holder.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 5 — NO WARRANTY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+THE SOFTWARE IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF
+ANY KIND, EITHER EXPRESS OR IMPLIED.
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE COPYRIGHT HOLDER
+EXPRESSLY DISCLAIMS ALL WARRANTIES, INCLUDING BUT NOT LIMITED TO:
+
+  - WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
+    AND NON-INFRINGEMENT;
+  - WARRANTIES THAT THE SOFTWARE WILL MEET YOUR REQUIREMENTS OR EXPECTATIONS;
+  - WARRANTIES THAT THE SOFTWARE WILL OPERATE UNINTERRUPTED, ERROR-FREE,
+    OR WITHOUT DEFECT;
+  - WARRANTIES REGARDING THE ACCURACY, COMPLETENESS, RELIABILITY, OR QUALITY
+    OF ANY OUTPUT GENERATED BY THE SOFTWARE, INCLUDING OUTPUT PRODUCED BY AI
+    AGENTS, LANGUAGE MODELS, OR AUTOMATED PIPELINES;
+  - WARRANTIES THAT ERRORS, VULNERABILITIES, OR DEFECTS WILL BE CORRECTED;
+  - WARRANTIES THAT THE SOFTWARE IS SECURE OR SUITABLE FOR SENSITIVE OR
+    CRITICAL SYSTEMS;
+  - WARRANTIES ARISING FROM COURSE OF DEALING, PERFORMANCE, OR TRADE USAGE.
+
+YOU ASSUME ALL RISK ASSOCIATED WITH SELECTING, INSTALLING, CONFIGURING,
+AND USING THE SOFTWARE. YOUR USE IS ENTIRELY AT YOUR OWN RISK.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 6 — LIMITATION OF LIABILITY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE
+COPYRIGHT HOLDER, CONTRIBUTORS, OR ANY AFFILIATED PARTY BE LIABLE FOR ANY:
+
+  - DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+    DAMAGES OF ANY KIND;
+  - LOSS OF PROFITS, REVENUE, BUSINESS, DATA, GOODWILL, OR ANTICIPATED
+    SAVINGS;
+  - COST OF SUBSTITUTE GOODS, SERVICES, OR TECHNOLOGY;
+  - SYSTEM FAILURE, DATA CORRUPTION, OR DATA LOSS;
+  - SECURITY BREACHES, UNAUTHORIZED ACCESS, OR EXPOSURE OF CONFIDENTIAL
+    INFORMATION;
+  - REGULATORY FINES, PENALTIES, OR LEGAL COSTS ARISING FROM YOUR USE;
+  - HARM CAUSED BY AI-GENERATED CONTENT, AUTOMATED ACTIONS, OR DECISIONS
+    MADE BY OR WITH THE ASSISTANCE OF THE SOFTWARE.
+
+THIS APPLIES REGARDLESS OF THE THEORY OF LIABILITY — CONTRACT, TORT,
+NEGLIGENCE, STRICT LIABILITY, OR OTHERWISE — EVEN IF THE COPYRIGHT HOLDER
+HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 7 — NO RESPONSIBILITY FOR USE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The Copyright Holder takes no responsibility for the manner in which the
+Software is deployed, configured, operated, or used by any person or
+organization. This includes, without limitation:
+
+7.1 — GENERAL OPERATIONS
+  - How You configure, integrate, or extend the Software;
+  - Actions performed by AI agents, automated pipelines, or scripts operating
+    within or orchestrated by the Software;
+  - Decisions made by or with the assistance of the Software or its outputs;
+  - Interactions between the Software and third-party APIs, services,
+    infrastructure, or data sources.
+
+7.2 — SECURITY AND SENSITIVE OPERATIONS
+  - Use of the Software for security research, penetration testing, red team
+    exercises, or vulnerability analysis — You are solely responsible for
+    ensuring such use is authorized and lawful;
+  - Exposure or exfiltration of sensitive, personal, confidential, or
+    regulated data processed by the Software;
+  - Vulnerabilities introduced by Your configuration, deployment, or
+    modifications of the Software;
+  - Unauthorized access to systems enabled, facilitated, or left exposed by
+    Your use of the Software.
+
+7.3 — AI AND AUTOMATED CONTENT
+  - The accuracy, safety, legality, or appropriateness of any content,
+    decisions, recommendations, or actions produced by AI models or agents
+    operating within or through the Software;
+  - Harm caused by automated actions taken by agents, scripts, browser
+    automation, terminal commands, or other automated workflows.
+
+7.4 — LEGAL AND REGULATORY COMPLIANCE
+  - Compliance with any applicable laws, regulations, export controls, data
+    protection requirements (including GDPR, HIPAA, CCPA, or equivalent),
+    intellectual property laws, or third-party terms of service;
+  - Any legal consequences — civil, criminal, or regulatory — arising from
+    Your use of the Software;
+  - Third-party claims against You arising from Your use of the Software.
+
+It is solely Your responsibility to ensure Your use of the Software is
+lawful, ethical, authorized, and appropriate for Your context.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 8 — TERMINATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+8.1 This license is effective until terminated.
+
+8.2 Your rights under this license terminate automatically and immediately,
+without notice, if You:
+
+  a) Deliberately and indefinitely profit from the Software while acting
+     in bad faith with no intent to contribute anything back, as described
+     in Section 3.4;
+  b) Misrepresent the origin or authorship of the Software;
+  c) Assert any patent or intellectual property claim against the Copyright
+     Holder relating to the Software.
+
+8.3 Upon termination, You must immediately cease all use and distribution
+of the Software and any Derivative Works, and destroy all copies in Your
+possession or control.
+
+8.4 The Copyright Holder reserves the right to pursue all available legal
+remedies in the event of a breach.
+
+8.5 Sections 5, 6, 7, and 9 survive termination of this license.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION 9 — GENERAL PROVISIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+9.1 ENTIRE AGREEMENT
+This license constitutes the entire agreement between You and the Copyright
+Holder with respect to the Software and supersedes all prior agreements,
+representations, and understandings.
+
+9.2 SEVERABILITY
+If any provision of this license is held invalid or unenforceable, that
+provision shall be modified to the minimum extent necessary to make it
+enforceable, or severed if modification is not possible. The remaining
+provisions continue in full force.
+
+9.3 NO WAIVER
+Failure by the Copyright Holder to enforce any right or provision shall not
+constitute a waiver of that right or provision.
+
+9.4 AMENDMENTS
+The Copyright Holder reserves the right to update this license for future
+versions of the Software. Your rights with respect to previously obtained
+versions remain governed by the license in effect at the time of acquisition.
+
+9.5 INDEPENDENT PARTIES
+Nothing in this license creates any partnership, joint venture, agency, or
+employment relationship between You and the Copyright Holder.
+
+9.6 GOVERNING LAW
+This license shall be interpreted in accordance with principles common to
+software licensing law. Disputes shall be resolved in good faith. If
+resolution cannot be reached, both parties agree to submit to the jurisdiction
+of the courts applicable to the Copyright Holder's place of residence.
+
+9.7 ACCEPTANCE
+By obtaining, installing, copying, running, or otherwise using the Software
+in any form, You accept and agree to be bound by the terms of this license.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CONTACT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+To fulfill your profit-sharing obligation, negotiate terms, or ask any
+question about this license, contact the Copyright Holder:
+
+  Project:    AutoBot — AI-Powered Automation Platform
+  Author:     mrveiss
+  Repository: https://github.com/mrveiss/AutoBot-AI
