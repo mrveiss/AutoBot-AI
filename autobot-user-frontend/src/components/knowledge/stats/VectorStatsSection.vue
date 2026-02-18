@@ -272,7 +272,7 @@ const getCategoryColor = (index: number): string => {
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
 .vector-stats-section {
-  background: linear-gradient(135deg, var(--chart-purple) 0%, var(--color-purple) 100%);
+  background: var(--chart-purple);
   border-radius: var(--radius-lg);
   padding: var(--spacing-8);
   margin-bottom: var(--spacing-8);
@@ -348,10 +348,10 @@ const getCategoryColor = (index: number): string => {
   flex-shrink: 0;
 }
 
-.vector-stat-icon.facts { background: linear-gradient(135deg, var(--chart-pink), var(--color-error)); }
-.vector-stat-icon.vectors { background: linear-gradient(135deg, var(--chart-cyan), var(--chart-teal)); }
-.vector-stat-icon.database { background: linear-gradient(135deg, var(--color-success), var(--chart-teal)); }
-.vector-stat-icon.status { background: linear-gradient(135deg, var(--chart-pink), var(--color-warning)); }
+.vector-stat-icon.facts { background: var(--chart-pink); }
+.vector-stat-icon.vectors { background: var(--chart-cyan); }
+.vector-stat-icon.database { background: var(--color-success); }
+.vector-stat-icon.status { background: var(--chart-pink); }
 
 .vector-stat-content h4 {
   font-size: var(--text-sm);

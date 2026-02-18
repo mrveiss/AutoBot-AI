@@ -1366,7 +1366,7 @@ watch(() => props.mode, () => {
   align-items: center;
   gap: 0.5rem;
   padding: 0.375rem 0.75rem;
-  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  background: var(--color-primary-bg);
   border: 1px solid var(--color-primary-light);
   border-radius: 1rem;
   font-size: 0.8125rem;
@@ -1450,7 +1450,7 @@ watch(() => props.mode, () => {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary));
+  background: var(--color-primary);
   box-shadow: 0 4px 12px var(--color-primary-alpha-30);
   padding: 0.75rem 1.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);

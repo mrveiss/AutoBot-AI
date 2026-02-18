@@ -1906,7 +1906,7 @@ export default {
 .modal-header {
   padding: 20px 24px 16px 24px;
   border-bottom: 1px solid #444;
-  background: linear-gradient(135deg, #333 0%, #2d2d2d 100%);
+  background: var(--bg-secondary);
   border-radius: 12px 12px 0 0;
 }
 

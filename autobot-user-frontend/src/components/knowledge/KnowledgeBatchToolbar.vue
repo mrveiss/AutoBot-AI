@@ -71,7 +71,7 @@ defineEmits<Emits>()
   position: sticky;
   top: 0;
   z-index: 20;
-  background: linear-gradient(135deg, var(--color-primary-active) 0%, var(--color-primary) 100%);
+  background: var(--color-primary);
   color: var(--text-on-primary);
   padding: var(--spacing-3) var(--spacing-6);
   box-shadow: var(--shadow-lg);

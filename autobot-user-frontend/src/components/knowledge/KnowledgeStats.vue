@@ -983,23 +983,23 @@ onMounted(() => {
 }
 
 .stat-icon.facts {
-  background: linear-gradient(135deg, #f093fb, #f5576c);
+  background: var(--chart-pink);
 }
 
 .stat-icon.documents {
-  background: linear-gradient(135deg, var(--color-info), var(--color-info-hover));
+  background: var(--color-info);
 }
 
 .stat-icon.categories {
-  background: linear-gradient(135deg, var(--color-success), var(--color-success-hover));
+  background: var(--color-success);
 }
 
 .stat-icon.tags {
-  background: linear-gradient(135deg, var(--color-warning), var(--color-warning-hover));
+  background: var(--color-warning);
 }
 
 .stat-icon.storage {
-  background: linear-gradient(135deg, var(--chart-purple), var(--color-purple-hover));
+  background: var(--chart-purple);
 }
 
 .stat-content {
@@ -1224,7 +1224,7 @@ onMounted(() => {
 
 /* Vector Database Statistics Section */
 .vector-stats-section {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--chart-purple);
   border-radius: var(--radius-xl);
   padding: var(--spacing-8);
   margin-bottom: var(--spacing-8);
@@ -1355,19 +1355,19 @@ onMounted(() => {
 }
 
 .vector-stat-icon.facts {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: var(--chart-pink);
 }
 
 .vector-stat-icon.vectors {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  background: var(--chart-cyan);
 }
 
 .vector-stat-icon.database {
-  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  background: var(--color-success);
 }
 
 .vector-stat-icon.status {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  background: var(--chart-pink);
 }
 
 .vector-stat-content h4 {
@@ -1599,7 +1599,7 @@ onMounted(() => {
   width: 4rem;
   height: 4rem;
   border-radius: var(--radius-xl);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--chart-purple);
   display: flex;
   align-items: center;
   justify-content: center;

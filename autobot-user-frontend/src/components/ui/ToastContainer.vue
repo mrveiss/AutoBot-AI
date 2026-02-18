@@ -84,27 +84,32 @@ const getIcon = (type: string): string => {
 }
 
 .toast-info {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-  color: var(--text-on-primary);
-  border-left: 4px solid var(--color-primary-active);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-left: 4px solid var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-left: 4px solid var(--color-primary);
 }
 
 .toast-success {
-  background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-hover) 100%);
-  color: var(--text-on-primary);
-  border-left: 4px solid var(--color-success-active);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--color-success-border);
+  border-left: 4px solid var(--color-success);
 }
 
 .toast-warning {
-  background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-hover) 100%);
-  color: var(--text-on-primary);
-  border-left: 4px solid var(--color-warning-active);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--color-warning-border);
+  border-left: 4px solid var(--color-warning);
 }
 
 .toast-error {
-  background: linear-gradient(135deg, var(--color-error) 0%, var(--color-error-hover) 100%);
-  color: var(--text-on-primary);
-  border-left: 4px solid var(--color-error-active);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--color-error-border);
+  border-left: 4px solid var(--color-error);
 }
 
 .toast-icon {
@@ -126,9 +131,9 @@ const getIcon = (type: string): string => {
 
 .toast-close {
   flex-shrink: 0;
-  background: var(--bg-primary-transparent);
+  background: var(--bg-hover);
   border: none;
-  color: var(--text-on-primary);
+  color: var(--text-secondary);
   width: 24px;
   height: 24px;
   border-radius: var(--radius-full);
@@ -140,11 +145,12 @@ const getIcon = (type: string): string => {
 }
 
 .toast-close:hover {
-  background: var(--bg-primary-transparent-hover);
+  background: var(--bg-active);
+  color: var(--text-primary);
 }
 
 .toast-close:focus {
-  outline: 2px solid var(--bg-primary-transparent);
+  outline: 2px solid var(--color-primary-bg);
   outline-offset: 2px;
 }
 

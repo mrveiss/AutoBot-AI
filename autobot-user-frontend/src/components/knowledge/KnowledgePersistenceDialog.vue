@@ -506,7 +506,7 @@ watch(() => props.visible, (newVal) => {
   align-items: center;
   padding: var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
-  background: linear-gradient(135deg, var(--color-info) 0%, var(--color-info-dark) 100%);
+  background: var(--color-info);
 }
 
 .dialog-title {

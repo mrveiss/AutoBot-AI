@@ -1285,7 +1285,7 @@ watch(layoutMode, () => {
 }
 
 .action-btn.primary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
+  background: var(--color-primary);
   color: white;
   border-color: transparent;
 }
@@ -1497,7 +1497,7 @@ watch(layoutMode, () => {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--color-primary-bg), var(--color-primary-bg-hover));
+  background: var(--color-primary-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1598,7 +1598,7 @@ watch(layoutMode, () => {
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-md);
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
+  background: var(--color-primary);
   color: white;
 }
 
@@ -1780,7 +1780,7 @@ watch(layoutMode, () => {
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-md) var(--spacing-lg);
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
+  background: var(--color-primary);
   color: white;
 }
 

@@ -1246,8 +1246,8 @@ watch(() => currentView.value, () => {
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-4) var(--spacing-6);
-  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-primary));
-  border-bottom: 1px solid var(--bg-tertiary);
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .header-content h3 {
@@ -1389,7 +1389,7 @@ watch(() => currentView.value, () => {
   width: 100%;
   height: 100%;
   cursor: grab;
-  background: radial-gradient(circle at 50% 50%, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+  background: var(--bg-secondary);
 }
 
 .diagram-svg:active {
@@ -1558,8 +1558,8 @@ watch(() => currentView.value, () => {
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-4);
-  background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary));
-  border-bottom: 1px solid var(--bg-tertiary);
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .panel-header h4 {
@@ -1809,23 +1809,23 @@ watch(() => currentView.value, () => {
 
 /* Legend colors using design tokens */
 .legend-color-frontend {
-  background: linear-gradient(135deg, var(--color-primary), #764ba2);
+  background: var(--color-primary);
 }
 
 .legend-color-backend {
-  background: linear-gradient(135deg, var(--color-success), var(--color-success-dark));
+  background: var(--color-success);
 }
 
 .legend-color-database {
-  background: linear-gradient(135deg, var(--color-warning), var(--color-warning-hover));
+  background: var(--color-warning);
 }
 
 .legend-color-ai {
-  background: linear-gradient(135deg, var(--chart-purple), #7c3aed);
+  background: var(--chart-purple);
 }
 
 .legend-color-infrastructure {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
+  background: var(--color-primary);
 }
 
 .legend-line {
@@ -1847,13 +1847,8 @@ watch(() => currentView.value, () => {
 }
 
 .legend-line.dashed {
-  background: repeating-linear-gradient(
-    90deg,
-    var(--color-warning),
-    var(--color-warning) 4px,
-    transparent 4px,
-    transparent 8px
-  );
+  background: var(--color-warning);
+  opacity: 0.6;
 }
 
 /* Transitions */

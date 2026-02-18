@@ -1140,19 +1140,19 @@ export default {
 }
 
 .progress-fill.running {
-  background: linear-gradient(90deg, var(--color-info), var(--color-info-hover));
+  background: var(--color-info);
 }
 
 .progress-fill.success {
-  background: linear-gradient(90deg, var(--color-success), var(--color-success-hover));
+  background: var(--color-success);
 }
 
 .progress-fill.error {
-  background: linear-gradient(90deg, var(--color-error), var(--color-error-hover));
+  background: var(--color-error);
 }
 
 .progress-fill.task-progress {
-  background: linear-gradient(90deg, var(--chart-purple), var(--chart-purple-light));
+  background: var(--chart-purple);
 }
 
 .progress-messages {

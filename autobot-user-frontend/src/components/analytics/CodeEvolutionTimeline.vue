@@ -798,7 +798,7 @@ watch([selectedGranularity, selectedDays], () => {
 
 .sparkline-bar {
   flex: 1;
-  background: linear-gradient(to top, var(--color-primary), var(--chart-purple));
+  background: var(--color-primary);
   border-radius: 2px 2px 0 0;
   min-height: 2px;
 }

@@ -544,7 +544,7 @@ onMounted(() => {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1.5rem;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-default);
   padding-bottom: 0.5rem;
 }
 
@@ -563,8 +563,8 @@ onMounted(() => {
 }
 
 .tab-btn.active {
-  background: var(--primary-color);
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
 }
 
 .tab-btn i {
@@ -588,7 +588,7 @@ onMounted(() => {
 }
 
 .metric-value.success {
-  color: var(--success-color);
+  color: var(--color-success);
 }
 
 .metric-trend {
@@ -597,11 +597,11 @@ onMounted(() => {
 }
 
 .trend-up {
-  color: var(--danger-color);
+  color: var(--color-error);
 }
 
 .trend-down {
-  color: var(--success-color);
+  color: var(--color-success);
 }
 
 .trend-stable {
@@ -617,7 +617,7 @@ onMounted(() => {
 .data-table td {
   padding: 0.75rem;
   text-align: left;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .data-table th {
@@ -639,15 +639,15 @@ onMounted(() => {
 }
 
 .success {
-  color: var(--success-color);
+  color: var(--color-success);
 }
 
 .warning {
-  color: var(--warning-color);
+  color: var(--color-warning);
 }
 
 .error {
-  color: var(--danger-color);
+  color: var(--color-error);
 }
 
 .mt-4 {
@@ -670,11 +670,11 @@ onMounted(() => {
 }
 
 .severity-high {
-  color: var(--danger-color);
+  color: var(--color-error);
 }
 
 .severity-medium {
-  color: var(--warning-color);
+  color: var(--color-warning);
 }
 
 .severity-low {
@@ -731,17 +731,17 @@ onMounted(() => {
 }
 
 .rank-1 {
-  background: linear-gradient(135deg, var(--color-rank-gold, #ffd700), var(--color-rank-gold-dark, #ffb700));
-  color: var(--text-dark, #1a1a1a);
+  background: var(--color-warning);
+  color: var(--text-primary);
 }
 
 .rank-2 {
-  background: linear-gradient(135deg, var(--color-rank-silver, #c0c0c0), var(--color-rank-silver-dark, #a0a0a0));
-  color: var(--text-dark, #1a1a1a);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .rank-3 {
-  background: linear-gradient(135deg, var(--color-rank-bronze, #cd7f32), var(--color-rank-bronze-dark, #b87333));
+  background: var(--chart-orange, #f97316);
   color: var(--text-on-primary);
 }
 
@@ -755,7 +755,7 @@ onMounted(() => {
 
 .popularity-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--primary-color), var(--success-color));
+  background: var(--color-primary);
   border-radius: 4px;
   transition: width 0.3s ease;
 }
@@ -781,8 +781,8 @@ onMounted(() => {
   justify-content: center;
   width: 1.5rem;
   height: 1.5rem;
-  background: var(--primary-color);
-  color: white;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
   border-radius: 50%;
   font-size: 0.75rem;
   font-weight: 600;

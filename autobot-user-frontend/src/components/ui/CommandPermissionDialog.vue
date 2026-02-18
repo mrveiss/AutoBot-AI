@@ -451,7 +451,7 @@ export default {
 }
 
 .command-header {
-  background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success-dark) 100%);
+  background: var(--color-success);
   color: var(--text-on-primary);
   padding: var(--spacing-5);
   display: flex;

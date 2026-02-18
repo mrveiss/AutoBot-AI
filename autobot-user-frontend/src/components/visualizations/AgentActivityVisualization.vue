@@ -664,23 +664,23 @@ defineExpose({
 }
 
 .agent-avatar.orchestrator {
-  background: linear-gradient(135deg, var(--chart-purple), var(--chart-indigo));
+  background: var(--chart-purple);
 }
 
 .agent-avatar.worker {
-  background: linear-gradient(135deg, var(--chart-blue), var(--color-info-dark));
+  background: var(--color-primary);
 }
 
 .agent-avatar.monitor {
-  background: linear-gradient(135deg, var(--color-success), var(--color-success-dark));
+  background: var(--color-success);
 }
 
 .agent-avatar.analyzer {
-  background: linear-gradient(135deg, var(--color-warning), var(--color-warning-hover));
+  background: var(--color-warning);
 }
 
 .agent-avatar.executor {
-  background: linear-gradient(135deg, var(--color-error), var(--color-error-hover));
+  background: var(--color-error);
 }
 
 .avatar-icon {
@@ -947,7 +947,7 @@ defineExpose({
 }
 
 .activity-bar.working {
-  background: linear-gradient(90deg, var(--color-info), var(--chart-blue-light));
+  background: var(--color-primary);
 }
 
 .activity-bar.idle {
@@ -955,7 +955,7 @@ defineExpose({
 }
 
 .activity-bar.error {
-  background: linear-gradient(90deg, var(--color-error), var(--color-error-light));
+  background: var(--color-error);
 }
 
 /* Activity Feed */

@@ -86,15 +86,15 @@
           <span class="detail-label font-semibold text-blue-700">Interactive Command</span>
         </div>
         <div class="interactive-info">
-          <p class="text-sm text-blueGray-600 mb-2">
+          <p class="text-sm text-autobot-text-secondary mb-2">
             This command requires user input (stdin). You'll be prompted after approval.
           </p>
           <div
             v-if="interactiveReasons && interactiveReasons.length > 0"
             class="interactive-reasons"
           >
-            <span class="text-xs font-medium text-blueGray-500">Input required for:</span>
-            <ul class="text-xs text-blueGray-600 mt-1 ml-4 list-disc">
+            <span class="text-xs font-medium text-autobot-text-secondary">Input required for:</span>
+            <ul class="text-xs text-autobot-text-secondary mt-1 ml-4 list-disc">
               <li v-for="(reason, idx) in interactiveReasons" :key="idx">{{ reason }}</li>
             </ul>
           </div>
@@ -334,22 +334,22 @@ const submitWithComment = () => {
 }
 
 .approval-pre-approved {
-  background: linear-gradient(135deg, var(--color-info-bg) 0%, rgba(59, 130, 246, 0.05) 100%);
-  border: 1px solid var(--color-info-border);
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info-bg-hover);
 }
 
 .approval-approved {
-  background: linear-gradient(135deg, var(--color-success-bg) 0%, rgba(34, 197, 94, 0.05) 100%);
+  background: var(--color-success-bg);
   border: 1px solid var(--color-success-border);
 }
 
 .approval-denied {
-  background: linear-gradient(135deg, var(--color-error-bg) 0%, rgba(239, 68, 68, 0.05) 100%);
+  background: var(--color-error-bg);
   border: 1px solid var(--color-error-border);
 }
 
 .approval-request {
-  background: linear-gradient(135deg, var(--color-warning-bg) 0%, rgba(245, 158, 11, 0.05) 100%);
+  background: var(--color-warning-bg);
   border: 1px solid var(--color-warning-border);
 }
 
@@ -380,12 +380,12 @@ const submitWithComment = () => {
 }
 
 .detail-value {
-  color: var(--text-primary-light);
+  color: var(--text-primary);
   word-break: break-word;
 }
 
 .detail-value code {
-  background: var(--bg-primary-alpha);
+  background: var(--bg-tertiary);
   padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-default);
   font-family: var(--font-mono);
@@ -415,7 +415,7 @@ const submitWithComment = () => {
   padding: var(--spacing-3);
   background: var(--color-info-bg);
   border-radius: var(--radius-md);
-  border: 1px solid var(--color-info-border);
+  border: 1px solid var(--color-info-bg-hover);
 }
 
 .interactive-header {
@@ -482,7 +482,7 @@ const submitWithComment = () => {
   align-items: center;
   gap: var(--spacing-1-5);
   font-size: var(--text-sm);
-  color: var(--text-secondary-light);
+  color: var(--text-secondary);
 }
 
 .auto-approve-hint {

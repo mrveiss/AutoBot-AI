@@ -11,6 +11,7 @@
 import appConfig from '@/config/AppConfig.js';
 import { NetworkConstants } from '@/constants/network';
 import { createLogger } from '@/utils/debugUtils';
+import type { ApiResponse } from '@/types/api';
 
 const logger = createLogger('FeatureFlagsApiClient');
 
@@ -125,7 +126,7 @@ class FeatureFlagsApiClient {
       const data = await response.json();
 
       if (!response.ok) {
-        logger.error('API request failed:', response.status, data);
+        logger.error('API request failed:', { status: response.status, data });
         return {
           success: false,
           error: data.detail || data.message || `Request failed with status ${response.status}`,

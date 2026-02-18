@@ -295,12 +295,12 @@
                   <span class="detail-label font-semibold text-blue-700">Interactive Command</span>
                 </div>
                 <div class="interactive-info">
-                  <p class="text-sm text-blueGray-600 mb-2">
+                  <p class="text-sm text-autobot-text-secondary mb-2">
                     This command requires user input (stdin). You'll be prompted after approval.
                   </p>
                   <div v-if="message.metadata.interactive_reasons && message.metadata.interactive_reasons.length > 0" class="interactive-reasons">
-                    <span class="text-xs font-medium text-blueGray-500">Input required for:</span>
-                    <ul class="text-xs text-blueGray-600 mt-1 ml-4 list-disc">
+                    <span class="text-xs font-medium text-autobot-text-secondary">Input required for:</span>
+                    <ul class="text-xs text-autobot-text-secondary mt-1 ml-4 list-disc">
                       <li v-for="(reason, idx) in message.metadata.interactive_reasons" :key="idx">{{ reason }}</li>
                     </ul>
                   </div>

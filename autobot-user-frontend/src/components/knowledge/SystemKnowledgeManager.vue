@@ -856,7 +856,7 @@ export default {
 }
 
 .btn-highlight {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--chart-purple) 100%);
+  background: var(--color-primary);
   color: var(--text-on-primary);
   border: 2px solid rgba(255, 255, 255, 0.3);
   box-shadow: var(--shadow-primary);
@@ -864,7 +864,7 @@ export default {
 }
 
 .btn-highlight:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--chart-purple) 0%, var(--color-primary) 100%);
+  background: var(--chart-purple);
   box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
   transform: translateY(-2px);
 }

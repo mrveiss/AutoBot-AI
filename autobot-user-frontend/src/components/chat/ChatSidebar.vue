@@ -1,12 +1,12 @@
 <template>
   <div
-    class="bg-blueGray-100 border-r border-blueGray-200 flex flex-col h-full overflow-hidden transition-all duration-300 flex-shrink-0"
+    class="bg-autobot-bg-secondary border-r border-autobot-border flex flex-col h-full overflow-hidden transition-all duration-300 flex-shrink-0"
     :class="{ 'w-12': store.sidebarCollapsed, 'w-80': !store.sidebarCollapsed }"
   >
     <!-- Toggle Button -->
     <BaseButton
       variant="ghost"
-      class="p-3 border-b border-blueGray-200 text-blueGray-600 flex-shrink-0"
+      class="p-3 border-b border-autobot-border text-autobot-text-secondary flex-shrink-0"
       @click="controller.toggleSidebar()"
       :aria-label="store.sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
     >
@@ -19,24 +19,24 @@
       <!-- Chat History Section - FIXED: Scrollable area with multi-select -->
       <section class="flex-1 flex flex-col min-h-0 overflow-hidden p-4 pb-0">
         <div class="flex items-center justify-between mb-3 flex-shrink-0">
-          <h3 class="text-base font-semibold text-blueGray-700">Chat History</h3>
+          <h3 class="text-base font-semibold text-autobot-text-primary">Chat History</h3>
           <BaseButton
             v-if="!selectionMode"
             @click="enableSelectionMode"
             variant="ghost"
             size="xs"
-            class="text-blueGray-600"
+            class="text-autobot-text-secondary"
             title="Select multiple"
           >
             <i class="fas fa-check-square mr-1"></i>Select
           </BaseButton>
           <div v-else class="flex items-center gap-2">
-            <span class="text-xs text-blueGray-600">{{ selectedSessions.size }} selected</span>
+            <span class="text-xs text-autobot-text-secondary">{{ selectedSessions.size }} selected</span>
             <BaseButton
               @click="cancelSelection"
               variant="ghost"
               size="xs"
-              class="text-blueGray-600"
+              class="text-autobot-text-secondary"
             >
               Cancel
             </BaseButton>
@@ -76,7 +76,7 @@
             </div>
 
             <div class="flex items-start justify-between gap-2" :class="{ 'ml-6': selectionMode }">
-              <span class="text-sm text-blueGray-700 truncate flex-1 leading-tight">
+              <span class="text-sm text-autobot-text-primary truncate flex-1 leading-tight">
                 {{ session.title || getSessionPreview(session) }}
               </span>
               <div v-if="!selectionMode" class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
@@ -93,7 +93,7 @@
                 <BaseButton
                   variant="ghost"
                   size="xs"
-                  class="text-blueGray-400 p-1"
+                  class="text-autobot-text-muted p-1"
                   @click.stop="editSessionName(session)"
                   title="Edit Name"
                   tabindex="-1"
@@ -114,7 +114,7 @@
             </div>
 
             <!-- Session metadata - FIXED: Smaller, more compact -->
-            <div class="text-xs text-blueGray-500 mt-1 flex justify-between leading-tight" :class="{ 'ml-6': selectionMode }">
+            <div class="text-xs text-autobot-text-secondary mt-1 flex justify-between leading-tight" :class="{ 'ml-6': selectionMode }">
               <span>{{ session.messages.length }} msgs</span>
               <span>{{ formatDate(session.updatedAt) }}</span>
             </div>
@@ -129,7 +129,7 @@
         </div>
 
         <!-- Chat Actions - FIXED: More compact, stays at bottom of scrollable area -->
-        <div v-if="!selectionMode" class="grid grid-cols-2 gap-1.5 pt-2 border-t border-blueGray-200 flex-shrink-0">
+        <div v-if="!selectionMode" class="grid grid-cols-2 gap-1.5 pt-2 border-t border-autobot-border flex-shrink-0">
           <BaseButton
             variant="primary"
             size="xs"
@@ -175,7 +175,7 @@
         </div>
 
         <!-- Selection Mode Actions -->
-        <div v-else class="pt-2 border-t border-blueGray-200 flex-shrink-0">
+        <div v-else class="pt-2 border-t border-autobot-border flex-shrink-0">
           <BaseButton
             variant="danger"
             size="xs"
@@ -191,8 +191,8 @@
       </section>
 
       <!-- Display Settings Section - FIXED: More compact -->
-      <section class="border-t border-blueGray-200 p-4 pb-3 flex-shrink-0">
-        <h3 class="text-base font-semibold text-blueGray-700 mb-2">Message Display</h3>
+      <section class="border-t border-autobot-border p-4 pb-3 flex-shrink-0">
+        <h3 class="text-base font-semibold text-autobot-text-primary mb-2">Message Display</h3>
         <div class="space-y-2">
           <label v-for="setting in displaySettingsConfig" :key="setting.key" class="flex items-center">
             <input
@@ -201,14 +201,14 @@
               @change="toggleSetting(setting.key as keyof DisplaySettings, ($event.target as HTMLInputElement)?.checked)"
               class="mr-2 rounded border-autobot-border text-electric-600 focus:ring-electric-500"
             />
-            <span class="text-xs text-blueGray-600">{{ setting.label }}</span>
+            <span class="text-xs text-autobot-text-secondary">{{ setting.label }}</span>
           </label>
         </div>
       </section>
 
       <!-- System Control Section - FIXED: More compact -->
-      <section class="border-t border-blueGray-200 p-4 pb-4 flex-shrink-0">
-        <h3 class="text-base font-semibold text-blueGray-700 mb-2">System Control</h3>
+      <section class="border-t border-autobot-border p-4 pb-4 flex-shrink-0">
+        <h3 class="text-base font-semibold text-autobot-text-primary mb-2">System Control</h3>
         <div class="space-y-1.5">
           <BaseButton
             variant="primary"
@@ -223,7 +223,7 @@
           </BaseButton>
 
           <!-- System Status -->
-          <div class="text-xs text-center text-blueGray-500 mt-1">
+          <div class="text-xs text-center text-autobot-text-secondary mt-1">
             System: {{ systemStatus }}
           </div>
         </div>

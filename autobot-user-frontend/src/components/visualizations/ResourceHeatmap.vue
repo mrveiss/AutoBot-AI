@@ -565,14 +565,8 @@ defineExpose({
   width: 200px;
   height: 12px;
   border-radius: var(--radius-md);
-  background: linear-gradient(
-    90deg,
-    var(--color-info-dark) 0%,
-    var(--color-info-hover) 25%,
-    var(--chart-blue) 50%,
-    var(--color-warning) 75%,
-    var(--color-error) 100%
-  );
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
 }
 
 .heatmap-stats {

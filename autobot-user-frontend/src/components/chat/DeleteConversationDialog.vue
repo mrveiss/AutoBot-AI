@@ -93,13 +93,13 @@
 
           <!-- File Information -->
           <div v-if="fileStats && fileStats.total_files > 0" class="space-y-3">
-            <div class="flex items-center gap-2 p-3 bg-blueGray-50 rounded-lg">
-              <i class="fas fa-paperclip text-blueGray-600"></i>
+            <div class="flex items-center gap-2 p-3 bg-autobot-bg-secondary rounded-lg">
+              <i class="fas fa-paperclip text-autobot-text-secondary"></i>
               <div class="flex-1">
-                <p class="text-sm font-medium text-blueGray-700">
+                <p class="text-sm font-medium text-autobot-text-primary">
                   {{ fileStats.total_files }} attached file{{ fileStats.total_files > 1 ? 's' : '' }}
                 </p>
-                <p class="text-xs text-blueGray-600">
+                <p class="text-xs text-autobot-text-secondary">
                   Total size: {{ formatFileSize(fileStats.total_size_bytes) }}
                 </p>
               </div>

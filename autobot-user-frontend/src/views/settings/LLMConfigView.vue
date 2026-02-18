@@ -232,7 +232,7 @@ onMounted(async () => {
     <!-- Configuration Modal (placeholder) -->
     <div
       v-if="showConfigModal"
-      class="fixed inset-0 bg-autobot-bg-secondary0 bg-opacity-75 flex items-center justify-center z-50"
+      class="fixed inset-0 bg-autobot-bg-secondary bg-opacity-75 flex items-center justify-center z-50"
       @click.self="closeConfigModal"
     >
       <div class="bg-autobot-bg-card rounded shadow-xl max-w-md w-full mx-4 p-6">

@@ -10,7 +10,7 @@
       <div class="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
         <!-- Recipients Input -->
         <div>
-          <label class="block text-sm font-medium text-blueGray-700 mb-1">
+          <label class="block text-sm font-medium text-autobot-text-primary mb-1">
             Share with (user IDs)
           </label>
           <input
@@ -44,23 +44,23 @@
             type="checkbox"
             class="rounded border-autobot-border text-autobot-primary focus:ring-autobot-primary"
           />
-          <span class="text-sm text-blueGray-700">Include knowledge created in this conversation</span>
+          <span class="text-sm text-autobot-text-primary">Include knowledge created in this conversation</span>
         </label>
 
         <!-- KB Facts Preview -->
         <div v-if="includeKnowledge" class="space-y-2">
-          <div v-if="factsLoading" class="flex items-center gap-2 text-sm text-blueGray-500 p-3">
+          <div v-if="factsLoading" class="flex items-center gap-2 text-sm text-autobot-text-secondary p-3">
             <i class="fas fa-spinner fa-spin"></i>
             Loading knowledge facts...
           </div>
 
-          <div v-else-if="facts.length === 0" class="text-sm text-blueGray-500 p-3 bg-autobot-bg-secondary rounded-lg">
+          <div v-else-if="facts.length === 0" class="text-sm text-autobot-text-secondary p-3 bg-autobot-bg-secondary rounded-lg">
             No knowledge facts found in this conversation.
           </div>
 
           <template v-else>
             <div class="flex items-center justify-between">
-              <p class="text-sm font-medium text-blueGray-700">
+              <p class="text-sm font-medium text-autobot-text-primary">
                 {{ selectedFactIds.size }} of {{ facts.length }} facts selected
               </p>
               <button

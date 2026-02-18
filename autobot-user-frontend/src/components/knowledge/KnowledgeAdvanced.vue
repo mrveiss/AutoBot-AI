@@ -699,7 +699,7 @@ onMounted(() => {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-dark));
+  background: var(--color-primary);
   transition: width 0.3s ease;
 }
 

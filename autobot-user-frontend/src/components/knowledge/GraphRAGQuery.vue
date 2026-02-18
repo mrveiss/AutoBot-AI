@@ -543,7 +543,7 @@ onMounted(() => {
 }
 
 .action-btn.primary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover));
+  background: var(--color-primary);
   color: white;
   border-color: transparent;
 }

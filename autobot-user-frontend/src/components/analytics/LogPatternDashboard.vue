@@ -478,7 +478,7 @@ onUnmounted(() => {
 
 .analyze-btn {
   padding: var(--spacing-2) var(--spacing-5);
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--chart-indigo) 100%);
+  background: var(--color-primary);
   border: none;
   border-radius: var(--radius-md);
   color: var(--text-on-primary);

@@ -463,7 +463,7 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(90deg, var(--card-color, var(--border-default)), transparent);
+  background: var(--card-color, var(--border-default));
   opacity: 0;
   transition: opacity 0.3s;
 }
@@ -709,7 +709,7 @@ onUnmounted(() => {
 .stat-icon {
   width: 3rem;
   height: 3rem;
-  background: linear-gradient(135deg, var(--color-info), var(--color-info-hover));
+  background: var(--color-info);
   color: var(--text-on-primary);
   border-radius: 0.75rem;
   display: flex;
@@ -764,7 +764,7 @@ onUnmounted(() => {
 .category-browse-card .category-icon {
   width: 3.5rem;
   height: 3.5rem;
-  background: linear-gradient(135deg, var(--color-info-bg), var(--color-info-bg-hover));
+  background: var(--color-info-bg);
   color: var(--color-info);
   border-radius: 0.75rem;
   display: flex;
@@ -1519,7 +1519,7 @@ onUnmounted(() => {
 .doc-icon-large {
   width: 3rem;
   height: 3rem;
-  background: linear-gradient(135deg, var(--color-info-bg), var(--color-info-bg-hover));
+  background: var(--color-info-bg);
   color: var(--color-info);
   border-radius: 0.5rem;
   display: flex;

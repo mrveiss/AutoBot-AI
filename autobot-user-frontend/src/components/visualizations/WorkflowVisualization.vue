@@ -853,7 +853,7 @@ defineExpose({
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--chart-blue), var(--color-success));
+  background: var(--chart-blue);
   transition: width 0.3s ease;
 }
 

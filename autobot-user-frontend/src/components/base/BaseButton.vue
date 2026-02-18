@@ -201,13 +201,13 @@ const createRipple = (event: TouchEvent) => {
 
 /* Color variants - Issue #901: Professional electric blue primary */
 .btn-primary {
-  background-color: var(--color-info);
+  background-color: var(--color-primary);
   color: var(--text-on-primary);
   font-weight: 500;
 }
 
 .btn-primary:hover {
-  background-color: var(--color-info-hover);
+  background-color: var(--color-primary-hover);
 }
 
 .btn-secondary {
@@ -306,7 +306,7 @@ const createRipple = (event: TouchEvent) => {
 
 .btn-link {
   background-color: transparent;
-  color: var(--color-info);
+  color: var(--color-primary);
   text-decoration: none;
   padding-left: 0;
   padding-right: 0;
@@ -314,7 +314,7 @@ const createRipple = (event: TouchEvent) => {
 }
 
 .btn-link:hover {
-  color: var(--color-info-hover);
+  color: var(--color-primary-hover);
   text-decoration: underline;
 }
 

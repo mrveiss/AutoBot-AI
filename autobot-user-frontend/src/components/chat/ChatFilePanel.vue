@@ -1,10 +1,10 @@
 <template>
-  <div class="chat-file-panel h-full flex flex-col bg-autobot-bg-card border-l border-blueGray-200">
+  <div class="chat-file-panel h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border">
     <!-- Header -->
-    <div class="flex items-center justify-between p-3 border-b border-blueGray-200 flex-shrink-0">
+    <div class="flex items-center justify-between p-3 border-b border-autobot-border flex-shrink-0">
       <div class="flex items-center gap-2">
-        <i class="fas fa-folder text-blueGray-600"></i>
-        <h3 class="text-sm font-semibold text-blueGray-700">File Manager</h3>
+        <i class="fas fa-folder text-autobot-text-secondary"></i>
+        <h3 class="text-sm font-semibold text-autobot-text-primary">File Manager</h3>
       </div>
       <div class="flex items-center gap-1">
         <button @click="showCreateDialog = true" class="action-btn" title="New file (Ctrl+N)">
@@ -20,14 +20,14 @@
     </div>
 
     <!-- File Statistics & Search -->
-    <div class="px-3 py-2 border-b border-blueGray-200 flex-shrink-0 space-y-2">
-      <div v-if="stats.total_files > 0" class="flex justify-between text-xs text-blueGray-600">
+    <div class="px-3 py-2 border-b border-autobot-border flex-shrink-0 space-y-2">
+      <div v-if="stats.total_files > 0" class="flex justify-between text-xs text-autobot-text-secondary">
         <span>{{ stats.total_files }} file{{ stats.total_files > 1 ? 's' : '' }}</span>
         <span>{{ totalSizeFormatted }}</span>
       </div>
       <!-- Search -->
       <div class="relative">
-        <i class="fas fa-search absolute left-2 top-1/2 -translate-y-1/2 text-blueGray-400 text-xs"></i>
+        <i class="fas fa-search absolute left-2 top-1/2 -translate-y-1/2 text-autobot-text-muted text-xs"></i>
         <input
           v-model="searchQuery"
           type="text"
@@ -37,7 +37,7 @@
       </div>
       <!-- Sort -->
       <div class="flex items-center gap-1 text-xs">
-        <span class="text-blueGray-500">Sort:</span>
+        <span class="text-autobot-text-secondary">Sort:</span>
         <button
           v-for="opt in sortOptions"
           :key="opt.field"
@@ -62,7 +62,7 @@
     </div>
 
     <!-- Upload Area -->
-    <div class="p-3 border-b border-blueGray-200 flex-shrink-0">
+    <div class="p-3 border-b border-autobot-border flex-shrink-0">
       <div
         class="upload-area border-2 border-dashed rounded-lg p-3 text-center transition-colors cursor-pointer"
         :class="[
@@ -76,7 +76,7 @@
         @drop.prevent="handleDrop"
       >
         <i class="fas fa-cloud-upload-alt text-2xl mb-1" :class="isDragging ? 'text-autobot-primary' : 'text-autobot-text-muted'"></i>
-        <p class="text-xs text-blueGray-600">
+        <p class="text-xs text-autobot-text-secondary">
           {{ isDragging ? 'Drop files here' : 'Click or drag files' }}
         </p>
         <input
@@ -91,7 +91,7 @@
 
       <!-- Upload Progress -->
       <div v-if="uploadProgress > 0 && uploadProgress < 100" class="mt-2">
-        <div class="flex items-center justify-between text-xs text-blueGray-600 mb-1">
+        <div class="flex items-center justify-between text-xs text-autobot-text-secondary mb-1">
           <span>Uploading...</span>
           <span>{{ uploadProgress }}%</span>
         </div>
@@ -132,8 +132,8 @@
 
       <!-- Loading State -->
       <div v-if="loading && !hasFiles" class="text-center py-8">
-        <i class="fas fa-spinner fa-spin text-2xl text-blueGray-400 mb-2"></i>
-        <p class="text-xs text-blueGray-500">Loading files...</p>
+        <i class="fas fa-spinner fa-spin text-2xl text-autobot-text-muted mb-2"></i>
+        <p class="text-xs text-autobot-text-secondary">Loading files...</p>
       </div>
 
       <!-- File Items -->
@@ -157,7 +157,7 @@
 
           <!-- File Icon -->
           <div class="file-icon flex-shrink-0">
-            <i :class="getFileIcon(file.mime_type)" class="text-blueGray-500 text-lg"></i>
+            <i :class="getFileIcon(file.mime_type)" class="text-autobot-text-secondary text-lg"></i>
           </div>
 
           <!-- File Info -->
@@ -174,13 +174,13 @@
                 <i class="fas fa-check text-xs text-green-600"></i>
               </button>
             </div>
-            <p v-else class="text-xs font-medium text-blueGray-700 truncate" :title="file.filename">
+            <p v-else class="text-xs font-medium text-autobot-text-primary truncate" :title="file.filename">
               {{ file.filename }}
             </p>
             <div class="flex items-center gap-2 mt-0.5">
-              <span class="text-xs text-blueGray-500">{{ formatFileSize(file.size_bytes) }}</span>
-              <span class="text-xs text-blueGray-400">&middot;</span>
-              <span class="text-xs text-blueGray-500">{{ formatDate(file.upload_timestamp) }}</span>
+              <span class="text-xs text-autobot-text-secondary">{{ formatFileSize(file.size_bytes) }}</span>
+              <span class="text-xs text-autobot-text-muted">&middot;</span>
+              <span class="text-xs text-autobot-text-secondary">{{ formatDate(file.upload_timestamp) }}</span>
             </div>
             <StatusBadge
               v-if="file.file_type === 'generated'"
@@ -233,7 +233,7 @@
     <Teleport to="body">
       <div
         v-if="contextMenu"
-        class="fixed z-50 bg-autobot-bg-card border border-blueGray-200 rounded-lg shadow-lg py-1 min-w-[140px]"
+        class="fixed z-50 bg-autobot-bg-card border border-autobot-border rounded-lg shadow-lg py-1 min-w-[140px]"
         :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
         @click.stop
       >
@@ -247,7 +247,7 @@
           class="ctx-menu-item"><i class="fas fa-copy w-4"></i> Duplicate</button>
         <button @click="handleDownload(contextMenu.fileId, contextMenu.filename); closeContextMenu()"
           class="ctx-menu-item"><i class="fas fa-download w-4"></i> Download</button>
-        <div class="border-t border-blueGray-200 my-1"></div>
+        <div class="border-t border-autobot-border my-1"></div>
         <button @click="handleDelete(contextMenu.fileId, contextMenu.filename); closeContextMenu()"
           class="ctx-menu-item text-red-600 hover:bg-red-50"><i class="fas fa-trash w-4"></i> Delete</button>
       </div>
@@ -257,7 +257,7 @@
     <Teleport to="body">
       <div v-if="showCreateDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showCreateDialog = false">
         <div class="bg-autobot-bg-card rounded-lg shadow-xl w-80 p-4">
-          <h4 class="text-sm font-semibold text-blueGray-700 mb-3">Create New File</h4>
+          <h4 class="text-sm font-semibold text-autobot-text-primary mb-3">Create New File</h4>
           <input
             v-model="newFileName"
             placeholder="filename.txt"
@@ -271,7 +271,7 @@
             class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary mb-3 resize-none font-mono"
           ></textarea>
           <div class="flex justify-end gap-2">
-            <button @click="showCreateDialog = false" class="px-3 py-1 text-xs text-blueGray-600 hover:bg-blueGray-100 rounded">Cancel</button>
+            <button @click="showCreateDialog = false" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">Cancel</button>
             <button @click="handleCreateFile" :disabled="!newFileName.trim()" class="px-3 py-1 text-xs text-white bg-autobot-primary hover:bg-autobot-primary-hover rounded disabled:opacity-50">Create</button>
           </div>
         </div>
@@ -283,7 +283,7 @@
       <div v-if="editingFileId" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="editingFileId = null">
         <div class="bg-autobot-bg-card rounded-lg shadow-xl w-[480px] max-h-[80vh] flex flex-col p-4">
           <div class="flex items-center justify-between mb-3">
-            <h4 class="text-sm font-semibold text-blueGray-700 truncate">{{ editingFileName }}</h4>
+            <h4 class="text-sm font-semibold text-autobot-text-primary truncate">{{ editingFileName }}</h4>
             <button @click="editingFileId = null" class="action-btn"><i class="fas fa-times text-xs"></i></button>
           </div>
           <textarea
@@ -291,7 +291,7 @@
             class="flex-1 w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary resize-none font-mono min-h-[200px]"
           ></textarea>
           <div class="flex justify-end gap-2 mt-3">
-            <button @click="editingFileId = null" class="px-3 py-1 text-xs text-blueGray-600 hover:bg-blueGray-100 rounded">Cancel</button>
+            <button @click="editingFileId = null" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">Cancel</button>
             <button @click="handleSaveEdit" class="px-3 py-1 text-xs text-white bg-autobot-primary hover:bg-autobot-primary-hover rounded">Save</button>
           </div>
         </div>
@@ -509,11 +509,11 @@ watch(() => props.sessionId, (newSessionId) => {
 }
 
 .action-btn {
-  @apply w-6 h-6 flex items-center justify-center rounded transition-colors text-blueGray-400 hover:text-blueGray-600 hover:bg-blueGray-100;
+  @apply w-6 h-6 flex items-center justify-center rounded transition-colors text-autobot-text-muted hover:text-autobot-text-secondary hover:bg-autobot-bg-secondary;
 }
 
 .ctx-menu-item {
-  @apply w-full text-left px-3 py-1.5 text-xs text-blueGray-700 hover:bg-blueGray-100 flex items-center gap-2 transition-colors;
+  @apply w-full text-left px-3 py-1.5 text-xs text-autobot-text-primary hover:bg-autobot-bg-secondary flex items-center gap-2 transition-colors;
 }
 
 /* Issue #704: Migrated to CSS design tokens */

@@ -265,7 +265,7 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--chart-purple) 100%);
+  background: var(--bg-primary);
   padding: var(--spacing-4);
 }
 
@@ -380,7 +380,7 @@ onMounted(async () => {
 
 
 .login-button {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--chart-purple) 100%);
+  background: var(--color-primary);
   color: var(--text-on-primary);
   border: none;
   padding: var(--spacing-3-5);
@@ -388,8 +388,7 @@ onMounted(async () => {
   font-size: var(--text-base);
   font-weight: var(--font-medium);
   cursor: pointer;
-  transition: opacity var(--duration-200) var(--ease-in-out),
-              transform var(--duration-200) var(--ease-in-out);
+  transition: background var(--duration-150) var(--ease-in-out);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -397,8 +396,7 @@ onMounted(async () => {
 }
 
 .login-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  opacity: 0.9;
+  background: var(--color-primary-hover);
 }
 
 .login-button:disabled {

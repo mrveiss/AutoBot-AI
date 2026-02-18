@@ -101,7 +101,7 @@ defineEmits<Emits>()
 <style scoped>
 /** Issue #704: Migrated to design tokens */
 .analytics-header {
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+  background: var(--bg-card);
   border-radius: var(--radius-xl);
   padding: var(--spacing-6);
   margin-bottom: var(--spacing-6);

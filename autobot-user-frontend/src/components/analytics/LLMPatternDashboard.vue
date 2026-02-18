@@ -977,7 +977,7 @@ onMounted(() => {
 
 .model-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--color-info), var(--chart-purple));
+  background: var(--color-info);
   border-radius: 2px;
   transition: width 0.3s;
 }
@@ -1019,7 +1019,7 @@ onMounted(() => {
 
 .category-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--chart-green), var(--chart-green-light));
+  background: var(--color-success);
   border-radius: 2px;
   transition: width 0.3s;
 }

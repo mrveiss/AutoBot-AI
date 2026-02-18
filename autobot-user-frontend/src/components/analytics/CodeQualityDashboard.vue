@@ -1091,8 +1091,8 @@ watch(selectedPeriod, () => {
   align-items: center;
   gap: var(--spacing-8);
   padding: var(--spacing-8);
-  background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-secondary) 100%);
-  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-2xl);
   margin-bottom: var(--spacing-6);
 }

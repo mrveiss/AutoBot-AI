@@ -207,7 +207,8 @@ onUnmounted(() => {
 
 .typing-wave {
   @apply absolute top-0 left-0 right-0 h-1 rounded-full;
-  background: linear-gradient(to right, transparent, var(--color-primary-hover), transparent);
+  background: var(--color-primary-hover);
+  opacity: 0.6;
   animation: typingWave 2s ease-in-out infinite;
 }
 

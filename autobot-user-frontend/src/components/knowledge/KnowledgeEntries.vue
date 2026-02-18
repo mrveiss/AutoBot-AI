@@ -434,7 +434,7 @@ import DeduplicationManager from '@/components/knowledge/DeduplicationManager.vu
 import SessionOrphanManager from '@/components/knowledge/SessionOrphanManager.vue'
 import BulkActionsToolbar from '@/components/knowledge/BulkActionsToolbar.vue'
 import BulkEditModal from '@/components/knowledge/modals/BulkEditModal.vue'
-import type { BulkEditMode, BulkEditEntry, ExportFormat } from '@/components/knowledge/modals/BulkEditModal.vue'
+import type { BulkEditMode, BulkEditEntry } from '@/components/knowledge/modals/BulkEditModal.vue'
 import { formatDate, formatDateTime } from '@/utils/formatHelpers'
 import { getDocumentTypeIcon } from '@/utils/iconMappings'
 import { useDebounce } from '@/composables/useDebounce'
@@ -443,6 +443,8 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { useModal } from '@/composables/useModal'
 import { createLogger } from '@/utils/debugUtils'
+
+type ExportFormat = 'json' | 'csv' | 'markdown'
 
 const logger = createLogger('KnowledgeEntries')
 

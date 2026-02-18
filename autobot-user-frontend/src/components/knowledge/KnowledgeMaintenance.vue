@@ -453,31 +453,31 @@ onMounted(() => {
 }
 
 .card-icon.facts {
-  background: linear-gradient(135deg, #f093fb, #f5576c);
+  background: var(--chart-pink);
 }
 
 .card-icon.vectors {
-  background: linear-gradient(135deg, #4facfe, #00f2fe);
+  background: var(--chart-cyan);
 }
 
 .card-icon.storage {
-  background: linear-gradient(135deg, #43e97b, #38f9d7);
+  background: var(--color-success);
 }
 
 .card-icon.quality {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: var(--chart-purple);
 }
 
 .card-icon.quality.good {
-  background: linear-gradient(135deg, #10b981, #34d399);
+  background: var(--color-success);
 }
 
 .card-icon.quality.warning {
-  background: linear-gradient(135deg, #f59e0b, #fbbf24);
+  background: var(--color-warning);
 }
 
 .card-icon.quality.critical {
-  background: linear-gradient(135deg, #ef4444, #f87171);
+  background: var(--color-error);
 }
 
 .card-content {

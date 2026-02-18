@@ -480,6 +480,48 @@
   --badge-padding-y: var(--spacing-0-5);
   --badge-radius: var(--radius-full);
   --badge-font-size: var(--text-xs);
+
+  /* ============================================
+   * BACKWARD COMPAT ALIASES
+   * Maps legacy var names → current design tokens
+   * Fixes components using pre-#901 variable names
+   * Issue #901: Theme unification pass
+   * ============================================ */
+
+  /* Legacy color names → semantic tokens */
+  --primary-color: var(--color-primary);
+  --primary-dark: var(--color-primary-dark);
+  --primary-light: var(--color-primary-light);
+  --secondary-color: var(--color-secondary);
+  --success-color: var(--color-success);
+  --warning-color: var(--color-warning);
+  --danger-color: var(--color-danger);
+  --error-color: var(--color-error);
+  --info-color: var(--color-info);
+  --accent-color: var(--color-primary);
+  --accent-dark: var(--color-primary-active);
+
+  /* Legacy background transparency aliases */
+  --bg-primary-alpha: rgba(15, 23, 42, 0.5);
+  --bg-primary-transparent: rgba(15, 23, 42, 0.8);
+  --bg-primary-transparent-hover: rgba(15, 23, 42, 0.9);
+  --bg-quaternary: var(--bg-tertiary);
+  --bg-tertiary-transparent: rgba(51, 65, 85, 0.7);
+
+  /* Legacy border aliases */
+  --border-color: var(--border-default);
+  --border-color-light: var(--border-subtle);
+  --border-color-dark: var(--border-strong);
+
+  /* Extended chart colors used by analytics components */
+  --chart-brown: #92400e;
+  --chart-indigo-dark: #4338ca;
+  --chart-indigo-light: #818cf8;
+  --chart-lime: #84cc16;
+  --chart-lime-light: #a3e635;
+  --chart-light-green: #4ade80;
+  --chart-light-green-bg: rgba(74, 222, 128, 0.2);
+  --chart-purple-dark: #6d28d9;
 }
 
 /* ============================================

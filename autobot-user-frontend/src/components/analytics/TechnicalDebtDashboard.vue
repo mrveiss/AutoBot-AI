@@ -1012,8 +1012,8 @@ watch(selectedPeriod, () => {
 }
 
 .summary-card {
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
-  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
   display: flex;
@@ -1403,7 +1403,7 @@ watch(selectedPeriod, () => {
 
 .priority-item.top-priority {
   border-color: var(--color-primary);
-  background: linear-gradient(135deg, var(--color-primary-bg) 0%, var(--bg-secondary) 100%);
+  background: var(--color-primary-bg);
 }
 
 .priority-rank {

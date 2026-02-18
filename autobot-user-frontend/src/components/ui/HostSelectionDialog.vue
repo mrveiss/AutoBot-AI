@@ -434,7 +434,7 @@ onUnmounted(() => {
 
 /* Header */
 .dialog-header {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  background: var(--color-primary);
   color: var(--text-on-primary);
   padding: var(--spacing-5);
   display: flex;

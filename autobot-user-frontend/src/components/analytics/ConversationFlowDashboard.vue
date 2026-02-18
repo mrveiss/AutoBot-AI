@@ -443,7 +443,7 @@ defineExpose({ getCssVar })
 
 .analyze-btn {
   padding: var(--spacing-2) var(--spacing-5);
-  background: linear-gradient(135deg, var(--chart-cyan) 0%, var(--color-info-dark) 100%);
+  background: var(--chart-cyan);
   border: none;
   border-radius: var(--radius-md);
   color: var(--text-on-primary);
@@ -821,7 +821,7 @@ defineExpose({ getCssVar })
 
 .bar-fill {
   width: 100%;
-  background: linear-gradient(to top, var(--chart-cyan), var(--color-info-dark));
+  background: var(--chart-cyan);
   border-radius: var(--radius-xs) var(--radius-xs) 0 0;
   transition: height var(--duration-300);
   min-height: 2px;

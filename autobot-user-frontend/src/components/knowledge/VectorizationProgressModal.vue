@@ -328,7 +328,7 @@ const allCompleted = computed(() => {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-hover));
+  background: var(--color-primary);
   transition: width 0.3s ease;
   border-radius: 0.75rem;
 }

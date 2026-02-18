@@ -148,16 +148,16 @@ const getPhaseIcon = (status: string): string => {
 
 <style scoped>
 .progress-container {
-  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-surface) 100%);
+  background: var(--bg-card);
   border-radius: var(--radius-xl);
   padding: var(--spacing-5);
   margin-bottom: var(--spacing-6);
-  border: 1px solid rgba(6, 182, 212, 0.3);
+  border: 1px solid var(--border-default);
 }
 
 .code-smells-progress {
-  background: linear-gradient(135deg, var(--chart-purple-bg) 0%, var(--bg-surface) 100%);
-  border-color: rgba(236, 72, 153, 0.3);
+  background: var(--bg-secondary);
+  border-color: var(--border-default);
 }
 
 .progress-header {
@@ -223,7 +223,7 @@ const getPhaseIcon = (status: string): string => {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--chart-cyan), var(--color-success-light));
+  background: var(--color-primary);
   border-radius: var(--radius-default);
   transition: width var(--duration-300) var(--ease-out);
 }

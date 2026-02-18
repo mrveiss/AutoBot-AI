@@ -275,7 +275,7 @@ watch(activeCaptcha, (newVal) => {
   align-items: center;
   gap: var(--spacing-3);
   padding: var(--spacing-4);
-  background: linear-gradient(135deg, var(--color-error) 0%, var(--color-error-hover) 100%);
+  background: var(--color-error);
   color: var(--text-on-error);
 }
 
@@ -455,12 +455,12 @@ watch(activeCaptcha, (newVal) => {
 
 .timeout-bar {
   height: 100%;
-  background: linear-gradient(90deg, var(--color-info), var(--color-success));
+  background: var(--color-info);
   transition: width 1s linear;
 }
 
 .timeout-bar.bar-warning {
-  background: linear-gradient(90deg, var(--color-error), var(--color-warning));
+  background: var(--color-error);
 }
 
 /* Animations */

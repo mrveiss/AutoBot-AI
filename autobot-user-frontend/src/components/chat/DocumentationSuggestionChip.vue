@@ -141,7 +141,7 @@ const handleClick = () => {
   align-items: center;
   gap: var(--spacing-1-5);
   padding: var(--spacing-1) var(--spacing-2-5);
-  background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--border-emphasis) 100%);
+  background: var(--bg-tertiary);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-full);
   font-size: var(--text-xs);
@@ -155,14 +155,14 @@ const handleClick = () => {
 }
 
 .doc-suggestion-chip.clickable:hover {
-  background: linear-gradient(135deg, var(--border-emphasis) 0%, var(--border-strong) 100%);
+  background: var(--bg-secondary);
   border-color: var(--color-secondary-light);
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
 }
 
 .doc-suggestion-chip.selected {
-  background: linear-gradient(135deg, var(--color-info-bg) 0%, rgba(59, 130, 246, 0.2) 100%);
+  background: var(--color-info-bg);
   border-color: var(--color-info);
   color: var(--color-info-dark);
 }

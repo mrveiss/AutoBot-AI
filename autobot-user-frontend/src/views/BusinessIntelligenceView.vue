@@ -474,7 +474,7 @@ onMounted(() => {
 }
 
 .health-card {
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+  background: var(--color-primary);
   border-radius: 12px;
   padding: 1.5rem;
   color: white;
@@ -483,15 +483,15 @@ onMounted(() => {
 }
 
 .health-card.healthy {
-  background: linear-gradient(135deg, var(--success-color), #0d9488);
+  background: var(--color-success);
 }
 
 .health-card.warning {
-  background: linear-gradient(135deg, var(--warning-color), #f59e0b);
+  background: var(--color-warning);
 }
 
 .health-card.critical {
-  background: linear-gradient(135deg, var(--danger-color), #dc2626);
+  background: var(--color-error);
 }
 
 .health-score {
@@ -520,8 +520,8 @@ onMounted(() => {
 
 .overview-card {
   flex: 1;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 1rem;
   display: flex;
@@ -531,7 +531,7 @@ onMounted(() => {
 
 .overview-card i {
   font-size: 1.5rem;
-  color: var(--primary-color);
+  color: var(--color-primary);
   opacity: 0.8;
 }
 
@@ -552,11 +552,11 @@ onMounted(() => {
 }
 
 .card-trend.trend-up {
-  color: var(--danger-color);
+  color: var(--color-error);
 }
 
 .card-trend.trend-down {
-  color: var(--success-color);
+  color: var(--color-success);
 }
 
 .card-meta {
@@ -569,7 +569,7 @@ onMounted(() => {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1.5rem;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-default);
   padding-bottom: 0.5rem;
 }
 
@@ -592,7 +592,7 @@ onMounted(() => {
 }
 
 .tab-btn.active {
-  background: var(--primary-color);
+  background: var(--color-primary);
   color: white;
 }
 
@@ -608,7 +608,7 @@ onMounted(() => {
 }
 
 .tab-badge.critical {
-  background: var(--danger-color);
+  background: var(--color-error);
   color: white;
 }
 
@@ -627,7 +627,7 @@ onMounted(() => {
 
 .section-header h3 i {
   margin-right: 0.5rem;
-  color: var(--primary-color);
+  color: var(--color-primary);
 }
 
 /* Priority Summary */
@@ -641,8 +641,8 @@ onMounted(() => {
   padding: 1rem 1.5rem;
   border-radius: 8px;
   text-align: center;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
 }
 
 .priority-card .count {
@@ -656,21 +656,21 @@ onMounted(() => {
 }
 
 .priority-card.critical {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: var(--danger-color);
+  background: var(--color-error-bg);
+  border-color: var(--color-error);
 }
 
 .priority-card.critical .count {
-  color: var(--danger-color);
+  color: var(--color-error);
 }
 
 .priority-card.high {
-  background: rgba(245, 158, 11, 0.1);
-  border-color: var(--warning-color);
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning);
 }
 
 .priority-card.high .count {
-  color: var(--warning-color);
+  color: var(--color-warning);
 }
 
 /* Recommendation Cards */
@@ -685,22 +685,22 @@ onMounted(() => {
 .recommendation-card,
 .optimization-card,
 .insight-card {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 1rem;
 }
 
 .recommendation-card.priority-critical {
-  border-left: 4px solid var(--danger-color);
+  border-left: 4px solid var(--color-error);
 }
 
 .recommendation-card.priority-high {
-  border-left: 4px solid var(--warning-color);
+  border-left: 4px solid var(--color-warning);
 }
 
 .recommendation-card.priority-medium {
-  border-left: 4px solid var(--info-color);
+  border-left: 4px solid var(--color-info);
 }
 
 .rec-header,
@@ -722,17 +722,17 @@ onMounted(() => {
 }
 
 .priority-badge.critical {
-  background: var(--danger-color);
+  background: var(--color-error);
   color: white;
 }
 
 .priority-badge.high {
-  background: var(--warning-color);
+  background: var(--color-warning);
   color: white;
 }
 
 .priority-badge.medium {
-  background: var(--info-color);
+  background: var(--color-info);
   color: white;
 }
 
@@ -776,11 +776,11 @@ onMounted(() => {
 }
 
 .detail i {
-  color: var(--primary-color);
+  color: var(--color-primary);
 }
 
 .detail.confidence {
-  color: var(--success-color);
+  color: var(--color-success);
 }
 
 .rec-action,
@@ -798,7 +798,7 @@ onMounted(() => {
 .rec-action i,
 .opt-action i,
 .insight-action i {
-  color: var(--success-color);
+  color: var(--color-success);
 }
 
 /* Optimization specific */
@@ -814,7 +814,7 @@ onMounted(() => {
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background: linear-gradient(135deg, var(--success-color), #0d9488);
+  background: var(--color-success);
   border-radius: 8px;
   color: white;
 }
@@ -844,48 +844,48 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--success-color);
+  color: var(--color-success);
   font-size: 0.875rem;
 }
 
 .resource-type.llm_tokens {
-  background: var(--primary-color);
+  background: var(--color-primary);
   color: white;
 }
 
 .resource-type.agent_tasks {
-  background: var(--info-color);
+  background: var(--color-info);
   color: white;
 }
 
 .resource-type.cache {
-  background: var(--success-color);
+  background: var(--color-success);
   color: white;
 }
 
 .effort-badge.low {
-  background: var(--success-color);
+  background: var(--color-success);
   color: white;
 }
 
 .effort-badge.medium {
-  background: var(--warning-color);
+  background: var(--color-warning);
   color: white;
 }
 
 .effort-badge.high {
-  background: var(--danger-color);
+  background: var(--color-error);
   color: white;
 }
 
 /* Insights specific */
 .insight-type.maintenance {
-  background: var(--warning-color);
+  background: var(--color-warning);
   color: white;
 }
 
 .insight-type.optimization {
-  background: var(--success-color);
+  background: var(--color-success);
   color: white;
 }
 
@@ -899,7 +899,7 @@ onMounted(() => {
 }
 
 .insight-impact i {
-  color: var(--info-color);
+  color: var(--color-info);
 }
 
 /* Reports */
@@ -911,8 +911,8 @@ onMounted(() => {
 }
 
 .report-card {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 1.5rem;
   cursor: pointer;
@@ -920,13 +920,13 @@ onMounted(() => {
 }
 
 .report-card:hover {
-  border-color: var(--primary-color);
+  border-color: var(--color-primary);
   transform: translateY(-2px);
 }
 
 .report-card i {
   font-size: 2rem;
-  color: var(--primary-color);
+  color: var(--color-primary);
   margin-bottom: 0.75rem;
 }
 
@@ -942,8 +942,8 @@ onMounted(() => {
 }
 
 .generated-report {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 1rem;
 }

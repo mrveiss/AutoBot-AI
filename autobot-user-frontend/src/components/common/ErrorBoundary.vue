@@ -200,7 +200,7 @@ defineExpose({
 /* Issue #704: Migrated to CSS design tokens */
 .error-boundary {
   padding: var(--spacing-8);
-  background: linear-gradient(135deg, var(--color-error-light) 0%, var(--color-error-bg) 100%);
+  background: var(--color-error-bg);
   border-radius: var(--radius-lg);
   border: 2px solid var(--color-error);
   margin: var(--spacing-4) 0;
@@ -214,7 +214,7 @@ defineExpose({
 }
 
 .error-icon {
-  font-size: var(--font-size-2xl);
+  font-size: var(--text-2xl);
   flex-shrink: 0;
 }
 
@@ -225,8 +225,8 @@ defineExpose({
 .error-title {
   margin: 0 0 var(--spacing-2) 0;
   color: var(--color-error-dark);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
 }
 
 .error-message {
@@ -246,13 +246,13 @@ defineExpose({
 .error-details-toggle {
   cursor: pointer;
   color: var(--color-error-dark);
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-medium);
 }
 
 .error-stack {
   margin-top: var(--spacing-2);
   font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 .stack-trace {

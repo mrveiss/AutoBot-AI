@@ -118,11 +118,7 @@ const formatSourcePath = (sourcePath: string): string => {
   margin-top: var(--spacing-3);
   border: 1px solid var(--color-primary-bg);
   border-radius: var(--radius-lg);
-  background: linear-gradient(
-    135deg,
-    var(--color-primary-bg) 0%,
-    rgba(99, 102, 241, 0.02) 100%
-  );
+  background: var(--bg-card);
   overflow: hidden;
 }
 

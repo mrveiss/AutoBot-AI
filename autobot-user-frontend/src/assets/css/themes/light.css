@@ -118,6 +118,15 @@
   --table-border: #e2e8f0;
   --input-bg: #ffffff;
   --input-border: #e2e8f0;
+
+  /* Light-mode overrides for backward-compat aliases */
+  --bg-primary-alpha: rgba(255, 255, 255, 0.7);
+  --bg-primary-transparent: rgba(255, 255, 255, 0.9);
+  --bg-primary-transparent-hover: rgba(255, 255, 255, 0.95);
+  --bg-tertiary-transparent: rgba(241, 245, 249, 0.9);
+  --border-color: #e2e8f0;
+  --border-color-light: rgba(226, 232, 240, 0.8);
+  --border-color-dark: #cbd5e1;
 }
 
 /* ============================================

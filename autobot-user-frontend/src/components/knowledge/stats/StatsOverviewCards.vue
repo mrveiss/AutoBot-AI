@@ -120,11 +120,11 @@ defineProps<Props>()
   color: var(--text-on-primary);
 }
 
-.stat-icon.facts { background: linear-gradient(135deg, var(--chart-pink), var(--color-error)); }
-.stat-icon.documents { background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover)); }
-.stat-icon.categories { background: linear-gradient(135deg, var(--color-success), var(--color-success-hover)); }
-.stat-icon.tags { background: linear-gradient(135deg, var(--color-warning), var(--color-warning-hover)); }
-.stat-icon.storage { background: linear-gradient(135deg, var(--chart-purple), var(--color-purple)); }
+.stat-icon.facts { background: var(--chart-pink); }
+.stat-icon.documents { background: var(--color-primary); }
+.stat-icon.categories { background: var(--color-success); }
+.stat-icon.tags { background: var(--color-warning); }
+.stat-icon.storage { background: var(--chart-purple); }
 
 .stat-content { flex: 1; }
 

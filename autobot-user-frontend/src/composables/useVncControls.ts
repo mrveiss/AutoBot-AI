@@ -8,7 +8,7 @@
  */
 
 import { ref } from 'vue'
-import ApiClient from '@/api/ApiClient'
+import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useVncControls')
@@ -56,7 +56,7 @@ export function useVncControls() {
       error.value = err.message || 'Mouse click failed'
       return {
         status: 'error',
-        message: error.value
+        message: error.value ?? 'Mouse click failed'
       }
     } finally {
       loading.value = false
@@ -78,7 +78,7 @@ export function useVncControls() {
       error.value = err.message || 'Keyboard type failed'
       return {
         status: 'error',
-        message: error.value
+        message: error.value ?? 'Keyboard type failed'
       }
     } finally {
       loading.value = false
@@ -100,7 +100,7 @@ export function useVncControls() {
       error.value = err.message || 'Special key failed'
       return {
         status: 'error',
-        message: error.value
+        message: error.value ?? 'Special key failed'
       }
     } finally {
       loading.value = false
@@ -122,7 +122,7 @@ export function useVncControls() {
       error.value = err.message || 'Mouse scroll failed'
       return {
         status: 'error',
-        message: error.value
+        message: error.value ?? 'Mouse scroll failed'
       }
     } finally {
       loading.value = false
@@ -144,7 +144,7 @@ export function useVncControls() {
       error.value = err.message || 'Mouse drag failed'
       return {
         status: 'error',
-        message: error.value
+        message: error.value ?? 'Mouse drag failed'
       }
     } finally {
       loading.value = false
@@ -166,7 +166,7 @@ export function useVncControls() {
       error.value = err.message || 'Screenshot capture failed'
       return {
         status: 'error',
-        message: error.value,
+        message: error.value ?? 'Screenshot capture failed',
         image_data: ''
       }
     } finally {
@@ -189,7 +189,7 @@ export function useVncControls() {
       error.value = err.message || 'Clipboard sync failed'
       return {
         status: 'error',
-        message: error.value
+        message: error.value ?? 'Clipboard sync failed'
       }
     } finally {
       loading.value = false

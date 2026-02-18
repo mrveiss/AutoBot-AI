@@ -820,8 +820,8 @@ watch(selectedPeriod, () => {
 }
 
 .summary-card {
-  background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-secondary) 100%);
-  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   padding: var(--spacing-5);
   display: flex;

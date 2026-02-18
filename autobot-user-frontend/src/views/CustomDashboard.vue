@@ -643,7 +643,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem 2rem;
-  background: linear-gradient(135deg, var(--bg-secondary), var(--bg-primary));
+  background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -688,7 +688,7 @@ onMounted(() => {
 
 .action-btn:hover {
   background: var(--bg-tertiary);
-  border-color: var(--border-hover);
+  border-color: var(--border-strong);
 }
 
 .action-btn.active {
@@ -698,7 +698,7 @@ onMounted(() => {
 }
 
 .action-btn.primary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  background: var(--color-primary);
   border-color: transparent;
   color: var(--text-on-primary);
 }
@@ -825,7 +825,7 @@ onMounted(() => {
 }
 
 .widget-container:hover {
-  border-color: var(--border-hover);
+  border-color: var(--border-strong);
 }
 
 .widget-container.is-dragging {
@@ -846,7 +846,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
-  background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary));
+  background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -911,7 +911,7 @@ onMounted(() => {
 .empty-icon {
   width: 80px;
   height: 80px;
-  background: linear-gradient(135deg, var(--color-primary-alpha-10), var(--color-primary-alpha-10));
+  background: var(--color-primary-bg);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -965,7 +965,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 1.5rem;
-  background: linear-gradient(135deg, var(--bg-tertiary), var(--bg-secondary));
+  background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -1063,7 +1063,7 @@ onMounted(() => {
 .widget-preview {
   width: 60px;
   height: 60px;
-  background: linear-gradient(135deg, var(--color-primary-alpha-10), var(--color-primary-alpha-10));
+  background: var(--color-primary-bg);
   border-radius: 12px;
   display: flex;
   align-items: center;

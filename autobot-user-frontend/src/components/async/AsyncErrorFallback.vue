@@ -248,11 +248,11 @@ if (props.error) {
 .async-error-fallback {
   min-height: 300px;
   padding: var(--spacing-8);
-  background: linear-gradient(135deg, var(--color-warning-bg) 0%, var(--color-warning-bg-hover) 100%);
+  background: var(--color-warning-bg);
   border-radius: var(--radius-xl);
   border: 2px solid var(--color-warning);
   margin: var(--spacing-4);
-  box-shadow: var(--shadow-warning);
+  box-shadow: var(--shadow-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -284,14 +284,14 @@ if (props.error) {
 
 .error-title {
   margin: 0 0 var(--spacing-3) 0;
-  color: var(--color-warning-active);
+  color: var(--color-warning-dark);
   font-size: var(--text-2xl);
   font-weight: var(--font-semibold);
 }
 
 .error-message {
   margin: 0 0 var(--spacing-6) 0;
-  color: var(--color-error-hover);
+  color: var(--color-error-dark);
   line-height: var(--leading-relaxed);
   font-size: var(--text-base);
 }

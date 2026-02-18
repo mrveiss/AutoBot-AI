@@ -225,7 +225,7 @@ function formatResult(result: Record<string, unknown>): string {
 
 .progress-overview { padding: 20px; background: var(--bg-secondary); }
 .progress-bar-large { height: 8px; background: var(--bg-tertiary); border-radius: 4px; overflow: hidden; margin-bottom: 16px; }
-.progress-bar-large .progress-fill { height: 100%; background: linear-gradient(90deg, var(--color-primary), var(--color-success)); transition: width 0.3s; }
+.progress-bar-large .progress-fill { height: 100%; background: var(--color-primary); transition: width 0.3s; }
 .progress-stats { display: flex; justify-content: space-around; }
 .progress-stats .stat { text-align: center; }
 .progress-stats .value { display: block; font-size: 24px; font-weight: 600; color: var(--text-primary); }
