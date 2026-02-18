@@ -3,12 +3,14 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 /**
- * Agent Management View (Issue #760 Phase 4)
+ * Agent Management View (Issue #760 Phase 4, #942)
  *
  * Provides UI for viewing and managing agent LLM configurations.
+ * Endpoint is selected by fleet node (auto-constructs http://ip:11434)
+ * or entered manually via the Custom option.
  */
 
-import { ref, onMounted, computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 
 interface Agent {
@@ -24,42 +26,65 @@ interface Agent {
   is_default: boolean
 }
 
+interface FleetNode {
+  node_id: string
+  hostname: string
+  ip_address: string
+  status: string
+  roles: string[]
+}
+
+const OLLAMA_PORT = 11434
+const CUSTOM_VALUE = '__custom__'
+
 const authStore = useAuthStore()
 const agents = ref<Agent[]>([])
+const nodes = ref<FleetNode[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
 const selectedAgent = ref<Agent | null>(null)
 const isEditing = ref(false)
 
-// Edit form state
 const editForm = ref({
   llm_provider: '',
   llm_model: '',
   llm_endpoint: '',
+  endpoint_node: '' as string, // node_id or CUSTOM_VALUE
   llm_timeout: 30,
   llm_temperature: 0.7,
-  is_active: true
+  is_active: true,
 })
 
 const providers = ['ollama', 'openai', 'anthropic']
 
+// ── helpers ────────────────────────────────────────────────────────────────
+
+function endpointForNode(node: FleetNode): string {
+  return `http://${node.ip_address}:${OLLAMA_PORT}`
+}
+
+/** Return the node whose Ollama URL matches the stored endpoint, or null. */
+function nodeForEndpoint(endpoint: string): FleetNode | null {
+  return nodes.value.find((n) => endpointForNode(n) === endpoint) ?? null
+}
+
+/** Human-readable label for the endpoint in read-only mode. */
+function endpointLabel(endpoint: string): string {
+  const match = nodeForEndpoint(endpoint)
+  if (match) return `${match.node_id} (${match.ip_address}:${OLLAMA_PORT})`
+  return endpoint || '—'
+}
+
+// ── data fetching ──────────────────────────────────────────────────────────
+
 async function fetchAgents() {
   loading.value = true
   error.value = null
-
   try {
-    // Use relative path - SLM Admin is hosted by SLM server
     const response = await fetch('/api/agents', {
-      headers: {
-        'Authorization': `Bearer ${authStore.token}`,
-        'Content-Type': 'application/json'
-      }
+      headers: { Authorization: `Bearer ${authStore.token}` },
     })
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch agents: ${response.status}`)
-    }
-
+    if (!response.ok) throw new Error(`Failed to fetch agents: ${response.status}`)
     const data = await response.json()
     agents.value = data.agents || []
   } catch (err) {
@@ -69,15 +94,34 @@ async function fetchAgents() {
   }
 }
 
+async function fetchNodes() {
+  try {
+    const response = await fetch('/api/nodes', {
+      headers: { Authorization: `Bearer ${authStore.token}` },
+    })
+    if (!response.ok) return
+    const data = await response.json()
+    nodes.value = (data.nodes || data || []).filter(
+      (n: FleetNode) => n.status === 'online',
+    )
+  } catch {
+    // Non-critical — fall back to Custom mode
+  }
+}
+
+// ── selection ──────────────────────────────────────────────────────────────
+
 function selectAgent(agent: Agent) {
   selectedAgent.value = agent
+  const matchedNode = nodeForEndpoint(agent.llm_endpoint)
   editForm.value = {
     llm_provider: agent.llm_provider,
     llm_model: agent.llm_model,
     llm_endpoint: agent.llm_endpoint,
+    endpoint_node: matchedNode ? matchedNode.node_id : CUSTOM_VALUE,
     llm_timeout: agent.llm_timeout,
     llm_temperature: agent.llm_temperature,
-    is_active: agent.is_active
+    is_active: agent.is_active,
   }
   isEditing.value = false
 }
@@ -87,59 +131,58 @@ function startEditing() {
 }
 
 function cancelEditing() {
-  if (selectedAgent.value) {
-    editForm.value = {
-      llm_provider: selectedAgent.value.llm_provider,
-      llm_model: selectedAgent.value.llm_model,
-      llm_endpoint: selectedAgent.value.llm_endpoint,
-      llm_timeout: selectedAgent.value.llm_timeout,
-      llm_temperature: selectedAgent.value.llm_temperature,
-      is_active: selectedAgent.value.is_active
-    }
-  }
-  isEditing.value = false
+  if (selectedAgent.value) selectAgent(selectedAgent.value)
 }
+
+// ── endpoint node watcher ──────────────────────────────────────────────────
+
+function onEndpointNodeChange(val: string) {
+  if (val === CUSTOM_VALUE) return
+  const node = nodes.value.find((n) => n.node_id === val)
+  if (node) editForm.value.llm_endpoint = endpointForNode(node)
+}
+
+// ── save ───────────────────────────────────────────────────────────────────
 
 async function saveAgent() {
   if (!selectedAgent.value) return
-
   try {
-    // Use relative path - SLM Admin is hosted by SLM server
-    const response = await fetch(
-      `/api/agents/${selectedAgent.value.agent_id}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${authStore.token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(editForm.value)
-      }
-    )
-
-    if (!response.ok) {
-      throw new Error(`Failed to update agent: ${response.status}`)
+    const payload = {
+      llm_provider: editForm.value.llm_provider,
+      llm_model: editForm.value.llm_model,
+      llm_endpoint: editForm.value.llm_endpoint,
+      llm_timeout: editForm.value.llm_timeout,
+      llm_temperature: editForm.value.llm_temperature,
+      is_active: editForm.value.is_active,
     }
-
-    // Refresh agent list
+    const response = await fetch(`/api/agents/${selectedAgent.value.agent_id}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${authStore.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+    if (!response.ok) throw new Error(`Failed to update agent: ${response.status}`)
     await fetchAgents()
-
-    // Re-select updated agent
-    const updated = agents.value.find(a => a.agent_id === selectedAgent.value?.agent_id)
-    if (updated) {
-      selectAgent(updated)
-    }
-
+    const updated = agents.value.find(
+      (a) => a.agent_id === selectedAgent.value?.agent_id,
+    )
+    if (updated) selectAgent(updated)
     isEditing.value = false
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to save agent'
   }
 }
 
-const activeAgentCount = computed(() => agents.value.filter(a => a.is_active).length)
+// ── computed ───────────────────────────────────────────────────────────────
+
+const activeAgentCount = computed(() => agents.value.filter((a) => a.is_active).length)
+const isCustomEndpoint = computed(() => editForm.value.endpoint_node === CUSTOM_VALUE)
 
 onMounted(() => {
   fetchAgents()
+  fetchNodes()
 })
 </script>
 
@@ -171,6 +214,7 @@ onMounted(() => {
     </div>
 
     <div class="agents-container">
+      <!-- Agent list -->
       <div class="agents-list">
         <h2>Agents</h2>
         <div v-if="loading" class="loading">Loading agents...</div>
@@ -178,7 +222,10 @@ onMounted(() => {
           <li
             v-for="agent in agents"
             :key="agent.agent_id"
-            :class="{ selected: selectedAgent?.agent_id === agent.agent_id, inactive: !agent.is_active }"
+            :class="{
+              selected: selectedAgent?.agent_id === agent.agent_id,
+              inactive: !agent.is_active,
+            }"
             @click="selectAgent(agent)"
           >
             <span class="agent-name">{{ agent.name }}</span>
@@ -188,14 +235,15 @@ onMounted(() => {
         </ul>
       </div>
 
-      <div class="agent-detail" v-if="selectedAgent">
+      <!-- Agent detail -->
+      <div v-if="selectedAgent" class="agent-detail">
         <div class="detail-header">
           <h2>{{ selectedAgent.name }}</h2>
           <div class="actions">
-            <button v-if="!isEditing" @click="startEditing" class="btn-edit">Edit</button>
+            <button v-if="!isEditing" class="btn-edit" @click="startEditing">Edit</button>
             <template v-else>
-              <button @click="saveAgent" class="btn-save">Save</button>
-              <button @click="cancelEditing" class="btn-cancel">Cancel</button>
+              <button class="btn-save" @click="saveAgent">Save</button>
+              <button class="btn-cancel" @click="cancelEditing">Cancel</button>
             </template>
           </div>
         </div>
@@ -203,11 +251,13 @@ onMounted(() => {
         <p class="description">{{ selectedAgent.description }}</p>
 
         <div class="config-form">
+          <!-- Agent ID (always read-only) -->
           <div class="form-group">
             <label>Agent ID</label>
             <input type="text" :value="selectedAgent.agent_id" disabled />
           </div>
 
+          <!-- LLM Provider -->
           <div class="form-group">
             <label>LLM Provider</label>
             <select v-model="editForm.llm_provider" :disabled="!isEditing">
@@ -215,32 +265,71 @@ onMounted(() => {
             </select>
           </div>
 
+          <!-- LLM Model -->
           <div class="form-group">
             <label>LLM Model</label>
             <input v-model="editForm.llm_model" :disabled="!isEditing" />
           </div>
 
-          <div class="form-group">
+          <!-- LLM Endpoint — node selector or custom -->
+          <div class="form-group endpoint-group">
             <label>LLM Endpoint</label>
-            <input v-model="editForm.llm_endpoint" :disabled="!isEditing" />
+
+            <!-- Read-only view -->
+            <div v-if="!isEditing" class="endpoint-readonly">
+              {{ endpointLabel(selectedAgent.llm_endpoint) }}
+            </div>
+
+            <!-- Edit view -->
+            <template v-else>
+              <select
+                v-model="editForm.endpoint_node"
+                class="node-select"
+                @change="onEndpointNodeChange(editForm.endpoint_node)"
+              >
+                <optgroup label="Fleet Nodes">
+                  <option
+                    v-for="node in nodes"
+                    :key="node.node_id"
+                    :value="node.node_id"
+                  >
+                    {{ node.node_id }} — {{ node.ip_address }}:{{ OLLAMA_PORT }}
+                  </option>
+                </optgroup>
+                <option :value="CUSTOM_VALUE">Custom…</option>
+              </select>
+
+              <input
+                v-if="isCustomEndpoint"
+                v-model="editForm.llm_endpoint"
+                class="custom-endpoint-input"
+                placeholder="http://host:11434"
+              />
+
+              <span v-else class="endpoint-hint">
+                → {{ editForm.llm_endpoint }}
+              </span>
+            </template>
           </div>
 
+          <!-- Timeout -->
           <div class="form-group">
             <label>Timeout (seconds)</label>
             <input
-              type="number"
               v-model.number="editForm.llm_timeout"
+              type="number"
               :disabled="!isEditing"
               min="1"
               max="300"
             />
           </div>
 
+          <!-- Temperature -->
           <div class="form-group">
             <label>Temperature</label>
             <input
-              type="number"
               v-model.number="editForm.llm_temperature"
+              type="number"
               :disabled="!isEditing"
               min="0"
               max="2"
@@ -248,11 +337,12 @@ onMounted(() => {
             />
           </div>
 
+          <!-- Active -->
           <div class="form-group">
             <label class="checkbox-label">
               <input
-                type="checkbox"
                 v-model="editForm.is_active"
+                type="checkbox"
                 :disabled="!isEditing"
               />
               Active
@@ -261,7 +351,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="agent-detail empty" v-else>
+      <div v-else class="agent-detail empty">
         <p>Select an agent to view and edit its configuration</p>
       </div>
     </div>
@@ -446,6 +536,10 @@ onMounted(() => {
   gap: 6px;
 }
 
+.endpoint-group {
+  grid-column: 1 / -1;
+}
+
 .form-group label {
   font-size: 13px;
   font-weight: 500;
@@ -464,6 +558,45 @@ onMounted(() => {
 .form-group select:disabled {
   background: #f9fafb;
   color: var(--text-secondary, #6b7280);
+}
+
+.node-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+}
+
+.custom-endpoint-input {
+  margin-top: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #6366f1;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: monospace;
+  box-sizing: border-box;
+}
+
+.endpoint-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  font-family: monospace;
+  color: var(--text-secondary, #6b7280);
+}
+
+.endpoint-readonly {
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  background: #f9fafb;
+  color: var(--text-secondary, #6b7280);
+  font-family: monospace;
 }
 
 .checkbox-label {
