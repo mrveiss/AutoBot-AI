@@ -1,0 +1,474 @@
+---
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Node Cleanup Playbook (Issue #926 Phase 6)
+#
+# Removes legacy directories, wrong-node role dirs, and stale loose files
+# from all fleet nodes, then reports the resulting /opt/autobot/ layout.
+#
+# Usage:
+#   cd autobot-slm-backend/ansible
+#   ansible-playbook playbooks/cleanup-nodes.yml -i inventory/slm-nodes.yml
+#
+#   # Single node:
+#   ansible-playbook playbooks/cleanup-nodes.yml -i inventory/slm-nodes.yml \
+#     --limit 02-Frontend
+#
+#   # Dry run (check mode - shows what WOULD be removed):
+#   ansible-playbook playbooks/cleanup-nodes.yml -i inventory/slm-nodes.yml \
+#     --check
+#
+# Safety notes:
+#   - data/ and logs/ directories are NEVER removed (contain runtime data)
+#   - All removals use state: absent (idempotent, no error if already gone)
+#   - Run with --check first to preview changes
+
+# ---------------------------------------------------------------------------
+# Pre-cleanup: snapshot /opt/autobot/ on all nodes
+# ---------------------------------------------------------------------------
+- name: "Pre-cleanup: Record current /opt/autobot/ layout"
+  hosts: slm_nodes
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: "Snapshot | List /opt/autobot/ before cleanup"
+      ansible.builtin.command:
+        cmd: ls -1 /opt/autobot/
+      register: pre_snapshot
+      changed_when: false
+      failed_when: false
+
+    - name: "Snapshot | Show pre-cleanup state"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} [BEFORE]: {{ pre_snapshot.stdout_lines | default([]) }}"
+
+# ---------------------------------------------------------------------------
+# Play 1: SLM Manager (.19) — remove wrong-node and legacy dirs
+# ---------------------------------------------------------------------------
+- name: "Cleanup: 00-SLM-Manager (.19)"
+  hosts: 00-SLM-Manager
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: "SLM | Clean: wrong-node autobot-backend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-backend
+        state: absent
+
+    - name: "SLM | Clean: wrong-node autobot-frontend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-frontend
+        state: absent
+
+    - name: "SLM | Clean: wrong-node autobot-user-backend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-user-backend
+        state: absent
+
+    - name: "SLM | Clean: wrong-node autobot-user-frontend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-user-frontend
+        state: absent
+
+    - name: "SLM | Clean: legacy npu-worker dir"
+      ansible.builtin.file:
+        path: /opt/autobot/npu-worker
+        state: absent
+
+    - name: "SLM | Clean: legacy browser-service dir"
+      ansible.builtin.file:
+        path: /opt/autobot/browser-service
+        state: absent
+
+    - name: "SLM | Clean: legacy ai-stack dir"
+      ansible.builtin.file:
+        path: /opt/autobot/ai-stack
+        state: absent
+
+    - name: "SLM | Clean: wrong-node autobot-npu-worker dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-npu-worker
+        state: absent
+
+    - name: "SLM | Clean: wrong-node autobot-browser-worker dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-browser-worker
+        state: absent
+
+    - name: "SLM | Clean: stale loose scripts dir"
+      ansible.builtin.file:
+        path: /opt/autobot/scripts
+        state: absent
+
+    - name: "SLM | Clean: stale loose config dir"
+      ansible.builtin.file:
+        path: /opt/autobot/config
+        state: absent
+
+# ---------------------------------------------------------------------------
+# Play 2: Backend (.20) — remove legacy dirs + flat Python files
+# ---------------------------------------------------------------------------
+- name: "Cleanup: 01-Backend (.20)"
+  hosts: 01-Backend
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: "Backend | Clean: legacy npu-worker dir"
+      ansible.builtin.file:
+        path: /opt/autobot/npu-worker
+        state: absent
+
+    - name: "Backend | Clean: legacy browser-service dir"
+      ansible.builtin.file:
+        path: /opt/autobot/browser-service
+        state: absent
+
+    - name: "Backend | Clean: legacy ai-stack dir"
+      ansible.builtin.file:
+        path: /opt/autobot/ai-stack
+        state: absent
+
+    - name: "Backend | Clean: legacy autobot-user-backend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-user-backend
+        state: absent
+
+    - name: "Backend | Clean: wrong-node autobot-slm-frontend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-slm-frontend
+        state: absent
+
+    - name: "Backend | Clean: wrong-node autobot-slm-backend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-slm-backend
+        state: absent
+
+    - name: "Backend | Clean: stale loose scripts dir"
+      ansible.builtin.file:
+        path: /opt/autobot/scripts
+        state: absent
+
+    - name: "Backend | Clean: stale loose config dir"
+      ansible.builtin.file:
+        path: /opt/autobot/config
+        state: absent
+
+    - name: "Backend | Find flat Python files at /opt/autobot root"
+      ansible.builtin.find:
+        paths: /opt/autobot
+        patterns: "*.py"
+        file_type: file
+        depth: 1
+      register: flat_py_files
+      failed_when: false
+
+    - name: "Backend | Report flat Python files found"
+      ansible.builtin.debug:
+        msg: "Found flat Python file to remove: {{ item.path }}"
+      loop: "{{ flat_py_files.files | default([]) }}"
+
+    - name: "Backend | Remove flat Python files at /opt/autobot root"
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ flat_py_files.files | default([]) }}"
+
+# ---------------------------------------------------------------------------
+# Play 3: Frontend (.21) — remove wrong-node autobot-slm-frontend and others
+# ---------------------------------------------------------------------------
+- name: "Cleanup: 02-Frontend (.21)"
+  hosts: 02-Frontend
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: "Frontend | Clean: legacy autobot-user-frontend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-user-frontend
+        state: absent
+
+    - name: "Frontend | Clean: wrong-node autobot-slm-frontend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-slm-frontend
+        state: absent
+
+    - name: "Frontend | Clean: wrong-node autobot-slm-backend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-slm-backend
+        state: absent
+
+    - name: "Frontend | Clean: wrong-node autobot-backend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-backend
+        state: absent
+
+    - name: "Frontend | Clean: legacy npu-worker dir"
+      ansible.builtin.file:
+        path: /opt/autobot/npu-worker
+        state: absent
+
+    - name: "Frontend | Clean: legacy browser-service dir"
+      ansible.builtin.file:
+        path: /opt/autobot/browser-service
+        state: absent
+
+    - name: "Frontend | Clean: stale loose scripts dir"
+      ansible.builtin.file:
+        path: /opt/autobot/scripts
+        state: absent
+
+    - name: "Frontend | Clean: stale loose config dir"
+      ansible.builtin.file:
+        path: /opt/autobot/config
+        state: absent
+
+# ---------------------------------------------------------------------------
+# Play 4: NPU Worker (.22) — remove wrong-node and legacy dirs
+# ---------------------------------------------------------------------------
+- name: "Cleanup: npu-worker (.22)"
+  hosts: npu-worker
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: "NPU | Clean: legacy npu-worker dir (old name)"
+      ansible.builtin.file:
+        path: /opt/autobot/npu-worker
+        state: absent
+
+    - name: "NPU | Clean: wrong-node autobot-backend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-backend
+        state: absent
+
+    - name: "NPU | Clean: wrong-node autobot-frontend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-frontend
+        state: absent
+
+    - name: "NPU | Clean: wrong-node autobot-slm-backend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-slm-backend
+        state: absent
+
+    - name: "NPU | Clean: legacy browser-service dir"
+      ansible.builtin.file:
+        path: /opt/autobot/browser-service
+        state: absent
+
+    - name: "NPU | Clean: legacy ai-stack dir"
+      ansible.builtin.file:
+        path: /opt/autobot/ai-stack
+        state: absent
+
+    - name: "NPU | Clean: stale loose scripts dir"
+      ansible.builtin.file:
+        path: /opt/autobot/scripts
+        state: absent
+
+    - name: "NPU | Clean: stale loose config dir"
+      ansible.builtin.file:
+        path: /opt/autobot/config
+        state: absent
+
+# ---------------------------------------------------------------------------
+# Play 5: AI Stack (.24) — remove legacy ai-stack and wrong-node dirs
+# ---------------------------------------------------------------------------
+- name: "Cleanup: 03-AI-Stack (.24)"
+  hosts: 03-AI-Stack
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: "AI Stack | Clean: legacy ai-stack dir (old name)"
+      ansible.builtin.file:
+        path: /opt/autobot/ai-stack
+        state: absent
+
+    - name: "AI Stack | Clean: wrong-node autobot-backend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-backend
+        state: absent
+
+    - name: "AI Stack | Clean: wrong-node autobot-frontend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-frontend
+        state: absent
+
+    - name: "AI Stack | Clean: wrong-node autobot-slm-backend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-slm-backend
+        state: absent
+
+    - name: "AI Stack | Clean: legacy npu-worker dir"
+      ansible.builtin.file:
+        path: /opt/autobot/npu-worker
+        state: absent
+
+    - name: "AI Stack | Clean: legacy browser-service dir"
+      ansible.builtin.file:
+        path: /opt/autobot/browser-service
+        state: absent
+
+    - name: "AI Stack | Clean: stale loose scripts dir"
+      ansible.builtin.file:
+        path: /opt/autobot/scripts
+        state: absent
+
+    - name: "AI Stack | Clean: stale loose config dir"
+      ansible.builtin.file:
+        path: /opt/autobot/config
+        state: absent
+
+# ---------------------------------------------------------------------------
+# Play 6: Database (.23) — remove wrong-node and legacy dirs
+# ---------------------------------------------------------------------------
+- name: "Cleanup: 04-Databases (.23)"
+  hosts: 04-Databases
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: "Databases | Clean: wrong-node autobot-backend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-backend
+        state: absent
+
+    - name: "Databases | Clean: wrong-node autobot-frontend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-frontend
+        state: absent
+
+    - name: "Databases | Clean: wrong-node autobot-slm-backend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-slm-backend
+        state: absent
+
+    - name: "Databases | Clean: legacy npu-worker dir"
+      ansible.builtin.file:
+        path: /opt/autobot/npu-worker
+        state: absent
+
+    - name: "Databases | Clean: legacy browser-service dir"
+      ansible.builtin.file:
+        path: /opt/autobot/browser-service
+        state: absent
+
+    - name: "Databases | Clean: legacy ai-stack dir"
+      ansible.builtin.file:
+        path: /opt/autobot/ai-stack
+        state: absent
+
+    - name: "Databases | Clean: stale loose scripts dir"
+      ansible.builtin.file:
+        path: /opt/autobot/scripts
+        state: absent
+
+    - name: "Databases | Clean: stale loose config dir"
+      ansible.builtin.file:
+        path: /opt/autobot/config
+        state: absent
+
+    # NOTE: data/ and logs/ are NOT removed — contain live Redis + PostgreSQL data
+
+# ---------------------------------------------------------------------------
+# Play 7: Browser (.25) — remove legacy browser-service and wrong-node dirs
+# ---------------------------------------------------------------------------
+- name: "Cleanup: browser-automation (.25)"
+  hosts: browser-automation
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: "Browser | Clean: legacy browser-service dir (old name)"
+      ansible.builtin.file:
+        path: /opt/autobot/browser-service
+        state: absent
+
+    - name: "Browser | Clean: wrong-node autobot-backend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-backend
+        state: absent
+
+    - name: "Browser | Clean: wrong-node autobot-frontend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-frontend
+        state: absent
+
+    - name: "Browser | Clean: wrong-node autobot-slm-backend dir"
+      ansible.builtin.file:
+        path: /opt/autobot/autobot-slm-backend
+        state: absent
+
+    - name: "Browser | Clean: legacy npu-worker dir"
+      ansible.builtin.file:
+        path: /opt/autobot/npu-worker
+        state: absent
+
+    - name: "Browser | Clean: legacy ai-stack dir"
+      ansible.builtin.file:
+        path: /opt/autobot/ai-stack
+        state: absent
+
+    - name: "Browser | Clean: stale loose scripts dir"
+      ansible.builtin.file:
+        path: /opt/autobot/scripts
+        state: absent
+
+    - name: "Browser | Clean: stale loose config dir"
+      ansible.builtin.file:
+        path: /opt/autobot/config
+        state: absent
+
+# ---------------------------------------------------------------------------
+# Post-cleanup: snapshot /opt/autobot/ on all nodes + summary
+# ---------------------------------------------------------------------------
+- name: "Post-cleanup: Verify /opt/autobot/ layout"
+  hosts: slm_nodes
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: "Verify | List /opt/autobot/ after cleanup"
+      ansible.builtin.command:
+        cmd: ls -1 /opt/autobot/
+      register: post_snapshot
+      changed_when: false
+      failed_when: false
+
+    - name: "Verify | Show post-cleanup state"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} [AFTER]: {{ post_snapshot.stdout_lines | default([]) }}"
+
+- name: "Summary"
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: "Display cleanup summary"
+      ansible.builtin.debug:
+        msg:
+          - ""
+          - "╔═══════════════════════════════════════════════════════════════╗"
+          - "║  Fleet Node Cleanup Complete (Issue #926 Phase 6)            ║"
+          - "╚═══════════════════════════════════════════════════════════════╝"
+          - ""
+          - "Cleaned nodes:"
+          - "  .19 (00-SLM-Manager) — removed wrong-node/legacy role dirs"
+          - "  .20 (01-Backend)     — removed legacy dirs + flat Python files"
+          - "  .21 (02-Frontend)    — removed wrong-node autobot-slm-frontend"
+          - "  .22 (npu-worker)     — removed legacy npu-worker dir"
+          - "  .23 (04-Databases)   — removed wrong-node/legacy dirs"
+          - "  .24 (03-AI-Stack)    — removed legacy ai-stack dir"
+          - "  .25 (browser-automation) — removed legacy browser-service dir"
+          - ""
+          - "NOTE: data/ and logs/ were NOT removed (contain runtime data)"
+          - ""
+          - "Run 'ansible-playbook playbooks/cleanup-nodes.yml --check'"
+          - "to preview changes without modifying nodes."
+          - ""
