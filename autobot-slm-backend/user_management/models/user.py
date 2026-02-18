@@ -168,6 +168,7 @@ class User(Base, TimestampMixin):
         "APIKey",
         back_populates="user",
         cascade="all, delete-orphan",
+        foreign_keys="[APIKey.user_id]",
     )
 
     sso_links: Mapped[list["UserSSOLink"]] = relationship(
