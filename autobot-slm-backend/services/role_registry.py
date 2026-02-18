@@ -33,7 +33,7 @@ DEFAULT_ROLES = [
         "target_path": "/opt/autobot",
         "systemd_service": "autobot-backend",
         "auto_restart": False,
-        "health_check_port": 8001,
+        "health_check_port": 8443,
         "health_check_path": "/api/health",
     },
     {
@@ -44,7 +44,7 @@ DEFAULT_ROLES = [
         "target_path": "/opt/autobot",
         "systemd_service": "autobot-frontend",
         "auto_restart": True,
-        "health_check_port": 5173,
+        "health_check_port": 443,
         "post_sync_cmd": "cd /opt/autobot/autobot-frontend && npm install",
     },
     {
