@@ -3,7 +3,7 @@
 # Author: mrveiss
 """Skills System DB Models"""
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
@@ -42,6 +42,8 @@ class TrustLevel(str, Enum):
 
 
 class SkillPackage(SkillsBase):
+    """Persistent record of a skill package and its lifecycle state."""
+
     __tablename__ = "skill_packages"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False, unique=True, index=True)
@@ -55,11 +57,13 @@ class SkillPackage(SkillsBase):
     mcp_pid = Column(Integer, nullable=True)
     gap_reason = Column(Text, nullable=True)
     requested_by = Column(String, default="autobot-self")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     promoted_at = Column(DateTime, nullable=True)
 
 
 class SkillRepo(SkillsBase):
+    """Registry entry for an external or local skill repository."""
+
     __tablename__ = "skill_repos"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False, unique=True)
@@ -74,11 +78,13 @@ class SkillRepo(SkillsBase):
 
 
 class SkillApproval(SkillsBase):
+    """Approval workflow record for a skill promotion request."""
+
     __tablename__ = "skill_approvals"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     skill_id = Column(String, nullable=False, index=True)
     requested_by = Column(String, nullable=False)
-    requested_at = Column(DateTime, default=datetime.utcnow)
+    requested_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     reason = Column(Text, nullable=False)
     status = Column(String, default="pending")
     reviewed_by = Column(String, nullable=True)
@@ -94,13 +100,19 @@ class SkillApproval(SkillsBase):
 
 
 class GovernanceConfig(SkillsBase):
+    """Singleton row storing the active governance policy for skills."""
+
     __tablename__ = "skill_governance"
     id = Column(Integer, primary_key=True, default=1)
     mode = Column(String, default=GovernanceMode.SEMI_AUTO)
     default_trust_level = Column(String, default=TrustLevel.MONITORED)
     gap_detection_enabled = Column(Boolean, default=True)
     self_generation_enabled = Column(Boolean, default=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
     updated_by = Column(String, nullable=True)
 
     def __init__(self, **kwargs):
