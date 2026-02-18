@@ -11,7 +11,6 @@ Issue #697: Added OpenTelemetry tracing spans for LLM inference.
 
 import asyncio
 import logging
-import os
 import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
@@ -23,6 +22,7 @@ from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.ssot_config import get_ollama_url
 
 from ..models import LLMRequest, LLMResponse, LLMSettings
 from ..streaming import StreamingManager
@@ -66,23 +66,13 @@ class OllamaProvider:
 
     def get_host_from_env(self) -> str:
         """
-        Get Ollama host URL from environment variables.
+        Get Ollama host URL from SSOT config (same path as individual agents).
 
         Returns:
             Ollama host URL
-
-        Raises:
-            ValueError: If environment variables are not set
         """
-        ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST")
-        ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT")
-        if not ollama_host or not ollama_port:
-            raise ValueError(
-                "Ollama configuration missing: AUTOBOT_OLLAMA_HOST and "
-                "AUTOBOT_OLLAMA_PORT environment variables must be set"
-            )
-        host_url = f"http://{ollama_host}:{ollama_port}"
-        logger.debug("[REQUEST] Using Ollama URL from environment: %s", host_url)
+        host_url = get_ollama_url()
+        logger.debug("[REQUEST] Using Ollama URL from config: %s", host_url)
         return host_url
 
     def build_request_data(

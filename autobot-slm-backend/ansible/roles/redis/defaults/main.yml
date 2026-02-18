@@ -38,3 +38,8 @@ redis_tls_local_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_CERT_DIR') | default('c
 redis_tls_ca_cert: "{{ redis_tls_local_cert_dir }}/ca/ca-cert.pem"
 redis_tls_server_cert: "{{ redis_tls_local_cert_dir }}/redis/server-cert.pem"
 redis_tls_server_key: "{{ redis_tls_local_cert_dir }}/redis/server-key.pem"
+
+# Redis Exporter (Prometheus metrics)
+redis_exporter_version: "1.62.0"
+redis_exporter_port: 9121
+slm_admin_url: "https://{{ slm_host | default('172.16.168.19') }}"

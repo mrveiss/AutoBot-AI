@@ -1,0 +1,97 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# SLM Agent Role - Node Exporter Setup (#945)
+#
+# Installs node_exporter on every managed fleet node so that
+# Prometheus on the SLM server can scrape system metrics.
+# Firewall is scoped to SLM server IP only.
+---
+
+- name: "Node Exporter | Create system user"
+  ansible.builtin.user:
+    name: node_exporter
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+  become: yes
+  tags: ['slm_agent', 'node_exporter']
+
+- name: "Node Exporter | Check if binary exists"
+  ansible.builtin.stat:
+    path: /opt/node_exporter/node_exporter
+  register: _node_exporter_binary
+  tags: ['slm_agent', 'node_exporter']
+
+- name: "Node Exporter | Create install directory"
+  ansible.builtin.file:
+    path: /opt/node_exporter
+    state: directory
+    owner: node_exporter
+    group: node_exporter
+    mode: "0755"
+  become: yes
+  tags: ['slm_agent', 'node_exporter']
+
+- name: "Node Exporter | Download archive"
+  ansible.builtin.get_url:
+    url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    dest: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
+    mode: "0644"
+  when: not _node_exporter_binary.stat.exists
+  become: yes
+  tags: ['slm_agent', 'node_exporter']
+
+- name: "Node Exporter | Extract binary"
+  ansible.builtin.unarchive:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
+    dest: /opt/node_exporter
+    remote_src: true
+    extra_opts:
+      - --strip-components=1
+    owner: node_exporter
+    group: node_exporter
+  when: not _node_exporter_binary.stat.exists
+  become: yes
+  tags: ['slm_agent', 'node_exporter']
+
+- name: "Node Exporter | Deploy systemd service"
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: yes
+  notify:
+    - Reload systemd
+    - Restart node_exporter
+  tags: ['slm_agent', 'node_exporter']
+
+- name: "Node Exporter | Enable and start service"
+  ansible.builtin.systemd:
+    name: node_exporter
+    state: started
+    enabled: true
+    daemon_reload: true
+  become: yes
+  tags: ['slm_agent', 'node_exporter']
+
+- name: "Node Exporter | Check if UFW is installed"
+  ansible.builtin.command: which ufw
+  register: _ufw_check
+  changed_when: false
+  failed_when: false
+  tags: ['slm_agent', 'node_exporter', 'firewall']
+
+- name: "Node Exporter | Allow scrape from SLM server only"
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ slm_admin_url | regex_replace('^https?://([^:/]+).*$', '\\1') }}"
+    port: "{{ node_exporter_port | string }}"
+    proto: tcp
+    comment: "Node Exporter (Prometheus scrape from SLM)"
+  become: yes
+  when: _ufw_check.rc == 0
+  tags: ['slm_agent', 'node_exporter', 'firewall']

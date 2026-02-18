@@ -83,6 +83,35 @@ def configure_logging():
     logger.info("📊 Logging level set to: %s (%s)", LOG_LEVEL, LOG_LEVEL_VALUE)
 
 
+async def _init_cache_coordinator() -> None:
+    """Register caches with CacheCoordinator for memory optimization.
+
+    Helper for initialize_critical_services (Issue #743).
+    """
+    logger.info("✅ [ 55%] Cache: Registering caches with CacheCoordinator...")
+    try:
+        from cache import register_all_caches
+
+        cache_count = register_all_caches()
+        logger.info(
+            "✅ [ 55%] Cache: %d caches registered for coordinated management",
+            cache_count,
+        )
+    except Exception as cache_error:
+        logger.warning("Cache registration failed (non-critical): %s", cache_error)
+
+
+async def _init_skills_tables() -> None:
+    """Create skills system tables if they don't exist."""
+    from skills.db import get_skills_engine
+    from skills.models import SkillsBase
+
+    engine = get_skills_engine()
+    async with engine.begin() as conn:
+        await conn.run_sync(SkillsBase.metadata.create_all)
+    logger.info("Skills tables initialized")
+
+
 async def _init_chat_history_manager(app: FastAPI) -> None:
     """Initialize chat history manager (Issue #665: extracted helper).
 
@@ -256,17 +285,15 @@ async def initialize_critical_services(app: FastAPI):
         await _init_chat_workflow_manager(app)
 
         # Issue #743: Register caches with CacheCoordinator for memory optimization
-        logger.info("✅ [ 55%] Cache: Registering caches with CacheCoordinator...")
-        try:
-            from cache import register_all_caches
+        await _init_cache_coordinator()
 
-            cache_count = register_all_caches()
-            logger.info(
-                "✅ [ 55%] Cache: %d caches registered for coordinated management",
-                cache_count,
+        # Initialize skills system tables (non-blocking, SQLite-backed)
+        try:
+            await _init_skills_tables()
+        except Exception as skills_db_error:
+            logger.warning(
+                "Skills table initialization failed (non-critical): %s", skills_db_error
             )
-        except Exception as cache_error:
-            logger.warning("Cache registration failed (non-critical): %s", cache_error)
 
         logger.info("✅ [ 60%] PHASE 1 COMPLETE: All critical services operational")
 

@@ -11,6 +11,9 @@ import logging
 from typing import List, Optional
 
 from auth_middleware import get_current_user
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
+
 from backend.knowledge.search_filters import (
     augment_search_request_with_permissions,
     extract_user_context_from_request,
@@ -18,8 +21,6 @@ from backend.knowledge.search_filters import (
 )
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.user_management.models.user import User
-from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -93,23 +94,20 @@ async def scoped_search(
             search_request.query,
         )
 
-        # Build permission filter for ChromaDB (currently unused - see post-filter below)
-        # TODO: Pass permission_where to kb.search() when ChromaDB metadata filter API is confirmed
-        _ = await augment_search_request_with_permissions(
+        # Build permission filter for ChromaDB metadata pre-filtering (Issue #934)
+        permission_where = await augment_search_request_with_permissions(
             query=search_request.query,
             user_id=user_id,
             user_org_id=user_org_id,
             user_group_ids=user_group_ids,
         )
 
-        # Execute search with permission filter
-        # Use the existing knowledge base search method
+        # Execute search with permission filter applied at ChromaDB level
         if hasattr(kb, "search"):
             results = await kb.search(
                 query=search_request.query,
                 top_k=search_request.top_k,
-                category=search_request.category,
-                # TODO: Pass permission filter as metadata filter once API confirmed
+                filters=permission_where,
             )
         else:
             raise HTTPException(

@@ -542,6 +542,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAppStore } from '@/stores/useAppStore'
+import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('App');
@@ -576,6 +577,7 @@ export default {
   setup() {
     // Store references
     const appStore = useAppStore();
+    const userStore = useUserStore();
     const chatStore = useChatStore();
     const knowledgeStore = useKnowledgeStore();
     const router = useRouter();
@@ -634,7 +636,9 @@ export default {
     // Computed properties
     const isLoading = computed(() => appStore?.isLoading || false);
     const hasErrors = computed(() => false); // No errors property in store
-    const isLoginPage = computed(() => router.currentRoute.value.path === '/login');
+    const isLoginPage = computed(() =>
+      router.currentRoute.value.path === '/login' || !userStore.isAuthenticated
+    );
 
     // Methods
     const toggleMobileNav = () => {

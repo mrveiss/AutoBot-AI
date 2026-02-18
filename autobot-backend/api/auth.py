@@ -14,12 +14,12 @@ from typing import Dict, List, Optional
 
 import jwt as pyjwt
 from auth_middleware import auth_middleware
-from backend.user_management.database import db_session_context
-from backend.user_management.services.user_service import UserService
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, validator
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.user_management.database import db_session_context
+from backend.user_management.services.user_service import UserService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -218,6 +218,7 @@ async def login(request: Request, login_data: LoginRequest):
         # Remove sensitive data from response
         safe_user_data = {
             "username": user_data["username"],
+            "user_id": user_data.get("user_id", user_data["username"]),
             "role": user_data["role"],
             "email": user_data.get("email", ""),
             "last_login": user_data.get("last_login"),

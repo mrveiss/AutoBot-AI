@@ -91,7 +91,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { useRouter } from 'vue-router'
 
 const logger = createLogger('LoginForm')
-import { useUserStore } from '@/stores/useUserStore'
+import { useUserStore, type UserProfile } from '@/stores/useUserStore'
 import ApiClient from '@/utils/ApiClient'
 import BaseAlert from '@/components/ui/BaseAlert.vue'
 
@@ -190,10 +190,31 @@ async function handleLogin() {
     })
 
     if (response.success && response.user && response.token) {
+      // Map backend response to complete UserProfile (#946)
+      const u = response.user
+      const userProfile: UserProfile = {
+        id: u.user_id || u.username || '',
+        username: u.username,
+        email: u.email || '',
+        displayName: u.username
+          ? u.username.charAt(0).toUpperCase() + u.username.slice(1)
+          : u.username,
+        role: (u.role as 'admin' | 'user' | 'viewer') || 'user',
+        preferences: {
+          theme: 'auto',
+          language: 'en',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          notifications: { email: true, browser: true, sound: false },
+          ui: { sidebarCollapsed: false, compactMode: false, showTooltips: true, animationsEnabled: true },
+          accessibility: { highContrast: false, reducedMotion: false, fontSize: 'medium', keyboardNavigation: false },
+          chat: { autoSave: true, messageHistory: 100, typingIndicators: true, timestamps: true }
+        },
+        createdAt: new Date(),
+        lastLoginAt: new Date()
+      }
       // Store authentication data
-      userStore.login(response.user, {
+      userStore.login(userProfile, {
         token: response.token,
-        refreshToken: response.refreshToken,
         expiresIn: 24 * 60 * 60 // 24 hours in seconds
       })
 
@@ -205,8 +226,7 @@ async function handleLogin() {
       credentials.password = ''
 
       // Redirect to intended route or chat
-      const redirectTo = router.currentRoute.value.query.redirect as string || '/chat'
-      await router.push(redirectTo)
+      await router.push('/chat')
 
     } else {
       loginError.value = response.message || 'Login failed. Please check your credentials.'

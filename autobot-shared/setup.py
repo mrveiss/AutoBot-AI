@@ -17,5 +17,6 @@ setup(
         "pydantic>=2.0.0",
         "requests>=2.31.0",
         "aiohttp>=3.9.0",
+        "prometheus-client>=0.20.0",
     ],
 )

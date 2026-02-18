@@ -1,0 +1,96 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Redis Role - Redis Exporter Setup
+#
+# Installs redis_exporter on the Redis VM so Prometheus on the SLM server
+# can scrape Redis metrics. Firewall is scoped to SLM server IP only.
+---
+
+- name: "Redis Exporter | Create system user"
+  ansible.builtin.user:
+    name: redis_exporter
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+  become: yes
+  tags: ['redis', 'redis_exporter']
+
+- name: "Redis Exporter | Check if binary exists"
+  ansible.builtin.stat:
+    path: /opt/redis_exporter/redis_exporter
+  register: _redis_exporter_binary
+  tags: ['redis', 'redis_exporter']
+
+- name: "Redis Exporter | Create install directory"
+  ansible.builtin.file:
+    path: /opt/redis_exporter
+    state: directory
+    owner: redis_exporter
+    group: redis_exporter
+    mode: "0755"
+  become: yes
+  tags: ['redis', 'redis_exporter']
+
+- name: "Redis Exporter | Download archive"
+  ansible.builtin.get_url:
+    url: "https://github.com/oliver006/redis_exporter/releases/download/v{{ redis_exporter_version }}/redis_exporter-v{{ redis_exporter_version }}.linux-amd64.tar.gz"
+    dest: "/tmp/redis_exporter-v{{ redis_exporter_version }}.tar.gz"
+    mode: "0644"
+  when: not _redis_exporter_binary.stat.exists
+  become: yes
+  tags: ['redis', 'redis_exporter']
+
+- name: "Redis Exporter | Extract binary"
+  ansible.builtin.unarchive:
+    src: "/tmp/redis_exporter-v{{ redis_exporter_version }}.tar.gz"
+    dest: /opt/redis_exporter
+    remote_src: true
+    extra_opts:
+      - --strip-components=1
+    owner: redis_exporter
+    group: redis_exporter
+  when: not _redis_exporter_binary.stat.exists
+  become: yes
+  tags: ['redis', 'redis_exporter']
+
+- name: "Redis Exporter | Deploy systemd service"
+  ansible.builtin.template:
+    src: redis_exporter.service.j2
+    dest: /etc/systemd/system/redis_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: yes
+  notify:
+    - Reload systemd
+    - Restart redis_exporter
+  tags: ['redis', 'redis_exporter']
+
+- name: "Redis Exporter | Enable and start service"
+  ansible.builtin.systemd:
+    name: redis_exporter
+    state: started
+    enabled: true
+    daemon_reload: true
+  become: yes
+  tags: ['redis', 'redis_exporter']
+
+- name: "Redis Exporter | Check if UFW is installed"
+  ansible.builtin.command: which ufw
+  register: _ufw_check
+  changed_when: false
+  failed_when: false
+  tags: ['redis', 'redis_exporter', 'firewall']
+
+- name: "Redis Exporter | Allow scrape from SLM server only"
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ slm_admin_url | regex_replace('^https?://([^:/]+).*$', '\\1') }}"
+    port: "{{ redis_exporter_port | string }}"
+    proto: tcp
+    comment: "Redis Exporter (Prometheus scrape from SLM)"
+  become: yes
+  when: _ufw_check.rc == 0
+  tags: ['redis', 'redis_exporter', 'firewall']

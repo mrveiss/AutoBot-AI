@@ -11,11 +11,11 @@ import logging
 from typing import Dict, List, Optional
 
 from auth_middleware import get_current_user
-from backend.knowledge.ownership import VisibilityLevel
-from backend.knowledge_factory import get_or_create_knowledge_base
-from backend.user_management.models.user import User
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+
+from backend.knowledge.ownership import VisibilityLevel
+from backend.knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ class UpdateOrganizationPolicyRequest(BaseModel):
 
 @router.get("/policy")
 async def get_organization_policy(
-    request: Request, current_user: User = Depends(get_current_user)
+    request: Request, current_user: Dict = Depends(get_current_user)
 ):
     """Get organization knowledge policy.
 
@@ -86,7 +86,8 @@ async def get_organization_policy(
     Returns:
         OrganizationKnowledgePolicy: Current policy settings
     """
-    if not current_user.org_id:
+    org_id = current_user.get("org_id")
+    if not org_id:
         raise HTTPException(
             status_code=400, detail="User not associated with an organization"
         )
@@ -97,7 +98,7 @@ async def get_organization_policy(
 
     try:
         # Get policy from Redis or use defaults
-        policy_key = f"org:policy:{current_user.org_id}"
+        policy_key = f"org:policy:{org_id}"
         policy_data = await kb.aioredis_client.get(policy_key)
 
         if policy_data:
@@ -122,7 +123,7 @@ async def get_organization_policy(
 async def update_organization_policy(
     policy_request: UpdateOrganizationPolicyRequest,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
 ):
     """Update organization knowledge policy.
 
@@ -137,27 +138,27 @@ async def update_organization_policy(
     Raises:
         403: If user is not an organization admin
     """
-    if not current_user.org_id:
+    org_id = current_user.get("org_id")
+    if not org_id:
         raise HTTPException(
             status_code=400, detail="User not associated with an organization"
         )
 
-    # TODO: Check if user is org admin (requires org admin role check)
-    # For now, assuming all users in org can update policy
+    user_role = current_user.get("role", "")
+    if user_role not in ("admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Organization admin role required")
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None:
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        pass
-
         # Store policy in Redis
-        policy_key = f"org:policy:{current_user.org_id}"
+        policy_key = f"org:policy:{org_id}"
         policy_json = policy_request.policy.model_dump_json()
         await kb.aioredis_client.set(policy_key, policy_json)
 
-        logger.info("Updated organization policy for org %s", current_user.org_id)
+        logger.info("Updated organization policy for org %s", org_id)
 
         return policy_request.policy
 
@@ -224,23 +225,28 @@ async def _analyze_organization_facts(kb, fact_ids: list) -> dict:
     }
 
 
-def _get_organization_team_count(current_user: User) -> int:
+def _get_organization_team_count(current_user: Dict) -> int:
     """Get count of teams in user's organization.
 
     Helper for get_organization_knowledge_stats() (Issue #679).
+    Dict users (auth_middleware) carry no team info — returns 0.
     """
+    team_memberships = getattr(current_user, "team_memberships", None)
+    if team_memberships is None:
+        return 0
+    org_id = str(current_user.org_id) if hasattr(current_user, "org_id") else None
     return len(
         [
             m.team
-            for m in current_user.team_memberships
-            if m.team and m.team.org_id == current_user.org_id and not m.team.is_deleted
+            for m in team_memberships
+            if m.team and str(m.team.org_id) == org_id and not m.team.is_deleted
         ]
     )
 
 
 @router.get("/stats")
 async def get_organization_knowledge_stats(
-    request: Request, current_user: User = Depends(get_current_user)
+    request: Request, current_user: Dict = Depends(get_current_user)
 ):
     """Get knowledge statistics for the organization.
 
@@ -249,7 +255,8 @@ async def get_organization_knowledge_stats(
     Returns:
         OrganizationKnowledgeStats: Statistics and breakdowns
     """
-    if not current_user.org_id:
+    org_id = current_user.get("org_id")
+    if not org_id:
         raise HTTPException(
             status_code=400, detail="User not associated with an organization"
         )
@@ -259,11 +266,9 @@ async def get_organization_knowledge_stats(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        org_id = str(current_user.org_id)
-
         # Get all organization facts
         fact_ids = await kb.ownership_manager.get_organization_facts(
-            organization_id=org_id
+            organization_id=str(org_id)
         )
 
         # Analyze facts
@@ -279,7 +284,7 @@ async def get_organization_knowledge_stats(
             reverse=True,
         )[:10]
 
-        # Get team count from user's organization
+        # Get team count — 0 for dict-based auth (no team info available)
         team_count = _get_organization_team_count(current_user)
 
         return OrganizationKnowledgeStats(
@@ -301,7 +306,7 @@ async def get_organization_knowledge_stats(
 @router.delete("/cleanup")
 async def cleanup_organization_knowledge(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
     retention_days: int = 90,
 ):
     """Clean up old organization knowledge based on retention policy.
@@ -317,12 +322,15 @@ async def cleanup_organization_knowledge(
     Raises:
         403: If user is not an organization admin
     """
-    if not current_user.org_id:
+    org_id = current_user.get("org_id")
+    if not org_id:
         raise HTTPException(
             status_code=400, detail="User not associated with an organization"
         )
 
-    # TODO: Check if user is org admin
+    user_role = current_user.get("role", "")
+    if user_role not in ("admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Organization admin role required")
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None or not kb.ownership_manager:
@@ -332,7 +340,7 @@ async def cleanup_organization_knowledge(
         import json
         from datetime import datetime, timedelta
 
-        org_id = str(current_user.org_id)
+        org_id = str(org_id)
 
         # Get all organization facts
         fact_ids = await kb.ownership_manager.get_organization_facts(

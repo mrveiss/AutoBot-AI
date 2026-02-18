@@ -19,7 +19,8 @@ StandardOutput=append:{{ slm_log_dir }}/slm-backend.log
 StandardError=append:{{ slm_log_dir }}/slm-backend-error.log
 
 # Security hardening
-NoNewPrivileges=true
+# NoNewPrivileges intentionally omitted: the backend needs sudo systemctl
+# for self-restart during GUI-triggered SLM sync (#926 code_sync.py)
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only

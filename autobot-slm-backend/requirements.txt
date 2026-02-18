@@ -6,6 +6,9 @@
 #   sudo apt install sshpass  # Required for password-based SSH connections
 #
 
+# Prometheus metrics (Issue #937: shared monitoring implementation)
+prometheus-client>=0.20.0
+
 # Web framework
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0

@@ -9,14 +9,14 @@ Issue #679: Audit logging and compliance reporting for knowledge access and modi
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Dict, Optional
 
 from auth_middleware import get_current_user
-from backend.knowledge.audit_log import AuditEventType, KnowledgeAuditLog
-from backend.knowledge_factory import get_or_create_knowledge_base
-from backend.user_management.models.user import User
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+
+from backend.knowledge.audit_log import AuditEventType, KnowledgeAuditLog
+from backend.knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ async def _get_audit_log(kb) -> KnowledgeAuditLog:
 @router.get("/user-activity")
 async def get_user_activity_log(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
 ):
@@ -93,11 +93,12 @@ async def get_user_activity_log(
     try:
         audit_log = await _get_audit_log(kb)
 
+        user_id = current_user.get("user_id") or current_user.get("username", "")
         events = await audit_log.get_user_activity(
-            user_id=str(current_user.id), limit=limit, offset=offset
+            user_id=user_id, limit=limit, offset=offset
         )
 
-        return {"events": events, "count": len(events), "user_id": str(current_user.id)}
+        return {"events": events, "count": len(events), "user_id": user_id}
 
     except Exception as e:
         logger.error("Error retrieving user activity: %s", e)
@@ -108,7 +109,7 @@ async def get_user_activity_log(
 async def get_fact_access_log(
     fact_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
     limit: int = Query(default=100, ge=1, le=1000),
 ):
     """Get access log for a specific fact.
@@ -141,7 +142,8 @@ async def get_fact_access_log(
             fact_data = fact_data.decode("utf-8")
         metadata = json.loads(fact_data)
 
-        if metadata.get("owner_id") != str(current_user.id):
+        user_id = current_user.get("user_id") or current_user.get("username", "")
+        if metadata.get("owner_id") != user_id:
             raise HTTPException(
                 status_code=403, detail="Only the owner can view access logs"
             )
@@ -164,13 +166,14 @@ async def get_fact_access_log(
 @router.get("/organization/audit-log")
 async def get_organization_audit_log(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
     limit: int = Query(default=1000, ge=1, le=10000),
     offset: int = Query(default=0, ge=0),
 ):
     """Get audit log for the organization.
 
     Issue #679: Organization admins can view all organization activity.
+    Issue #934: Enforce org admin role.
 
     Args:
         limit: Maximum events to return
@@ -182,12 +185,15 @@ async def get_organization_audit_log(
     Raises:
         403: If user is not an organization admin
     """
-    if not current_user.org_id:
+    org_id = current_user.get("org_id")
+    if not org_id:
         raise HTTPException(
             status_code=400, detail="User not associated with an organization"
         )
 
-    # TODO: Check if user is org admin
+    user_role = current_user.get("role", "")
+    if user_role not in ("admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Organization admin role required")
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None:
@@ -197,13 +203,13 @@ async def get_organization_audit_log(
         audit_log = await _get_audit_log(kb)
 
         events = await audit_log.get_organization_audit_log(
-            organization_id=str(current_user.org_id), limit=limit, offset=offset
+            organization_id=org_id, limit=limit, offset=offset
         )
 
         return {
             "events": events,
             "count": len(events),
-            "organization_id": str(current_user.org_id),
+            "organization_id": org_id,
         }
 
     except Exception as e:
@@ -221,7 +227,7 @@ async def get_organization_audit_log(
 @router.get("/permission-changes")
 async def get_permission_changes(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
     fact_id: Optional[str] = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
 ):
@@ -243,8 +249,9 @@ async def get_permission_changes(
     try:
         audit_log = await _get_audit_log(kb)
 
+        user_id = current_user.get("user_id") or current_user.get("username", "")
         events = await audit_log.get_permission_changes(
-            fact_id=fact_id, user_id=str(current_user.id), limit=limit
+            fact_id=fact_id, user_id=user_id, limit=limit
         )
 
         return {"events": events, "count": len(events)}
@@ -265,11 +272,12 @@ async def get_permission_changes(
 async def generate_compliance_report(
     report_request: ComplianceReportRequest,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
 ):
     """Generate compliance report for an organization.
 
     Issue #679: Organization admins can generate compliance reports.
+    Issue #934: Enforce org admin role.
 
     Args:
         report_request: Report parameters
@@ -283,13 +291,16 @@ async def generate_compliance_report(
     # Determine organization ID
     org_id = report_request.organization_id
     if not org_id:
-        if not current_user.org_id:
+        user_org_id = current_user.get("org_id")
+        if not user_org_id:
             raise HTTPException(
                 status_code=400, detail="User not associated with an organization"
             )
-        org_id = str(current_user.org_id)
+        org_id = user_org_id
 
-    # TODO: Check if user is org admin for the specified org
+    user_role = current_user.get("role", "")
+    if user_role not in ("admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Organization admin role required")
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None:
@@ -320,12 +331,13 @@ async def generate_compliance_report(
 @router.get("/compliance-summary")
 async def get_compliance_summary(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
     days: int = Query(default=30, ge=1, le=365),
 ):
     """Get compliance summary for the last N days.
 
     Issue #679: Quick overview of organization activity for compliance.
+    Issue #934: Enforce org admin role.
 
     Args:
         days: Number of days to include (default: 30)
@@ -333,12 +345,15 @@ async def get_compliance_summary(
     Returns:
         Summary statistics for the period
     """
-    if not current_user.org_id:
+    org_id = current_user.get("org_id")
+    if not org_id:
         raise HTTPException(
             status_code=400, detail="User not associated with an organization"
         )
 
-    # TODO: Check if user is org admin
+    user_role = current_user.get("role", "")
+    if user_role not in ("admin", "org_admin"):
+        raise HTTPException(status_code=403, detail="Organization admin role required")
 
     kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
     if kb is None:
@@ -351,7 +366,7 @@ async def get_compliance_summary(
         audit_log = await _get_audit_log(kb)
 
         report = await audit_log.generate_compliance_report(
-            organization_id=str(current_user.org_id),
+            organization_id=org_id,
             start_date=start_date,
             end_date=end_date,
         )

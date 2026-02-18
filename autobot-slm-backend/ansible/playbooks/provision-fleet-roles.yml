@@ -41,9 +41,9 @@
 
   tasks:
     - name: "Agent | Deploy SLM agent"
-      ansible.builtin.include_role:
+      ansible.builtin.import_role:
         name: slm_agent
-      tags: ['slm-agent', 'provision']
+      tags: ['slm-agent', 'slm_agent', 'provision']
 
 # -------------------------------------------------------------------
 # Phase 3: Data layer (Redis, PostgreSQL)
@@ -55,9 +55,9 @@
 
   tasks:
     - name: "Data | Deploy Redis role"
-      ansible.builtin.include_role:
+      ansible.builtin.import_role:
         name: redis
-      tags: ['redis', 'provision']
+      tags: ['redis', 'redis_exporter', 'provision']
 
 # -------------------------------------------------------------------
 # Phase 4: Application layer (Backend, Frontend)
@@ -134,25 +134,8 @@
       tags: ['browser', 'provision']
 
 # -------------------------------------------------------------------
-# Phase 7: Monitoring on all nodes (node_exporter)
-# -------------------------------------------------------------------
-- name: "Provision Phase 7: Node Monitoring"
-  hosts: slm_nodes:!00-SLM-Manager
-  become: true
-  gather_facts: false
-
-  tasks:
-    - name: "Monitor | Deploy node_exporter via monitoring role"
-      ansible.builtin.include_role:
-        name: monitoring
-      vars:
-        monitoring_install_prometheus: false
-        monitoring_install_grafana: false
-        monitoring_install_node_exporter: true
-      tags: ['monitoring', 'provision']
-
-# -------------------------------------------------------------------
-# Phase 8: Summary
+# Phase 7: Summary
+# (node_exporter is now deployed by slm_agent role in Phase 2 - #945)
 # -------------------------------------------------------------------
 - name: "Provision Summary"
   hosts: localhost
@@ -166,13 +149,14 @@
           - "=== Fleet Auto-Provisioning Complete ==="
           - ""
           - "Provisioned nodes:"
-          - "  01-Backend      : backend, vnc, slm-agent"
-          - "  02-Frontend     : frontend, slm-agent"
-          - "  npu-worker      : npu-worker, slm-agent"
-          - "  03-AI-Stack     : ai-stack, llm, slm-agent"
-          - "  04-Databases    : redis, slm-agent"
-          - "  browser-auto    : browser, slm-agent"
+          - "  01-Backend      : autobot-backend, llm, vnc, autobot-slm-agent"
+          - "  02-Frontend     : autobot-frontend, autobot-slm-agent"
+          - "  npu-worker      : autobot-npu-worker, autobot-slm-agent"
+          - "  03-AI-Stack     : autobot-ai-stack, llm, autobot-slm-agent"
+          - "  04-Databases    : autobot-database, autobot-slm-agent"
+          - "  browser-auto    : autobot-browser-worker, autobot-slm-agent"
           - ""
-          - "All nodes have: common + slm-agent + node_exporter"
+          - "All nodes have: common + autobot-slm-agent + node_exporter"
+          - "  (node_exporter deployed by slm_agent role, not a separate phase)"
           - ""
           - "Next: Verify with health-check.yml"

@@ -315,7 +315,16 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["integrations-monitoring"],
         "integration_monitoring",
     ),
-    # Skills system (Issue #731)
+    # Skills repo management and governance MUST be registered before the base skills
+    # router so their static path prefixes take precedence over skills' /{name} param.
+    ("backend.api.skills_repos", "/skills/repos", ["skills"], "skills-repos"),
+    (
+        "backend.api.skills_governance",
+        "/skills/governance",
+        ["skills"],
+        "skills-governance",
+    ),
+    # Skills system base (Issue #731) - registered AFTER sub-routers (see above)
     ("backend.api.skills", "/skills", ["skills"], "skills"),
     # Knowledge graph pipeline (Issue #759)
     (

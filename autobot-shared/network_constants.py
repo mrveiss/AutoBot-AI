@@ -240,11 +240,9 @@ class ServiceURLs:
     )
 
     # Ollama LLM URLs (computed from ConfigRegistry)
+    # Ollama runs on the local host (.20); OLLAMA_MAIN pointed to .24 (wrong).
     OLLAMA_LOCAL: str = (
         f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
-    )
-    OLLAMA_MAIN: str = (
-        f"http://{NetworkConstants.AI_STACK_VM_IP}:{NetworkConstants.OLLAMA_PORT}"
     )
 
     # VNC Desktop URLs (computed from ConfigRegistry)
@@ -347,7 +345,7 @@ class NetworkConfig:
     @property
     def ollama_url(self) -> str:
         """Get Ollama URL based on deployment context"""
-        return ServiceURLs.OLLAMA_MAIN
+        return ServiceURLs.OLLAMA_LOCAL
 
     @cached_property
     def _service_map(self) -> dict:

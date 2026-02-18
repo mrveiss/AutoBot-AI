@@ -41,6 +41,10 @@ slm_agent_debug: false
 slm_agent_restart_sec: 10
 slm_agent_watchdog_sec: 60
 
+# Node Exporter (general fleet monitoring, issue #945)
+node_exporter_version: "1.7.0"
+node_exporter_port: 9100
+
 # Issue #741: Version tracking
 # Set this to override the git commit (e.g., for releases)
 # When empty, the current git commit hash is auto-detected

@@ -40,33 +40,34 @@
     # Role names must match AVAILABLE_ROLES in api/deployments.py.
     node_role_map:
       00-SLM-Manager:
-        - slm-agent
-        - postgresql
-        - monitoring
+        - autobot-slm-agent
+        - autobot-slm-database
+        - autobot-monitoring
       01-Backend:
-        - slm-agent
-        - backend
+        - autobot-slm-agent
+        - autobot-backend
+        - llm
         - vnc
       02-Frontend:
-        - slm-agent
-        - frontend
+        - autobot-slm-agent
+        - autobot-frontend
       npu-worker:
-        - slm-agent
-        - npu-worker
+        - autobot-slm-agent
+        - autobot-npu-worker
       03-AI-Stack:
-        - slm-agent
-        - ai-stack
+        - autobot-slm-agent
+        - autobot-ai-stack
         - llm
       04-Databases:
-        - slm-agent
-        - redis
+        - autobot-slm-agent
+        - autobot-database
       browser-automation:
-        - slm-agent
-        - browser-automation
+        - autobot-slm-agent
+        - autobot-browser-worker
       05-Node-26:
-        - slm-agent
+        - autobot-slm-agent
       06-Node-27:
-        - slm-agent
+        - autobot-slm-agent
 
   tasks:
     - name: "Authenticate with SLM API"

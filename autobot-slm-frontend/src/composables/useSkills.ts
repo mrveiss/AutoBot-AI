@@ -250,3 +250,190 @@ function _extractError(err: unknown): string {
   }
   return String(err)
 }
+
+// =============================================================================
+// Skill Governance Types
+// =============================================================================
+
+export interface SkillRepo {
+  id: string
+  name: string
+  url: string
+  repo_type: 'git' | 'local' | 'http' | 'mcp'
+  skill_count: number
+  status: string
+  last_synced: string | null
+}
+
+export interface SkillApproval {
+  id: string
+  skill_id: string
+  requested_by: string
+  requested_at: string
+  reason: string
+  status: 'pending' | 'approved' | 'rejected'
+  notes: string | null
+}
+
+export interface GovernanceConfig {
+  mode: 'full_auto' | 'semi_auto' | 'locked'
+  gap_detection_enabled: boolean
+  default_trust_level: string
+}
+
+// Governance API base — hits main backend via SLM nginx proxy
+const SKILLS_REPOS_BASE = '/autobot-api/skills/repos'
+const SKILLS_GOV_BASE = '/autobot-api/skills/governance'
+
+// =============================================================================
+// useSkillGovernance Composable
+// =============================================================================
+
+export function useSkillGovernance() {
+  const authStore = useAuthStore()
+  const repos = ref<SkillRepo[]>([])
+  const approvals = ref<SkillApproval[]>([])
+  const drafts = ref<Record<string, unknown>[]>([])
+  const governanceConfig = ref<GovernanceConfig | null>(null)
+  const loading = ref(false)
+  const error = ref<string | null>(null)
+
+  const api = axios.create({ timeout: 15000 })
+  api.interceptors.request.use((config) => {
+    const token = authStore.token
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  })
+
+  async function fetchRepos(): Promise<void> {
+    loading.value = true
+    try {
+      const { data } = await api.get<SkillRepo[]>(SKILLS_REPOS_BASE)
+      repos.value = data
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : 'Failed to fetch repos'
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function addRepo(
+    payload: Omit<SkillRepo, 'id' | 'skill_count' | 'status' | 'last_synced'>,
+  ): Promise<unknown> {
+    try {
+      const { data } = await api.post(SKILLS_REPOS_BASE, payload)
+      await fetchRepos()
+      return data
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : 'Failed to add repo'
+      throw e
+    }
+  }
+
+  async function syncRepo(repoId: string): Promise<unknown> {
+    try {
+      const { data } = await api.post(`${SKILLS_REPOS_BASE}/${repoId}/sync`)
+      await fetchRepos()
+      return data
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : 'Failed to sync repo'
+      throw e
+    }
+  }
+
+  async function fetchApprovals(): Promise<void> {
+    try {
+      const { data } = await api.get<SkillApproval[]>(`${SKILLS_GOV_BASE}/approvals`)
+      approvals.value = data
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : 'Failed to fetch approvals'
+    }
+  }
+
+  async function decideApproval(
+    approvalId: string,
+    approved: boolean,
+    trustLevel = 'monitored',
+    notes = '',
+  ): Promise<void> {
+    try {
+      await api.post(`${SKILLS_GOV_BASE}/approvals/${approvalId}`, {
+        approved,
+        notes,
+        trust_level: trustLevel,
+      })
+      await fetchApprovals()
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : 'Failed to process approval'
+    }
+  }
+
+  async function fetchDrafts(): Promise<void> {
+    try {
+      const { data } = await api.get<Record<string, unknown>[]>(`${SKILLS_GOV_BASE}/drafts`)
+      drafts.value = data
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : 'Failed to fetch drafts'
+    }
+  }
+
+  async function testDraft(skillId: string): Promise<unknown> {
+    try {
+      const { data } = await api.post(`${SKILLS_GOV_BASE}/drafts/${skillId}/test`)
+      return data
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : 'Test draft failed'
+      throw e
+    }
+  }
+
+  async function promoteDraft(skillId: string): Promise<unknown> {
+    try {
+      const { data } = await api.post(`${SKILLS_GOV_BASE}/drafts/${skillId}/promote`)
+      await fetchDrafts()
+      return data
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : 'Failed to promote draft'
+      throw e
+    }
+  }
+
+  async function fetchGovernance(): Promise<void> {
+    try {
+      const { data } = await api.get<GovernanceConfig>(`${SKILLS_GOV_BASE}/`)
+      governanceConfig.value = data
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : 'Failed to fetch governance config'
+    }
+  }
+
+  async function setGovernanceMode(mode: GovernanceConfig['mode']): Promise<void> {
+    try {
+      await api.put(`${SKILLS_GOV_BASE}/`, { mode })
+      await fetchGovernance()
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : 'Failed to update governance mode'
+    }
+  }
+
+  return {
+    repos: readonly(repos),
+    approvals: readonly(approvals),
+    drafts: readonly(drafts),
+    governanceConfig: readonly(governanceConfig),
+    loading: readonly(loading),
+    error: readonly(error),
+    fetchRepos,
+    addRepo,
+    syncRepo,
+    fetchApprovals,
+    decideApproval,
+    fetchDrafts,
+    testDraft,
+    promoteDraft,
+    fetchGovernance,
+    setGovernanceMode,
+  }
+}

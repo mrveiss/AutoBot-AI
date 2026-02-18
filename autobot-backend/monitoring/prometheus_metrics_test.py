@@ -6,11 +6,12 @@ Target coverage: ≥90%
 """
 
 import pytest
+from prometheus_client import CollectorRegistry
+
 from backend.monitoring.prometheus_metrics import (
     PrometheusMetricsManager,
     get_metrics_manager,
 )
-from prometheus_client import CollectorRegistry
 
 
 class TestPrometheusMetricsManager:
@@ -25,7 +26,7 @@ class TestPrometheusMetricsManager:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """Reset the global metrics instance before each test"""
-        import monitoring.prometheus_metrics as pm
+        import autobot_shared.monitoring.prometheus_metrics as pm
 
         pm._metrics_instance = None
         yield

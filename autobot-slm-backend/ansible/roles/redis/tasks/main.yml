@@ -162,6 +162,11 @@
   become: yes
   tags: ['redis', 'backup']
 
+# Prometheus exporter - scrape target for SLM monitoring
+- name: "Redis | Install redis_exporter"
+  ansible.builtin.import_tasks: redis_exporter.yml
+  tags: ['redis', 'redis_exporter']
+
 - name: "Redis | Display configuration summary"
   debug:
     msg:

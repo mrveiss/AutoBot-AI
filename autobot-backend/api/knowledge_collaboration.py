@@ -13,14 +13,15 @@ Issue #679: Hierarchical knowledge access control system supporting:
 """
 
 import logging
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from auth_middleware import get_current_user
-from backend.knowledge.ownership import VisibilityLevel
-from backend.knowledge_factory import get_or_create_knowledge_base
-from backend.user_management.models.user import User
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+
+from backend.knowledge.ownership import VisibilityLevel
+from backend.knowledge.search_filters import extract_user_context_from_request
+from backend.knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ class KnowledgeAccessResponse(BaseModel):
 @router.get("/facts")
 async def get_knowledge_by_scope(
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
     scope: Optional[VisibilityLevel] = Query(
         default=None, description="Filter by visibility scope"
     ),
@@ -116,16 +117,13 @@ async def get_knowledge_by_scope(
 
     try:
         # Get user's organization and group memberships
-        user_org_id = str(current_user.org_id) if current_user.org_id else None
-        user_group_ids = [
-            str(m.team_id)
-            for m in current_user.team_memberships
-            if m.team and not m.team.is_deleted
-        ]
+        user_id, user_org_id, user_group_ids = extract_user_context_from_request(
+            current_user
+        )
 
         # Get all accessible facts
         fact_ids = await kb.ownership_manager.get_all_accessible_facts(
-            user_id=str(current_user.id),
+            user_id=user_id,
             user_org_id=user_org_id,
             user_group_ids=user_group_ids,
             limit=limit,
@@ -187,7 +185,7 @@ async def get_knowledge_by_scope(
 async def get_organization_knowledge(
     organization_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
 ):
@@ -211,7 +209,8 @@ async def get_organization_knowledge(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     # Verify user belongs to organization
-    if str(current_user.org_id) != organization_id:
+    _, user_org_id, _ = extract_user_context_from_request(current_user)
+    if user_org_id != organization_id:
         raise HTTPException(
             status_code=403,
             detail="Not authorized to access this organization's knowledge",
@@ -261,7 +260,7 @@ async def get_organization_knowledge(
 async def get_group_knowledge(
     group_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
 ):
@@ -285,12 +284,7 @@ async def get_group_knowledge(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     # Verify user is a member of the group
-    user_group_ids = [
-        str(m.team_id)
-        for m in current_user.team_memberships
-        if m.team and not m.team.is_deleted
-    ]
-
+    _, _, user_group_ids = extract_user_context_from_request(current_user)
     if group_id not in user_group_ids:
         raise HTTPException(
             status_code=403, detail="Not authorized to access this group's knowledge"
@@ -346,7 +340,7 @@ async def share_knowledge(
     fact_id: str,
     share_request: ShareKnowledgeRequest,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
 ):
     """Share a knowledge fact with users or groups.
 
@@ -380,7 +374,8 @@ async def share_knowledge(
         metadata = json.loads(fact_data)
 
         # Verify ownership
-        if metadata.get("owner_id") != str(current_user.id):
+        user_id, _, _ = extract_user_context_from_request(current_user)
+        if metadata.get("owner_id") != user_id:
             raise HTTPException(
                 status_code=403, detail="Only the owner can share knowledge"
             )
@@ -425,7 +420,7 @@ async def unshare_knowledge(
     fact_id: str,
     entity_id: str,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
     entity_type: str = Query(..., pattern="^(user|group)$"),
 ):
     """Revoke access to a knowledge fact from a user or group.
@@ -461,7 +456,8 @@ async def unshare_knowledge(
         metadata = json.loads(fact_data)
 
         # Verify ownership
-        if metadata.get("owner_id") != str(current_user.id):
+        user_id, _, _ = extract_user_context_from_request(current_user)
+        if metadata.get("owner_id") != user_id:
             raise HTTPException(
                 status_code=403, detail="Only the owner can unshare knowledge"
             )
@@ -503,7 +499,7 @@ async def update_knowledge_permissions(
     fact_id: str,
     permissions_request: UpdatePermissionsRequest,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: Dict = Depends(get_current_user),
 ):
     """Update knowledge fact permissions and visibility.
 
@@ -537,19 +533,20 @@ async def update_knowledge_permissions(
         metadata = json.loads(fact_data)
 
         # Verify ownership
-        if metadata.get("owner_id") != str(current_user.id):
+        user_id, user_org_id, _ = extract_user_context_from_request(current_user)
+        if metadata.get("owner_id") != user_id:
             raise HTTPException(
                 status_code=403, detail="Only the owner can update permissions"
             )
 
         # Verify organization-level permission
         if permissions_request.visibility == VisibilityLevel.ORGANIZATION:
-            if not current_user.org_id:
+            if not user_org_id:
                 raise HTTPException(
                     status_code=403,
                     detail="Cannot create organization knowledge without organization membership",
                 )
-            permissions_request.organization_id = str(current_user.org_id)
+            permissions_request.organization_id = user_org_id
 
         # Update visibility
         old_visibility = metadata.get("visibility")
@@ -560,7 +557,7 @@ async def update_knowledge_permissions(
         # Update Redis indexes
         await kb.ownership_manager.set_owner(
             fact_id=fact_id,
-            owner_id=str(current_user.id),
+            owner_id=user_id,
             visibility=permissions_request.visibility,
             source_type=metadata.get("source_type", "manual"),
             shared_with=metadata.get("shared_with", []),
@@ -599,7 +596,7 @@ async def update_knowledge_permissions(
 
 @router.get("/facts/{fact_id}/access")
 async def get_knowledge_access_info(
-    fact_id: str, request: Request, current_user: User = Depends(get_current_user)
+    fact_id: str, request: Request, current_user: Dict = Depends(get_current_user)
 ):
     """Get access information for a knowledge fact.
 
@@ -631,17 +628,14 @@ async def get_knowledge_access_info(
         metadata = json.loads(fact_data)
 
         # Get user's organization and group memberships
-        user_org_id = str(current_user.org_id) if current_user.org_id else None
-        user_group_ids = [
-            str(m.team_id)
-            for m in current_user.team_memberships
-            if m.team and not m.team.is_deleted
-        ]
+        user_id, user_org_id, user_group_ids = extract_user_context_from_request(
+            current_user
+        )
 
         # Check if user has access
         has_access = await kb.ownership_manager.check_access(
             fact_id=fact_id,
-            user_id=str(current_user.id),
+            user_id=user_id,
             fact_metadata=metadata,
             user_org_id=user_org_id,
             user_group_ids=user_group_ids,
@@ -651,7 +645,7 @@ async def get_knowledge_access_info(
             raise HTTPException(status_code=403, detail="Access denied")
 
         # Determine user permissions
-        is_owner = metadata.get("owner_id") == str(current_user.id)
+        is_owner = metadata.get("owner_id") == user_id
 
         return {
             "fact_id": fact_id,

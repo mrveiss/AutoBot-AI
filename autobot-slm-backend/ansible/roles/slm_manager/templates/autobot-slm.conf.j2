@@ -74,6 +74,19 @@ server {
         proxy_set_header Host $host;
     }
 
+    # Grafana Live WebSocket (must be before the general /grafana/ block)
+    location /grafana/api/live/ {
+        proxy_pass http://{{ grafana_host | default('127.0.0.1') }}:{{ grafana_port | default(3000) }}/grafana/api/live/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600;
+    }
+
     # Grafana reverse proxy (monitoring dashboards)
     # Issue #853: Support both local and external Grafana instances
     location /grafana/ {
@@ -99,6 +112,21 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Main AutoBot backend proxy (user backend skills, cache, etc.)
+    # /autobot-api/* → https://main_backend/api/* (strips /autobot-api prefix)
+    location /autobot-api/ {
+        proxy_pass https://{{ autobot_backend_host | default('172.16.168.20') }}:{{ autobot_backend_port | default(8443) }}/api/;
+        proxy_http_version 1.1;
+        proxy_ssl_verify off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
     }
 
     # Frontend SPA routing - serve index.html for all routes

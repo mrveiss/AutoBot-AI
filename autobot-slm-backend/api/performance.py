@@ -733,7 +733,6 @@ async def get_node_metrics(
 @router.get("/metrics/prometheus")
 async def get_prometheus_metrics(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
 ) -> Response:
     """Export metrics in Prometheus text format."""
     cutoff = datetime.utcnow() - timedelta(hours=1)
