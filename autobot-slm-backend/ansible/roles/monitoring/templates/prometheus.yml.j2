@@ -24,7 +24,7 @@ scrape_configs:
   - job_name: "slm"
     static_configs:
       - targets: ["localhost:8000"]
-    metrics_path: /api/metrics
+    metrics_path: /api/performance/metrics/prometheus
     scheme: http
 
   # Node exporters on all managed fleet nodes (auto-populated from inventory)
