@@ -201,10 +201,10 @@
     # =========================================================================
     # USER BACKEND - Main AutoBot Backend
     # =========================================================================
-    - name: "[PLAY 2] Backend | Sync autobot-user-backend code"
+    - name: "[PLAY 2] Backend | Sync autobot-backend code"
       synchronize:
-        src: "{{ playbook_dir }}/../../autobot-user-backend/"
-        dest: "{{ code_base_dir }}/autobot-user-backend/"
+        src: "{{ playbook_dir }}/../../autobot-backend/"
+        dest: "{{ code_base_dir }}/autobot-backend/"
         delete: false
         rsync_opts:
           - "--exclude=venv"
@@ -228,10 +228,10 @@
     # =========================================================================
     # USER FRONTEND - Vue Application
     # =========================================================================
-    - name: "[PLAY 2] Frontend | Sync autobot-user-frontend code"
+    - name: "[PLAY 2] Frontend | Sync autobot-frontend code"
       synchronize:
-        src: "{{ playbook_dir }}/../../autobot-user-frontend/"
-        dest: "{{ code_base_dir }}/autobot-user-frontend/"
+        src: "{{ playbook_dir }}/../../autobot-frontend/"
+        dest: "{{ code_base_dir }}/autobot-frontend/"
         delete: false
         rsync_opts:
           - "--exclude=node_modules"
@@ -242,7 +242,7 @@
     - name: "[PLAY 2] Frontend | Rebuild production dist"
       command:
         cmd: npx vite build
-        chdir: "{{ code_base_dir }}/autobot-user-frontend"
+        chdir: "{{ code_base_dir }}/autobot-frontend"
       when: "'frontend' in group_names"
       tags: [frontend, user-frontend]
 
