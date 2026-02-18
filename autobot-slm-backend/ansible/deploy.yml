@@ -32,7 +32,7 @@
     # Core Infrastructure Roles
     - name: Deploy slm-agent role
       ansible.builtin.include_role:
-        name: slm-agent
+        name: slm_agent
       when: "'slm-agent' in role_list"
 
     - name: Deploy redis role

@@ -731,10 +731,12 @@ async def provision_node_roles(
     await db.commit()
 
     # Execute deploy playbook
+    # Use node_id (maps to slm_node_id in Ansible inventory) not hostname —
+    # hostname is user-editable and can drift from inventory host names (#921)
     executor = get_playbook_executor()
     result = await executor.execute_playbook(
         playbook_name="deploy.yml",
-        limit=[node.hostname],
+        limit=[node.node_id],
         extra_vars={"target_roles": ",".join(target_roles)},
     )
 
@@ -1181,7 +1183,7 @@ async def reboot_node(
     executor = get_playbook_executor()
     result = await executor.execute_playbook(
         playbook_name="reboot-node.yml",
-        limit=[node.hostname],
+        limit=[node.node_id],
     )
 
     if result["success"]:
