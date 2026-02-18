@@ -11,7 +11,9 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import tempfile
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -28,7 +30,7 @@ class _MCPProcess:
     name: str
     proc: asyncio.subprocess.Process
     tmpfile: str
-    _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
 
 
 class MCPProcessManager:
@@ -72,7 +74,7 @@ class MCPProcessManager:
         """
         try:
             return await asyncio.create_subprocess_exec(
-                "python",
+                sys.executable,
                 script_path,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
@@ -201,7 +203,7 @@ class MCPProcessManager:
 
 
 _manager: Optional[MCPProcessManager] = None
-_manager_lock = __import__("threading").Lock()
+_manager_lock = threading.Lock()
 
 
 def get_mcp_manager() -> MCPProcessManager:

@@ -90,7 +90,7 @@ async def test_invalid_script_raises():
     """A script that exits immediately causes start() to raise RuntimeError."""
     mgr = MCPProcessManager()
     bad_script = "import sys; sys.exit(1)"
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match=r"bad-skill"):
         await mgr.start("bad-skill", bad_script)
 
 
