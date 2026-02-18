@@ -2,7 +2,7 @@
 
 > **AutoBot: Autonomous AI-Powered Linux Administration Platform**
 >
-> Multi-modal AI with 20+ specialized agents, NPU hardware acceleration, and enterprise-grade security.
+> Multi-modal AI with 20+ specialized agents, NPU hardware acceleration, and RBAC security.
 
 ---
 

@@ -22,7 +22,7 @@
 
 ## Overview (Legacy Documentation)
 
-The AutoBot Performance Monitoring System is a comprehensive, enterprise-grade monitoring solution designed specifically for AutoBot's distributed architecture across 6 VMs. It provides real-time performance monitoring, automated optimization, benchmarking capabilities, and intelligent alerting.
+The AutoBot Performance Monitoring System is a monitoring solution designed for AutoBot's distributed architecture across 6 VMs. It provides real-time performance monitoring, automated optimization, benchmarking capabilities, and intelligent alerting.
 
 ## Architecture
 
@@ -542,7 +542,7 @@ ws.onmessage = (event) => {
 
 ## Conclusion
 
-The AutoBot Performance Monitoring System provides comprehensive, enterprise-grade monitoring capabilities specifically designed for AutoBot's distributed infrastructure. With real-time monitoring, automated optimization, and intelligent alerting, it ensures optimal performance across all 6 VMs while leveraging advanced hardware acceleration capabilities.
+The AutoBot Performance Monitoring System provides comprehensive monitoring capabilities specifically designed for AutoBot's distributed infrastructure. With real-time monitoring, automated optimization, and intelligent alerting, it targets optimal performance across all VMs while leveraging hardware acceleration capabilities.
 
 The system is designed for both production deployment and development use, providing the insights and automation needed to maintain peak performance in AutoBot's complex multi-modal AI platform.
 

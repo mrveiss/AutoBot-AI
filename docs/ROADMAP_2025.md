@@ -1,7 +1,7 @@
 # AutoBot Project Roadmap 2025
 
 **Project Start**: July 2025
-**Current Status**: Active Development - Production Ready (~99%)
+**Current Status**: Active Development - See [docs/system-state.md](system-state.md) for current status
 **Last Updated**: February 18, 2026
 **Canonical Source**: This is the single authoritative project roadmap
 
