@@ -32,6 +32,7 @@ backend_redis_password: ""
 
 # API settings
 backend_secret_key: "change-me-in-production"
+backend_jwt_secret: "autobot-jwt-secret-change-in-production-minimum-32-chars"
 backend_cors_origins: "*"
 
 # LLM Configuration (Issue #858)

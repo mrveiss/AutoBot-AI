@@ -15,10 +15,11 @@ from typing import Dict, Optional, Tuple
 
 import bcrypt
 import jwt
-from backend.utils.catalog_http_exceptions import raise_auth_error
 from config import UnifiedConfigManager
 from fastapi import Request
 from security_layer import SecurityLayer
+
+from backend.utils.catalog_http_exceptions import raise_auth_error
 
 logger = logging.getLogger(__name__)
 
@@ -80,14 +81,19 @@ class AuthenticationMiddleware:
 
     def _get_jwt_secret(self) -> str:
         """Generate or retrieve JWT secret key securely"""
-        # Priority order: Environment variable -> Config file -> Generated secure secret
+        # Priority order: AUTOBOT_JWT_SECRET -> SECRET_KEY -> Config file -> Generated secret
 
-        # 1. Check environment variable first (most secure)
+        # 1. Check dedicated JWT secret env var first (most specific)
         secret = os.getenv("AUTOBOT_JWT_SECRET")
-        if secret and len(secret) >= 32:
+        if secret:
             return secret
 
-        # 2. Check configuration file
+        # 2. Fall back to SECRET_KEY env var (stable across restarts)
+        secret = os.getenv("SECRET_KEY")
+        if secret:
+            return secret
+
+        # 3. Check configuration file
         secret = self.security_config.get("jwt_secret")
         if secret and len(secret) >= 32:
             return secret

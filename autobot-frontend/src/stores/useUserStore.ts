@@ -338,6 +338,7 @@ export const useUserStore = defineStore('user', () => {
             isAuthenticated: true,
             token: data.deployment_mode === 'single_user' ? 'single_user_mode' : undefined
           }
+          persistToStorage()
           logger.info('Auto-authenticated from backend:', data.deployment_mode)
           return true
         }
