@@ -27,7 +27,7 @@ class AddRepoRequest(BaseModel):
     sync_interval: int = Field(60, description="Sync interval in minutes")
 
 
-async def _sync_packages(repo: Any) -> List[Dict[str, Any]]:
+async def _sync_packages(repo: SkillRepo) -> List[Dict[str, Any]]:
     """Discover skill packages from a repository using the appropriate syncer.
 
     Delegates to GitRepoSync, LocalDirSync, or MCPClientSync based on repo_type.
@@ -59,14 +59,21 @@ async def _get_repo_by_id(session: AsyncSession, repo_id: str) -> SkillRepo:
 async def add_repo(body: AddRepoRequest) -> Dict[str, Any]:
     """Register a new skill repository in the skills database."""
     engine = get_skills_engine()
-    repo = SkillRepo(
-        name=body.name,
-        url=body.url,
-        repo_type=body.repo_type,
-        auto_sync=body.auto_sync,
-        sync_interval=body.sync_interval,
-    )
     async with AsyncSession(engine) as session:
+        existing = await session.scalar(
+            select(SkillRepo).where(SkillRepo.name == body.name)
+        )
+        if existing is not None:
+            raise HTTPException(
+                status_code=409, detail=f"Repo '{body.name}' already registered"
+            )
+        repo = SkillRepo(
+            name=body.name,
+            url=body.url,
+            repo_type=body.repo_type,
+            auto_sync=body.auto_sync,
+            sync_interval=body.sync_interval,
+        )
         session.add(repo)
         await session.commit()
         await session.refresh(repo)
@@ -103,7 +110,15 @@ async def sync_repo(repo_id: str) -> Dict[str, Any]:
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:
         repo = await _get_repo_by_id(session, repo_id)
-        packages = await _sync_packages(repo)
+        try:
+            packages = await _sync_packages(repo)
+        except (
+            Exception
+        ) as exc:  # intentionally broad: can be network, git, or filesystem error
+            logger.error("Sync failed for repo '%s': %s", repo.name, exc)
+            raise HTTPException(
+                status_code=502, detail=f"Sync failed for repo '{repo.name}': {exc}"
+            ) from exc
         repo.skill_count = len(packages)
         await session.commit()
     logger.info("Synced %d packages from repo: %s", len(packages), repo.name)

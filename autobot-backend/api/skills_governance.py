@@ -27,6 +27,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+_GOVERNANCE_SINGLETON_ID = 1
+_STATUS_PENDING = "pending"
+_STATUS_APPROVED = "approved"
+_STATUS_REJECTED = "rejected"
+
 
 class GapRequest(BaseModel):
     """Request body for generating a skill to fill a capability gap."""
@@ -80,7 +85,11 @@ def _governance_default() -> Dict[str, Any]:
 async def detect_gap(req: GapRequest) -> Dict[str, Any]:
     """Use the SkillGenerator to produce a draft skill for the described task."""
     gen = SkillGenerator()
-    pkg = await gen.generate(req.task)
+    try:
+        pkg = await gen.generate(req.task)
+    except Exception as exc:  # intentionally broad: LLM call can fail in many ways
+        logger.warning("Skill generation failed: %s", exc)
+        return {"success": False, "errors": [str(exc)], "draft": None}
 
     validator = SkillValidator()
     result = await validator.validate(pkg["skill_md"], pkg.get("skill_py"))
@@ -160,11 +169,24 @@ async def promote_draft(skill_id: str) -> Dict[str, Any]:
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:
         skill = await _get_skill_draft(session, skill_id)
-        promoted_path = await SkillPromoter().promote(
-            name=skill.name,
-            skill_md=skill.skill_md,
-            skill_py=skill.skill_py,
-        )
+        if skill.state != SkillState.DRAFT:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Skill '{skill.name}' is already in state '{skill.state}', not DRAFT",
+            )
+        try:
+            promoted_path = await SkillPromoter().promote(
+                name=skill.name,
+                skill_md=skill.skill_md,
+                skill_py=skill.skill_py,
+            )
+        except (
+            Exception
+        ) as exc:  # intentionally broad: promoter can fail due to FS/git/IO errors
+            logger.error("Skill promotion failed for '%s': %s", skill.name, exc)
+            raise HTTPException(
+                status_code=500, detail=f"Promotion failed: {exc}"
+            ) from exc
         skill.state = SkillState.BUILTIN
         skill.promoted_at = datetime.now(timezone.utc)
         await session.commit()
@@ -179,7 +201,7 @@ async def list_approvals() -> List[Dict[str, Any]]:
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:
         result = await session.execute(
-            select(SkillApproval).where(SkillApproval.status == "pending")
+            select(SkillApproval).where(SkillApproval.status == _STATUS_PENDING)
         )
         approvals = result.scalars().all()
     return [
@@ -201,7 +223,7 @@ async def decide_approval(approval_id: str, body: ApprovalDecision) -> Dict[str,
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:
         approval = await _get_approval(session, approval_id)
-        approval.status = "approved" if body.approved else "rejected"
+        approval.status = _STATUS_APPROVED if body.approved else _STATUS_REJECTED
         approval.notes = body.notes
         approval.reviewed_at = datetime.now(timezone.utc)
         await session.commit()
@@ -236,7 +258,7 @@ async def update_governance(body: GovernanceModeUpdate) -> Dict[str, Any]:
         result = await session.execute(select(GovernanceConfig))
         config = result.scalar_one_or_none()
         if config is None:
-            config = GovernanceConfig(id=1, mode=body.mode)
+            config = GovernanceConfig(id=_GOVERNANCE_SINGLETON_ID, mode=body.mode)
             session.add(config)
         else:
             config.mode = body.mode
