@@ -133,7 +133,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, useSlots } from 'vue'
 
 interface TableColumn {
   key: string
@@ -176,6 +176,7 @@ const emit = defineEmits<{
   sort: [key: string, order: 'asc' | 'desc']
 }>()
 
+const slots = useSlots()
 const sortKey = ref<string>('')
 const sortOrder = ref<'asc' | 'desc'>('asc')
 const selectedRows = ref<Set<any>>(new Set())
@@ -188,7 +189,7 @@ const wrapperClasses = computed(() => [
 const totalColumns = computed(() => {
   let count = props.columns.length
   if (props.selectable) count++
-  if (props.$slots.actions) count++
+  if (slots.actions) count++
   return count
 })
 

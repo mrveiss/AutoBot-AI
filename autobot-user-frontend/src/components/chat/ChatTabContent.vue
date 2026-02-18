@@ -42,7 +42,7 @@
             <HostSelector
               ref="vncHostSelectorRef"
               v-model="selectedVncHost"
-              :chat-id="currentSessionId"
+              :chat-id="currentSessionId ?? undefined"
               required-capability="vnc"
               @host-selected="onVncHostSelected"
               @open-secrets-manager="emit('open-secrets-manager')"
@@ -93,7 +93,7 @@
         <HostSelector
           ref="sshHostSelectorRef"
           v-model="selectedSshHost"
-          :chat-id="currentSessionId"
+          :chat-id="currentSessionId ?? undefined"
           required-capability="ssh"
           @host-selected="onSshHostSelected"
           @open-secrets-manager="emit('open-secrets-manager')"

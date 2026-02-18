@@ -267,7 +267,7 @@ export function useChatInterface() {
       // Upload files in parallel - eliminates N+1 sequential uploads
       const uploadResults = await Promise.allSettled(
         filesToUpload.map(async (file) => {
-          const result = (await apiClient.uploadFile(file)) as unknown as FileUploadResponse
+          const result = (await apiClient.uploadFile('/api/files/upload', file)) as unknown as FileUploadResponse
           const filePath = result.path || result.filename || file.name
           await associateFileWithChat(filePath, file.name)
           return filePath

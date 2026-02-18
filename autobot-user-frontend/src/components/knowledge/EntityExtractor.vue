@@ -298,7 +298,7 @@ async function extractEntities(): Promise<void> {
 
     extractionResult.value = { ...result, timestamp: Date.now() }
 
-    extractionHistory.value.unshift(extractionResult.value)
+    extractionHistory.value.unshift(extractionResult.value!)
     if (extractionHistory.value.length > 10) {
       extractionHistory.value.pop()
     }

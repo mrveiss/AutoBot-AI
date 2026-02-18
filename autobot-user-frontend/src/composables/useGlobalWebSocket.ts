@@ -65,7 +65,7 @@ export function useGlobalWebSocket(): UseGlobalWebSocketReturn {
 
   // Send message through WebSocket
   const send = (data: unknown): boolean => {
-    return globalWebSocketService.send(data)
+    return globalWebSocketService.send(data as Record<string, unknown>)
   }
 
   // Test WebSocket connection

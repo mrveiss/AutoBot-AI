@@ -43,6 +43,7 @@
         <HealthScoreGauge
           v-if="healthScore"
           :score="healthScore.health_score"
+          :grade="healthScore.health_score >= 90 ? 'A' : healthScore.health_score >= 80 ? 'B' : healthScore.health_score >= 70 ? 'C' : healthScore.health_score >= 60 ? 'D' : 'F'"
           label="Code Health"
           :status-message="`${healthScore.issues_count.critical + healthScore.issues_count.high + healthScore.issues_count.medium + healthScore.issues_count.low} issues · ${healthScore.coverage_percent}% coverage`"
         />

@@ -219,7 +219,7 @@ const handleMessage = (message: SSHTerminalMessage) => {
 
     case 'error':
       logger.error('SSH error:', message.content)
-      errorMessage.value = message.content
+      errorMessage.value = message.content ?? ''
       if (terminal) {
         terminal.write(`\r\n\x1b[31mError: ${message.content}\x1b[0m\r\n`)
       }

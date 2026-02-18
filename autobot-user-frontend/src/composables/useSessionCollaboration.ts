@@ -535,7 +535,7 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
   // Subscribe to WebSocket messages on mount
   onMounted(() => {
     // Subscribe to collaboration messages
-    const unsubMessage = globalWebSocketService.subscribe('collaboration', handleCollaborationMessage)
+    const unsubMessage = globalWebSocketService.subscribe('collaboration', handleCollaborationMessage as (data: unknown) => void)
     unsubscribers.push(unsubMessage)
 
     // Also subscribe to specific message types that might come separately
@@ -552,7 +552,8 @@ export function useSessionCollaboration(): UseSessionCollaborationReturn {
     ]
 
     messageTypes.forEach(type => {
-      const unsub = globalWebSocketService.subscribe(type, (data: Record<string, unknown>) => {
+      const unsub = globalWebSocketService.subscribe(type, (rawData: unknown) => {
+        const data = rawData as Record<string, unknown>
         handleCollaborationMessage({
           type,
           sessionId: data.sessionId as string,

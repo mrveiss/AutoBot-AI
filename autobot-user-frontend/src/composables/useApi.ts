@@ -374,7 +374,7 @@ export function useConnectionStatus() {
         },
         {
           errorMessage: 'Connection test failed',
-          fallbackValue: { connected: false, result: null, error: 'Connection test failed' },
+          fallbackValue: { connected: false, result: false, error: 'Connection test failed' },
           silent: true // Connection tests shouldn't show user notifications
         }
       )

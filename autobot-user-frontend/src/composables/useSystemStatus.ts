@@ -141,11 +141,11 @@ async function fetchVmStatus(): Promise<[SystemService[], boolean]> {
   let hadError = false
 
   try {
-    const vmResponse: FallbackResponse =
+    const vmResponse =
       await apiEndpointMapper.fetchWithFallback(
         '/api/service-monitor/vms/status',
         { timeout: 5000 },
-      )
+      ) as FallbackResponse
     const vmData: VmStatusResponse = await vmResponse.json()
 
     if (vmResponse.fallback) {
@@ -191,11 +191,11 @@ async function fetchServiceStatus(): Promise<[SystemService[], boolean]> {
   let hadError = false
 
   try {
-    const resp: FallbackResponse =
+    const resp =
       await apiEndpointMapper.fetchWithFallback(
         '/api/service-monitor/services',
         { timeout: 5000 },
-      )
+      ) as FallbackResponse
     const data: ServicesResponse = await resp.json()
 
     if (resp.fallback) {

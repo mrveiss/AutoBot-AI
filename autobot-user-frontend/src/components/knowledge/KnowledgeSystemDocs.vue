@@ -468,7 +468,7 @@ onMounted(() => {
             <div class="preview-actions">
               <BaseButton
                 variant="ghost"
-                size="small"
+                size="sm"
                 :class="{ success: copySuccess }"
                 @click="copyToClipboard"
               >
@@ -477,7 +477,7 @@ onMounted(() => {
               </BaseButton>
               <BaseButton
                 variant="ghost"
-                size="small"
+                size="sm"
                 @click="exportDoc('markdown')"
                 :disabled="isExporting"
               >

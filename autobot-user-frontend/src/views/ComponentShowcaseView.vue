@@ -307,7 +307,7 @@ const tableColumns = [
   { key: 'id', label: 'ID', sortable: true, width: '80px', monospace: true },
   { key: 'name', label: 'Name', sortable: true },
   { key: 'email', label: 'Email', monospace: true },
-  { key: 'count', label: 'Count', sortable: true, numeric: true, align: 'right' },
+  { key: 'count', label: 'Count', sortable: true, numeric: true, align: 'right' as const },
   { key: 'timestamp', label: 'Last Seen', sortable: true, monospace: true },
   { key: 'status', label: 'Status', sortable: true }
 ]

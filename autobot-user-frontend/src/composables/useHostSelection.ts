@@ -70,7 +70,7 @@ const loadHosts = async (): Promise<InfrastructureHost[]> => {
 
     // Fetch both secrets (infrastructure_host type) and legacy hosts
     const [secretsResponse, legacyHostsResponse] = await Promise.all([
-      secretsApiClient.getSecrets({}),
+      secretsApiClient.getSecrets({}) as Promise<Record<string, any>>,
       fetch(`${backendUrl}/api/infrastructure/hosts`)
         .then(r => r.ok ? r.json() : { hosts: [] })
         .catch(() => ({ hosts: [] }))

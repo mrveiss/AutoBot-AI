@@ -241,8 +241,6 @@ import WorkflowVisualization from '@/components/visualizations/WorkflowVisualiza
 import AgentActivityVisualization from '@/components/visualizations/AgentActivityVisualization.vue'
 import SystemArchitectureDiagram from '@/components/visualizations/SystemArchitectureDiagram.vue'
 
-// Import other dashboard components
-import SystemMonitor from '@/components/SystemMonitor.vue'
 
 const logger = createLogger('CustomDashboard')
 
@@ -302,8 +300,7 @@ const componentRegistry = shallowRef<Record<string, unknown>>({
   heatmap: markRaw(ResourceHeatmap),
   workflow: markRaw(WorkflowVisualization),
   agents: markRaw(AgentActivityVisualization),
-  architecture: markRaw(SystemArchitectureDiagram),
-  system: markRaw(SystemMonitor)
+  architecture: markRaw(SystemArchitectureDiagram)
 })
 
 // Available widget definitions
@@ -344,15 +341,6 @@ const availableWidgets: WidgetDefinition[] = [
     defaultHeight: 500,
     defaultProps: { height: 500 }
   },
-  {
-    type: 'system',
-    name: 'System Monitor',
-    icon: 'fas fa-tachometer-alt',
-    description: 'Real-time system metrics and health',
-    defaultWidth: 1,
-    defaultHeight: 350,
-    defaultProps: {}
-  }
 ]
 
 // ============================================================================

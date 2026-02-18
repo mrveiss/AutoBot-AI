@@ -861,8 +861,8 @@ async function uploadFiles(): Promise<void> {
       // Update overall progress
       const completed = uploadedCount + failedCount
       const percentage = Math.round((completed / totalFiles) * 100)
-      uploadProgress.value.percentage = percentage
-      uploadProgress.value.status = `Uploaded ${completed} of ${totalFiles} files...`
+      uploadProgress.percentage = percentage
+      uploadProgress.status = `Uploaded ${completed} of ${totalFiles} files...`
     })
 
     await Promise.allSettled(uploadPromises)

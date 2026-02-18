@@ -58,7 +58,8 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import PasswordChangeForm from '@/../shared-components/PasswordChangeForm.vue'
+// @ts-ignore - shared component path resolved at build time
+import PasswordChangeForm from '../../../shared-components/PasswordChangeForm.vue'
 import { useUserStore } from '@/stores/useUserStore'
 
 defineProps<{

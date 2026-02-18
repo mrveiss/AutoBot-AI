@@ -404,7 +404,7 @@ function selectIcon(icon: string): void {
           <div class="left-actions">
             <BaseButton
               v-if="canDelete"
-              variant="danger-outline"
+              variant="danger"
               @click="confirmDelete"
               :disabled="isLoading"
             >

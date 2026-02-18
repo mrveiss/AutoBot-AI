@@ -195,10 +195,10 @@ const handleSearch = async () => {
   // TODO: Call API to search users and groups
   // Placeholder mock data
   searchResults.value = [
-    { id: 'user1', name: 'John Doe', type: 'user' },
-    { id: 'user2', name: 'Jane Smith', type: 'user' },
-    { id: 'group1', name: 'Engineering Team', type: 'group' },
-    { id: 'group2', name: 'Security Team', type: 'group' },
+    { id: 'user1', name: 'John Doe', type: 'user' as const },
+    { id: 'user2', name: 'Jane Smith', type: 'user' as const },
+    { id: 'group1', name: 'Engineering Team', type: 'group' as const },
+    { id: 'group2', name: 'Security Team', type: 'group' as const },
   ].filter((item) =>
     item.name.toLowerCase().includes(searchQuery.value.toLowerCase())
   )

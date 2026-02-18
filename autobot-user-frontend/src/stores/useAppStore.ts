@@ -5,7 +5,7 @@ import { generateChatId } from '@/utils/ChatIdGenerator.js'
 // Issue #156 Fix: Changed 'desktop' to 'infrastructure' to match router routes
 // Issue #545: Added 'analytics' for consolidated analytics section
 // Issue #591: Added 'operations' for long-running operations tracker
-export type TabType = 'chat' | 'infrastructure' | 'knowledge' | 'tools' | 'monitoring' | 'operations' | 'analytics' | 'secrets' | 'settings'
+export type TabType = 'chat' | 'infrastructure' | 'knowledge' | 'tools' | 'monitoring' | 'operations' | 'analytics' | 'secrets' | 'settings' | 'automation' | 'vision'
 
 export interface BackendStatus {
   text: string
@@ -203,7 +203,9 @@ export const useAppStore = defineStore('app', () => {
         'monitoring': '/monitoring',
         'operations': '/operations',
         'analytics': '/analytics',
-        'settings': '/settings'
+        'settings': '/settings',
+        'automation': '/automation',
+        'vision': '/vision'
       };
 
       const targetRoute = routeMap[tab];

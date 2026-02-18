@@ -191,7 +191,7 @@ const loadFacts = async () => {
   }
 }
 
-watch(() => props.includeKnowledge, (val) => {
+watch(includeKnowledge, (val) => {
   if (val && facts.value.length === 0) {
     loadFacts()
   }

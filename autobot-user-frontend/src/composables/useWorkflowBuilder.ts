@@ -17,7 +17,7 @@ import { getBackendUrl } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
-import type { WorkflowTemplateSummary, WorkflowTemplateDetail } from '@/types/workflowTemplates';
+import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
 
 const logger = createLogger('useWorkflowBuilder');
 
@@ -1036,7 +1036,7 @@ export function useWorkflowBuilder() {
   function exportCanvasToSteps(): WorkflowStep[] {
     return workflowNodes.value
       .filter((n) => n.type === 'step')
-      .map((n, index) => ({
+      .map((n, _index) => ({
         step_id: n.id,
         ...(n.data as Omit<WorkflowStep, 'step_id'>),
         status: 'pending' as WorkflowStepStatus,

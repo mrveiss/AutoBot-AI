@@ -66,7 +66,7 @@
               </div>
             </template>
             <template v-else-if="node.type === 'condition'">
-              <input v-model="node.data.condition" placeholder="Condition (e.g., $? -eq 0)" @click.stop />
+              <input v-model="(node.data as any).condition" placeholder="Condition (e.g., $? -eq 0)" @click.stop />
             </template>
           </div>
           <div class="port port-in" @mousedown.stop="startConnect(node.id, 'in', $event)"></div>

@@ -159,7 +159,7 @@
                   :style="{ height: getPercentage(count, maxDayCount) + '%' }"
                 ></div>
               </div>
-              <span class="day-label">{{ formatDayLabel(date) }}</span>
+              <span class="day-label">{{ formatDayLabel(String(date)) }}</span>
               <span class="day-count">{{ count }}</span>
             </div>
           </div>

@@ -171,14 +171,14 @@ const filteredHosts = computed(() => {
   // Filter by required capability
   if (props.requiredCapability) {
     filtered = filtered.filter(h =>
-      h.capabilities?.includes(props.requiredCapability)
+      h.capabilities?.includes(props.requiredCapability!)
     );
   }
 
   // Filter by user-selected capability
   if (capabilityFilter.value) {
     filtered = filtered.filter(h =>
-      h.capabilities?.includes(capabilityFilter.value)
+      h.capabilities?.includes(capabilityFilter.value!)
     );
   }
 
