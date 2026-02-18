@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
@@ -54,6 +55,8 @@ from services.sync_orchestrator import get_sync_orchestrator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -449,7 +452,9 @@ async def sync_node(
     executor = get_playbook_executor()
 
     # Build playbook parameters
-    limit = [node.hostname]
+    # Use node_id (maps to slm_node_id in Ansible inventory) not hostname —
+    # hostname is user-editable and can drift from inventory host names (#921)
+    limit = [node.node_id]
     tags = []
     if not request.restart:
         tags.append("!restart")  # Skip restart tasks
@@ -461,9 +466,9 @@ async def sync_node(
     # Check if this is the SLM server itself (Issue #867)
     # When syncing the SLM server, we can't wait for the playbook to complete
     # because the backend will restart during execution, causing HTTP 502 errors
-    is_slm_server = (
-        node.hostname == "00-SLM-Manager" or node.node_id == "00-SLM-Manager"
-    )
+    # Detect by IP (not by name — names are user-editable) (#921)
+    slm_own_ip = urlparse(settings.external_url).hostname or ""
+    is_slm_server = bool(slm_own_ip) and node.ip_address == slm_own_ip
 
     if is_slm_server and request.restart:
         # SLM server cannot self-sync via the Ansible playbook because
@@ -563,7 +568,8 @@ async def _sync_single_node(executor, node_state: NodeSyncState, restart: bool) 
     """Sync a single node using Ansible playbook and update its state."""
     try:
         # Build playbook parameters
-        limit = [node_state.hostname]
+        # Use node_id (maps to slm_node_id in Ansible inventory) not hostname (#921)
+        limit = [node_state.node_id]
         tags = []
         if not restart:
             tags.append("!restart")  # Skip restart tasks

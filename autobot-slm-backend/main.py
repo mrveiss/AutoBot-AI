@@ -69,6 +69,28 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _init_user_management_tables() -> None:
+    """Create user management tables (SSO, organizations, users, etc.) (#921).
+
+    The user_management models use a separate Base and engine from the main
+    SLM backend.  Without this call the sso_providers table (and others)
+    would not exist, causing 502 errors on /api/auth/sso/providers.
+    """
+    try:
+        # Import all models so they register with the Base metadata
+        import user_management.models  # noqa: F401  (registers all UM models)
+        from user_management.database import get_slm_engine
+        from user_management.models.base import Base as UMBase
+
+        engine = get_slm_engine()
+        async with engine.begin() as conn:
+            await conn.run_sync(UMBase.metadata.create_all)
+        logger.info("User management tables initialised")
+    except Exception as exc:
+        logger.error("User management table init failed: %s", exc)
+        raise
+
+
 async def _run_migrations():
     """Run pending database migrations on startup."""
     from migrations.runner import run_migrations_async
@@ -96,6 +118,7 @@ async def lifespan(app: FastAPI):
 
     # Create base tables first, then apply incremental migrations
     await db_service.initialize()
+    await _init_user_management_tables()
     await _run_migrations()
     await _ensure_admin_user()
     await _seed_default_roles()
