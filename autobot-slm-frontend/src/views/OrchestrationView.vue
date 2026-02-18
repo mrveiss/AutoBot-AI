@@ -17,7 +17,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useOrchestrationManagement } from '@/composables/useOrchestrationManagement'
-import { useRoles } from '@/composables/useRoles'
+import { useRoles, type Role } from '@/composables/useRoles'
 import { createLogger } from '@/utils/debugUtils'
 import ServiceStatusBadge from '@/components/orchestration/ServiceStatusBadge.vue'
 import ServiceActionButtons from '@/components/orchestration/ServiceActionButtons.vue'
@@ -210,13 +210,20 @@ const roleFormData = ref({
 })
 
 // =============================================================================
-// Tab 4: Migration State
+// Tab 4: Migration State (role-based)
 // =============================================================================
 
-const showMigrationWizard = ref(false)
-const migrationService = ref('')
+const migrationRole = ref<Role | null>(null)
 const migrationSourceNode = ref('')
 const migrationTargetNode = ref('')
+const migrationRemoveFromSource = ref(false)
+const migrationRestart = ref(true)
+const migrationInProgress = ref(false)
+const migrationResult = ref<{
+  success: boolean
+  message: string
+  details: Array<{ node_id: string; success: boolean; message: string }>
+} | null>(null)
 
 // =============================================================================
 // Tab 5: Infrastructure Overview State
@@ -440,32 +447,65 @@ async function deleteRole(roleName: string): Promise<void> {
 }
 
 // =============================================================================
-// Actions: Migration
+// Actions: Migration (role-based)
 // =============================================================================
 
-function openMigrationWizard(serviceName?: string): void {
-  migrationService.value = serviceName || ''
+function selectMigrationRole(role: Role): void {
+  migrationRole.value = role
   migrationSourceNode.value = ''
   migrationTargetNode.value = ''
-  showMigrationWizard.value = true
+  migrationResult.value = null
+}
+
+function resetMigration(): void {
+  migrationRole.value = null
+  migrationSourceNode.value = ''
+  migrationTargetNode.value = ''
+  migrationRemoveFromSource.value = false
+  migrationRestart.value = true
+  migrationInProgress.value = false
+  migrationResult.value = null
 }
 
 async function executeMigration(): Promise<void> {
-  if (!migrationService.value || !migrationSourceNode.value || !migrationTargetNode.value) {
-    alert('Please fill all migration fields')
+  if (!migrationRole.value || !migrationTargetNode.value) return
+
+  migrationInProgress.value = true
+  migrationResult.value = null
+  const roleName = migrationRole.value.name
+
+  // Assign role to target node so sync picks it up
+  const assigned = await roles.assignRole(migrationTargetNode.value, roleName)
+  if (!assigned) {
+    migrationResult.value = {
+      success: false,
+      message: roles.error || 'Failed to assign role to target node',
+      details: [],
+    }
+    migrationInProgress.value = false
     return
   }
 
-  const result = await orchestration.migrateService(migrationService.value, {
-    source_node_id: migrationSourceNode.value,
-    target_node_id: migrationTargetNode.value,
-  })
+  // Sync role code to target node
+  const syncResult = await roles.syncRole(roleName, [migrationTargetNode.value], migrationRestart.value)
 
-  if (result?.success) {
-    logger.info(`Migrated ${migrationService.value}: ${result.message}`)
-    showMigrationWizard.value = false
-    await orchestration.fetchFleetServices()
+  // Optionally remove role from source node
+  if (syncResult.success && migrationRemoveFromSource.value && migrationSourceNode.value) {
+    await roles.removeRole(migrationSourceNode.value, roleName)
   }
+
+  migrationResult.value = {
+    success: syncResult.success,
+    message: syncResult.message,
+    details: syncResult.results || [],
+  }
+
+  if (syncResult.success) {
+    logger.info(`Role migration ${roleName} → ${migrationTargetNode.value}: success`)
+    await Promise.allSettled([roles.fetchRoles(), orchestration.fetchFleetServices()])
+  }
+
+  migrationInProgress.value = false
 }
 
 // =============================================================================
@@ -1072,49 +1112,90 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Tab 4: Migration & Advanced -->
-      <div v-if="activeTab === 'migration'">
-        <div class="card p-4 mb-4">
-          <h3 class="font-medium text-gray-900 mb-3">Service Migration</h3>
+      <!-- Tab 4: Migration (role-based) -->
+      <div v-if="activeTab === 'migration'" class="space-y-4">
+        <!-- Step 1: Select a role -->
+        <div v-if="!migrationRole" class="card p-4">
+          <h3 class="font-medium text-gray-900 mb-1">Role Migration</h3>
           <p class="text-sm text-gray-600 mb-4">
-            Move a service from one node to another. The service will be stopped on the source node and
-            started on the target node.
+            Select an AutoBot role to migrate. A role consists of all code and services needed to
+            provide a capability. The role will be synced to the target node and optionally removed
+            from the source.
           </p>
-          <button
-            @click="openMigrationWizard()"
-            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Start Migration
-          </button>
+          <div v-if="roles.roles.length === 0" class="text-sm text-gray-500 py-4 text-center">
+            No roles defined. Create roles in the Roles &amp; Deployment tab first.
+          </div>
+          <div v-else class="grid grid-cols-2 gap-3">
+            <button
+              v-for="role in roles.roles"
+              :key="role.name"
+              @click="selectMigrationRole(role)"
+              class="text-left border rounded-lg p-3 hover:border-blue-400 hover:bg-blue-50 transition-colors"
+            >
+              <div class="font-medium text-gray-900 text-sm">
+                {{ role.display_name || role.name }}
+              </div>
+              <div class="text-xs text-gray-500 mt-1 truncate">
+                {{ role.systemd_service || 'No systemd service' }}
+              </div>
+              <div class="flex items-center gap-2 mt-1">
+                <span class="text-xs bg-gray-100 text-gray-600 rounded px-1.5 py-0.5">
+                  {{ role.sync_type || 'full' }}
+                </span>
+                <span class="text-xs text-gray-400">
+                  {{ role.source_paths.length }} source path(s)
+                </span>
+              </div>
+            </button>
+          </div>
         </div>
 
-        <!-- Migration Form -->
-        <div v-if="showMigrationWizard" class="card p-4">
-          <h3 class="font-medium text-gray-900 mb-4">Migration Wizard</h3>
-          <div class="space-y-4">
+        <!-- Step 2: Configure migration -->
+        <div v-if="migrationRole" class="card p-4">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-medium text-gray-900">
+              Migrate: {{ migrationRole.display_name || migrationRole.name }}
+            </h3>
+            <button
+              @click="resetMigration()"
+              class="text-sm text-gray-500 hover:text-gray-700 underline"
+            >
+              Change role
+            </button>
+          </div>
+
+          <!-- Role summary -->
+          <div class="bg-gray-50 rounded-lg p-3 mb-4 text-sm grid grid-cols-2 gap-y-1">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Service Name</label>
-              <select
-                v-model="migrationService"
-                class="w-full px-3 py-2 border rounded-lg text-sm"
-              >
-                <option value="">Select a service...</option>
-                <option
-                  v-for="svc in (orchestration.fleetServices || [])"
-                  :key="svc.service_name"
-                  :value="svc.service_name"
-                >
-                  {{ svc.service_name }}
-                </option>
-              </select>
+              <span class="text-gray-500">Service:</span>
+              {{ migrationRole.systemd_service || 'None' }}
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Source Node</label>
+              <span class="text-gray-500">Sync type:</span>
+              {{ migrationRole.sync_type || 'full' }}
+            </div>
+            <div>
+              <span class="text-gray-500">Target path:</span>
+              {{ migrationRole.target_path }}
+            </div>
+            <div>
+              <span class="text-gray-500">Sources:</span>
+              {{ migrationRole.source_paths.length }} path(s)
+            </div>
+          </div>
+
+          <!-- Node selection -->
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Source Node
+                <span class="text-gray-400 font-normal">(optional — where role currently runs)</span>
+              </label>
               <select
                 v-model="migrationSourceNode"
                 class="w-full px-3 py-2 border rounded-lg text-sm"
               >
-                <option value="">Select source node...</option>
+                <option value="">Not currently assigned / skip</option>
                 <option
                   v-for="node in orchestration.fleetStore.nodeList"
                   :key="node.node_id"
@@ -1125,7 +1206,9 @@ onUnmounted(() => {
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Target Node</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                Target Node <span class="text-red-500">*</span>
+              </label>
               <select
                 v-model="migrationTargetNode"
                 class="w-full px-3 py-2 border rounded-lg text-sm"
@@ -1141,21 +1224,76 @@ onUnmounted(() => {
                 </option>
               </select>
             </div>
-            <div class="flex gap-2">
+
+            <!-- Options -->
+            <div class="flex flex-col gap-2 pt-1">
+              <label class="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" v-model="migrationRestart" class="rounded" />
+                <span>Restart services on target node after sync</span>
+              </label>
+              <label
+                class="flex items-center gap-2 text-sm cursor-pointer"
+                :class="!migrationSourceNode ? 'opacity-40' : ''"
+              >
+                <input
+                  type="checkbox"
+                  v-model="migrationRemoveFromSource"
+                  :disabled="!migrationSourceNode"
+                  class="rounded"
+                />
+                <span>Remove role assignment from source node after migration</span>
+              </label>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-2 pt-2">
               <button
                 @click="executeMigration"
-                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                :disabled="!migrationTargetNode || migrationInProgress"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Execute Migration
+                {{ migrationInProgress ? 'Migrating...' : 'Execute Migration' }}
               </button>
               <button
-                @click="showMigrationWizard = false"
-                class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                @click="resetMigration()"
+                :disabled="migrationInProgress"
+                class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
               >
                 Cancel
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- Result -->
+        <div
+          v-if="migrationResult"
+          class="card p-4"
+          :class="migrationResult.success ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'"
+        >
+          <div
+            class="flex items-center gap-2 font-medium mb-2"
+            :class="migrationResult.success ? 'text-green-700' : 'text-red-700'"
+          >
+            <span>{{ migrationResult.success ? '✓' : '✗' }}</span>
+            <span>{{ migrationResult.message }}</span>
+          </div>
+          <div v-if="migrationResult.details.length > 0" class="text-sm space-y-1 mt-2">
+            <div
+              v-for="detail in migrationResult.details"
+              :key="detail.node_id"
+              :class="detail.success ? 'text-green-600' : 'text-red-600'"
+            >
+              {{ detail.node_id }}: {{ detail.message }}
+            </div>
+          </div>
+          <button
+            v-if="migrationResult.success"
+            @click="resetMigration()"
+            class="mt-3 text-sm text-blue-600 hover:underline"
+          >
+            Migrate another role
+          </button>
         </div>
       </div>
 
