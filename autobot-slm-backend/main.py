@@ -52,14 +52,13 @@ from api import (
 from api.code_source import router as code_source_router
 from api.performance import router as performance_router
 from api.roles import router as roles_router
+from config import settings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.database import db_service
 from services.git_tracker import start_version_checker
 from services.reconciler import reconciler_service
 from services.schedule_executor import start_schedule_executor, stop_schedule_executor
-
-from config import settings
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -122,6 +121,12 @@ async def lifespan(app: FastAPI):
     await _run_migrations()
     await _ensure_admin_user()
     await _seed_default_roles()
+
+    # Initialize manifest loader singleton (Issue #926 Phase 3)
+    from services.manifest_loader import init_manifest_loader
+
+    init_manifest_loader()
+
     await reconciler_service.start()
 
     # Start version checker background task (Issue #741)

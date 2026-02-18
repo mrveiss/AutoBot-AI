@@ -1932,3 +1932,52 @@ class NPUWorkerConfigResponse(BaseModel):
     message: str
     node_id: str
     config: NPUWorkerConfig
+
+
+# =============================================================================
+# Manifest / Role Pre-flight Schemas (Issue #926 Phase 3)
+# =============================================================================
+
+
+class PreflightConflict(BaseModel):
+    """A single conflict found during role assignment pre-flight."""
+
+    kind: str  # "hard_conflict" | "port_conflict" | "warning"
+    role: str
+    detail: str
+
+
+class PreflightResult(BaseModel):
+    """Result of a manifest-based pre-flight check before role assignment."""
+
+    allowed: bool
+    role_name: str
+    node_id: str
+    conflicts: List[PreflightConflict] = Field(default_factory=list)
+    warnings: List[PreflightConflict] = Field(default_factory=list)
+    manifest_found: bool = True
+
+
+class ServiceOrderEntry(BaseModel):
+    """A single service with its start order from the role manifest."""
+
+    role_name: str
+    service_name: str
+    start_order: int
+    service_type: str = "systemd"
+
+
+class NodeServiceOrderResponse(BaseModel):
+    """Ordered list of services for all roles on a node."""
+
+    node_id: str
+    services: List[ServiceOrderEntry]
+
+
+class UpdatePolicyResponse(BaseModel):
+    """System update policy derived from all role manifests on a node."""
+
+    node_id: str
+    effective_policy: str  # "full" | "security" | "manual"
+    reboot_strategy: Optional[str] = None
+    per_role: Dict[str, str] = Field(default_factory=dict)

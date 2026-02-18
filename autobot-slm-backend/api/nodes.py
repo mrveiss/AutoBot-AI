@@ -41,8 +41,13 @@ from models.schemas import (
     NodeRoleAssignRequest,
     NodeRoleResponse,
     NodeRolesResponse,
+    NodeServiceOrderResponse,
     NodeUpdate,
     PortInfo,
+    PreflightConflict,
+    PreflightResult,
+    ServiceOrderEntry,
+    UpdatePolicyResponse,
 )
 from pydantic import BaseModel
 from services.auth import get_current_user
@@ -514,6 +519,87 @@ async def get_node_detected_roles(
     )
 
 
+async def _run_preflight(
+    node_id: str, role_name: str, db: AsyncSession
+) -> PreflightResult:
+    """
+    Run manifest-based pre-flight checks for assigning role_name to node_id.
+
+    Helper for assign_role_to_node and the preflight query endpoint (#926 Phase 3).
+    Checks port conflicts, hard manifest conflicts, and soft warnings.
+    """
+    from services.manifest_loader import get_manifest_loader
+
+    loader = get_manifest_loader()
+    candidate = loader.load(role_name)
+
+    if candidate is None:
+        return PreflightResult(
+            allowed=True,
+            role_name=role_name,
+            node_id=node_id,
+            manifest_found=False,
+        )
+
+    candidate_ports = set(candidate.port_numbers())
+    hard_conflicts = set(candidate.hard_conflicts())
+    soft_warnings = set(candidate.coexistence.warns_with)
+
+    # Fetch roles currently assigned to this node
+    existing_result = await db.execute(
+        select(NodeRole).where(NodeRole.node_id == node_id)
+    )
+    existing_roles = [r.role_name for r in existing_result.scalars().all()]
+
+    conflicts: list = []
+    warnings: list = []
+
+    for existing_role in existing_roles:
+        if existing_role == role_name:
+            continue
+
+        # Hard manifest-defined conflict
+        if existing_role in hard_conflicts:
+            conflicts.append(
+                PreflightConflict(
+                    kind="hard_conflict",
+                    role=existing_role,
+                    detail=f"{role_name} declares {existing_role} as a hard conflict",
+                )
+            )
+
+        # Port collision
+        existing_ports = set(loader.get_port_numbers(existing_role))
+        overlap = candidate_ports & existing_ports
+        if overlap:
+            conflicts.append(
+                PreflightConflict(
+                    kind="port_conflict",
+                    role=existing_role,
+                    detail=f"Port(s) {sorted(overlap)} also used by {existing_role}",
+                )
+            )
+
+        # Soft warning
+        if existing_role in soft_warnings:
+            warnings.append(
+                PreflightConflict(
+                    kind="warning",
+                    role=existing_role,
+                    detail=f"{role_name} warns about coexisting with {existing_role}",
+                )
+            )
+
+    return PreflightResult(
+        allowed=len(conflicts) == 0,
+        role_name=role_name,
+        node_id=node_id,
+        conflicts=conflicts,
+        warnings=warnings,
+        manifest_found=True,
+    )
+
+
 @router.post("/{node_id}/detected-roles", response_model=NodeRoleResponse)
 async def assign_role_to_node(
     node_id: str,
@@ -522,9 +608,10 @@ async def assign_role_to_node(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> NodeRoleResponse:
     """
-    Manually assign a role to a node (Issue #779).
+    Manually assign a role to a node (Issue #779, #926).
 
-    Used for manual role assignment when auto-detection doesn't apply.
+    Runs manifest pre-flight checks before assignment — rejects if hard
+    port or coexistence conflicts are found.
     """
     # Verify node exists
     result = await db.execute(select(Node).where(Node.node_id == node_id))
@@ -534,6 +621,24 @@ async def assign_role_to_node(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Node not found",
+        )
+
+    # Manifest pre-flight check (Issue #926 Phase 3)
+    preflight = await _run_preflight(node_id, role_request.role_name, db)
+    if not preflight.allowed:
+        conflict_details = "; ".join(c.detail for c in preflight.conflicts)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Role assignment blocked by pre-flight check: {conflict_details}",
+        )
+
+    # Log warnings (soft conflicts allowed but flagged)
+    for warn in preflight.warnings:
+        logger.warning(
+            "Role assignment warning %s -> %s: %s",
+            node_id,
+            role_request.role_name,
+            warn.detail,
         )
 
     # Check if role assignment already exists
@@ -1603,3 +1708,128 @@ async def apply_node_updates(
         applied_updates=applied,
         failed_updates=failed,
     )
+
+
+# =============================================================================
+# Manifest-backed endpoints (Issue #926 Phase 3)
+# =============================================================================
+
+
+@router.get("/{node_id}/roles/preflight", response_model=PreflightResult)
+async def preflight_role_assignment(
+    node_id: str,
+    role: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> PreflightResult:
+    """
+    Pre-flight check for assigning a role to a node (Issue #926 Phase 3).
+
+    Returns port conflicts, hard coexistence conflicts, and soft warnings
+    without modifying any state. Use this before calling the assignment
+    endpoint to surface issues in the UI.
+    """
+    node_result = await db.execute(select(Node).where(Node.node_id == node_id))
+    if not node_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+
+    return await _run_preflight(node_id, role, db)
+
+
+@router.get("/{node_id}/update-policy", response_model=UpdatePolicyResponse)
+async def get_node_update_policy(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> UpdatePolicyResponse:
+    """
+    Return the effective system update policy for a node (Issue #926 Phase 3).
+
+    Derives the most restrictive policy across all assigned roles:
+    manual > security > full.  The frontend uses this to warn operators
+    before triggering apt updates.
+    """
+    from services.manifest_loader import get_manifest_loader
+
+    node_result = await db.execute(select(Node).where(Node.node_id == node_id))
+    if not node_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+
+    roles_result = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id))
+    role_names = [r.role_name for r in roles_result.scalars().all()]
+
+    loader = get_manifest_loader()
+    per_role: dict = {}
+    reboot_strategy = None
+
+    for role_name in role_names:
+        policy = loader.get_update_policy(role_name)
+        if policy:
+            per_role[role_name] = policy.value
+            # Most restrictive reboot strategy: manual > scheduled > immediate
+            manifest = loader.load(role_name)
+            if manifest and manifest.system_updates.reboot_strategy:
+                strat = manifest.system_updates.reboot_strategy.value
+                if reboot_strategy is None:
+                    reboot_strategy = strat
+                elif strat == "manual" or (
+                    strat == "scheduled" and reboot_strategy == "immediate"
+                ):
+                    reboot_strategy = strat
+
+    effective_policy = loader.node_update_policy(role_names)
+
+    return UpdatePolicyResponse(
+        node_id=node_id,
+        effective_policy=effective_policy.value,
+        reboot_strategy=reboot_strategy,
+        per_role=per_role,
+    )
+
+
+@router.get("/{node_id}/service-order", response_model=NodeServiceOrderResponse)
+async def get_node_service_order(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeServiceOrderResponse:
+    """
+    Return ordered service list for all roles on a node (Issue #926 Phase 3).
+
+    Services are sorted by start_order ascending — the order Ansible/systemd
+    should bring them up.  Used by the provisioning UI and playbook executor.
+    """
+    from services.manifest_loader import get_manifest_loader
+
+    node_result = await db.execute(select(Node).where(Node.node_id == node_id))
+    if not node_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+
+    roles_result = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id))
+    role_names = [r.role_name for r in roles_result.scalars().all()]
+
+    loader = get_manifest_loader()
+    entries: list = []
+
+    for role_name in role_names:
+        manifest = loader.load(role_name)
+        if not manifest:
+            continue
+        for svc in manifest.services:
+            entries.append(
+                ServiceOrderEntry(
+                    role_name=role_name,
+                    service_name=svc.name,
+                    start_order=svc.start_order,
+                    service_type=svc.type.value,
+                )
+            )
+
+    entries.sort(key=lambda e: e.start_order)
+    return NodeServiceOrderResponse(node_id=node_id, services=entries)

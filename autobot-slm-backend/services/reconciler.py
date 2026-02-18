@@ -11,10 +11,12 @@ human approval for re-enrollment.
 
 import asyncio
 import logging
+import ssl
 import uuid
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
+from config import settings
 from models.database import (
     Deployment,
     DeploymentStatus,
@@ -32,8 +34,6 @@ from services.service_categorizer import categorize_service
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config import settings
-
 logger = logging.getLogger(__name__)
 
 # Role to systemd service mapping
@@ -49,6 +49,10 @@ ROLE_SERVICE_MAP: Dict[str, list] = {
 
 # Maximum remediation attempts before requiring human intervention
 MAX_REMEDIATION_ATTEMPTS = 3
+# How often to poll manifest health endpoints (seconds)
+MANIFEST_HEALTH_INTERVAL = 60
+# How often to check TLS cert expiry (seconds — daily)
+CERT_EXPIRY_CHECK_INTERVAL = 86_400
 # Cooldown between remediation attempts (seconds)
 REMEDIATION_COOLDOWN = 300  # 5 minutes
 # Default rollback window (seconds) - deployments older than this won't be auto-rolled back
@@ -76,8 +80,11 @@ class ReconcilerService:
         )
         # Track remediation attempts per node: {node_id: {"count": int, "last_attempt": datetime}}
         self._remediation_tracker: Dict[str, Dict] = {}
-        # Track service restart attempts: {(node_id, service_name): {"count": int, "last_attempt": datetime}}
+        # Track service restart attempts: {(node_id, svc_name): {"count": int, "last_attempt": dt}}
         self._service_remediation_tracker: Dict[tuple, Dict] = {}
+        # Timestamps for rate-limited background tasks (#926 Phase 3)
+        self._last_manifest_health_check: float = 0.0
+        self._last_cert_expiry_check: float = 0.0
 
     async def start(self) -> None:
         """Start the reconciler background task."""
@@ -102,6 +109,8 @@ class ReconcilerService:
 
     async def _run_loop(self) -> None:
         """Main reconciliation loop."""
+        import time
+
         while self._running:
             try:
                 await self._check_node_health()
@@ -109,6 +118,15 @@ class ReconcilerService:
                 await self._remediate_failed_services()
                 await self._check_auto_rollback()
                 await self._reconcile_roles()
+
+                # Rate-limited manifest tasks (Issue #926 Phase 3)
+                now = time.monotonic()
+                if now - self._last_manifest_health_check >= MANIFEST_HEALTH_INTERVAL:
+                    await self._poll_manifest_health()
+                    self._last_manifest_health_check = now
+                if now - self._last_cert_expiry_check >= CERT_EXPIRY_CHECK_INTERVAL:
+                    await self._check_cert_expiry()
+                    self._last_cert_expiry_check = now
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -1306,6 +1324,150 @@ class ReconcilerService:
             return NodeStatus.DEGRADED.value
         else:
             return NodeStatus.ONLINE.value
+
+    # ------------------------------------------------------------------
+    # Manifest-driven background tasks (Issue #926 Phase 3)
+    # ------------------------------------------------------------------
+
+    async def _poll_manifest_health(self) -> None:
+        """
+        Poll manifest-defined health endpoints for every assigned NodeRole.
+
+        Updates NodeRole.status based on HTTP response.
+        Runs every MANIFEST_HEALTH_INTERVAL seconds (default 60s).
+        """
+        from models.database import NodeRole
+        from services.database import db_service
+        from services.manifest_loader import get_manifest_loader
+
+        loader = get_manifest_loader()
+
+        async with db_service.session() as db:
+            result = await db.execute(select(NodeRole))
+            node_roles = result.scalars().all()
+
+            node_ip_map = await self._build_node_ip_map(db)
+
+            for node_role in node_roles:
+                endpoint = loader.get_health_endpoint(node_role.role_name)
+                if not endpoint:
+                    continue
+
+                node_ip = node_ip_map.get(node_role.node_id)
+                if not node_ip:
+                    continue
+
+                # Replace localhost/127.0.0.1 with the node's actual IP
+                url = endpoint.replace("localhost", node_ip).replace(
+                    "127.0.0.1", node_ip
+                )
+
+                new_status = await self._http_health_check(url)
+                if new_status != node_role.status:
+                    logger.info(
+                        "NodeRole %s/%s health: %s → %s",
+                        node_role.node_id,
+                        node_role.role_name,
+                        node_role.status,
+                        new_status,
+                    )
+                    node_role.status = new_status
+
+            await db.commit()
+
+    async def _build_node_ip_map(self, db: AsyncSession) -> dict:
+        """Return {node_id: ip_address} for all known nodes.
+
+        Helper for _poll_manifest_health (Issue #926 Phase 3).
+        """
+        result = await db.execute(select(Node))
+        return {n.node_id: n.ip_address for n in result.scalars().all()}
+
+    async def _http_health_check(self, url: str) -> str:
+        """
+        Perform a single HTTP(S) GET health check.
+
+        Helper for _poll_manifest_health (Issue #926 Phase 3).
+        Returns: "healthy" | "unhealthy" | "unknown"
+        """
+        try:
+            import aiohttp
+
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+            timeout = aiohttp.ClientTimeout(total=10)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url, ssl=ssl_ctx) as resp:
+                    return "healthy" if resp.status < 400 else "unhealthy"
+        except Exception as exc:
+            logger.debug("Health check failed for %s: %s", url, exc)
+            return "unhealthy"
+
+    async def _check_cert_expiry(self) -> None:
+        """
+        Check TLS cert expiry for roles with tls.auto_rotate=true.
+
+        Logs a warning when a cert expires within rotate_days_before days.
+        Runs once per CERT_EXPIRY_CHECK_INTERVAL (daily).
+        """
+        from services.manifest_loader import get_manifest_loader
+
+        loader = get_manifest_loader()
+        all_manifests = loader.load_all()
+
+        for role_name, manifest in all_manifests.items():
+            if not manifest.tls or not manifest.tls.auto_rotate:
+                continue
+            cert_path = manifest.tls.cert
+            if not cert_path:
+                continue
+            days_left = self._cert_days_remaining(cert_path)
+            if days_left is None:
+                continue
+            threshold = loader.get_tls_rotate_days_before(role_name)
+            if days_left <= threshold:
+                logger.warning(
+                    "TLS cert for %s expires in %d day(s) (threshold: %d). "
+                    "Run rotate-certs.yml to renew.",
+                    role_name,
+                    days_left,
+                    threshold,
+                )
+
+    def _cert_days_remaining(self, cert_path: str) -> Optional[int]:
+        """
+        Return days until a PEM cert expires, or None if unreadable.
+
+        Helper for _check_cert_expiry (Issue #926 Phase 3).
+        """
+        from pathlib import Path
+
+        try:
+            import cryptography.x509
+            from cryptography.hazmat.backends import default_backend
+
+            pem = Path(cert_path).read_bytes()
+            cert = cryptography.x509.load_pem_x509_certificate(pem, default_backend())
+            delta = cert.not_valid_after_utc.replace(tzinfo=None) - datetime.utcnow()
+            return max(0, delta.days)
+        except Exception as exc:
+            logger.debug("Could not read cert %s: %s", cert_path, exc)
+            return None
+
+    def get_role_health_summary(self, role_statuses: List[dict]) -> str:
+        """
+        Summarise per-role health into a node-level status string.
+
+        Helper for callers that aggregate manifest health results (#926 Phase 3).
+        """
+        if not role_statuses:
+            return NodeStatus.UNKNOWN.value
+        if all(r.get("status") == "healthy" for r in role_statuses):
+            return NodeStatus.ONLINE.value
+        if any(r.get("status") == "unhealthy" for r in role_statuses):
+            return NodeStatus.DEGRADED.value
+        return NodeStatus.UNKNOWN.value
 
 
 reconciler_service = ReconcilerService()
