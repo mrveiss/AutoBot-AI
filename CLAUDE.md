@@ -639,20 +639,20 @@ autobot-infrastructure/
 
 ```bash
 # User backend to Main server
-./autobot-infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/
+./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh main autobot-backend/
 
 # User frontend to Frontend VM
-./autobot-infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-frontend/
+./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh frontend autobot-frontend/
 
 # SLM backend + frontend to SLM server
-./autobot-infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-backend/
-./autobot-infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-frontend/
+./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh slm autobot-slm-backend/
+./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh slm autobot-slm-frontend/
 
 # NPU worker to NPU VM
-./autobot-infrastructure/shared/scripts/sync-to-vm.sh npu autobot-npu-worker/
+./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh npu autobot-npu-worker/
 
 # Browser worker to Browser VM
-./autobot-infrastructure/shared/scripts/sync-to-vm.sh browser autobot-browser-worker/
+./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh browser autobot-browser-worker/
 ```
 
 ### Ansible Deployment (PRIMARY METHOD)
@@ -693,14 +693,14 @@ ansible-playbook playbooks/deploy-full.yml --limit slm_server
 - `.21` serves User frontend via nginx+SSL (production build)
 - **FORBIDDEN**: `npm run dev` on any VM — production builds only
 - **Ansible deployment:** `ansible-playbook playbooks/deploy-full.yml --tags frontend`
-- **Manual sync:** `./autobot-infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-frontend/`
+- **Manual sync:** `./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh frontend autobot-frontend/`
 
 ### Local-Only Development (ZERO TOLERANCE)
 
 **NEVER edit on remote VMs** - No version control, no backup, VMs are ephemeral.
 
 1. Edit in `/home/kali/Desktop/AutoBot/`
-2. Deploy via Ansible or sync: `./autobot-infrastructure/shared/scripts/sync-to-vm.sh <vm> <component>/`
+2. Deploy via Ansible or sync: `./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh <vm> <component>/`
 
 ### Infrastructure as Code (MANDATORY)
 
@@ -919,9 +919,9 @@ ansible-playbook playbooks/deploy-full.yml                    # Full deployment
 ansible-playbook playbooks/slm-service-control.yml -e "service=autobot-backend action=restart"
 
 # Manual sync to VMs (dev/manual operations)
-./autobot-infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/
-./autobot-infrastructure/shared/scripts/sync-to-vm.sh frontend autobot-slm-frontend/
-./autobot-infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-backend/
+./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh main autobot-backend/
+./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh frontend autobot-slm-frontend/
+./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh slm autobot-slm-backend/
 
 # Memory MCP
 mcp__memory__search_nodes --query "keywords"
