@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosResponse } from 'axios'
 import { NetworkConstants } from '@/constants/network'
+import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for ChatRepository
@@ -111,7 +112,7 @@ export class ChatRepository {
   private baseURL: string
 
   constructor(baseURL?: string) {
-    this.baseURL = baseURL || import.meta.env.VITE_API_URL || `http://${NetworkConstants.MAIN_MACHINE_IP}:${NetworkConstants.BACKEND_PORT}`
+    this.baseURL = baseURL || import.meta.env.VITE_API_URL || getBackendUrl()
     this.axios = axios.create({
       baseURL: this.baseURL,
       timeout: 60000, // 60 second timeout for chat operations

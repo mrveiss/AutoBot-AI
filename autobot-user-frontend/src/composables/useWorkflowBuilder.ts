@@ -13,7 +13,7 @@
  */
 
 import { ref, computed, reactive, onUnmounted, onMounted } from 'vue';
-import { getBackendUrl } from '@/config/ssot-config';
+import { getBackendUrl, getBackendWsUrl } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
@@ -1053,7 +1053,7 @@ export function useWorkflowBuilder() {
       wsConnection.close();
     }
 
-    const wsUrl = `${getBackendUrl().replace('http', 'ws')}/api/workflow-automation/workflow_ws/${sessionId}`;
+    const wsUrl = `${getBackendWsUrl()}/api/workflow-automation/workflow_ws/${sessionId}`;
     wsConnection = new WebSocket(wsUrl);
 
     wsConnection.onopen = () => {

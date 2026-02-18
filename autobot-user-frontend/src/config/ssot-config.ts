@@ -587,8 +587,16 @@ export default config;
 
 /**
  * Get backend URL (backward compatibility).
+ * Returns empty string when VITE_BACKEND_HOST is not explicitly set,
+ * enabling proxy mode where nginx at the frontend VM routes API calls.
  */
 export function getBackendUrl(): string {
+  // Explicit base URL override takes highest priority
+  const explicitBaseUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
+  if (explicitBaseUrl) return explicitBaseUrl;
+  // If no explicit backend host, return '' for proxy mode via nginx
+  const explicitHost = import.meta.env.VITE_BACKEND_HOST;
+  if (!explicitHost) return '';
   return getConfig().backendUrl;
 }
 
@@ -606,10 +614,18 @@ export function getWebsocketUrl(): string {
  *
  * Note: This differs from getWebsocketUrl() which includes /ws suffix
  * for the main chat WebSocket endpoint.
+ * Returns a window.location-relative WS URL when in proxy mode.
  */
 export function getBackendWsUrl(): string {
-  const backendUrl = getConfig().backendUrl;
-  // Convert http(s) to ws(s) protocol
+  const backendUrl = getBackendUrl();
+  if (!backendUrl) {
+    // Proxy mode: derive WS URL from current page location
+    if (typeof window !== 'undefined') {
+      const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${wsProto}//${window.location.host}`;
+    }
+    return '';
+  }
   return backendUrl.replace(/^http/, 'ws');
 }
 
