@@ -61,6 +61,7 @@ class SkillValidator:
         """Start MCP server in isolation, list tools, return (errors, tool_names)."""
         from skills.mcp_process import MCPProcessManager
 
+        # Deliberately create a fresh manager for validation isolation (not the production singleton)
         mgr = MCPProcessManager()
         errors: List[str] = []
         tools: List[str] = []

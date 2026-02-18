@@ -10,6 +10,7 @@ and optionally commits it to git.
 import asyncio
 import logging
 import os
+import re
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,11 @@ class SkillPromoter:
 
         Returns the path to the promoted skill directory.
         """
+        if not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", name):
+            raise ValueError(
+                f"Invalid skill name '{name}': must be 1-64 chars, lowercase letters,"
+                " digits, and hyphens only"
+            )
         dest = os.path.join(self.skills_dir, name)
         os.makedirs(dest, exist_ok=True)
         self._write_skill_md(dest, skill_md)

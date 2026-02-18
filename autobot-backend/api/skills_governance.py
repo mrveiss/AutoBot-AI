@@ -7,7 +7,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from skills.db import get_skills_engine
 from skills.generator import SkillGenerator
@@ -82,7 +83,10 @@ def _governance_default() -> Dict[str, Any]:
 
 
 @router.post("/gaps", summary="Generate a skill to fill a capability gap")
-async def detect_gap(req: GapRequest) -> Dict[str, Any]:
+async def detect_gap(
+    req: GapRequest,
+    _: None = Depends(check_admin_permission),
+) -> Dict[str, Any]:
     """Use the SkillGenerator to produce a draft skill for the described task."""
     gen = SkillGenerator()
     try:
@@ -147,7 +151,10 @@ async def list_drafts() -> List[Dict[str, Any]]:
 
 
 @router.post("/drafts/{skill_id}/test", summary="Validate a skill draft")
-async def test_draft(skill_id: str) -> Dict[str, Any]:
+async def test_draft(
+    skill_id: str,
+    _: None = Depends(check_admin_permission),
+) -> Dict[str, Any]:
     """Run the SkillValidator against an existing draft and return results."""
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:
@@ -164,7 +171,10 @@ async def test_draft(skill_id: str) -> Dict[str, Any]:
 
 
 @router.post("/drafts/{skill_id}/promote", summary="Promote a draft skill to builtin")
-async def promote_draft(skill_id: str) -> Dict[str, Any]:
+async def promote_draft(
+    skill_id: str,
+    _: None = Depends(check_admin_permission),
+) -> Dict[str, Any]:
     """Promote an approved draft skill to the builtin skills directory."""
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:
@@ -174,6 +184,26 @@ async def promote_draft(skill_id: str) -> Dict[str, Any]:
                 status_code=409,
                 detail=f"Skill '{skill.name}' is already in state '{skill.state}', not DRAFT",
             )
+
+    async with AsyncSession(engine) as gs:
+        cfg_row = await gs.scalar(select(GovernanceConfig))
+        mode = cfg_row.mode if cfg_row else GovernanceMode.SEMI_AUTO
+
+    if mode == GovernanceMode.SEMI_AUTO:
+        async with AsyncSession(engine) as as_:
+            approval = await as_.scalar(
+                select(SkillApproval)
+                .where(SkillApproval.skill_id == skill_id)
+                .where(SkillApproval.status == _STATUS_APPROVED)
+            )
+        if approval is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Governance is SEMI_AUTO: skill must be approved before promotion",
+            )
+
+    async with AsyncSession(engine) as session:
+        skill = await _get_skill_draft(session, skill_id)
         try:
             promoted_path = await SkillPromoter().promote(
                 name=skill.name,
@@ -218,7 +248,11 @@ async def list_approvals() -> List[Dict[str, Any]]:
 
 
 @router.post("/approvals/{approval_id}", summary="Approve or reject a skill approval")
-async def decide_approval(approval_id: str, body: ApprovalDecision) -> Dict[str, Any]:
+async def decide_approval(
+    approval_id: str,
+    body: ApprovalDecision,
+    _: None = Depends(check_admin_permission),
+) -> Dict[str, Any]:
     """Update an approval record with an approve or reject decision."""
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:
@@ -251,7 +285,10 @@ async def get_governance() -> Dict[str, Any]:
 
 
 @router.put("/governance", summary="Update the governance mode")
-async def update_governance(body: GovernanceModeUpdate) -> Dict[str, Any]:
+async def update_governance(
+    body: GovernanceModeUpdate,
+    _: None = Depends(check_admin_permission),
+) -> Dict[str, Any]:
     """Update the governance mode in GovernanceConfig (upsert singleton row)."""
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:

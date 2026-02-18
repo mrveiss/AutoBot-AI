@@ -6,7 +6,8 @@
 import logging
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from skills.db import get_skills_engine
 from skills.models import RepoType, SkillRepo
@@ -56,7 +57,10 @@ async def _get_repo_by_id(session: AsyncSession, repo_id: str) -> SkillRepo:
 
 
 @router.post("/", summary="Register a new skill repository")
-async def add_repo(body: AddRepoRequest) -> Dict[str, Any]:
+async def add_repo(
+    body: AddRepoRequest,
+    _: None = Depends(check_admin_permission),
+) -> Dict[str, Any]:
     """Register a new skill repository in the skills database."""
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:
@@ -105,7 +109,10 @@ async def list_repos() -> List[Dict[str, Any]]:
 
 
 @router.post("/{repo_id}/sync", summary="Sync packages from a repository")
-async def sync_repo(repo_id: str) -> Dict[str, Any]:
+async def sync_repo(
+    repo_id: str,
+    _: None = Depends(check_admin_permission),
+) -> Dict[str, Any]:
     """Trigger a sync of skill packages from the specified repository."""
     engine = get_skills_engine()
     async with AsyncSession(engine) as session:
