@@ -1,0 +1,65 @@
+role: autobot-npu-worker
+description: "Intel NPU inference worker — OpenVINO model serving and hardware acceleration"
+version: "1.0.0"
+target_node: npu
+
+deploy:
+  source: autobot-npu-worker/
+  destination: /opt/autobot/autobot-npu-worker/
+  shared: true
+  infrastructure: true
+
+system_dependencies:
+  - python3-venv
+  - python3-dev
+  - build-essential
+  - intel-opencl-icd         # Intel GPU/NPU compute runtime
+  - ocl-icd-opencl-dev
+
+services:
+  - name: autobot-npu-worker
+    type: systemd
+    start_order: 1
+    user: autobot-npu-worker
+
+ports:
+  - port: 8081
+    protocol: http
+    public: false
+    loopback_only: false
+    description: "NPU worker HTTP API (accessed by backend at .20)"
+
+health:
+  endpoint: "http://localhost:8081/health"
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+  expected_status: 200
+
+secrets:
+  own:
+    - npu_service_key
+  shared:
+    - service_auth_token
+
+tls:
+  auto_rotate: false   # Internal HTTP (service auth via token)
+
+system_updates:
+  policy: security
+  reboot_strategy: scheduled
+
+coexistence:
+  compatible_with:
+    - autobot-slm-agent
+    - autobot-shared
+  conflicts_with: []
+  warns_with: []
+
+depends_on: []
+
+ansible_role: npu-worker
+notes: |
+  Requires Intel NPU hardware (Core Ultra series). Worker binds :8081.
+  Backend health endpoint returns device capabilities and model list.
+  OpenVINO runtime must be installed — check intel-opencl-icd package.

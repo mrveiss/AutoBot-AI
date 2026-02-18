@@ -1,0 +1,77 @@
+role: autobot-frontend
+description: "User-facing chat interface — Vue 3 SPA served by nginx over HTTPS"
+version: "1.0.0"
+target_node: frontend
+
+deploy:
+  source: autobot-frontend/
+  destination: /opt/autobot/autobot-frontend/
+  shared: false
+  infrastructure: true
+
+system_dependencies:
+  - nginx
+  - nodejs   # v20 via NodeSource
+
+services:
+  - name: autobot-frontend-build
+    type: oneshot
+    start_order: 1
+    exec_start: "bash -c 'cd /opt/autobot/autobot-frontend && npm ci && npm run build'"
+    user: autobot-frontend
+  - name: autobot-frontend
+    type: systemd
+    system_service: nginx
+    start_order: 2
+
+ports:
+  - port: 443
+    protocol: https
+    public: true
+    description: "User HTTPS frontend"
+  - port: 80
+    protocol: http
+    public: true
+    description: "HTTP redirect to HTTPS"
+
+health:
+  endpoint: "https://localhost/api/health"
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+  expected_status: 200
+
+secrets:
+  own:
+    - tls_cert
+    - tls_key
+  shared:
+    - backend_host
+    - backend_port
+
+tls:
+  auto_rotate: true
+  rotate_days_before: 14
+  reload_command: "systemctl reload nginx"
+
+system_updates:
+  policy: full
+  reboot_strategy: immediate
+
+coexistence:
+  conflicts_with:
+    - autobot-slm-frontend   # both bind port 443
+  compatible_with:
+    - autobot-slm-agent
+    - autobot-shared
+  warns_with: []
+
+depends_on:
+  - autobot-backend
+
+ansible_role: frontend
+notes: |
+  Production build only — never run npm run dev on this node.
+  nginx serves built dist/ from /var/www/html/.
+  All /api/* requests are proxied to autobot-backend (.20:8443).
+  nginx dir owned by www-data; rsync fix: chown -R autobot:autobot /var/www/html/

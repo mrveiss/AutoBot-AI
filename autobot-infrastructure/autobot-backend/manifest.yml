@@ -1,0 +1,87 @@
+role: autobot-backend
+description: "AutoBot core API — AI agents, chat workflow, RAG, tool execution, Celery workers"
+version: "1.0.0"
+target_node: backend
+
+deploy:
+  source: autobot-backend/
+  destination: /opt/autobot/autobot-backend/
+  shared: true
+  infrastructure: true
+
+system_dependencies:
+  - python3-venv
+  - python3-dev
+  - build-essential
+  - libpq-dev
+  - redis-tools
+  - ffmpeg             # audio processing
+  - libgl1-mesa-glx   # OpenCV headless
+
+services:
+  - name: autobot-backend
+    type: systemd
+    start_order: 1
+    user: autobot-backend
+  - name: autobot-celery
+    type: systemd
+    start_order: 2
+    user: autobot-backend
+
+ports:
+  - port: 8443
+    protocol: https
+    public: false
+    loopback_only: false
+    description: "Main FastAPI HTTPS API (reached via nginx on .21)"
+  - port: 5555
+    protocol: http
+    public: false
+    loopback_only: true
+    description: "Celery Flower monitoring (loopback only)"
+
+health:
+  endpoint: "https://localhost:8443/api/health"
+  interval: "30s"
+  timeout: "15s"
+  retries: 3
+  expected_status: 200
+
+secrets:
+  own:
+    - tls_cert
+    - tls_key
+  shared:
+    - redis_password
+    - chromadb_host
+    - service_auth_token
+    - jwt_secret
+    - llm_api_key
+
+tls:
+  auto_rotate: true
+  rotate_days_before: 14
+  reload_command: "systemctl restart autobot-backend"
+
+system_updates:
+  policy: security
+  reboot_strategy: scheduled
+
+coexistence:
+  compatible_with:
+    - autobot-ollama
+    - autobot-slm-agent
+    - autobot-shared
+  conflicts_with: []
+  warns_with: []
+
+depends_on:
+  - autobot-database
+
+ansible_role: backend
+notes: |
+  Backend takes ~6 minutes to fully initialize (loads GPUSemanticChunker,
+  RAG optimizer, ChromaDB). During init uvicorn binds the socket but workers
+  don't accept connections — nginx returns 504 until ready.
+  Never restart unless essential.
+  Python runtime: conda env autobot-backend at /home/autobot/miniconda3/envs/autobot-backend

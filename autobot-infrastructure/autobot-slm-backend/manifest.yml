@@ -1,0 +1,81 @@
+role: autobot-slm-backend
+description: "SLM fleet management API — node registry, code sync, role assignment, health polling"
+version: "1.0.0"
+target_node: slm
+
+deploy:
+  source: autobot-slm-backend/
+  destination: /opt/autobot/autobot-slm-backend/
+  shared: true
+  infrastructure: true
+
+system_dependencies:
+  - python3-venv
+  - python3-dev
+  - build-essential
+  - libpq-dev
+
+services:
+  - name: autobot-slm-backend
+    type: systemd
+    start_order: 1
+    user: autobot-slm-backend
+
+ports:
+  - port: 8000
+    protocol: http
+    public: false
+    loopback_only: true
+    description: "SLM FastAPI (behind nginx, internal only)"
+  - port: 443
+    protocol: https
+    public: true
+    description: "SLM API + admin UI via nginx"
+
+health:
+  endpoint: "https://localhost/api/health"
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+  expected_status: 200
+
+secrets:
+  own:
+    - tls_cert
+    - tls_key
+    - slm_admin_password
+    - jwt_secret
+    - encryption_key
+  shared:
+    - db_password
+    - redis_password
+    - service_auth_token
+
+tls:
+  auto_rotate: true
+  rotate_days_before: 14
+  reload_command: "systemctl reload nginx"
+
+system_updates:
+  policy: security
+  reboot_strategy: scheduled
+
+coexistence:
+  compatible_with:
+    - autobot-slm-frontend
+    - autobot-slm-database
+    - autobot-monitoring
+    - autobot-slm-agent
+    - autobot-shared
+  conflicts_with: []
+  warns_with: []
+
+depends_on:
+  - autobot-slm-database
+
+ansible_role: slm_manager
+notes: |
+  SLM server is the distribution hub — all code syncs through /opt/autobot/cache/ here.
+  Post-commit hook notifies via POST /api/code-source/notify.
+  PostgreSQL DB (autobot_slm) lives on this same node (autobot-slm-database role).
+  Ansible runs FROM this node to deploy to fleet.

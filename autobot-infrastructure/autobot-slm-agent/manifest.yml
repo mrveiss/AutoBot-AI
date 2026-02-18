@@ -1,0 +1,77 @@
+role: autobot-slm-agent
+description: "SLM node agent — heartbeat, code sync executor, health reporting, Ansible runner"
+version: "1.0.0"
+target_node: null         # Deployed to ALL nodes
+deploy_to_all: true
+
+deploy:
+  source: autobot-slm-agent/
+  destination: /opt/autobot/autobot-slm-agent/
+  shared: true
+  infrastructure: true
+
+system_dependencies:
+  - python3-venv
+  - python3-dev
+  - ansible              # Runs playbooks on SLM server (.19)
+  - rsync
+
+services:
+  - name: autobot-slm-agent
+    type: systemd
+    start_order: 1
+    user: autobot-slm-agent
+
+ports:
+  - port: 9100
+    protocol: http
+    public: false
+    loopback_only: false
+    description: "Prometheus node_exporter (scraped by monitoring on .19)"
+
+health:
+  endpoint: "http://localhost:9100/metrics"
+  interval: "30s"
+  timeout: "5s"
+  retries: 3
+  expected_status: 200
+
+secrets:
+  own:
+    - agent_api_key
+  shared:
+    - slm_backend_url
+    - service_auth_token
+
+tls:
+  auto_rotate: false   # Agent communicates over HTTPS to SLM — cert on SLM side
+
+system_updates:
+  policy: security
+  reboot_strategy: scheduled
+
+coexistence:
+  compatible_with:
+    - autobot-backend
+    - autobot-frontend
+    - autobot-slm-backend
+    - autobot-slm-frontend
+    - autobot-slm-database
+    - autobot-monitoring
+    - autobot-npu-worker
+    - autobot-browser-worker
+    - autobot-ai-stack
+    - autobot-database
+    - autobot-ollama
+    - autobot-shared
+  conflicts_with: []
+  warns_with: []
+
+depends_on: []
+
+ansible_role: slm_agent
+notes: |
+  Must be launched with --node-id <node_id> matching inventory hostname.
+  SLM_NODE_ID env var or config.yaml node_id must be set.
+  The legacy service name was 'autobot-agent' — removed by slm_agent Ansible role cleanup tasks.
+  Ansible role on .19 installs this to all 9 nodes.

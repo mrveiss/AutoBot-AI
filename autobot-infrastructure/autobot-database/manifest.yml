@@ -1,0 +1,81 @@
+role: autobot-database
+description: "Redis Stack + PostgreSQL — session storage, caching, vector search, and relational data"
+version: "1.0.0"
+target_node: database
+
+deploy:
+  source: autobot-database/
+  destination: /opt/autobot/autobot-database/
+  shared: false
+  infrastructure: true
+
+system_dependencies:
+  - redis-stack-server
+  - postgresql
+  - postgresql-contrib
+  - libpq-dev
+
+services:
+  - name: autobot-database-redis
+    type: systemd
+    system_service: redis-stack-server
+    start_order: 1
+    user: redis
+  - name: autobot-database-postgres
+    type: systemd
+    system_service: postgresql
+    start_order: 2
+    user: postgres
+
+ports:
+  - port: 6379
+    protocol: tcp
+    public: false
+    loopback_only: false
+    description: "Redis Stack (accessed by all backend services)"
+  - port: 8001
+    protocol: http
+    public: false
+    loopback_only: false
+    description: "RedisInsight web UI"
+  - port: 5432
+    protocol: tcp
+    public: false
+    loopback_only: true
+    description: "PostgreSQL (user management DB for autobot-backend)"
+
+health:
+  endpoint: "http://localhost:6379"
+  interval: "30s"
+  timeout: "5s"
+  retries: 3
+  expected_status: 200
+
+secrets:
+  own:
+    - redis_password
+    - db_password
+  shared: []
+
+tls:
+  auto_rotate: false   # Internal TCP (auth via password)
+
+system_updates:
+  policy: manual
+  reboot_strategy: manual
+
+coexistence:
+  compatible_with:
+    - autobot-slm-agent
+    - autobot-shared
+  conflicts_with: []
+  warns_with: []
+
+depends_on: []
+
+ansible_role: redis
+notes: |
+  Redis Stack binds :6379 (all interfaces — fleet-wide access).
+  Redis databases: main (0), knowledge (1), prompts (2), analytics (3).
+  PostgreSQL on localhost:5432 — user management DB for autobot-backend.
+  system_updates policy = manual: database nodes require planned maintenance window.

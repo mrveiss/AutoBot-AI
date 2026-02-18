@@ -1,0 +1,63 @@
+role: autobot-ollama
+description: "Ollama local LLM runtime — on-device model inference colocated with backend"
+version: "1.0.0"
+target_node: backend
+
+deploy:
+  source: autobot-ollama/
+  destination: /opt/autobot/autobot-ollama/
+  shared: false
+  infrastructure: true
+
+system_dependencies:
+  - curl   # Ollama install script
+
+services:
+  - name: ollama
+    type: systemd
+    system_service: ollama
+    start_order: 1
+    user: ollama
+
+ports:
+  - port: 11434
+    protocol: http
+    public: false
+    loopback_only: true
+    description: "Ollama API (accessed locally by autobot-backend)"
+
+health:
+  endpoint: "http://localhost:11434/api/tags"
+  interval: "60s"
+  timeout: "30s"
+  retries: 3
+  expected_status: 200
+
+secrets:
+  own: []
+  shared: []
+
+tls:
+  auto_rotate: false   # Loopback only — no TLS needed
+
+system_updates:
+  policy: security
+  reboot_strategy: scheduled
+
+coexistence:
+  compatible_with:
+    - autobot-backend
+    - autobot-slm-agent
+    - autobot-shared
+  conflicts_with: []
+  warns_with: []
+
+depends_on: []
+
+ansible_role: llm
+notes: |
+  Ollama installed via official install script (not apt).
+  Service runs as 'ollama' system user.
+  Port 11434 loopback only — backend reaches it at http://127.0.0.1:11434.
+  Models pulled manually or via Ansible 'ollama pull' task.
+  Does not conflict with autobot-backend on .20 (different ports, different users).

@@ -1,0 +1,63 @@
+role: autobot-ai-stack
+description: "ChromaDB vector database + embedding models — semantic search and RAG backing store"
+version: "1.0.0"
+target_node: ai-stack
+
+deploy:
+  source: autobot-ai-stack/
+  destination: /opt/autobot/autobot-ai-stack/
+  shared: true
+  infrastructure: true
+
+system_dependencies:
+  - python3-venv
+  - python3-dev
+  - build-essential
+
+services:
+  - name: autobot-ai-stack
+    type: systemd
+    start_order: 1
+    user: autobot-ai-stack
+
+ports:
+  - port: 8080
+    protocol: http
+    public: false
+    loopback_only: false
+    description: "AI stack HTTP API — ChromaDB + embedding endpoints"
+
+health:
+  endpoint: "http://localhost:8080/health"
+  interval: "30s"
+  timeout: "15s"
+  retries: 3
+  expected_status: 200
+
+secrets:
+  own:
+    - ai_stack_service_key
+  shared:
+    - service_auth_token
+
+tls:
+  auto_rotate: false   # Internal HTTP (service auth via token)
+
+system_updates:
+  policy: security
+  reboot_strategy: scheduled
+
+coexistence:
+  compatible_with:
+    - autobot-slm-agent
+    - autobot-shared
+  conflicts_with: []
+  warns_with: []
+
+depends_on: []
+
+ansible_role: ai-stack
+notes: |
+  Previously deployed as 'ai-stack/' (no prefix). Renamed to autobot-ai-stack/.
+  ChromaDB persists vector data in /opt/autobot/data/chromadb/.
+  Embedding model loaded at startup — allow 2-3 minutes for first request.

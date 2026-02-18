@@ -1,0 +1,50 @@
+role: autobot-shared
+description: "Shared Python utilities — redis_client, ssot_config, tracing, logging (deployed with every backend)"
+version: "1.0.0"
+target_node: null         # Deployed to all nodes that run Python backends
+deploy_to_all: true
+
+deploy:
+  source: autobot-shared/
+  destination: /opt/autobot/autobot-shared/
+  shared: false           # IS the shared component — no recursion
+  infrastructure: false
+
+system_dependencies: []   # No system deps — pure Python library
+
+services: []              # Not a standalone service
+
+ports: []
+
+health: null
+
+secrets:
+  own: []
+  shared: []
+
+tls:
+  auto_rotate: false
+
+system_updates:
+  policy: security
+  reboot_strategy: scheduled
+
+coexistence:
+  compatible_with:
+    - autobot-backend
+    - autobot-slm-backend
+    - autobot-npu-worker
+    - autobot-browser-worker
+    - autobot-ai-stack
+    - autobot-slm-agent
+  conflicts_with: []
+  warns_with: []
+
+depends_on: []
+
+ansible_role: common
+notes: |
+  Pure Python library. Deployed alongside any role that imports from autobot_shared.
+  Key modules: redis_client, ssot_config, tracing, logging_config.
+  Import path: from autobot_shared.redis_client import get_redis_client
+  The autobot_shared/ symlink at repo root points to autobot-shared/ for WSL2 compat.

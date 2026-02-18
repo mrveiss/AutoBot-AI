@@ -1,0 +1,62 @@
+role: autobot-slm-frontend
+description: "SLM admin dashboard — Vue 3 SPA for fleet management, monitoring, and orchestration"
+version: "1.0.0"
+target_node: slm
+
+deploy:
+  source: autobot-slm-frontend/
+  destination: /opt/autobot/autobot-slm-frontend/
+  shared: false
+  infrastructure: true
+
+system_dependencies:
+  - nodejs   # v20 via NodeSource — shared with slm-backend
+
+services:
+  - name: autobot-slm-frontend-build
+    type: oneshot
+    start_order: 3
+    exec_start: "bash -c 'cd /opt/autobot/autobot-slm-frontend && npm ci && npm run build'"
+    user: autobot-slm-frontend
+  # Served by nginx managed by autobot-slm-backend role; no separate service needed
+
+ports: []   # Port 443 served by nginx from autobot-slm-backend role
+
+health:
+  endpoint: "https://localhost/"
+  interval: "60s"
+  timeout: "10s"
+  retries: 2
+  expected_status: 200
+
+secrets:
+  own: []
+  shared:
+    - slm_backend_url
+
+tls:
+  auto_rotate: false   # TLS managed by autobot-slm-backend/nginx
+
+system_updates:
+  policy: security
+  reboot_strategy: scheduled
+
+coexistence:
+  compatible_with:
+    - autobot-slm-backend
+    - autobot-slm-database
+    - autobot-monitoring
+    - autobot-slm-agent
+    - autobot-shared
+  conflicts_with:
+    - autobot-frontend   # both would try port 443 if on different nodes
+  warns_with: []
+
+depends_on:
+  - autobot-slm-backend
+
+ansible_role: slm_manager
+notes: |
+  Built dist/ is served by nginx configured by autobot-slm-backend role.
+  Co-deployed with autobot-slm-backend (same Ansible role: slm_manager).
+  Never deploy autobot-slm-frontend to .21 (conflicts with autobot-frontend on port 443).

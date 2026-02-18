@@ -1,0 +1,67 @@
+role: autobot-browser-worker
+description: "Playwright browser automation worker — web scraping, GUI automation, screenshots"
+version: "1.0.0"
+target_node: browser
+
+deploy:
+  source: autobot-browser-worker/
+  destination: /opt/autobot/autobot-browser-worker/
+  shared: true
+  infrastructure: true
+
+system_dependencies:
+  - nodejs              # v20 via NodeSource
+  - chromium-browser
+  - xvfb               # Virtual display for headed mode
+  - libgbm-dev
+  - libnss3
+
+services:
+  - name: autobot-playwright
+    type: systemd
+    start_order: 1
+    user: autobot-browser-worker
+
+ports:
+  - port: 3000
+    protocol: http
+    public: false
+    loopback_only: false
+    description: "Playwright worker HTTP API (accessed by backend at .20)"
+
+health:
+  endpoint: "http://localhost:3000/health"
+  interval: "30s"
+  timeout: "10s"
+  retries: 3
+  expected_status: 200
+
+secrets:
+  own:
+    - browser_service_key
+  shared:
+    - service_auth_token
+
+tls:
+  auto_rotate: false   # Internal HTTP (service auth via token)
+
+system_updates:
+  policy: full
+  reboot_strategy: immediate
+
+coexistence:
+  compatible_with:
+    - autobot-slm-agent
+    - autobot-shared
+  conflicts_with: []
+  warns_with:
+    - autobot-monitoring   # both bind port 3000 if co-deployed
+
+depends_on: []
+
+ansible_role: browser
+notes: |
+  systemd service is named 'autobot-playwright' (NOT autobot-browser-worker).
+  Playwright browsers installed via: npx playwright install chromium.
+  Worker binds :3000 — conflicts with Grafana (:3000) if monitoring were on same node.
+  Never assign autobot-monitoring to .25.
