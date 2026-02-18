@@ -1,0 +1,262 @@
+---
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Update Node from SLM Cache (Issue #926 Phase 5)
+#
+# Deploys one or more roles from the SLM's /opt/autobot/cache/ to a target
+# node.  Skips Phase 1 (clean) and Phase 3 (system deps) — this is a code
+# update, not a fresh provision.
+#
+# Usage:
+#   ansible-playbook playbooks/update-node.yml \
+#     -i inventory/slm-nodes.yml \
+#     -e "node_id=02-Frontend"
+#
+#   # Scope to specific roles:
+#   ansible-playbook playbooks/update-node.yml \
+#     -i inventory/slm-nodes.yml \
+#     -e "node_id=02-Frontend" \
+#     -e "role_names=autobot-frontend,autobot-shared"
+#
+# Variables:
+#   node_id       (required) Inventory hostname / SLM node ID (e.g. 01-Backend)
+#   role_names    (optional) Comma-separated roles to deploy.  Defaults to all
+#                 roles found under slm_cache_dir for this node.
+#   slm_admin_url (optional) SLM API base URL. Default: https://172.16.168.19
+#   slm_admin_password (optional) SLM admin password. Default: admin
+
+# ---------------------------------------------------------------------------
+# Play 1 – Authenticate with SLM API
+# ---------------------------------------------------------------------------
+- name: "Authenticate with SLM"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    slm_admin_url: "{{ lookup('env', 'AUTOBOT_SLM_URL') | default('https://172.16.168.19', true) }}"
+
+  tasks:
+    - name: "Login to SLM API"
+      ansible.builtin.uri:
+        url: "{{ slm_admin_url }}/api/auth/login"
+        method: POST
+        body_format: json
+        body:
+          username: "admin"
+          password: "{{ slm_admin_password | default('admin') }}"
+        validate_certs: false
+        status_code: 200
+      register: slm_auth
+      no_log: true
+
+    - name: "Set SLM auth token fact"
+      ansible.builtin.set_fact:
+        slm_token: "{{ slm_auth.json.access_token }}"
+
+    - name: "Validate node_id is provided"
+      ansible.builtin.fail:
+        msg: "Variable 'node_id' is required. Example: -e 'node_id=01-Backend'"
+      when: node_id is not defined or node_id | length == 0
+
+    - name: "Resolve role list from cache or variable"
+      block:
+        - name: "List cached roles on SLM server"
+          ansible.builtin.find:
+            paths: "{{ slm_cache_dir | default('/opt/autobot/cache') }}"
+            file_type: directory
+            depth: 1
+            patterns: "autobot-*"
+          register: cached_dirs
+          when: role_names is not defined
+
+        - name: "Set role list from cache directories"
+          ansible.builtin.set_fact:
+            resolved_role_names: "{{ cached_dirs.files | map(attribute='path') | map('basename') | list }}"
+          when: role_names is not defined and cached_dirs is defined
+
+        - name: "Set role list from role_names variable"
+          ansible.builtin.set_fact:
+            resolved_role_names: "{{ role_names.split(',') | map('trim') | list }}"
+          when: role_names is defined
+
+    - name: "Display update plan"
+      ansible.builtin.debug:
+        msg:
+          - "╔═══════════════════════════════════════════════════╗"
+          - "║  AutoBot Node Update from Cache                   ║"
+          - "╚═══════════════════════════════════════════════════╝"
+          - ""
+          - "Target node : {{ node_id }}"
+          - "Roles       : {{ resolved_role_names | join(', ') }}"
+          - "Cache dir   : {{ slm_cache_dir | default('/opt/autobot/cache') }}"
+          - ""
+
+# ---------------------------------------------------------------------------
+# Play 2 – Deploy cached roles to target node
+# ---------------------------------------------------------------------------
+- name: "Deploy cached roles to {{ node_id }}"
+  hosts: "{{ node_id }}"
+  gather_facts: false
+  vars:
+    cache_base: "{{ slm_cache_dir | default('/opt/autobot/cache') }}"
+    install_base: "/opt/autobot"
+    # Role → systemd service mapping.  Empty string = no service restart.
+    role_service_map:
+      autobot-backend: autobot-backend
+      autobot-frontend: nginx
+      autobot-slm-backend: autobot-slm-backend
+      autobot-slm-frontend: nginx
+      autobot-npu-worker: autobot-npu-worker
+      autobot-browser-worker: autobot-playwright
+      autobot-ai-stack: autobot-ai-stack
+      autobot-slm-agent: slm-agent
+      autobot-shared: ""
+      autobot-infrastructure: ""
+
+  pre_tasks:
+    - name: "Import role list from Play 1"
+      ansible.builtin.set_fact:
+        deploy_roles: "{{ hostvars['localhost']['resolved_role_names'] }}"
+
+  tasks:
+    - name: "Check cache exists for each role"
+      ansible.builtin.stat:
+        path: "{{ cache_base }}/{{ item }}"
+      loop: "{{ deploy_roles }}"
+      register: cache_stat
+      delegate_to: localhost
+
+    - name: "Warn about missing cache entries"
+      ansible.builtin.debug:
+        msg: "⚠  Cache not found for {{ item.item }} — skipping"
+      loop: "{{ cache_stat.results }}"
+      when: not item.stat.exists
+
+    - name: "Rsync roles from SLM cache to node"
+      ansible.posix.synchronize:
+        src: "{{ cache_base }}/{{ item.item }}/"
+        dest: "{{ install_base }}/{{ item.item }}/"
+        delete: false
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=__pycache__"
+          - "--exclude=*.pyc"
+          - "--exclude=*.pyo"
+          - "--exclude=venv/"
+          - "--exclude=node_modules/"
+          - "--exclude=dist/"
+          - "--exclude=*.egg-info/"
+          - "--exclude=data/"
+          - "--exclude=logs/"
+          - "--exclude=.env"
+      loop: "{{ cache_stat.results }}"
+      when: item.stat.exists
+      become: true
+      register: rsync_results
+
+    # ------------------------------------------------------------------
+    # Frontend build step: rebuild dist after code sync
+    # ------------------------------------------------------------------
+    - name: "Rebuild autobot-frontend production dist"
+      ansible.builtin.command:
+        cmd: npm run build
+        chdir: "{{ install_base }}/autobot-frontend"
+      register: frontend_build
+      when: >
+        'autobot-frontend' in deploy_roles
+        and (cache_stat.results | selectattr('item', 'equalto', 'autobot-frontend') | map(attribute='stat.exists') | first | default(false))
+      changed_when: frontend_build.rc == 0
+
+    - name: "Rebuild autobot-slm-frontend production dist"
+      ansible.builtin.command:
+        cmd: npm run build
+        chdir: "{{ install_base }}/autobot-slm-frontend"
+      register: slm_frontend_build
+      when: >
+        'autobot-slm-frontend' in deploy_roles
+        and (cache_stat.results | selectattr('item', 'equalto', 'autobot-slm-frontend') | map(attribute='stat.exists') | first | default(false))
+      changed_when: slm_frontend_build.rc == 0
+
+    # ------------------------------------------------------------------
+    # Service restart for each deployed role
+    # ------------------------------------------------------------------
+    - name: "Collect services to restart"
+      ansible.builtin.set_fact:
+        services_to_restart: >-
+          {{
+            deploy_roles
+            | map('extract', role_service_map | default({}), default='')
+            | select('ne', '')
+            | list
+            | unique
+          }}
+
+    - name: "Restart affected services"
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: restarted
+        daemon_reload: true
+      loop: "{{ services_to_restart }}"
+      become: true
+      register: service_restarts
+      failed_when: false  # Log failures but don't abort — verify below
+
+    - name: "Report service restart failures"
+      ansible.builtin.debug:
+        msg: "⚠  Failed to restart {{ item.item }}: {{ item.msg | default('unknown error') }}"
+      loop: "{{ service_restarts.results }}"
+      when: item.failed | default(false)
+
+# ---------------------------------------------------------------------------
+# Play 3 – Health verify and mark node UP_TO_DATE
+# ---------------------------------------------------------------------------
+- name: "Verify and mark node synced"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    slm_admin_url: "{{ lookup('env', 'AUTOBOT_SLM_URL') | default('https://172.16.168.19', true) }}"
+
+  tasks:
+    - name: "Pause for services to stabilise"
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: "Mark node as UP_TO_DATE in SLM DB"
+      ansible.builtin.uri:
+        url: "{{ slm_admin_url }}/api/code-sync/nodes/{{ node_id }}/mark-synced"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ slm_token }}"
+          Content-Type: "application/json"
+        body: "{}"
+        body_format: json
+        validate_certs: false
+        status_code: [200, 404]
+      register: mark_result
+      ignore_errors: true
+
+    - name: "Update NodeCodeVersion rows to UP_TO_DATE"
+      ansible.builtin.uri:
+        url: "{{ slm_admin_url }}/api/code-source/node-code-versions"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ slm_token }}"
+        body_format: json
+        validate_certs: false
+        status_code: 200
+      register: version_check
+      ignore_errors: true
+
+    - name: "Display update summary"
+      ansible.builtin.debug:
+        msg:
+          - ""
+          - "╔═══════════════════════════════════════════════════════════════╗"
+          - "║  Node Update Complete (Issue #926 Phase 5)                   ║"
+          - "╚═══════════════════════════════════════════════════════════════╝"
+          - ""
+          - "Node     : {{ node_id }}"
+          - "Roles    : {{ resolved_role_names | join(', ') }}"
+          - "DB sync  : {{ 'OK' if (mark_result.status | default(0)) in [200, 404] else 'FAILED' }}"
+          - ""

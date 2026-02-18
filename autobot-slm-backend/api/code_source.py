@@ -9,11 +9,22 @@ Manages the code-source node assignment and git notifications.
 
 import asyncio
 import logging
+import os
+import tarfile
+import tempfile
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from models.database import CodeSource, CodeStatus, Node, NodeRole, RoleStatus, Setting
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from models.database import (
+    CodeSource,
+    CodeStatus,
+    Node,
+    NodeCodeVersion,
+    NodeRole,
+    RoleStatus,
+    Setting,
+)
 from pydantic import BaseModel
 from services.auth import get_current_user
 from services.database import get_db
@@ -57,6 +68,8 @@ class CodeNotification(BaseModel):
     branch: str = "main"
     message: Optional[str] = None
     is_code_source: bool = True
+    # Phase 5 (#926): list of role dirs that changed (empty = all roles)
+    changed_roles: List[str] = []
 
 
 class CodeNotificationResponse(BaseModel):
@@ -306,16 +319,20 @@ async def remove_code_source(
     return {"success": True, "message": "Code-source removed"}
 
 
-async def _update_code_sync_state(db: AsyncSession, node_id: str, commit: str) -> int:
-    """Update latest version setting and mark other nodes outdated.
+async def _update_code_sync_state(
+    db: AsyncSession,
+    node_id: str,
+    commit: str,
+    changed_roles: List[str],
+) -> int:
+    """Update latest version setting and mark affected nodes outdated.
 
-    Helper for notify_new_commit (#829).
+    Phase 5 (#926): If changed_roles is provided, only mark nodes that have
+    those roles assigned as OUTDATED. Otherwise mark all other nodes.
 
     Returns:
         Number of nodes marked as outdated.
     """
-    # Update slm_agent_latest_commit setting so /code-sync/status
-    # reflects the new version
     setting_result = await db.execute(
         select(Setting).where(Setting.key == "slm_agent_latest_commit")
     )
@@ -325,19 +342,110 @@ async def _update_code_sync_state(db: AsyncSession, node_id: str, commit: str) -
     else:
         db.add(Setting(key="slm_agent_latest_commit", value=commit))
 
-    # Mark all other nodes as outdated so /code-sync/pending
-    # shows them as needing updates
+    if changed_roles:
+        outdated_count = await _mark_roles_outdated(db, node_id, commit, changed_roles)
+    else:
+        outdated_count = await _mark_all_nodes_outdated(db, node_id, commit)
+
+    return outdated_count
+
+
+async def _mark_all_nodes_outdated(
+    db: AsyncSession, source_node_id: str, commit: str
+) -> int:
+    """Mark all nodes except source as outdated.
+
+    Helper for _update_code_sync_state (#926 Phase 5).
+    """
     outdated_result = await db.execute(
         select(Node).where(
-            Node.node_id != node_id,
+            Node.node_id != source_node_id,
             Node.code_version != commit,
         )
     )
-    outdated_nodes = outdated_result.scalars().all()
-    for outdated_node in outdated_nodes:
-        outdated_node.code_status = CodeStatus.OUTDATED.value
+    nodes = outdated_result.scalars().all()
+    for node in nodes:
+        node.code_status = CodeStatus.OUTDATED.value
+    return len(nodes)
 
-    return len(outdated_nodes)
+
+async def _mark_roles_outdated(
+    db: AsyncSession,
+    source_node_id: str,
+    commit: str,
+    changed_roles: List[str],
+) -> int:
+    """Mark only nodes that have changed roles assigned as outdated.
+
+    Also upserts NodeCodeVersion rows for each (node, role) pair.
+
+    Helper for _update_code_sync_state (#926 Phase 5).
+    """
+    affected_node_ids: set = set()
+
+    for role_name in changed_roles:
+        # Find nodes that have this role assigned
+        role_result = await db.execute(
+            select(NodeRole).where(
+                NodeRole.role_name == role_name,
+                NodeRole.node_id != source_node_id,
+            )
+        )
+        for node_role in role_result.scalars().all():
+            affected_node_ids.add(node_role.node_id)
+            await _upsert_node_code_version(
+                db, node_role.node_id, role_name, commit, CodeStatus.OUTDATED
+            )
+
+    # Mark affected nodes OUTDATED at the node level too
+    for affected_id in affected_node_ids:
+        node_result = await db.execute(select(Node).where(Node.node_id == affected_id))
+        node = node_result.scalar_one_or_none()
+        if node:
+            node.code_status = CodeStatus.OUTDATED.value
+
+    return len(affected_node_ids)
+
+
+async def _upsert_node_code_version(
+    db: AsyncSession,
+    node_id: str,
+    role_name: str,
+    commit: str,
+    status: CodeStatus,
+    cache_path: Optional[str] = None,
+) -> None:
+    """Insert or update a NodeCodeVersion row.
+
+    Helper for Phase 5 code sync (#926).
+    """
+    result = await db.execute(
+        select(NodeCodeVersion).where(
+            NodeCodeVersion.node_id == node_id,
+            NodeCodeVersion.role_name == role_name,
+        )
+    )
+    row = result.scalar_one_or_none()
+    if row:
+        row.commit_hash = commit
+        row.status = status.value
+        if cache_path:
+            row.cache_path = cache_path
+        if status == CodeStatus.UP_TO_DATE:
+            row.deployed_at = datetime.utcnow()
+    else:
+        db.add(
+            NodeCodeVersion(
+                node_id=node_id,
+                role_name=role_name,
+                commit_hash=commit,
+                status=status.value,
+                cache_path=cache_path,
+                deployed_at=datetime.utcnow()
+                if status == CodeStatus.UP_TO_DATE
+                else None,
+            )
+        )
 
 
 async def _broadcast_commit_notification(
@@ -407,9 +515,9 @@ async def notify_new_commit(
         # to be synced from the git repo. Only mark UP_TO_DATE after a sync (#913).
         node.code_status = CodeStatus.OUTDATED.value
 
-    # Update code-sync status and mark fleet nodes outdated (#829)
+    # Update code-sync status and mark fleet nodes outdated (#829/#926)
     outdated_count = await _update_code_sync_state(
-        db, notification.node_id, notification.commit
+        db, notification.node_id, notification.commit, notification.changed_roles
     )
 
     await db.commit()
@@ -428,5 +536,167 @@ async def notify_new_commit(
         success=True,
         message=f"Commit {notification.commit[:12]} recorded",
         commit=notification.commit,
+        outdated_nodes=outdated_count,
+    )
+
+
+# =============================================================================
+# Phase 5 (#926): per-role version tracking + air-gapped upload
+# =============================================================================
+
+_CACHE_BASE = os.environ.get("AUTOBOT_CODE_CACHE_DIR", "/opt/autobot/cache")
+
+
+class NodeCodeVersionResponse(BaseModel):
+    """Per-role version entry for a node."""
+
+    node_id: str
+    role_name: str
+    commit_hash: Optional[str] = None
+    status: str
+    deployed_at: Optional[datetime] = None
+    cache_path: Optional[str] = None
+
+
+class PackageUploadResponse(BaseModel):
+    """Response after uploading a role package."""
+
+    success: bool
+    role_name: str
+    commit_hash: str
+    cache_path: str
+    outdated_nodes: int
+
+
+@router.get("/node-code-versions", response_model=List[NodeCodeVersionResponse])
+async def list_node_code_versions(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    node_id: Optional[str] = None,
+    role_name: Optional[str] = None,
+) -> List[NodeCodeVersionResponse]:
+    """List per-role code version status across the fleet."""
+    query = select(NodeCodeVersion)
+    if node_id:
+        query = query.where(NodeCodeVersion.node_id == node_id)
+    if role_name:
+        query = query.where(NodeCodeVersion.role_name == role_name)
+
+    result = await db.execute(query)
+    rows = result.scalars().all()
+    return [
+        NodeCodeVersionResponse(
+            node_id=r.node_id,
+            role_name=r.role_name,
+            commit_hash=r.commit_hash,
+            status=r.status,
+            deployed_at=r.deployed_at,
+            cache_path=r.cache_path,
+        )
+        for r in rows
+    ]
+
+
+def _extract_tarball_to_cache(data: bytes, role_name: str, commit_hash: str) -> str:
+    """Extract uploaded tarball to the role cache directory.
+
+    Helper for upload_package (#926 Phase 5).
+    Returns the cache path.
+    """
+    cache_path = os.path.join(_CACHE_BASE, role_name)
+    os.makedirs(cache_path, exist_ok=True)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tar_path = os.path.join(tmpdir, "upload.tar.gz")
+        with open(tar_path, "wb") as fh:
+            fh.write(data)
+
+        if not tarfile.is_tarfile(tar_path):
+            raise ValueError("Uploaded file is not a valid tar archive")
+
+        with tarfile.open(tar_path, "r:gz") as tar:
+            # Security: reject absolute paths and path traversal
+            for member in tar.getmembers():
+                if member.name.startswith("/") or ".." in member.name:
+                    raise ValueError(f"Unsafe path in archive: {member.name}")
+            tar.extractall(cache_path)  # noqa: S202  # nosec B202
+
+    return cache_path
+
+
+@router.post("/upload-package", response_model=PackageUploadResponse)
+async def upload_package(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    role_name: str = Form(...),
+    commit_hash: str = Form(...),
+    package: UploadFile = File(...),
+) -> PackageUploadResponse:
+    """Upload a role code package for air-gapped deployments.
+
+    Accepts a .tar.gz of the role directory. Extracts to
+    /opt/autobot/cache/<role_name>/ and marks all nodes that have
+    this role assigned as OUTDATED.
+    """
+    if not package.filename or not package.filename.endswith((".tar.gz", ".tgz")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Package must be a .tar.gz or .tgz file",
+        )
+
+    data = await package.read()
+
+    try:
+        cache_path = await asyncio.get_event_loop().run_in_executor(
+            None, _extract_tarball_to_cache, data, role_name, commit_hash
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    except OSError as exc:
+        logger.error("Failed to extract package for %s: %s", role_name, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to extract package: {exc}",
+        ) from exc
+
+    # Mark all nodes with this role as OUTDATED
+    role_result = await db.execute(
+        select(NodeRole).where(NodeRole.role_name == role_name)
+    )
+    outdated_count = 0
+    for node_role in role_result.scalars().all():
+        await _upsert_node_code_version(
+            db,
+            node_role.node_id,
+            role_name,
+            commit_hash,
+            CodeStatus.OUTDATED,
+            cache_path=cache_path,
+        )
+        node_result = await db.execute(
+            select(Node).where(Node.node_id == node_role.node_id)
+        )
+        node = node_result.scalar_one_or_none()
+        if node:
+            node.code_status = CodeStatus.OUTDATED.value
+            outdated_count += 1
+
+    await db.commit()
+
+    logger.info(
+        "Package uploaded: role=%s commit=%s cache=%s outdated=%d",
+        role_name,
+        commit_hash[:12],
+        cache_path,
+        outdated_count,
+    )
+
+    return PackageUploadResponse(
+        success=True,
+        role_name=role_name,
+        commit_hash=commit_hash,
+        cache_path=cache_path,
         outdated_nodes=outdated_count,
     )

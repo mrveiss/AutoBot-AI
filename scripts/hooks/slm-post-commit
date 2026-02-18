@@ -3,49 +3,139 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
-# Git Post-Commit Hook - Notifies SLM server of new commits (#824)
+# Git Post-Commit Hook - Notifies SLM server of new commits (#824 / #926 Phase 5)
 #
-# Install: ln -sf scripts/hooks/slm-post-commit .git/hooks/post-commit
+# Install: ln -sf ../../scripts/hooks/slm-post-commit .git/hooks/post-commit
+# Or:      cp scripts/hooks/slm-post-commit .git/hooks/post-commit && chmod +x .git/hooks/post-commit
 #
-# When a commit is made on the dev machine (code-source), this hook
-# sends a notification to the SLM server. The SLM then marks all
-# fleet nodes as "outdated" so they can be synced.
+# Phase 5 (#926): Detects which autobot-* role dirs changed, rsyncs only
+# those roles to /opt/autobot/cache/<role>/ on the SLM server, then
+# sends POST /api/code-source/notify with changed_roles[] so SLM only
+# marks nodes that have those specific roles as OUTDATED.
 
 set -e
 
-# SLM server configuration
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 SLM_HOST="${AUTOBOT_SLM_HOST:-172.16.168.19}"
-# Port 443 for nginx HTTPS (not 8000 which is backend localhost only)
 SLM_URL="https://${SLM_HOST}"
-
-# Code-source node ID (whichever node has the code-source role assigned)
 CODE_SOURCE_NODE_ID="${AUTOBOT_CODE_SOURCE_NODE:-01-Backend}"
+SLM_CACHE_USER="${AUTOBOT_SLM_USER:-autobot}"
+SLM_CACHE_DIR="${AUTOBOT_SLM_CACHE_DIR:-/opt/autobot/cache}"
 
-# Get commit info from git
-COMMIT_HASH=$(git rev-parse HEAD)
-COMMIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-COMMIT_MSG=$(git log -1 --pretty=%s)
+# Roles whose dirs live at the repo root.  Add new ones here when created.
+KNOWN_ROLE_DIRS=(
+    autobot-backend
+    autobot-frontend
+    autobot-slm-backend
+    autobot-slm-frontend
+    autobot-npu-worker
+    autobot-browser-worker
+    autobot-ai-stack
+    autobot-shared
+    autobot-slm-agent
+    autobot-infrastructure
+)
 
-# Only notify on tracked branches (skip detached HEAD, etc)
-if [ "$COMMIT_BRANCH" = "HEAD" ]; then
-    exit 0
-fi
+# ---------------------------------------------------------------------------
+# Detect changed role directories in this commit
+# ---------------------------------------------------------------------------
+detect_changed_roles() {
+    local changed_roles=()
 
-# Send notification to SLM (non-blocking, don't fail the commit)
+    # Get files changed between previous commit and HEAD
+    # Fall back to comparing against empty tree for the very first commit
+    local prev_ref
+    if git rev-parse HEAD~1 >/dev/null 2>&1; then
+        prev_ref="HEAD~1"
+    else
+        prev_ref="$(git hash-object -t tree /dev/null)"
+    fi
+
+    local changed_files
+    changed_files=$(git diff --name-only "${prev_ref}" HEAD 2>/dev/null || true)
+
+    for role_dir in "${KNOWN_ROLE_DIRS[@]}"; do
+        if echo "${changed_files}" | grep -q "^${role_dir}/"; then
+            changed_roles+=("${role_dir}")
+        fi
+    done
+
+    echo "${changed_roles[@]}"
+}
+
+# ---------------------------------------------------------------------------
+# Rsync a single role to the SLM cache
+# ---------------------------------------------------------------------------
+rsync_role_to_cache() {
+    local role_dir="$1"
+    local src="${PWD}/${role_dir}/"
+    local dest="${SLM_CACHE_USER}@${SLM_HOST}:${SLM_CACHE_DIR}/${role_dir}/"
+
+    # Skip if the role directory doesn't exist locally (e.g., stub dirs)
+    if [ ! -d "${src}" ]; then
+        return 0
+    fi
+
+    rsync -az --delete \
+        --exclude=".git" \
+        --exclude="__pycache__" \
+        --exclude="*.pyc" \
+        --exclude="*.pyo" \
+        --exclude="venv/" \
+        --exclude="node_modules/" \
+        --exclude="dist/" \
+        --exclude="*.egg-info/" \
+        --exclude="data/" \
+        --exclude="logs/" \
+        --exclude=".env" \
+        -e "ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no" \
+        "${src}" "${dest}" \
+        > /dev/null 2>&1
+}
+
+# ---------------------------------------------------------------------------
+# Build changed_roles JSON array for the notify payload
+# ---------------------------------------------------------------------------
+build_roles_json() {
+    local roles=("$@")
+    local json="["
+    local first=true
+    for role in "${roles[@]}"; do
+        if [ "${first}" = true ]; then
+            first=false
+        else
+            json+=","
+        fi
+        json+="\"${role}\""
+    done
+    json+="]"
+    echo "${json}"
+}
+
+# ---------------------------------------------------------------------------
+# Send notification to SLM
+# ---------------------------------------------------------------------------
 notify_slm() {
+    local commit_hash="$1"
+    local branch="$2"
+    local commit_msg="$3"
+    local changed_roles_json="$4"
+
     local payload
     payload=$(cat <<PAYLOAD
 {
     "node_id": "${CODE_SOURCE_NODE_ID}",
-    "commit": "${COMMIT_HASH}",
-    "branch": "${COMMIT_BRANCH}",
-    "message": "${COMMIT_MSG}",
-    "is_code_source": true
+    "commit": "${commit_hash}",
+    "branch": "${branch}",
+    "message": "${commit_msg}",
+    "is_code_source": true,
+    "changed_roles": ${changed_roles_json}
 }
 PAYLOAD
 )
 
-    # Use --insecure for self-signed TLS certs
     curl -s --insecure \
         -X POST "${SLM_URL}/api/code-source/notify" \
         -H "Content-Type: application/json" \
@@ -55,7 +145,38 @@ PAYLOAD
         > /dev/null 2>&1
 }
 
-# Run in background so commit doesn't hang if SLM is unreachable
-notify_slm &
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+COMMIT_HASH=$(git rev-parse HEAD)
+COMMIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+COMMIT_MSG=$(git log -1 --pretty=%s | sed "s/\"/'/g")
+
+# Skip detached HEAD
+if [ "${COMMIT_BRANCH}" = "HEAD" ]; then
+    exit 0
+fi
+
+# Detect which roles changed
+read -ra CHANGED_ROLES <<< "$(detect_changed_roles)"
+
+if [ ${#CHANGED_ROLES[@]} -eq 0 ]; then
+    # No autobot-* role dirs changed — still notify but with empty changed_roles
+    # (SLM will mark all nodes outdated for backwards compat)
+    notify_slm "${COMMIT_HASH}" "${COMMIT_BRANCH}" "${COMMIT_MSG}" "[]" &
+    exit 0
+fi
+
+ROLES_JSON=$(build_roles_json "${CHANGED_ROLES[@]}")
+
+# Rsync changed roles to SLM cache in background (parallel)
+for role in "${CHANGED_ROLES[@]}"; do
+    rsync_role_to_cache "${role}" &
+done
+
+# Wait for all rsyncs then notify (so cache is ready before SLM triggers deploy)
+wait
+
+notify_slm "${COMMIT_HASH}" "${COMMIT_BRANCH}" "${COMMIT_MSG}" "${ROLES_JSON}" &
 
 exit 0

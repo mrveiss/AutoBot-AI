@@ -917,6 +917,29 @@ class NodeRole(Base):
     __table_args__ = (UniqueConstraint("node_id", "role_name", name="uq_node_role"),)
 
 
+class NodeCodeVersion(Base):
+    """Per-role per-node code version tracking (Issue #926 Phase 5).
+
+    Tracks the deployed commit hash for each (node, role) pair independently,
+    enabling per-role OUTDATED marking when only specific roles change.
+    """
+
+    __tablename__ = "node_code_versions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    node_id = Column(String(64), nullable=False, index=True)
+    role_name = Column(String(64), nullable=False, index=True)
+    commit_hash = Column(String(64), nullable=True)
+    status = Column(String(20), default=CodeStatus.UNKNOWN.value)
+    deployed_at = Column(DateTime, nullable=True)
+    cache_path = Column(String(512), nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("node_id", "role_name", name="uq_node_code_version"),
+    )
+
+
 class CodeSource(Base):
     """Code source node configuration (Issue #779)."""
 
