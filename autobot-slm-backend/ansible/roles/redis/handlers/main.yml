@@ -16,3 +16,14 @@
   ufw:
     state: reloaded
   become: yes
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: yes
+
+- name: Restart redis_exporter
+  ansible.builtin.systemd:
+    name: redis_exporter
+    state: restarted
+  become: yes

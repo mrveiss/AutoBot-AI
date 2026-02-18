@@ -1,0 +1,31 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# redis_exporter systemd service - managed by Ansible
+[Unit]
+Description=Redis Exporter for Prometheus
+Documentation=https://github.com/oliver006/redis_exporter
+After=network-online.target redis-stack-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=redis_exporter
+Group=redis_exporter
+ExecStart=/opt/redis_exporter/redis_exporter \
+  --redis.addr=redis://{{ ansible_default_ipv4.address }}:{{ redis_port }} \
+  --web.listen-address=:{{ redis_exporter_port }} \
+  --web.telemetry-path=/metrics
+{% if redis_password is defined and redis_password %}
+Environment="REDIS_PASSWORD={{ redis_password }}"
+{% endif %}
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/tmp
+
+[Install]
+WantedBy=multi-user.target
