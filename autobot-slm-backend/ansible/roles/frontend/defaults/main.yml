@@ -2,8 +2,9 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 ---
-# Frontend configuration defaults
+# Frontend configuration defaults  (#926 Phase 4: service account created, migration in Phase 7)
 network_subnet: "172.16.168.0/24"
+frontend_service_account: autobot-frontend  # Phase 7: migrate service to run as this account
 frontend_user: autobot
 frontend_group: autobot
 frontend_install_dir: /opt/autobot

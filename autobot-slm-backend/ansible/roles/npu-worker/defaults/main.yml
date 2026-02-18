@@ -2,10 +2,11 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 ---
-# NPU Worker configuration defaults
-npu_user: autobot
-npu_group: autobot
-npu_install_dir: /opt/autobot/npu-worker
+# NPU Worker configuration defaults  (#926 Phase 4: per-role account + scoped dir)
+npu_service_account: autobot-npu
+npu_user: autobot-npu
+npu_group: autobot-npu
+npu_install_dir: /opt/autobot/autobot-npu-worker
 npu_log_dir: /var/log/autobot
 npu_models_dir: /var/lib/autobot/models
 

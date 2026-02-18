@@ -1,0 +1,42 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Browser role - Phase 1 CLEAN task (#926 Phase 4)
+# Removes legacy and wrong-node directories from .25 (browser node).
+
+- name: "Browser | Clean: legacy browser-service dir (old name)"
+  ansible.builtin.file:
+    path: /opt/autobot/browser-service
+    state: absent
+  tags: ['clean']
+
+- name: "Browser | Clean: wrong-node autobot-backend dir"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-backend
+    state: absent
+  tags: ['clean']
+
+- name: "Browser | Clean: wrong-node autobot-frontend dir"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-frontend
+    state: absent
+  tags: ['clean']
+
+- name: "Browser | Clean: wrong-node autobot-slm-backend dir"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-slm-backend
+    state: absent
+  tags: ['clean']
+
+- name: "Browser | Clean: legacy npu-worker dir"
+  ansible.builtin.file:
+    path: /opt/autobot/npu-worker
+    state: absent
+  tags: ['clean']
+
+- name: "Browser | Clean: legacy ai-stack dir"
+  ansible.builtin.file:
+    path: /opt/autobot/ai-stack
+    state: absent
+  tags: ['clean']

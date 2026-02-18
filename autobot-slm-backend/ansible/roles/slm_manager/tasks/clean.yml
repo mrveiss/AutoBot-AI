@@ -1,0 +1,62 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# SLM Manager role - Phase 1 CLEAN task (#926 Phase 4)
+# Removes non-SLM directories from .19 (SLM server).
+# The SLM server should only have: autobot-slm-backend, autobot-slm-frontend,
+# autobot-slm-database, autobot-monitoring, autobot-shared, autobot-infrastructure.
+
+- name: "SLM | Clean: wrong-node autobot-backend dir"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-backend
+    state: absent
+  tags: ['clean']
+
+- name: "SLM | Clean: wrong-node autobot-frontend dir"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-frontend
+    state: absent
+  tags: ['clean']
+
+- name: "SLM | Clean: wrong-node autobot-user-backend dir"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-user-backend
+    state: absent
+  tags: ['clean']
+
+- name: "SLM | Clean: wrong-node autobot-user-frontend dir"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-user-frontend
+    state: absent
+  tags: ['clean']
+
+- name: "SLM | Clean: legacy npu-worker dir"
+  ansible.builtin.file:
+    path: /opt/autobot/npu-worker
+    state: absent
+  tags: ['clean']
+
+- name: "SLM | Clean: legacy browser-service dir"
+  ansible.builtin.file:
+    path: /opt/autobot/browser-service
+    state: absent
+  tags: ['clean']
+
+- name: "SLM | Clean: legacy ai-stack dir"
+  ansible.builtin.file:
+    path: /opt/autobot/ai-stack
+    state: absent
+  tags: ['clean']
+
+- name: "SLM | Clean: wrong-node autobot-npu-worker dir"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-npu-worker
+    state: absent
+  tags: ['clean']
+
+- name: "SLM | Clean: wrong-node autobot-browser-worker dir"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-browser-worker
+    state: absent
+  tags: ['clean']

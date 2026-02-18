@@ -1,0 +1,42 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Frontend role - Phase 1 CLEAN task (#926 Phase 4)
+# Removes legacy and wrong-node directories from .21 (frontend node).
+
+- name: "Frontend | Clean: legacy autobot-user-frontend dir"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-user-frontend
+    state: absent
+  tags: ['clean']
+
+- name: "Frontend | Clean: wrong-node autobot-slm-frontend dir"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-slm-frontend
+    state: absent
+  tags: ['clean']
+
+- name: "Frontend | Clean: wrong-node autobot-slm-backend dir"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-slm-backend
+    state: absent
+  tags: ['clean']
+
+- name: "Frontend | Clean: wrong-node autobot-backend dir"
+  ansible.builtin.file:
+    path: /opt/autobot/autobot-backend
+    state: absent
+  tags: ['clean']
+
+- name: "Frontend | Clean: legacy npu-worker dir"
+  ansible.builtin.file:
+    path: /opt/autobot/npu-worker
+    state: absent
+  tags: ['clean']
+
+- name: "Frontend | Clean: legacy browser-service dir"
+  ansible.builtin.file:
+    path: /opt/autobot/browser-service
+    state: absent
+  tags: ['clean']

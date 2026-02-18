@@ -1,0 +1,19 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# SLM Agent role - Phase 1 CLEAN task (#926 Phase 4)
+# Removes stale agent code copied to wrong paths on any node.
+# The legacy autobot-agent.service is already cleaned in main.yml (#917).
+
+- name: "SLM Agent | Clean: legacy flat agent dir at /opt/autobot/agent"
+  ansible.builtin.file:
+    path: /opt/autobot/agent
+    state: absent
+  tags: ['clean']
+
+- name: "SLM Agent | Clean: legacy slm-agent dir at /opt/autobot/slm-agent"
+  ansible.builtin.file:
+    path: /opt/autobot/slm-agent
+    state: absent
+  tags: ['clean']

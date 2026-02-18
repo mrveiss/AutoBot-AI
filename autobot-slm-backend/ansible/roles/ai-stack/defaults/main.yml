@@ -2,10 +2,11 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 ---
-# AI Stack configuration defaults
-ai_user: autobot
-ai_group: autobot
-ai_install_dir: /opt/autobot/ai-stack
+# AI Stack configuration defaults  (#926 Phase 4: per-role account + scoped dir)
+ai_service_account: autobot-ai
+ai_user: autobot-ai
+ai_group: autobot-ai
+ai_install_dir: /opt/autobot/autobot-ai-stack
 ai_log_dir: /var/log/autobot
 ai_data_dir: /var/lib/autobot
 

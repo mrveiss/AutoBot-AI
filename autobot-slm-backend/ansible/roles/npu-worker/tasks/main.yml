@@ -4,6 +4,58 @@
 #
 # NPU Worker Role - Intel NPU acceleration worker for AutoBot
 ---
+
+# ============================================================
+# Phase 1 CLEAN - remove legacy/wrong-node dirs  (#926 Phase 4)
+# ============================================================
+- name: "NPU Worker | Include clean tasks"
+  ansible.builtin.import_tasks: clean.yml
+  tags: ['clean']
+
+# ============================================================
+# Per-role service account  (#926 Phase 4)
+# ============================================================
+- name: "NPU Worker | Create autobot-npu system group"
+  ansible.builtin.group:
+    name: "{{ npu_group }}"
+    system: true
+    state: present
+  tags: ['npu', 'users']
+
+- name: "NPU Worker | Create per-role service account"
+  ansible.builtin.user:
+    name: "{{ npu_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    group: "{{ npu_group }}"
+    comment: "AutoBot NPU worker service account"
+    state: present
+  tags: ['npu', 'users']
+
+# ============================================================
+# Per-role env at /etc/autobot/  (#926 Phase 4)
+# ============================================================
+- name: "NPU Worker | Ensure /etc/autobot dir exists"
+  ansible.builtin.file:
+    path: /etc/autobot
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  tags: ['npu', 'config']
+
+- name: "NPU Worker | Deploy /etc/autobot/autobot-npu-worker.env"
+  ansible.builtin.template:
+    src: npu-worker.env.j2
+    dest: /etc/autobot/autobot-npu-worker.env
+    mode: "0640"
+    owner: root
+    group: "{{ npu_group }}"
+  notify: restart npu-worker
+  tags: ['npu', 'config']
+
+# ============================================================
 - name: Install NPU worker dependencies
   ansible.builtin.apt:
     name:

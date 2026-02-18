@@ -4,8 +4,10 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
-browser_user: autobot
-browser_group: autobot
+# (#926 Phase 4: per-role account)
+browser_service_account: autobot-browser
+browser_user: autobot-browser
+browser_group: autobot-browser
 browser_install_dir: /opt/autobot/autobot-browser-worker
 
 # VNC configuration

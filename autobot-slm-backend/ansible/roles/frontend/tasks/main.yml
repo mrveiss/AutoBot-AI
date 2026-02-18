@@ -2,6 +2,50 @@
 # Frontend role - User frontend (autobot-frontend) deployment
 # Serves production build via nginx + SSL on Frontend VM (.21)
 
+# ============================================================
+# Phase 1 CLEAN - remove legacy/wrong-node dirs  (#926 Phase 4)
+# ============================================================
+- name: "Frontend | Include clean tasks"
+  ansible.builtin.import_tasks: clean.yml
+  tags: ['clean']
+
+# ============================================================
+# Per-role service account  (#926 Phase 4)
+# ============================================================
+- name: "Frontend | Create per-role service account"
+  ansible.builtin.user:
+    name: "{{ frontend_service_account }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    groups: "{{ frontend_group }}"
+    append: true
+    comment: "AutoBot frontend service account"
+    state: present
+  tags: ['frontend', 'users']
+
+# ============================================================
+# Per-role env at /etc/autobot/  (#926 Phase 4)
+# ============================================================
+- name: "Frontend | Ensure /etc/autobot dir exists"
+  ansible.builtin.file:
+    path: /etc/autobot
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  tags: ['frontend', 'config']
+
+- name: "Frontend | Deploy /etc/autobot/autobot-frontend.env"
+  ansible.builtin.template:
+    src: frontend.env.j2
+    dest: /etc/autobot/autobot-frontend.env
+    mode: "0640"
+    owner: root
+    group: "{{ frontend_service_account }}"
+  tags: ['frontend', 'config']
+
+# ============================================================
 - name: "Frontend | Check if Node.js is already installed"
   ansible.builtin.command:
     cmd: node --version
