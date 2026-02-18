@@ -119,6 +119,11 @@ export interface WorkflowTemplate {
   category: string;
   icon: string;
   steps: Omit<WorkflowStep, 'step_id' | 'status'>[];
+  // Optional fields present on API WorkflowTemplateSummary (#920)
+  estimated_duration_minutes?: number;
+  agents_involved?: string[];
+  complexity?: string;
+  tags?: string[];
 }
 
 /** Execution strategy info */

@@ -141,7 +141,7 @@ const searchResults = ref<WorkflowTemplateSummary[]>([])
 const isSearching = ref(false)
 
 // Determine data source - API or props
-const effectiveTemplates = computed(() => {
+const effectiveTemplates = computed((): AnyTemplate[] => {
   if (isSearching.value && searchResults.value.length > 0) {
     return searchResults.value
   }
@@ -234,7 +234,15 @@ const getStepsCount = (template: AnyTemplate): number => {
 // Get template steps for preview
 const getTemplateSteps = (template: AnyTemplate): TemplateStep[] => {
   if ('steps' in template && Array.isArray(template.steps)) {
-    return template.steps as TemplateStep[]
+    return template.steps.map((step, index): TemplateStep => ({
+      step_id: (step as Partial<TemplateStep>).step_id ?? `step-${index}`,
+      description: step.description,
+      command: step.command,
+      requires_confirmation: step.requires_confirmation,
+      risk_level: step.risk_level as TemplateStep['risk_level'],
+      estimated_duration_seconds: (step as Partial<TemplateStep>).estimated_duration_seconds ?? 0,
+      agent_type: (step as Partial<TemplateStep>).agent_type,
+    }))
   }
   return []
 }

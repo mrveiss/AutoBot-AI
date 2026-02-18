@@ -503,6 +503,7 @@ import {
   type WorkflowTemplate,
   type ExecutionStrategy,
 } from '@/composables/useWorkflowBuilder';
+import type { WorkflowTemplateSummary } from '@/types/workflowTemplates';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue';
 import WorkflowTemplateGallery from '@/components/workflow/WorkflowTemplateGallery.vue';
@@ -729,13 +730,13 @@ async function handleSaveWorkflow(name: string, description: string): Promise<vo
   showToast('Workflow saved', 'success');
 }
 
-async function handleTemplateSelected(template: WorkflowTemplate): Promise<void> {
+async function handleTemplateSelected(template: WorkflowTemplate | WorkflowTemplateSummary): Promise<void> {
   // Load template into canvas
   logger.debug('Template selected:', template);
 }
 
-async function handleRunTemplate(template: WorkflowTemplate): Promise<void> {
-  const workflowId = await createWorkflowFromTemplate(template, sessionId.value);
+async function handleRunTemplate(template: WorkflowTemplate | WorkflowTemplateSummary): Promise<void> {
+  const workflowId = await createWorkflowFromTemplate(template as WorkflowTemplate, sessionId.value);
   if (workflowId) {
     showToast(`Workflow "${template.name}" created`, 'success');
     activeSection.value = 'runner';
