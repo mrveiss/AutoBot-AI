@@ -1,7 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Tests for the skill repo sync engine (Phase 3, Issue #TBD)."""
+"""Tests for the skill repo sync engine (Phase 3)."""
 import os
 import tempfile
 import textwrap
@@ -87,3 +87,73 @@ async def test_local_sync_parses_frontmatter():
         assert manifest["name"] == "sample-skill"
         assert manifest["version"] == "1.0.0"
         assert manifest["description"] == "A sample skill for testing"
+
+
+@pytest.mark.anyio
+async def test_git_repo_sync_clones_and_delegates(tmp_path, monkeypatch):
+    """GitRepoSync shallow-clones repo and delegates discovery to LocalDirSync."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    # Create a fake skill directory for LocalDirSync to find
+    skills_root = tmp_path / "repo"
+    skills_root.mkdir()
+    skill_dir = skills_root / "my-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: my-skill\nversion: 1.0.0\ndescription: Test\ntools: [do_x]\n---\n# My Skill\n",
+        encoding="utf-8",
+    )
+
+    async def fake_create_subprocess(*args, **kwargs):
+        """Fake subprocess that succeeds immediately without cloning."""
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+        return mock_proc
+
+    from skills.sync.git_sync import GitRepoSync
+
+    with patch("asyncio.create_subprocess_exec", side_effect=fake_create_subprocess):
+        with patch.object(
+            GitRepoSync, "_find_skills_dir", return_value=str(skills_root)
+        ):
+            sync = GitRepoSync("https://example.com/skills.git")
+            packages = await sync.discover()
+
+    assert len(packages) == 1
+    assert packages[0]["name"] == "my-skill"
+
+
+@pytest.mark.anyio
+async def test_mcp_client_sync_wraps_tools():
+    """MCPClientSync converts remote tool descriptors into skill packages."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    fake_response_data = {
+        "result": {
+            "tools": [
+                {"name": "echo", "description": "Echo a message"},
+            ]
+        }
+    }
+
+    mock_resp = AsyncMock()
+    mock_resp.json = AsyncMock(return_value=fake_response_data)
+    mock_resp.status = 200
+    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_resp.__aexit__ = AsyncMock(return_value=None)
+
+    mock_session = MagicMock()
+    mock_session.post = MagicMock(return_value=mock_resp)
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=None)
+
+    from skills.sync.mcp_sync import MCPClientSync
+
+    with patch("aiohttp.ClientSession", return_value=mock_session):
+        sync = MCPClientSync("http://mcp-server.example.com")
+        packages = await sync.discover()
+
+    assert len(packages) == 1
+    assert packages[0]["name"] == "echo"
+    assert packages[0]["manifest"]["remote_mcp"] == "http://mcp-server.example.com"

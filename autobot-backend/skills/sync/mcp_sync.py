@@ -6,6 +6,7 @@
 Connects to a remote MCP HTTP server, lists its tools,
 and wraps each as a local skill package.
 """
+import asyncio
 import logging
 from typing import Any, Dict, List
 
@@ -44,7 +45,7 @@ class MCPClientSync(BaseRepoSync):
         """Connect to MCP server, list tools, wrap as skill packages."""
         try:
             tools = await self._fetch_tools()
-        except Exception as exc:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             logger.error("MCP sync failed for %s: %s", self.server_url, exc)
             return []
         return [self._tool_to_package(tool) for tool in tools]
@@ -57,6 +58,10 @@ class MCPClientSync(BaseRepoSync):
                 json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
+                if resp.status != 200:
+                    raise aiohttp.ClientResponseError(
+                        resp.request_info, resp.history, status=resp.status
+                    )
                 data = await resp.json()
                 return data.get("result", {}).get("tools", [])
 

@@ -34,19 +34,26 @@ class GitRepoSync(BaseRepoSync):
 
     async def _clone(self, dest: str) -> None:
         """Clone repo shallowly into dest directory."""
-        proc = await asyncio.create_subprocess_exec(
-            "git",
-            "clone",
-            "--depth=1",
-            "--branch",
-            self.branch,
-            self.url,
-            dest,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "clone",
+                "--depth=1",
+                "--branch",
+                self.branch,
+                self.url,
+                dest,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                "git clone failed: git binary not found on PATH"
+            ) from exc
         _, stderr = await proc.communicate()
         if proc.returncode != 0:
-            raise RuntimeError(f"git clone failed: {stderr.decode()}")
+            raise RuntimeError(
+                f"git clone failed: {stderr.decode('utf-8', errors='replace')}"
+            )
         logger.info("Cloned skill repo %s@%s", self.url, self.branch)
 
     @staticmethod
