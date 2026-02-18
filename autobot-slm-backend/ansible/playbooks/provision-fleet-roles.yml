@@ -134,25 +134,8 @@
       tags: ['browser', 'provision']
 
 # -------------------------------------------------------------------
-# Phase 7: Monitoring on all nodes (node_exporter)
-# -------------------------------------------------------------------
-- name: "Provision Phase 7: Node Monitoring"
-  hosts: slm_nodes:!00-SLM-Manager
-  become: true
-  gather_facts: false
-
-  tasks:
-    - name: "Monitor | Deploy node_exporter via monitoring role"
-      ansible.builtin.include_role:
-        name: monitoring
-      vars:
-        monitoring_install_prometheus: false
-        monitoring_install_grafana: false
-        monitoring_install_node_exporter: true
-      tags: ['monitoring', 'provision']
-
-# -------------------------------------------------------------------
-# Phase 8: Summary
+# Phase 7: Summary
+# (node_exporter is now deployed by slm_agent role in Phase 2 - #945)
 # -------------------------------------------------------------------
 - name: "Provision Summary"
   hosts: localhost
@@ -174,5 +157,6 @@
           - "  browser-auto    : autobot-browser-worker, autobot-slm-agent"
           - ""
           - "All nodes have: common + autobot-slm-agent + node_exporter"
+          - "  (node_exporter deployed by slm_agent role, not a separate phase)"
           - ""
           - "Next: Verify with health-check.yml"

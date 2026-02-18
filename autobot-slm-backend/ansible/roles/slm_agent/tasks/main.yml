@@ -215,6 +215,11 @@
   become: yes
   tags: ['slm_agent', 'verify']
 
+# General fleet monitoring - node_exporter on every managed node (#945)
+- name: "SLM Agent | Install node_exporter"
+  ansible.builtin.import_tasks: node_exporter.yml
+  tags: ['slm_agent', 'node_exporter']
+
 - name: "SLM Agent | Display deployment summary"
   debug:
     msg:
