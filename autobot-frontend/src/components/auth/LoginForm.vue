@@ -226,8 +226,7 @@ async function handleLogin() {
       credentials.password = ''
 
       // Redirect to intended route or chat
-      const redirectTo = router.currentRoute.value.query.redirect as string || '/chat'
-      await router.push(redirectTo)
+      await router.push('/chat')
 
     } else {
       loginError.value = response.message || 'Login failed. Please check your credentials.'

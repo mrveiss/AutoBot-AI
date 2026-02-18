@@ -678,11 +678,8 @@ router.beforeEach(async (to, from, next) => {
         })
       }
 
-      // Redirect to login with intended destination
-      next({
-        name: 'login',
-        query: { redirect: to.fullPath }
-      })
+      // Redirect to login (no redirect param — clean URL)
+      next({ name: 'login' })
       return
     }
 
@@ -700,10 +697,7 @@ router.beforeEach(async (to, from, next) => {
 
       // If the route requires auth, redirect to login
       if (requiresAuth) {
-        next({
-          name: 'login',
-          query: { redirect: to.fullPath, reason: 'token_expired' }
-        })
+        next({ name: 'login' })
         return
       }
     }
