@@ -177,22 +177,28 @@ async def augment_search_request_with_permissions(
 def extract_user_context_from_request(current_user) -> tuple:
     """Extract user context for permission filtering.
 
-    Issue #679: Helper to extract user ID, org ID, and group IDs from User model.
+    Issue #679: Helper to extract user ID, org ID, and group IDs from user data.
+    Issue #934: Handle both dict (auth_middleware) and ORM User objects.
 
     Args:
-        current_user: User model instance
+        current_user: Dict from auth_middleware or ORM User model instance
 
     Returns:
         Tuple of (user_id, org_id, group_ids)
     """
-    user_id = str(current_user.id)
-    user_org_id = str(current_user.org_id) if current_user.org_id else None
-
-    # Extract group IDs from team memberships
-    user_group_ids = [
-        str(m.team_id)
-        for m in current_user.team_memberships
-        if m.team and not m.team.is_deleted
-    ]
+    if isinstance(current_user, dict):
+        user_id = current_user.get("user_id") or current_user.get("username", "")
+        raw_org_id = current_user.get("org_id")
+        user_org_id = str(raw_org_id) if raw_org_id else None
+        # Dict-based auth does not carry team memberships
+        user_group_ids = []
+    else:
+        user_id = str(current_user.id)
+        user_org_id = str(current_user.org_id) if current_user.org_id else None
+        user_group_ids = [
+            str(m.team_id)
+            for m in current_user.team_memberships
+            if m.team and not m.team.is_deleted
+        ]
 
     return user_id, user_org_id, user_group_ids

@@ -28,6 +28,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
+from autobot_shared.error_boundaries import error_boundary
+
 # Import components from the search_components package
 from backend.knowledge.search_components import (
     KeywordSearcher,
@@ -45,8 +47,6 @@ from backend.knowledge.search_components.helpers import (
 )
 from backend.knowledge.search_components.hybrid_search import HybridSearcher
 from backend.models.task_context import EnhancedSearchContext
-
-from autobot_shared.error_boundaries import error_boundary
 
 if TYPE_CHECKING:
     import aioredis
@@ -132,11 +132,16 @@ class SearchMixin:
         return None  # Valid inputs
 
     async def _execute_vector_search(
-        self, query: str, similarity_top_k: int
+        self,
+        query: str,
+        similarity_top_k: int,
+        filters: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """Execute vector search and deduplicate results (Issue #398: extracted)."""
         query_embedding = await self._get_query_embedding(query)
-        results_data = await self._query_chromadb(query_embedding, similarity_top_k)
+        results_data = await self._query_chromadb(
+            query_embedding, similarity_top_k, where=filters
+        )
         results = self._deduplicate_results(results_data, similarity_top_k)
         logger.info(
             "ChromaDB search returned %d unique documents for query: %s...",
@@ -153,7 +158,10 @@ class SearchMixin:
         filters: Optional[Dict[str, Any]] = None,
         mode: str = "auto",
     ) -> List[Dict[str, Any]]:
-        """Search the knowledge base (Issue #398: refactored)."""
+        """Search the knowledge base (Issue #398: refactored).
+
+        Issue #934: filters is now passed to ChromaDB as a metadata where clause.
+        """
         self.ensure_initialized()
         similarity_top_k = similarity_top_k or top_k
 
@@ -162,7 +170,9 @@ class SearchMixin:
             return invalid_result
 
         try:
-            return await self._execute_vector_search(query, similarity_top_k)
+            return await self._execute_vector_search(
+                query, similarity_top_k, filters=filters
+            )
         except Exception as e:
             logger.error("Knowledge base search failed: %s", e)
             return []
@@ -187,16 +197,33 @@ class SearchMixin:
         return query_embedding
 
     async def _query_chromadb(
-        self, query_embedding: List[float], similarity_top_k: int
+        self,
+        query_embedding: List[float],
+        similarity_top_k: int,
+        where: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Query ChromaDB directly with embedding. Issue #281: Extracted helper."""
+        """Query ChromaDB directly with embedding. Issue #281: Extracted helper.
+
+        Issue #934: Accepts optional where filter for permission-based pre-filtering.
+        """
         chroma_collection = self.vector_store._collection
-        return await asyncio.to_thread(
-            chroma_collection.query,
-            query_embeddings=[query_embedding],
-            n_results=similarity_top_k,
-            include=["documents", "metadatas", "distances"],
-        )
+        kwargs: Dict[str, Any] = {
+            "query_embeddings": [query_embedding],
+            "n_results": similarity_top_k,
+            "include": ["documents", "metadatas", "distances"],
+        }
+        if where:
+            kwargs["where"] = where
+        try:
+            return await asyncio.to_thread(chroma_collection.query, **kwargs)
+        except (ValueError, Exception) as exc:
+            # ChromaDB raises ValueError when where filter matches fewer docs
+            # than n_results. Fall back to unfiltered search.
+            logger.warning(
+                "ChromaDB where filter failed (%s), retrying without filter", exc
+            )
+            kwargs.pop("where", None)
+            return await asyncio.to_thread(chroma_collection.query, **kwargs)
 
     def _deduplicate_results(
         self, results_data: Dict[str, Any], similarity_top_k: int
