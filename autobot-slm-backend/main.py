@@ -121,6 +121,7 @@ async def lifespan(app: FastAPI):
     await _run_migrations()
     await _ensure_admin_user()
     await _seed_default_roles()
+    await _seed_default_agents()
 
     # Initialize manifest loader singleton (Issue #926 Phase 3)
     from services.manifest_loader import init_manifest_loader
@@ -206,6 +207,16 @@ async def _seed_default_roles():
         created = await seed_default_roles(db)
         if created > 0:
             logger.info("Seeded %d default roles", created)
+
+
+async def _seed_default_agents():
+    """Seed all 29 AutoBot agents if the agents table is empty (Issue #939)."""
+    from services.agent_seeder import seed_default_agents
+
+    async with db_service.session() as db:
+        created = await seed_default_agents(db)
+        if created > 0:
+            logger.info("Seeded %d default agents", created)
 
 
 app = FastAPI(
