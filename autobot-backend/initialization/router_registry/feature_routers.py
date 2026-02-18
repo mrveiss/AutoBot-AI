@@ -317,6 +317,15 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     # Skills system (Issue #731)
     ("backend.api.skills", "/skills", ["skills"], "skills"),
+    # Skills repo management (MCP skills system)
+    ("backend.api.skills_repos", "/skills/repos", ["skills"], "skills-repos"),
+    # Skills governance + gap detection (MCP skills system)
+    (
+        "backend.api.skills_governance",
+        "/skills/governance",
+        ["skills"],
+        "skills-governance",
+    ),
     # Knowledge graph pipeline (Issue #759)
     (
         "backend.api.knowledge_graph_routes",
