@@ -8,7 +8,7 @@
  * Provides API integration for role management.
  */
 
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import axios from 'axios'
 
 export interface Role {
@@ -137,6 +137,39 @@ export function useRoles() {
     }
   }
 
+  async function createRole(roleData: Partial<Role>): Promise<Role | null> {
+    try {
+      const response = await client.post<Role>('/api/roles', roleData)
+      return response.data
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } }; message?: string }
+      error.value = err.response?.data?.detail || err.message || 'Failed to create role'
+      return null
+    }
+  }
+
+  async function updateRole(roleName: string, roleData: Partial<Role>): Promise<Role | null> {
+    try {
+      const response = await client.put<Role>(`/api/roles/${roleName}`, roleData)
+      return response.data
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } }; message?: string }
+      error.value = err.response?.data?.detail || err.message || 'Failed to update role'
+      return null
+    }
+  }
+
+  async function deleteRole(roleName: string): Promise<boolean> {
+    try {
+      await client.delete(`/api/roles/${roleName}`)
+      return true
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } }; message?: string }
+      error.value = err.response?.data?.detail || err.message || 'Failed to delete role'
+      return false
+    }
+  }
+
   async function syncRole(
     roleName: string,
     nodeIds?: string[],
@@ -179,7 +212,7 @@ export function useRoles() {
     }
   }
 
-  return {
+  return reactive({
     roles,
     isLoading,
     error,
@@ -187,7 +220,10 @@ export function useRoles() {
     getNodeRoles,
     assignRole,
     removeRole,
+    createRole,
+    updateRole,
+    deleteRole,
     syncRole,
     pullFromSource,
-  }
+  })
 }

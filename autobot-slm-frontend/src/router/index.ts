@@ -37,7 +37,7 @@ const router = createRouter({
       // Issue #850: Consolidated into unified orchestration view
       path: '/services',
       name: 'services',
-      redirect: '/orchestration',
+      redirect: '/orchestration/per-node',
       meta: { title: 'Services' }
     },
     {
@@ -106,7 +106,7 @@ const router = createRouter({
           // Issue #850: Consolidated into unified orchestration view (Tab 5)
           path: 'infrastructure',
           name: 'settings-infrastructure',
-          redirect: '/orchestration',
+          redirect: '/orchestration/infrastructure',
           meta: { title: 'Infrastructure', parent: 'settings' }
         },
         {
@@ -277,10 +277,16 @@ const router = createRouter({
     },
     {
       // Issue #838: Service Orchestration management
-      path: '/orchestration',
+      // Issue #924: tab subroutes via :tab? param
+      path: '/orchestration/:tab?',
       name: 'orchestration',
       component: () => import('@/views/OrchestrationView.vue'),
-      meta: { title: 'Orchestration' }
+      meta: { title: 'Orchestration' },
+      beforeEnter: (to) => {
+        if (!to.params.tab) {
+          return { name: 'orchestration', params: { tab: 'per-node' }, replace: true }
+        }
+      },
     },
     {
       // Issue #840: Update job tracking and checking
@@ -293,7 +299,7 @@ const router = createRouter({
       // Issue #850: Consolidated into unified orchestration view (Tab 3)
       path: '/roles',
       name: 'roles',
-      redirect: '/orchestration',
+      redirect: '/orchestration/roles',
       meta: { title: 'Role Registry' }
     },
     {

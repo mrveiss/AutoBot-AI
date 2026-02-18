@@ -14,7 +14,8 @@
  * 5. Infrastructure Overview (from InfrastructureSettings)
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useOrchestrationManagement } from '@/composables/useOrchestrationManagement'
 import { useRoles } from '@/composables/useRoles'
 import { createLogger } from '@/utils/debugUtils'
@@ -26,23 +27,42 @@ import RestartConfirmDialog from '@/components/orchestration/RestartConfirmDialo
 const logger = createLogger('OrchestrationView')
 
 // Initialize composables
+const route = useRoute()
+const router = useRouter()
 const orchestration = useOrchestrationManagement()
 const roles = useRoles()
 
 // =============================================================================
-// Tab Management
+// Tab Management (Issue #924: subroutes via :tab? param)
 // =============================================================================
 
-type Tab = 'per-node' | 'fleet' | 'roles' | 'migration' | 'infrastructure'
-const activeTab = ref<Tab>('per-node')
+const VALID_TABS = ['per-node', 'fleet', 'roles', 'migration', 'infrastructure'] as const
+type Tab = (typeof VALID_TABS)[number]
 
-const tabs = [
+function resolveTab(param: unknown): Tab {
+  const t = param as string
+  return VALID_TABS.includes(t as Tab) ? (t as Tab) : 'per-node'
+}
+
+const activeTab = ref<Tab>(resolveTab(route.params.tab))
+
+// Keep activeTab in sync when the user navigates via browser back/forward
+watch(() => route.params.tab, (tab) => {
+  activeTab.value = resolveTab(tab)
+})
+
+function navigateToTab(tab: Tab): void {
+  activeTab.value = tab
+  router.push({ name: 'orchestration', params: { tab } })
+}
+
+const tabs: { id: Tab; label: string; icon: string }[] = [
   { id: 'per-node', label: 'Per-Node Control', icon: 'server' },
   { id: 'fleet', label: 'Fleet Operations', icon: 'globe' },
   { id: 'roles', label: 'Roles & Deployment', icon: 'cog' },
   { id: 'migration', label: 'Migration', icon: 'arrows' },
   { id: 'infrastructure', label: 'Overview', icon: 'chart' },
-] as const
+]
 
 // =============================================================================
 // Tab 1: Per-Node Control State
@@ -616,7 +636,7 @@ onUnmounted(() => {
         <button
           v-for="tab in tabs"
           :key="tab.id"
-          @click="activeTab = tab.id as Tab"
+          @click="navigateToTab(tab.id)"
           :class="[
             'py-3 px-1 border-b-2 font-medium text-sm whitespace-nowrap',
             activeTab === tab.id
