@@ -373,7 +373,7 @@ export function useSkillGovernance() {
   async function fetchDrafts(): Promise<void> {
     try {
       const { data } = await api.get<Record<string, unknown>[]>(`${SKILLS_GOV_BASE}/drafts`)
-      drafts.value = data
+      drafts.value = Array.isArray(data) ? data : []
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch drafts'
     }

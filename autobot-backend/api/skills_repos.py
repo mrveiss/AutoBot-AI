@@ -85,7 +85,8 @@ async def add_repo(
     return {"id": repo.id, "name": repo.name, "status": "registered"}
 
 
-@router.get("/", summary="List all registered skill repositories")
+@router.get("", summary="List all registered skill repositories")
+@router.get("/", include_in_schema=False)
 async def list_repos() -> List[Dict[str, Any]]:
     """Return all registered skill repositories."""
     engine = get_skills_engine()
