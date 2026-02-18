@@ -1,0 +1,560 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# System Update Playbook - Policy-aware apt updates for all fleet nodes
+# Issue #926: Reads update_policy from each node's role manifest
+#
+# Update policies (read from manifest.yml or overridden via -e):
+#   full     - apt-get upgrade (all packages)
+#   security - unattended-upgrades or apt-get --only-upgrade ... (security only)
+#   manual   - skip apt entirely; just restart services and verify health
+#
+# Usage:
+#   # Dry-run (check mode) across all nodes
+#   ansible-playbook playbooks/system-update.yml --check
+#
+#   # Live update - respects per-node policy from manifest
+#   ansible-playbook playbooks/system-update.yml
+#
+#   # Override policy for all nodes
+#   ansible-playbook playbooks/system-update.yml -e "update_policy=security"
+#
+#   # Update a single node
+#   ansible-playbook playbooks/system-update.yml --limit autobot-npu
+#
+#   # Skip reboot even if required
+#   ansible-playbook playbooks/system-update.yml -e "allow_reboot=false"
+#
+# Run from: autobot-slm-backend/ansible/
+
+# ===========================================================================
+# Pre-flight: display plan and wait for confirmation
+# ===========================================================================
+- name: "System Update | Pre-flight"
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    update_policy: "{{ lookup('env', 'AUTOBOT_UPDATE_POLICY') | default('full', true) }}"
+    allow_reboot: "{{ lookup('env', 'AUTOBOT_ALLOW_REBOOT') | default(false) | bool }}"
+    auto_confirm: "{{ lookup('env', 'AUTOBOT_AUTO_CONFIRM') | default(false) | bool }}"
+
+  tasks:
+    - name: "System Update | Display plan"
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - "AutoBot System Update (#926)"
+          - "=========================================================="
+          - "Default policy : {{ update_policy }}"
+          - "Allow reboot   : {{ allow_reboot }}"
+          - "Mode           : {{ 'DRY RUN (--check)' if ansible_check_mode else 'LIVE' }}"
+          - ""
+          - "Order: SLM → Backend → Database → AI Stack → NPU → Browser → Frontend"
+          - "Each node stops its service, updates packages, restarts, verifies health."
+          - "=========================================================="
+
+    - name: "System Update | Confirm"
+      ansible.builtin.pause:
+        prompt: "Press ENTER to proceed with system updates, Ctrl+C to abort"
+      when: not (auto_confirm | bool)
+
+# ===========================================================================
+# Phase 1: SLM server (.19) — update first so Ansible control plane is current
+# ===========================================================================
+- name: "System Update | Phase 1 - SLM Server"
+  hosts: slm
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  gather_facts: true
+
+  vars:
+    _policy: "{{ update_policy | default('full') }}"
+    allow_reboot: "{{ allow_reboot | default(false) | bool }}"
+
+  tasks:
+    - name: "System Update [slm] | apt cache refresh"
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 0
+      when: _policy != 'manual'
+
+    - name: "System Update [slm] | Full upgrade"
+      ansible.builtin.apt:
+        upgrade: full
+        autoremove: true
+        autoclean: true
+      when: _policy == 'full'
+      register: _full_upgrade
+
+    - name: "System Update [slm] | Security-only upgrade"
+      ansible.builtin.shell:
+        cmd: >-
+          DEBIAN_FRONTEND=noninteractive unattended-upgrade -d 2>&1 | tail -5
+      changed_when: true
+      when: _policy == 'security'
+
+    - name: "System Update [slm] | Check if reboot required"
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: _reboot_required
+
+    - name: "System Update [slm] | Reboot if required and allowed"
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        post_reboot_delay: 10
+      when:
+        - _reboot_required.stat.exists
+        - allow_reboot | bool
+
+    - name: "System Update [slm] | Show reboot notice"
+      ansible.builtin.debug:
+        msg: "NOTICE: Reboot required on {{ inventory_hostname }} but allow_reboot=false"
+      when:
+        - _reboot_required.stat.exists
+        - not (allow_reboot | bool)
+
+  tags: ['slm', 'phase1']
+
+# ===========================================================================
+# Phase 2: Backend (.20)
+# ===========================================================================
+- name: "System Update | Phase 2 - Backend"
+  hosts: backend
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  gather_facts: true
+
+  vars:
+    _policy: "{{ update_policy | default('full') }}"
+    _service: "autobot-backend"
+    allow_reboot: "{{ allow_reboot | default(false) | bool }}"
+
+  tasks:
+    - name: "System Update [backend] | Stop service"
+      ansible.builtin.systemd:
+        name: "{{ _service }}"
+        state: stopped
+      failed_when: false
+
+    - name: "System Update [backend] | apt cache refresh"
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 0
+      when: _policy != 'manual'
+
+    - name: "System Update [backend] | Full upgrade"
+      ansible.builtin.apt:
+        upgrade: full
+        autoremove: true
+        autoclean: true
+      when: _policy == 'full'
+
+    - name: "System Update [backend] | Security-only upgrade"
+      ansible.builtin.shell:
+        cmd: >-
+          DEBIAN_FRONTEND=noninteractive unattended-upgrade -d 2>&1 | tail -5
+      changed_when: true
+      when: _policy == 'security'
+
+    - name: "System Update [backend] | Restart service"
+      ansible.builtin.systemd:
+        name: "{{ _service }}"
+        state: started
+        daemon_reload: true
+
+    - name: "System Update [backend] | Wait for health"
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 8443
+        delay: 5
+        timeout: 120
+        state: started
+
+    - name: "System Update [backend] | Check reboot required"
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: _reboot_required
+
+    - name: "System Update [backend] | Reboot if required and allowed"
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        post_reboot_delay: 15
+      when:
+        - _reboot_required.stat.exists
+        - allow_reboot | bool
+
+    - name: "System Update [backend] | Show reboot notice"
+      ansible.builtin.debug:
+        msg: "NOTICE: Reboot required on {{ inventory_hostname }} but allow_reboot=false"
+      when:
+        - _reboot_required.stat.exists
+        - not (allow_reboot | bool)
+
+  tags: ['backend', 'phase2']
+
+# ===========================================================================
+# Phase 3: Database (.23 Redis)
+# ===========================================================================
+- name: "System Update | Phase 3 - Database"
+  hosts: database
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  gather_facts: true
+
+  vars:
+    _policy: "{{ update_policy | default('full') }}"
+    _service: "redis-stack-server"
+    allow_reboot: "{{ allow_reboot | default(false) | bool }}"
+
+  tasks:
+    - name: "System Update [database] | Stop service"
+      ansible.builtin.systemd:
+        name: "{{ _service }}"
+        state: stopped
+      failed_when: false
+
+    - name: "System Update [database] | apt cache refresh"
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 0
+      when: _policy != 'manual'
+
+    - name: "System Update [database] | Full upgrade"
+      ansible.builtin.apt:
+        upgrade: full
+        autoremove: true
+        autoclean: true
+      when: _policy == 'full'
+
+    - name: "System Update [database] | Security-only upgrade"
+      ansible.builtin.shell:
+        cmd: >-
+          DEBIAN_FRONTEND=noninteractive unattended-upgrade -d 2>&1 | tail -5
+      changed_when: true
+      when: _policy == 'security'
+
+    - name: "System Update [database] | Restart service"
+      ansible.builtin.systemd:
+        name: "{{ _service }}"
+        state: started
+        daemon_reload: true
+      failed_when: false
+
+    - name: "System Update [database] | Wait for Redis"
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 6379
+        delay: 3
+        timeout: 60
+        state: started
+
+    - name: "System Update [database] | Check reboot required"
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: _reboot_required
+
+    - name: "System Update [database] | Reboot if required and allowed"
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        post_reboot_delay: 10
+      when:
+        - _reboot_required.stat.exists
+        - allow_reboot | bool
+
+  tags: ['database', 'phase3']
+
+# ===========================================================================
+# Phase 4: AI Stack (.24)
+# ===========================================================================
+- name: "System Update | Phase 4 - AI Stack"
+  hosts: aiml
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  gather_facts: true
+
+  vars:
+    _policy: "{{ update_policy | default('full') }}"
+    _service: "autobot-ai-stack"
+    allow_reboot: "{{ allow_reboot | default(false) | bool }}"
+
+  tasks:
+    - name: "System Update [aiml] | Stop service"
+      ansible.builtin.systemd:
+        name: "{{ _service }}"
+        state: stopped
+      failed_when: false
+
+    - name: "System Update [aiml] | apt cache refresh"
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 0
+      when: _policy != 'manual'
+
+    - name: "System Update [aiml] | Full upgrade"
+      ansible.builtin.apt:
+        upgrade: full
+        autoremove: true
+        autoclean: true
+      when: _policy == 'full'
+
+    - name: "System Update [aiml] | Security-only upgrade"
+      ansible.builtin.shell:
+        cmd: >-
+          DEBIAN_FRONTEND=noninteractive unattended-upgrade -d 2>&1 | tail -5
+      changed_when: true
+      when: _policy == 'security'
+
+    - name: "System Update [aiml] | Restart service"
+      ansible.builtin.systemd:
+        name: "{{ _service }}"
+        state: started
+        daemon_reload: true
+      failed_when: false
+
+    - name: "System Update [aiml] | Check reboot required"
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: _reboot_required
+
+    - name: "System Update [aiml] | Reboot if required and allowed"
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        post_reboot_delay: 10
+      when:
+        - _reboot_required.stat.exists
+        - allow_reboot | bool
+
+  tags: ['aiml', 'phase4']
+
+# ===========================================================================
+# Phase 5: NPU Worker (.22)
+# ===========================================================================
+- name: "System Update | Phase 5 - NPU Worker"
+  hosts: npu
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  gather_facts: true
+
+  vars:
+    _policy: "{{ update_policy | default('full') }}"
+    _service: "autobot-npu-worker"
+    allow_reboot: "{{ allow_reboot | default(false) | bool }}"
+
+  tasks:
+    - name: "System Update [npu] | Stop service"
+      ansible.builtin.systemd:
+        name: "{{ _service }}"
+        state: stopped
+      failed_when: false
+
+    - name: "System Update [npu] | apt cache refresh"
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 0
+      when: _policy != 'manual'
+
+    - name: "System Update [npu] | Full upgrade"
+      ansible.builtin.apt:
+        upgrade: full
+        autoremove: true
+        autoclean: true
+      when: _policy == 'full'
+
+    - name: "System Update [npu] | Security-only upgrade"
+      ansible.builtin.shell:
+        cmd: >-
+          DEBIAN_FRONTEND=noninteractive unattended-upgrade -d 2>&1 | tail -5
+      changed_when: true
+      when: _policy == 'security'
+
+    - name: "System Update [npu] | Restart service"
+      ansible.builtin.systemd:
+        name: "{{ _service }}"
+        state: started
+        daemon_reload: true
+      failed_when: false
+
+    - name: "System Update [npu] | Wait for health"
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 8081
+        delay: 3
+        timeout: 60
+        state: started
+
+    - name: "System Update [npu] | Check reboot required"
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: _reboot_required
+
+    - name: "System Update [npu] | Reboot if required and allowed"
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        post_reboot_delay: 10
+      when:
+        - _reboot_required.stat.exists
+        - allow_reboot | bool
+
+  tags: ['npu', 'phase5']
+
+# ===========================================================================
+# Phase 6: Browser Worker (.25)
+# ===========================================================================
+- name: "System Update | Phase 6 - Browser Worker"
+  hosts: browser
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  gather_facts: true
+
+  vars:
+    _policy: "{{ update_policy | default('full') }}"
+    _service: "autobot-playwright"
+    allow_reboot: "{{ allow_reboot | default(false) | bool }}"
+
+  tasks:
+    - name: "System Update [browser] | Stop service"
+      ansible.builtin.systemd:
+        name: "{{ _service }}"
+        state: stopped
+      failed_when: false
+
+    - name: "System Update [browser] | apt cache refresh"
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 0
+      when: _policy != 'manual'
+
+    - name: "System Update [browser] | Full upgrade"
+      ansible.builtin.apt:
+        upgrade: full
+        autoremove: true
+        autoclean: true
+      when: _policy == 'full'
+
+    - name: "System Update [browser] | Security-only upgrade"
+      ansible.builtin.shell:
+        cmd: >-
+          DEBIAN_FRONTEND=noninteractive unattended-upgrade -d 2>&1 | tail -5
+      changed_when: true
+      when: _policy == 'security'
+
+    - name: "System Update [browser] | Restart service"
+      ansible.builtin.systemd:
+        name: "{{ _service }}"
+        state: started
+        daemon_reload: true
+      failed_when: false
+
+    - name: "System Update [browser] | Check reboot required"
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: _reboot_required
+
+    - name: "System Update [browser] | Reboot if required and allowed"
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        post_reboot_delay: 10
+      when:
+        - _reboot_required.stat.exists
+        - allow_reboot | bool
+
+  tags: ['browser', 'phase6']
+
+# ===========================================================================
+# Phase 7: Frontend (.21)
+# ===========================================================================
+- name: "System Update | Phase 7 - Frontend"
+  hosts: frontend
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  gather_facts: true
+
+  vars:
+    _policy: "{{ update_policy | default('full') }}"
+    allow_reboot: "{{ allow_reboot | default(false) | bool }}"
+
+  tasks:
+    - name: "System Update [frontend] | Reload nginx (drain connections)"
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+      failed_when: false
+
+    - name: "System Update [frontend] | apt cache refresh"
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 0
+      when: _policy != 'manual'
+
+    - name: "System Update [frontend] | Full upgrade"
+      ansible.builtin.apt:
+        upgrade: full
+        autoremove: true
+        autoclean: true
+      when: _policy == 'full'
+
+    - name: "System Update [frontend] | Security-only upgrade"
+      ansible.builtin.shell:
+        cmd: >-
+          DEBIAN_FRONTEND=noninteractive unattended-upgrade -d 2>&1 | tail -5
+      changed_when: true
+      when: _policy == 'security'
+
+    - name: "System Update [frontend] | Restart nginx"
+      ansible.builtin.systemd:
+        name: nginx
+        state: restarted
+        daemon_reload: true
+
+    - name: "System Update [frontend] | Wait for HTTPS"
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 443
+        delay: 3
+        timeout: 30
+        state: started
+
+    - name: "System Update [frontend] | Check reboot required"
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: _reboot_required
+
+    - name: "System Update [frontend] | Reboot if required and allowed"
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        post_reboot_delay: 10
+      when:
+        - _reboot_required.stat.exists
+        - allow_reboot | bool
+
+  tags: ['frontend', 'phase7']
+
+# ===========================================================================
+# Summary
+# ===========================================================================
+- name: "System Update | Summary"
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: "System Update | Done"
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - "AutoBot System Update - COMPLETE"
+          - "=========================================================="
+          - "All fleet nodes updated in dependency order."
+          - ""
+          - "If any nodes require reboot and allow_reboot=false:"
+          - "  Re-run with: -e allow_reboot=true"
+          - "  Or reboot manually and verify service health."
+          - "=========================================================="

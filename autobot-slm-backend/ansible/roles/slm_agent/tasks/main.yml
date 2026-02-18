@@ -5,6 +5,13 @@
 # SLM Agent Role - Main Tasks
 # Deploys the SLM node agent as a systemd service
 
+# ============================================================
+# Phase 1 CLEAN - remove legacy/wrong-node dirs  (#926 Phase 4)
+# ============================================================
+- name: "SLM Agent | Include clean tasks"
+  ansible.builtin.import_tasks: clean.yml
+  tags: ['clean']
+
 - name: "SLM Agent | Validate required variables"
   assert:
     that:

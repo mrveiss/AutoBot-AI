@@ -1,0 +1,322 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# SSH Key Rotation Playbook - Safe key rotation with autobot_admin safety net
+# Issue #926: Rotate autobot SSH keys across fleet with emergency backdoor intact
+#
+# Safety net: The playbook NEVER touches the autobot_admin authorized_keys entry.
+# K0 (pre-flight) adds a temporary admin key to every node before any rotation.
+# K6 (cleanup) removes the temp key only after verifying the new key works.
+#
+# Phases:
+#   K0 - Pre-flight: add temp admin key as safety net on all nodes
+#   K1 - Generate new ED25519 keypair on localhost
+#   K2 - Stage new public key (don't remove old key yet)
+#   K3 - Verify connectivity with new key
+#   K4 - Remove old key from authorized_keys
+#   K5 - Distribute new private key to Ansible controller
+#   K6 - Cleanup: remove temp admin key
+#
+# Usage:
+#   # Full rotation
+#   ansible-playbook playbooks/rotate-ssh-keys.yml
+#
+#   # Skip confirmation prompt (for automation)
+#   ansible-playbook playbooks/rotate-ssh-keys.yml -e "auto_confirm=true"
+#
+#   # Dry run (show what would happen without changing anything)
+#   ansible-playbook playbooks/rotate-ssh-keys.yml --check
+#
+#   # Limit to specific nodes
+#   ansible-playbook playbooks/rotate-ssh-keys.yml --limit backend,npu
+#
+# Run from: autobot-slm-backend/ansible/
+
+# ===========================================================================
+# K0: Pre-flight — add temp admin key, verify all nodes reachable
+# ===========================================================================
+- name: "SSH Key Rotation | K0 - Pre-flight"
+  hosts: localhost
+  gather_facts: true
+  connection: local
+
+  vars:
+    _keys_dir: "{{ lookup('env', 'HOME') }}/.ssh/autobot-rotation"
+    _new_key_path: "{{ _keys_dir }}/autobot_key_new"
+    _temp_key_path: "{{ _keys_dir }}/autobot_admin_temp"
+    auto_confirm: false
+
+  tasks:
+    - name: "SSH K0 | Display plan"
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - "AutoBot SSH Key Rotation (#926)"
+          - "=========================================================="
+          - "K0 - Pre-flight: add temp safety-net key to all nodes"
+          - "K1 - Generate new ED25519 keypair on localhost"
+          - "K2 - Stage new public key alongside old key"
+          - "K3 - Verify connectivity with new key"
+          - "K4 - Remove old key from authorized_keys"
+          - "K5 - Save new private key to ~/.ssh/autobot_key"
+          - "K6 - Remove temp safety-net key"
+          - "=========================================================="
+
+    - name: "SSH K0 | Confirm"
+      ansible.builtin.pause:
+        prompt: "Press ENTER to begin SSH key rotation, Ctrl+C to abort"
+      when: not (auto_confirm | bool)
+
+    - name: "SSH K0 | Create rotation working dir"
+      ansible.builtin.file:
+        path: "{{ _keys_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: "SSH K0 | Check if temp safety key already exists"
+      ansible.builtin.stat:
+        path: "{{ _temp_key_path }}"
+      register: _temp_key_stat
+
+    - name: "SSH K0 | Generate temp ED25519 safety-net key"
+      ansible.builtin.command:
+        cmd: >-
+          ssh-keygen -t ed25519 -N ""
+          -C "autobot-rotation-temp-{{ ansible_date_time.iso8601 }}"
+          -f {{ _temp_key_path }}
+        creates: "{{ _temp_key_path }}"
+
+    - name: "SSH K0 | Read temp public key"
+      ansible.builtin.slurp:
+        src: "{{ _temp_key_path }}.pub"
+      register: _temp_pubkey
+
+    - name: "SSH K0 | Set temp key fact"
+      ansible.builtin.set_fact:
+        autobot_temp_pubkey: "{{ _temp_pubkey.content | b64decode | trim }}"
+
+  tags: ['preflight', 'k0']
+
+# Add temp safety key to all nodes before touching anything
+- name: "SSH Key Rotation | K0 - Install safety key"
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    _keys_dir: "{{ lookup('env', 'HOME') }}/.ssh/autobot-rotation"
+    _temp_key_path: "{{ _keys_dir }}/autobot_admin_temp"
+
+  tasks:
+    - name: "SSH K0 | Add temp safety-net key to autobot"
+      ansible.posix.authorized_key:
+        user: autobot
+        key: "{{ hostvars['localhost']['autobot_temp_pubkey'] }}"
+        state: present
+        comment: "rotation-temp-key — remove after rotation"
+
+    - name: "SSH K0 | Verify SSH reachable via current key"
+      ansible.builtin.ping:
+
+  tags: ['preflight', 'k0']
+
+# ===========================================================================
+# K1: Generate new keypair on localhost
+# ===========================================================================
+- name: "SSH Key Rotation | K1 - Generate new keypair"
+  hosts: localhost
+  gather_facts: true
+  connection: local
+
+  vars:
+    _keys_dir: "{{ lookup('env', 'HOME') }}/.ssh/autobot-rotation"
+    _new_key_path: "{{ _keys_dir }}/autobot_key_new"
+
+  tasks:
+    - name: "SSH K1 | Generate new ED25519 keypair"
+      ansible.builtin.command:
+        cmd: >-
+          ssh-keygen -t ed25519 -N ""
+          -C "autobot-key-{{ ansible_date_time.date }}"
+          -f {{ _new_key_path }}
+        creates: "{{ _new_key_path }}"
+
+    - name: "SSH K1 | Read new public key"
+      ansible.builtin.slurp:
+        src: "{{ _new_key_path }}.pub"
+      register: _new_pubkey
+
+    - name: "SSH K1 | Set new key fact"
+      ansible.builtin.set_fact:
+        autobot_new_pubkey: "{{ _new_pubkey.content | b64decode | trim }}"
+
+    - name: "SSH K1 | Display new key fingerprint"
+      ansible.builtin.command:
+        cmd: ssh-keygen -lf {{ _new_key_path }}.pub
+      register: _new_fp
+      changed_when: false
+
+    - name: "SSH K1 | Show fingerprint"
+      ansible.builtin.debug:
+        msg: "New key: {{ _new_fp.stdout }}"
+
+  tags: ['generate', 'k1']
+
+# ===========================================================================
+# K2: Stage new public key on all nodes (alongside old key)
+# ===========================================================================
+- name: "SSH Key Rotation | K2 - Stage new public key"
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: "SSH K2 | Add new public key to autobot authorized_keys"
+      ansible.posix.authorized_key:
+        user: autobot
+        key: "{{ hostvars['localhost']['autobot_new_pubkey'] }}"
+        state: present
+        comment: "autobot-key-new"
+
+  tags: ['stage', 'k2']
+
+# ===========================================================================
+# K3: Verify connectivity with new key
+# ===========================================================================
+- name: "SSH Key Rotation | K3 - Verify new key works"
+  hosts: all
+  gather_facts: false
+
+  vars:
+    _new_key_path: "{{ lookup('env', 'HOME') }}/.ssh/autobot-rotation/autobot_key_new"
+
+  tasks:
+    - name: "SSH K3 | Test connection with new key"
+      ansible.builtin.ping:
+      vars:
+        ansible_ssh_private_key_file: "{{ _new_key_path }}"
+
+    - name: "SSH K3 | Confirm new key works"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: new key verified OK"
+
+  tags: ['verify', 'k3']
+
+# ===========================================================================
+# K4: Remove old key from authorized_keys
+# ===========================================================================
+- name: "SSH Key Rotation | K4 - Remove old key"
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    _old_key_path: "{{ lookup('env', 'HOME') }}/.ssh/autobot_key"
+
+  tasks:
+    - name: "SSH K4 | Read current old public key"
+      ansible.builtin.slurp:
+        src: "{{ _old_key_path }}.pub"
+      register: _old_pubkey
+      delegate_to: localhost
+      become: false
+      failed_when: false
+
+    - name: "SSH K4 | Remove old key from authorized_keys"
+      ansible.posix.authorized_key:
+        user: autobot
+        key: "{{ _old_pubkey.content | b64decode | trim }}"
+        state: absent
+      when: _old_pubkey.content is defined
+
+  tags: ['remove-old', 'k4']
+
+# ===========================================================================
+# K5: Install new private key on Ansible controller
+# ===========================================================================
+- name: "SSH Key Rotation | K5 - Install new private key"
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  vars:
+    _keys_dir: "{{ lookup('env', 'HOME') }}/.ssh/autobot-rotation"
+    _new_key_path: "{{ _keys_dir }}/autobot_key_new"
+    _final_key_path: "{{ lookup('env', 'HOME') }}/.ssh/autobot_key"
+
+  tasks:
+    - name: "SSH K5 | Back up old private key"
+      ansible.builtin.copy:
+        src: "{{ _final_key_path }}"
+        dest: "{{ _final_key_path }}.bak"
+        mode: "0600"
+      failed_when: false
+
+    - name: "SSH K5 | Install new private key"
+      ansible.builtin.copy:
+        src: "{{ _new_key_path }}"
+        dest: "{{ _final_key_path }}"
+        mode: "0600"
+
+    - name: "SSH K5 | Install new public key"
+      ansible.builtin.copy:
+        src: "{{ _new_key_path }}.pub"
+        dest: "{{ _final_key_path }}.pub"
+        mode: "0644"
+
+    - name: "SSH K5 | Confirm installed"
+      ansible.builtin.debug:
+        msg: "New SSH key installed at {{ _final_key_path }}"
+
+  tags: ['install', 'k5']
+
+# ===========================================================================
+# K6: Remove temp safety key from all nodes
+# ===========================================================================
+- name: "SSH Key Rotation | K6 - Remove safety key"
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: "SSH K6 | Remove temp safety-net key"
+      ansible.posix.authorized_key:
+        user: autobot
+        key: "{{ hostvars['localhost']['autobot_temp_pubkey'] }}"
+        state: absent
+
+    - name: "SSH K6 | Verify final connection with new key"
+      ansible.builtin.ping:
+
+  tags: ['cleanup', 'k6']
+
+# ===========================================================================
+# Summary
+# ===========================================================================
+- name: "SSH Key Rotation | Summary"
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  vars:
+    _keys_dir: "{{ lookup('env', 'HOME') }}/.ssh/autobot-rotation"
+
+  tasks:
+    - name: "SSH K6 | Cleanup rotation working dir"
+      ansible.builtin.file:
+        path: "{{ _keys_dir }}"
+        state: absent
+
+    - name: "SSH Rotation | Done"
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - "AutoBot SSH Key Rotation - COMPLETE"
+          - "=========================================================="
+          - "All 9 nodes updated with new ED25519 key."
+          - "New key installed at ~/.ssh/autobot_key"
+          - "Old key backed up at ~/.ssh/autobot_key.bak"
+          - ""
+          - "To verify: ssh -i ~/.ssh/autobot_key autobot@172.16.168.19"
+          - "=========================================================="

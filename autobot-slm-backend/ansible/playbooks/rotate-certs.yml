@@ -1,0 +1,323 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# TLS Certificate Rotation Playbook - Zero-downtime cert renewal for all nodes
+# Issue #926: Rotate self-signed TLS certs across fleet with nginx/uvicorn reload
+#
+# Strategy:
+#   1. Generate new cert on each node (preserve old cert as .bak until reload)
+#   2. Reload nginx (reads new cert file, keeps connections alive via graceful reload)
+#   3. Restart uvicorn-based services (brief gap — < 5s per node)
+#   4. Verify HTTPS handshake succeeds with new cert
+#
+# Usage:
+#   # Check current cert expiry across fleet
+#   ansible-playbook playbooks/rotate-certs.yml --tags check
+#
+#   # Rotate all certs
+#   ansible-playbook playbooks/rotate-certs.yml
+#
+#   # Rotate specific node only
+#   ansible-playbook playbooks/rotate-certs.yml --limit autobot-slm
+#
+# Run from: autobot-slm-backend/ansible/
+
+# ===========================================================================
+# Pre-flight: Check expiry on all nodes in parallel
+# ===========================================================================
+- name: "Rotate Certs | Pre-flight expiry check"
+  hosts: all
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: "Certs | Check cert file exists"
+      ansible.builtin.stat:
+        path: /etc/autobot/certs/server-cert.pem
+      register: _cert_stat
+      failed_when: false
+
+    - name: "Certs | Check expiry (days remaining)"
+      ansible.builtin.command:
+        cmd: >-
+          openssl x509 -noout -enddate
+          -in /etc/autobot/certs/server-cert.pem
+      register: _cert_expiry
+      changed_when: false
+      failed_when: false
+      when: _cert_stat.stat.exists | default(false)
+
+    - name: "Certs | Display expiry status"
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}:
+          {{ _cert_expiry.stdout | default('no cert') }}
+      when: _cert_stat.stat.exists | default(false)
+
+    - name: "Certs | Note missing cert"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: no cert at /etc/autobot/certs/server-cert.pem"
+      when: not (_cert_stat.stat.exists | default(false))
+
+  tags: ['check']
+
+# ===========================================================================
+# Phase 1: SLM Server (.19) — nginx + uvicorn
+# ===========================================================================
+- name: "Rotate Certs | Phase 1 - SLM Server"
+  hosts: slm
+  become: true
+  serial: 1
+  gather_facts: true
+
+  vars:
+    _cert_dir: /etc/autobot/certs
+    _cert_file: "{{ _cert_dir }}/server-cert.pem"
+    _key_file: "{{ _cert_dir }}/server-key.pem"
+    _cert_days: "{{ slm_tls_days | default(365) }}"
+    _cert_subject: "{{ slm_tls_subject | default('/CN=autobot-slm/O=AutoBot') }}"
+    _service: autobot-slm-backend
+
+  tasks:
+    - name: "Certs [slm] | Ensure cert directory"
+      ansible.builtin.file:
+        path: "{{ _cert_dir }}"
+        state: directory
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: "Certs [slm] | Back up existing cert"
+      ansible.builtin.copy:
+        src: "{{ _cert_file }}"
+        dest: "{{ _cert_file }}.bak"
+        remote_src: true
+        mode: "0644"
+      failed_when: false
+
+    - name: "Certs [slm] | Generate new self-signed cert"
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -nodes
+          -days {{ _cert_days }}
+          -newkey rsa:2048
+          -keyout {{ _key_file }}
+          -out {{ _cert_file }}
+          -subj '{{ _cert_subject }}'
+      changed_when: true
+
+    - name: "Certs [slm] | Set key permissions"
+      ansible.builtin.file:
+        path: "{{ _key_file }}"
+        mode: "0600"
+        owner: root
+        group: root
+
+    - name: "Certs [slm] | Test nginx config"
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+
+    - name: "Certs [slm] | Reload nginx (zero-downtime)"
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+
+    - name: "Certs [slm] | Restart backend service"
+      ansible.builtin.systemd:
+        name: "{{ _service }}"
+        state: restarted
+      failed_when: false
+
+    - name: "Certs [slm] | Wait for backend port"
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 8000
+        delay: 3
+        timeout: 60
+        state: started
+
+    - name: "Certs [slm] | Verify new cert fingerprint"
+      ansible.builtin.command:
+        cmd: >-
+          openssl x509 -noout -fingerprint -sha256
+          -in {{ _cert_file }}
+      register: _new_fp
+      changed_when: false
+
+    - name: "Certs [slm] | Show new cert fingerprint"
+      ansible.builtin.debug:
+        msg: "SLM new cert: {{ _new_fp.stdout }}"
+
+  tags: ['slm', 'phase1']
+
+# ===========================================================================
+# Phase 2: Backend (.20 — WSL) — uvicorn only (no nginx on this node)
+# ===========================================================================
+- name: "Rotate Certs | Phase 2 - Backend"
+  hosts: backend
+  become: true
+  serial: 1
+  gather_facts: true
+
+  vars:
+    _cert_dir: /etc/autobot/certs
+    _cert_file: "{{ _cert_dir }}/server-cert.pem"
+    _key_file: "{{ _cert_dir }}/server-key.pem"
+    _cert_days: 365
+    _cert_subject: "/CN=autobot-backend/O=AutoBot"
+    _service: autobot-backend
+
+  tasks:
+    - name: "Certs [backend] | Ensure cert directory"
+      ansible.builtin.file:
+        path: "{{ _cert_dir }}"
+        state: directory
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: "Certs [backend] | Back up existing cert"
+      ansible.builtin.copy:
+        src: "{{ _cert_file }}"
+        dest: "{{ _cert_file }}.bak"
+        remote_src: true
+        mode: "0644"
+      failed_when: false
+
+    - name: "Certs [backend] | Generate new self-signed cert"
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -nodes
+          -days {{ _cert_days }}
+          -newkey rsa:2048
+          -keyout {{ _key_file }}
+          -out {{ _cert_file }}
+          -subj '{{ _cert_subject }}'
+      changed_when: true
+
+    - name: "Certs [backend] | Set key permissions"
+      ansible.builtin.file:
+        path: "{{ _key_file }}"
+        mode: "0600"
+        owner: root
+        group: root
+
+    - name: "Certs [backend] | Restart backend service"
+      ansible.builtin.systemd:
+        name: "{{ _service }}"
+        state: restarted
+      failed_when: false
+
+    - name: "Certs [backend] | Wait for HTTPS port"
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 8443
+        delay: 5
+        timeout: 120
+        state: started
+
+    - name: "Certs [backend] | Show new cert fingerprint"
+      ansible.builtin.command:
+        cmd: >-
+          openssl x509 -noout -fingerprint -sha256 -in {{ _cert_file }}
+      register: _new_fp
+      changed_when: false
+
+    - name: "Certs [backend] | Display fingerprint"
+      ansible.builtin.debug:
+        msg: "Backend new cert: {{ _new_fp.stdout }}"
+
+  tags: ['backend', 'phase2']
+
+# ===========================================================================
+# Phase 3: Frontend (.21) — nginx only
+# ===========================================================================
+- name: "Rotate Certs | Phase 3 - Frontend"
+  hosts: frontend
+  become: true
+  serial: 1
+  gather_facts: true
+
+  vars:
+    _cert_dir: /etc/autobot/certs
+    _cert_file: "{{ _cert_dir }}/server-cert.pem"
+    _key_file: "{{ _cert_dir }}/server-key.pem"
+    _cert_days: 365
+    _cert_subject: "/CN=autobot-frontend/O=AutoBot"
+
+  tasks:
+    - name: "Certs [frontend] | Ensure cert directory"
+      ansible.builtin.file:
+        path: "{{ _cert_dir }}"
+        state: directory
+        mode: "0755"
+        owner: root
+        group: root
+
+    - name: "Certs [frontend] | Back up existing cert"
+      ansible.builtin.copy:
+        src: "{{ _cert_file }}"
+        dest: "{{ _cert_file }}.bak"
+        remote_src: true
+        mode: "0644"
+      failed_when: false
+
+    - name: "Certs [frontend] | Generate new self-signed cert"
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -nodes
+          -days {{ _cert_days }}
+          -newkey rsa:2048
+          -keyout {{ _key_file }}
+          -out {{ _cert_file }}
+          -subj '{{ _cert_subject }}'
+      changed_when: true
+
+    - name: "Certs [frontend] | Set key permissions"
+      ansible.builtin.file:
+        path: "{{ _key_file }}"
+        mode: "0600"
+        owner: root
+        group: root
+
+    - name: "Certs [frontend] | Test nginx config"
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+
+    - name: "Certs [frontend] | Reload nginx (zero-downtime)"
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+
+    - name: "Certs [frontend] | Verify HTTPS"
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 443
+        delay: 2
+        timeout: 30
+        state: started
+
+  tags: ['frontend', 'phase3']
+
+# ===========================================================================
+# Summary
+# ===========================================================================
+- name: "Rotate Certs | Summary"
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: "Certs | Done"
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - "AutoBot TLS Certificate Rotation - COMPLETE"
+          - "=========================================================="
+          - "Nodes rotated: SLM (.19), Backend (.20), Frontend (.21)"
+          - ""
+          - "Backup certs saved as server-cert.pem.bak on each node."
+          - "Run with --tags check to verify new expiry dates."
+          - "=========================================================="

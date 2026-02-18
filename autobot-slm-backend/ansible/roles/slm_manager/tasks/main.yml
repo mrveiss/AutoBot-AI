@@ -6,6 +6,13 @@
 # Expects code to be already synced via rsync before running.
 ---
 
+# ============================================================
+# Phase 1 CLEAN - remove legacy/wrong-node dirs  (#926 Phase 4)
+# ============================================================
+- name: "SLM | Include clean tasks"
+  ansible.builtin.import_tasks: clean.yml
+  tags: ['clean']
+
 # ==========================================================
 # System packages (assume blank host)
 # ==========================================================
