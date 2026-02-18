@@ -161,6 +161,7 @@ class User(Base, TimestampMixin):
         "UserRole",
         back_populates="user",
         cascade="all, delete-orphan",
+        foreign_keys="[UserRole.user_id]",
     )
 
     api_keys: Mapped[list["APIKey"]] = relationship(
