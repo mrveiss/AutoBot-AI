@@ -33,6 +33,14 @@ MONITORING_ROUTER_CONFIGS = [
         "error_monitoring",
     ),
     ("backend.api.rum", "router", "/rum", ["rum"], "rum"),
+    # Issue #925: service-monitor re-added for frontend health status widget
+    (
+        "backend.api.service_monitor",
+        "router",
+        "/service-monitor",
+        ["service-monitor"],
+        "service_monitor",
+    ),
     # Issue #729: vm_services removed - VM service monitoring now in slm-server
     # AlertManager webhook integration (Issue #346)
     (
