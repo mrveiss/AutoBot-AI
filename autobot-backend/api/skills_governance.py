@@ -266,7 +266,7 @@ async def decide_approval(
     return {"approval_id": approval_id, "status": approval.status}
 
 
-@router.get("/governance", summary="Get current governance configuration")
+@router.get("/", summary="Get current governance configuration")
 async def get_governance() -> Dict[str, Any]:
     """Return the active GovernanceConfig, or the default if none exists."""
     engine = get_skills_engine()
@@ -284,7 +284,7 @@ async def get_governance() -> Dict[str, Any]:
     }
 
 
-@router.put("/governance", summary="Update the governance mode")
+@router.put("/", summary="Update the governance mode")
 async def update_governance(
     body: GovernanceModeUpdate,
     _: None = Depends(check_admin_permission),
