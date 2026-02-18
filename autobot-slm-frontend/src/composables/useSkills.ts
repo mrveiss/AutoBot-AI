@@ -250,3 +250,139 @@ function _extractError(err: unknown): string {
   }
   return String(err)
 }
+
+// =============================================================================
+// Skill Governance Types
+// =============================================================================
+
+export interface SkillRepo {
+  id: string
+  name: string
+  url: string
+  repo_type: 'git' | 'local' | 'http' | 'mcp'
+  skill_count: number
+  status: string
+  last_synced: string | null
+}
+
+export interface SkillApproval {
+  id: string
+  skill_id: string
+  requested_by: string
+  requested_at: string
+  reason: string
+  status: 'pending' | 'approved' | 'rejected'
+  notes: string | null
+}
+
+export interface GovernanceConfig {
+  mode: 'full_auto' | 'semi_auto' | 'locked'
+  gap_detection_enabled: boolean
+  default_trust_level: string
+}
+
+// Governance API base — hits main backend via SLM nginx proxy
+const SKILLS_REPOS_BASE = '/autobot-api/skills/repos'
+const SKILLS_GOV_BASE = '/autobot-api/skills/governance'
+
+// =============================================================================
+// useSkillGovernance Composable
+// =============================================================================
+
+export function useSkillGovernance() {
+  const repos = ref<SkillRepo[]>([])
+  const approvals = ref<SkillApproval[]>([])
+  const drafts = ref<Record<string, unknown>[]>([])
+  const governanceConfig = ref<GovernanceConfig | null>(null)
+  const loading = ref(false)
+  const error = ref<string | null>(null)
+
+  async function fetchRepos(): Promise<void> {
+    loading.value = true
+    try {
+      const { data } = await axios.get<SkillRepo[]>(SKILLS_REPOS_BASE)
+      repos.value = data
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : 'Failed to fetch repos'
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function addRepo(
+    payload: Omit<SkillRepo, 'id' | 'skill_count' | 'status' | 'last_synced'>,
+  ): Promise<unknown> {
+    const { data } = await axios.post(SKILLS_REPOS_BASE, payload)
+    await fetchRepos()
+    return data
+  }
+
+  async function syncRepo(repoId: string): Promise<unknown> {
+    const { data } = await axios.post(`${SKILLS_REPOS_BASE}/${repoId}/sync`)
+    await fetchRepos()
+    return data
+  }
+
+  async function fetchApprovals(): Promise<void> {
+    const { data } = await axios.get<SkillApproval[]>(`${SKILLS_GOV_BASE}/approvals`)
+    approvals.value = data
+  }
+
+  async function decideApproval(
+    approvalId: string,
+    approved: boolean,
+    notes = '',
+  ): Promise<void> {
+    await axios.post(`${SKILLS_GOV_BASE}/approvals/${approvalId}`, {
+      approved,
+      notes,
+      trust_level: 'monitored',
+    })
+    await fetchApprovals()
+  }
+
+  async function fetchDrafts(): Promise<void> {
+    const { data } = await axios.get<Record<string, unknown>[]>(`${SKILLS_GOV_BASE}/drafts`)
+    drafts.value = data
+  }
+
+  async function testDraft(skillId: string): Promise<unknown> {
+    const { data } = await axios.post(`${SKILLS_GOV_BASE}/drafts/${skillId}/test`)
+    return data
+  }
+
+  async function promoteDraft(skillId: string): Promise<unknown> {
+    const { data } = await axios.post(`${SKILLS_GOV_BASE}/drafts/${skillId}/promote`)
+    await fetchDrafts()
+    return data
+  }
+
+  async function fetchGovernance(): Promise<void> {
+    const { data } = await axios.get<GovernanceConfig>(`${SKILLS_GOV_BASE}/governance`)
+    governanceConfig.value = data
+  }
+
+  async function setGovernanceMode(mode: GovernanceConfig['mode']): Promise<void> {
+    await axios.put(`${SKILLS_GOV_BASE}/governance`, { mode })
+    await fetchGovernance()
+  }
+
+  return {
+    repos: readonly(repos),
+    approvals: readonly(approvals),
+    drafts: readonly(drafts),
+    governanceConfig: readonly(governanceConfig),
+    loading: readonly(loading),
+    error: readonly(error),
+    fetchRepos,
+    addRepo,
+    syncRepo,
+    fetchApprovals,
+    decideApproval,
+    fetchDrafts,
+    testDraft,
+    promoteDraft,
+    fetchGovernance,
+    setGovernanceMode,
+  }
+}
