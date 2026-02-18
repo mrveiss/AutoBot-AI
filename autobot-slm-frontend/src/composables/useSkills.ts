@@ -402,7 +402,7 @@ export function useSkillGovernance() {
 
   async function fetchGovernance(): Promise<void> {
     try {
-      const { data } = await api.get<GovernanceConfig>(`${SKILLS_GOV_BASE}/governance`)
+      const { data } = await api.get<GovernanceConfig>(`${SKILLS_GOV_BASE}/`)
       governanceConfig.value = data
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch governance config'
@@ -411,7 +411,7 @@ export function useSkillGovernance() {
 
   async function setGovernanceMode(mode: GovernanceConfig['mode']): Promise<void> {
     try {
-      await api.put(`${SKILLS_GOV_BASE}/governance`, { mode })
+      await api.put(`${SKILLS_GOV_BASE}/`, { mode })
       await fetchGovernance()
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Failed to update governance mode'
