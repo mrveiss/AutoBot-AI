@@ -23,6 +23,14 @@ logger = logging.getLogger(__name__)
 MONITORING_ROUTER_CONFIGS = [
     ("backend.api.monitoring", "router", "/monitoring", ["monitoring"], "monitoring"),
     ("backend.api.metrics", "router", "/metrics", ["metrics"], "metrics"),
+    # Prometheus scrape endpoint at /api/metrics (no auth, used by Prometheus server)
+    (
+        "backend.api.prometheus_endpoint",
+        "router",
+        "/metrics",
+        ["metrics"],
+        "prometheus_endpoint",
+    ),
     # Issue #69: monitoring_alerts removed - replaced by Prometheus AlertManager
     # Alerts now handled via alertmanager_webhook router (Issue #346)
     (
