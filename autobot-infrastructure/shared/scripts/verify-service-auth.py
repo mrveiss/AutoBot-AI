@@ -8,6 +8,9 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 

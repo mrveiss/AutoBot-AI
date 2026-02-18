@@ -9,6 +9,9 @@ This addresses the original Redis connection issue
 
 import logging
 import sys
+import logging
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 

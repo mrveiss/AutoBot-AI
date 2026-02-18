@@ -10,6 +10,9 @@ Validates deployment mode detection and service URL resolution
 import logging
 import os
 import sys
+import logging
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 

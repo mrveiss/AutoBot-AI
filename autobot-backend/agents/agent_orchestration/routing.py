@@ -15,10 +15,17 @@ from typing import Any, Dict, Optional
 from backend.constants.threshold_constants import LLMDefaults
 
 from .types import (
+    AUDIO_PROCESSING_PATTERNS,
+    CODE_GENERATION_PATTERNS,
+    DATA_ANALYSIS_PATTERNS,
     GREETING_PATTERNS,
+    IMAGE_ANALYSIS_PATTERNS,
     KNOWLEDGE_PATTERNS,
     RESEARCH_PATTERNS,
+    SENTIMENT_PATTERNS,
+    SUMMARIZATION_PATTERNS,
     SYSTEM_COMMAND_PATTERNS,
+    TRANSLATION_PATTERNS,
     AgentCapability,
     AgentType,
 )
@@ -192,6 +199,45 @@ class AgentRouter:
             "reasoning": "Complex request requiring orchestrator analysis",
         }
 
+    def _check_specialized_agent_patterns(
+        self, request_lower: str
+    ) -> Optional[Dict[str, Any]]:
+        """Check for specialized agent patterns (Issue #60)."""
+        pattern_agent_map = [
+            (DATA_ANALYSIS_PATTERNS, AgentType.DATA_ANALYSIS, "Data analysis pattern"),
+            (
+                CODE_GENERATION_PATTERNS,
+                AgentType.CODE_GENERATION,
+                "Code generation pattern",
+            ),
+            (TRANSLATION_PATTERNS, AgentType.TRANSLATION, "Translation pattern"),
+            (SUMMARIZATION_PATTERNS, AgentType.SUMMARIZATION, "Summarization pattern"),
+            (
+                SENTIMENT_PATTERNS,
+                AgentType.SENTIMENT_ANALYSIS,
+                "Sentiment analysis pattern",
+            ),
+            (
+                IMAGE_ANALYSIS_PATTERNS,
+                AgentType.IMAGE_ANALYSIS,
+                "Image analysis pattern",
+            ),
+            (
+                AUDIO_PROCESSING_PATTERNS,
+                AgentType.AUDIO_PROCESSING,
+                "Audio processing pattern",
+            ),
+        ]
+        for patterns, agent_type, reasoning in pattern_agent_map:
+            if any(pattern in request_lower for pattern in patterns):
+                return {
+                    "strategy": "single_agent",
+                    "primary_agent": agent_type,
+                    "confidence": 0.85,
+                    "reasoning": reasoning,
+                }
+        return None
+
     def quick_route_analysis(self, request: str) -> Dict[str, Any]:
         """Quick pattern-based routing analysis."""
         request_lower = request.lower()
@@ -202,6 +248,7 @@ class AgentRouter:
             self._check_system_command_patterns,
             self._check_research_patterns,
             self._check_knowledge_patterns,
+            self._check_specialized_agent_patterns,
         ]:
             result = checker(request_lower)
             if result:
