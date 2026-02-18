@@ -96,7 +96,7 @@
                 <i :class="getSessionIcon(session.status)"></i>
               </div>
               <div class="flex-1">
-                <h4 class="session-name">{{ session.name }}</h4>
+                <h4 class="session-name">{{ session.title }}</h4>
                 <p class="session-url">{{ session.url }}</p>
               </div>
             </div>
@@ -106,9 +106,7 @@
                 {{ session.status.toUpperCase() }}
               </StatusBadge>
 
-              <div v-if="session.persistent" class="persistent-badge" title="Persistent Session">
-                <i class="fas fa-thumbtack"></i>
-              </div>
+
             </div>
           </div>
 
@@ -117,15 +115,11 @@
             <div class="info-grid">
               <div class="info-item">
                 <i class="fas fa-calendar text-autobot-text-muted"></i>
-                <span class="text-sm text-autobot-text-secondary">Created {{ formatDate(session.createdAt) }}</span>
+                <span class="text-sm text-autobot-text-secondary">Created {{ formatDate(session.created_at) }}</span>
               </div>
               <div class="info-item">
                 <i class="fas fa-clock text-autobot-text-muted"></i>
-                <span class="text-sm text-autobot-text-secondary">Active {{ formatTimeAgo(session.lastActivityAt) }}</span>
-              </div>
-              <div v-if="session.cookies" class="info-item">
-                <i class="fas fa-cookie text-autobot-text-muted"></i>
-                <span class="text-sm text-autobot-text-secondary">{{ session.cookies.length }} cookies</span>
+                <span class="text-sm text-autobot-text-secondary">Active {{ formatTimeAgo(session.last_activity) }}</span>
               </div>
             </div>
           </div>
@@ -143,7 +137,7 @@
             </BaseButton>
 
             <BaseButton
-              v-if="session.status === 'idle' || session.status === 'closed'"
+              v-if="session.status === 'idle' || session.status === 'error'"
               variant="primary"
               size="sm"
               @click="resumeSession(session.id)"
@@ -162,14 +156,6 @@
             </BaseButton>
 
             <button
-              @click="togglePersistent(session.id)"
-              class="action-btn"
-              :title="session.persistent ? 'Remove Persistence' : 'Make Persistent'"
-            >
-              <i class="fas fa-thumbtack" :class="{ 'text-blue-600': session.persistent }"></i>
-            </button>
-
-            <button
               @click="duplicateSession(session.id)"
               class="action-btn"
               title="Duplicate Session"
@@ -178,7 +164,7 @@
             </button>
 
             <button
-              v-if="session.status !== 'closed'"
+              v-if="session.status !== 'idle'"
               @click="closeSession(session.id)"
               class="action-btn"
               title="Close Session"
@@ -210,17 +196,6 @@
 
         <div class="modal-body">
           <div class="form-group">
-            <label class="form-label">Session Name</label>
-            <input
-              v-model="newSession.name"
-              type="text"
-              class="form-input"
-              placeholder="e.g., Development Testing, Admin Panel"
-              @keyup.enter="createNewSession"
-            />
-          </div>
-
-          <div class="form-group">
             <label class="form-label">Starting URL</label>
             <input
               v-model="newSession.url"
@@ -230,19 +205,7 @@
             />
           </div>
 
-          <div class="form-group">
-            <label class="flex items-center space-x-2 cursor-pointer">
-              <input
-                v-model="newSession.persistent"
-                type="checkbox"
-                class="form-checkbox"
-              />
-              <span class="text-sm font-medium text-autobot-text-secondary">Make this session persistent</span>
-            </label>
-            <p class="text-xs text-autobot-text-muted mt-1">
-              Persistent sessions will be saved and restored across browser restarts
-            </p>
-          </div>
+
         </div>
 
         <div class="modal-footer">
@@ -284,17 +247,14 @@ export default {
   setup() {
     const {
       sessions,
-      createSession,
+      launchSession,
       closeSession: closeSessionHandler,
-      deleteSession: deleteSessionHandler,
-      updateSessionActivity
+      deleteSession: deleteSessionHandler
     } = useBrowserAutomation()
 
     const showCreateModal = ref(false)
     const newSession = ref({
-      name: '',
-      url: 'https://',
-      persistent: false
+      url: 'https://'
     })
 
     // Computed
@@ -306,9 +266,7 @@ export default {
       sessions.value.filter(s => s.status === 'idle')
     )
 
-    const persistentSessions = computed(() =>
-      sessions.value.filter(s => s.persistent)
-    )
+    const persistentSessions = computed(() => [] as typeof sessions.value)
 
     const sortedSessions = computed(() => {
       return [...sessions.value].sort((a, b) => {
@@ -316,35 +274,29 @@ export default {
         const statusPriority: Record<SessionStatus, number> = {
           active: 0,
           idle: 1,
-          closed: 2
+          error: 2
         }
 
         const priorityDiff = statusPriority[a.status] - statusPriority[b.status]
         if (priorityDiff !== 0) return priorityDiff
 
-        return b.lastActivityAt.getTime() - a.lastActivityAt.getTime()
+        return b.last_activity.localeCompare(a.last_activity)
       })
     })
 
     const isFormValid = computed(() => {
-      return newSession.value.name.trim() && newSession.value.url.trim().startsWith('http')
+      return newSession.value.url.trim().startsWith('http')
     })
 
     // Methods
-    const createNewSession = () => {
+    const createNewSession = async () => {
       if (!isFormValid.value) return
 
-      createSession(
-        newSession.value.name,
-        newSession.value.url,
-        newSession.value.persistent
-      )
+      await launchSession(newSession.value.url)
 
       // Reset form
       newSession.value = {
-        name: '',
-        url: 'https://',
-        persistent: false
+        url: 'https://'
       }
 
       showCreateModal.value = false
@@ -363,7 +315,6 @@ export default {
       const session = sessions.value.find(s => s.id === sessionId)
       if (session) {
         session.status = 'active'
-        updateSessionActivity(sessionId)
         logger.info('Resumed session', { id: sessionId })
       }
     }
@@ -372,27 +323,14 @@ export default {
       const session = sessions.value.find(s => s.id === sessionId)
       if (session) {
         window.open(session.url, `session-${sessionId}`)
-        updateSessionActivity(sessionId)
         logger.info('Opened session', { id: sessionId })
       }
     }
 
-    const togglePersistent = (sessionId: string) => {
+    const duplicateSession = async (sessionId: string) => {
       const session = sessions.value.find(s => s.id === sessionId)
       if (session) {
-        session.persistent = !session.persistent
-        logger.info('Toggled persistent', { id: sessionId, persistent: session.persistent })
-      }
-    }
-
-    const duplicateSession = (sessionId: string) => {
-      const session = sessions.value.find(s => s.id === sessionId)
-      if (session) {
-        createSession(
-          `${session.name} (Copy)`,
-          session.url,
-          session.persistent
-        )
+        await launchSession(session.url)
         logger.info('Duplicated session', { id: sessionId })
       }
     }
@@ -413,7 +351,7 @@ export default {
       switch (status) {
         case 'active': return 'status-active'
         case 'idle': return 'status-idle'
-        case 'closed': return 'status-closed'
+        case 'error': return 'status-closed'
         default: return ''
       }
     }
@@ -422,7 +360,7 @@ export default {
       switch (status) {
         case 'active': return 'success'
         case 'idle': return 'warning'
-        case 'closed': return 'info'
+        case 'error': return 'danger'
         default: return 'info'
       }
     }
@@ -431,7 +369,7 @@ export default {
       switch (status) {
         case 'active': return 'fas fa-check-circle'
         case 'idle': return 'fas fa-pause-circle'
-        case 'closed': return 'fas fa-times-circle'
+        case 'error': return 'fas fa-exclamation-circle'
         default: return 'fas fa-circle'
       }
     }
@@ -440,22 +378,22 @@ export default {
       switch (status) {
         case 'active': return 'bg-green-100 text-green-600'
         case 'idle': return 'bg-yellow-100 text-yellow-600'
-        case 'closed': return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
+        case 'error': return 'bg-red-100 text-red-600'
         default: return 'bg-autobot-bg-tertiary text-autobot-text-secondary'
       }
     }
 
-    const formatDate = (date: Date): string => {
+    const formatDate = (dateStr: string): string => {
       return new Intl.DateTimeFormat('en-US', {
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
-      }).format(date)
+      }).format(new Date(dateStr))
     }
 
-    const formatTimeAgo = (date: Date): string => {
-      const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+    const formatTimeAgo = (dateStr: string): string => {
+      const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
 
       if (seconds < 60) return `${seconds}s ago`
       if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
@@ -476,7 +414,6 @@ export default {
       pauseSession,
       resumeSession,
       openSession,
-      togglePersistent,
       duplicateSession,
       closeSession,
       deleteSession,

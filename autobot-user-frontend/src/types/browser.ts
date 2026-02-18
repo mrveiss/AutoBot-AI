@@ -120,17 +120,14 @@ export interface AutomationRecording {
 }
 
 // Browser Session Types
-export type SessionStatus = 'active' | 'idle' | 'closed';
+export type SessionStatus = 'active' | 'idle' | 'error';
 
 export interface BrowserSession {
   id: string;
-  name: string;
-  status: SessionStatus;
   url: string;
-  cookies?: any[];
-  localStorage?: Record<string, string>;
-  sessionStorage?: Record<string, string>;
-  createdAt: Date;
-  lastActivityAt: Date;
-  persistent: boolean;
+  title: string;
+  status: SessionStatus;
+  created_at: string;
+  last_activity: string;
+  viewport: { width: number; height: number };
 }

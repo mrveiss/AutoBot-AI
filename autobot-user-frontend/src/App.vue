@@ -534,21 +534,8 @@
     </main>
   </div>
 
-  <!-- Global Elevation Dialog -->
-  <ElevationDialog
-    ref="elevationDialog"
-    :show="showElevationDialog"
-    :operation="elevationOperation"
-    :command="elevationCommand"
-    :reason="elevationReason"
-    :risk-level="elevationRiskLevel"
-    :request-id="elevationRequestId"
-    @approved="onElevationApproved"
-    @cancelled="onElevationCancelled"
-    @close="onElevationClose"
-  />
-
   <!-- Issue #729: RUM Dashboard moved to slm-admin -->
+  <!-- ElevationDialog removed: feature not yet implemented (#920) -->
 </template>
 
 <script lang="ts">
