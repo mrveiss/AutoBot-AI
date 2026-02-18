@@ -303,7 +303,9 @@ async function extractEntities(): Promise<void> {
       extractionHistory.value.pop()
     }
 
-    emit('extraction-complete', extractionResult.value)
+    if (extractionResult.value) {
+      emit('extraction-complete', extractionResult.value)
+    }
     logger.info(`Extraction complete: ${result.entities_created} entities`)
   } catch (error) {
     logger.error('Entity extraction failed:', error)

@@ -171,7 +171,7 @@ const connect = () => {
     }
 
     websocket.onclose = (event) => {
-      logger.info('SSH WebSocket closed:', event.code, event.reason)
+      logger.info('SSH WebSocket closed:', { code: event.code, reason: event.reason })
       connectionState.value = 'disconnected'
       emit('disconnected')
     }

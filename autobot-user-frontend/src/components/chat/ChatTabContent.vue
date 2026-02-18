@@ -184,12 +184,12 @@ const dynamicVncUrl = computed(() => {
 
 // Host selection handlers
 const onSshHostSelected = (host: InfrastructureHost) => {
-  logger.info('SSH host selected:', host.name, host.host)
+  logger.info('SSH host selected:', { name: host.name, host: host.host })
   selectedSshHost.value = host
 }
 
 const onVncHostSelected = (host: InfrastructureHost) => {
-  logger.info('VNC host selected:', host.name, host.host)
+  logger.info('VNC host selected:', { name: host.name, host: host.host })
   selectedVncHost.value = host
 }
 

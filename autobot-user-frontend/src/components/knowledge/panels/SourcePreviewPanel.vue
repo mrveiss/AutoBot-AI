@@ -239,7 +239,7 @@ watch(() => props.modelValue, (isOpen) => {
           <footer class="panel-footer">
             <BaseButton
               variant="outline"
-              size="small"
+              size="sm"
               :class="{ success: copySuccess }"
               @click="copyContent"
               :disabled="!hasDocument"
@@ -250,7 +250,7 @@ watch(() => props.modelValue, (isOpen) => {
 
             <BaseButton
               variant="primary"
-              size="small"
+              size="sm"
               @click="openInKnowledgeManager"
               :disabled="!hasDocument"
             >

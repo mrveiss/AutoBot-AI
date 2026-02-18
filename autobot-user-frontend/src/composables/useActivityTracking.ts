@@ -176,7 +176,7 @@ export function useActivityTracking(): UseActivityTrackingReturn {
       }
       collaboration.broadcastActivity(activity)
     }
-    logger.debug('[Issue #874] Tracked file activity:', operation, path)
+    logger.debug('[Issue #874] Tracked file activity:', { operation, path })
   }
 
   /**
@@ -227,7 +227,7 @@ export function useActivityTracking(): UseActivityTrackingReturn {
     secretType: SecretType
   ): void => {
     activityLogger.logSecretUsage(action, secretId, secretName, secretType)
-    logger.debug('[Issue #874] Tracked secret usage:', action, secretName)
+    logger.debug('[Issue #874] Tracked secret usage:', { action, secretName })
   }
 
   /**

@@ -211,10 +211,8 @@ class GlobalWebSocketService {
 
     const wsUrl = this.state.url
     logger.debug(
-      'Connecting WebSocket (attempt',
-      this.reconnectAttempts + 1,
-      '):',
-      wsUrl
+      'Connecting WebSocket',
+      { attempt: this.reconnectAttempts + 1, url: wsUrl }
     )
     this.trackEvent('connection_attempt', {
       url: wsUrl,

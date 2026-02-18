@@ -402,7 +402,7 @@ onBeforeUnmount(() => {
             <div class="toolbar-actions">
               <BaseButton
                 variant="ghost"
-                size="small"
+                size="sm"
                 @click="loadHistory"
               >
                 <i class="fas fa-history"></i>
@@ -410,7 +410,7 @@ onBeforeUnmount(() => {
               </BaseButton>
               <BaseButton
                 variant="ghost"
-                size="small"
+                size="sm"
                 @click="revertChanges"
                 :disabled="!hasUnsavedChanges"
               >
@@ -419,7 +419,7 @@ onBeforeUnmount(() => {
               </BaseButton>
               <BaseButton
                 variant="primary"
-                size="small"
+                size="sm"
                 @click="savePrompt"
                 :disabled="!hasUnsavedChanges || isSaving"
               >
@@ -499,7 +499,7 @@ onBeforeUnmount(() => {
             </div>
             <BaseButton
               variant="outline"
-              size="small"
+              size="sm"
               @click.stop="revertToVersion(version)"
             >
               <i class="fas fa-undo"></i>

@@ -112,8 +112,7 @@ const chartOptions = computed<ApexOptions>(() => ({
     position: 'top',
     horizontalAlign: 'left',
     markers: {
-      width: 12,
-      height: 12,
+      size: 12,
       radius: 2,
     },
   },

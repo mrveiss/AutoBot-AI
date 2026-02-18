@@ -136,9 +136,10 @@ function handleCaptchaResolved(data: { captcha_id: string } | { payload: { captc
 }
 
 // Subscribe to WebSocket events (unsubscribe is handled by the composable on unmount)
-on('captcha_detected', handleCaptchaDetected)
-on('captcha_timeout', handleCaptchaTimeout)
-on('captcha_resolved', handleCaptchaResolved)
+// Casts are safe: the data IS the correct type at runtime, matching the server event schema
+on('captcha_detected', handleCaptchaDetected as (data: unknown) => void)
+on('captcha_timeout', handleCaptchaTimeout as (data: unknown) => void)
+on('captcha_resolved', handleCaptchaResolved as (data: unknown) => void)
 
 // ============================================================================
 // Computed

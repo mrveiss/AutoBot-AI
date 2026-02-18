@@ -286,11 +286,15 @@ export class BatchApiService {
       // First, check if the system is healthy
       const healthCheck = await this.apiClient.checkHealth();
 
-      if (!healthCheck || healthCheck.status !== 'healthy') {
+      const isHealthy = healthCheck &&
+        typeof healthCheck !== 'boolean' &&
+        healthCheck.status === 'healthy';
+
+      if (!isHealthy) {
         logger.warn('System health check failed, loading minimal data');
         return {
           chat_sessions: { sessions: [] },
-          health_status: healthCheck || { status: 'unknown' },
+          health_status: (healthCheck && typeof healthCheck !== 'boolean') ? healthCheck : { status: 'unknown' },
           error: 'System health check failed'
         };
       }

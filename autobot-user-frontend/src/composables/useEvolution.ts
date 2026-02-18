@@ -156,7 +156,7 @@ export function useEvolution() {
         timelineData.value = response.data.timeline
       }
 
-      logger.info('Timeline data fetched', timelineData.value.length, 'points')
+      logger.info('Timeline data fetched', { count: timelineData.value.length })
     } catch (e: any) {
       const errorMsg = e.response?.data?.message || e.message || 'Failed to fetch timeline'
       error.value = errorMsg
@@ -189,7 +189,7 @@ export function useEvolution() {
         patternData.value = response.data.patterns
       }
 
-      logger.info('Pattern evolution data fetched', Object.keys(patternData.value).length, 'types')
+      logger.info('Pattern evolution data fetched', { count: Object.keys(patternData.value).length })
     } catch (e: any) {
       const errorMsg = e.response?.data?.message || e.message || 'Failed to fetch pattern data'
       error.value = errorMsg
@@ -208,7 +208,7 @@ export function useEvolution() {
       if (response.data.trends) {
         trendsData.value = response.data.trends
       }
-      logger.info('Trends data fetched', Object.keys(trendsData.value).length, 'metrics')
+      logger.info('Trends data fetched', { count: Object.keys(trendsData.value).length })
     } catch (e: any) {
       logger.error('Failed to fetch trends:', e)
     }

@@ -98,7 +98,7 @@
               v-for="(count, endpoint) in sortedEndpoints"
               :key="endpoint"
               class="breakdown-item clickable"
-              @click="$emit('view-endpoint', endpoint)"
+              @click="$emit('view-endpoint', String(endpoint))"
             >
               <div class="item-info">
                 <code class="item-label">{{ endpoint }}</code>
@@ -125,7 +125,7 @@
               v-for="(count, user) in sortedUsers"
               :key="user"
               class="breakdown-item clickable"
-              @click="$emit('view-user', user)"
+              @click="$emit('view-user', String(user))"
             >
               <div class="item-info">
                 <span class="item-label">{{ user }}</span>
