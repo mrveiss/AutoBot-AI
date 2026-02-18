@@ -45,7 +45,7 @@ def get_slm_engine() -> AsyncEngine:
             max_overflow=10,
             pool_pre_ping=True,
         )
-        logger.info("Created SLM database engine: %s", config.host)
+        logger.info("Created SLM database engine")
     return _slm_engine
 
 
@@ -61,7 +61,7 @@ def get_autobot_engine() -> AsyncEngine:
             max_overflow=20,
             pool_pre_ping=True,
         )
-        logger.info("Created AutoBot database engine: %s", config.host)
+        logger.info("Created AutoBot database engine")
     return _autobot_engine
 
 
