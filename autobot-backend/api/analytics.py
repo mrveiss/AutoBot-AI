@@ -16,6 +16,11 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 
 import httpx
+from auth_middleware import get_current_user
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import RedisDatabase
 
 # Import controller class (extracted from this file - Issue #212)
 from backend.api.analytics_controller import (
@@ -28,10 +33,6 @@ from backend.api.analytics_controller import (
 from backend.api.analytics_models import AnalyticsOverview, RealTimeEvent
 from backend.constants.network_constants import NetworkConstants
 from backend.constants.threshold_constants import TimingConstants
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import RedisDatabase
 
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import hardware_monitor
@@ -99,7 +100,7 @@ async def _get_code_analysis_status() -> Dict[str, Any]:
     error_code_prefix="ANALYTICS",
 )
 @router.get("/dashboard/overview", response_model=AnalyticsOverview)
-async def get_dashboard_overview():
+async def get_dashboard_overview(current_user: Dict = Depends(get_current_user)):
     """Get comprehensive dashboard overview (Issue #398: refactored)."""
     timestamp = datetime.now().isoformat()
 
@@ -200,7 +201,7 @@ def _check_resource_alerts(system_resources: Dict) -> List[Dict[str, Any]]:
     error_code_prefix="ANALYTICS",
 )
 @router.get("/system/health-detailed")
-async def get_detailed_system_health():
+async def get_detailed_system_health(current_user: Dict = Depends(get_current_user)):
     """Get detailed system health with enhanced analytics (Issue #398: refactored)."""
     base_health = await hardware_monitor.get_system_health()
 
@@ -257,7 +258,7 @@ async def get_detailed_system_health():
     error_code_prefix="ANALYTICS",
 )
 @router.get("/performance/metrics")
-async def get_performance_metrics():
+async def get_performance_metrics(current_user: Dict = Depends(get_current_user)):
     """Get comprehensive performance metrics"""
     metrics = await analytics_controller.collect_performance_metrics()
 
@@ -303,7 +304,7 @@ async def get_performance_metrics():
     error_code_prefix="ANALYTICS",
 )
 @router.get("/communication/patterns")
-async def get_communication_patterns():
+async def get_communication_patterns(current_user: Dict = Depends(get_current_user)):
     """Get detailed communication pattern analysis"""
     patterns = await analytics_controller.analyze_communication_patterns()
 
@@ -356,7 +357,7 @@ async def get_communication_patterns():
     error_code_prefix="ANALYTICS",
 )
 @router.get("/usage/statistics")
-async def get_usage_statistics():
+async def get_usage_statistics(current_user: Dict = Depends(get_current_user)):
     """Get comprehensive usage statistics"""
     stats = await analytics_controller.get_usage_statistics()
 
@@ -419,21 +420,15 @@ analytics_code.set_analytics_dependencies(analytics_controller, analytics_state)
 # ============================================================================
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_realtime_metrics",
-    error_code_prefix="ANALYTICS",
-)
-@router.get("/realtime/metrics")
-async def get_realtime_metrics():
-    """Get current real-time metrics snapshot"""
+async def _collect_realtime_metrics_data() -> Dict[str, Any]:
+    """Gather realtime metrics data (helper for endpoint and WS streaming, #943)."""
     # Issue #619: Parallelize independent metrics collection
     current_metrics, system_resources = await asyncio.gather(
         analytics_controller.metrics_collector.collect_all_metrics(),
         hardware_monitor.get_system_resources(),
     )
 
-    realtime_data = {
+    realtime_data: Dict[str, Any] = {
         "timestamp": datetime.now().isoformat(),
         "system_metrics": {
             name: {
@@ -469,11 +464,24 @@ async def get_realtime_metrics():
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="get_realtime_metrics",
+    error_code_prefix="ANALYTICS",
+)
+@router.get("/realtime/metrics")
+async def get_realtime_metrics(current_user: Dict = Depends(get_current_user)):
+    """Get current real-time metrics snapshot"""
+    return await _collect_realtime_metrics_data()
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="track_analytics_event",
     error_code_prefix="ANALYTICS",
 )
 @router.post("/events/track")
-async def track_analytics_event(event: RealTimeEvent):
+async def track_analytics_event(
+    event: RealTimeEvent, current_user: Dict = Depends(get_current_user)
+):
     """Track a real-time analytics event"""
     # Store event in analytics state
     event_data = event.dict()
@@ -577,7 +585,8 @@ def _compute_hourly_stats(historical_calls: list) -> dict:
 )
 @router.get("/trends/historical")
 async def get_historical_trends(
-    hours: int = Query(24, description="Number of hours to analyze", ge=1, le=168)
+    hours: int = Query(24, description="Number of hours to analyze", ge=1, le=168),
+    current_user: Dict = Depends(get_current_user),
 ):
     """Get historical trend analysis"""
     trends = await analytics_controller.detect_trends()
@@ -621,7 +630,7 @@ async def _send_periodic_update_or_break(websocket: WebSocket) -> bool:
         True to continue loop, False to break
     """
     try:
-        current_data = await get_realtime_metrics()
+        current_data = await _collect_realtime_metrics_data()
         await websocket.send_json(_build_periodic_update(current_data))
         return True
     except Exception as e:
@@ -708,7 +717,7 @@ async def websocket_realtime_analytics(websocket: WebSocket):
     error_code_prefix="ANALYTICS",
 )
 @router.post("/collection/start")
-async def start_analytics_collection():
+async def start_analytics_collection(current_user: Dict = Depends(get_current_user)):
     """Start continuous analytics collection"""
     # Initialize session tracking
     analytics_state["session_start"] = datetime.now().isoformat()
@@ -734,7 +743,7 @@ async def start_analytics_collection():
     error_code_prefix="ANALYTICS",
 )
 @router.post("/collection/stop")
-async def stop_analytics_collection():
+async def stop_analytics_collection(current_user: Dict = Depends(get_current_user)):
     """Stop continuous analytics collection"""
     # Stop metrics collection
     collector = analytics_controller.metrics_collector
@@ -794,7 +803,7 @@ async def _check_analytics_redis_connectivity() -> Dict[str, str]:
     error_code_prefix="ANALYTICS",
 )
 @router.get("/status")
-async def get_analytics_status():
+async def get_analytics_status(current_user: Dict = Depends(get_current_user)):
     """Get comprehensive analytics system status (Issue #398: refactored)."""
     status = _build_analytics_status_base(analytics_controller.metrics_collector)
     # Issue #664: Parallelize independent async operations
