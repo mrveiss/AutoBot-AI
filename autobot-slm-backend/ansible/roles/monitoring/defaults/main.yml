@@ -41,11 +41,6 @@ prometheus_config_dir: "/etc/prometheus"
 prometheus_data_dir: "/var/lib/prometheus"
 grafana_data_dir: "/var/lib/grafana"
 
-# Targets to scrape (can be populated dynamically)
-prometheus_targets: []
-#  - "{{ backend_host }}:9100"
-#  - "{{ frontend_host }}:9100"
-
 # SLM integration
 slm_api_url: "http://localhost:8000"
 slm_metrics_endpoint: "/api/metrics"
