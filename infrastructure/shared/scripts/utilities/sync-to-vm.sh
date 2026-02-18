@@ -162,10 +162,24 @@ sync_to_vm() {
 
     # Check if rsync is available
     if command -v rsync >/dev/null 2>&1; then
-        # Use rsync with --delete to remove extraneous files
+        # Use rsync with --delete to remove extraneous files.
+        # Exclude server-side runtime directories so they are never deleted on sync.
+        local RSYNC_EXCLUDES=(
+            --exclude=venv/
+            --exclude=node_modules/
+            --exclude=__pycache__/
+            --exclude="*.pyc"
+            --exclude=.git/
+            --exclude=data/
+            --exclude=logs/
+            --exclude="*.egg-info/"
+            --exclude=dist/
+            --exclude=.env
+        )
         if [ -d "$local_path" ]; then
             log_info "Syncing directory (rsync with --delete): $local_path -> $vm_name:$remote_path"
             rsync -avz --delete --progress \
+                "${RSYNC_EXCLUDES[@]}" \
                 -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
                 "$local_path/" "$REMOTE_USER@$vm_ip:$remote_path/"
         else
