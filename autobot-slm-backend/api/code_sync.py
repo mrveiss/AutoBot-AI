@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+from config import settings
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from models.database import (
@@ -55,8 +56,6 @@ from services.sync_orchestrator import get_sync_orchestrator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
-
-from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -322,28 +321,49 @@ async def _restart_slm_service(service: str) -> None:
         logger.warning("Failed to restart %s: %s", service, exc)
 
 
-async def _sync_slm_from_code_source(db: AsyncSession, node_id: str) -> None:
+async def _sync_slm_from_code_source(node_id: str) -> None:
     """Pull SLM components from the code source node and restart services.
 
     Used when the GUI triggers a sync for the SLM server itself (#913).
     The Ansible playbook cannot be used because it runs rsync FROM the
     controller (SLM server) but the source path only exists on the dev machine.
     This function reverses the direction: SLM server PULLS from the code source.
+
+    NOTE: Must create its own DB session — the request-scoped session passed
+    from sync_node is closed by FastAPI before this background task runs.
     """
     from models.database import CodeSource, Node  # avoid circular import
+    from services.database import db_service  # own session to avoid closed-session bug
 
-    source_result = await db.execute(
-        select(CodeSource).where(CodeSource.is_active.is_(True))
-    )
-    source = source_result.scalar_one_or_none()
-    if not source:
-        logger.error("SLM self-sync failed: no active code source")
-        return
+    # --- Phase 1: gather connection info from DB ---
+    source_ip = None
+    source_user = None
+    repo_path = None
+    last_known_commit = ""
+    try:
+        async with db_service.session() as db:
+            source_result = await db.execute(
+                select(CodeSource).where(CodeSource.is_active.is_(True))
+            )
+            source = source_result.scalar_one_or_none()
+            if not source:
+                logger.error("SLM self-sync failed: no active code source")
+                return
 
-    node_result = await db.execute(select(Node).where(Node.node_id == source.node_id))
-    source_node = node_result.scalar_one_or_none()
-    if not source_node:
-        logger.error("SLM self-sync failed: code source node not found in DB")
+            node_result = await db.execute(
+                select(Node).where(Node.node_id == source.node_id)
+            )
+            source_node = node_result.scalar_one_or_none()
+            if not source_node:
+                logger.error("SLM self-sync failed: code source node not found in DB")
+                return
+
+            source_ip = source_node.ip_address
+            source_user = source_node.ssh_user or "autobot"
+            repo_path = source.repo_path
+            last_known_commit = source.last_known_commit or ""
+    except Exception as db_err:
+        logger.error("SLM self-sync failed: DB read error: %s", db_err)
         return
 
     ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
@@ -351,14 +371,11 @@ async def _sync_slm_from_code_source(db: AsyncSession, node_id: str) -> None:
         logger.error("SLM self-sync failed: SSH key not found at %s", ssh_key)
         return
 
-    source_ip = source_node.ip_address
-    source_user = source_node.ssh_user or "autobot"
-    repo_path = source.repo_path  # e.g. /home/kali/Desktop/AutoBot
-
     logger.info(
         "SLM self-sync: pulling from %s@%s:%s", source_user, source_ip, repo_path
     )
 
+    # --- Phase 2: rsync components ---
     all_ok = True
     for component, excludes in _SLM_COMPONENTS:
         ok, msg = await _rsync_component(
@@ -368,22 +385,25 @@ async def _sync_slm_from_code_source(db: AsyncSession, node_id: str) -> None:
             logger.error("SLM self-sync component %s failed: %s", component, msg)
             all_ok = False
 
-    if all_ok:
-        # Mark SLM node as up-to-date in DB before restarting (session closes on restart)
-        try:
+    if not all_ok:
+        logger.error("SLM self-sync had failures; services NOT restarted")
+        return
+
+    # --- Phase 3: mark up-to-date in DB before restarting ---
+    try:
+        async with db_service.session() as db:
             slm_result = await db.execute(select(Node).where(Node.node_id == node_id))
             slm_node = slm_result.scalar_one_or_none()
             if slm_node:
-                slm_node.code_version = source.last_known_commit or ""
+                slm_node.code_version = last_known_commit
                 slm_node.code_status = CodeStatus.UP_TO_DATE.value
-                await db.commit()
-        except Exception as db_err:
-            logger.warning("SLM self-sync: could not update node status: %s", db_err)
-        await _restart_slm_service("autobot-slm-backend")
-        await _restart_slm_service("nginx")
-        logger.info("SLM self-sync complete and services restarted")
-    else:
-        logger.error("SLM self-sync had failures; services NOT restarted")
+    except Exception as db_err:
+        logger.warning("SLM self-sync: could not update node status: %s", db_err)
+
+    # --- Phase 4: restart services ---
+    await _restart_slm_service("autobot-slm-backend")
+    await _restart_slm_service("nginx")
+    logger.info("SLM self-sync complete and services restarted")
 
 
 async def _broadcast_sync_progress(node_id: str, progress: Dict[str, str]) -> None:
@@ -476,7 +496,7 @@ async def sync_node(
         # but the source path /home/kali/Desktop/AutoBot only exists on the dev
         # machine. Instead, pull code FROM the code source node directly (#913).
         logger.info("SLM self-sync: pulling from code source (fire-and-forget)")
-        asyncio.create_task(_sync_slm_from_code_source(db, node_id))
+        asyncio.create_task(_sync_slm_from_code_source(node_id))
         return NodeSyncResponse(
             success=True,
             message=(
