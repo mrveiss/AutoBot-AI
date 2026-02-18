@@ -35,6 +35,7 @@ llama-index-embeddings-ollama>=0.1.0,<0.2.0  # Ollama embeddings (older API)
 llama-index-vector-stores-chroma>=0.1.0,<0.2.0  # ChromaDB vector store (older API)
 langchain>=0.1.0,<0.2.0       # LangChain with Tool API (not 0.3+)
 markdownify>=0.11.0  # HTML to Markdown conversion
+mcp>=1.0.0             # MCP protocol for skill subprocesses (Issue #731)
 
 # Media processing pipelines (Issue #932)
 aiohttp>=3.9.0          # Async HTTP client for link pipeline
