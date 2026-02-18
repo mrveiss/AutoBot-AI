@@ -12,10 +12,9 @@ import re
 import threading
 from typing import Any, Dict, List, Optional
 
-from backend.constants.network_constants import ServiceURLs
-from backend.constants.path_constants import PATH
-
 from autobot_shared.logging_manager import get_llm_logger
+from autobot_shared.ssot_config import get_ollama_url
+from backend.constants.path_constants import PATH
 
 logger = get_llm_logger("doc_searcher")
 
@@ -101,7 +100,7 @@ class DocumentationSearcher:
 
             # Initialize embedding model
             self._embed_model = OllamaEmbedding(
-                model_name="nomic-embed-text", base_url=ServiceURLs.OLLAMA_LOCAL
+                model_name="nomic-embed-text", base_url=get_ollama_url()
             )
 
             self._initialized = True

@@ -17,9 +17,10 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from backend.utils.service_registry import get_service_url
 from memory import EnhancedMemoryManager, TaskPriority
 from task_execution_tracker import task_tracker
+
+from backend.utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
 
@@ -612,290 +613,85 @@ class GoogleGeminiProvider(BaseAIProvider):
 
 
 class LocalModelProvider(BaseAIProvider):
-    """Local model provider using Ollama for text generation.
+    """Local model provider — thin shim delegating to the canonical OllamaProvider.
 
-    Provides integration with locally-hosted LLMs via Ollama.
-    Image analysis is not supported by most local models.
+    Replaces the duplicate HTTP client implementation (#949). All requests are
+    forwarded to OllamaProvider via LLMInterface which uses the SSOT config for
+    URL resolution, circuit breaking, and streaming.
     """
 
     def __init__(self, config: AIModelConfig):
-        """Initialize local model provider with Ollama client."""
+        """Initialize local model provider with OllamaProvider delegation."""
         super().__init__(config)
-        self._ollama_available = False
 
     def _initialize_client(self):
-        """Initialize Ollama client connection."""
-        import os
+        """Initialize LLMInterface for OllamaProvider delegation."""
+        try:
+            from llm_interface_pkg import LLMInterface
 
-        self._ollama_host = os.getenv("AUTOBOT_OLLAMA_HOST")
-        self._ollama_port = os.getenv("AUTOBOT_OLLAMA_PORT")
-        self._ollama_available = bool(self._ollama_host and self._ollama_port)
-
-        if self._ollama_available:
-            self._ollama_url = f"http://{self._ollama_host}:{self._ollama_port}"
-            logger.info(
-                "LocalModelProvider initialized with Ollama at %s", self._ollama_url
-            )
-        else:
-            logger.warning(
-                "Ollama not configured. Set AUTOBOT_OLLAMA_HOST and "
-                "AUTOBOT_OLLAMA_PORT environment variables for local model support."
-            )
-
-    def _build_ollama_error_response(
-        self, request: AIRequest, error_msg: str, start_time: float, error_key: str
-    ) -> AIResponse:
-        """Build error response for Ollama failures (Issue #665: extracted helper)."""
-        return AIResponse(
-            request_id=request.request_id,
-            provider=self.config.provider,
-            model_name=self.config.model_name,
-            content=error_msg,
-            usage={"prompt_tokens": 0, "completion_tokens": 0},
-            finish_reason="error",
-            tool_calls=None,
-            confidence=0.0,
-            processing_time=time.time() - start_time,
-            metadata={"error": error_key},
-        )
-
-    def _build_ollama_chat_request(self, request: AIRequest) -> Dict[str, Any]:
-        """Build request payload for Ollama chat API.
-
-        Args:
-            request: The AI request containing prompt and parameters
-
-        Returns:
-            Dict formatted for Ollama chat API. Issue #620.
-        """
-        messages = []
-        if request.system_message:
-            messages.append({"role": "system", "content": request.system_message})
-        messages.append({"role": "user", "content": request.prompt})
-
-        return {
-            "model": self.config.model_name or "llama3.2",
-            "messages": messages,
-            "stream": False,
-            "options": {
-                "temperature": request.temperature or self.config.temperature,
-            },
-        }
-
-    def _build_ollama_success_response(
-        self, request: AIRequest, result: Dict[str, Any], processing_time: float
-    ) -> AIResponse:
-        """Build success response from Ollama API result.
-
-        Args:
-            request: Original AI request
-            result: Response from Ollama API
-            processing_time: Time taken for the request
-
-        Returns:
-            AIResponse with content and metadata. Issue #620.
-        """
-        return AIResponse(
-            request_id=request.request_id,
-            provider=self.config.provider,
-            model_name=result.get("model", self.config.model_name),
-            content=result.get("message", {}).get("content", ""),
-            usage={
-                "prompt_tokens": result.get("prompt_eval_count", 0),
-                "completion_tokens": result.get("eval_count", 0),
-            },
-            finish_reason="stop" if result.get("done") else "incomplete",
-            tool_calls=None,
-            confidence=0.8,
-            processing_time=processing_time,
-            metadata={
-                "total_duration": result.get("total_duration"),
-                "load_duration": result.get("load_duration"),
-            },
-        )
+            self._llm_interface = LLMInterface()
+            logger.info("LocalModelProvider initialized via OllamaProvider delegation")
+        except Exception as e:
+            self._llm_interface = None
+            logger.warning("LocalModelProvider: LLMInterface unavailable: %s", e)
 
     async def generate_text(self, request: AIRequest) -> AIResponse:
-        """Generate text using local Ollama model.
-
-        Args:
-            request: AI request with prompt and parameters
-
-        Returns:
-            AIResponse with generated text or error. Issue #620.
-        """
-        import aiohttp
-
+        """Generate text by delegating to OllamaProvider via LLMInterface."""
         start_time = time.time()
 
-        if not self._ollama_available:
-            return self._build_ollama_error_response(
-                request,
-                "Error: Ollama not configured. Set AUTOBOT_OLLAMA_HOST and AUTOBOT_OLLAMA_PORT.",
-                start_time,
-                "ollama_not_configured",
-            )
+        if self._llm_interface is None:
+            return self._create_error_response(request, "LLMInterface not available")
 
         try:
-            data = self._build_ollama_chat_request(request)
+            from llm_interface_pkg.models import LLMRequest
 
-            async with aiohttp.ClientSession() as session:
-                timeout = aiohttp.ClientTimeout(total=120.0)
-                async with session.post(
-                    f"{self._ollama_url}/api/chat", json=data, timeout=timeout
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        raise aiohttp.ClientError(
-                            f"HTTP {response.status}: {error_text}"
-                        )
-                    result = await response.json()
-
-            return self._build_ollama_success_response(
-                request, result, time.time() - start_time
-            )
-
-        except Exception as e:
-            logger.error("Ollama request failed: %s", e)
-            return self._build_ollama_error_response(
-                request,
-                f"Error: Local model request failed - {str(e)}",
-                start_time,
-                str(e),
-            )
-
-    async def analyze_image(self, request: AIRequest) -> AIResponse:
-        """Analyze image using local model.
-
-        Note: Most local models do not support vision. Returns error for unsupported models.
-        LLaVA models support vision if available.
-        """
-        start_time = time.time()
-
-        # Check if using a vision-capable model (e.g., llava)
-        model_name = self.config.model_name or ""
-        if "llava" not in model_name.lower() and "vision" not in model_name.lower():
-            return AIResponse(
-                request_id=request.request_id,
-                provider=self.config.provider,
-                model_name=self.config.model_name,
-                content=(
-                    f"Error: Model '{model_name}' does not support image analysis. "
-                    "Use a vision-capable model like 'llava' for image analysis."
-                ),
-                usage={"prompt_tokens": 0, "completion_tokens": 0},
-                finish_reason="error",
-                tool_calls=None,
-                confidence=0.0,
-                processing_time=time.time() - start_time,
-                metadata={"error": "vision_not_supported"},
-            )
-
-        # For vision models, attempt to process with images
-        return await self._generate_with_images(request)
-
-    def _build_vision_error_response(
-        self, request: AIRequest, error_msg: str, start_time: float, error_detail: str
-    ) -> AIResponse:
-        """Build error response for vision model failures.
-
-        Issue #665: Extracted from _generate_with_images to reduce function length.
-        """
-        return AIResponse(
-            request_id=request.request_id,
-            provider=self.config.provider,
-            model_name=self.config.model_name,
-            content=error_msg,
-            usage={"prompt_tokens": 0, "completion_tokens": 0},
-            finish_reason="error",
-            tool_calls=None,
-            confidence=0.0,
-            processing_time=time.time() - start_time,
-            metadata={"error": error_detail},
-        )
-
-    def _build_vision_success_response(
-        self, request: AIRequest, result: dict, processing_time: float
-    ) -> AIResponse:
-        """Build success response for vision model.
-
-        Issue #665: Extracted from _generate_with_images to reduce function length.
-        """
-        return AIResponse(
-            request_id=request.request_id,
-            provider=self.config.provider,
-            model_name=result.get("model", self.config.model_name),
-            content=result.get("message", {}).get("content", ""),
-            usage={
-                "prompt_tokens": result.get("prompt_eval_count", 0),
-                "completion_tokens": result.get("eval_count", 0),
-            },
-            finish_reason="stop" if result.get("done") else "incomplete",
-            tool_calls=None,
-            confidence=0.7,
-            processing_time=processing_time,
-            metadata={"vision_model": True},
-        )
-
-    async def _generate_with_images(self, request: AIRequest) -> AIResponse:
-        """Generate response with image input. Issue #665: Refactored with helpers."""
-        import aiohttp
-
-        start_time = time.time()
-
-        if not self._ollama_available:
-            return self._build_vision_error_response(
-                request,
-                "Error: Ollama not configured for vision model.",
-                start_time,
-                "ollama_not_configured",
-            )
-
-        try:
             messages = []
             if request.system_message:
                 messages.append({"role": "system", "content": request.system_message})
-            user_message = {"role": "user", "content": request.prompt}
-            if request.images:
-                user_message["images"] = request.images
-            messages.append(user_message)
+            messages.append({"role": "user", "content": request.prompt})
 
-            data = {
-                "model": self.config.model_name,
-                "messages": messages,
-                "stream": False,
-            }
-
-            async with aiohttp.ClientSession() as session:
-                timeout = aiohttp.ClientTimeout(total=180.0)
-                async with session.post(
-                    f"{self._ollama_url}/api/chat", json=data, timeout=timeout
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        raise aiohttp.ClientError(
-                            f"HTTP {response.status}: {error_text}"
-                        )
-                    result = await response.json()
-
-            return self._build_vision_success_response(
-                request, result, time.time() - start_time
+            llm_req = LLMRequest(
+                messages=messages,
+                model_name=self.config.model_name,
+                temperature=request.temperature or self.config.temperature,
+                request_id=request.request_id,
             )
+            llm_resp = await self._llm_interface.chat_completion(llm_req)
 
+            return AIResponse(
+                request_id=request.request_id,
+                provider=self.config.provider,
+                model_name=llm_resp.model,
+                content=llm_resp.content,
+                usage=llm_resp.usage or {"prompt_tokens": 0, "completion_tokens": 0},
+                finish_reason="stop",
+                tool_calls=None,
+                confidence=0.8,
+                processing_time=time.time() - start_time,
+                metadata=llm_resp.metadata or {},
+            )
         except Exception as e:
-            logger.error("Ollama vision request failed: %s", e)
-            return self._build_vision_error_response(
-                request,
-                f"Error: Vision model request failed - {str(e)}",
-                start_time,
-                str(e),
+            logger.error("LocalModelProvider.generate_text failed: %s", e)
+            return self._create_error_response(
+                request, f"Local model request failed: {e}"
             )
+
+    async def analyze_image(self, request: AIRequest) -> AIResponse:
+        """Analyze image — delegates text prompt to Ollama (vision models only)."""
+        model_name = self.config.model_name or ""
+        if "llava" not in model_name.lower() and "vision" not in model_name.lower():
+            return self._create_error_response(
+                request,
+                f"Model '{model_name}' does not support image analysis. "
+                "Use a vision-capable model like 'llava'.",
+            )
+        return await self.generate_text(request)
 
     async def multimodal_chat(self, request: AIRequest) -> AIResponse:
         """Multi-modal chat with local model."""
         if request.images:
             return await self.analyze_image(request)
-        else:
-            return await self.generate_text(request)
+        return await self.generate_text(request)
 
 
 class ModernAIIntegration:

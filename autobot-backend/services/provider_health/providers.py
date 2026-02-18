@@ -12,6 +12,7 @@ import time
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.ssot_config import get_ollama_url
 
 from .base import BaseProviderHealth, ProviderHealthResult, ProviderStatus
 
@@ -33,12 +34,7 @@ class OllamaHealth(BaseProviderHealth):
     def __init__(self):
         """Initialize Ollama health checker with host configuration."""
         super().__init__("ollama")
-        # Get Ollama configuration from environment
-        from config import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT
-
-        self.ollama_host = os.getenv(
-            "AUTOBOT_OLLAMA_HOST", f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"
-        )
+        self.ollama_host = get_ollama_url()
 
     async def check_health(self, timeout: float = 5.0) -> ProviderHealthResult:
         """Check Ollama service health"""

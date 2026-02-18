@@ -13,13 +13,13 @@ import time
 from datetime import datetime
 
 import aiohttp
-from backend.constants.model_constants import ModelConstants
-from backend.constants.network_constants import NetworkConstants
-from backend.type_defs.common import Metadata
-from config import HTTP_PROTOCOL, OLLAMA_HOST_IP, OLLAMA_PORT
 from config import config as global_config_manager
 
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.ssot_config import get_ollama_url
+from backend.constants.model_constants import ModelConstants
+from backend.constants.network_constants import NetworkConstants
+from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +60,7 @@ class ConnectionTester:
             # Quick Ollama availability check (no generation test)
             ollama_status = "disconnected"
             try:
-                ollama_endpoint = os.getenv(
-                    "AUTOBOT_OLLAMA_HOST",
-                    f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}",
-                )
+                ollama_endpoint = get_ollama_url()
                 ollama_check_url = f"{ollama_endpoint}/api/tags"
                 timeout = aiohttp.ClientTimeout(total=3)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -145,10 +142,7 @@ class ConnectionTester:
         if not endpoint:
             endpoint = global_config_manager.get_nested(
                 "backend.ollama_endpoint",
-                os.getenv(
-                    "AUTOBOT_OLLAMA_HOST",
-                    f"{HTTP_PROTOCOL}://{OLLAMA_HOST_IP}:{OLLAMA_PORT}/api/generate",
-                ),
+                f"{get_ollama_url()}/api/generate",
             )
         if not model:
             model = global_config_manager.get_nested(
@@ -159,9 +153,7 @@ class ConnectionTester:
             )
         # Final fallbacks
         if not endpoint:
-            from config import OLLAMA_URL
-
-            endpoint = f"{OLLAMA_URL}/api/generate"
+            endpoint = f"{get_ollama_url()}/api/generate"
         if not model:
             model = os.getenv(
                 "AUTOBOT_DEFAULT_LLM_MODEL", ModelConstants.DEFAULT_OLLAMA_MODEL
@@ -333,9 +325,7 @@ class ConnectionTester:
         provider_config: dict, current_model: str, provider: str
     ) -> Metadata:
         """Check Ollama embedding model availability (reduces nesting in _get_embedding_status)."""
-        from config import OLLAMA_URL
-
-        ollama_host = provider_config.get("host", OLLAMA_URL)
+        ollama_host = provider_config.get("host", get_ollama_url())
         tags_url = f"{ollama_host}/api/tags"
         timeout = aiohttp.ClientTimeout(total=5)
 
@@ -524,9 +514,7 @@ class ModelManager:
         """Get models from Ollama service"""
         try:
             ollama_config = global_config_manager.get_nested("llm_config.ollama", {})
-            from config import OLLAMA_URL
-
-            ollama_host = ollama_config.get("host", OLLAMA_URL)
+            ollama_host = ollama_config.get("host", get_ollama_url())
             ollama_url = f"{ollama_host}/api/tags"
 
             timeout = aiohttp.ClientTimeout(total=10)
