@@ -16,19 +16,16 @@
           <input
             v-model="analysisPath"
             type="text"
-            placeholder="Enter path to analyze..."
+            placeholder="Enter code snippet to analyze..."
             class="path-field"
           />
         </div>
-        <button @click="showFileScanModal = true" class="btn-secondary">
-          <i class="fas fa-file-code"></i> Scan File
-        </button>
         <button
           @click="runAnalysis"
-          :disabled="loading || !analysisPath"
+          :disabled="isLoading || !analysisPath"
           class="btn-primary"
         >
-          <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
+          <i :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
           Analyze
         </button>
       </div>
@@ -40,275 +37,171 @@
       {{ error }}
     </div>
 
-    <!-- Health Scores Grid -->
+    <!-- Health & Quality Scores Grid -->
     <div v-if="hasScores" class="scores-grid">
       <div class="score-card">
         <HealthScoreGauge
           v-if="healthScore"
           :score="healthScore.health_score"
-          :grade="healthScore.grade"
+          label="Code Health"
+          :status-message="`${healthScore.issues_count.critical + healthScore.issues_count.high + healthScore.issues_count.medium + healthScore.issues_count.low} issues · ${healthScore.coverage_percent}% coverage`"
+        />
+      </div>
+      <div class="score-card">
+        <HealthScoreGauge
+          v-if="qualityScore"
+          :score="qualityScore.overall_score"
+          :grade="qualityScore.grade"
           label="Code Quality"
-          :status-message="`${healthScore.total_issues} issues in ${healthScore.files_analyzed} files`"
+          :status-message="`Trend: ${qualityScore.trend}`"
         />
       </div>
-      <div class="score-card">
-        <HealthScoreGauge
-          v-if="securityScore"
-          :score="securityScore.security_score"
-          :grade="securityScore.grade"
-          label="Security"
-          :status-message="securityScore.status_message"
-        />
-      </div>
-      <div class="score-card">
-        <HealthScoreGauge
-          v-if="performanceScore"
-          :score="performanceScore.performance_score"
-          :grade="performanceScore.grade"
-          label="Performance"
-          :status-message="performanceScore.status_message"
-        />
-      </div>
-      <div class="score-card">
-        <HealthScoreGauge
-          v-if="redisScore"
-          :score="redisScore.health_score"
-          :grade="redisScore.grade"
-          label="Redis Usage"
-          :status-message="redisScore.status_message"
-        />
-      </div>
+      <!-- TODO: implement securityScore in backend (#920) -->
+      <!-- TODO: implement performanceScore in backend (#920) -->
+      <!-- TODO: implement redisScore in backend (#920) -->
     </div>
 
     <!-- Empty state for scores -->
-    <div v-else-if="!loading" class="empty-state">
+    <div v-else-if="!isLoading" class="empty-state">
       <i class="fas fa-code"></i>
       <h3>No Analysis Results</h3>
-      <p>Enter a path above and click Analyze to scan your codebase</p>
+      <p>Enter a code snippet above and click Analyze to inspect quality and health</p>
     </div>
 
-    <!-- Tabs -->
-    <div v-if="hasScores" class="tabs-section">
+    <!-- Suggestions Tab -->
+    <div v-if="suggestions.length > 0" class="tabs-section">
       <div class="tabs-header">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          @click="activeTab = tab.id"
-          :class="['tab-btn', { active: activeTab === tab.id }]"
-        >
-          <i :class="tab.icon"></i>
-          {{ tab.label }}
-          <span v-if="getTabCount(tab.id) > 0" class="tab-count">
-            {{ getTabCount(tab.id) }}
-          </span>
+        <button class="tab-btn active">
+          <i class="fas fa-lightbulb"></i>
+          Suggestions
+          <span class="tab-count">{{ suggestions.length }}</span>
         </button>
       </div>
 
       <div class="tabs-content">
-        <SecurityFindingsPanel
-          v-if="activeTab === 'security'"
-          :findings="securityFindings"
-          :loading="findingsLoading"
-        />
-        <PerformanceFindingsPanel
-          v-if="activeTab === 'performance'"
-          :findings="performanceFindings"
-          :loading="findingsLoading"
-        />
-        <RedisFindingsPanel
-          v-if="activeTab === 'redis'"
-          :findings="redisFindings"
-          :loading="findingsLoading"
-        />
+        <div class="suggestions-list">
+          <div
+            v-for="suggestion in suggestions"
+            :key="suggestion.id"
+            class="suggestion-item"
+            :class="`priority-${suggestion.priority}`"
+          >
+            <div class="suggestion-header">
+              <span class="suggestion-type">{{ suggestion.type }}</span>
+              <span class="suggestion-priority" :class="`badge-${suggestion.priority}`">
+                {{ suggestion.priority }}
+              </span>
+            </div>
+            <div class="suggestion-title">{{ suggestion.title }}</div>
+            <div class="suggestion-description">{{ suggestion.description }}</div>
+            <div v-if="suggestion.impact" class="suggestion-impact">
+              <i class="fas fa-bolt"></i> {{ suggestion.impact }}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Reports Section -->
-    <div v-if="hasScores" class="reports-section">
-      <h3><i class="fas fa-file-alt"></i> Download Reports</h3>
-      <div class="report-buttons">
-        <button @click="downloadReport('security', 'json')" class="btn-secondary">
-          <i class="fas fa-shield-alt"></i> Security Report (JSON)
-        </button>
-        <button @click="downloadReport('security', 'markdown')" class="btn-secondary">
-          <i class="fas fa-shield-alt"></i> Security Report (MD)
-        </button>
-        <button @click="downloadReport('performance', 'json')" class="btn-secondary">
-          <i class="fas fa-tachometer-alt"></i> Performance Report (JSON)
-        </button>
-        <button @click="downloadReport('performance', 'markdown')" class="btn-secondary">
-          <i class="fas fa-tachometer-alt"></i> Performance Report (MD)
-        </button>
+    <!-- Current Analysis Issues -->
+    <div v-if="currentAnalysis && currentAnalysis.issues.length > 0" class="issues-section">
+      <h3><i class="fas fa-exclamation-triangle"></i> Issues Found</h3>
+      <div class="issues-list">
+        <div
+          v-for="(issue, idx) in currentAnalysis.issues"
+          :key="idx"
+          class="issue-item"
+          :class="`severity-${issue.severity}`"
+        >
+          <span class="issue-severity" :class="issue.severity">{{ issue.severity }}</span>
+          <span class="issue-category">{{ issue.category }}</span>
+          <span class="issue-message">{{ issue.message }}</span>
+          <span v-if="issue.line_number" class="issue-line">Line {{ issue.line_number }}</span>
+        </div>
       </div>
     </div>
 
-    <!-- File Scan Modal -->
-    <FileScanModal
-      :show="showFileScanModal"
-      @close="showFileScanModal = false"
-      @scan="handleFileScan"
-    />
+    <!-- Analysis History -->
+    <div v-if="analysisHistory.length > 0" class="history-section">
+      <h3><i class="fas fa-history"></i> Analysis History</h3>
+      <div class="history-list">
+        <div
+          v-for="item in analysisHistory.slice(0, 10)"
+          :key="item.id"
+          class="history-item"
+          @click="loadHistoryItem(item.id)"
+        >
+          <div class="history-meta">
+            <span class="history-lang">{{ item.language }}</span>
+            <span class="history-score" :class="getQualityClass(item.quality_score)">
+              {{ item.quality_score }}/100
+            </span>
+          </div>
+          <div class="history-filename">{{ item.filename || 'Untitled' }}</div>
+          <div class="history-time">{{ formatTimestamp(item.timestamp) }}</div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useCodeIntelligence } from '@/composables/useCodeIntelligence'
 import HealthScoreGauge from './HealthScoreGauge.vue'
-import SecurityFindingsPanel from './code-intelligence/SecurityFindingsPanel.vue'
-import PerformanceFindingsPanel from './code-intelligence/PerformanceFindingsPanel.vue'
-import RedisFindingsPanel from './code-intelligence/RedisFindingsPanel.vue'
-import FileScanModal from './code-intelligence/FileScanModal.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CodeIntelligenceDashboard')
 
 const {
-  loading,
+  isLoading,
   error,
+  currentAnalysis,
+  analysisHistory,
+  qualityScore,
   healthScore,
-  securityScore,
-  performanceScore,
-  redisScore,
-  securityFindings,
-  performanceFindings,
-  redisFindings,
-  fetchAllScores,
-  fetchAllTypes,
-  fetchSecurityFindings,
-  fetchPerformanceFindings,
-  fetchRedisFindings,
-  scanFileSecurity,
-  scanFilePerformance,
-  scanFileRedis,
-  downloadReport: doDownloadReport
+  suggestions,
+  analyzeCode,
+  getAnalysis,
+  getQualityScore,
+  getHealthScore,
+  getSuggestions,
+  getAnalysisHistory,
 } = useCodeIntelligence()
 
-const analysisPath = ref('/home/kali/Desktop/AutoBot')
-const activeTab = ref<'security' | 'performance' | 'redis'>('security')
-const showFileScanModal = ref(false)
-const findingsLoading = ref(false)
-const findingsFetched = ref({ security: false, performance: false, redis: false })
+const analysisPath = ref('')
 
-const tabs = [
-  { id: 'security' as const, label: 'Security', icon: 'fas fa-shield-alt' },
-  { id: 'performance' as const, label: 'Performance', icon: 'fas fa-tachometer-alt' },
-  { id: 'redis' as const, label: 'Redis', icon: 'fas fa-database' }
-]
-
-const hasScores = computed(() =>
-  healthScore.value || securityScore.value || performanceScore.value || redisScore.value
-)
-
-function getTabCount(tabId: string): number {
-  switch (tabId) {
-    case 'security': return securityFindings.value.length
-    case 'performance': return performanceFindings.value.length
-    case 'redis': return redisFindings.value.length
-    default: return 0
-  }
-}
+const hasScores = computed(() => healthScore.value !== null || qualityScore.value !== null)
 
 async function runAnalysis() {
   if (!analysisPath.value) return
-  logger.info('Running analysis on:', analysisPath.value)
-
-  // Reset findings cache
-  findingsFetched.value = { security: false, performance: false, redis: false }
-
-  // Fetch scores
-  await fetchAllScores(analysisPath.value)
-
-  // Fetch findings for active tab
-  await loadFindingsForTab(activeTab.value)
+  logger.info('Running code analysis')
+  await analyzeCode({ code: analysisPath.value })
+  await Promise.all([
+    getQualityScore(analysisPath.value),
+    getSuggestions(analysisPath.value),
+  ])
 }
 
-async function loadFindingsForTab(tab: 'security' | 'performance' | 'redis') {
-  if (findingsFetched.value[tab]) return
+async function loadHistoryItem(id: string) {
+  await getAnalysis(id)
+}
 
-  findingsLoading.value = true
+function getQualityClass(score: number): string {
+  if (score >= 80) return 'score-good'
+  if (score >= 60) return 'score-medium'
+  return 'score-poor'
+}
+
+function formatTimestamp(timestamp: string): string {
   try {
-    switch (tab) {
-      case 'security':
-        await fetchSecurityFindings(analysisPath.value)
-        break
-      case 'performance':
-        await fetchPerformanceFindings(analysisPath.value)
-        break
-      case 'redis':
-        await fetchRedisFindings(analysisPath.value)
-        break
-    }
-    findingsFetched.value[tab] = true
-  } finally {
-    findingsLoading.value = false
+    return new Date(timestamp).toLocaleString()
+  } catch {
+    return timestamp
   }
-}
-
-// Load findings when tab changes
-watch(activeTab, (newTab) => {
-  if (hasScores.value) {
-    loadFindingsForTab(newTab)
-  }
-})
-
-async function handleFileScan(
-  filePath: string,
-  types: { security: boolean; performance: boolean; redis: boolean }
-) {
-  showFileScanModal.value = false
-  findingsLoading.value = true
-
-  try {
-    const results: string[] = []
-
-    if (types.security) {
-      const findings = await scanFileSecurity(filePath)
-      if (findings.length > 0) {
-        findingsFetched.value.security = true
-        results.push(`${findings.length} security`)
-      }
-    }
-
-    if (types.performance) {
-      const findings = await scanFilePerformance(filePath)
-      if (findings.length > 0) {
-        findingsFetched.value.performance = true
-        results.push(`${findings.length} performance`)
-      }
-    }
-
-    if (types.redis) {
-      const findings = await scanFileRedis(filePath)
-      if (findings.length > 0) {
-        findingsFetched.value.redis = true
-        results.push(`${findings.length} Redis`)
-      }
-    }
-
-    if (results.length > 0) {
-      logger.info(`File scan found: ${results.join(', ')} issues`)
-      // Switch to first tab with results
-      if (types.security && securityFindings.value.length > 0) {
-        activeTab.value = 'security'
-      } else if (types.performance && performanceFindings.value.length > 0) {
-        activeTab.value = 'performance'
-      } else if (types.redis && redisFindings.value.length > 0) {
-        activeTab.value = 'redis'
-      }
-    }
-  } finally {
-    findingsLoading.value = false
-  }
-}
-
-async function downloadReport(type: 'security' | 'performance', format: 'json' | 'markdown') {
-  if (!analysisPath.value) return
-  await doDownloadReport(analysisPath.value, type, format)
 }
 
 onMounted(async () => {
-  await fetchAllTypes()
+  await Promise.all([getHealthScore(), getAnalysisHistory()])
 })
 </script>
 
@@ -379,23 +272,6 @@ onMounted(async () => {
 .btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.btn-secondary {
-  padding: var(--spacing-2) var(--spacing-3);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: 0.875rem;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-}
-
-.btn-secondary:hover {
-  background: var(--bg-tertiary);
 }
 
 .error-banner {
@@ -481,35 +357,196 @@ onMounted(async () => {
   font-size: 0.75rem;
 }
 
-.tab-btn.active .tab-count {
-  background: rgba(99, 102, 241, 0.2);
-  color: var(--color-info-dark);
-}
-
 .tabs-content {
   min-height: 200px;
 }
 
-.reports-section {
+.suggestions-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.suggestion-item {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3);
+}
+
+.suggestion-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-1);
+}
+
+.suggestion-type {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.badge-high {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+}
+
+.badge-medium {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+}
+
+.badge-low {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+}
+
+.suggestion-title {
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-1);
+}
+
+.suggestion-description {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.suggestion-impact {
+  margin-top: var(--spacing-1);
+  font-size: 0.8rem;
+  color: var(--color-info-dark);
+}
+
+.issues-section {
+  margin-bottom: var(--spacing-6);
+}
+
+.issues-section h3 {
+  font-size: 1rem;
+  margin-bottom: var(--spacing-3);
+  color: var(--text-primary);
+}
+
+.issues-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.issue-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  font-size: 0.875rem;
+}
+
+.issue-severity {
+  font-size: 0.75rem;
+  font-weight: var(--font-semibold);
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+
+.issue-severity.critical { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+.issue-severity.high { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.issue-severity.medium { background: rgba(99, 102, 241, 0.15); color: var(--color-info-dark); }
+.issue-severity.low { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+
+.issue-category {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.issue-message {
+  flex: 1;
+  color: var(--text-primary);
+}
+
+.issue-line {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.history-section {
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
   padding: var(--spacing-4);
 }
 
-.reports-section h3 {
+.history-section h3 {
   margin: 0 0 var(--spacing-4) 0;
   font-size: 1rem;
   color: var(--text-primary);
 }
 
-.reports-section h3 i {
-  margin-right: var(--spacing-2);
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
 }
 
-.report-buttons {
+.history-item {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.history-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.history-meta {
+  display: flex;
+  align-items: center;
   gap: var(--spacing-2);
+}
+
+.history-lang {
+  font-size: 0.75rem;
+  background: var(--bg-tertiary);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+}
+
+.history-score {
+  font-weight: var(--font-semibold);
+  font-size: 0.875rem;
+}
+
+.score-good { color: #10b981; }
+.score-medium { color: #f59e0b; }
+.score-poor { color: #ef4444; }
+
+.history-filename {
+  flex: 1;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.history-time {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
 }
 </style>
