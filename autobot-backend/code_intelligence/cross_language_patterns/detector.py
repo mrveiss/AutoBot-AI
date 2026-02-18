@@ -830,7 +830,7 @@ class CrossLanguagePatternDetector:
                 PatternType.DTO_DEFINITION,
                 PatternType.API_ENDPOINT,
                 PatternType.VALIDATION_RULE,
-                PatternType.TYPE_ALIAS,
+                PatternType.TYPE_DEFINITION,
             ):
                 high_priority.append(p)
             else:

@@ -141,6 +141,14 @@
     owner: "{{ backend_user }}"
     group: "{{ backend_group }}"
 
+- name: Create autobot_shared symlink (underscore) so Python can import it
+  ansible.builtin.file:
+    src: "{{ backend_install_dir }}/autobot-shared"
+    dest: "{{ backend_install_dir }}/autobot_shared"
+    state: link
+    owner: "{{ backend_user }}"
+    group: "{{ backend_group }}"
+
 # Issue #912: Deploy error catalog so it is always available on the VM.
 # path_constants.py resolves PROJECT_ROOT as 3 levels up from constants/,
 # putting CONFIG_DIR at /opt/autobot/infrastructure/shared/config/ which is

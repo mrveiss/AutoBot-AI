@@ -11,7 +11,7 @@ User={{ backend_user }}
 Group={{ backend_group }}
 WorkingDirectory={{ backend_code_dir | default(backend_install_dir) }}
 Environment="PATH=/home/{{ backend_user }}/miniconda3/envs/autobot-backend/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="PYTHONPATH={{ backend_code_dir | default(backend_install_dir) }}:{{ backend_install_dir }}/autobot-shared"
+Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir | default(backend_install_dir) }}:{{ backend_install_dir }}/autobot-shared"
 EnvironmentFile=/opt/autobot/.env
 EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys') }}/{{ service_auth_service_id | default('main-backend') }}.env
 # Issue #891: Removed ExecStartPre symlink creation - causes infinite import loops with fixed backend imports
