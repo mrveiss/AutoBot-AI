@@ -279,6 +279,10 @@ const restartAllNodeId = ref<string | null>(null)
 const restartAllHostname = ref<string | null>(null)
 const showRestartAllConfirm = ref(false)
 
+// Issue #991: Fleet bulk-action confirmation dialog state
+const showBulkConfirm = ref(false)
+const pendingBulkAction = ref<'start' | 'stop' | 'restart' | null>(null)
+
 async function handleRestartAllServices(nodeId: string, hostname: string): Promise<void> {
   restartAllNodeId.value = nodeId
   restartAllHostname.value = hostname
@@ -347,9 +351,17 @@ async function handleFleetAction(
   }
 }
 
-async function handleBulkAction(action: 'start' | 'stop' | 'restart'): Promise<void> {
-  const confirmMsg = `Are you sure you want to ${action} ALL services across the entire fleet?`
-  if (!confirm(confirmMsg)) return
+// Issue #991: Show styled confirmation dialog instead of window.confirm()
+function handleBulkAction(action: 'start' | 'stop' | 'restart'): void {
+  pendingBulkAction.value = action
+  showBulkConfirm.value = true
+}
+
+async function confirmBulkAction(): Promise<void> {
+  const action = pendingBulkAction.value
+  showBulkConfirm.value = false
+  pendingBulkAction.value = null
+  if (!action) return
 
   try {
     let result
@@ -1369,7 +1381,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Restart All Confirmation Dialog -->
+    <!-- Restart All Confirmation Dialog (per-node) -->
     <RestartConfirmDialog
       :show="showRestartAllConfirm"
       title="Restart All Services"
@@ -1377,6 +1389,16 @@ onUnmounted(() => {
       confirmButtonText="Restart All Services"
       @confirm="confirmRestartAll"
       @cancel="showRestartAllConfirm = false"
+    />
+
+    <!-- Issue #991: Fleet Bulk Action Confirmation Dialog -->
+    <RestartConfirmDialog
+      :show="showBulkConfirm"
+      :title="`${pendingBulkAction ? pendingBulkAction.charAt(0).toUpperCase() + pendingBulkAction.slice(1) : ''} All Fleet Services`"
+      :message="`Are you sure you want to <strong>${pendingBulkAction}</strong> ALL services across the entire fleet?<br><br>This will affect all ${orchestration.fleetStore.nodeList.length} nodes simultaneously.`"
+      :confirmButtonText="`${pendingBulkAction ? pendingBulkAction.charAt(0).toUpperCase() + pendingBulkAction.slice(1) : ''} All Services`"
+      @confirm="confirmBulkAction"
+      @cancel="showBulkConfirm = false"
     />
   </div>
 </template>

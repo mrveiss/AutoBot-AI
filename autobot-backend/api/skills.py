@@ -11,10 +11,11 @@ configure, execute, and monitor skills.
 import logging
 from typing import Any, Dict, Optional
 
-from backend.skills.manager import SkillManager
-from backend.skills.registry import get_skill_registry
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+
+from backend.skills.manager import SkillManager
+from backend.skills.registry import get_skill_registry
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -124,21 +125,25 @@ async def get_skill(name: str) -> Dict[str, Any]:
 
 @router.post("/{name}/enable", summary="Enable a skill")
 async def enable_skill(name: str) -> Dict[str, Any]:
-    """Enable a skill, checking dependencies."""
+    """Enable a skill, checking dependencies. Persists state to Redis (Issue #993)."""
     registry = get_skill_registry()
     result = registry.enable_skill(name)
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["error"])
+    manager = _get_manager()
+    await manager.persist_skill_enabled(name, True)
     return result
 
 
 @router.post("/{name}/disable", summary="Disable a skill")
 async def disable_skill(name: str) -> Dict[str, Any]:
-    """Disable a skill."""
+    """Disable a skill. Persists state to Redis (Issue #993)."""
     registry = get_skill_registry()
     result = registry.disable_skill(name)
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["error"])
+    manager = _get_manager()
+    await manager.persist_skill_enabled(name, False)
     return result
 
 

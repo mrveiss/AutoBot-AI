@@ -21,7 +21,8 @@ const api = useAutobotApi()
 // State
 const loading = ref(false)
 const error = ref<string | null>(null)
-const url = ref('https://www.google.com')
+// Default to an internal URL that passes the backend URL whitelist (#985)
+const url = ref('http://172.16.168.19/')
 const screenshot = ref<string | null>(null)
 const browserStatus = ref<'disconnected' | 'connecting' | 'connected'>('disconnected')
 
@@ -47,8 +48,11 @@ async function startBrowser(): Promise<void> {
     isConnected.value = true
     browserStatus.value = 'connected'
     await takeScreenshot()
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to start browser'
+  } catch (e: unknown) {
+    // Surface the backend detail (e.g. "URL not in whitelist") when available (#985)
+    const axiosErr = e as { response?: { data?: { detail?: string } }; message?: string }
+    const detail = axiosErr?.response?.data?.detail
+    error.value = detail ?? (e instanceof Error ? e.message : 'Failed to start browser')
     browserStatus.value = 'disconnected'
   } finally {
     loading.value = false
@@ -70,8 +74,10 @@ async function navigate(): Promise<void> {
   try {
     await api.browserNavigate(url.value)
     await takeScreenshot()
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Navigation failed'
+  } catch (e: unknown) {
+    const axiosErr = e as { response?: { data?: { detail?: string } }; message?: string }
+    const detail = axiosErr?.response?.data?.detail
+    error.value = detail ?? (e instanceof Error ? e.message : 'Navigation failed')
   } finally {
     loading.value = false
   }
