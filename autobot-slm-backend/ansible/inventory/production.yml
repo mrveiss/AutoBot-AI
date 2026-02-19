@@ -104,8 +104,11 @@ all:
             - desktop-access
       vars:
         # WSL machine configuration (local)
-        backend_port: 8443
-        backend_protocol: "https"
+        # Issue #957: nginx holds 8443 (TLS); uvicorn binds plain HTTP on localhost:8001
+        backend_host: "127.0.0.1"    # uvicorn bind address (localhost only)
+        backend_port: 8001           # uvicorn plain HTTP port (internal)
+        backend_nginx_port: 8443     # nginx external TLS port (LAN-facing)
+        backend_protocol: "http"     # uvicorn no longer terminates TLS
         terminal_port: 7681
         novnc_port: 6080
         vnc_port: 5900
