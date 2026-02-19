@@ -64,6 +64,21 @@ class SkillRegistry:
             self._skill_classes[name] = skill_class
             logger.info("Registered skill: %s v%s", name, manifest.version)
 
+    def reload(self) -> int:
+        """Re-discover builtin skills, registering any newly added modules.
+
+        Called after a skill is promoted to disk so the new skill becomes
+        available without a full backend restart (Issue #951).
+
+        Returns the count of newly registered skills.
+        """
+        existing = set(self._skills.keys())
+        discovered = self.discover_builtin_skills()
+        new_names = set(self._skills.keys()) - existing
+        if new_names:
+            logger.info("Hot-reloaded %d new skill(s): %s", len(new_names), new_names)
+        return discovered
+
     def unregister(self, name: str) -> bool:
         """Remove a skill from the registry.
 

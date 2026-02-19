@@ -9,7 +9,7 @@
  * via the AutoBot user backend API.
  */
 
-import { ref, computed, readonly } from 'vue'
+import { ref, computed, readonly, onUnmounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 
@@ -297,6 +297,8 @@ export function useSkillGovernance() {
   const governanceConfig = ref<GovernanceConfig | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const newDraftNotification = ref<string | null>(null)
+  let _pollTimer: ReturnType<typeof setInterval> | null = null
 
   const api = axios.create({ timeout: 15000 })
   api.interceptors.request.use((config) => {
@@ -418,6 +420,34 @@ export function useSkillGovernance() {
     }
   }
 
+  /** Issue #951: Poll for new autonomous-generated approvals every 30s. */
+  function startApprovalPolling(): void {
+    if (_pollTimer !== null) return
+    _pollTimer = setInterval(async () => {
+      const prev = approvals.value.length
+      await fetchApprovals()
+      const curr = approvals.value.length
+      if (curr > prev) {
+        const newest = approvals.value[approvals.value.length - 1]
+        newDraftNotification.value =
+          `AutoBot generated a new skill: "${newest?.skill_id ?? 'unknown'}" — pending approval`
+      }
+    }, 30_000)
+  }
+
+  function stopApprovalPolling(): void {
+    if (_pollTimer !== null) {
+      clearInterval(_pollTimer)
+      _pollTimer = null
+    }
+  }
+
+  function dismissDraftNotification(): void {
+    newDraftNotification.value = null
+  }
+
+  onUnmounted(stopApprovalPolling)
+
   return {
     repos: readonly(repos),
     approvals: readonly(approvals),
@@ -425,6 +455,7 @@ export function useSkillGovernance() {
     governanceConfig: readonly(governanceConfig),
     loading: readonly(loading),
     error: readonly(error),
+    newDraftNotification: readonly(newDraftNotification),
     fetchRepos,
     addRepo,
     syncRepo,
@@ -435,5 +466,8 @@ export function useSkillGovernance() {
     promoteDraft,
     fetchGovernance,
     setGovernanceMode,
+    startApprovalPolling,
+    stopApprovalPolling,
+    dismissDraftNotification,
   }
 }

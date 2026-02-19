@@ -39,6 +39,7 @@ const {
   approvals,
   drafts,
   governanceConfig,
+  newDraftNotification,
   fetchRepos,
   syncRepo,
   addRepo,
@@ -49,6 +50,8 @@ const {
   promoteDraft,
   fetchGovernance,
   setGovernanceMode,
+  startApprovalPolling,
+  dismissDraftNotification,
 } = useSkillGovernance()
 
 const activeTab = ref<'active' | 'approvals' | 'repos' | 'drafts'>('active')
@@ -126,6 +129,7 @@ onMounted(async () => {
     fetchRepos(),
     fetchDrafts(),
   ])
+  startApprovalPolling()
 })
 
 watch(searchQuery, (val) => {
@@ -191,6 +195,26 @@ function categoryIcon(category: string): string {
                  disabled:opacity-50 transition-colors"
         >
           {{ loading ? 'Loading...' : 'Refresh' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Issue #951: autonomous skill development notification -->
+    <div
+      v-if="newDraftNotification"
+      class="flex items-center justify-between bg-amber-500/15 border border-amber-500/30
+             rounded-lg px-4 py-3 mb-4 text-amber-300 text-sm"
+    >
+      <span>{{ newDraftNotification }}</span>
+      <div class="flex items-center gap-3">
+        <button
+          class="underline hover:no-underline text-amber-200"
+          @click="activeTab = 'approvals'"
+        >
+          Review
+        </button>
+        <button class="opacity-60 hover:opacity-100" @click="dismissDraftNotification">
+          ✕
         </button>
       </div>
     </div>

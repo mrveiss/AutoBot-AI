@@ -47,6 +47,7 @@ class GovernanceEngine:
         skill_name: str,
         requested_by: str,
         reason: str,
+        skill_id: Optional[str] = None,
     ) -> ActivationResult:
         """Process a skill activation request under the current governance mode."""
         if self.mode == GovernanceMode.LOCKED:
@@ -58,7 +59,9 @@ class GovernanceEngine:
                 reason="full_auto mode",
                 trust_level=self.default_trust,
             )
-        return await self._create_pending_approval(skill_name, requested_by, reason)
+        return await self._create_pending_approval(
+            skill_name, requested_by, reason, skill_id=skill_id
+        )
 
     async def approve(
         self,
@@ -78,10 +81,21 @@ class GovernanceEngine:
         )
 
     async def _create_pending_approval(
-        self, skill_name: str, requested_by: str, reason: str
+        self,
+        skill_name: str,
+        requested_by: str,
+        reason: str,
+        skill_id: Optional[str] = None,
     ) -> ActivationResult:
-        """Create approval record and notify admin (SEMI_AUTO mode)."""
+        """Create approval record in DB and notify admin (SEMI_AUTO mode).
+
+        Persists a SkillApproval row so the SLM Approvals tab shows pending
+        requests even after a page reload.  Redis pub/sub is still published
+        for real-time notification.
+        """
         approval_id = str(uuid.uuid4())
+        resolved_skill_id = skill_id or skill_name
+        await _persist_approval(approval_id, resolved_skill_id, requested_by, reason)
         await self._notify_admin(skill_name, approval_id, requested_by, reason)
         return ActivationResult(
             approved=False,
@@ -112,6 +126,34 @@ class GovernanceEngine:
             )
         except Exception as exc:
             logger.warning("Failed to notify admin of skill approval: %s", exc)
+
+
+async def _persist_approval(
+    approval_id: str, skill_id: str, requested_by: str, reason: str
+) -> None:
+    """Write a SkillApproval row to the skills DB (non-fatal on failure).
+
+    Helper for GovernanceEngine._create_pending_approval (Issue #951).
+    """
+    try:
+        from skills.db import get_skills_engine
+        from skills.models import SkillApproval
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        engine = get_skills_engine()
+        async with AsyncSession(engine) as session:
+            session.add(
+                SkillApproval(
+                    id=approval_id,
+                    skill_id=skill_id,
+                    requested_by=requested_by,
+                    reason=reason,
+                )
+            )
+            await session.commit()
+        logger.debug("SkillApproval %s persisted to DB", approval_id)
+    except Exception as exc:
+        logger.warning("Failed to persist SkillApproval to DB: %s", exc)
 
 
 def _locked_result() -> ActivationResult:
