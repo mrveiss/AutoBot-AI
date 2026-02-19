@@ -9,6 +9,7 @@ Writes to both Prometheus and legacy systems during transition.
 """
 
 import logging
+import threading
 from typing import Optional
 
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -216,8 +217,6 @@ class MetricsAdapter:
 
 
 # Global adapter instance (thread-safe)
-import threading
-
 _adapter_instance: Optional[MetricsAdapter] = None
 _adapter_instance_lock = threading.Lock()
 

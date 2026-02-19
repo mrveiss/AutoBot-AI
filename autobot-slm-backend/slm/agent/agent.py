@@ -26,6 +26,11 @@ from typing import Optional
 import aiohttp
 from aiohttp import web
 
+from .health_collector import HealthCollector
+from .port_scanner import get_listening_ports
+from .role_detector import RoleDetector
+from .version import get_agent_version
+
 
 def sd_notify(state: str) -> bool:
     """
@@ -59,11 +64,6 @@ def sd_notify(state: str) -> bool:
     except Exception:
         return False
 
-
-from .health_collector import HealthCollector
-from .port_scanner import get_listening_ports
-from .role_detector import RoleDetector
-from .version import get_agent_version
 
 logger = logging.getLogger(__name__)
 
