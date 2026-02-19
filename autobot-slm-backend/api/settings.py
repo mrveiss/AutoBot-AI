@@ -7,7 +7,7 @@ SLM Settings API Routes
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from models.database import Node, Setting
@@ -139,18 +139,20 @@ async def sync_time(
         node_result = await db.execute(select(Node))
         node_count = len(node_result.scalars().all())
 
-    extra_vars: Dict[str, Any] = {
+    # Pass NTP servers as comma-separated string to avoid JSON shell-escaping issues.
+    # The playbook splits on ',' to reconstruct the list.
+    extra_vars = {
         "time_sync_timezone": timezone,
-        "time_sync_ntp_servers": json.dumps(ntp_servers),
+        "time_sync_ntp_servers_csv": ",".join(ntp_servers),
     }
 
     try:
         executor = get_playbook_executor()
         play_result = await executor.execute_playbook(
-            playbook_name="sync-time.yml",
+            playbook_name="playbooks/sync-time.yml",
             limit=limit,
             tags=["time_sync"],
-            extra_vars={k: str(v) for k, v in extra_vars.items()},
+            extra_vars=extra_vars,
         )
         logger.info(
             "Time sync complete: tz=%s nodes=%d success=%s",

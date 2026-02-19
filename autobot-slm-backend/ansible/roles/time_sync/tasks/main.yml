@@ -34,10 +34,18 @@
   apt:
     name:
       - systemd-timesyncd
-      - ntpdate
       - cron
     state: present
     update_cache: yes
+    lock_timeout: 120
+  tags: ['time_sync', 'packages']
+
+- name: "Time Sync | Install ntpdate (optional, may be absent on Kali)"
+  apt:
+    name: ntpdate
+    state: present
+    lock_timeout: 120
+  ignore_errors: true
   tags: ['time_sync', 'packages']
 
 - name: "Time Sync | Check if chrony is requested"

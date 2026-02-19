@@ -13,14 +13,17 @@
 - name: "Sync Time Config Across Fleet Nodes"
   hosts: slm_nodes
   become: true
-  gather_facts: false
+  gather_facts: true
 
   vars:
+    # NTP servers passed as comma-separated string to avoid shell JSON-escaping issues.
+    _ntp_servers: "{{ (time_sync_ntp_servers_csv | default('0.pool.ntp.org,1.pool.ntp.org,2.pool.ntp.org,3.pool.ntp.org')).split(',') }}"
+
     time_sync:
       timezone: "{{ time_sync_timezone | default('UTC') }}"
       ntp:
         enabled: true
-        servers: "{{ time_sync_ntp_servers | from_json | default(['0.pool.ntp.org', '1.pool.ntp.org', '2.pool.ntp.org', '3.pool.ntp.org']) }}"
+        servers: "{{ _ntp_servers }}"
         use_chrony: false
         service: "systemd-timesyncd"
         config_file: "/etc/systemd/timesyncd.conf"
@@ -46,7 +49,7 @@
       debug:
         msg:
           - "Timezone: {{ time_sync.timezone }}"
-          - "NTP servers: {{ time_sync.ntp.servers | join(', ') }}"
+          - "NTP servers: {{ _ntp_servers | join(', ') }}"
       tags: ['time_sync']
 
   roles:
