@@ -5,6 +5,11 @@
  * Issue #476: Added Prometheus metrics export via /api/rum/metrics endpoint.
  */
 
+import { createLogger } from '@/utils/debugUtils'
+
+// Issue #981: Use scoped logger — console.* was causing [object Object] in log output
+const logger = createLogger('RumAgent')
+
 // Issue #476: Prometheus metrics payload interfaces
 interface PrometheusPageMetrics {
   page: string
@@ -252,12 +257,12 @@ class RumAgent {
 
     // Log performance issues immediately
     if (isTimeout) {
-      console.error('🚨 API TIMEOUT:', apiCall)
+      logger.error('🚨 API TIMEOUT', apiCall)
       this.reportCriticalIssue('api_timeout', apiCall)
     } else if (isVerySlow) {
-      console.warn('🐌 VERY SLOW API:', apiCall)
+      logger.warn('🐌 VERY SLOW API', apiCall)
     } else if (isSlow) {
-      console.warn('⚠️ SLOW API:', apiCall)
+      logger.warn('⚠️ SLOW API', apiCall)
     } else {
     }
 
@@ -302,7 +307,7 @@ class RumAgent {
     }
 
     if (event === 'error' || event === 'close') {
-      console.warn('🔌 WebSocket Issue:', wsEvent)
+      logger.warn('🔌 WebSocket Issue', wsEvent)
     } else {
     }
   }
@@ -370,7 +375,7 @@ class RumAgent {
 
     // Reduce noise from expected network errors during backend connection attempts
     if (type !== 'network_error' && type !== 'http_error') {
-      console.error('💥 Error Tracked:', error)
+      logger.error('💥 Error Tracked', error)
     }
 
     this.reportCriticalIssue('error', error)
@@ -523,8 +528,10 @@ class RumAgent {
     }
 
     // Reduce excessive logging for known network issues
+    // Issue #981: Format message as string to prevent [object Object] in log output
     if (issue.type !== 'network_error' && issue.type !== 'http_error') {
-      console.error('🚨🚨🚨 CRITICAL ISSUE:', issue)
+      const dataMsg = issue.data?.message || JSON.stringify(issue.data)
+      logger.error(`🚨🚨🚨 CRITICAL ISSUE: ${issue.type} — ${dataMsg}`)
     }
   }
 
