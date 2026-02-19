@@ -5,6 +5,7 @@
 A2A Protocol Type Definitions
 
 Issue #961: Core data models aligned with the A2A spec v0.3.
+Issue #968: Added TraceContext on Task for distributed tracing + audit.
 Ref: https://a2a-protocol.org/latest/
 """
 
@@ -140,6 +141,7 @@ class Task:
     A2A Task (spec §4).
 
     Represents a unit of work submitted to this agent.
+    trace_context carries the distributed trace for audit and observability.
     """
 
     id: str
@@ -149,9 +151,11 @@ class Task:
     artifacts: List[TaskArtifact] = field(default_factory=list)
     created_at: str = field(default_factory=_utcnow)
     updated_at: str = field(default_factory=_utcnow)
+    # Issue #968: distributed tracing — set on task creation
+    trace_context: Optional["TraceContext"] = field(default=None, repr=False)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d: Dict[str, Any] = {
             "id": self.id,
             "status": self.status.to_dict(),
             "input": self.input,
@@ -159,3 +163,13 @@ class Task:
             "createdAt": self.created_at,
             "updatedAt": self.updated_at,
         }
+        if self.trace_context:
+            d["trace"] = {
+                "traceId": self.trace_context.trace_id,
+                "callerId": self.trace_context.caller_id,
+            }
+        return d
+
+
+# Re-export TraceContext so callers can import from a2a.types
+from .tracing import TraceContext as TraceContext  # noqa: E402,F401

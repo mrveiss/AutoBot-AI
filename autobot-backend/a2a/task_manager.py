@@ -5,6 +5,7 @@
 A2A Task Manager
 
 Issue #961: In-memory task lifecycle manager for A2A tasks.
+Issue #968: Adds TraceContext per task for distributed tracing + audit log.
 Manages task state transitions per the A2A spec §4.2.
 
 State machine:
@@ -18,8 +19,9 @@ State machine:
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
+from .tracing import TraceContext, new_trace_id
 from .types import Task, TaskArtifact, TaskState, TaskStatus
 
 logger = logging.getLogger(__name__)
@@ -42,17 +44,36 @@ class TaskManager:
         self,
         input_text: str,
         context: Optional[Dict] = None,
+        caller_id: str = "anonymous",
+        trace_id: Optional[str] = None,
     ) -> Task:
-        """Create and register a new task in SUBMITTED state."""
+        """
+        Create and register a new task in SUBMITTED state.
+
+        Issue #968: Assigns a TraceContext to every task for distributed
+        tracing and audit.  caller_id identifies the submitting agent/user.
+        """
         task_id = str(uuid.uuid4())
+        tc = TraceContext(
+            trace_id=trace_id or new_trace_id(),
+            caller_id=caller_id,
+        )
+        tc.record("task.submitted", {"task_id": task_id})
+
         task = Task(
             id=task_id,
             status=TaskStatus(state=TaskState.SUBMITTED),
             input=input_text,
             context=context,
+            trace_context=tc,
         )
         self._tasks[task_id] = task
-        logger.info("A2A task created: %s", task_id)
+        logger.info(
+            "A2A task created: %s trace=%s caller=%s",
+            task_id,
+            tc.trace_id[:8],
+            caller_id,
+        )
         return task
 
     def get_task(self, task_id: str) -> Optional[Task]:
@@ -89,6 +110,11 @@ class TaskManager:
 
         task.status = TaskStatus(state=state, message=message)
         task.updated_at = _utcnow()
+        if task.trace_context:
+            task.trace_context.record(
+                "task.state_transition",
+                {"state": state.value, "message": message},
+            )
         logger.debug("A2A task %s → %s", task_id, state.value)
         return task
 
@@ -115,8 +141,17 @@ class TaskManager:
             return False
         task.status = TaskStatus(state=TaskState.CANCELLED)
         task.updated_at = _utcnow()
+        if task.trace_context:
+            task.trace_context.record("task.cancelled")
         logger.info("A2A task cancelled: %s", task_id)
         return True
+
+    def get_audit_log(self, task_id: str) -> Optional[List[Dict[str, Any]]]:
+        """Return the full trace event log for a task, or None if not found."""
+        task = self._tasks.get(task_id)
+        if not task or not task.trace_context:
+            return None
+        return [e.to_dict() for e in task.trace_context.events]
 
     def stats(self) -> Dict[str, int]:
         """Return task counts per state."""
