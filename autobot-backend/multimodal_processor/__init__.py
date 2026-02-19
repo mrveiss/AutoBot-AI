@@ -31,6 +31,9 @@ Usage:
     result = await processor.process(input_data)
 """
 
+import threading
+from typing import Any, Optional
+
 # Base class
 from .base import BaseModalProcessor
 
@@ -69,8 +72,38 @@ from .types import (
 # Backward compatibility: module-level constant alias (Issue #380)
 _EMBEDDING_FIELDS = EMBEDDING_FIELDS
 
-# Singleton instance for global access
-unified_processor = UnifiedMultiModalProcessor()
+
+class _LazyUnifiedProcessor:
+    """Lazy proxy for UnifiedMultiModalProcessor.
+
+    Defers model loading (CLIP, BLIP-2, Whisper, Wav2Vec2) until first use
+    to prevent 5-6 minute startup delays. Issue #940.
+
+    Thread-safe via double-checked locking.
+    """
+
+    _instance: Optional["UnifiedMultiModalProcessor"] = None  # noqa: F821
+    _lock = threading.Lock()
+
+    def _get_instance(self) -> "UnifiedMultiModalProcessor":  # noqa: F821
+        """Return the real processor, creating it on first call."""
+        if self._instance is None:
+            with self._lock:
+                if self._instance is None:
+                    self.__class__._instance = UnifiedMultiModalProcessor()
+        return self._instance  # type: ignore[return-value]
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate all attribute access to the underlying processor."""
+        return getattr(self._get_instance(), name)
+
+    def __bool__(self) -> bool:
+        """Always truthy — proxy exists even before models are loaded."""
+        return True
+
+
+# Singleton instance — lazy-loaded on first attribute access (Issue #940)
+unified_processor = _LazyUnifiedProcessor()
 
 __all__ = [
     # Types and enums

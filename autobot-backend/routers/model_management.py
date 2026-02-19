@@ -14,14 +14,14 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import torch
-from backend.models.ml_model import MLModel
-from backend.training.completion_trainer import CompletionTrainer
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.ssot_config import config
+from backend.models.ml_model import MLModel
+from backend.training.completion_trainer import CompletionTrainer
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +32,21 @@ DATABASE_URL = (
     f"postgresql://{config.database.user}:{config.database.password}"
     f"@{config.database.host}:{config.database.port}/{config.database.name}"
 )
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine)
+_engine = None
+_SessionLocal = None
+
+
+def _get_session():
+    """Return a new SQLAlchemy session, creating the engine on first call.
+
+    Deferred from module level to avoid DB connection at import time (Issue #940).
+    """
+    global _engine, _SessionLocal
+    if _engine is None:
+        _engine = create_engine(DATABASE_URL)
+        _SessionLocal = sessionmaker(bind=_engine)
+    return _SessionLocal()
+
 
 # Active model cache
 _active_model: Optional[CompletionTrainer] = None
@@ -144,7 +157,7 @@ async def train_model(request: TrainRequest, background_tasks: BackgroundTasks):
             final_metrics = history["metrics"][-1] if history["metrics"] else {}
 
             # Register in database
-            db = SessionLocal()
+            db = _get_session()
             try:
                 # Get model version from checkpoint
                 model_files = list(
@@ -207,7 +220,7 @@ async def list_models(
     - **language**: Filter by training language
     - **is_active**: Filter by active status
     """
-    db = SessionLocal()
+    db = _get_session()
     try:
         query = db.query(MLModel)
 
@@ -248,7 +261,7 @@ async def list_models(
 @router.get("/models/{version}", response_model=Dict)
 async def get_model(version: str):
     """Get detailed model metadata by version."""
-    db = SessionLocal()
+    db = _get_session()
     try:
         model = db.query(MLModel).filter(MLModel.version == version).first()
 
@@ -269,7 +282,7 @@ async def activate_model(version: str):
     """
     global _active_model, _active_version
 
-    db = SessionLocal()
+    db = _get_session()
     try:
         # Find model
         model = db.query(MLModel).filter(MLModel.version == version).first()
@@ -312,7 +325,7 @@ async def get_evaluation_metrics():
     if _active_model is None:
         raise HTTPException(status_code=400, detail="No active model")
 
-    db = SessionLocal()
+    db = _get_session()
     try:
         model = db.query(MLModel).filter(MLModel.version == _active_version).first()
 
