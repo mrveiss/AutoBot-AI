@@ -8,9 +8,11 @@ SLM Nodes API Routes
 import asyncio
 import hashlib
 import logging
+import os
 import time
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -1835,3 +1837,118 @@ async def get_node_service_order(
 
     entries.sort(key=lambda e: e.start_order)
     return NodeServiceOrderResponse(node_id=node_id, services=entries)
+
+
+# =============================================================================
+# Node SSH Exec endpoint (Issue #933)
+# =============================================================================
+
+_DEFAULT_SSH_KEY = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
+_DEFAULT_SSH_USER = os.environ.get("SLM_SSH_USER", "autobot")
+
+
+class NodeExecRequest(BaseModel):
+    """Request body for executing a command on a node."""
+
+    command: str
+    timeout: int = 30
+
+
+class NodeExecResponse(BaseModel):
+    """Result of a remote command execution."""
+
+    node_id: str
+    command: str
+    stdout: str
+    stderr: str
+    exit_code: int
+    success: bool
+
+
+def _build_node_ssh_cmd(ip_address: str, ssh_user: str, ssh_port: int) -> list:
+    """Build base SSH command args for a node.
+
+    Helper for exec_node_command (Issue #933).
+    """
+    cmd = [
+        "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=10",
+        "-p",
+        str(ssh_port),
+    ]
+    key_path = Path(_DEFAULT_SSH_KEY)
+    if key_path.exists():
+        cmd.extend(["-i", str(key_path)])
+    cmd.append(f"{ssh_user}@{ip_address}")
+    return cmd
+
+
+@router.post("/{node_id}/exec", response_model=NodeExecResponse)
+async def exec_node_command(
+    node_id: str,
+    body: NodeExecRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeExecResponse:
+    """Execute a command on a node via SSH.
+
+    Used by backend services to run read-only discovery commands on fleet nodes
+    (Issue #933). Requires authenticated user.
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+
+    ssh_user = node.ssh_user or _DEFAULT_SSH_USER
+    ssh_port = node.ssh_port or 22
+    cmd = _build_node_ssh_cmd(node.ip_address, ssh_user, ssh_port)
+    cmd.append(body.command)
+
+    try:
+        proc = await asyncio.wait_for(
+            asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            ),
+            timeout=body.timeout + 5,
+        )
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            proc.communicate(), timeout=body.timeout
+        )
+        exit_code = proc.returncode or 0
+    except asyncio.TimeoutError:
+        logger.warning("SSH exec timed out on node %s: %s", node_id, body.command)
+        return NodeExecResponse(
+            node_id=node_id,
+            command=body.command,
+            stdout="",
+            stderr="Command timed out",
+            exit_code=-1,
+            success=False,
+        )
+    except Exception as exc:
+        logger.error("SSH exec failed on node %s: %s", node_id, exc)
+        return NodeExecResponse(
+            node_id=node_id,
+            command=body.command,
+            stdout="",
+            stderr=str(exc),
+            exit_code=-1,
+            success=False,
+        )
+
+    return NodeExecResponse(
+        node_id=node_id,
+        command=body.command,
+        stdout=stdout_bytes.decode("utf-8", errors="replace"),
+        stderr=stderr_bytes.decode("utf-8", errors="replace"),
+        exit_code=exit_code,
+        success=exit_code == 0,
+    )

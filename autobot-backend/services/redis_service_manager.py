@@ -20,22 +20,20 @@ Features:
 import asyncio
 import json
 import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
-# TODO (#729): SSH proxied through SLM API
-# from backend.services.ssh_manager import RemoteCommandResult, SSHManager
-from backend.constants.network_constants import NetworkConstants
+import aiohttp
+
 from backend.constants.threshold_constants import TimingConstants
 from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
-# TODO (#729): Temporary placeholders until refactored to use SLM proxy
-# These are used for type hints only
-SSHManager = object  # type: ignore
-RemoteCommandResult = object  # type: ignore
+_DEFAULT_SLM_URL = os.environ.get("SLM_URL", "")
+_DEFAULT_REDIS_NODE_ID = os.environ.get("REDIS_NODE_ID", "04-Databases")
 
 
 # Custom exceptions for Redis Stack service operations
@@ -101,43 +99,41 @@ class RedisServiceManager:
 
     def __init__(
         self,
-        ssh_manager: Optional[SSHManager] = None,
-        redis_host: str = "redis",
+        slm_url: Optional[str] = None,
+        slm_node_id: Optional[str] = None,
         service_name: str = "redis-stack-server",
         enable_audit_logging: bool = True,
     ):
         """
-        Initialize Redis Service Manager
+        Initialize Redis Service Manager.
+
+        Routes all service operations through the SLM API (Issue #933).
 
         Args:
-            ssh_manager: SSH manager instance (creates new if None)
-            redis_host: SSH host name for Redis VM (default: 'redis')
+            slm_url: Base URL of SLM server (default: SLM_URL env var)
+            slm_node_id: SLM node_id of the Redis VM (default: REDIS_NODE_ID env var)
             service_name: Systemd service name (default: 'redis-stack-server')
             enable_audit_logging: Enable audit logging (default: True)
         """
-        # TODO (#729): SSH proxied through SLM API - This service needs refactoring
-        raise NotImplementedError(
-            "Redis Service Manager temporarily disabled - SSH proxied through SLM API (#729)"
-        )
-        # OLD CODE:
-        # self.ssh_manager = ssh_manager or SSHManager(enable_audit_logging=True)
-        self.redis_host = redis_host
+        self.slm_url = (slm_url or _DEFAULT_SLM_URL).rstrip("/")
+        self.slm_node_id = slm_node_id or _DEFAULT_REDIS_NODE_ID
         self.service_name = service_name
         self.enable_audit_logging = enable_audit_logging
 
         # Status cache
         self._status_cache: Optional[ServiceStatus] = None
         self._status_cache_time: Optional[datetime] = None
-        self._cache_ttl_seconds = 10  # Cache TTL
+        self._cache_ttl_seconds = 10
 
         # Error tracking for health metrics
         self._error_count: int = 0
         self._error_count_hour_start: datetime = datetime.now()
-        self._error_lock = asyncio.Lock()  # Lock for thread-safe error tracking
+        self._error_lock = asyncio.Lock()
 
         logger.info(
-            f"Redis Service Manager initialized for host={redis_host}, "
-            f"service={service_name}"
+            "Redis Service Manager initialized for node=%s, service=%s",
+            self.slm_node_id,
+            service_name,
         )
 
     async def _record_error(self) -> None:
@@ -159,14 +155,12 @@ class RedisServiceManager:
                 self._error_count_hour_start = now
             return self._error_count
 
-    async def start(self):
-        """Start Redis Service Manager"""
-        await self.ssh_manager.start()
-        logger.info("Redis Service Manager started")
+    async def start(self) -> None:
+        """Start Redis Service Manager (no-op — SLM API is stateless)."""
+        logger.info("Redis Service Manager ready (SLM URL: %s)", self.slm_url)
 
-    async def stop(self):
-        """Stop Redis Service Manager"""
-        await self.ssh_manager.stop()
+    async def stop(self) -> None:
+        """Stop Redis Service Manager (no-op — SLM API is stateless)."""
         logger.info("Redis Service Manager stopped")
 
     def _audit_log(
@@ -187,39 +181,67 @@ class RedisServiceManager:
         except Exception as e:
             logger.error("Audit logging failed: %s", e)
 
-    async def _execute_systemctl_command(
-        self, command: str, timeout: int = 30
-    ) -> RemoteCommandResult:
+    async def _slm_service_action(self, action: str) -> Tuple[bool, str]:
         """
-        Execute systemctl command on Redis VM
+        Call SLM API to start/stop/restart the Redis service.
+
+        Issue #933: Replaces direct SSH systemctl calls.
 
         Args:
-            command: Systemctl command (e.g., 'start', 'stop', 'status')
-            timeout: Command timeout in seconds
+            action: "start", "stop", or "restart"
 
         Returns:
-            RemoteCommandResult
+            Tuple of (success, message)
 
         Raises:
-            RedisConnectionError: If SSH connection fails
+            RedisConnectionError: If SLM API is unreachable
         """
-        full_command = f"sudo systemctl {command} {self.service_name}"
-
+        if not self.slm_url:
+            raise RedisConnectionError("SLM_URL not configured")
+        url = (
+            f"{self.slm_url}/api/nodes/{self.slm_node_id}"
+            f"/services/{self.service_name}/{action}"
+        )
         try:
-            result = await self.ssh_manager.execute_command(
-                host=self.redis_host,
-                command=full_command,
-                timeout=timeout,
-                validate=False,  # Skip validation - commands are hardcoded and RBAC-protected
-            )
-            return result
-
-        except Exception as e:
-            logger.error("Failed to execute systemctl %s: %s", command, e)
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, ssl=False) as resp:
+                    data = await resp.json()
+                    success = data.get("success", resp.status < 300)
+                    message = data.get("message", "")
+                    return success, message
+        except Exception as exc:
+            logger.error("SLM service action '%s' failed: %s", action, exc)
             await self._record_error()
             raise RedisConnectionError(
-                f"Cannot execute command on Redis VM: {str(e)}"
-            ) from e
+                f"Cannot reach SLM API for service action '{action}': {exc}"
+            ) from exc
+
+    async def _slm_get_service_status(self) -> str:
+        """
+        Query SLM API for Redis service status.
+
+        Issue #933: Replaces direct SSH systemctl status call.
+
+        Returns:
+            One of: "running", "stopped", "failed", "unknown"
+        """
+        if not self.slm_url:
+            return "unknown"
+        url = f"{self.slm_url}/api/nodes/{self.slm_node_id}/services"
+        try:
+            async with aiohttp.ClientSession() as session:
+                params = {"search": self.service_name, "per_page": "1"}
+                async with session.get(url, params=params, ssl=False) as resp:
+                    if resp.status != 200:
+                        return "unknown"
+                    data = await resp.json()
+                    services = data.get("services", [])
+                    if services:
+                        return services[0].get("status", "unknown")
+                    return "unknown"
+        except Exception as exc:
+            logger.warning("SLM service status query failed: %s", exc)
+            return "unknown"
 
     def _already_in_state_result(
         self, operation: str, target_status: str, duration: float
@@ -311,10 +333,8 @@ class RedisServiceManager:
                 duration = (datetime.now() - start_time).total_seconds()
                 return self._already_in_state_result("start", "running", duration)
 
-            # Execute start command and verify
-            result = await self._execute_systemctl_command(
-                "start", timeout=TimingConstants.SHORT_TIMEOUT
-            )
+            # Call SLM API to start service and verify
+            _ok, err_msg = await self._slm_service_action("start")
             await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
             new_status = await self.get_service_status()
 
@@ -323,7 +343,11 @@ class RedisServiceManager:
 
             # Build result (Issue #665: uses helper)
             operation_result = self._operation_result(
-                "start", success, new_status.status, duration, result.stderr
+                "start",
+                success,
+                new_status.status,
+                duration,
+                None if success else err_msg,
             )
 
             self._audit_log(
@@ -373,10 +397,8 @@ class RedisServiceManager:
                 duration = (datetime.now() - start_time).total_seconds()
                 return self._already_in_state_result("stop", "stopped", duration)
 
-            # Execute stop command and verify
-            result = await self._execute_systemctl_command(
-                "stop", timeout=TimingConstants.SHORT_TIMEOUT
-            )
+            # Call SLM API to stop service and verify
+            _ok, err_msg = await self._slm_service_action("stop")
             await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
             new_status = await self.get_service_status()
 
@@ -385,7 +407,11 @@ class RedisServiceManager:
 
             # Build result (Issue #665: uses helper)
             operation_result = self._operation_result(
-                "stop", success, new_status.status, duration, result.stderr
+                "stop",
+                success,
+                new_status.status,
+                duration,
+                None if success else err_msg,
             )
 
             self._audit_log(
@@ -410,7 +436,9 @@ class RedisServiceManager:
 
     async def restart_service(self, user_id: str = "system") -> ServiceOperationResult:
         """
-        Restart Redis Stack service
+        Restart Redis Stack service.
+
+        Issue #933: Uses SLM API instead of SSH.
 
         Args:
             user_id: User ID for audit logging
@@ -422,38 +450,25 @@ class RedisServiceManager:
             RedisConnectionError: If cannot connect to Redis VM
         """
         start_time = datetime.now()
-
         self._audit_log(
             "redis_service_restart_attempt", {"user_id": user_id}, user_id=user_id
         )
 
         try:
-            # Execute restart command
-            result = await self._execute_systemctl_command(
-                "restart", timeout=TimingConstants.SHORT_TIMEOUT
-            )
-
-            # Verify service restarted - wait for initialization
+            # Call SLM API to restart service and verify
+            _ok, err_msg = await self._slm_service_action("restart")
             await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
             new_status = await self.get_service_status()
 
             duration = (datetime.now() - start_time).total_seconds()
             success = new_status.status == "running"
-
-            operation_result = ServiceOperationResult(
-                success=success,
-                operation="restart",
-                message=(
-                    "Redis Stack service restarted successfully"
-                    if success
-                    else "Failed to restart Redis Stack service"
-                ),
-                duration_seconds=duration,
-                timestamp=datetime.now(),
-                new_status=new_status.status,
-                error=None if success else result.stderr,
+            operation_result = self._operation_result(
+                "restart",
+                success,
+                new_status.status,
+                duration,
+                None if success else err_msg,
             )
-
             self._audit_log(
                 "redis_service_restart_completed",
                 {
@@ -463,27 +478,16 @@ class RedisServiceManager:
                 },
                 user_id=user_id,
             )
-
             return operation_result
 
         except Exception as e:
             duration = (datetime.now() - start_time).total_seconds()
             logger.error("Restart service failed: %s", e)
             await self._record_error()
-
             self._audit_log(
                 "redis_service_restart_failed", {"error": str(e)}, user_id=user_id
             )
-
-            return ServiceOperationResult(
-                success=False,
-                operation="restart",
-                message=f"Failed to restart Redis Stack service: {str(e)}",
-                duration_seconds=duration,
-                timestamp=datetime.now(),
-                new_status="unknown",
-                error=str(e),
-            )
+            return self._operation_failure_result("restart", str(e), duration)
 
     async def get_service_status(self, use_cache: bool = True) -> ServiceStatus:
         """
@@ -506,37 +510,8 @@ class RedisServiceManager:
             return self._status_cache
 
         try:
-            # Execute status command
-            result = await self._execute_systemctl_command("status", timeout=10)
-
-            # Parse systemctl status output
-            status_text = result.stdout.lower()
-
-            if "active (running)" in status_text:
-                status = "running"
-            elif (
-                "inactive (dead)" in status_text or "could not be found" in status_text
-            ):
-                status = "stopped"
-            elif "failed" in status_text:
-                status = "failed"
-            else:
-                status = "unknown"
-
-            # Try to extract PID (basic parsing)
-            pid = None
-            try:
-                for line in result.stdout.split("\n"):
-                    if "Main PID:" in line:
-                        pid_str = line.split("Main PID:")[1].strip().split()[0]
-                        pid = int(pid_str) if pid_str.isdigit() else None
-                        break
-            except Exception as e:
-                logger.debug("Failed to parse PID from status output: %s", e)
-
-            service_status = ServiceStatus(
-                status=status, pid=pid, last_check=datetime.now()
-            )
+            status_str = await self._slm_get_service_status()
+            service_status = ServiceStatus(status=status_str, last_check=datetime.now())
 
             # Update cache
             self._status_cache = service_status
@@ -549,29 +524,23 @@ class RedisServiceManager:
             await self._record_error()
             return ServiceStatus(status="unknown", last_check=datetime.now())
 
-    async def _check_redis_connectivity(self) -> tuple:
+    async def _check_redis_connectivity(self) -> Tuple[bool, float]:
         """
-        Test Redis connectivity via redis-cli PING.
+        Test Redis connectivity via direct Python redis ping.
 
-        (Issue #398: extracted helper)
+        Issue #933: Replaces SSH-based redis-cli PING.
 
         Returns:
             Tuple of (connectivity: bool, response_time_ms: float)
         """
         try:
+            from autobot_shared.redis_client import get_redis_client
+
             ping_start = datetime.now()
-            ping_result = await self.ssh_manager.execute_command(
-                host=self.redis_host,
-                command=(
-                    f"redis-cli -h {NetworkConstants.LOCALHOST_IP} -p {NetworkConstants.REDIS_PORT}"
-                    f"PING"
-                ),
-                timeout=5,
-                validate=False,
-            )
+            client = get_redis_client(async_client=True, database="main")
+            await client.ping()
             response_time_ms = (datetime.now() - ping_start).total_seconds() * 1000
-            connectivity = ping_result.success and "PONG" in ping_result.stdout
-            return connectivity, response_time_ms
+            return True, response_time_ms
         except Exception as e:
             logger.warning("Redis connectivity check failed: %s", e)
             return False, 0.0
