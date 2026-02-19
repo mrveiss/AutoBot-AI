@@ -556,9 +556,8 @@ async def _init_memory_graph(app: FastAPI):
     try:
         from autobot_memory_graph import AutoBotMemoryGraph
 
-        memory_graph = AutoBotMemoryGraph(
-            chat_history_manager=app.state.chat_history_manager
-        )
+        memory_graph = AutoBotMemoryGraph()
+        memory_graph.chat_history_manager = app.state.chat_history_manager
         await memory_graph.initialize()
         app.state.memory_graph = memory_graph
         await update_app_state("memory_graph", memory_graph)
@@ -685,23 +684,24 @@ async def initialize_background_services(app: FastAPI):
         )
         logger.info("=== PHASE 2: Background Services Initialization ===")
 
-        # Issue #876: ALL PHASE 2 DISABLED TEMPORARILY - isolating event loop deadlock
-        # await _init_knowledge_base(app)
-        # await _init_npu_worker_websocket()
-        # await _warmup_npu_connection()
-        # await _init_memory_graph(app)
-        # await _init_slm_client()
-        # await _init_background_llm_sync(app)
-        # await _init_documentation_watcher()
-        # await _init_log_forwarding()
-        # await _init_slm_reconciler(app)
-        # await _init_metrics_collection()
+        # Issue #876: Root cause fixed — metrics collector no longer calls backend
+        # self-health endpoint (circular deadlock). Phase 2 re-enabled (#970).
+        await _init_knowledge_base(app)
+        await _init_npu_worker_websocket()
+        await _warmup_npu_connection()
+        await _init_memory_graph(app)
+        await _init_slm_client()
+        await _init_background_llm_sync(app)
+        await _init_documentation_watcher()
+        await _init_log_forwarding()
+        await _init_slm_reconciler(app)
+        await _init_metrics_collection()
 
         await update_app_state_multi(
             initialization_status="ready",
-            initialization_message="Phase 1 only (Phase 2 disabled)",
+            initialization_message="All services initialized",
         )
-        logger.info("✅ [100%] PHASE 2 SKIPPED: Testing with Phase 1 only")
+        logger.info("✅ [100%] PHASE 2 COMPLETE: All background services initialized")
 
     except Exception as e:
         logger.error("Background initialization encountered errors: %s", e)
