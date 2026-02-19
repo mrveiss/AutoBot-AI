@@ -124,7 +124,9 @@ cd autobot-slm-backend/ansible && ansible-playbook playbooks/<playbook>.yml --sy
 
 ### Architecture Confirmation
 
-**Before implementing, confirm assumptions with the user:**
+**Before implementing ANY task where the approach isn't obvious, confirm with the user:**
+
+This applies not just to deployment/startup but to any ambiguous task — if there are multiple valid approaches and you're not sure which the user wants, state your intended approach and wait for confirmation.
 
 - Startup methods: Do NOT assume `systemd` vs `bash run_autobot.sh` vs `docker-compose` - ask or check CLAUDE.md
 - Deployment strategies: Do NOT assume Ansible vs manual sync vs Docker - verify the correct method
@@ -525,6 +527,18 @@ git log -1 --stat
 ---
 
 ## TECHNICAL STANDARDS
+
+### Debugging Discipline
+
+**Hypothesize before running commands:**
+
+When diagnosing a problem, form a hypothesis first — don't fire off diagnostic commands at random:
+1. State your hypothesis: "I think X is caused by Y because Z"
+2. List the 3-4 specific commands that would confirm or reject it
+3. Run them in that order
+4. Update the hypothesis based on results before running more commands
+
+This prevents the "1,686 Bash invocations" pattern where trial-and-error burns time without converging on root cause.
 
 ### Error Handling
 
