@@ -402,3 +402,19 @@
     enabled: true
     daemon_reload: true
   tags: ['backend', 'nginx']
+
+# ==========================================================
+# UFW loopback0 rule (WSL2 mirrored networking)
+# WSL2 mirrored networking routes 127.0.0.1 traffic through
+# the loopback0 interface, NOT lo. UFW's default lo accept
+# rule does NOT cover loopback0, so nginx→uvicorn (port 8001)
+# connections are dropped by UFW INPUT DROP policy.
+# This rule is harmless on non-WSL2 hosts (no loopback0 traffic).
+# ==========================================================
+- name: "Backend | Allow loopback0 interface (WSL2 mirrored networking)"
+  community.general.ufw:
+    rule: allow
+    interface: loopback0
+    direction: in
+  failed_when: false
+  tags: ['backend', 'ufw']
