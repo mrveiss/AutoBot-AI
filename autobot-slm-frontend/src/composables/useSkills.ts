@@ -14,7 +14,7 @@ import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 
 // Skills API is on the main AutoBot backend, proxied via nginx
-const API_BASE = '/autobot-api/skills'
+const API_BASE = '/autobot-api/skills/'
 
 // =============================================================================
 // Type Definitions

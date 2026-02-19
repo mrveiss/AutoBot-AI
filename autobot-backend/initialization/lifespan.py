@@ -112,6 +112,19 @@ async def _init_skills_tables() -> None:
     logger.info("Skills tables initialized")
 
 
+async def _init_skills_discovery() -> None:
+    """Discover and register builtin skills at startup."""
+    from skills.manager import SkillManager
+
+    manager = SkillManager.get_instance()
+    result = await manager.initialize()
+    logger.info(
+        "Skills discovered: %d registered, categories: %s",
+        result.get("total_registered", 0),
+        result.get("categories", []),
+    )
+
+
 async def _init_chat_history_manager(app: FastAPI) -> None:
     """Initialize chat history manager (Issue #665: extracted helper).
 
@@ -287,12 +300,13 @@ async def initialize_critical_services(app: FastAPI):
         # Issue #743: Register caches with CacheCoordinator for memory optimization
         await _init_cache_coordinator()
 
-        # Initialize skills system tables (non-blocking, SQLite-backed)
+        # Initialize skills system tables and discover builtin skills (non-blocking)
         try:
             await _init_skills_tables()
+            await _init_skills_discovery()
         except Exception as skills_db_error:
             logger.warning(
-                "Skills table initialization failed (non-critical): %s", skills_db_error
+                "Skills initialization failed (non-critical): %s", skills_db_error
             )
 
         logger.info("✅ [ 60%] PHASE 1 COMPLETE: All critical services operational")
