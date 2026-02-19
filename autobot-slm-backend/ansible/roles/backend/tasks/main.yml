@@ -71,6 +71,20 @@
       - libxmlsec1-dev
       - libffi-dev
       - liblzma-dev
+      # GUI / display (VNC, xvfb headless, GUI automation)
+      - xvfb
+      - x11-utils
+      - x11-apps
+      # Audio / voice processing (PyAudio, librosa, Whisper)
+      - ffmpeg
+      - libsndfile1
+      - libsndfile1-dev
+      - portaudio19-dev
+      # OCR / CAPTCHA solver (tesseract, Issue #206)
+      - tesseract-ocr
+      - libtesseract-dev
+      # Matplotlib GUI backend
+      - python3-tk
     state: present
     update_cache: true
 
