@@ -124,6 +124,18 @@
     state: present
     extra_args: "--index-url https://download.pytorch.org/whl/cpu --timeout 300"
   become_user: "{{ tts_user }}"
+  when: "not tts_device.startswith('cuda')"
+  tags: ['tts', 'packages']
+
+- name: "TTS Worker | Install torch with CUDA support (GPU node)"
+  ansible.builtin.pip:
+    name:
+      - torch>=2.0.0
+    virtualenv: "{{ tts_install_dir }}/venv"
+    state: present
+    extra_args: "--timeout 300"
+  become_user: "{{ tts_user }}"
+  when: "tts_device.startswith('cuda')"
   tags: ['tts', 'packages']
 
 - name: "TTS Worker | Install remaining TTS model dependencies"
