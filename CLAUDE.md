@@ -689,6 +689,11 @@ autobot-infrastructure/
 - Security: `service_auth`, `access_control`, `centralized_logging`
 - Management: `slm_manager`, `slm_agent`, `browser`, `vnc`
 
+**Before multi-step Ansible deployments:**
+- Verify SSH access and sudo work on ALL target nodes first: `ansible all -m ping` and `ansible all -m command -a "sudo id"`
+- Verify all target hosts appear in inventory before running — missing hosts = silent partial deployment
+- Use SLM service management (`/orchestration` page or `slm-service-control.yml`) to restart services on fleet nodes — never restart manually via SSH unless SLM itself is the broken component
+
 **Common Playbooks:**
 ```bash
 cd autobot-slm-backend/ansible
