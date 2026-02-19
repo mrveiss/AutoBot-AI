@@ -367,6 +367,20 @@
                 </svg>
               </div>
             </a>
+
+            <!-- Profile Settings (Issue #950) -->
+            <button
+              v-if="userStore.isAuthenticated"
+              @click="showProfileModal = true; closeMobileNav()"
+              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 text-autobot-text-primary hover:bg-autobot-bg-tertiary"
+            >
+              <div class="flex items-center space-x-2">
+                <div class="w-4 h-4 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold">
+                  {{ userStore.currentUser?.username?.charAt(0).toUpperCase() || 'U' }}
+                </div>
+                <span>Profile Settings</span>
+              </div>
+            </button>
           </div>
         </div>
       </Transition>
