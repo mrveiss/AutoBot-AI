@@ -284,6 +284,11 @@ export const useUserStore = defineStore('user', () => {
 
           applyTheme()
           applyAccessibilitySettings()
+        } else if (hasRealToken && auth.expiresAt && new Date(auth.expiresAt) <= new Date()) {
+          // Clear stale expired token so ApiClient doesn't keep sending it (#979)
+          logger.warn('Expired token found in storage, clearing');
+          localStorage.removeItem('autobot_auth');
+          localStorage.removeItem('autobot_user');
         }
       }
     } catch (error) {
