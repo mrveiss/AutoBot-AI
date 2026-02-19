@@ -17,7 +17,7 @@ EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys')
 # Issue #891: Removed ExecStartPre symlink creation - causes infinite import loops with fixed backend imports
 ExecStart={{ backend_code_dir }}/venv/bin/uvicorn main:app --host {{ backend_host }} --port {{ backend_port }} --workers {{ backend_workers }} --ssl-keyfile /etc/autobot/certs/server-key.pem --ssl-certfile /etc/autobot/certs/server-cert.pem
 Restart=always
-RestartSec=5
+RestartSec=30  # Issue #954: 5s is shorter than Windows Firewall port-state cache refresh; 30s gives WDF time to clear before re-bind
 StandardOutput=append:{{ backend_log_dir }}/backend.log
 StandardError=append:{{ backend_log_dir }}/backend-error.log
 
