@@ -20,7 +20,6 @@ interface ChatInitData {
 interface FallbackResults {
   chat_sessions: any;
   system_health: any;
-  service_health: any;
   settings: any;
 }
 
@@ -99,15 +98,14 @@ export class BatchApiService {
 
     // Issue #671: Run all API calls in parallel using Promise.allSettled
     // This reduces worst-case load time from 4x timeout to 1x timeout
+    // Note: service health monitoring is handled by SLM, not the backend
     const [
       chatSessionsResult,
       systemHealthResult,
-      serviceHealthResult,
       settingsResult
     ] = await Promise.allSettled([
       this.apiClient.getChatList(),
       this.apiClient.getSystemHealth(),
-      this.apiClient.getServiceHealth(),
       this.apiClient.getSettings()
     ]);
 
@@ -121,10 +119,6 @@ export class BatchApiService {
         ? systemHealthResult.value
         : { error: (systemHealthResult as PromiseRejectedResult).reason?.message || 'Failed to load', status: 'unknown' },
 
-      service_health: serviceHealthResult.status === 'fulfilled'
-        ? serviceHealthResult.value
-        : { error: (serviceHealthResult as PromiseRejectedResult).reason?.message || 'Failed to load', services: [] },
-
       settings: settingsResult.status === 'fulfilled'
         ? settingsResult.value
         : { error: (settingsResult as PromiseRejectedResult).reason?.message || 'Failed to load' }
@@ -136,9 +130,6 @@ export class BatchApiService {
     }
     if (systemHealthResult.status === 'rejected') {
       logger.warn('Failed to load system health:', (systemHealthResult as PromiseRejectedResult).reason?.message);
-    }
-    if (serviceHealthResult.status === 'rejected') {
-      logger.warn('Failed to load service health:', (serviceHealthResult as PromiseRejectedResult).reason?.message);
     }
     if (settingsResult.status === 'rejected') {
       logger.warn('Failed to load settings:', (settingsResult as PromiseRejectedResult).reason?.message);
