@@ -1000,7 +1000,7 @@ function validateField(field: string) {
     case 'hostname':
       if (!value || (typeof value === 'string' && value.trim() === '')) {
         errors.value.hostname = 'Hostname is required'
-      } else if (typeof value === 'string' && !/^[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/.test(value)) {
+      } else if (typeof value === 'string' && !/^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$/.test(value)) {
         errors.value.hostname = 'Invalid hostname format'
       } else {
         delete errors.value.hostname
@@ -1017,7 +1017,7 @@ function validateField(field: string) {
       }
       break
 
-    case 'ssh_password':
+    case 'ssh_password': {
       // In edit mode, password only required if SSH operations are requested
       const passwordRequired = isEditMode.value
         ? formData.value.auth_method === 'password' && needsCredentialsForEdit.value
@@ -1029,6 +1029,7 @@ function validateField(field: string) {
         delete errors.value.ssh_password
       }
       break
+    }
 
     case 'ssh_key':
       if (formData.value.auth_method === 'pki' && keySource.value === 'paste' && (!value || (typeof value === 'string' && value.trim() === ''))) {
