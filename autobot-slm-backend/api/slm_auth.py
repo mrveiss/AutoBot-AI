@@ -9,10 +9,12 @@ Handles login/logout for SLM admin users using the local database.
 
 import logging
 from datetime import timedelta
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from api.security import create_audit_log
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from services.auth import auth_service, get_current_user
+from services.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from user_management.database import get_slm_session
 from user_management.models.user import User
@@ -29,14 +31,25 @@ async def get_slm_db():
         yield session
 
 
+def _get_client_ip(http_request: Request) -> Optional[str]:
+    """Extract client IP from request, respecting X-Forwarded-For."""
+    forwarded_for = http_request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return http_request.client.host if http_request.client else None
+
+
 @router.post("/login")
 async def login(
+    http_request: Request,
     request: UserLogin,
     db: Annotated[AsyncSession, Depends(get_slm_db)],
+    audit_db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     """Authenticate SLM admin user and return JWT token."""
     context = TenantContext(is_platform_admin=True)
     user_service = UserService(db, context)
+    client_ip = _get_client_ip(http_request)
 
     user = await user_service.authenticate(
         username_or_email=request.username_or_email,
@@ -44,6 +57,22 @@ async def login(
     )
 
     if not user:
+        # Issue #998: Record failed login attempt in audit log
+        await create_audit_log(
+            audit_db,
+            category="authentication",
+            action="login_failed",
+            username=request.username_or_email,
+            ip_address=client_ip,
+            resource_type="session",
+            description=f"Failed login attempt for '{request.username_or_email}'",
+            request_method="POST",
+            request_path="/api/slm-auth/login",
+            response_status=401,
+            success=False,
+            error_message="Invalid username or password",
+        )
+        await audit_db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
@@ -53,6 +82,23 @@ async def login(
     # Check if MFA is enabled for this user
     if user.mfa_enabled:
         return _create_mfa_challenge(user)
+
+    # Issue #998: Record successful login in audit log
+    await create_audit_log(
+        audit_db,
+        category="authentication",
+        action="login_success",
+        user_id=str(user.id),
+        username=user.username,
+        ip_address=client_ip,
+        resource_type="session",
+        description=f"SLM admin '{user.username}' logged in successfully",
+        request_method="POST",
+        request_path="/api/slm-auth/login",
+        response_status=200,
+        success=True,
+    )
+    await audit_db.commit()
 
     logger.info("SLM admin logged in: %s", user.username)
     return await auth_service.create_token_response(user)
