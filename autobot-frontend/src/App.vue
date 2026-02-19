@@ -179,6 +179,20 @@
 
           <!-- Right side - Status and controls -->
           <div class="flex items-center space-x-4">
+            <!-- User Profile Button -->
+            <button
+              v-if="userStore.isAuthenticated"
+              @click="showProfileModal = true"
+              class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-autobot-text-primary hover:bg-autobot-bg-tertiary transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+              title="Open profile settings"
+              aria-label="Profile settings"
+            >
+              <div class="w-6 h-6 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                {{ userStore.currentUser?.username?.charAt(0).toUpperCase() || 'U' }}
+              </div>
+              <span class="max-w-[120px] truncate">{{ userStore.currentUser?.username || 'Profile' }}</span>
+            </button>
+
             <!-- Dark Mode Toggle -->
             <DarkModeToggle />
 
@@ -480,6 +494,12 @@
       </div>
     </Teleport>
 
+    <!-- Profile Modal (Issue #950) -->
+    <ProfileModal
+      :is-open="showProfileModal"
+      @close="showProfileModal = false"
+    />
+
     <!-- System Status Notifications (limit to last 5 to prevent teleport accumulation) -->
     <SystemStatusNotification
       v-for="notif in (appStore?.systemNotifications || []).filter(n => n.visible).slice(-5)"
@@ -543,24 +563,25 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
-import { createLogger } from '@/utils/debugUtils'
-
-const logger = createLogger('App');
 import { useChatStore } from '@/stores/useChatStore'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useSystemStatus } from '@/composables/useSystemStatus'
-import SystemStatusNotification from '@/components/ui/SystemStatusNotification.vue';
-import CaptchaNotification from '@/components/research/CaptchaNotification.vue';
-import ToastContainer from '@/components/ui/ToastContainer.vue';
-import HostSelectionDialog from '@/components/ui/HostSelectionDialog.vue';
 import { useHostSelection } from '@/composables/useHostSelection';
+import { createLogger } from '@/utils/debugUtils'
 import { cacheBuster } from '@/utils/CacheBuster.js';
 import { optimizedHealthMonitor } from '@/utils/OptimizedHealthMonitor.js';
 import { initializeNotificationBridge } from '@/utils/notificationBridge';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
-import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue';
 import { getSLMAdminUrl } from '@/config/ssot-config';
+import SystemStatusNotification from '@/components/ui/SystemStatusNotification.vue';
+import CaptchaNotification from '@/components/research/CaptchaNotification.vue';
+import ToastContainer from '@/components/ui/ToastContainer.vue';
+import HostSelectionDialog from '@/components/ui/HostSelectionDialog.vue';
+import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue';
+import ProfileModal from '@/components/profile/ProfileModal.vue';
+
+const logger = createLogger('App');
 
 export default {
   name: 'App',
@@ -571,6 +592,7 @@ export default {
     ToastContainer,
     HostSelectionDialog,
     UnifiedLoadingView,
+    ProfileModal,
     DarkModeToggle: () => import('@/components/ui/DarkModeToggle.vue'),
   },
 
@@ -631,6 +653,7 @@ export default {
 
     // Reactive data (non-status related)
     const showMobileNav = ref(false);
+    const showProfileModal = ref(false);
     let notificationCleanup: number | null = null;
 
     // Computed properties
@@ -883,11 +906,13 @@ export default {
     return {
       // Store references
       appStore,
+      userStore,
       chatStore,
       knowledgeStore,
 
       // Reactive data
       showMobileNav,
+      showProfileModal,
 
       // System status (from composable)
       showSystemStatus,
