@@ -129,6 +129,7 @@ all:
             disk_gb: 50      # LVM expansion target
           services:
             - npu-worker
+            - tts-worker
             - openvino
             - python3
             - hardware-acceleration
@@ -140,6 +141,8 @@ all:
       vars:
         # NPU Worker-specific configuration
         npu_worker_port: 8081
+        # TTS Worker (#928)
+        tts_worker_port: 8082
         openvino_device: "AUTO"  # Auto-detect NPU > GPU > CPU
         python_version: "3.11"
         worker_threads: 2

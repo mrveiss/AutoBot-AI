@@ -142,8 +142,19 @@
         daemon_reload: true
       loop:
         - "autobot-ai-stack"
-        - "autobot-npu-worker"
       when: inventory_hostname in groups['aiml']
+      become: true
+
+    - name: Start NPU and TTS services (Phase 2)
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+        daemon_reload: true
+      loop:
+        - "autobot-npu-worker"
+        - "autobot-tts-worker"
+      when: inventory_hostname in groups['npu']
       become: true
 
     - name: Wait for backend readiness

@@ -113,6 +113,7 @@ class PortConfig(BaseSettings):
     browser: int = Field(default=3000, alias="AUTOBOT_BROWSER_SERVICE_PORT")
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
     npu: int = Field(default=8081, alias="AUTOBOT_NPU_WORKER_PORT")
+    tts: int = Field(default=8082, alias="AUTOBOT_TTS_WORKER_PORT")  # Issue #928
     slm: int = Field(default=8000, alias="AUTOBOT_SLM_PORT")  # Issue #768
     prometheus: int = Field(default=9090, alias="AUTOBOT_PROMETHEUS_PORT")
     grafana: int = Field(default=3000, alias="AUTOBOT_GRAFANA_PORT")
@@ -966,6 +967,11 @@ class AutoBotConfig(BaseSettings):
     def npu_worker_url(self) -> str:
         """Get the NPU Worker service URL."""
         return f"http://{self.vm.npu}:{self.port.npu}"
+
+    @property
+    def tts_worker_url(self) -> str:
+        """Get the TTS Worker (Kani-TTS-2) service URL. (#928)"""
+        return f"http://{self.vm.npu}:{self.port.tts}"
 
     @property
     def browser_service_url(self) -> str:

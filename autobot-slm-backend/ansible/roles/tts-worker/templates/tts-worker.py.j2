@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+"""
+TTS Worker - Kani-TTS-2 text-to-speech service.
+Handles synthesis and zero-shot voice cloning requests. (#928)
+"""
+
+import asyncio
+import io
+import logging
+import os
+from pathlib import Path
+from typing import Optional, Tuple
+
+import numpy as np
+import soundfile as sf
+import uvicorn
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import JSONResponse, StreamingResponse
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger("tts-worker")
+
+TTS_HOST = os.getenv("TTS_HOST", "0.0.0.0")
+TTS_PORT = int(os.getenv("TTS_PORT", "8082"))
+TTS_MODEL_ID = os.getenv("TTS_MODEL_ID", "liquid-ai/kani-tts-2")
+TTS_DEVICE = os.getenv("TTS_DEVICE", "cpu")
+TTS_MODELS_DIR = Path(os.getenv("TTS_MODELS_DIR", "/var/lib/autobot/models/tts"))
+
+app = FastAPI(title="AutoBot TTS Worker", version="1.0.0")
+
+_pipeline = None
+_model_loaded = False
+_model_error: Optional[str] = None
+
+
+def _load_tts_model() -> Tuple[bool, Optional[str]]:
+    """Load Kani-TTS-2 pipeline from HuggingFace. Returns (success, error_msg)."""
+    global _pipeline
+    try:
+        from transformers import pipeline
+
+        TTS_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        _pipeline = pipeline(
+            "text-to-speech",
+            model=TTS_MODEL_ID,
+            device=TTS_DEVICE,
+            model_kwargs={"cache_dir": str(TTS_MODELS_DIR)},
+        )
+        logger.info("TTS model loaded: %s on %s", TTS_MODEL_ID, TTS_DEVICE)
+        return True, None
+    except Exception as e:
+        logger.error("Failed to load TTS model %s: %s", TTS_MODEL_ID, e)
+        return False, str(e)
+
+
+def _to_wav_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
+    """Convert float32 audio array to 16-bit WAV bytes."""
+    audio_f32 = audio.astype(np.float32)
+    peak = max(abs(audio_f32.max()), abs(audio_f32.min()), 1e-8)
+    if peak > 1.0:
+        audio_f32 = audio_f32 / peak
+    buf = io.BytesIO()
+    sf.write(buf, audio_f32, sample_rate, format="WAV", subtype="PCM_16")
+    buf.seek(0)
+    return buf.read()
+
+
+def _run_synthesis(text: str) -> bytes:
+    """Synchronous TTS synthesis via pipeline."""
+    result = _pipeline(text)
+    audio = np.array(result["audio"]).squeeze()
+    return _to_wav_bytes(audio, result.get("sampling_rate", 22050))
+
+
+def _run_clone_synthesis(text: str, ref_bytes: bytes) -> bytes:
+    """Synchronous voice-cloned synthesis using reference audio."""
+    ref_audio, _ = sf.read(io.BytesIO(ref_bytes))
+    result = _pipeline(
+        text,
+        forward_params={"speaker_embeddings": ref_audio},
+    )
+    audio = np.array(result["audio"]).squeeze()
+    return _to_wav_bytes(audio, result.get("sampling_rate", 22050))
+
+
+@app.on_event("startup")
+async def on_startup() -> None:
+    """Load TTS model on startup in thread pool to avoid blocking."""
+    global _model_loaded, _model_error
+    loop = asyncio.get_event_loop()
+    success, err = await loop.run_in_executor(None, _load_tts_model)
+    _model_loaded = success
+    _model_error = err
+
+
+@app.get("/health")
+async def health() -> JSONResponse:
+    """Health check endpoint with model status."""
+    payload: dict = {
+        "status": "healthy" if _model_loaded else "degraded",
+        "service": "tts-worker",
+        "version": "1.0.0",
+        "model_id": TTS_MODEL_ID,
+        "model_loaded": _model_loaded,
+        "device": TTS_DEVICE,
+    }
+    if _model_error:
+        payload["error"] = _model_error
+    return JSONResponse(payload)
+
+
+@app.post("/tts/synthesize")
+async def synthesize(text: str = Form(...)) -> StreamingResponse:
+    """Synthesize speech from text. Returns audio/wav stream."""
+    if not _model_loaded:
+        raise HTTPException(status_code=503, detail=f"TTS model not ready: {_model_error}")
+    loop = asyncio.get_event_loop()
+    try:
+        wav_bytes = await loop.run_in_executor(None, _run_synthesis, text)
+    except Exception as e:
+        logger.error("Synthesis error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Synthesis failed: {e}") from e
+    return StreamingResponse(
+        io.BytesIO(wav_bytes),
+        media_type="audio/wav",
+        headers={"Content-Disposition": "attachment; filename=speech.wav"},
+    )
+
+
+@app.post("/tts/clone-voice")
+async def clone_voice(
+    text: str = Form(...),
+    reference_audio: UploadFile = File(...),
+) -> StreamingResponse:
+    """Zero-shot voice cloning: synthesize text in the voice of reference_audio."""
+    if not _model_loaded:
+        raise HTTPException(status_code=503, detail=f"TTS model not ready: {_model_error}")
+    ref_bytes = await reference_audio.read()
+    loop = asyncio.get_event_loop()
+    try:
+        wav_bytes = await loop.run_in_executor(None, _run_clone_synthesis, text, ref_bytes)
+    except Exception as e:
+        logger.error("Voice clone error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Voice clone failed: {e}") from e
+    return StreamingResponse(
+        io.BytesIO(wav_bytes),
+        media_type="audio/wav",
+        headers={"Content-Disposition": "attachment; filename=cloned_speech.wav"},
+    )
+
+
+@app.get("/")
+async def root() -> dict:
+    """Root endpoint."""
+    return {
+        "service": "AutoBot TTS Worker",
+        "version": "1.0.0",
+        "endpoints": ["/health", "/tts/synthesize", "/tts/clone-voice"],
+    }
+
+
+def main() -> None:
+    """Start TTS worker service."""
+    logger.info("=" * 60)
+    logger.info("TTS Worker starting (Kani-TTS-2)")
+    logger.info("Binding to %s:%d", TTS_HOST, TTS_PORT)
+    logger.info("Model: %s  Device: %s", TTS_MODEL_ID, TTS_DEVICE)
+    logger.info("Model cache: %s", TTS_MODELS_DIR)
+    logger.info("=" * 60)
+    uvicorn.run(app, host=TTS_HOST, port=TTS_PORT, log_level="info", access_log=True)
+
+
+if __name__ == "__main__":
+    main()

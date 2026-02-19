@@ -3,10 +3,11 @@
 # Author: mrveiss
 import logging
 
-from fastapi import APIRouter, Form, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi.responses import JSONResponse, Response
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.services.tts_client import get_tts_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -88,3 +89,73 @@ async def voice_speak_api(
             status_code=500,
             content={"message": f"Text-to-speech failed: {result['message']}"},
         )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_synthesize_api",
+    error_code_prefix="VOICE",
+)
+@router.post("/synthesize")
+async def voice_synthesize_api(
+    request: Request,
+    text: str = Form(...),
+    user_role: str = Form("user"),
+):
+    """Synthesize speech via Kani-TTS-2 worker. Returns audio/wav stream."""
+    security_layer = request.app.state.security_layer
+    if not security_layer.check_permission(user_role, "allow_voice_speak"):
+        security_layer.audit_log(
+            "voice_synthesize", user_role, "denied", {"reason": "permission_denied"}
+        )
+        return JSONResponse(
+            status_code=403,
+            content={"message": "Permission denied to synthesize voice."},
+        )
+
+    tts = get_tts_client()
+    wav_bytes = await tts.synthesize(text)
+    security_layer.audit_log(
+        "voice_synthesize", user_role, "success", {"text_preview": text[:50]}
+    )
+    return Response(
+        content=wav_bytes,
+        media_type="audio/wav",
+        headers={"Content-Disposition": "attachment; filename=speech.wav"},
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_clone_api",
+    error_code_prefix="VOICE",
+)
+@router.post("/clone-voice")
+async def voice_clone_api(
+    request: Request,
+    text: str = Form(...),
+    reference_audio: UploadFile = File(...),
+    user_role: str = Form("user"),
+):
+    """Zero-shot voice cloning via Kani-TTS-2. Returns audio/wav stream."""
+    security_layer = request.app.state.security_layer
+    if not security_layer.check_permission(user_role, "allow_voice_speak"):
+        security_layer.audit_log(
+            "voice_clone", user_role, "denied", {"reason": "permission_denied"}
+        )
+        return JSONResponse(
+            status_code=403,
+            content={"message": "Permission denied to clone voice."},
+        )
+
+    ref_bytes = await reference_audio.read()
+    tts = get_tts_client()
+    wav_bytes = await tts.clone_voice(text, ref_bytes)
+    security_layer.audit_log(
+        "voice_clone", user_role, "success", {"text_preview": text[:50]}
+    )
+    return Response(
+        content=wav_bytes,
+        media_type="audio/wav",
+        headers={"Content-Disposition": "attachment; filename=cloned_speech.wav"},
+    )
