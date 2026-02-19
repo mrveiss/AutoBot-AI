@@ -205,7 +205,7 @@
               aria-label="Profile settings"
             >
               <div class="w-6 h-6 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                {{ displayUsername?.charAt(0).toUpperCase() || 'U' }}
+                {{ displayUsername?.charAt(0)?.toUpperCase() || 'U' }}
               </div>
               <span class="max-w-[120px] truncate">{{ displayUsername || 'Profile' }}</span>
             </button>
@@ -411,7 +411,7 @@
             >
               <div class="flex items-center space-x-2">
                 <div class="w-4 h-4 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold">
-                  {{ displayUsername?.charAt(0).toUpperCase() || 'U' }}
+                  {{ displayUsername?.charAt(0)?.toUpperCase() || 'U' }}
                 </div>
                 <span>Profile Settings</span>
               </div>
