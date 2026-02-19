@@ -11,6 +11,7 @@ Provides WebSocket endpoints for:
 - Saving explanations to chat history
 """
 
+import asyncio
 import logging
 from typing import Any, Dict, Optional
 
@@ -117,6 +118,7 @@ class OverseerWebSocketHandler:
         self.overseer: Optional[OverseerAgent] = None
         self.executor: Optional[StepExecutorAgent] = None
         self.chat_history = _get_chat_history_manager()
+        self._current_task: Optional[asyncio.Task] = None
 
     async def connect(self) -> bool:
         """Accept WebSocket connection."""
@@ -145,8 +147,10 @@ class OverseerWebSocketHandler:
             return False
 
     async def disconnect(self):
-        """Clean up on disconnect."""
+        """Clean up on disconnect, cancelling any running query task."""
         logger.info("[OverseerWS] Disconnected: session=%s", self.session_id)
+        if self._current_task and not self._current_task.done():
+            self._current_task.cancel()
         # Keep overseer alive for reconnection
 
     async def send_update(self, update: OverseerUpdate):
@@ -211,49 +215,45 @@ class OverseerWebSocketHandler:
         except Exception as e:
             logger.error("[OverseerWS] Failed to save plan to chat: %s", e)
 
+    def _format_step_message_text(self, result: StepResult) -> str:
+        """
+        Build human-readable chat message text for a step result.
+
+        Helper for save_step_result_to_chat (Issue #935).
+        """
+        cmd_explanation = ""
+        if result.command_explanation:
+            breakdown_text = "\n".join(
+                f"  • `{p['part']}`: {p['explanation']}"
+                for p in (
+                    result.to_dict().get("command_explanation", {}).get("breakdown", [])
+                )
+            )
+            cmd_explanation = (
+                f"\n📖 **What this command does:**\n"
+                f"{result.command_explanation.summary}\n\n{breakdown_text}\n"
+            )
+
+        output_explanation = ""
+        if result.output_explanation:
+            findings_text = "\n".join(
+                f"  • {f}" for f in result.output_explanation.key_findings
+            )
+            output_explanation = (
+                f"\n📊 **What we found:**\n"
+                f"{result.output_explanation.summary}\n\n{findings_text}\n"
+            )
+
+        return (
+            f"📌 **Step {result.step_number}/{result.total_steps}**\n\n"
+            f"**Command:** `{result.command or 'N/A'}`\n"
+            f"{cmd_explanation}{output_explanation}"
+        )
+
     async def save_step_result_to_chat(self, result: StepResult) -> None:
         """Save step result with explanations to chat history."""
         try:
-            # Build command explanation text for display
-            cmd_explanation = ""
-            if result.command_explanation:
-                breakdown_text = "\n".join(
-                    [
-                        f"  • `{p['part']}`: {p['explanation']}"
-                        for p in (
-                            result.to_dict()
-                            .get("command_explanation", {})
-                            .get("breakdown", [])
-                        )
-                    ]
-                )
-                cmd_explanation = f"""
-📖 **What this command does:**
-{result.command_explanation.summary}
-
-{breakdown_text}
-"""
-
-            # Build output explanation text for display
-            output_explanation = ""
-            if result.output_explanation:
-                findings_text = "\n".join(
-                    [f"  • {f}" for f in result.output_explanation.key_findings]
-                )
-                output_explanation = f"""
-📊 **What we found:**
-{result.output_explanation.summary}
-
-{findings_text}
-"""
-
-            message_text = f"""📌 **Step {result.step_number}/{result.total_steps}**
-
-**Command:** `{result.command or 'N/A'}`
-{cmd_explanation}
-{output_explanation}
-"""
-            # Include full step object in metadata for frontend component rendering
+            message_text = self._format_step_message_text(result)
             step_data = result.to_dict()
             step_data[
                 "description"
@@ -265,7 +265,7 @@ class OverseerWebSocketHandler:
                 message_type="overseer_step",
                 session_id=self.session_id,
                 metadata={
-                    "step": step_data,  # Full step object for OverseerStepMessage component
+                    "step": step_data,
                     "step_number": result.step_number,
                     "total_steps": result.total_steps,
                     "status": result.status.value,
@@ -280,18 +280,61 @@ class OverseerWebSocketHandler:
         except Exception as e:
             logger.error("[OverseerWS] Failed to save step to chat: %s", e)
 
+    async def _broadcast_plan(self, plan) -> None:
+        """
+        Save plan to chat history and broadcast it to the frontend.
+
+        Helper for handle_query (Issue #935).
+        """
+        await self.save_plan_to_chat(plan)
+        await self.send_update(
+            OverseerUpdate(
+                update_type="plan",
+                plan_id=plan.plan_id,
+                total_steps=len(plan.steps),
+                content={
+                    "analysis": plan.analysis,
+                    "steps": [
+                        {
+                            "step_number": s.step_number,
+                            "description": s.description,
+                            "command": s.command,
+                        }
+                        for s in plan.steps
+                    ],
+                },
+            )
+        )
+
+    async def _execute_plan(self, plan) -> None:
+        """
+        Stream plan execution updates and persist step results to chat.
+
+        Helper for handle_query (Issue #665, #935).
+        """
+        async for update in self.overseer.orchestrate_execution(plan, self.executor):
+            await self.send_update(update)
+            if update.update_type == "step_complete" and update.content:
+                if isinstance(update.content, dict):
+                    await self.save_step_result_to_chat(
+                        _dict_to_step_result(update.content)
+                    )
+                elif isinstance(update.content, StepResult):
+                    await self.save_step_result_to_chat(update.content)
+
     async def handle_query(self, query: str, context: Optional[Dict] = None):
         """
         Handle a user query through the overseer.
+
+        Runs as a background asyncio Task so the WS loop can receive
+        cancel messages while execution is in progress (Issue #935).
 
         Args:
             query: The user's question or request
             context: Optional conversation context
         """
         logger.info("[OverseerWS] Processing query: %s", query[:100])
-
         try:
-            # Phase 1: Analyze and create plan
             await self.send_json(
                 {
                     "type": "status",
@@ -299,47 +342,9 @@ class OverseerWebSocketHandler:
                     "message": "Analyzing your request...",
                 }
             )
-
             plan = await self.overseer.analyze_query(query, context)
-
-            # Save plan to chat history (so it appears in chat)
-            await self.save_plan_to_chat(plan)
-
-            # Send plan overview via WebSocket
-            await self.send_update(
-                OverseerUpdate(
-                    update_type="plan",
-                    plan_id=plan.plan_id,
-                    total_steps=len(plan.steps),
-                    content={
-                        "analysis": plan.analysis,
-                        "steps": [
-                            {
-                                "step_number": s.step_number,
-                                "description": s.description,
-                                "command": s.command,
-                            }
-                            for s in plan.steps
-                        ],
-                    },
-                )
-            )
-
-            # Phase 2: Execute steps
-            async for update in self.overseer.orchestrate_execution(
-                plan, self.executor
-            ):
-                await self.send_update(update)
-
-                # Save step results to chat history (Issue #665: uses helper)
-                if update.update_type == "step_complete" and update.content:
-                    if isinstance(update.content, dict):
-                        result = _dict_to_step_result(update.content)
-                        await self.save_step_result_to_chat(result)
-                    elif isinstance(update.content, StepResult):
-                        await self.save_step_result_to_chat(update.content)
-
-            # Phase 3: Complete
+            await self._broadcast_plan(plan)
+            await self._execute_plan(plan)
             await self.send_json(
                 {
                     "type": "status",
@@ -348,6 +353,17 @@ class OverseerWebSocketHandler:
                     "plan_id": plan.plan_id,
                 }
             )
+
+        except asyncio.CancelledError:
+            logger.info("[OverseerWS] Query cancelled: session=%s", self.session_id)
+            await self.send_json(
+                {
+                    "type": "status",
+                    "status": "cancelled",
+                    "message": "Execution cancelled.",
+                }
+            )
+            raise
 
         except Exception as e:
             logger.error("[OverseerWS] Query processing failed: %s", e)
@@ -374,7 +390,17 @@ class OverseerWebSocketHandler:
             query = data.get("query", "")
             context = data.get("context")
             if query:
-                await self.handle_query(query, context)
+                if self._current_task and not self._current_task.done():
+                    await self.send_json(
+                        {
+                            "type": "error",
+                            "error": "A query is already running. Send 'cancel' first.",
+                        }
+                    )
+                else:
+                    self._current_task = asyncio.create_task(
+                        self.handle_query(query, context)
+                    )
             else:
                 await self.send_json(
                     {
@@ -384,14 +410,17 @@ class OverseerWebSocketHandler:
                 )
 
         elif msg_type == "cancel":
-            # TODO: Implement cancellation
-            await self.send_json(
-                {
-                    "type": "status",
-                    "status": "cancelled",
-                    "message": "Execution cancelled.",
-                }
-            )
+            if self._current_task and not self._current_task.done():
+                self._current_task.cancel()
+                # Cancelled status is sent by handle_query's CancelledError handler
+            else:
+                await self.send_json(
+                    {
+                        "type": "status",
+                        "status": "cancelled",
+                        "message": "No active execution to cancel.",
+                    }
+                )
 
         elif msg_type == "status":
             summary = self.overseer.get_plan_summary() if self.overseer else None

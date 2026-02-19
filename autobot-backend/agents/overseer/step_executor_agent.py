@@ -54,6 +54,11 @@ logger = logging.getLogger(__name__)
 # Issue #765: DANGEROUS_PATTERNS and SAFE_COMMANDS now imported from
 # src.security.command_patterns for centralized security pattern management
 
+# Unique marker written after each PTY command to capture the exit code.
+# Format written to terminal: echo '__AUTOBOT_EXIT__='$?
+# Format that appears in output: __AUTOBOT_EXIT__=<N>
+_PTY_EXIT_MARKER = "__AUTOBOT_EXIT__"
+
 
 def _build_no_command_result(task: "AgentTask", execution_time: float) -> StepResult:
     """
@@ -124,6 +129,26 @@ def _build_execution_error_result(
         execution_time=execution_time,
         error=str(error),
     )
+
+
+def _parse_pty_exit_code(output: str) -> Tuple[str, int]:
+    """
+    Extract exit code from PTY output containing the exit marker.
+
+    Searches for '__AUTOBOT_EXIT__=<N>' in output, strips the marker line,
+    and returns (cleaned_output, exit_code).  Returns exit_code=0 when
+    the marker is absent (e.g. older sessions without exit-code support).
+
+    Issue #935.
+    """
+    import re
+
+    match = re.search(rf"{_PTY_EXIT_MARKER}=(\d+)", output)
+    if match:
+        exit_code = int(match.group(1))
+        cleaned = re.sub(rf"\s*{_PTY_EXIT_MARKER}=\d+\s*", "", output).strip()
+        return cleaned, exit_code
+    return output, 0
 
 
 class StepExecutorAgent:
@@ -623,25 +648,28 @@ class StepExecutorAgent:
             is_final=False,
         )
 
-        # Poll for output completion
-        output = await self._poll_pty_output(chat_manager, timeout=60.0)
+        # Poll for output completion (returns raw output including exit marker)
+        raw_output = await self._poll_pty_output(chat_manager, timeout=60.0)
 
-        # Yield final output
+        # Extract real exit code from marker appended by _execute_command_streaming
+        clean_output, exit_code = _parse_pty_exit_code(raw_output)
+        logger.debug("[StepExecutor] PTY exit code: %d", exit_code)
+
+        # Yield final output (without the exit marker line)
         yield StreamChunk(
             task_id=task_id,
             step_number=0,
             chunk_type="stdout",
-            content=output,
+            content=clean_output,
             is_final=False,
         )
 
-        # Yield return code (assume 0 for PTY execution)
-        # TODO: Detect actual return code from PTY
+        # Yield actual return code detected from PTY (Issue #935)
         yield StreamChunk(
             task_id=task_id,
             step_number=0,
             chunk_type="return_code",
-            content="0",
+            content=str(exit_code),
             is_final=True,
         )
 
@@ -659,8 +687,10 @@ class StepExecutorAgent:
 
         # Try PTY execution first (preferred - shows in user's terminal)
         if PTY_AVAILABLE and simple_pty_manager:
-            # Write command to PTY
-            if not self._write_to_pty(f"{command}\n"):
+            # Append exit-code marker so we can detect the real return code
+            # from PTY output (Issue #935).
+            pty_command = f"{command}; echo '{_PTY_EXIT_MARKER}='$?"
+            if not self._write_to_pty(f"{pty_command}\n"):
                 logger.warning(
                     "[StepExecutor] PTY write failed, falling back to subprocess"
                 )
@@ -681,26 +711,28 @@ class StepExecutorAgent:
 
     def _extract_terminal_output(self, messages: list) -> str:
         """
-        Extract terminal output from chat messages.
+        Aggregate all recent terminal output from chat messages.
 
-        Searches through messages in reverse order to find the most recent
-        terminal output that is not a command prompt.
+        Collects every non-prompt terminal message in chronological order so
+        multi-line command output (including the exit-code marker appended by
+        _execute_command_streaming) is captured as a single string.
 
         Args:
-            messages: List of chat messages to search through
+            messages: List of chat messages in chronological order
 
         Returns:
-            Extracted terminal output text, or empty string if none found.
-            Issue #620.
+            Concatenated terminal output text (may include exit-code marker).
+            Issue #620, #935.
         """
         from utils.encoding_utils import strip_ansi_codes
 
-        for msg in reversed(messages):
+        parts = []
+        for msg in messages:
             if msg.get("sender") == "terminal" and msg.get("text"):
                 text = strip_ansi_codes(msg["text"])
                 if text and not text.startswith("$"):
-                    return text
-        return ""
+                    parts.append(text)
+        return "\n".join(parts)
 
     async def _poll_pty_output(
         self,
@@ -732,6 +764,11 @@ class StepExecutorAgent:
                     session_id=self.session_id, limit=10
                 )
                 current_output = self._extract_terminal_output(messages)
+
+                # Terminate early when exit-code marker appears (Issue #935)
+                if current_output and _PTY_EXIT_MARKER in current_output:
+                    logger.debug("[StepExecutor] Exit marker found in PTY output")
+                    return current_output
 
                 # Check stability - output unchanged for threshold duration
                 if current_output and current_output == last_output:
