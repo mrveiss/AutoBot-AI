@@ -816,6 +816,9 @@ Every manual change creates **configuration debt** that will cause problems late
    /opt/autobot/venv/bin/python --version
    ```
    - Wrong Python path = missing modules, version mismatches
+   - Main backend: Python 3.12 (conda env `/home/autobot/miniconda3/envs/autobot-backend`)
+   - SLM/fleet nodes: Python 3.10 (Ubuntu 22.04 venv at `/opt/autobot/venv`)
+   - Python 3.13+: `aioredis` requires compatibility shim — `from redis import asyncio as aioredis`
 
 3. **Database migrations current:**
    ```bash
