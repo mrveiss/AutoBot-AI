@@ -504,6 +504,18 @@ const routes: RouteRecordRaw[] = [
       return '/chat'
     }
   },
+  // Issue #929: Plugin Manager UI
+  {
+    path: '/plugins',
+    name: 'plugins',
+    component: () => import('@/views/PluginsView.vue'),
+    meta: {
+      title: 'Plugin Manager',
+      icon: 'fas fa-puzzle-piece',
+      description: 'Browse, install, and manage AutoBot plugins',
+      requiresAuth: true
+    }
+  },
   // Issue #729: Secrets stays in autobot-vue - user functionality for chat/agent credentials
   {
     path: '/secrets',

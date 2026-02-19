@@ -155,6 +155,23 @@
                   </div>
                 </router-link>
 
+                <!-- Issue #929: Plugin Manager -->
+                <router-link
+                  to="/plugins"
+                  :class="{
+                    'bg-autobot-primary text-white': $route.path.startsWith('/plugins'),
+                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/plugins')
+                  }"
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
+                >
+                  <div class="flex items-center space-x-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path>
+                    </svg>
+                    <span>Plugins</span>
+                  </div>
+                </router-link>
+
                 <!-- Issue #729: Link to SLM Admin for infrastructure operations -->
                 <a
                   :href="slmAdminUrl"
@@ -347,6 +364,24 @@
                   <path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z"></path>
                 </svg>
                 <span>Preferences</span>
+              </div>
+            </router-link>
+
+            <!-- Issue #929: Plugin Manager -->
+            <router-link
+              to="/plugins"
+              @click="closeMobileNav"
+              :class="{
+                'bg-autobot-primary text-white': $route.path.startsWith('/plugins'),
+                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/plugins')
+              }"
+              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+            >
+              <div class="flex items-center space-x-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path>
+                </svg>
+                <span>Plugins</span>
               </div>
             </router-link>
 
