@@ -1,0 +1,132 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Fix incorrect port values in /opt/autobot/.env on SLM server
+#
+# The .env was generated from a legacy config system with wrong port values.
+# This playbook corrects them to match production reality:
+#   - Frontend: nginx HTTPS on 443 (not dev server 5173)
+#   - NPU Worker: port 8081 (not 8082)
+#   - AI Stack / Ollama: port 11434 on .20 (not 8080 on .24)
+#
+# Usage:
+#   cd autobot-slm-backend/ansible
+#   ansible-playbook fix-slm-env-ports.yml
+
+- name: Fix SLM Server .env port configuration
+  hosts: slm
+  become: true
+  gather_facts: false
+
+  vars:
+    env_file: /opt/autobot/.env
+    frontend_host: "172.16.168.21"
+    frontend_port: "443"
+    npu_host: "172.16.168.22"
+    npu_port: "8081"
+    ai_stack_host: "172.16.168.20"
+    ai_stack_port: "11434"
+
+  tasks:
+    - name: "Fix | Frontend port 5173 → 443"
+      lineinfile:
+        path: "{{ env_file }}"
+        regexp: '^AUTOBOT_FRONTEND_PORT='
+        line: "AUTOBOT_FRONTEND_PORT={{ frontend_port }}"
+
+    - name: "Fix | Frontend URL http:5173 → https:443"
+      lineinfile:
+        path: "{{ env_file }}"
+        regexp: '^AUTOBOT_FRONTEND_URL='
+        line: "AUTOBOT_FRONTEND_URL=https://{{ frontend_host }}"
+
+    - name: "Fix | VITE frontend port 5173 → 443"
+      lineinfile:
+        path: "{{ env_file }}"
+        regexp: '^VITE_FRONTEND_PORT='
+        line: "VITE_FRONTEND_PORT={{ frontend_port }}"
+
+    - name: "Fix | NPU Worker port 8082 → 8081"
+      lineinfile:
+        path: "{{ env_file }}"
+        regexp: '^AUTOBOT_NPU_WORKER_PORT='
+        line: "AUTOBOT_NPU_WORKER_PORT={{ npu_port }}"
+
+    - name: "Fix | NPU Worker URL 8082 → 8081"
+      lineinfile:
+        path: "{{ env_file }}"
+        regexp: '^AUTOBOT_NPU_WORKER_URL='
+        line: "AUTOBOT_NPU_WORKER_URL=http://{{ npu_host }}:{{ npu_port }}"
+
+    - name: "Fix | VITE NPU Worker port 8082 → 8081"
+      lineinfile:
+        path: "{{ env_file }}"
+        regexp: '^VITE_NPU_WORKER_PORT='
+        line: "VITE_NPU_WORKER_PORT={{ npu_port }}"
+
+    - name: "Fix | AI Stack host .24 → .20 (Ollama is on main VM)"
+      lineinfile:
+        path: "{{ env_file }}"
+        regexp: '^AUTOBOT_AI_STACK_HOST='
+        line: "AUTOBOT_AI_STACK_HOST={{ ai_stack_host }}"
+
+    - name: "Fix | AI Stack port 8080 → 11434 (Ollama port)"
+      lineinfile:
+        path: "{{ env_file }}"
+        regexp: '^AUTOBOT_AI_STACK_PORT='
+        line: "AUTOBOT_AI_STACK_PORT={{ ai_stack_port }}"
+
+    - name: "Fix | AI Stack URL http:.24:8080 → http:.20:11434"
+      lineinfile:
+        path: "{{ env_file }}"
+        regexp: '^AUTOBOT_AI_STACK_URL='
+        line: "AUTOBOT_AI_STACK_URL=http://{{ ai_stack_host }}:{{ ai_stack_port }}"
+
+    - name: "Fix | VITE AI Stack host → .20"
+      lineinfile:
+        path: "{{ env_file }}"
+        regexp: '^VITE_AI_STACK_HOST='
+        line: "VITE_AI_STACK_HOST={{ ai_stack_host }}"
+
+    - name: "Fix | VITE AI Stack port 8080 → 11434"
+      lineinfile:
+        path: "{{ env_file }}"
+        regexp: '^VITE_AI_STACK_PORT='
+        line: "VITE_AI_STACK_PORT={{ ai_stack_port }}"
+
+    - name: "Restart SLM backend to pick up new env values"
+      systemd:
+        name: autobot-slm-backend
+        state: restarted
+      async: 1
+      poll: 0
+
+    - name: "Wait for SLM backend to restart"
+      pause:
+        seconds: 12
+
+    - name: "Verify SLM backend health"
+      uri:
+        url: "https://{{ ansible_host }}/api/health"
+        validate_certs: false
+        status_code: 200
+      register: health
+      retries: 6
+      delay: 5
+      until: health.status == 200
+      failed_when: false
+
+    - name: "Summary"
+      debug:
+        msg: |
+          ╔═══════════════════════════════════════════════════════╗
+          ║  SLM .env Port Fix Complete                          ║
+          ╚═══════════════════════════════════════════════════════╝
+          Fixed values in {{ env_file }}:
+            AUTOBOT_FRONTEND_PORT: 5173 → 443 (nginx HTTPS)
+            AUTOBOT_NPU_WORKER_PORT: 8082 → 8081
+            AUTOBOT_AI_STACK_HOST: 172.16.168.24 → 172.16.168.20
+            AUTOBOT_AI_STACK_PORT: 8080 → 11434 (Ollama)
+          SLM backend health: {{ health.status | default('unknown') }}
+          ═══════════════════════════════════════════════════════
