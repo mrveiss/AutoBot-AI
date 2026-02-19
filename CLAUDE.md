@@ -450,7 +450,9 @@ When merging duplicate code: **Preserve ALL features** + **Choose BEST implement
 git status
 
 # Fix the specific issue (don't skip hooks with --no-verify)
-# Re-stage and re-commit
+# If the hook AUTO-MODIFIED a file (formatter/linter), re-stage those files:
+# git add <hook-modified-files>
+# Then re-commit (the hook change is now staged)
 
 # Verify success
 git log -1 --stat
