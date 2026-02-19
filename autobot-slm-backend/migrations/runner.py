@@ -43,6 +43,7 @@ MIGRATIONS = [
     "add_agents",
     "seed_agents",
     "add_error_resolution_fields",
+    "add_external_agents",
 ]
 
 

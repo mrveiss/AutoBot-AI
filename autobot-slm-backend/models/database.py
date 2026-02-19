@@ -1042,3 +1042,30 @@ class AlertRule(Base):
     last_triggered = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class ExternalAgent(Base):
+    """External A2A-compliant agent registered in the SLM registry (Issue #963)."""
+
+    __tablename__ = "external_agents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+    base_url = Column(String(512), nullable=False, unique=True)
+    description = Column(Text, nullable=True)
+    tags = Column(JSON, default=list)
+    enabled = Column(Boolean, default=True)
+
+    # A2A Agent Card cache
+    card_data = Column(JSON, nullable=True)
+    card_fetched_at = Column(DateTime, nullable=True)
+    card_error = Column(Text, nullable=True)
+
+    # Trust and connectivity
+    verified = Column(Boolean, default=False)
+    ssl_verify = Column(Boolean, default=True)
+    api_key = Column(Text, nullable=True)  # AES-GCM encrypted at rest
+
+    created_by = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

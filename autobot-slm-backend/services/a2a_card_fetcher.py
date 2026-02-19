@@ -2,13 +2,16 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-A2A Agent Card Fetcher Service (Issue #962).
+A2A Agent Card Fetcher Service (Issues #962, #963).
 
-Periodically fetches /.well-known/agent.json from backend nodes and
-stores the result in Node.extra_data["a2a_card"] so the SLM dashboard
-can display each node's published A2A capabilities.
+Periodically fetches /.well-known/agent.json from:
+  - Fleet backend nodes (port 8443 HTTPS) — stored in Node.extra_data
+  - External registered agents — stored in ExternalAgent.card_data
 
-Only nodes with the "backend" role are queried (port 8443 HTTPS).
+Public API:
+  fetch_card_for_node(node_id)           → Optional[dict]
+  fetch_card_for_external(agent_id)      → Optional[dict]
+  start_card_refresh_task(interval)      → asyncio.Task
 """
 
 import asyncio
@@ -115,12 +118,102 @@ async def _refresh_all_backend_nodes() -> None:
     await asyncio.gather(*tasks, return_exceptions=True)
 
 
+async def fetch_card_for_external(agent_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Fetch and store the A2A card for an ExternalAgent by its DB id.
+
+    Respects the agent's ssl_verify flag.  Decrypts api_key if present.
+    Returns the card dict on success, None otherwise.
+    """
+    import ssl
+
+    import aiohttp
+    from models.database import ExternalAgent
+    from services.database import db_service
+    from sqlalchemy import select, update
+
+    async with db_service.get_session() as db:
+        result = await db.execute(
+            select(ExternalAgent).where(ExternalAgent.id == agent_id)
+        )
+        agent = result.scalar_one_or_none()
+        if agent is None:
+            logger.warning("External agent %s not found", agent_id)
+            return None
+
+        url = agent.base_url.rstrip("/") + _WELL_KNOWN_PATH
+        headers: Dict[str, str] = {}
+        if agent.api_key:
+            try:
+                from services.encryption import decrypt_data
+
+                headers["Authorization"] = f"Bearer {decrypt_data(agent.api_key)}"
+            except Exception as exc:
+                logger.warning(
+                    "Could not decrypt api_key for agent %s: %s", agent_id, exc
+                )
+
+        ssl_ctx = ssl.create_default_context()
+        ssl_ctx.check_hostname = False
+        if not agent.ssl_verify:
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+
+        card = None
+        error_msg = None
+        try:
+            timeout = aiohttp.ClientTimeout(total=_FETCH_TIMEOUT)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(url, ssl=ssl_ctx, headers=headers) as resp:
+                    if resp.status == 200:
+                        card = await resp.json(content_type=None)
+                    else:
+                        error_msg = f"HTTP {resp.status}"
+        except Exception as exc:
+            error_msg = str(exc)
+            logger.debug("External agent %s card fetch failed: %s", agent_id, exc)
+
+        now = datetime.now(timezone.utc)
+        await db.execute(
+            update(ExternalAgent)
+            .where(ExternalAgent.id == agent_id)
+            .values(
+                card_data=card,
+                card_fetched_at=now,
+                card_error=error_msg if card is None else None,
+                verified=(card is not None),
+            )
+        )
+        await db.commit()
+        return card
+
+
+async def _refresh_all_external_agents() -> None:
+    """Re-fetch cards for every enabled ExternalAgent."""
+    from models.database import ExternalAgent
+    from services.database import db_service
+    from sqlalchemy import select
+
+    async with db_service.get_session() as db:
+        result = await db.execute(
+            select(ExternalAgent).where(ExternalAgent.enabled.is_(True))
+        )
+        agents = result.scalars().all()
+
+    if not agents:
+        return
+
+    logger.debug("Refreshing A2A cards for %d external agent(s)", len(agents))
+    tasks = [fetch_card_for_external(a.id) for a in agents]
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
 async def _card_refresh_loop(interval: int) -> None:
     """Background loop — runs forever until cancelled."""
     logger.info("A2A card refresh loop started (interval=%ds)", interval)
     while True:
         try:
             await _refresh_all_backend_nodes()
+            await _refresh_all_external_agents()
         except Exception as exc:
             logger.error("A2A card refresh error: %s", exc)
         await asyncio.sleep(interval)

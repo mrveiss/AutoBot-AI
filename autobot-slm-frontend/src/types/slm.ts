@@ -586,3 +586,54 @@ export interface NPUWorkerConfig {
   max_retries: number
   assigned_models: string[]
 }
+
+// =============================================================================
+// External Agent Registry Types (Issue #963)
+// =============================================================================
+
+/**
+ * External A2A-compliant agent registered in the SLM registry.
+ */
+export interface ExternalAgent {
+  id: number
+  name: string
+  base_url: string
+  description: string | null
+  tags: string[]
+  enabled: boolean
+  has_api_key: boolean
+  verified: boolean
+  card_data: Record<string, unknown> | null
+  card_fetched_at: string | null
+  card_error: string | null
+  skill_count: number
+  created_by: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface ExternalAgentCreate {
+  name: string
+  base_url: string
+  description?: string
+  tags?: string[]
+  enabled?: boolean
+  ssl_verify?: boolean
+  api_key?: string
+}
+
+export interface ExternalAgentUpdate {
+  name?: string
+  description?: string
+  tags?: string[]
+  enabled?: boolean
+  ssl_verify?: boolean
+  api_key?: string
+}
+
+export interface ExternalAgentCard {
+  id: number
+  name: string
+  base_url: string
+  card: Record<string, unknown>
+}
