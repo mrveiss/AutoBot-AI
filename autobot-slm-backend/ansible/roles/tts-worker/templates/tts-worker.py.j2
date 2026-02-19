@@ -28,30 +28,27 @@ logger = logging.getLogger("tts-worker")
 
 TTS_HOST = os.getenv("TTS_HOST", "0.0.0.0")
 TTS_PORT = int(os.getenv("TTS_PORT", "8082"))
-TTS_MODEL_ID = os.getenv("TTS_MODEL_ID", "liquid-ai/kani-tts-2")
+TTS_MODEL_ID = os.getenv("TTS_MODEL_ID", "nineninesix/kani-tts-2-en")
 TTS_DEVICE = os.getenv("TTS_DEVICE", "cpu")
 TTS_MODELS_DIR = Path(os.getenv("TTS_MODELS_DIR", "/var/lib/autobot/models/tts"))
 
 app = FastAPI(title="AutoBot TTS Worker", version="1.0.0")
 
-_pipeline = None
+_model = None
+_embedder = None
 _model_loaded = False
 _model_error: Optional[str] = None
 
 
 def _load_tts_model() -> Tuple[bool, Optional[str]]:
-    """Load Kani-TTS-2 pipeline from HuggingFace. Returns (success, error_msg)."""
-    global _pipeline
+    """Load Kani-TTS-2 via kani_tts package. Returns (success, error_msg)."""
+    global _model, _embedder
     try:
-        from transformers import pipeline
+        from kani_tts import KaniTTS, SpeakerEmbedder
 
         TTS_MODELS_DIR.mkdir(parents=True, exist_ok=True)
-        _pipeline = pipeline(
-            "text-to-speech",
-            model=TTS_MODEL_ID,
-            device=TTS_DEVICE,
-            model_kwargs={"cache_dir": str(TTS_MODELS_DIR)},
-        )
+        _model = KaniTTS(TTS_MODEL_ID)
+        _embedder = SpeakerEmbedder()
         logger.info("TTS model loaded: %s on %s", TTS_MODEL_ID, TTS_DEVICE)
         return True, None
     except Exception as e:
@@ -72,21 +69,24 @@ def _to_wav_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
 
 
 def _run_synthesis(text: str) -> bytes:
-    """Synchronous TTS synthesis via pipeline."""
-    result = _pipeline(text)
-    audio = np.array(result["audio"]).squeeze()
-    return _to_wav_bytes(audio, result.get("sampling_rate", 22050))
+    """Synchronous TTS synthesis via KaniTTS."""
+    audio, _ = _model(text)
+    return _to_wav_bytes(audio, _model.sample_rate)
 
 
 def _run_clone_synthesis(text: str, ref_bytes: bytes) -> bytes:
     """Synchronous voice-cloned synthesis using reference audio."""
-    ref_audio, _ = sf.read(io.BytesIO(ref_bytes))
-    result = _pipeline(
-        text,
-        forward_params={"speaker_embeddings": ref_audio},
-    )
-    audio = np.array(result["audio"]).squeeze()
-    return _to_wav_bytes(audio, result.get("sampling_rate", 22050))
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp.write(ref_bytes)
+        ref_path = tmp.name
+    try:
+        speaker_emb = _embedder.embed_audio_file(ref_path)
+        audio, _ = _model(text, speaker_emb=speaker_emb)
+        return _to_wav_bytes(audio, _model.sample_rate)
+    finally:
+        os.unlink(ref_path)
 
 
 @app.on_event("startup")

@@ -11,7 +11,7 @@ tts_log_dir: /var/log/autobot
 tts_models_dir: /var/lib/autobot/models/tts
 
 # Model settings
-tts_model_id: "liquid-ai/kani-tts-2"
+tts_model_id: "nineninesix/kani-tts-2-en"
 tts_device: "cpu"
 
 # Server settings

@@ -138,16 +138,26 @@
   when: "tts_device.startswith('cuda')"
   tags: ['tts', 'packages']
 
-- name: "TTS Worker | Install remaining TTS model dependencies"
+- name: "TTS Worker | Install kani-tts-2 package and audio dependencies"
   ansible.builtin.pip:
     name:
-      - transformers>=4.40.0
+      - kani-tts-2
       - soundfile>=0.12.0
       - numpy>=1.24.0
       - huggingface_hub>=0.20.0
     virtualenv: "{{ tts_install_dir }}/venv"
     state: present
     extra_args: "--timeout 300"
+  become_user: "{{ tts_user }}"
+  tags: ['tts', 'packages']
+
+- name: "TTS Worker | Pin transformers==4.56.0 (required by kani-tts-2)"
+  ansible.builtin.pip:
+    name:
+      - "transformers==4.56.0"
+    virtualenv: "{{ tts_install_dir }}/venv"
+    state: present
+    extra_args: "--upgrade --timeout 300"
   become_user: "{{ tts_user }}"
   tags: ['tts', 'packages']
 
