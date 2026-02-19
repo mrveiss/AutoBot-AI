@@ -114,9 +114,9 @@ async def _init_skills_tables() -> None:
 
 async def _init_skills_discovery() -> None:
     """Discover and register builtin skills at startup."""
-    from skills.manager import SkillManager
+    from backend.api.skills import _get_manager
 
-    manager = SkillManager.get_instance()
+    manager = _get_manager()
     result = await manager.initialize()
     logger.info(
         "Skills discovered: %d registered, categories: %s",
