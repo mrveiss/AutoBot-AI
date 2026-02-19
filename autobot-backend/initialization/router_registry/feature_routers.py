@@ -113,6 +113,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("backend.api.permissions", "", ["permissions"], "permissions"),
     # Personality profiles (Issue #964)
     ("backend.api.personality", "/personality", ["personality"], "personality"),
+    # Self-improving tasks — adaptive task refinement and outcome learning (Issue #930)
+    (
+        "api.agents_self_improvement",
+        "/agents",
+        ["self-improvement", "agents"],
+        "agents_self_improvement",
+    ),
     # Code analysis and search
     ("backend.api.code_search", "/code-search", ["code-search"], "code_search"),
     (
