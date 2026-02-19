@@ -600,13 +600,15 @@ const buildNestedTree = (facts: any[], category: string): TreeNode[] => {
         if (!current._files) current._files = []
         // Extract the actual fact ID from the Redis key (e.g., "fact:UUID" -> "UUID")
         const factId = fact.key ? fact.key.replace('fact:', '') : `fact-${category}-${factIdx}`
+        const fileContent = fact.full_content || fact.content || ''
         current._files.push({
           id: factId, // Use actual fact ID from Redis, not synthetic ID
           name: part,
           type: 'file' as const,
           path: `/${category}/${filename}`,
           category: category,
-          content: fact.full_content || fact.content,
+          size: fileContent.length,
+          content: fileContent,
           metadata: {
             ...fact.metadata,
             key: fact.key,
@@ -1088,6 +1090,10 @@ const loadFileContent = async (file: TreeNode) => {
       }
     }
   })
+  // Update size to reflect actual loaded content length
+  if (selectedFile.value && fileContent.value) {
+    selectedFile.value.size = fileContent.value.length
+  }
 }
 
 const findNode = (nodes: TreeNode[], id: string): TreeNode | null => {
