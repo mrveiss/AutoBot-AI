@@ -116,10 +116,19 @@
   become_user: "{{ tts_user }}"
   tags: ['tts', 'packages']
 
-- name: "TTS Worker | Install TTS model dependencies"
+- name: "TTS Worker | Install torch CPU-only (avoids 4GB NVIDIA CUDA wheels)"
   ansible.builtin.pip:
     name:
       - torch>=2.0.0
+    virtualenv: "{{ tts_install_dir }}/venv"
+    state: present
+    extra_args: "--index-url https://download.pytorch.org/whl/cpu --timeout 300"
+  become_user: "{{ tts_user }}"
+  tags: ['tts', 'packages']
+
+- name: "TTS Worker | Install remaining TTS model dependencies"
+  ansible.builtin.pip:
+    name:
       - transformers>=4.40.0
       - soundfile>=0.12.0
       - numpy>=1.24.0

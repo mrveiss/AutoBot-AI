@@ -55,6 +55,12 @@
       when: deploy_role == 'npu-worker'
       tags: ['npu-worker']
 
+    - name: "Apply TTS Worker Role"
+      include_role:
+        name: tts-worker
+      when: deploy_role == 'tts-worker'
+      tags: ['tts-worker']
+
     - name: "Apply AI Stack Role"
       include_role:
         name: ai-stack
