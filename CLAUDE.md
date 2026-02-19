@@ -307,6 +307,27 @@ Let me fix that real quick...
 
 ---
 
+## MEMORY HYGIENE (MANDATORY)
+
+**Rules for `~/.claude/projects/.../memory/MEMORY.md`:**
+
+- **Line limit:** Target <150 lines. Hard limit 200 (file is truncated after line 200).
+- **One line per issue:** Each closed issue gets exactly one line: `#NNN: phrase. Commit abc1234.`
+- **Archive threshold:** When Recent Completed exceeds 30 items → move to `completed-history.md`
+- **Prune gotchas:** Delete notes that reference resolved issues or duplicate CLAUDE.md content
+- **Source of truth split:** CLAUDE.md owns stable patterns/standards. MEMORY.md owns recent state only.
+
+**End-of-session ritual (60 seconds):**
+
+1. Did I close any issues? → Move from Open Work to Recent Completed (1 line each)
+2. Did any gotcha get resolved? → Delete it
+3. Is Recent Completed >30 items? → Archive oldest batch to `completed-history.md`
+4. Is MEMORY.md >150 lines? → Trim now using `/memory-cleanup` skill
+
+**Run `/memory-cleanup`** for a guided walkthrough of this ritual.
+
+---
+
 ## MULTI-AGENT SAFETY (MANDATORY)
 
 ### Git Operations
