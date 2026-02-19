@@ -201,6 +201,12 @@ def validate_config():
     return _lazy_cache["unified_config_manager"].validate_config()
 
 
+def is_feature_enabled(feature: str) -> bool:
+    """Check if a feature is enabled (e.g. 'multimodal.vision', 'npu')."""
+    _lazy_import_manager()
+    return _lazy_cache["unified_config_manager"].is_feature_enabled(feature)
+
+
 # Async convenience functions
 async def get_config_manager_async():
     """Get async config manager instance"""
