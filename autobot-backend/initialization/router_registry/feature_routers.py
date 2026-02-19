@@ -33,7 +33,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "batch_jobs",
     ),
     (
-        "backend.services.advanced_workflow",
+        "backend.api.orchestration",
         "/orchestrator",
         ["orchestrator"],
         "orchestrator",

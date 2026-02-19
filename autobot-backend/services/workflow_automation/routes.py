@@ -28,7 +28,7 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/workflow_automation", tags=["workflow_automation"])
+router = APIRouter(tags=["workflow_automation"])
 
 # Global workflow manager instance (lazy initialization, thread-safe)
 # REUSABLE PATTERN: Lazy initialization avoids creating async resources at module import time
