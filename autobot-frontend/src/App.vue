@@ -205,9 +205,9 @@
               aria-label="Profile settings"
             >
               <div class="w-6 h-6 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                {{ userStore.currentUser?.username?.charAt(0).toUpperCase() || 'U' }}
+                {{ displayUsername?.charAt(0).toUpperCase() || 'U' }}
               </div>
-              <span class="max-w-[120px] truncate">{{ userStore.currentUser?.username || 'Profile' }}</span>
+              <span class="max-w-[120px] truncate">{{ displayUsername || 'Profile' }}</span>
             </button>
 
             <!-- Dark Mode Toggle -->
@@ -411,7 +411,7 @@
             >
               <div class="flex items-center space-x-2">
                 <div class="w-4 h-4 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold">
-                  {{ userStore.currentUser?.username?.charAt(0).toUpperCase() || 'U' }}
+                  {{ displayUsername?.charAt(0).toUpperCase() || 'U' }}
                 </div>
                 <span>Profile Settings</span>
               </div>
@@ -952,6 +952,12 @@ export default {
     // SLM Admin URL from SSOT config (Issue #729)
     const slmAdminUrl = computed(() => getSLMAdminUrl());
 
+    // Issue #973: Guard against Promise objects being rendered as username
+    const displayUsername = computed(() => {
+      const username = userStore.currentUser?.username
+      return typeof username === 'string' ? username : null
+    });
+
     return {
       // Store references
       appStore,
@@ -973,6 +979,7 @@ export default {
       hasErrors,
       isLoginPage,
       slmAdminUrl,
+      displayUsername,
 
       // Methods
       toggleMobileNav,
