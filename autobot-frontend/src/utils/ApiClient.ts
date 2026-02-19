@@ -174,6 +174,10 @@ export class ApiClient {
     logger.warn('401 Unauthorized, clearing auth:', endpoint);
     localStorage.removeItem('autobot_auth');
     localStorage.removeItem('autobot_user');
+    // Also clear Pinia store to prevent stale isAuthenticated blocking login redirect (#972)
+    import('@/stores/useUserStore').then(({ useUserStore }) => {
+      try { useUserStore().logout(); } catch { /* ignore if store unavailable */ }
+    });
     if (
       typeof window !== 'undefined' &&
       !window.location.pathname.includes('/login')

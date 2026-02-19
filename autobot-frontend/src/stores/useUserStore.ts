@@ -268,8 +268,10 @@ export const useUserStore = defineStore('user', () => {
         const auth = JSON.parse(storedAuth)
         const user = JSON.parse(storedUser)
 
+        // Only restore if there's a real JWT token (not fake single_user_mode token) (#972)
+        const hasRealToken = auth.token && auth.token !== 'single_user_mode'
         // Check if token is not expired
-        if (!auth.expiresAt || new Date(auth.expiresAt) > new Date()) {
+        if (hasRealToken && (!auth.expiresAt || new Date(auth.expiresAt) > new Date())) {
           authState.value = {
             ...auth,
             expiresAt: auth.expiresAt ? new Date(auth.expiresAt) : undefined
