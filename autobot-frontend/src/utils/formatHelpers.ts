@@ -297,7 +297,7 @@ export function formatCategoryName(category: string): string {
   if (!category) return ''
 
   return category
-    .split('_')
+    .split(/[_-]/)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
 }

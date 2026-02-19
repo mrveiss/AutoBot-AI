@@ -39,7 +39,7 @@
       <span v-if="node.type === 'folder' && node.children" class="folder-count">
         {{ node.children.length }} items
       </span>
-      <span v-else-if="node.type === 'file' && node.size" class="node-size">
+      <span v-else-if="node.type === 'file' && node.size !== undefined" class="node-size">
         {{ formatSize(node.size) }}
       </span>
 
@@ -261,7 +261,8 @@ const formatSize = (bytes: number): string => {
 }
 
 .node-name {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   font-size: var(--text-sm);
   color: var(--text-primary);
   overflow: hidden;
