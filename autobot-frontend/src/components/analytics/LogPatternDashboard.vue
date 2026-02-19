@@ -226,6 +226,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('LogPatternDashboard')
@@ -331,7 +332,7 @@ const filteredPatterns = computed(() => {
 const runAnalysis = async () => {
   isAnalyzing.value = true
   try {
-    const response = await fetch(
+    const response = await fetchWithAuth(
       `/api/log-patterns/mine?hours=${timeRange.value}&include_anomalies=true&include_trends=true`
     )
     if (response.ok) {
@@ -346,7 +347,7 @@ const runAnalysis = async () => {
 
 const fetchRealtimeData = async () => {
   try {
-    const response = await fetch('/api/log-patterns/realtime')
+    const response = await fetchWithAuth('/api/log-patterns/realtime')
     if (response.ok) {
       realtimeData.value = await response.json()
     }

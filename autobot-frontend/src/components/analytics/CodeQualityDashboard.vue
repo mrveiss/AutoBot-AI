@@ -419,6 +419,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
 
 const logger = createLogger('CodeQualityDashboard');
@@ -633,7 +634,7 @@ async function refreshData(): Promise<void> {
 async function loadHealthScore(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetch('/api/quality/health-score');
+    const response = await fetchWithAuth('/api/quality/health-score');
     if (response.ok) {
       healthScore.value = await response.json();
     } else {
@@ -648,7 +649,7 @@ async function loadHealthScore(): Promise<void> {
 async function loadMetrics(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetch('/api/quality/metrics');
+    const response = await fetchWithAuth('/api/quality/metrics');
     if (response.ok) {
       metrics.value = await response.json();
     } else {
@@ -664,7 +665,7 @@ async function loadMetrics(): Promise<void> {
 async function loadPatterns(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetch('/api/quality/patterns');
+    const response = await fetchWithAuth('/api/quality/patterns');
     if (response.ok) {
       patterns.value = await response.json();
     } else {
@@ -680,7 +681,7 @@ async function loadPatterns(): Promise<void> {
 async function loadComplexity(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetch('/api/quality/complexity?top_n=5');
+    const response = await fetchWithAuth('/api/quality/complexity?top_n=5');
     if (response.ok) {
       complexity.value = await response.json();
     } else {
@@ -695,7 +696,7 @@ async function loadComplexity(): Promise<void> {
 async function loadTrends(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetch(`/api/quality/trends?period=${selectedPeriod.value}`);
+    const response = await fetchWithAuth(`/api/quality/trends?period=${selectedPeriod.value}`);
     if (response.ok) {
       const data = await response.json();
       trendData.value = data.data_points || [];
@@ -712,7 +713,7 @@ async function loadTrends(): Promise<void> {
 async function loadSnapshot(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetch('/api/quality/snapshot');
+    const response = await fetchWithAuth('/api/quality/snapshot');
     if (response.ok) {
       const data = await response.json();
       codebaseStats.value = data.codebase_stats || { files: 0, lines: 0, issues: 0 };
@@ -729,7 +730,7 @@ async function drillDown(category: string): Promise<void> {
   drillDownCategory.value = category;
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetch(`/api/quality/drill-down/${category}`);
+    const response = await fetchWithAuth(`/api/quality/drill-down/${category}`);
     if (response.ok) {
       drillDownData.value = await response.json();
     } else {
@@ -746,7 +747,7 @@ async function exportReport(format: string): Promise<void> {
   exportMenuOpen.value = false;
   try {
     // Issue #552: Fixed path - backend uses /api/quality/* not /api/analytics/quality/*
-    const response = await fetch(`/api/quality/export?format=${format}`);
+    const response = await fetchWithAuth(`/api/quality/export?format=${format}`);
     if (response.ok) {
       const data = await response.json();
       if (format === 'json') {

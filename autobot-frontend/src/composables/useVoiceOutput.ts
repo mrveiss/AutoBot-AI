@@ -8,6 +8,7 @@
  */
 
 import { ref } from 'vue'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useVoiceOutput')
@@ -71,7 +72,7 @@ export function useVoiceOutput() {
     try {
       const formData = new FormData()
       formData.append('text', text)
-      const response = await fetch('/api/voice/synthesize', {
+      const response = await fetchWithAuth('/api/voice/synthesize', {
         method: 'POST',
         body: formData,
       })

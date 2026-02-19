@@ -520,6 +520,7 @@ import appConfig from '@/config/AppConfig.js'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 const logger = createLogger('ChatMessages')
 
@@ -992,7 +993,7 @@ const pollCommandState = async (command_id: string, callback: (result: any) => v
   const poll = async () => {
     try {
       const backendUrl = await appConfig.getApiUrl(`/api/agent-terminal/commands/${command_id}`)
-      const response = await fetch(backendUrl)
+      const response = await fetchWithAuth(backendUrl)
 
       if (!response.ok) {
         logger.error('Failed to get command state:', response.status)
@@ -1079,7 +1080,7 @@ const approveCommand = async (
     // Get backend URL from appConfig
     const backendUrl = await appConfig.getApiUrl(`/api/agent-terminal/sessions/${terminal_session_id}/approve`)
 
-    const response = await fetch(backendUrl, {
+    const response = await fetchWithAuth(backendUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

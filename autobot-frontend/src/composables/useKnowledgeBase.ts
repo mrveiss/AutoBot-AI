@@ -6,6 +6,7 @@
  */
 
 import apiClient from '@/utils/ApiClient'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import {
   formatDate as formatDateHelper,
@@ -313,7 +314,7 @@ export function useKnowledgeBase() {
     try {
       const url = await appConfig.getApiUrl('/api/knowledge_base/upload')
 
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         method: 'POST',
         body: formData
       })

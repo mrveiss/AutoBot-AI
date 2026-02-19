@@ -156,6 +156,7 @@ import ChatFilePanel from './ChatFilePanel.vue'
 import KnowledgePersistenceDialog from '@/components/knowledge/KnowledgePersistenceDialog.vue'
 import CommandPermissionDialog from '@/components/ui/CommandPermissionDialog.vue'
 import WorkflowProgressWidget from '@/components/workflow/WorkflowProgressWidget.vue'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 // Stores and controller
 const store = useChatStore()
@@ -497,7 +498,7 @@ const onCommandCommented = async (commentData: any) => {
         `/api/agent-terminal/sessions/${pendingCommand.value.terminalSessionId}/approve`
       )
 
-      const response = await fetch(approvalUrl, {
+      const response = await fetchWithAuth(approvalUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

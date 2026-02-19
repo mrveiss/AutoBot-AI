@@ -180,6 +180,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('AgentActivityVisualization')
@@ -329,7 +330,7 @@ function pauseAgent(agent: Agent) {
 
 async function fetchAgents() {
   try {
-    const response = await fetch('/api/agents/status')
+    const response = await fetchWithAuth('/api/agents/status')
     if (response.ok) {
       const data = await response.json()
       if (data.agents) {
@@ -349,7 +350,7 @@ async function fetchEvents() {
   try {
     // Issue #552: Fixed path - backend uses /api/analytics/agents/tasks/recent
     // (analytics_agents.py has prefix="/agents" and is included into analytics.py router)
-    const response = await fetch('/api/analytics/agents/tasks/recent?limit=10')
+    const response = await fetchWithAuth('/api/analytics/agents/tasks/recent?limit=10')
     if (response.ok) {
       const data = await response.json()
       // Backend returns tasks, not events - adapt response structure

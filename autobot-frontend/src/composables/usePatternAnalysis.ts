@@ -11,6 +11,7 @@
 import { ref, reactive, computed } from 'vue'
 import appConfig from '@/config/AppConfig.js'
 import { getConfig } from '@/config/ssot-config'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('usePatternAnalysis')
@@ -193,7 +194,7 @@ export function usePatternAnalysis() {
 
     try {
       const backendUrl = await getBackendUrl()
-      let response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/analyze`, {
+      let response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -211,7 +212,7 @@ export function usePatternAnalysis() {
         logger.info('Another analysis is running, attempting to clear stuck tasks...')
 
         // Try to clear stuck tasks with force=true
-        const clearResponse = await fetch(`${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`, {
+        const clearResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`, {
           method: 'POST'
         })
 
@@ -220,7 +221,7 @@ export function usePatternAnalysis() {
           logger.info('Cleared stuck tasks:', clearResult)
 
           // Retry the analysis
-          response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/analyze`, {
+          response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/analyze`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -289,7 +290,7 @@ export function usePatternAnalysis() {
 
       try {
         const backendUrl = await getBackendUrl()
-        const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/status/${taskId}`)
+        const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/status/${taskId}`)
 
         if (!response.ok) {
           throw new Error(`Status check failed: ${response.statusText}`)
@@ -331,7 +332,7 @@ export function usePatternAnalysis() {
   const getCachedSummary = async (): Promise<boolean> => {
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/cached-summary`)
+      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/cached-summary`)
 
       if (!response.ok) {
         return false
@@ -390,7 +391,7 @@ export function usePatternAnalysis() {
         ? `${backendUrl}/api/analytics/codebase/patterns/summary?path=${encodeURIComponent(path)}`
         : `${backendUrl}/api/analytics/codebase/patterns/summary`
 
-      const response = await fetch(url)
+      const response = await fetchWithAuth(url)
 
       if (!response.ok) {
         throw new Error(`Summary fetch failed: ${response.statusText}`)
@@ -448,7 +449,7 @@ export function usePatternAnalysis() {
       })
       if (path) params.append('path', path)
 
-      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/duplicates?${params}`)
+      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/duplicates?${params}`)
 
       if (!response.ok) {
         throw new Error(`Duplicates fetch failed: ${response.statusText}`)
@@ -481,7 +482,7 @@ export function usePatternAnalysis() {
       const params = new URLSearchParams({ limit: limit.toString() })
       if (path) params.append('path', path)
 
-      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/regex-opportunities?${params}`)
+      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/regex-opportunities?${params}`)
 
       if (!response.ok) {
         throw new Error(`Regex opportunities fetch failed: ${response.statusText}`)
@@ -518,7 +519,7 @@ export function usePatternAnalysis() {
       })
       if (path) params.append('path', path)
 
-      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/complexity-hotspots?${params}`)
+      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/complexity-hotspots?${params}`)
 
       if (!response.ok) {
         throw new Error(`Complexity hotspots fetch failed: ${response.statusText}`)
@@ -551,7 +552,7 @@ export function usePatternAnalysis() {
       const params = new URLSearchParams({ max_suggestions: maxSuggestions.toString() })
       if (path) params.append('path', path)
 
-      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/refactoring-suggestions?${params}`)
+      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/refactoring-suggestions?${params}`)
 
       if (!response.ok) {
         throw new Error(`Refactoring suggestions fetch failed: ${response.statusText}`)
@@ -577,7 +578,7 @@ export function usePatternAnalysis() {
 
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/storage/stats`)
+      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/storage/stats`)
 
       if (!response.ok) {
         throw new Error(`Storage stats fetch failed: ${response.statusText}`)
@@ -602,7 +603,7 @@ export function usePatternAnalysis() {
 
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/storage/clear`, {
+      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/storage/clear`, {
         method: 'DELETE'
       })
 
@@ -633,7 +634,7 @@ export function usePatternAnalysis() {
     try {
       const backendUrl = await getBackendUrl()
       const params = path ? `?path=${encodeURIComponent(path)}` : ''
-      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/report${params}`)
+      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/report${params}`)
 
       if (!response.ok) {
         throw new Error(`Report fetch failed: ${response.statusText}`)
@@ -714,7 +715,7 @@ export function usePatternAnalysis() {
   const clearStuckTasks = async (force: boolean = false): Promise<{ cleared: number; message: string }> => {
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=${force}`,
         { method: 'POST' }
       )
@@ -739,7 +740,7 @@ export function usePatternAnalysis() {
   const listTasks = async (): Promise<{ total: number; running: number; tasks: any[] }> => {
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/analytics/codebase/patterns/tasks`)
+      const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/tasks`)
 
       if (!response.ok) {
         throw new Error(`Failed to list tasks: ${response.statusText}`)

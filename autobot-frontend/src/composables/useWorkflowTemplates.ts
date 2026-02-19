@@ -9,6 +9,7 @@
 
 import { ref, computed } from 'vue'
 import appConfig from '@/config/AppConfig.js'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import type {
   WorkflowTemplateSummary,
@@ -52,7 +53,7 @@ export function useWorkflowTemplates() {
       if (complexity) params.append('complexity', complexity)
 
       const url = `${backendUrl}/api/templates/templates${params.toString() ? '?' + params.toString() : ''}`
-      const response = await fetch(url)
+      const response = await fetchWithAuth(url)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json()
       templates.value = data.templates || []
@@ -69,7 +70,7 @@ export function useWorkflowTemplates() {
     error.value = null
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/templates/templates/${templateId}`)
+      const response = await fetchWithAuth(`${backendUrl}/api/templates/templates/${templateId}`)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json()
       selectedTemplate.value = data.template
@@ -88,7 +89,7 @@ export function useWorkflowTemplates() {
     error.value = null
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${backendUrl}/api/templates/templates/search?q=${encodeURIComponent(query)}`
       )
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -106,7 +107,7 @@ export function useWorkflowTemplates() {
   async function fetchCategories(): Promise<void> {
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/templates/templates/categories`)
+      const response = await fetchWithAuth(`${backendUrl}/api/templates/templates/categories`)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json()
       categories.value = data.categories || []
@@ -118,7 +119,7 @@ export function useWorkflowTemplates() {
   async function fetchStats(): Promise<void> {
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(`${backendUrl}/api/templates/templates/stats`)
+      const response = await fetchWithAuth(`${backendUrl}/api/templates/templates/stats`)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json()
       stats.value = data.statistics
@@ -139,7 +140,7 @@ export function useWorkflowTemplates() {
       if (variables && Object.keys(variables).length > 0) {
         url += `?variables=${encodeURIComponent(JSON.stringify(variables))}`
       }
-      const response = await fetch(url)
+      const response = await fetchWithAuth(url)
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       const data = await response.json()
       preview.value = data
@@ -161,7 +162,7 @@ export function useWorkflowTemplates() {
     error.value = null
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${backendUrl}/api/templates/templates/${templateId}/create-workflow`,
         {
           method: 'POST',
@@ -193,7 +194,7 @@ export function useWorkflowTemplates() {
     error.value = null
     try {
       const backendUrl = await getBackendUrl()
-      const response = await fetch(
+      const response = await fetchWithAuth(
         `${backendUrl}/api/templates/templates/${templateId}/execute`,
         {
           method: 'POST',
