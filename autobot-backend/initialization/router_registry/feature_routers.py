@@ -326,6 +326,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     # Skills system base (Issue #731) - registered AFTER sub-routers (see above)
     ("backend.api.skills", "/skills", ["skills"], "skills"),
+    # A2A (Agent2Agent) protocol (Issue #961)
+    ("backend.api.a2a", "/a2a", ["a2a"], "a2a"),
     # Knowledge graph pipeline (Issue #759)
     (
         "backend.api.knowledge_graph_routes",

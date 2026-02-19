@@ -114,8 +114,25 @@ def register_root_endpoints(app: FastAPI) -> None:
             "timestamp": datetime.now().isoformat(),
         }
 
+    # Issue #961: A2A canonical discovery endpoint (spec §3.1)
+    # Served at /.well-known/agent.json as required by the A2A protocol.
+    # The /api/a2a/agent-card endpoint also serves this for API clients.
+    @app.get("/.well-known/agent.json", include_in_schema=False)
+    async def well_known_agent_card(request: Request):
+        """A2A canonical Agent Card discovery endpoint."""
+        try:
+            from a2a.agent_card import build_agent_card
+
+            base_url = str(request.base_url).rstrip("/")
+            card = build_agent_card(base_url)
+            return card.to_dict()
+        except Exception as exc:
+            logger.warning("A2A agent card unavailable: %s", exc)
+            return {"error": "agent card unavailable"}
+
     logger.info(
-        "✅ Root endpoints registered: /api/health, /api/health/ai-stack, /api/version"
+        "✅ Root endpoints registered: /api/health, /api/health/ai-stack, "
+        "/api/version, /.well-known/agent.json"
     )
 
 
