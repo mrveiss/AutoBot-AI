@@ -31,6 +31,15 @@
         >
           <!-- File Panel Toggle Button (injected into header) -->
           <template #actions>
+            <!-- Voice Output Toggle (#928) -->
+            <button
+              @click="toggleVoiceOutput"
+              class="header-btn"
+              :class="{ 'bg-electric-100 text-electric-600': voiceOutputEnabled }"
+              :title="voiceOutputEnabled ? 'Voice output on — click to mute' : 'Voice output off — click to enable'"
+            >
+              <i :class="isSpeaking ? 'fas fa-volume-up animate-pulse' : voiceOutputEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute'"></i>
+            </button>
             <button
               v-if="store.currentSessionId"
               @click="toggleFilePanel"
@@ -120,6 +129,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue'
+import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
@@ -151,6 +161,9 @@ import WorkflowProgressWidget from '@/components/workflow/WorkflowProgressWidget
 const store = useChatStore()
 const controller = useChatController()
 const appStore = useAppStore()
+
+// Voice output (#928)
+const { voiceOutputEnabled, isSpeaking, toggleVoiceOutput, speak } = useVoiceOutput()
 
 // Toast notifications
 const { showToast } = useToast()
@@ -745,6 +758,21 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
     showFilePanel.value = false
   }
 })
+
+// Auto-speak last assistant message when voice output is enabled (#928)
+watch(
+  () => {
+    const session = store.sessions.find(s => s.id === store.currentSessionId)
+    const msgs = session?.messages ?? []
+    const last = msgs[msgs.length - 1]
+    return last?.sender === 'assistant' ? last.content : null
+  },
+  (newContent, oldContent) => {
+    if (newContent && newContent !== oldContent) {
+      speak(newContent)
+    }
+  }
+)
 </script>
 
 <style scoped>
