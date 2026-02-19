@@ -20,7 +20,7 @@ from pydantic import BaseModel, field_validator
 from backend.services.personality_service import get_personality_manager
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/personality", tags=["personality"])
+router = APIRouter(tags=["personality"])
 
 _VALID_TONES = {"direct", "professional", "casual", "technical"}
 
