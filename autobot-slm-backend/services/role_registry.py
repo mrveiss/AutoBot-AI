@@ -49,7 +49,7 @@ DEFAULT_ROLES = [
         "systemd_service": "autobot-frontend",
         "auto_restart": True,
         "health_check_port": 443,
-        "post_sync_cmd": f"cd {_BASE_DIR}/autobot-frontend && npm install",
+        "post_sync_cmd": f"cd {_BASE_DIR}/autobot-frontend && npm install && npm run build",
     },
     {
         "name": "slm-server",
@@ -61,6 +61,7 @@ DEFAULT_ROLES = [
         "auto_restart": False,
         "health_check_port": 8000,
         "health_check_path": "/api/health",
+        "post_sync_cmd": f"cd {_BASE_DIR}/autobot-slm-frontend && npm install && npm run build",
     },
     {
         "name": "slm-agent",
