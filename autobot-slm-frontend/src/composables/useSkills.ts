@@ -36,10 +36,10 @@ export interface SkillInfo {
   category: string
   status: string
   enabled: boolean
-  tools: string[]
-  triggers: string[]
-  dependencies: string[]
-  tags: string[]
+  tools: readonly string[]
+  triggers: readonly string[]
+  dependencies: readonly string[]
+  tags: readonly string[]
 }
 
 export interface SkillDetail extends SkillInfo {

@@ -10,7 +10,7 @@
  * Migrated from main AutoBot frontend - Issue #729.
  */
 
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
 
 const api = useAutobotApi()

@@ -24,7 +24,6 @@ const error = ref<string | null>(null)
 const url = ref('https://www.google.com')
 const screenshot = ref<string | null>(null)
 const browserStatus = ref<'disconnected' | 'connecting' | 'connected'>('disconnected')
-const consoleOutput = ref<{ type: string; text: string }[]>([])
 
 const isConnected = ref(false)
 

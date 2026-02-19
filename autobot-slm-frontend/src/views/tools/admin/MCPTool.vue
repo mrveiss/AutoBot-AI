@@ -133,7 +133,7 @@ function toggleToolSchema(toolName: string): void {
 async function fetchBridges(): Promise<void> {
   try {
     // Issue #835 - use named function from useAutobotApi
-    bridges.value = (await api.getMCPBridges()) as MCPBridge[]
+    bridges.value = (await api.getMCPBridges()) as unknown as MCPBridge[]
   } catch (e) {
     logger.error('Failed to fetch MCP bridges:', e)
   }
@@ -142,7 +142,7 @@ async function fetchBridges(): Promise<void> {
 async function fetchTools(): Promise<void> {
   try {
     // Issue #835 - use named function from useAutobotApi
-    tools.value = (await api.getMCPTools()) as MCPTool[]
+    tools.value = (await api.getMCPTools()) as unknown as MCPTool[]
   } catch (e) {
     logger.error('Failed to fetch MCP tools:', e)
   }
@@ -151,7 +151,7 @@ async function fetchTools(): Promise<void> {
 async function fetchHealth(): Promise<void> {
   try {
     // Issue #835 - use named function from useAutobotApi
-    healthData.value = (await api.getMCPHealth()) as HealthData
+    healthData.value = (await api.getMCPHealth()) as unknown as HealthData
   } catch (e) {
     logger.error('Failed to fetch MCP health:', e)
   }
