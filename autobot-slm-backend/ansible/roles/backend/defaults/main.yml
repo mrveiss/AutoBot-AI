@@ -17,7 +17,7 @@ backend_version: main
 backend_deploy_from_git: true
 
 # Server settings
-backend_host: "0.0.0.0"
+backend_host: "172.16.168.20"  # Issue #954: bind specific IP, not 0.0.0.0 — avoids WSL2 loopback0 Windows Firewall trigger
 backend_port: 8443  # Issue #858/#861: HTTPS port
 backend_workers: 4
 

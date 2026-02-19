@@ -209,7 +209,7 @@
           - ""
           - "🌐 Service Endpoints:"
           - "   Frontend:     http://172.16.168.21"
-          - "   Backend API:  http://172.16.168.20:8001/api"
+          - "   Backend API:  https://172.16.168.20:8443/api"
           - "   Redis Stack:  redis://172.16.168.23:6379"
           - "   RedisInsight:  http://172.16.168.23:8002"
           - "   AI Stack:     http://172.16.168.24:8080"
@@ -247,7 +247,7 @@
 
           Service Endpoints:
           - Frontend: http://172.16.168.21
-          - Backend: http://172.16.168.20:8001
+          - Backend: https://172.16.168.20:8443
           - Redis: redis://172.16.168.23:6379
           - AI Stack: http://172.16.168.24:8080
           - NPU Worker: http://172.16.168.22:8081
