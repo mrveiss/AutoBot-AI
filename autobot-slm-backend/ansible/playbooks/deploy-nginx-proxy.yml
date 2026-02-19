@@ -19,7 +19,12 @@
   vars:
     backend_user: autobot
     backend_group: autobot
+    backend_install_dir: /opt/autobot/autobot-backend
     backend_code_dir: /opt/autobot/autobot-backend
+    backend_log_dir: /var/log/autobot
+    backend_workers: 4
+    service_auth_service_id: "main-backend"
+    service_auth_keys_dir: "/etc/autobot/service-keys"
 
   tasks:
 
@@ -33,7 +38,7 @@
         update_cache: true
 
     # -------------------------------------------------------
-    # 2. Deploy vhost config
+    # 2. Deploy vhost config (but don't start nginx yet)
     # -------------------------------------------------------
     - name: "nginx | Deploy backend vhost config"
       ansible.builtin.template:
@@ -42,49 +47,54 @@
         mode: "0644"
         owner: root
         group: root
-      notify: reload nginx
 
     - name: "nginx | Enable vhost"
       ansible.builtin.file:
         src: /etc/nginx/sites-available/autobot-backend.conf
         dest: /etc/nginx/sites-enabled/autobot-backend.conf
         state: link
-      notify: reload nginx
 
     - name: "nginx | Disable default vhost"
       ansible.builtin.file:
         path: /etc/nginx/sites-enabled/default
         state: absent
-      notify: reload nginx
 
     - name: "nginx | Validate config"
       ansible.builtin.command: nginx -t
       changed_when: false
 
-    - name: "nginx | Enable and start"
-      ansible.builtin.systemd:
-        name: nginx
-        state: started
-        enabled: true
-        daemon_reload: true
-
     # -------------------------------------------------------
-    # 3. Update backend systemd service (remove SSL flags)
+    # 3. Update backend systemd service FIRST (frees port 8443)
+    #    uvicorn moves from :8443 (SSL) → :8001 (plain HTTP)
     # -------------------------------------------------------
     - name: "backend | Deploy updated systemd service (no SSL)"
       ansible.builtin.template:
         src: ../roles/backend/templates/autobot-backend.service.j2
         dest: /etc/systemd/system/autobot-backend.service
         mode: "0644"
-      notify:
-        - reload systemd
-        - restart backend
+
+    - name: "backend | Reload systemd and restart backend (frees port 8443)"
+      ansible.builtin.systemd:
+        name: autobot-backend
+        state: restarted
+        daemon_reload: true
+
+    - name: "backend | Wait for uvicorn on :{{ backend_port }}"
+      ansible.builtin.wait_for:
+        port: "{{ backend_port }}"
+        host: 127.0.0.1
+        delay: 3
+        timeout: 60
 
     # -------------------------------------------------------
-    # 4. Flush handlers so nginx reloads before health check
+    # 4. Now port 8443 is free — start nginx
     # -------------------------------------------------------
-    - name: Flush handlers
-      ansible.builtin.meta: flush_handlers
+    - name: "nginx | Enable and start"
+      ansible.builtin.systemd:
+        name: nginx
+        state: started
+        enabled: true
+        daemon_reload: true
 
     # -------------------------------------------------------
     # 5. Verify
