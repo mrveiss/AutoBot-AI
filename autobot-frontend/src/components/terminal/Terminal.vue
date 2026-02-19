@@ -82,6 +82,7 @@ import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger
 import { useTabCompletion } from '@/composables/useTabCompletion'
 import CompletionSuggestions from './CompletionSuggestions.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 const logger = createLogger('Terminal')
 
