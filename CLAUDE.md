@@ -95,6 +95,8 @@ cd autobot-slm-backend/ansible && ansible-playbook playbooks/<playbook>.yml --sy
 
 - For large features spanning backend + frontend, complete and commit backend fully before starting frontend
 - When a session is getting long, commit completed work incrementally rather than waiting until everything is done
+- After writing each file, verify it exists on disk before moving to the next step
+- When a fix applies to a component that runs on multiple nodes, explicitly check: "Are there other nodes/services with this same component?" Fix all of them, not just the first one found
 - If implementation has 10+ tasks, commit after each logical group (e.g., every 2-3 tasks)
 - Incremental commits protect progress and simplify recovery if sessions need to end
 
