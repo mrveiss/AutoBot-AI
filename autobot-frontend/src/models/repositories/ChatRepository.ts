@@ -121,6 +121,15 @@ export class ChatRepository {
       }
     })
 
+    // Inject auth token on every request
+    this.axios.interceptors.request.use(config => {
+      const token = this._getAuthToken()
+      if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`
+      }
+      return config
+    })
+
     // Add response interceptor for error handling
     this.axios.interceptors.response.use(
       response => response,
@@ -129,6 +138,21 @@ export class ChatRepository {
         return Promise.reject(error)
       }
     )
+  }
+
+  private _getAuthToken(): string | null {
+    try {
+      const stored = localStorage.getItem('autobot_auth')
+      if (stored) {
+        const auth = JSON.parse(stored)
+        if (auth.token && auth.token !== 'single_user_mode') {
+          return auth.token
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+    return null
   }
 
   /**
@@ -174,11 +198,12 @@ export class ChatRepository {
 
       // Use native fetch API for proper SSE streaming support
       const url = `${this.baseURL}/api/chats/${chatId}/message`
+      const fetchHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+      const authToken = this._getAuthToken()
+      if (authToken) fetchHeaders['Authorization'] = `Bearer ${authToken}`
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: fetchHeaders,
         body: JSON.stringify({
           message: message,
           context: metadata
