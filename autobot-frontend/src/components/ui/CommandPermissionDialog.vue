@@ -204,7 +204,7 @@ export default {
       );
 
       // Send approval using direct fetch
-      const fetchResponse = await fetch(
+      const fetchResponse = await fetchWithAuth(
         approvalUrl,
         {
           method: 'POST',

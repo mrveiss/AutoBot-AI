@@ -105,7 +105,7 @@ const loadInfrastructureHosts = async () => {
   loading.value = true
   try {
     // Use relative URL to go through Vite proxy
-    const response = await fetch('/api/infrastructure/hosts')
+    const response = await fetchWithAuth('/api/infrastructure/hosts')
     if (!response.ok) {
       throw new Error(`Failed to load hosts: ${response.statusText}`)
     }

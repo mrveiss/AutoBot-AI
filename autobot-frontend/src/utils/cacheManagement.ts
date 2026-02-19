@@ -4,6 +4,7 @@
  */
 
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 // Create scoped logger for cacheManagement
 const logger = createLogger('cacheManagement')
@@ -143,7 +144,7 @@ export async function checkForUpdates(): Promise<boolean> {
 
     // Check if build hash has changed
     // Issue #552: Fixed path - backend has /api/services/version
-    const response = await fetch('/api/services/version', {
+    const response = await fetchWithAuth('/api/services/version', {
       cache: 'no-cache',
       headers: {
         'Cache-Control': 'no-cache, no-store, must-revalidate'
