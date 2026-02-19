@@ -45,6 +45,8 @@ const statusText = computed(() => {
 })
 
 const lastSeen = computed(() => {
+  // Issue #989: online nodes are actively connected — last_heartbeat can be stale
+  if (props.node.status === 'online') return 'Just now'
   if (!props.node.health?.last_heartbeat) return 'Never'
   const date = new Date(props.node.health.last_heartbeat)
   const now = new Date()

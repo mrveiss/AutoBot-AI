@@ -192,8 +192,8 @@ onMounted(() => {
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-semibold text-gray-100">External Agent Registry</h1>
-        <p class="text-sm text-gray-400 mt-1">
+        <h1 class="text-2xl font-bold text-gray-900">External Agents</h1>
+        <p class="text-sm text-gray-600 mt-1">
           Manage external A2A-compliant agents that AutoBot can route tasks to.
         </p>
       </div>

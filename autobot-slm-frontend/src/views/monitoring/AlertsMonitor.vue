@@ -102,7 +102,8 @@ function getPriorityBadgeClass(priority: string): string {
 }
 
 function formatTimestamp(ts: number): string {
-  const date = new Date(ts * 1000)
+  // ts is already in milliseconds (from Date.now() / .getTime())
+  const date = new Date(ts)
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
   const diffMins = Math.floor(diffMs / 60000)
