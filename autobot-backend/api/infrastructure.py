@@ -11,10 +11,10 @@ and host-selection UI components. Authoritative source is SSOT config.
 import logging
 from typing import Any, Dict, List, Optional
 
+from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, Query
 
 from autobot_shared.ssot_config import get_config
-from backend.middleware.auth_middleware import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["infrastructure"])
