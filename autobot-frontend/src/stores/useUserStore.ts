@@ -345,7 +345,12 @@ export const useUserStore = defineStore('user', () => {
             isAuthenticated: true,
             token: data.deployment_mode === 'single_user' ? 'single_user_mode' : undefined
           }
-          persistToStorage()
+          // Only persist when we have a real token marker (single_user mode).
+          // For JWT deployments the token comes from the login flow; persisting
+          // token:undefined here would overwrite a valid JWT in storage (#979).
+          if (data.deployment_mode === 'single_user') {
+            persistToStorage()
+          }
           logger.info('Auto-authenticated from backend:', data.deployment_mode)
           return true
         }
