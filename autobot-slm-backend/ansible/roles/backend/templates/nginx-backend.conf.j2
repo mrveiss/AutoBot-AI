@@ -1,0 +1,69 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# nginx reverse proxy for AutoBot backend on .20 (WSL2)
+# Issue #957: nginx holds port {{ backend_nginx_port }} permanently so Windows Defender
+# Firewall evaluates the rule once (for nginx), not on every uvicorn restart.
+# uvicorn binds plain HTTP on 127.0.0.1:{{ backend_port }} (localhost only).
+
+server {
+    listen {{ backend_nginx_port }} ssl;
+    listen [::]:{{ backend_nginx_port }} ssl;
+    server_name _;
+
+    # TLS termination — same certs previously used by uvicorn
+    ssl_certificate     /etc/autobot/certs/server-cert.pem;
+    ssl_certificate_key /etc/autobot/certs/server-key.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    # Logging
+    access_log /var/log/nginx/autobot-backend-access.log;
+    error_log  /var/log/nginx/autobot-backend-error.log;
+
+    # HTTP/1.1 keep-alive to upstream
+    proxy_http_version 1.1;
+    proxy_set_header   Host              $host;
+    proxy_set_header   X-Real-IP         $remote_addr;
+    proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto https;
+
+    proxy_connect_timeout 60s;
+    proxy_send_timeout    300s;
+    proxy_read_timeout    300s;
+
+    # API — plain HTTP upstream (uvicorn no longer terminates TLS)
+    location / {
+        proxy_pass http://127.0.0.1:{{ backend_port }};
+    }
+
+    # WebSocket paths — must set Upgrade/Connection headers
+    location /ws {
+        proxy_pass         http://127.0.0.1:{{ backend_port }};
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_read_timeout 86400s;
+    }
+
+    location /api/ws {
+        proxy_pass         http://127.0.0.1:{{ backend_port }};
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_read_timeout 86400s;
+    }
+
+    location /api/terminal/ws {
+        proxy_pass         http://127.0.0.1:{{ backend_port }};
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_read_timeout 300s;
+    }
+
+    # Nginx health check (does not proxy to backend)
+    location /nginx-health {
+        access_log off;
+        return 200 "OK\n";
+        add_header Content-Type text/plain;
+    }
+}

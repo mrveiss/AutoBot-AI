@@ -352,3 +352,53 @@
     state: started
     enabled: true
     daemon_reload: true
+
+# ==========================================================
+# nginx reverse proxy (Issue #957)
+# Holds port backend_nginx_port (8443) permanently so WDF
+# rule is evaluated once for nginx, not on every uvicorn restart.
+# ==========================================================
+- name: "Backend nginx | Install nginx"
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+  tags: ['backend', 'nginx']
+
+- name: "Backend nginx | Deploy reverse-proxy vhost config"
+  ansible.builtin.template:
+    src: nginx-backend.conf.j2
+    dest: /etc/nginx/sites-available/autobot-backend.conf
+    mode: "0644"
+    owner: root
+    group: root
+  notify: reload nginx backend
+  tags: ['backend', 'nginx']
+
+- name: "Backend nginx | Enable vhost (symlink)"
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/autobot-backend.conf
+    dest: /etc/nginx/sites-enabled/autobot-backend.conf
+    state: link
+  notify: reload nginx backend
+  tags: ['backend', 'nginx']
+
+- name: "Backend nginx | Disable default vhost"
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: reload nginx backend
+  tags: ['backend', 'nginx']
+
+- name: "Backend nginx | Validate nginx config"
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  tags: ['backend', 'nginx']
+
+- name: "Backend nginx | Enable and start nginx"
+  ansible.builtin.systemd:
+    name: nginx
+    state: started
+    enabled: true
+    daemon_reload: true
+  tags: ['backend', 'nginx']

@@ -15,9 +15,9 @@ Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir | default(
 EnvironmentFile=/opt/autobot/.env
 EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys') }}/{{ service_auth_service_id | default('main-backend') }}.env
 # Issue #891: Removed ExecStartPre symlink creation - causes infinite import loops with fixed backend imports
-ExecStart={{ backend_code_dir }}/venv/bin/uvicorn main:app --host {{ backend_host }} --port {{ backend_port }} --workers {{ backend_workers }} --ssl-keyfile /etc/autobot/certs/server-key.pem --ssl-certfile /etc/autobot/certs/server-cert.pem
+ExecStart={{ backend_code_dir }}/venv/bin/uvicorn main:app --host {{ backend_host }} --port {{ backend_port }} --workers {{ backend_workers }}
 Restart=always
-RestartSec=30  # Issue #954: 5s is shorter than Windows Firewall port-state cache refresh; 30s gives WDF time to clear before re-bind
+RestartSec=5  # Issue #957: nginx holds port {{ backend_nginx_port }}; WDF rule tied to nginx not uvicorn, so 30s workaround no longer needed
 StandardOutput=append:{{ backend_log_dir }}/backend.log
 StandardError=append:{{ backend_log_dir }}/backend-error.log
 
