@@ -8,6 +8,7 @@ aiofiles>=23.0.0
 pydantic>=2.0
 cachetools>=5.0.0
 celery>=5.0.0  # Issue #892: Background task processing
+psutil>=5.9.0  # Issue #927: CPU monitoring for wake word optimization
 
 # Database
 sqlalchemy>=2.0

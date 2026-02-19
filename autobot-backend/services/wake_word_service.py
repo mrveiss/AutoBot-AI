@@ -16,6 +16,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable, Dict, List, Optional
 
+try:
+    import psutil as _psutil
+except ImportError:
+    _psutil = None  # psutil optional – CPU monitoring disabled without it
+
 from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
@@ -76,6 +81,27 @@ class DetectionStats:
     last_detection_time: Optional[float] = None
 
 
+@dataclass
+class ListeningStatus:
+    """Status of the background always-on listening loop (issue #927)"""
+
+    active: bool = False
+    duty_cycle_ms: float = 100.0  # Current effective cycle duration in ms
+    sleep_ms: float = 0.0  # Current throttle sleep between chunks
+    chunks_processed: int = 0
+    throttle_events: int = 0  # Count of times CPU limit triggered a sleep
+
+
+def _get_psutil_process() -> Optional[object]:
+    """Return psutil.Process for the current process, or None if unavailable."""
+    if _psutil is None:
+        return None
+    try:
+        return _psutil.Process()
+    except Exception:
+        return None
+
+
 class WakeWordDetector:
     """
     Efficient wake word detection engine optimized for low CPU usage.
@@ -103,6 +129,13 @@ class WakeWordDetector:
         self._start_time: Optional[float] = None
         self._cooldown_end_time: Optional[float] = None  # For sync context cooldown
 
+        # CPU optimization state (issue #927)
+        self._listening_status = ListeningStatus()
+        self._psutil_process = _get_psutil_process()
+        # Prime the CPU percent sampler (first call always returns 0.0)
+        if self._psutil_process is not None:
+            self._psutil_process.cpu_percent(interval=None)
+
         # Initialize adaptive thresholds
         for wake_word in self.config.wake_words:
             self._adaptive_thresholds[
@@ -110,7 +143,8 @@ class WakeWordDetector:
             ] = self.config.confidence_threshold
 
         logger.info(
-            f"WakeWordDetector initialized with {len(self.config.wake_words)} wake words"
+            "WakeWordDetector initialized with %d wake words",
+            len(self.config.wake_words),
         )
         logger.info("Wake words: %s", self.config.wake_words)
 
@@ -473,6 +507,131 @@ class WakeWordDetector:
         self.config.enabled = False
         self.state = WakeWordState.IDLE
         logger.info("Wake word detection disabled")
+
+    # ------------------------------------------------------------------
+    # CPU optimization: background listening loop (issue #927)
+    # ------------------------------------------------------------------
+
+    def _sample_cpu_percent(self) -> float:
+        """Sample current process CPU usage; returns 0.0 if psutil unavailable."""
+        if self._psutil_process is None:
+            return 0.0
+        try:
+            cpu = self._psutil_process.cpu_percent(interval=None)
+            self.stats.cpu_usage_percent = cpu
+            return cpu
+        except Exception:
+            return 0.0
+
+    def _calculate_duty_sleep_ms(self) -> float:
+        """
+        Return sleep duration (ms) needed to stay under max_cpu_percent.
+
+        Linear scale: 0 ms at 50 % of limit → 500 ms at 200 % of limit.
+        This provides gradual back-off rather than hard throttling.
+        """
+        cpu = self.stats.cpu_usage_percent  # updated by _sample_cpu_percent in loop
+        max_cpu = self.config.max_cpu_percent
+        low_watermark = max_cpu * 0.5
+        high_watermark = max_cpu * 2.0
+
+        if cpu <= low_watermark:
+            return 0.0
+        if cpu >= high_watermark:
+            return 500.0
+        ratio = (cpu - low_watermark) / (high_watermark - low_watermark)
+        return ratio * 500.0
+
+    async def start_listening(
+        self,
+        audio_callback: Optional[Callable[[], Optional[bytes]]] = None,
+    ) -> None:
+        """
+        Start the always-on background listening loop (issue #927).
+
+        Args:
+            audio_callback: Optional callable returning raw audio bytes per chunk.
+                            Pass None to run in standby/text-only mode.
+        """
+        if self._listening_status.active:
+            logger.warning("Background listening already active")
+            return
+        self._listening_status.active = True
+        self.state = WakeWordState.LISTENING
+        self._listening_task = asyncio.create_task(self._listening_loop(audio_callback))
+        logger.info(
+            "Background listening started (max_cpu=%.1f%%)", self.config.max_cpu_percent
+        )
+
+    async def stop_listening(self) -> None:
+        """Stop the always-on background listening loop."""
+        self._listening_status.active = False
+        if self._listening_task and not self._listening_task.done():
+            self._listening_task.cancel()
+            try:
+                await self._listening_task
+            except asyncio.CancelledError:
+                pass
+        self.state = WakeWordState.IDLE
+        logger.info("Background listening stopped")
+
+    async def _listening_loop(
+        self,
+        audio_callback: Optional[Callable[[], Optional[bytes]]],
+    ) -> None:
+        """
+        Core duty-cycling listening loop with CPU throttle.
+
+        Listens for one chunk_duration_ms window, then sleeps for a
+        CPU-proportional duration before the next window.
+        """
+        chunk_s = self.config.chunk_duration_ms / 1000.0
+        while self._listening_status.active:
+            start = time.monotonic()
+            try:
+                await self._process_audio_chunk(audio_callback)
+                self._listening_status.chunks_processed += 1
+            except Exception as exc:
+                logger.error("Error in listening loop chunk: %s", exc)
+
+            self._sample_cpu_percent()  # refresh stat before throttle decision
+            sleep_ms = self._calculate_duty_sleep_ms()
+            self._listening_status.sleep_ms = sleep_ms
+            self._listening_status.duty_cycle_ms = (
+                self.config.chunk_duration_ms + sleep_ms
+            )
+            if sleep_ms > 0:
+                self._listening_status.throttle_events += 1
+                await asyncio.sleep(sleep_ms / 1000.0)
+            else:
+                remaining = chunk_s - (time.monotonic() - start)
+                await asyncio.sleep(max(remaining, 0))
+
+    async def _process_audio_chunk(
+        self,
+        audio_callback: Optional[Callable[[], Optional[bytes]]],
+    ) -> None:
+        """Process one audio chunk; tracks listening time even when no callback."""
+        self.stats.total_listening_time += self.config.chunk_duration_ms / 1000.0
+        if audio_callback is None:
+            return
+        audio_data = audio_callback()
+        if audio_data is None:
+            return
+        # Audio → VAD → STT → wake-word check pipeline hook point.
+        # Downstream integration passes transcribed text via check_text_for_wake_word.
+
+    def get_listening_status(self) -> Metadata:
+        """Return background listening status including CPU metrics (issue #927)."""
+        return {
+            "active": self._listening_status.active,
+            "duty_cycle_ms": self._listening_status.duty_cycle_ms,
+            "sleep_ms": self._listening_status.sleep_ms,
+            "chunks_processed": self._listening_status.chunks_processed,
+            "throttle_events": self._listening_status.throttle_events,
+            "current_cpu_percent": self.stats.cpu_usage_percent,
+            "max_cpu_percent": self.config.max_cpu_percent,
+        }
 
 
 # Singleton instance for global access (thread-safe)
