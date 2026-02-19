@@ -20,9 +20,6 @@ from typing import List, Optional
 
 import aiofiles
 from auth_middleware import auth_middleware
-from backend.utils.io_executor import run_in_file_executor
-from backend.utils.path_validation import is_invalid_name
-from backend.utils.paths_manager import ensure_data_directory, get_data_path
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer
@@ -30,6 +27,9 @@ from pydantic import BaseModel, field_validator
 from security_layer import SecurityLayer
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.utils.io_executor import run_in_file_executor
+from backend.utils.path_validation import is_invalid_name
+from backend.utils.paths_manager import ensure_data_directory, get_data_path
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -1287,3 +1287,101 @@ async def get_file_stats(request: Request):
         "max_file_size_mb": MAX_FILE_SIZE // (1024 * 1024),
         "allowed_extensions": sorted(list(ALLOWED_EXTENSIONS)),
     }
+
+
+# SLM Admin File Browser (Issue #984) ==========================================
+
+_ADMIN_ALLOWED_DIRS = (
+    "/opt/autobot",
+    "/home/autobot",
+    "/var/log/autobot",
+    "/etc/autobot",
+)
+_ADMIN_MAX_READ_BYTES = 1 * 1024 * 1024  # 1 MB cap for inline reads
+
+
+def _validate_admin_path(path: str) -> Path:
+    """Resolve and validate an absolute path for the SLM admin file browser.
+
+    Restricts access to pre-approved base directories (Issue #984).
+    """
+    try:
+        resolved = Path(path).resolve()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid path")
+    for allowed in _ADMIN_ALLOWED_DIRS:
+        try:
+            resolved.relative_to(allowed)
+            return resolved
+        except ValueError:
+            continue
+    raise HTTPException(
+        status_code=403,
+        detail=f"Path outside allowed directories: {path}",
+    )
+
+
+def _entry_to_file_item(entry: Path) -> dict:
+    """Convert a filesystem entry to a FileItem dict (Issue #984)."""
+    try:
+        st = entry.stat()
+        is_dir = entry.is_dir()
+        return {
+            "name": entry.name,
+            "path": str(entry),
+            "type": "directory" if is_dir else "file",
+            "size": 0 if is_dir else st.st_size,
+            "modified": datetime.fromtimestamp(st.st_mtime).isoformat(),
+            "permissions": oct(st.st_mode & 0o777)[2:],
+        }
+    except OSError:
+        return {
+            "name": entry.name,
+            "path": str(entry),
+            "type": "file",
+            "size": 0,
+            "modified": "",
+            "permissions": "",
+        }
+
+
+@router.get("", summary="List directory for SLM admin file browser")
+async def admin_list_directory(path: str = "/home/autobot") -> dict:
+    """List directory contents at an absolute path.
+
+    No auth required — accessible via /autobot-api/ nginx proxy (Issue #984).
+    Restricted to pre-approved base directories.
+    """
+    target = _validate_admin_path(path)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Path not found")
+    if not target.is_dir():
+        raise HTTPException(status_code=400, detail="Path is not a directory")
+    try:
+        entries = sorted(
+            target.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower())
+        )
+        return {"files": [_entry_to_file_item(e) for e in entries]}
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+
+@router.get("/read", summary="Read file content for SLM admin file browser")
+async def admin_read_file(path: str) -> dict:
+    """Return text content of a file at an absolute path.
+
+    Limited to 1 MB. No auth required — accessible via /autobot-api/ (Issue #984).
+    """
+    target = _validate_admin_path(path)
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    if not target.is_file():
+        raise HTTPException(status_code=400, detail="Path is not a file")
+    if target.stat().st_size > _ADMIN_MAX_READ_BYTES:
+        raise HTTPException(
+            status_code=413, detail="File too large to read inline (> 1 MB)"
+        )
+    try:
+        return {"content": target.read_text(encoding="utf-8", errors="replace")}
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Permission denied")
