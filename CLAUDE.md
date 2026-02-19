@@ -99,6 +99,7 @@ cd autobot-slm-backend/ansible && ansible-playbook playbooks/<playbook>.yml --sy
 - When a fix applies to a component that runs on multiple nodes, explicitly check: "Are there other nodes/services with this same component?" Fix all of them, not just the first one found
 - If implementation has 10+ tasks, commit after each logical group (e.g., every 2-3 tasks)
 - Incremental commits protect progress and simplify recovery if sessions need to end
+- If approaching context limit mid-implementation: stop at the current phase boundary, commit what's done, then add a GitHub comment on the issue summarizing completed work and exact next steps remaining
 
 ---
 
