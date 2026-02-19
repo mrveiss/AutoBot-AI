@@ -13,12 +13,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFleetStore } from '@/stores/fleet'
-import { useAuthStore } from '@/stores/auth'
 import config from '@/config/ssot-config'
 
 const router = useRouter()
 const fleetStore = useFleetStore()
-const authStore = useAuthStore()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -121,7 +119,7 @@ function getStatusClass(status: string): string {
 onMounted(async () => {
   loading.value = true
   try {
-    await fleetStore.fetchFleetData()
+    await fleetStore.fetchNodes()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load fleet data'
   } finally {

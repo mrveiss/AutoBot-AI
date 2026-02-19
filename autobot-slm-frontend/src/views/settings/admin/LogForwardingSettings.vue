@@ -10,12 +10,9 @@
  * Provides management of log forwarding to external systems like Syslog, Elasticsearch, Loki.
  */
 
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { ref, reactive, onMounted } from 'vue'
 import { useAutobotApi, type LogForwardingDestination } from '@/composables/useAutobotApi'
-import { getKnownHosts } from '@/config/ssot-config'
 
-const authStore = useAuthStore()
 const api = useAutobotApi()
 
 // State
@@ -72,9 +69,6 @@ const destinationTypes = [
   { value: 'file', label: 'File' },
   { value: 'elasticsearch', label: 'Elasticsearch' },
 ]
-
-// Known hosts for per-host targeting - Use SSOT config (Issue #729)
-const knownHosts = getKnownHosts()
 
 // Methods
 // API returns data directly, not wrapped in response (Issue #729)
@@ -225,8 +219,8 @@ async function testAllDestinations(): Promise<void> {
 
   try {
     const response = await api.testAllLogForwardingDestinations()
-    const results = response.data
-    success.value = `${results?.healthy || 0}/${results?.total || 0} destinations healthy`
+    const successful = response.results.filter(r => r.success).length
+    success.value = `${successful}/${response.results.length} destinations healthy`
     await fetchDestinations()
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {

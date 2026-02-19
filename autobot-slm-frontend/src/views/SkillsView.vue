@@ -11,7 +11,7 @@
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
-import { useSkills, useSkillGovernance, type SkillInfo, type SkillDetail } from '@/composables/useSkills'
+import { useSkills, useSkillGovernance, type SkillInfo } from '@/composables/useSkills'
 import GovernanceModeSelector from '@/components/skills/GovernanceModeSelector.vue'
 import ApprovalsTab from '@/components/skills/ApprovalsTab.vue'
 import ReposTab from '@/components/skills/ReposTab.vue'
@@ -20,7 +20,6 @@ import DraftsTab from '@/components/skills/DraftsTab.vue'
 const {
   skills,
   categories,
-  categoryCounts,
   selectedSkill,
   loading,
   error,
@@ -28,7 +27,6 @@ const {
   disabledSkills,
   skillsByCategory,
   fetchSkills,
-  fetchCategories,
   fetchSkillDetail,
   enableSkill,
   disableSkill,

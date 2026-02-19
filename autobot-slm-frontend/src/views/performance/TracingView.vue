@@ -78,14 +78,6 @@ async function loadTraces(): Promise<void> {
 }
 
 /**
- * Reload traces with current filters.
- */
-function reloadTraces(): void {
-  page.value = 1
-  loadTraces()
-}
-
-/**
  * Handle filter change.
  */
 function onFilterChange(): void {

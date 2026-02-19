@@ -28,23 +28,10 @@ interface PlaybookInfo {
   requires_confirmation: boolean
 }
 
-interface PlaybookExecution {
-  execution_id: string
-  playbook_id: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-  started_at: string | null
-  completed_at: string | null
-  output: string[]
-  error: string | null
-  triggered_by: string
-}
 
 const showWizard = ref(false)
 const playbooks = ref<PlaybookInfo[]>([])
-const recentExecutions = ref<PlaybookExecution[]>([])
 const isLoading = ref(false)
-const selectedExecution = ref<PlaybookExecution | null>(null)
-const showOutputModal = ref(false)
 
 const playbooksByCategory = computed(() => {
   const groups: Record<string, PlaybookInfo[]> = {}
@@ -80,7 +67,7 @@ async function loadPlaybooks(): Promise<void> {
   }
 }
 
-function handleExecuted(executionId: string): void {
+function handleExecuted(_executionId: string): void {
   showWizard.value = false
   loadPlaybooks()
 }

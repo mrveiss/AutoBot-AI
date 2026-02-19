@@ -31,11 +31,11 @@ interface ErrorStat {
 
 interface SystemHealth {
   status: 'healthy' | 'degraded' | 'critical'
-  cpu_percent: number
-  memory_percent: number
-  disk_percent: number
-  uptime_seconds: number
-  services: { name: string; status: string }[]
+  cpu_percent?: number
+  memory_percent?: number
+  disk_percent?: number
+  uptime_seconds?: number
+  services?: { name: string; status: string }[]
 }
 
 interface ErrorStats {
@@ -244,7 +244,7 @@ onUnmounted(() => {
           <span class="font-medium capitalize">System Status: {{ healthStatus }}</span>
         </div>
         <div class="text-sm text-gray-600">
-          Uptime: {{ formatUptime(systemHealth.uptime_seconds) }}
+          Uptime: {{ formatUptime(systemHealth.uptime_seconds ?? 0) }}
         </div>
       </div>
     </div>

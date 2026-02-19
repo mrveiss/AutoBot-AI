@@ -14,7 +14,7 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
-import { useRoles, type NodeRolesInfo, type Role } from '@/composables/useRoles'
+import { useRoles, type NodeRolesInfo } from '@/composables/useRoles'
 
 const props = defineProps<{
   nodeId: string
@@ -36,14 +36,10 @@ const isSyncing = ref(false)
 const syncMessage = ref<string | null>(null)
 
 const availableRoles = computed(() =>
-  roles.value.filter(r => r.name !== 'code-source' && r.target_path)
+  roles.filter(r => r.name !== 'code-source' && r.target_path)
 )
 
 const detectedRolesList = computed(() => nodeRoles.value?.detected_roles || [])
-
-const assignedRolesList = computed(() =>
-  nodeRoles.value?.roles.filter(r => r.assignment_type === 'manual') || []
-)
 
 const allNodeRoles = computed(() => nodeRoles.value?.roles || [])
 

@@ -46,17 +46,6 @@ interface RedisDbInfo {
 
 const redisStats = ref<Record<string, RedisDbInfo>>({})
 
-// Cache activity log
-interface CacheActivity {
-  id: string
-  timestamp: string
-  operation: string
-  key?: string
-  result: string
-}
-
-const cacheActivity = ref<CacheActivity[]>([])
-
 // Computed
 const hitRate = computed(() => {
   if (!cacheStats.value) return 0
@@ -98,8 +87,9 @@ async function fetchCacheStats(): Promise<void> {
     cacheStats.value = stats
 
     // Extract Redis stats if available
-    if (stats?.redis_databases) {
-      redisStats.value = stats.redis_databases
+    const statsAny = stats as unknown as Record<string, unknown>
+    if (statsAny?.redis_databases) {
+      redisStats.value = statsAny.redis_databases as Record<string, RedisDbInfo>
     }
   } catch (e) {
     // Silently fail - stats may not be available

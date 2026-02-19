@@ -574,8 +574,6 @@ function generateMockEvents(): LifecycleEvent[] {
     'maintenance_end',
   ]
 
-  const severities: SeverityLevel[] = ['info', 'warning', 'error', 'critical']
-
   const mockEvents: LifecycleEvent[] = []
   const now = new Date()
 

@@ -31,7 +31,7 @@ function shouldLog(level: LogLevel): boolean {
   return LOG_LEVELS[level] >= LOG_LEVELS[currentLevel]
 }
 
-function formatMessage(component: string, level: LogLevel, args: unknown[]): string {
+function formatMessage(component: string, level: LogLevel, _args: unknown[]): string {
   const timestamp = new Date().toISOString()
   const prefix = `[${timestamp}] [${level.toUpperCase()}] [${component}]`
   return prefix

@@ -25,12 +25,6 @@ interface TimeConfig {
   ntp_servers: string[]
 }
 
-interface NodeSyncStatus {
-  node_id: string
-  success: boolean
-  message: string
-}
-
 const authStore = useAuthStore()
 const loading = ref(false)
 const saving = ref(false)
@@ -65,7 +59,7 @@ const ntpServersText = computed({
 // Full IANA timezone list from browser Intl API, with UTC first
 const allTimezones = computed<string[]>(() => {
   try {
-    const zones: string[] = Intl.supportedValuesOf('timeZone')
+    const zones: string[] = (Intl as unknown as { supportedValuesOf: (key: string) => string[] }).supportedValuesOf('timeZone')
     return ['UTC', ...zones.filter((z) => z !== 'UTC')]
   } catch {
     // Fallback for older browsers

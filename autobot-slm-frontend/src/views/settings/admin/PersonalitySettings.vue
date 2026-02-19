@@ -14,7 +14,7 @@
  * Related Issue: #964
  */
 
-import { ref, reactive, watch, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import {
   usePersonality,
   TONE_OPTIONS,
@@ -24,9 +24,7 @@ import {
 
 const {
   profiles,
-  activeProfile,
   enabled,
-  loading,
   error,
   fetchProfiles,
   fetchProfile,
@@ -47,10 +45,6 @@ const successMsg = ref<string | null>(null)
 const showNewDialog = ref(false)
 const newName = ref('')
 const confirmDeleteId = ref<string | null>(null)
-
-const selectedProfile = computed(() =>
-  profiles.value.find((p) => p.id === selectedId.value) ?? null
-)
 
 const isActive = computed(() => selectedId.value === (profiles.value.find((p) => p.active)?.id ?? null))
 

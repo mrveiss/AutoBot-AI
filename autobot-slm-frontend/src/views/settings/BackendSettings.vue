@@ -9,7 +9,7 @@
  * Configure backend server settings and connections.
  */
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { getBackendUrl } from '@/config/ssot-config'
 
@@ -47,7 +47,7 @@ async function fetchSettings(): Promise<void> {
         if (s.value !== null && s.key in settings.value) {
           const key = s.key as keyof typeof settings.value
           if (typeof settings.value[key] === 'boolean') {
-            settings.value[key] = s.value === 'true'
+            ;(settings.value as unknown as Record<string, boolean>)[key] = s.value === 'true'
           } else if (typeof settings.value[key] === 'number') {
             (settings.value as Record<string, any>)[key] = parseInt(s.value)
           } else {
@@ -114,31 +114,6 @@ async function saveSetting(key: string, value: string | number | boolean): Promi
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to save setting'
-  } finally {
-    saving.value = false
-  }
-}
-
-async function saveAllSettings(): Promise<void> {
-  saving.value = true
-  error.value = null
-  success.value = null
-
-  try {
-    for (const [key, value] of Object.entries(settings.value)) {
-      await fetch(`${authStore.getApiUrl()}/api/settings/${key}`, {
-        method: 'PUT',
-        headers: {
-          ...authStore.getAuthHeaders(),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ value: String(value) }),
-      })
-    }
-    success.value = 'All settings saved successfully'
-    setTimeout(() => { success.value = null }, 3000)
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save settings'
   } finally {
     saving.value = false
   }

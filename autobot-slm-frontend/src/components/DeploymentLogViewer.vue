@@ -24,12 +24,6 @@ interface LogEntry {
   timestamp: Date
 }
 
-interface StatusUpdate {
-  type: string
-  status: string
-  progress: number
-  error?: string
-}
 
 const props = defineProps<{
   deploymentId: string

@@ -49,12 +49,10 @@ export function useNodeServices(nodeId: MaybeRef<string>) {
     try {
       const response = await api.getNodeServices(resolvedNodeId.value)
       services.value = response.services.map(s => ({
-        name: s.name,
+        name: s.service_name,
         status: s.status as Service['status'],
-        pid: s.pid,
-        memory_mb: s.memory_mb,
-        cpu_percent: s.cpu_percent,
-        uptime: s.uptime,
+        pid: s.main_pid ?? undefined,
+        memory_mb: s.memory_bytes !== null ? s.memory_bytes / 1024 / 1024 : undefined,
         category: s.category,
       }))
       return services.value

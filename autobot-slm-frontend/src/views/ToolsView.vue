@@ -15,16 +15,12 @@
  * accessible labels on action buttons.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
-
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
 
 // Tool definitions - all tools integrated into SLM (Issue #729)
 const tools = [

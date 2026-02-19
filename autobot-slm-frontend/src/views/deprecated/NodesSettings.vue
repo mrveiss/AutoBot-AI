@@ -23,8 +23,7 @@
  * testing, updates, and certificate management.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useFleetStore } from '@/stores/fleet'
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
@@ -61,7 +60,6 @@ interface NodeRole {
   services: string[]
 }
 
-const fleetStore = useFleetStore()
 const authStore = useAuthStore()
 
 // State

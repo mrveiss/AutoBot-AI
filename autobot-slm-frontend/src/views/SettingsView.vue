@@ -15,13 +15,10 @@
 
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
 
-const loading = ref(false)
 const error = ref<string | null>(null)
 const success = ref<string | null>(null)
 
@@ -56,13 +53,6 @@ function navigateTo(path: string) {
   router.push(path)
 }
 
-// Clear messages after delay
-function clearMessages() {
-  setTimeout(() => {
-    success.value = null
-    error.value = null
-  }, 5000)
-}
 
 onMounted(() => {
   // If we're at /settings exactly, redirect to /settings/general

@@ -15,14 +15,9 @@ import GrafanaDashboard from '@/components/monitoring/GrafanaDashboard.vue'
 import MetricsDetailsView from './MetricsDetailsView.vue'
 import { useFleetStore } from '@/stores/fleet'
 import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
-import { getGrafanaUrl } from '@/config/ssot-config'
 
 const fleetStore = useFleetStore()
-const grafanaUrl = getGrafanaUrl()
-
 const {
-  gpuDetails,
-  npuDetails,
   cpuUsage,
   memoryUsage,
   diskUsage,
@@ -180,7 +175,7 @@ function getMetricColor(value: number): string {
           <p class="text-2xl font-bold capitalize" :class="{
             'text-success-600': systemHealth === 'healthy',
             'text-warning-600': systemHealth === 'degraded',
-            'text-danger-600': systemHealth === 'unhealthy' || systemHealth === 'critical',
+            'text-danger-600': systemHealth === 'critical',
             'text-gray-400': systemHealth === 'unknown',
           }">{{ systemHealth }}</p>
         </div>

@@ -10,11 +10,9 @@
  * Provides management of system prompts for LLM interactions.
  */
 
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import { ref, computed, onMounted } from 'vue'
 import { useAutobotApi, type PromptTemplate } from '@/composables/useAutobotApi'
 
-const authStore = useAuthStore()
 const api = useAutobotApi()
 
 // State
@@ -67,8 +65,7 @@ async function loadPrompts(): Promise<void> {
   error.value = null
 
   try {
-    const response = await api.getPromptTemplates()
-    prompts.value = response.data || []
+    prompts.value = await api.getPromptTemplates()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load prompts'
   } finally {
@@ -134,7 +131,7 @@ async function revertToDefault(): Promise<void> {
   error.value = null
 
   try {
-    await api.revertPromptTemplate(selectedPrompt.value.id)
+    await api.revertPromptToDefault(selectedPrompt.value.id)
     success.value = 'Prompt reverted to default'
 
     // Reload prompts to get the default content

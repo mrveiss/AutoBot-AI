@@ -44,7 +44,7 @@ async function fetchSettings(): Promise<void> {
         if (s.value !== null && s.key in notifications.value) {
           const key = s.key as keyof typeof notifications.value
           if (typeof notifications.value[key] === 'boolean') {
-            notifications.value[key] = s.value === 'true'
+            ;(notifications.value as unknown as Record<string, boolean>)[key] = s.value === 'true'
           } else {
             (notifications.value as Record<string, any>)[key] = s.value
           }

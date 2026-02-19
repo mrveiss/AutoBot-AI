@@ -817,9 +817,9 @@ onUnmounted(() => {
                         :status="service.status as any"
                         :isActionInProgress="orchestration.actionInProgress"
                         :activeAction="orchestration.activeAction"
-                        @start="handleServiceAction"
-                        @stop="handleServiceAction"
-                        @restart="handleServiceAction"
+                        @start="(nId, svc) => handleServiceAction(nId, svc, 'start')"
+                        @stop="(nId, svc) => handleServiceAction(nId, svc, 'stop')"
+                        @restart="(nId, svc) => handleServiceAction(nId, svc, 'restart')"
                       />
                     </td>
                   </tr>
@@ -1353,7 +1353,7 @@ onUnmounted(() => {
                 </td>
                 <td class="px-4 py-2 text-sm text-gray-600">
                   {{
-                    Array.isArray(orchestration.fleetServices)
+                    orchestration.fleetServices.length > 0
                       ? orchestration.fleetServices.reduce(
                           (sum, svc) => sum + svc.nodes.filter((n) => n.node_id === node.node_id).length,
                           0
