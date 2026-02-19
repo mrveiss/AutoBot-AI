@@ -68,8 +68,13 @@ const stats = ref<MCPStats>({ total_tools: 0, total_bridges: 0, healthy_bridges:
 const toolFilter = ref('')
 const expandedTools = ref<Set<string>>(new Set())
 const lastUpdated = ref<Date | null>(null)
+// Issue #986: track load errors so we can show them instead of empty state
+const loadError = ref<string | null>(null)
 
 let refreshInterval: ReturnType<typeof setInterval> | null = null
+// Issue #986: Safety timeout — force-clear loading if Promise.all hangs (TCP half-open / nginx
+// holds connection open longer than axios timeout). 20s covers any realistic API round-trip.
+let loadingTimeoutId: ReturnType<typeof setTimeout> | null = null
 
 // Computed
 const lastUpdatedTime = computed(() => {
@@ -170,18 +175,36 @@ async function fetchStats(): Promise<void> {
 async function refreshData(): Promise<void> {
   isRefreshing.value = true
   loading.value = true
+  loadError.value = null
+
+  // Issue #986: Safety timeout — if the AutoBot backend TCP connection hangs
+  // (nginx holds it open past the axios client timeout), force-clear the
+  // loading state after 20 s so the user sees an error instead of a spinner.
+  if (loadingTimeoutId) clearTimeout(loadingTimeoutId)
+  loadingTimeoutId = setTimeout(() => {
+    if (loading.value) {
+      loading.value = false
+      isRefreshing.value = false
+      loadError.value = 'AutoBot backend did not respond in time. Is it reachable?'
+    }
+  }, 20000)
+
   try {
-    await Promise.all([
-      fetchBridges(),
-      fetchTools(),
-      fetchHealth(),
-      fetchStats(),
-    ])
+    // Fetch bridges, tools, stats in parallel — fast endpoints.
+    // Health check is slow (checks all 10 bridges, ~60s) — load it
+    // in the background so it doesn't block the loading state. (#986)
+    await Promise.all([fetchBridges(), fetchTools(), fetchStats()])
     lastUpdated.value = new Date()
   } finally {
+    if (loadingTimeoutId) {
+      clearTimeout(loadingTimeoutId)
+      loadingTimeoutId = null
+    }
     loading.value = false
     isRefreshing.value = false
   }
+  // Load health data after UI is visible
+  fetchHealth()
 }
 
 onMounted(() => {
@@ -190,9 +213,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
+  if (refreshInterval) clearInterval(refreshInterval)
+  if (loadingTimeoutId) clearTimeout(loadingTimeoutId)
 })
 </script>
 
@@ -311,6 +333,20 @@ onUnmounted(() => {
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
       </svg>
       <p class="mt-4 text-gray-600">Loading MCP data...</p>
+    </div>
+
+    <!-- Error State (#986) -->
+    <div v-else-if="loadError" class="text-center py-12">
+      <svg class="w-12 h-12 mx-auto text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <p class="mt-4 text-red-600 font-medium">{{ loadError }}</p>
+      <button
+        @click="refreshData"
+        class="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm"
+      >
+        Retry
+      </button>
     </div>
 
     <!-- Bridges Tab -->

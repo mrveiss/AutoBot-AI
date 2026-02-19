@@ -129,6 +129,21 @@ server {
         proxy_read_timeout 60s;
     }
 
+    # noVNC WebSocket/HTTP proxy — Issue #1002
+    # /tools/novnc/* → http://main_backend:6080/* (strips /tools/novnc prefix)
+    # Needed to avoid mixed-content blocking when embedding VNC in HTTPS SLM admin.
+    location /tools/novnc/ {
+        proxy_pass http://{{ autobot_backend_host | default('172.16.168.20') }}:{{ novnc_port | default(6080) }}/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600;
+    }
+
     # Frontend SPA routing - serve index.html for all routes
     location / {
         try_files $uri $uri/ /index.html;
