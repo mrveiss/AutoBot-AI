@@ -60,6 +60,25 @@ export interface ServiceHealth {
   details: Record<string, unknown>
 }
 
+export interface A2ASkill {
+  id: string
+  name: string
+  description: string
+  tags?: string[]
+  examples?: string[]
+}
+
+export interface A2AAgentCard {
+  name: string
+  description: string
+  url: string
+  version: string
+  skills: A2ASkill[]
+  capabilities?: Record<string, unknown>
+  provider?: Record<string, unknown> | string
+  documentationUrl?: string
+}
+
 export interface SLMNode {
   node_id: string
   hostname: string
@@ -75,6 +94,7 @@ export interface SLMNode {
   updated_at: string
   code_status?: 'up_to_date' | 'outdated' | 'unknown'
   code_version?: string
+  a2a_card?: A2AAgentCard | null
 }
 
 /**

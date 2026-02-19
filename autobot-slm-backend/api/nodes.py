@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from models.database import (
     Certificate,
     CodeStatus,
@@ -1952,3 +1952,82 @@ async def exec_node_command(
         exit_code=exit_code,
         success=exit_code == 0,
     )
+
+
+# ---------------------------------------------------------------------------
+# A2A Agent Card endpoints (Issue #962)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/a2a-cards", tags=["a2a"])
+async def list_a2a_cards(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> list:
+    """
+    Return cached A2A Agent Cards for all backend nodes.
+
+    Each entry includes node_id, hostname, ip_address, and the card dict
+    (or null if no card has been fetched yet).
+    """
+    result = await db.execute(select(Node))
+    nodes = result.scalars().all()
+    return [
+        {
+            "node_id": n.node_id,
+            "hostname": n.hostname,
+            "ip_address": n.ip_address,
+            "a2a_card": (n.extra_data or {}).get("a2a_card"),
+            "fetched_at": (n.extra_data or {}).get("a2a_card_fetched_at"),
+        }
+        for n in nodes
+        if "backend" in (n.roles or [])
+    ]
+
+
+@router.get("/{node_id}/a2a-card", tags=["a2a"])
+async def get_node_a2a_card(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """Return the cached A2A Agent Card for a specific node."""
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+    extra = node.extra_data or {}
+    return {
+        "node_id": node_id,
+        "hostname": node.hostname,
+        "a2a_card": extra.get("a2a_card"),
+        "fetched_at": extra.get("a2a_card_fetched_at"),
+    }
+
+
+@router.post("/{node_id}/a2a-card/refresh", tags=["a2a"], status_code=202)
+async def refresh_node_a2a_card(
+    node_id: str,
+    background_tasks: BackgroundTasks,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """
+    Trigger a fresh A2A Agent Card fetch for a specific node.
+
+    Returns immediately (202). Poll GET /{node_id}/a2a-card for the result.
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+
+    from services.a2a_card_fetcher import fetch_card_for_node
+
+    background_tasks.add_task(fetch_card_for_node, node_id)
+    logger.info("A2A card refresh queued for node %s", node_id)
+    return {"node_id": node_id, "status": "refresh_queued"}

@@ -9,9 +9,9 @@ Request and response models for the SLM API.
 
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .database import NodeStatus
 
@@ -164,6 +164,8 @@ class NodeResponse(BaseModel):
     code_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    a2a_card: Optional[Dict[str, Any]] = None
+    extra_data: Optional[Dict[str, Any]] = Field(None, exclude=True)
 
     model_config = {"from_attributes": True}
 
@@ -172,6 +174,13 @@ class NodeResponse(BaseModel):
     def convert_none_roles(cls, v):
         """Convert None to empty list for roles."""
         return v if v is not None else []
+
+    @model_validator(mode="after")
+    def _populate_a2a_card(self):
+        """Populate a2a_card from extra_data when not set directly."""
+        if self.a2a_card is None and self.extra_data:
+            self.a2a_card = self.extra_data.get("a2a_card")
+        return self
 
 
 class NodeListResponse(BaseModel):

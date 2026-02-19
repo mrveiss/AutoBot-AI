@@ -101,6 +101,9 @@ function handleMenuKeydown(event: KeyboardEvent): void {
   }
 }
 
+// A2A skill count badge (Issue #962)
+const a2aSkillCount = computed(() => props.node.a2a_card?.skills?.length ?? null)
+
 // Update indicators (#682)
 const updateSummary = computed(() => {
   return fleetStore.getNodeUpdateSummary(props.node.node_id)
@@ -244,6 +247,19 @@ const hasUpdates = computed(() => {
       </span>
       <span v-if="node.roles.length === 0" class="text-xs text-gray-400 italic">
         No roles assigned
+      </span>
+    </div>
+
+    <!-- A2A Agent Card badge (Issue #962) -->
+    <div v-if="a2aSkillCount !== null" class="flex items-center gap-1.5 mb-2">
+      <span
+        class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded bg-indigo-50 text-indigo-700 border border-indigo-200"
+        :title="`A2A Agent Card: ${a2aSkillCount} skill${a2aSkillCount !== 1 ? 's' : ''}`"
+      >
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        A2A · {{ a2aSkillCount }} skill{{ a2aSkillCount !== 1 ? 's' : '' }}
       </span>
     </div>
 
