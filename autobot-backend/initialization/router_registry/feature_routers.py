@@ -244,6 +244,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("backend.api.npu_workers", "", ["npu-workers"], "npu_workers"),
     ("backend.api.redis_service", "/redis-service", ["redis-service"], "redis_service"),
     # Issue #729: infrastructure_nodes removed - now served by slm-server
+    # Fleet host list for HostSelector (SSH/VNC terminal in chat)
+    (
+        "backend.api.infrastructure",
+        "/infrastructure",
+        ["infrastructure"],
+        "infrastructure",
+    ),
     # Graph and entity features
     (
         "backend.api.entity_extraction",
