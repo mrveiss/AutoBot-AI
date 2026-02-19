@@ -1,0 +1,60 @@
+---
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# sync-time.yml - Triggered by POST /api/settings/time/sync
+# Applies timezone + NTP servers to fleet nodes using extra vars.
+#
+# Extra vars (injected by SLM backend, Issue #955):
+#   time_sync_timezone    - IANA timezone string (e.g. "America/New_York")
+#   time_sync_ntp_servers - JSON list of NTP server strings
+
+- name: "Sync Time Config Across Fleet Nodes"
+  hosts: slm_nodes
+  become: true
+  gather_facts: false
+
+  vars:
+    time_sync:
+      timezone: "{{ time_sync_timezone | default('UTC') }}"
+      ntp:
+        enabled: true
+        servers: "{{ time_sync_ntp_servers | from_json | default(['0.pool.ntp.org', '1.pool.ntp.org', '2.pool.ntp.org', '3.pool.ntp.org']) }}"
+        use_chrony: false
+        service: "systemd-timesyncd"
+        config_file: "/etc/systemd/timesyncd.conf"
+      hardware_clock:
+        utc_mode: true
+        sync_hwclock: true
+      validation:
+        max_drift_seconds: 60
+        sync_retries: 3
+        retry_delay: 10
+      logging:
+        enable_detailed_logs: true
+        log_file: "/var/log/autobot/time-sync.log"
+
+    fallback:
+      servers:
+        - "time.google.com"
+        - "time.cloudflare.com"
+        - "pool.ntp.org"
+
+  pre_tasks:
+    - name: "Time Sync | Display configuration"
+      debug:
+        msg:
+          - "Timezone: {{ time_sync.timezone }}"
+          - "NTP servers: {{ time_sync.ntp.servers | join(', ') }}"
+      tags: ['time_sync']
+
+  roles:
+    - role: time_sync
+      tags: ['time_sync']
+
+  post_tasks:
+    - name: "Time Sync | Report completion"
+      debug:
+        msg: "Time sync complete on {{ inventory_hostname }}"
+      tags: ['time_sync']
