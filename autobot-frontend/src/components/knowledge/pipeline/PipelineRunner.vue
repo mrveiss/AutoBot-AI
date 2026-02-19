@@ -17,9 +17,12 @@
           v-model="form.document_id"
           type="text"
           placeholder="Enter document ID to process"
-          class="form-input"
-          required
+          :class="['form-input', { 'input-error': documentIdError }]"
+          @input="documentIdError = ''"
         />
+        <p v-if="documentIdError" class="field-error">
+          {{ documentIdError }}
+        </p>
       </div>
 
       <div class="form-group">
@@ -57,7 +60,7 @@
       <button
         type="submit"
         class="submit-btn"
-        :disabled="loading || !form.document_id"
+        :disabled="loading"
       >
         <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
         {{ loading ? 'Running...' : 'Run Pipeline' }}
@@ -148,6 +151,7 @@ const form = reactive({
 
 const configJson = ref('')
 const configError = ref('')
+const documentIdError = ref('')
 const result = ref<PipelineResult | null>(null)
 
 function parseConfig(): Record<string, unknown> | null {
@@ -162,6 +166,11 @@ function parseConfig(): Record<string, unknown> | null {
 }
 
 async function handleSubmit(): Promise<void> {
+  if (!form.document_id.trim()) {
+    documentIdError.value = 'Document ID is required'
+    return
+  }
+
   const config = parseConfig()
   if (config === null) return
 
@@ -256,6 +265,10 @@ async function handleSubmit(): Promise<void> {
   font-size: var(--text-xs);
   resize: vertical;
   min-height: 100px;
+}
+
+.input-error {
+  border-color: var(--color-error) !important;
 }
 
 .field-error {
