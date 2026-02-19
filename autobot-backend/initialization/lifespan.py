@@ -15,14 +15,9 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
-from backend.knowledge_factory import get_or_create_knowledge_base
-from backend.services.slm_client import init_slm_client, shutdown_slm_client
-from backend.type_defs.common import Metadata
-from backend.user_management.database import init_database
-from backend.utils.background_llm_sync import BackgroundLLMSync
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
-from config import UnifiedConfigManager
+from config import ConfigManager
 from fastapi import FastAPI
 from security_layer import SecurityLayer
 
@@ -31,6 +26,11 @@ from autobot_shared.tracing import (
     instrument_redis,
     shutdown_tracing,
 )
+from backend.knowledge_factory import get_or_create_knowledge_base
+from backend.services.slm_client import init_slm_client, shutdown_slm_client
+from backend.type_defs.common import Metadata
+from backend.user_management.database import init_database
+from backend.utils.background_llm_sync import BackgroundLLMSync
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -209,7 +209,7 @@ async def initialize_critical_services(app: FastAPI):
     try:
         # Initialize configuration - CRITICAL
         logger.info("✅ [ 10%] Config: Loading unified configuration...")
-        config = UnifiedConfigManager()
+        config = ConfigManager()
         app.state.config = config
         await update_app_state("config", config)
         logger.info("✅ [ 10%] Config: Configuration loaded successfully")

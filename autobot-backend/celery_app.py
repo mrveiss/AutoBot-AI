@@ -16,12 +16,12 @@ import urllib.parse
 from pathlib import Path
 
 from celery import Celery
-from config import UnifiedConfigManager
+from config import ConfigManager
 
 from autobot_shared.ssot_config import config as ssot_config
 
 # Create singleton config instance for extended config values
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 # Build Redis URLs from SSOT configuration (loads directly from .env)
 # Environment variables take precedence, then SSOT config-based construction

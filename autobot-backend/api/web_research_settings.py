@@ -104,8 +104,9 @@ async def enable_web_research():
     """Enable web research functionality"""
     try:
         from agents.web_research_integration import get_web_research_integration
-        from backend.services.config_service import ConfigService
         from unified_unified_config_manager import unified_unified_config_manager
+
+        from backend.services.config_service import ConfigService
 
         # Enable in integration
         integration = get_web_research_integration()
@@ -157,8 +158,9 @@ async def disable_web_research():
     """Disable web research functionality"""
     try:
         from agents.web_research_integration import get_web_research_integration
-        from backend.services.config_service import ConfigService
         from unified_unified_config_manager import unified_unified_config_manager
+
+        from backend.services.config_service import ConfigService
 
         # Disable in integration
         integration = get_web_research_integration()
@@ -209,10 +211,10 @@ async def disable_web_research():
 async def get_research_settings():
     """Get current web research settings"""
     try:
-        from config import UnifiedConfigManager
+        from config import ConfigManager
 
         # Get settings from config
-        unified_config_manager = UnifiedConfigManager()
+        unified_config_manager = ConfigManager()
         research_config = unified_config_manager.get_nested("agents.research", {})
         web_research_config = unified_config_manager.get_nested("web_research", {})
 
@@ -263,8 +265,9 @@ async def get_research_settings():
 async def update_research_settings(settings: WebResearchSettings):
     """Update web research settings"""
     try:
-        from backend.services.config_service import ConfigService
         from config import unified_config_manager
+
+        from backend.services.config_service import ConfigService
 
         # Update research agent settings
         unified_config_manager.set_nested("agents.research.enabled", settings.enabled)

@@ -23,7 +23,7 @@ _NUMERIC_TYPES = (int, float)
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from config import UnifiedConfigManager
+from config import ConfigManager
 
 
 def print_section(title: str):
@@ -33,7 +33,7 @@ def print_section(title: str):
     logger.info(f"{'=' * 70}\n")
 
 
-def validate_configuration(config: UnifiedConfigManager) -> bool:
+def validate_configuration(config: ConfigManager) -> bool:
     """Validate timeout configuration."""
     print_section("TIMEOUT CONFIGURATION VALIDATION")
 
@@ -57,7 +57,7 @@ def validate_configuration(config: UnifiedConfigManager) -> bool:
     return validation_result["valid"]
 
 
-def test_environment_aware_access(config: UnifiedConfigManager):
+def test_environment_aware_access(config: ConfigManager):
     """Test environment-aware timeout access."""
     print_section("ENVIRONMENT-AWARE TIMEOUT ACCESS")
 
@@ -130,7 +130,7 @@ def test_environment_aware_access(config: UnifiedConfigManager):
     return all_passed
 
 
-def test_timeout_groups(config: UnifiedConfigManager):
+def test_timeout_groups(config: ConfigManager):
     """Test batch timeout retrieval."""
     print_section("TIMEOUT GROUP RETRIEVAL")
 
@@ -151,7 +151,7 @@ def test_timeout_groups(config: UnifiedConfigManager):
     logger.info("\n✅ Timeout group retrieval working correctly")
 
 
-def test_backward_compatibility(config: UnifiedConfigManager):
+def test_backward_compatibility(config: ConfigManager):
     """Test backward compatibility with expected values."""
     print_section("BACKWARD COMPATIBILITY CHECK")
 
@@ -193,7 +193,7 @@ def test_backward_compatibility(config: UnifiedConfigManager):
     return all_passed
 
 
-def display_summary(config: UnifiedConfigManager):
+def display_summary(config: ConfigManager):
     """Display configuration summary."""
     print_section("TIMEOUT CONFIGURATION SUMMARY")
 
@@ -234,8 +234,8 @@ def main():
 
     try:
         # Load configuration
-        config = UnifiedConfigManager()
-        logger.info("\n✅ UnifiedConfigManager loaded successfully")
+        config = ConfigManager()
+        logger.info("\n✅ ConfigManager loaded successfully")
 
         # Run validation tests
         config_valid = validate_configuration(config)

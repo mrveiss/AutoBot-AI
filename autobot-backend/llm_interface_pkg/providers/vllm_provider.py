@@ -11,12 +11,12 @@ import logging
 import time
 from typing import Optional
 
-from config import UnifiedConfigManager
+from config import ConfigManager
 
 from ..models import LLMRequest, LLMResponse
 
 logger = logging.getLogger(__name__)
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 
 class VLLMProviderHandler:

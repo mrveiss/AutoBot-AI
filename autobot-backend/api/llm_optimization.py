@@ -11,20 +11,20 @@ import time
 from typing import List, Optional
 
 from auth_middleware import check_admin_permission
-from backend.utils.model_optimizer import TaskRequest, get_model_optimizer
-from config import UnifiedConfigManager
+from config import ConfigManager
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from llm_interface import LLMInterface
 from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.utils.model_optimizer import TaskRequest, get_model_optimizer
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Create singleton config instance
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 
 class OptimizationRequest(BaseModel):

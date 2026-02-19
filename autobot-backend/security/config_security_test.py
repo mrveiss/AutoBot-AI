@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from backend.config.manager import UnifiedConfigManager as ConfigManager
+from backend.config.manager import ConfigManager as ConfigManager
 
 
 class TestConfigurationSecurity:

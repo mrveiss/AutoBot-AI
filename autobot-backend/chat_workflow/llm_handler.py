@@ -14,11 +14,11 @@ import logging
 from typing import Any, Dict, List
 
 from async_chat_workflow import WorkflowMessage
-from backend.constants.model_constants import ModelConstants
-from backend.dependencies import global_config_manager
 from prompt_manager import get_prompt
 
 from autobot_shared.http_client import get_http_client
+from backend.constants.model_constants import ModelConstants
+from backend.dependencies import global_config_manager
 
 from .models import WorkflowSession
 
@@ -62,10 +62,10 @@ class LLMHandlerMixin:
         return converted
 
     def _get_ollama_endpoint_fallback(self) -> str:
-        """Get Ollama endpoint from UnifiedConfigManager as fallback."""
-        from config import UnifiedConfigManager
+        """Get Ollama endpoint from ConfigManager as fallback."""
+        from config import ConfigManager
 
-        config = UnifiedConfigManager()
+        config = ConfigManager()
         ollama_host = config.get_host("ollama")
         ollama_port = config.get_port("ollama")
         return f"http://{ollama_host}:{ollama_port}/api/generate"

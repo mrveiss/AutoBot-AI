@@ -13,19 +13,19 @@ from datetime import datetime
 from typing import Optional
 
 import aiofiles
-from backend.constants.network_constants import NetworkConstants
-from config import UnifiedConfigManager
+from config import ConfigManager
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from research_browser_manager import research_browser_manager
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
 # Create singleton config instance
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 router = APIRouter()
 

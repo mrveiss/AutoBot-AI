@@ -18,12 +18,12 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 import xxhash
-from backend.constants.model_constants import ModelConstants
-from config import UnifiedConfigManager
+from config import ConfigManager
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.http_client import get_http_client
 from autobot_shared.tracing import get_tracer
+from backend.constants.model_constants import ModelConstants
 
 from .cache import CachedResponse, get_llm_cache
 from .hardware import HardwareDetector
@@ -84,7 +84,7 @@ except ImportError:
     UsageRecordRequest = None
     logger.debug("LLM Pattern Analyzer not available - usage tracking disabled")
 
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 # Issue #697: OpenTelemetry tracer for LLM operations
 _llm_tracer = get_tracer("autobot.llm")

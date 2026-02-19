@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 
 from backend.config import get_config, get_config_section, is_feature_enabled
-from backend.config.manager import UnifiedConfigManager as ConfigManager
+from backend.config.manager import ConfigManager as ConfigManager
 
 
 class TestConfigManager:

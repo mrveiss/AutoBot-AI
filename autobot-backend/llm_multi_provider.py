@@ -33,7 +33,7 @@ except ImportError:
 
 import aiohttp
 
-from backend.config.manager import get_unified_config_manager as _get_cfg
+from backend.config.manager import get_config_manager as _get_cfg
 
 config_manager = _get_cfg()
 from dotenv import load_dotenv

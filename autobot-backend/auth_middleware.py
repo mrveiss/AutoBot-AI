@@ -15,7 +15,7 @@ from typing import Dict, Optional, Tuple
 
 import bcrypt
 import jwt
-from config import UnifiedConfigManager
+from config import ConfigManager
 from fastapi import Request
 from security_layer import SecurityLayer
 
@@ -24,7 +24,7 @@ from backend.utils.catalog_http_exceptions import raise_auth_error
 logger = logging.getLogger(__name__)
 
 # Create singleton config instance
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 
 class AuthenticationMiddleware:

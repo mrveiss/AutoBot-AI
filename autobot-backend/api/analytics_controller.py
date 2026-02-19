@@ -23,16 +23,16 @@ from typing import Dict, List
 
 import psutil
 import redis
+from config import ConfigManager
+from constants import PATH
+
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 # Import models from dedicated module (Issue #185)
 from backend.api.analytics_models import CodeAnalysisRequest, CommunicationPattern
 from backend.constants.threshold_constants import TimingConstants
 from backend.type_defs.common import Metadata
 from backend.utils.system_metrics import get_metrics_collector
-from config import UnifiedConfigManager
-from constants import PATH
-
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 # Import existing monitoring infrastructure
 from .monitoring_hardware import hardware_monitor
@@ -40,7 +40,7 @@ from .monitoring_hardware import hardware_monitor
 logger = logging.getLogger(__name__)
 
 # Create singleton config instance
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 # Lock for thread-safe analytics state access
 _analytics_state_lock = asyncio.Lock()

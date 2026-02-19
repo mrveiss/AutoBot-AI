@@ -15,7 +15,7 @@ For new code, import directly from llm_interface_pkg:
 """
 
 # Import additional dependencies that may be expected by consumers
-from config import UnifiedConfigManager
+from config import ConfigManager
 
 # Re-export everything from the refactored package
 from llm_interface_pkg import (  # Types; Models; Hardware; Streaming; Mock providers; Main interface; Providers
@@ -42,7 +42,7 @@ from llm_interface_pkg import (  # Types; Models; Hardware; Streaming; Mock prov
 )
 
 # Create singleton config instance for backward compatibility
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 # Optional imports for backward compatibility
 try:

@@ -41,9 +41,9 @@ class OpenAIProvider:
         if api_key:
             self.api_key = api_key
         else:
-            from config import UnifiedConfigManager
+            from config import ConfigManager
 
-            self.api_key = UnifiedConfigManager().get_api_key("openai")
+            self.api_key = ConfigManager().get_api_key("openai")
 
     def _record_success_span_attributes(
         self, span, response, processing_time: float

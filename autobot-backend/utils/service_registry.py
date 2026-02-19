@@ -35,10 +35,10 @@ import aiohttp
 import yaml
 
 # Import unified configuration system - NO HARDCODED VALUES
-from config import UnifiedConfigManager
+from config import ConfigManager
 
 # Create singleton config instance
-config = UnifiedConfigManager()
+config = ConfigManager()
 from autobot_shared.http_client import get_http_client
 
 

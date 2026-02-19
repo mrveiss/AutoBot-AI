@@ -17,7 +17,7 @@ from multimodal_processor import (
     UnifiedMultiModalProcessor,
 )
 
-from backend.config.manager import UnifiedConfigManager as ConfigManager
+from backend.config.manager import ConfigManager as ConfigManager
 from backend.services.config_service import ConfigService
 
 

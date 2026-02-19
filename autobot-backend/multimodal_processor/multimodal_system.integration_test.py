@@ -18,7 +18,7 @@ from multimodal_processor import (
     VoiceProcessor,
 )
 
-from backend.config.manager import UnifiedConfigManager as ConfigManager
+from backend.config.manager import ConfigManager as ConfigManager
 
 
 class TestUnifiedMultiModalSystem:
