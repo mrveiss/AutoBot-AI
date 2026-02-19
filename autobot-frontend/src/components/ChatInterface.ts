@@ -431,7 +431,12 @@ export function useChatInterface() {
           }
         }
       }
-    } catch (error) {
+    } catch (error: any) {
+      // On 401, stop polling immediately to prevent retry storm (#967)
+      if (error?.response?.status === 401 || error?.status === 401) {
+        stopMessagePolling()
+        return
+      }
       if (!silent) {
         logger.error('Error loading chat messages:', error)
         messages.value = [{

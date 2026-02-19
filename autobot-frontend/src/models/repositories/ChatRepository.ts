@@ -1,6 +1,5 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosResponse } from 'axios'
-import { NetworkConstants } from '@/constants/network'
 import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -130,11 +129,22 @@ export class ChatRepository {
       return config
     })
 
-    // Add response interceptor for error handling
+    // Add response interceptor — redirect to login on 401 (#967)
     this.axios.interceptors.response.use(
       response => response,
       error => {
         logger.error('Request failed:', error)
+        if (
+          error?.response?.status === 401 &&
+          typeof window !== 'undefined' &&
+          !window.location.pathname.includes('/login')
+        ) {
+          logger.warn('401 Unauthorized — clearing auth and redirecting to login')
+          localStorage.removeItem('autobot_auth')
+          localStorage.removeItem('autobot_user')
+          const redirect = encodeURIComponent(window.location.pathname)
+          window.location.href = `/login?redirect=${redirect}`
+        }
         return Promise.reject(error)
       }
     )
