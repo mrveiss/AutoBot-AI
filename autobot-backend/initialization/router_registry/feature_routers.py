@@ -111,6 +111,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     # Permission system v2 (Claude Code-style)
     ("backend.api.permissions", "", ["permissions"], "permissions"),
+    # Personality profiles (Issue #964)
+    ("backend.api.personality", "/personality", ["personality"], "personality"),
     # Code analysis and search
     ("backend.api.code_search", "/code-search", ["code-search"], "code_search"),
     (

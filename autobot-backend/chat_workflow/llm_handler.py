@@ -93,18 +93,41 @@ class LLMHandlerMixin:
             logger.error("Failed to load Ollama endpoint from config: %s", e)
             return self._get_ollama_endpoint_fallback()
 
+    def _get_personality_preamble(self) -> str:
+        """Return personality block if enabled, else empty string.
+
+        Issue #964: Personality profile injection.
+        """
+        try:
+            from backend.services.personality_service import get_personality_manager
+
+            profile = get_personality_manager().get_active_profile()
+            if profile is None:
+                return ""
+            return profile.to_prompt_block() + "\n\n---\n\n"
+        except Exception as exc:
+            logger.warning("Personality profile load failed: %s", exc)
+            return ""
+
     def _get_system_prompt(self) -> str:
-        """Get system prompt with fallback."""
+        """Get system prompt with optional personality preamble.
+
+        Issue #964: Personality preamble prepended when a profile is active.
+        """
+        preamble = self._get_personality_preamble()
         try:
             prompt = get_prompt("chat.system_prompt_simple")
             logger.debug("[ChatWorkflowManager] Loaded simplified system prompt")
-            return prompt
+            return preamble + prompt
         except Exception as e:
             logger.error("Failed to load system prompt from file: %s", e)
-            return """You are AutoBot. Execute commands using:
+            return (
+                preamble
+                + """You are AutoBot. Execute commands using:
 <TOOL_CALL name="execute_command" params='{"command":"cmd"}'>desc</TOOL_CALL>
 
 NEVER teach commands - ALWAYS execute them."""
+            )
 
     def _build_conversation_context(self, session: WorkflowSession) -> str:
         """Build conversation context from recent history.
