@@ -273,14 +273,10 @@ class LLMInterface:
                 speculation_enabled=opt_config.get("local", {}).get(
                     "speculation_enabled", False
                 ),
-                flash_attention_enabled=True,
-                cuda_graphs_enabled=True,
                 prompt_compression_enabled=opt_config.get("prompt_compression", {}).get(
                     "enabled", True
                 ),
-                response_caching_enabled=opt_config.get("cache", {}).get(
-                    "enabled", True
-                ),
+                cache_enabled=opt_config.get("cache", {}).get("enabled", True),
             )
         )
 
