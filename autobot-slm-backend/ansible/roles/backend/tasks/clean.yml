@@ -31,6 +31,12 @@
     state: absent
   tags: ['clean']
 
+- name: "Backend | Clean: stale top-level config/ (pre-reorganization duplicate)"
+  ansible.builtin.file:
+    path: /opt/autobot/config
+    state: absent
+  tags: ['clean']
+
 - name: "Backend | Clean: wrong-node autobot-slm-frontend dir"
   ansible.builtin.file:
     path: /opt/autobot/autobot-slm-frontend
