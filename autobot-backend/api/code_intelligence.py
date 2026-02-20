@@ -16,8 +16,9 @@ Parent Epic: #217 - Advanced Code Intelligence
 import asyncio
 import logging
 import os
+import time
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, Optional, Tuple
 
 from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -1173,6 +1174,12 @@ async def get_redis_optimization_types(
     )
 
 
+# Issue #1034: TTL cache for Redis health score (path -> (timestamp, response))
+_redis_health_cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_REDIS_HEALTH_CACHE_TTL = 300  # 5 minutes
+_REDIS_HEALTH_TIMEOUT = 30.0  # seconds
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_redis_health",
@@ -1187,10 +1194,10 @@ async def get_redis_usage_health_score(
     Get a Redis usage health score for a codebase.
 
     Issue #744: Requires admin authentication.
+    Issue #1034: Cached with TTL + timeout to prevent 504s.
 
     Returns a score from 0-100 based on the number and severity
-    of optimization opportunities detected. Lower scores indicate
-    more room for optimization.
+    of optimization opportunities detected.
     """
     path_exists = await asyncio.to_thread(os.path.exists, path)
     if not path_exists:
@@ -1199,42 +1206,66 @@ async def get_redis_usage_health_score(
             detail=f"Path does not exist: {path}",
         )
 
+    # Issue #1034: Return cached result if still valid
+    cached = _redis_health_cache.get(path)
+    if cached and (time.monotonic() - cached[0]) < _REDIS_HEALTH_CACHE_TTL:
+        return JSONResponse(status_code=200, content=cached[1])
+
     try:
-        optimizer = RedisOptimizer(project_root=path)
-        results = await asyncio.to_thread(optimizer.analyze_directory, path)
-
-        # Calculate health score using extracted helper
-        score = _calculate_redis_health_score(results)
-
-        # Determine grade and status using extracted helpers
-        grade = _calculate_grade_from_score(score)
-        status = _get_redis_status_message(score)
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "timestamp": datetime.now().isoformat(),
-                "path": path,
-                "health_score": round(score, 1),
-                "grade": grade,
-                "status_message": status,
-                "total_optimizations": len(results),
-                "files_with_issues": len(set(r.file_path for r in results)),
-                "severity_breakdown": {
-                    sev.value: len([r for r in results if r.severity == sev])
-                    for sev in OptimizationSeverity
-                },
-                "category_breakdown": optimizer.get_summary().get("by_type", {}),
-            },
+        response_content = await asyncio.wait_for(
+            _run_redis_health_analysis(path),
+            timeout=_REDIS_HEALTH_TIMEOUT,
         )
+        _redis_health_cache[path] = (time.monotonic(), response_content)
+        return JSONResponse(status_code=200, content=response_content)
 
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Redis health analysis timed out after %.0fs for %s",
+            _REDIS_HEALTH_TIMEOUT,
+            path,
+        )
+        raise HTTPException(
+            status_code=504,
+            detail=(
+                f"Analysis timed out after {int(_REDIS_HEALTH_TIMEOUT)}s. "
+                "The codebase may be too large for real-time scanning."
+            ),
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Redis health score calculation failed: %s", e)
         raise HTTPException(
             status_code=500,
             detail=f"Health check failed: {str(e)}",
         )
+
+
+async def _run_redis_health_analysis(path: str) -> Dict[str, Any]:
+    """Run Redis health analysis in a thread. Issue #1034."""
+    optimizer = RedisOptimizer(project_root=path)
+    results = await asyncio.to_thread(optimizer.analyze_directory, path)
+
+    score = _calculate_redis_health_score(results)
+    grade = _calculate_grade_from_score(score)
+    status = _get_redis_status_message(score)
+
+    return {
+        "status": "success",
+        "timestamp": datetime.now().isoformat(),
+        "path": path,
+        "health_score": round(score, 1),
+        "grade": grade,
+        "status_message": status,
+        "total_optimizations": len(results),
+        "files_with_issues": len(set(r.file_path for r in results)),
+        "severity_breakdown": {
+            sev.value: len([r for r in results if r.severity == sev])
+            for sev in OptimizationSeverity
+        },
+        "category_breakdown": optimizer.get_summary().get("by_type", {}),
+    }
 
 
 # ============================================================================

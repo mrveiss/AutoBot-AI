@@ -4486,16 +4486,20 @@ const loadRedisHealth = async () => {
       }
     })
     if (!response.ok) {
-      throw new Error(`Redis health endpoint returned ${response.status}`)
+      if (response.status === 504) {
+        throw new Error('Analysis timed out — codebase too large for real-time scan')
+      }
+      const detail = await response.json().catch(() => null)
+      throw new Error(detail?.detail || `Redis health endpoint returned ${response.status}`)
     }
     const data = await response.json()
     if (data.status === 'success') {
       redisHealth.value = {
-        redis_health_score: data.redis_health_score || 0,
+        redis_health_score: data.health_score ?? data.redis_health_score ?? 0,
         grade: data.grade || 'N/A',
         status_message: data.status_message || '',
         total_files: data.total_files || 0,
-        total_issues: data.total_issues || 0,
+        total_issues: data.total_optimizations || data.total_issues || 0,
         files_with_issues: data.files_with_issues || 0
       }
     } else if (data.status === 'no_data') {
