@@ -10,14 +10,15 @@ Endpoints for completion feedback tracking and model improvement.
 import logging
 from typing import Dict, List, Optional
 
-from backend.services.feedback_tracker import FeedbackTracker
-from backend.services.incremental_trainer import IncrementalTrainer
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from backend.services.feedback_tracker import FeedbackTracker
+from backend.services.incremental_trainer import IncrementalTrainer
+
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/code-completion/feedback", tags=["feedback"])
+router = APIRouter(tags=["feedback"])
 
 # Initialize services
 feedback_tracker = FeedbackTracker()

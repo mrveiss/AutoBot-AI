@@ -10,19 +10,19 @@ Endpoints for pattern extraction and code completion.
 import logging
 from typing import Dict, List, Optional
 
-from backend.models.code_pattern import CodePattern
-from backend.services.context_analyzer import ContextAnalyzer
-from backend.services.pattern_extractor import PatternExtractor
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, desc, func
 from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.ssot_config import config
+from backend.models.code_pattern import CodePattern
+from backend.services.context_analyzer import ContextAnalyzer
+from backend.services.pattern_extractor import PatternExtractor
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/code-completion", tags=["code-completion"])
+router = APIRouter(tags=["code-completion"])
 
 # Initialize context analyzer
 context_analyzer = ContextAnalyzer()

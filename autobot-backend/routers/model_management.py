@@ -25,7 +25,7 @@ from backend.training.completion_trainer import CompletionTrainer
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/code-completion/model", tags=["ml-models"])
+router = APIRouter(tags=["ml-models"])
 
 # Database setup
 DATABASE_URL = (

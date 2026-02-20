@@ -23,7 +23,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/log-patterns", tags=["log-patterns", "analytics"])
+router = APIRouter(tags=["log-patterns", "analytics"])
 
 # Log directory
 LOG_DIR = Path(__file__).parent.parent.parent / "logs"
