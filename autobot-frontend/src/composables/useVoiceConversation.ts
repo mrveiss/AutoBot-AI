@@ -3,9 +3,10 @@
  * Copyright (c) 2025 mrveiss
  * Author: mrveiss
  *
- * useVoiceConversation.ts - Voice conversation state machine (#1029, #1031)
- * Manages walkie-talkie and full-duplex voice conversation modes.
- * Full-duplex uses WebSocket signaling + AudioWorklet VAD for barge-in.
+ * useVoiceConversation.ts - Voice conversation state machine (#1029, #1030, #1031)
+ * Manages walkie-talkie, hands-free, and full-duplex voice conversation modes.
+ * Hands-free uses Silero VAD + server-side Whisper transcription (#1030).
+ * Full-duplex uses WebSocket signaling + AudioWorklet VAD for barge-in (#1031).
  */
 
 import { ref, computed, watch } from 'vue'
@@ -14,6 +15,7 @@ import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useChatController } from '@/models/controllers'
 import { useChatStore } from '@/stores/useChatStore'
 import { getBackendWsUrl } from '@/config/ssot-config'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useVoiceConversation')
@@ -41,12 +43,18 @@ const isActive = ref(false)
 const errorMessage = ref('')
 const wsConnected = ref(false)
 
+// Hands-free mode state (#1030)
+const silenceThreshold = ref(1500)
+const audioLevel = ref(0)
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _recognition: any = null
 let _ws: WebSocket | null = null
 let _vadAudioCtx: AudioContext | null = null
 let _vadNode: AudioWorkletNode | null = null
 let _micStream: MediaStream | null = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _sileroVad: any = null
 
 // Response message types that should be spoken (skip thoughts/planning/debug)
 const _SPEAKABLE_TYPES = new Set(['response', 'message'])
@@ -386,6 +394,107 @@ function _dispatchTranscript(text: string): void {
     state.value = 'idle'
     if (mode.value === 'full-duplex') _startListeningInternal()
   })
+}
+
+// ─── Hands-free VAD helpers (#1030) ─────────────────────
+
+function _writeWavStr(view: DataView, off: number, s: string): void {
+  for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i))
+}
+
+/** Convert Float32Array PCM samples to a WAV Blob (16-bit, mono). */
+function _float32ToWav(samples: Float32Array, sr: number): Blob {
+  const len = samples.length
+  const buf = new ArrayBuffer(44 + len * 2)
+  const v = new DataView(buf)
+  _writeWavStr(v, 0, 'RIFF')
+  v.setUint32(4, 36 + len * 2, true)
+  _writeWavStr(v, 8, 'WAVE')
+  _writeWavStr(v, 12, 'fmt ')
+  v.setUint32(16, 16, true)
+  v.setUint16(20, 1, true)
+  v.setUint16(22, 1, true)
+  v.setUint32(24, sr, true)
+  v.setUint32(28, sr * 2, true)
+  v.setUint16(32, 2, true)
+  v.setUint16(34, 16, true)
+  _writeWavStr(v, 36, 'data')
+  v.setUint32(40, len * 2, true)
+  for (let i = 0; i < len; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]))
+    v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true)
+  }
+  return new Blob([buf], { type: 'audio/wav' })
+}
+
+/** POST audio blob to /api/voice/transcribe → { text, confidence }. */
+async function _transcribeAudio(blob: Blob): Promise<string> {
+  const form = new FormData()
+  form.append('audio', blob, 'speech.wav')
+  const res = await fetchWithAuth('/api/voice/transcribe', {
+    method: 'POST',
+    body: form,
+  })
+  if (!res.ok) {
+    logger.warn('Transcribe failed:', res.status)
+    return ''
+  }
+  const data = await res.json()
+  return (data.text ?? '').trim()
+}
+
+/** Start Silero VAD for hands-free speech detection (#1030). */
+async function _startHandsFree(): Promise<void> {
+  if (_sileroVad) return
+  state.value = 'listening'
+  try {
+    const { MicVAD } = await import('@ricky0123/vad-web')
+    _sileroVad = await MicVAD.new({
+      positiveSpeechThreshold: 0.8,
+      minSpeechFrames: 5,
+      redemptionFrames: 8,
+      onSpeechEnd: (audio: Float32Array) => {
+        _handleVadSpeechEnd(audio)
+      },
+      onFrameProcessed: (probs: { isSpeech: number }) => {
+        audioLevel.value = probs.isSpeech
+      },
+    })
+    _sileroVad.start()
+    logger.debug('Silero VAD started (hands-free)')
+  } catch (e) {
+    logger.error('Silero VAD init failed:', e)
+    errorMessage.value = 'Mic access required for hands-free mode.'
+    state.value = 'idle'
+  }
+}
+
+function _stopHandsFree(): void {
+  if (_sileroVad) {
+    try { _sileroVad.destroy() } catch { /* ignore */ }
+    _sileroVad = null
+  }
+  audioLevel.value = 0
+}
+
+/** Called by Silero VAD when speech ends: encode, transcribe, dispatch. */
+function _handleVadSpeechEnd(audio: Float32Array): void {
+  if (!isActive.value || state.value !== 'listening') return
+  state.value = 'processing'
+  const wavBlob = _float32ToWav(audio, 16000)
+  _transcribeAudio(wavBlob)
+    .then((text) => {
+      if (!text || !isActive.value) {
+        state.value = 'idle'
+        return
+      }
+      _dispatchTranscript(text)
+    })
+    .catch((err) => {
+      logger.error('Hands-free transcription error:', err)
+      errorMessage.value = 'Transcription failed. Try again.'
+      state.value = 'idle'
+    })
 }
 
 // ─── Main composable ────────────────────────────────────
