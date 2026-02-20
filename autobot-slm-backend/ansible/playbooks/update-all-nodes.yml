@@ -200,16 +200,19 @@
       when: "'01-Backend' in inventory_hostname"
 
     # Frontend (172.16.168.21)
+    # NOTE: Use shell rsync delegated to 01-Backend (where git repo lives)
+    # instead of synchronize (which runs FROM the SLM controller that
+    # doesn't have autobot-frontend code). Same pattern as Backend. (#913)
     - name: "[PLAY 2] Frontend | Sync autobot-frontend code"
-      ansible.posix.synchronize:
-        src: "{{ local_autobot_root }}/autobot-frontend/"
-        dest: "/opt/autobot/autobot-frontend/"
-        delete: false
-        rsync_opts:
-          - "--exclude=node_modules"
-          - "--exclude=dist"
-          - "--exclude=.git"
+      shell: |
+        rsync -avz \
+          --exclude=node_modules --exclude=dist --exclude=.git \
+          --rsync-path='sudo rsync' \
+          -e 'ssh -i /home/autobot/.ssh/autobot_key -o StrictHostKeyChecking=no' \
+          {{ local_autobot_root }}/autobot-frontend/ \
+          autobot@{{ ansible_host }}:/opt/autobot/autobot-frontend/
       become: true
+      delegate_to: 01-Backend
       when: "'02-Frontend' in inventory_hostname"
 
     - name: "[PLAY 2] Frontend | Fix ownership of frontend directory"
@@ -236,30 +239,32 @@
       when: "'02-Frontend' in inventory_hostname"
 
     # NPU Worker (172.16.168.22)
+    # NOTE: Delegate to 01-Backend where git repo lives (#913)
     - name: "[PLAY 2] NPU | Sync autobot-npu-worker code"
-      ansible.posix.synchronize:
-        src: "{{ local_autobot_root }}/autobot-npu-worker/"
-        dest: "/opt/autobot/autobot-npu-worker/"
-        delete: false
-        rsync_opts:
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
+      shell: |
+        rsync -avz \
+          --exclude=__pycache__ --exclude='*.pyc' --exclude=.git \
+          --rsync-path='sudo rsync' \
+          -e 'ssh -i /home/autobot/.ssh/autobot_key -o StrictHostKeyChecking=no' \
+          {{ local_autobot_root }}/autobot-npu-worker/ \
+          autobot@{{ ansible_host }}:/opt/autobot/autobot-npu-worker/
       become: true
-      when: "'03-NPU' in inventory_hostname"
+      delegate_to: 01-Backend
+      when: "'03-NPU' in inventory_hostname or 'npu-worker' in inventory_hostname"
 
     # Browser (172.16.168.25)
+    # NOTE: Delegate to 01-Backend where git repo lives (#913)
     - name: "[PLAY 2] Browser | Sync autobot-browser-worker code"
-      ansible.posix.synchronize:
-        src: "{{ local_autobot_root }}/autobot-browser-worker/"
-        dest: "/opt/autobot/autobot-browser-worker/"
-        delete: false
-        rsync_opts:
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
+      shell: |
+        rsync -avz \
+          --exclude=__pycache__ --exclude='*.pyc' --exclude=.git \
+          --rsync-path='sudo rsync' \
+          -e 'ssh -i /home/autobot/.ssh/autobot_key -o StrictHostKeyChecking=no' \
+          {{ local_autobot_root }}/autobot-browser-worker/ \
+          autobot@{{ ansible_host }}:/opt/autobot/autobot-browser-worker/
       become: true
-      when: "'05-Browser' in inventory_hostname"
+      delegate_to: 01-Backend
+      when: "'05-Browser' in inventory_hostname or 'browser-automation' in inventory_hostname"
 
     # Shared (all nodes)
     # NOTE: For 01-Backend (.20), the git repo exists locally so we use a shell

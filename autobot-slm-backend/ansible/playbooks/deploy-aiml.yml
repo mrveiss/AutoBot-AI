@@ -1,0 +1,67 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# AI/ML Deployment Playbook (VM4 - .24)
+# Deploys ChromaDB vector database and AI Stack API (agent router)
+---
+
+- name: "Deploy AI/ML Infrastructure (ChromaDB + AI Stack API)"
+  hosts: aiml
+  become: true
+  gather_facts: true
+  serial: 1
+
+  pre_tasks:
+    - name: Display AI/ML deployment information
+      ansible.builtin.debug:
+        msg:
+          - "Deploying AI/ML Infrastructure"
+          - "VM: {{ inventory_hostname }} ({{ ansible_host }})"
+          - "Services: ChromaDB (port {{ chromadb_port }}), AI Stack API (port {{ ai_port }})"
+
+  roles:
+    - role: ai-stack
+      tags: ['ai-stack', 'aiml']
+
+  post_tasks:
+    - name: Wait for ChromaDB to be ready
+      ansible.builtin.wait_for:
+        host: "127.0.0.1"
+        port: "{{ chromadb_port | default(8000) }}"
+        timeout: 60
+        delay: 5
+
+    - name: Wait for AI Stack API to be ready
+      ansible.builtin.wait_for:
+        host: "127.0.0.1"
+        port: "{{ ai_port | default(8080) }}"
+        timeout: 120
+        delay: 10
+
+    - name: Verify ChromaDB health
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ chromadb_port | default(8000) }}/api/v1/heartbeat"
+        return_content: true
+      register: chromadb_health
+      failed_when: chromadb_health.status != 200
+      retries: 3
+      delay: 5
+
+    - name: Verify AI Stack API health
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ ai_port | default(8080) }}/api/health"
+        return_content: true
+      register: ai_stack_health
+      failed_when: ai_stack_health.status != 200
+      retries: 3
+      delay: 10
+
+    - name: Display AI/ML deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "AI/ML infrastructure deployed successfully"
+          - "ChromaDB: http://{{ ansible_host }}:{{ chromadb_port | default(8000) }}"
+          - "AI Stack API: http://{{ ansible_host }}:{{ ai_port | default(8080) }}"
+          - "ChromaDB health: {{ chromadb_health.json | default('OK') }}"
+          - "AI Stack health: {{ ai_stack_health.json | default('OK') }}"
