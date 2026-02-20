@@ -33,16 +33,26 @@
             <div class="flex items-center gap-2">
               <!-- Mode Selector -->
               <select
-                v-model="voiceConversation.mode.value"
+                :value="voiceConversation.mode.value"
+                @change="handleModeChange"
                 class="voice-overlay__mode-select"
                 aria-label="Conversation mode"
               >
                 <option value="walkie-talkie">Walkie-talkie</option>
-                <option value="hands-free">Hands-free</option>
-                <option value="full-duplex" disabled>
-                  Full-duplex (soon)
-                </option>
+                <option value="full-duplex">Full-duplex</option>
               </select>
+
+              <!-- WS connection indicator (full-duplex only) -->
+              <div
+                v-if="voiceConversation.mode.value === 'full-duplex'"
+                class="voice-overlay__ws-indicator"
+                :class="{
+                  'voice-overlay__ws-indicator--connected':
+                    voiceConversation.wsConnected.value,
+                }"
+                :title="voiceConversation.wsConnected.value
+                  ? 'Connected' : 'Disconnected'"
+              ></div>
 
               <!-- Close -->
               <button
