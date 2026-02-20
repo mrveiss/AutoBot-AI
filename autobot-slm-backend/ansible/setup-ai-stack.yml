@@ -95,7 +95,7 @@
           ChromaDB URL: http://{{ ansible_host }}:{{ chromadb_port }}
           AI Stack API: {{ 'Running' if ai_stack_check.status | default(0) == 200 else 'Starting' }}
           AI Stack URL: http://{{ ansible_host }}:{{ ai_stack_port | default(8080) }}
-          Ollama: Remote on {{ ollama_host | default('172.16.168.20') }}:{{ ollama_port | default(11434) }}
+          Ollama: Remote on {{ ollama_host }}:{{ ollama_port }}
           Data: {{ chromadb_data_dir }}
           ═══════════════════════════════════════════════════════════════
       tags: [verify]

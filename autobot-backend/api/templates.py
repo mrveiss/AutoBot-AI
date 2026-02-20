@@ -4,17 +4,22 @@
 """
 Workflow Templates API endpoints
 Provides access to pre-configured workflow templates with intelligent caching
+
+Route ordering: Static paths (/templates/search, /templates/categories,
+/templates/stats) MUST be defined before parameterized paths
+(/templates/{template_id}) to prevent FastAPI from capturing static
+segments as path parameters.
 """
 
 from typing import Dict, Optional
 
 from autobot_types import TaskComplexity
-from backend.utils.advanced_cache_manager import smart_cache
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from workflow_templates import TemplateCategory, workflow_template_manager
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.utils.advanced_cache_manager import smart_cache
 
 router = APIRouter()
 
@@ -123,36 +128,15 @@ async def list_workflow_templates(
 
         return {"success": True, "templates": templates, "total": len(templates)}
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to list templates: {str(e)}"
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_template_details",
-    error_code_prefix="TEMPLATES",
-)
-@router.get("/templates/{template_id}")
-@smart_cache(
-    data_type="templates", key_func=lambda template_id: f"detail:{template_id}"
-)
-async def get_template_details(template_id: str):
-    """Get detailed information about a specific template (Issue #372 - uses model methods)"""
-    try:
-        template = workflow_template_manager.get_template(template_id)
-        if not template:
-            raise HTTPException(status_code=404, detail="Template not found")
-
-        # Issue #372: Use model method to reduce feature envy
-        return {
-            "success": True,
-            "template": template.to_detail_dict(),
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get template: {str(e)}")
+# --- Static paths MUST be registered before /templates/{template_id} ---
 
 
 @with_error_handling(
@@ -219,135 +203,6 @@ async def list_template_categories():
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
-    operation="validate_template_variables",
-    error_code_prefix="TEMPLATES",
-)
-@router.post("/templates/{template_id}/validate")
-async def validate_template_variables(
-    template_id: str, request: TemplateValidationRequest
-):
-    """Validate variables for a template before execution"""
-    try:
-        validation_result = workflow_template_manager.validate_template_variables(
-            template_id, request.variables
-        )
-
-        return {
-            "success": True,
-            "template_id": template_id,
-            "validation": validation_result,
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to validate template variables: {str(e)}"
-        )
-
-
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="create_workflow_from_template",
-    error_code_prefix="TEMPLATES",
-)
-@router.post("/templates/{template_id}/create-workflow")
-async def create_workflow_from_template(
-    template_id: str, request: TemplateExecutionRequest
-):
-    """Create a workflow instance from a template"""
-    try:
-        # Validate template exists
-        template = workflow_template_manager.get_template(template_id)
-        if not template:
-            raise HTTPException(status_code=404, detail="Template not found")
-
-        # Validate variables if provided
-        if request.variables:
-            validation = workflow_template_manager.validate_template_variables(
-                template_id, request.variables
-            )
-            if not validation["valid"]:
-                return {
-                    "success": False,
-                    "error": "Invalid template variables",
-                    "validation": validation,
-                }
-
-        # Create workflow from template
-        workflow_data = workflow_template_manager.create_workflow_from_template(
-            template_id, request.variables
-        )
-
-        if not workflow_data:
-            raise HTTPException(
-                status_code=500, detail="Failed to create workflow from template"
-            )
-
-        return {
-            "success": True,
-            "workflow": workflow_data,
-            "ready_for_execution": True,
-            "execution_endpoint": "/api/workflow/execute",
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to create workflow from template: {str(e)}"
-        )
-
-
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="execute_template_workflow",
-    error_code_prefix="TEMPLATES",
-)
-@router.post("/templates/{template_id}/execute")
-async def execute_template_workflow(
-    template_id: str, request: TemplateExecutionRequest
-):
-    """Execute a workflow directly from a template"""
-    try:
-        # Validate and create workflow
-        workflow_data = workflow_template_manager.create_workflow_from_template(
-            template_id, request.variables
-        )
-
-        if not workflow_data:
-            raise HTTPException(status_code=404, detail="Template not found or invalid")
-
-        # Execute the workflow using the workflow API
-        from backend.api.workflow import WorkflowExecutionRequest as WorkflowExecRequest
-        from backend.api.workflow import execute_workflow
-        from fastapi import BackgroundTasks
-
-        # Create execution request
-        execution_request = WorkflowExecRequest(
-            user_message=f"Execute template: {workflow_data['template_name']}",
-            auto_approve=request.auto_approve,
-        )
-
-        # Execute workflow
-        background_tasks = BackgroundTasks()
-        result = await execute_workflow(execution_request, background_tasks)
-
-        # Add template information to the result
-        if result.get("success"):
-            result["template_info"] = {
-                "template_id": template_id,
-                "template_name": workflow_data["template_name"],
-                "category": workflow_data["category"],
-                "variables_used": workflow_data.get("variables_used", {}),
-            }
-
-        return result
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to execute template workflow: {str(e)}"
-        )
-
-
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
     operation="get_template_statistics",
     error_code_prefix="TEMPLATES",
 )
@@ -400,6 +255,37 @@ async def get_template_statistics():
         raise HTTPException(
             status_code=500, detail=f"Failed to get template statistics: {str(e)}"
         )
+
+
+# --- Parameterized paths below (after all static paths) ---
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_template_details",
+    error_code_prefix="TEMPLATES",
+)
+@router.get("/templates/{template_id}")
+@smart_cache(
+    data_type="templates", key_func=lambda template_id: f"detail:{template_id}"
+)
+async def get_template_details(template_id: str):
+    """Get detailed information about a specific template (Issue #372 - uses model methods)"""
+    try:
+        template = workflow_template_manager.get_template(template_id)
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        # Issue #372: Use model method to reduce feature envy
+        return {
+            "success": True,
+            "template": template.to_detail_dict(),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get template: {str(e)}")
 
 
 @with_error_handling(
@@ -460,7 +346,146 @@ async def preview_template_workflow(
             ),
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to preview template: {str(e)}"
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="validate_template_variables",
+    error_code_prefix="TEMPLATES",
+)
+@router.post("/templates/{template_id}/validate")
+async def validate_template_variables(
+    template_id: str, request: TemplateValidationRequest
+):
+    """Validate variables for a template before execution"""
+    try:
+        validation_result = workflow_template_manager.validate_template_variables(
+            template_id, request.variables
+        )
+
+        return {
+            "success": True,
+            "template_id": template_id,
+            "validation": validation_result,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to validate template variables: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="create_workflow_from_template",
+    error_code_prefix="TEMPLATES",
+)
+@router.post("/templates/{template_id}/create-workflow")
+async def create_workflow_from_template(
+    template_id: str, request: TemplateExecutionRequest
+):
+    """Create a workflow instance from a template"""
+    try:
+        # Validate template exists
+        template = workflow_template_manager.get_template(template_id)
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        # Validate variables if provided
+        if request.variables:
+            validation = workflow_template_manager.validate_template_variables(
+                template_id, request.variables
+            )
+            if not validation["valid"]:
+                return {
+                    "success": False,
+                    "error": "Invalid template variables",
+                    "validation": validation,
+                }
+
+        # Create workflow from template
+        workflow_data = workflow_template_manager.create_workflow_from_template(
+            template_id, request.variables
+        )
+
+        if not workflow_data:
+            raise HTTPException(
+                status_code=500, detail="Failed to create workflow from template"
+            )
+
+        return {
+            "success": True,
+            "workflow": workflow_data,
+            "ready_for_execution": True,
+            "execution_endpoint": "/api/workflow/execute",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create workflow from template: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="execute_template_workflow",
+    error_code_prefix="TEMPLATES",
+)
+@router.post("/templates/{template_id}/execute")
+async def execute_template_workflow(
+    template_id: str, request: TemplateExecutionRequest
+):
+    """Execute a workflow directly from a template"""
+    try:
+        # Validate and create workflow
+        workflow_data = workflow_template_manager.create_workflow_from_template(
+            template_id, request.variables
+        )
+
+        if not workflow_data:
+            raise HTTPException(status_code=404, detail="Template not found or invalid")
+
+        # Execute the workflow using the workflow API
+        from fastapi import BackgroundTasks
+
+        from backend.api.workflow import WorkflowExecutionRequest as WorkflowExecRequest
+        from backend.api.workflow import execute_workflow
+
+        # Create execution request
+        execution_request = WorkflowExecRequest(
+            user_message=f"Execute template: {workflow_data['template_name']}",
+            auto_approve=request.auto_approve,
+        )
+
+        # Execute workflow
+        background_tasks = BackgroundTasks()
+        result = await execute_workflow(execution_request, background_tasks)
+
+        # Add template information to the result
+        if result.get("success"):
+            result["template_info"] = {
+                "template_id": template_id,
+                "template_name": workflow_data["template_name"],
+                "category": workflow_data["category"],
+                "variables_used": workflow_data.get("variables_used", {}),
+            }
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to execute template workflow: {str(e)}",
         )
