@@ -65,8 +65,8 @@ export function useVoiceOutput() {
     }
   }
 
-  async function speak(text: string): Promise<void> {
-    if (!voiceOutputEnabled.value || !text.trim()) return
+  async function speak(text: string, force?: boolean): Promise<void> {
+    if ((!force && !voiceOutputEnabled.value) || !text.trim()) return
     if (isSpeaking.value) _stopCurrentAudio()
 
     try {

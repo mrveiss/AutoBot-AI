@@ -30,8 +30,18 @@ export interface VoiceBubble {
   timestamp: number
 }
 
+// Module-level singletons — shared across all component instances (#1037)
+const state = ref<ConversationState>('idle')
+const mode = ref<ConversationMode>('walkie-talkie')
+const currentTranscript = ref('')
+const bubbles = ref<VoiceBubble[]>([])
+const isActive = ref(false)
+const errorMessage = ref('')
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _recognition: any = null
+let _lastMessageCount = 0
+let _pendingResponse = false
 
 function _generateId(): string {
   return `vb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -41,17 +51,6 @@ export function useVoiceConversation() {
   const store = useChatStore()
   const controller = useChatController()
   const { speak, isSpeaking } = useVoiceOutput()
-
-  const state = ref<ConversationState>('idle')
-  const mode = ref<ConversationMode>('walkie-talkie')
-  const currentTranscript = ref('')
-  const bubbles = ref<VoiceBubble[]>([])
-  const isActive = ref(false)
-  const errorMessage = ref('')
-
-  // Track the message count so we can detect new assistant responses
-  let _lastMessageCount = 0
-  let _pendingResponse = false
 
   const isListening = computed(() => state.value === 'listening')
   const isProcessing = computed(() => state.value === 'processing')
@@ -195,7 +194,7 @@ export function useVoiceConversation() {
   }
 
   // Watch for new assistant messages to trigger TTS playback
-  const _stopWatcher = watch(
+  watch(
     () => {
       const session = store.sessions.find(
         (s) => s.id === store.currentSessionId
@@ -217,12 +216,12 @@ export function useVoiceConversation() {
       })
 
       state.value = 'speaking'
-      speak(newContent)
+      speak(newContent, true)
     }
   )
 
   // Watch isSpeaking to transition back to idle when TTS finishes
-  const _stopSpeakingWatcher = watch(isSpeaking, (speaking) => {
+  watch(isSpeaking, (speaking) => {
     if (!speaking && state.value === 'speaking') {
       state.value = 'idle'
       logger.debug('TTS finished, returning to idle')
@@ -231,8 +230,6 @@ export function useVoiceConversation() {
 
   function cleanup(): void {
     deactivate()
-    _stopWatcher()
-    _stopSpeakingWatcher()
   }
 
   function _stopRecognition(): void {
