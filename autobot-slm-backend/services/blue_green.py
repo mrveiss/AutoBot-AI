@@ -22,12 +22,12 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import httpx
+from models.database import BlueGreenDeployment, BlueGreenStatus, Node, NodeStatus
+from models.schemas import BlueGreenCreate, BlueGreenResponse, EligibleNodeResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from models.database import BlueGreenDeployment, BlueGreenStatus, Node, NodeStatus
-from models.schemas import BlueGreenCreate, BlueGreenResponse, EligibleNodeResponse
 
 logger = logging.getLogger(__name__)
 
@@ -606,7 +606,7 @@ class BlueGreenService:
         """Get systemd services associated with a role."""
         role_service_map = {
             "slm-agent": ["slm-agent", "autobot-agent"],
-            "redis": ["redis-server", "redis"],
+            "redis": ["redis-stack-server"],
             "backend": ["autobot-backend", "autobot"],
             "frontend": ["autobot-frontend"],
             "npu-worker": ["autobot-npu-worker"],

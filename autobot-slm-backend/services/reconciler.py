@@ -16,7 +16,6 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from config import settings
 from models.database import (
     Deployment,
     DeploymentStatus,
@@ -33,6 +32,8 @@ from models.database import (
 from services.service_categorizer import categorize_service
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -1311,6 +1312,18 @@ class ReconcilerService:
                     last_checked=now,
                 )
                 db.add(service)
+
+        # Remove stale services no longer reported by the agent (#1018)
+        discovered_names = {s.get("name") for s in discovered_services if s.get("name")}
+        if discovered_names:
+            stale_result = await db.execute(
+                select(Service).where(
+                    Service.node_id == node_id,
+                    Service.service_name.notin_(discovered_names),
+                )
+            )
+            for stale_svc in stale_result.scalars().all():
+                await db.delete(stale_svc)
 
         # Note: commit happens in the calling method (update_node_heartbeat)
 
