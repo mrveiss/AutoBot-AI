@@ -451,12 +451,12 @@ async function _startHandsFree(): Promise<void> {
     const { MicVAD } = await import('@ricky0123/vad-web')
     _sileroVad = await MicVAD.new({
       positiveSpeechThreshold: 0.8,
-      minSpeechFrames: 5,
-      redemptionFrames: 8,
+      minSpeechMs: 150,
+      redemptionMs: 250,
       onSpeechEnd: (audio: Float32Array) => {
         _handleVadSpeechEnd(audio)
       },
-      onFrameProcessed: (probs: { isSpeech: number }) => {
+      onFrameProcessed: (probs) => {
         audioLevel.value = probs.isSpeech
       },
     })
@@ -531,6 +531,8 @@ export function useVoiceConversation() {
       _connectWs()
       await _initVad()
       _startListeningInternal()
+    } else if (mode.value === 'hands-free') {
+      await _startHandsFree()
     }
     logger.debug('Voice conversation activated, mode:', mode.value)
   }
