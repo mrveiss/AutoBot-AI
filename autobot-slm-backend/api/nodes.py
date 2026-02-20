@@ -25,6 +25,7 @@ from models.database import (
     NodeEvent,
     NodeRole,
     NodeStatus,
+    Role,
     Service,
     Setting,
 )
@@ -813,11 +814,13 @@ async def remove_role_from_node(
     role_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
+    backup: bool = Query(False, description="Backup data before removal"),
 ) -> dict:
     """
-    Remove a role assignment from a node (Issue #779).
+    Remove a role from a node (Issue #1041).
 
-    Only removes the assignment, not the actual role installation.
+    Stops the service via Ansible, optionally backs up data,
+    then removes the DB assignment.
     """
     result = await db.execute(
         select(NodeRole).where(
@@ -825,18 +828,84 @@ async def remove_role_from_node(
         )
     )
     node_role = result.scalar_one_or_none()
-
     if not node_role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Role assignment not found: {role_name}",
         )
 
+    # Look up the systemd service name from Role table
+    service_name = await _get_role_service_name(db, role_name)
+
+    # If there's a service, run Ansible to stop and clean up
+    if service_name:
+        ansible_result = await _run_role_removal(
+            node_id, role_name, service_name, backup
+        )
+        if not ansible_result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Role removal failed: {ansible_result['output'][:300]}",
+            )
+
+    # Remove DB assignment only after successful cleanup
     await db.delete(node_role)
     await db.commit()
 
-    logger.info("Removed role from node: %s -> %s", node_id, role_name)
-    return {"success": True, "message": f"Role '{role_name}' removed from node"}
+    logger.info(
+        "Removed role from node: %s -> %s (backup=%s)", node_id, role_name, backup
+    )
+    response: dict = {
+        "success": True,
+        "message": f"Role '{role_name}' removed from node",
+    }
+    if backup and service_name:
+        response["backup_path"] = ansible_result.get("backup_path")
+    return response
+
+
+async def _get_role_service_name(db: AsyncSession, role_name: str) -> str | None:
+    """Look up the systemd service name for a role."""
+    result = await db.execute(
+        select(Role.systemd_service).where(Role.name == role_name)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _run_role_removal(
+    node_id: str,
+    role_name: str,
+    service_name: str,
+    backup: bool,
+) -> dict:
+    """Execute the remove-role Ansible playbook."""
+    from services.playbook_executor import get_playbook_executor
+
+    executor = get_playbook_executor()
+    result = await executor.execute_playbook(
+        playbook_name="playbooks/remove-role.yml",
+        limit=[node_id],
+        extra_vars={
+            "role_name": role_name,
+            "systemd_service": service_name,
+            "backup_before_removal": str(backup).lower(),
+        },
+    )
+    # Extract backup path from output if backup was requested
+    if backup and result["success"]:
+        result["backup_path"] = _parse_backup_path(result.get("output", ""))
+    return result
+
+
+def _parse_backup_path(output: str) -> str | None:
+    """Extract backup path from Ansible output."""
+    for line in output.splitlines():
+        if "/opt/autobot/backups/" in line and "Backup:" in line:
+            parts = line.split("/opt/autobot/backups/")
+            if len(parts) > 1:
+                path = "/opt/autobot/backups/" + parts[1].strip().rstrip('"')
+                return path
+    return None
 
 
 @router.delete("/{node_id}", status_code=status.HTTP_204_NO_CONTENT)

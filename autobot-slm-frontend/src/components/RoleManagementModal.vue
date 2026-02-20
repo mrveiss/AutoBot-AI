@@ -35,6 +35,15 @@ const isLoading = ref(true)
 const isSyncing = ref(false)
 const syncMessage = ref<string | null>(null)
 
+// Removal confirmation state (Issue #1041)
+const showRemoveConfirm = ref(false)
+const roleToRemove = ref<string>('')
+const isRemoving = ref(false)
+
+const DATA_BEARING_ROLES = ['redis', 'postgresql', 'ai-stack', 'llm', 'backend', 'monitoring']
+
+const isDataBearingRole = computed(() => DATA_BEARING_ROLES.includes(roleToRemove.value))
+
 const availableRoles = computed(() =>
   roles.filter(r => r.name !== 'code-source' && r.target_path)
 )
@@ -66,14 +75,33 @@ async function handleAssignRole() {
   }
 }
 
-async function handleRemoveRole(roleName: string) {
-  isSaving.value = true
-  const success = await removeRole(props.nodeId, roleName)
-  isSaving.value = false
+function handleRemoveRole(roleName: string) {
+  roleToRemove.value = roleName
+  showRemoveConfirm.value = true
+}
 
-  if (success) {
+function cancelRemove() {
+  showRemoveConfirm.value = false
+  roleToRemove.value = ''
+}
+
+async function confirmRemove(withBackup: boolean) {
+  showRemoveConfirm.value = false
+  isRemoving.value = true
+  syncMessage.value = `Removing ${roleToRemove.value}...`
+
+  const result = await removeRole(props.nodeId, roleToRemove.value, withBackup)
+  isRemoving.value = false
+
+  if (result.success) {
+    syncMessage.value = result.backup_path
+      ? `Removed. Backup saved to ${result.backup_path}`
+      : result.message || `Role '${roleToRemove.value}' removed`
+    roleToRemove.value = ''
     await loadNodeRoles()
     emit('saved')
+  } else {
+    syncMessage.value = result.message || 'Role removal failed'
   }
 }
 
@@ -189,7 +217,7 @@ function formatDate(dateStr: string | null): string {
                   <button
                     v-if="role.assignment_type === 'manual'"
                     class="btn btn-sm btn-danger"
-                    :disabled="isSaving"
+                    :disabled="isSaving || isRemoving"
                     @click="handleRemoveRole(role.role_name)"
                     :aria-label="`Remove ${role.role_name}`"
                   >
@@ -244,7 +272,38 @@ function formatDate(dateStr: string | null): string {
           </div>
         </section>
 
-        <!-- Sync Message -->
+        <!-- Remove Confirmation Dialog (Issue #1041) -->
+        <div v-if="showRemoveConfirm" class="confirm-overlay">
+          <div class="confirm-dialog" role="alertdialog" aria-labelledby="confirm-title">
+            <h4 id="confirm-title">Remove {{ roleToRemove }}?</h4>
+            <p v-if="isDataBearingRole" class="confirm-warning">
+              This role may contain data. You can back it up before removal.
+            </p>
+            <p v-else class="confirm-text">
+              This will stop and remove the service from the node.
+            </p>
+            <div class="confirm-actions">
+              <button
+                v-if="isDataBearingRole"
+                class="btn btn-sm btn-primary"
+                @click="confirmRemove(true)"
+              >
+                Backup &amp; Remove
+              </button>
+              <button
+                class="btn btn-sm btn-danger"
+                @click="confirmRemove(false)"
+              >
+                {{ isDataBearingRole ? 'Remove without backup' : 'Remove' }}
+              </button>
+              <button class="btn btn-sm btn-secondary" @click="cancelRemove">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sync / Status Message -->
         <div v-if="syncMessage" class="sync-message" role="status">
           {{ syncMessage }}
         </div>
@@ -496,6 +555,39 @@ function formatDate(dateStr: string | null): string {
 .btn-danger {
   background: var(--danger-color, #ef4444);
   color: white;
+}
+
+/* Removal confirmation dialog (Issue #1041) */
+.confirm-overlay {
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--bg-tertiary, #2a2a3e);
+  border: 1px solid var(--danger-color, #ef4444);
+  border-radius: 6px;
+}
+
+.confirm-dialog h4 {
+  margin: 0 0 8px 0;
+  color: var(--text-primary, #fff);
+  font-size: 14px;
+}
+
+.confirm-warning {
+  margin: 0 0 12px 0;
+  color: var(--warning-color, #fbbf24);
+  font-size: 13px;
+}
+
+.confirm-text {
+  margin: 0 0 12px 0;
+  color: var(--text-muted, #888);
+  font-size: 13px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* Screen reader only utility (Issue #754) */
