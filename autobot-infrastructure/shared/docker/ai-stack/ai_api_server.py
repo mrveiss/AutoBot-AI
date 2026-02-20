@@ -187,6 +187,7 @@ async def process_agent_request(agent_type: str, request: Request):
             status_code=404, detail=f"Agent type '{agent_type}' not found"
         )
 
+    agent_request = None
     try:
         # Parse request body
         request_data = await request.body()
@@ -212,11 +213,12 @@ async def process_agent_request(agent_type: str, request: Request):
         return JSONResponse(content=response.to_dict(), media_type="application/json")
 
     except Exception as e:
-        logger.error(f"Error processing request for {agent_type}: {e}")
+        logger.error("Error processing request for %s: %s", agent_type, e)
         logger.error(traceback.format_exc())
 
+        req_id = getattr(agent_request, "request_id", "unknown") if agent_request else "unknown"
         error_response = AgentResponse(
-            request_id=getattr(agent_request, "request_id", "unknown"),
+            request_id=req_id,
             agent_type=agent_type,
             status="error",
             result=None,
