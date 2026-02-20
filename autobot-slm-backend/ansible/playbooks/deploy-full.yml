@@ -141,6 +141,7 @@
         enabled: true
         daemon_reload: true
       loop:
+        - "autobot-chromadb"
         - "autobot-ai-stack"
       when: inventory_hostname in groups['aiml']
       become: true

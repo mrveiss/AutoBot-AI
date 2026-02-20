@@ -6,6 +6,11 @@
   ansible.builtin.systemd:
     daemon_reload: true
 
+- name: restart chromadb
+  ansible.builtin.systemd:
+    name: autobot-chromadb
+    state: restarted
+
 - name: restart ai-stack
   ansible.builtin.systemd:
     name: autobot-ai-stack

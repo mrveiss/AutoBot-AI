@@ -13,7 +13,7 @@ llm_pull_models: false
 
 # Default models to pull
 llm_default_models:
-  - llama3.2:1b
+  - mistral:7b-instruct
   - nomic-embed-text
 
 # Server settings

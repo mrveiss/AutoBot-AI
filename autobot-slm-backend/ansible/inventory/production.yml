@@ -189,8 +189,7 @@ all:
             disk_gb: 50      # LVM expansion target
           services:
             - ai-stack
-            - ollama
-            - model-server
+            - chromadb
           hardware_features:
             gpu_passthrough: true
       vars:

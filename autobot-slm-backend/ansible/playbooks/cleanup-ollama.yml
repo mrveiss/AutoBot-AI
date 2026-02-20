@@ -1,0 +1,84 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Remove Ollama from AI Stack node (.24)
+#
+# Ollama should only run on the backend host (.20).
+# This playbook stops, disables, and removes Ollama from .24.
+#
+# Usage:
+#   ansible-playbook playbooks/cleanup-ollama.yml -i inventory/production.yml
+#
+# Safety: Only targets aiml group. Will not touch backend (.20).
+
+- name: Remove Ollama from AI Stack node
+  hosts: aiml
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Check if Ollama service exists
+      ansible.builtin.stat:
+        path: /etc/systemd/system/ollama.service
+      register: _ollama_service
+
+    - name: Stop and disable Ollama service
+      ansible.builtin.systemd:
+        name: ollama
+        state: stopped
+        enabled: false
+      when: _ollama_service.stat.exists
+      ignore_errors: true
+
+    - name: Remove Ollama systemd service file
+      ansible.builtin.file:
+        path: /etc/systemd/system/ollama.service
+        state: absent
+      notify: reload systemd
+
+    - name: Check if Ollama binary exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/ollama
+      register: _ollama_binary
+
+    - name: Remove Ollama binary
+      ansible.builtin.file:
+        path: /usr/local/bin/ollama
+        state: absent
+      when: _ollama_binary.stat.exists
+
+    - name: Check if Ollama models directory exists
+      ansible.builtin.stat:
+        path: /usr/share/ollama/.ollama
+      register: _ollama_models
+
+    - name: Remove Ollama models directory
+      ansible.builtin.file:
+        path: /usr/share/ollama/.ollama
+        state: absent
+      when: _ollama_models.stat.exists
+
+    - name: Check for Ollama user home models
+      ansible.builtin.stat:
+        path: /var/lib/ollama
+      register: _ollama_var_models
+
+    - name: Remove Ollama var models directory
+      ansible.builtin.file:
+        path: /var/lib/ollama
+        state: absent
+      when: _ollama_var_models.stat.exists
+
+    - name: Display cleanup summary
+      ansible.builtin.debug:
+        msg: |
+          Ollama cleanup complete on {{ inventory_hostname }} ({{ ansible_host }})
+          - Service: {{ 'removed' if _ollama_service.stat.exists else 'not present' }}
+          - Binary: {{ 'removed' if _ollama_binary.stat.exists else 'not present' }}
+          - Models: {{ 'removed' if _ollama_models.stat.exists or _ollama_var_models.stat.exists else 'not present' }}
+
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true

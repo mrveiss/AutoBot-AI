@@ -19,6 +19,10 @@ chromadb_persist_dir: /var/lib/autobot/chromadb
 chromadb_host: "0.0.0.0"
 chromadb_port: 8000
 
+# Ollama (remote on backend .20)
+ollama_host: "{{ hostvars['01-Backend']['ansible_host'] | default('172.16.168.20') }}"
+ollama_port: 11434
+
 # Redis connection
 ai_redis_host: "{{ redis_host | default('127.0.0.1') }}"
 ai_redis_port: 6379

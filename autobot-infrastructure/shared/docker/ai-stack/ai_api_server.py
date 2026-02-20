@@ -16,8 +16,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-# Add src to path for imports
-sys.path.insert(0, "/app/src")
+# Add src to path for imports (works in Docker /app and native /opt/autobot/...)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
 from agents.base_agent import AgentResponse, deserialize_agent_request
 from agents.chat_agent import ChatAgent
