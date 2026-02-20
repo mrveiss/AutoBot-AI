@@ -77,13 +77,15 @@ all:
             - autobot-playwright
             - nginx
 
-        # New node - pending role assignment
-        05-Node-26:
+        # LLM CPU node (#1040)
+        05-LLM-CPU:
           ansible_host: 172.16.168.26
-          slm_node_id: "05-Node-26"
-          slm_services_to_monitor: []
+          slm_node_id: "05-LLM-CPU"
+          slm_node_role: "llm"
+          slm_services_to_monitor:
+            - ollama
 
-        # New node - pending role assignment
+        # Reserved node - pending role assignment
         06-Node-27:
           ansible_host: 172.16.168.27
           slm_node_id: "06-Node-27"
@@ -118,6 +120,11 @@ all:
       hosts:
         00-SLM-Manager:
 
+    # LLM inference nodes (CPU or GPU) — #1040
+    llm_nodes:
+      hosts:
+        05-LLM-CPU:
+
     # Aggregate for all infrastructure nodes
     infrastructure:
       children:
@@ -128,3 +135,4 @@ all:
         redis:
         ai_stack:
         slm_server:
+        llm_nodes:
