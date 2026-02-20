@@ -183,6 +183,10 @@
     code_base_dir: /opt/autobot
     restart_services: true
     verify_health: true
+    # Git repo path on 01-Backend (.20) — the only host with all component
+    # source code.  All sync tasks delegate to 01-Backend and use this path
+    # because the SLM controller (.19) does not have user-facing components.
+    dev_repo_root: "/home/kali/Desktop/AutoBot"
 
   pre_tasks:
     - name: "[PLAY 2] Starting Node Update"
@@ -201,18 +205,16 @@
     # =========================================================================
     # USER BACKEND - Main AutoBot Backend
     # =========================================================================
+    # NOTE: All sync tasks delegate to 01-Backend where the git repo lives.
+    # The SLM controller (.19) only has SLM components, not user-facing code.
     - name: "[PLAY 2] Backend | Sync autobot-backend code"
-      synchronize:
-        src: "{{ playbook_dir }}/../../autobot-backend/"
-        dest: "{{ code_base_dir }}/autobot-backend/"
-        delete: false
-        rsync_opts:
-          - "--exclude=venv"
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
-          - "--exclude=data/"
-          - "--exclude=logs/"
+      shell: |
+        rsync -avz \
+          --exclude=venv --exclude=__pycache__ --exclude='*.pyc' \
+          --exclude=.git --exclude=data/ --exclude=logs/ \
+          {{ dev_repo_root }}/autobot-backend/ \
+          {{ code_base_dir }}/autobot-backend/
+      delegate_to: 01-Backend
       when: "'main' in group_names"
       tags: [backend, user-backend]
 
@@ -229,13 +231,14 @@
     # USER FRONTEND - Vue Application
     # =========================================================================
     - name: "[PLAY 2] Frontend | Sync autobot-frontend code"
-      synchronize:
-        src: "{{ playbook_dir }}/../../autobot-frontend/"
-        dest: "{{ code_base_dir }}/autobot-frontend/"
-        delete: false
-        rsync_opts:
-          - "--exclude=node_modules"
-          - "--exclude=.git"
+      shell: |
+        rsync -avz \
+          --exclude=node_modules --exclude=dist --exclude=.git \
+          --rsync-path='sudo rsync' \
+          -e 'ssh -i /home/autobot/.ssh/autobot_key -o StrictHostKeyChecking=no' \
+          {{ dev_repo_root }}/autobot-frontend/ \
+          autobot@{{ ansible_host }}:{{ code_base_dir }}/autobot-frontend/
+      delegate_to: 01-Backend
       when: "'frontend' in group_names"
       tags: [frontend, user-frontend]
 
@@ -259,15 +262,14 @@
     # NPU WORKER
     # =========================================================================
     - name: "[PLAY 2] NPU | Sync autobot-npu-worker code"
-      synchronize:
-        src: "{{ playbook_dir }}/../../autobot-npu-worker/"
-        dest: "{{ code_base_dir }}/autobot-npu-worker/"
-        delete: false
-        rsync_opts:
-          - "--exclude=venv"
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
+      shell: |
+        rsync -avz \
+          --exclude=venv --exclude=__pycache__ --exclude='*.pyc' --exclude=.git \
+          --rsync-path='sudo rsync' \
+          -e 'ssh -i /home/autobot/.ssh/autobot_key -o StrictHostKeyChecking=no' \
+          {{ dev_repo_root }}/autobot-npu-worker/ \
+          autobot@{{ ansible_host }}:{{ code_base_dir }}/autobot-npu-worker/
+      delegate_to: 01-Backend
       when: "'npu_worker' in group_names"
       tags: [npu, npu-worker]
 
@@ -283,16 +285,15 @@
     # BROWSER WORKER
     # =========================================================================
     - name: "[PLAY 2] Browser | Sync autobot-browser-worker code"
-      synchronize:
-        src: "{{ playbook_dir }}/../../autobot-browser-worker/"
-        dest: "{{ code_base_dir }}/autobot-browser-worker/"
-        delete: false
-        rsync_opts:
-          - "--exclude=venv"
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
-          - "--exclude=screenshots/"
+      shell: |
+        rsync -avz \
+          --exclude=venv --exclude=__pycache__ --exclude='*.pyc' \
+          --exclude=.git --exclude=screenshots/ \
+          --rsync-path='sudo rsync' \
+          -e 'ssh -i /home/autobot/.ssh/autobot_key -o StrictHostKeyChecking=no' \
+          {{ dev_repo_root }}/autobot-browser-worker/ \
+          autobot@{{ ansible_host }}:{{ code_base_dir }}/autobot-browser-worker/
+      delegate_to: 01-Backend
       when: "'browser_worker' in group_names"
       tags: [browser, browser-worker]
 
@@ -306,18 +307,51 @@
       tags: [browser, browser-worker, restart]
 
     # =========================================================================
+    # AI STACK - LangChain/LlamaIndex Agent Router + ChromaDB
+    # =========================================================================
+    - name: "[PLAY 2] AI Stack | Sync ai_api_server and requirements"
+      shell: |
+        rsync -avz \
+          --rsync-path='sudo rsync' \
+          -e 'ssh -i /home/autobot/.ssh/autobot_key -o StrictHostKeyChecking=no' \
+          {{ dev_repo_root }}/autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py \
+          {{ dev_repo_root }}/autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt \
+          autobot@{{ ansible_host }}:{{ code_base_dir }}/autobot-ai-stack/
+      delegate_to: 01-Backend
+      when: "'aiml' in group_names"
+      tags: [ai-stack, aiml]
+
+    - name: "[PLAY 2] AI Stack | Restart autobot-ai-stack service"
+      systemd:
+        name: autobot-ai-stack
+        state: restarted
+      when:
+        - "'aiml' in group_names"
+        - restart_services | bool
+      tags: [ai-stack, aiml, restart]
+
+    - name: "[PLAY 2] AI Stack | Restart autobot-chromadb service"
+      systemd:
+        name: autobot-chromadb
+        state: restarted
+      when:
+        - "'aiml' in group_names"
+        - restart_services | bool
+      tags: [ai-stack, aiml, chromadb, restart]
+
+    # =========================================================================
     # SHARED LIBRARY - All nodes with Python services
     # =========================================================================
     - name: "[PLAY 2] Shared | Sync autobot-shared library"
-      synchronize:
-        src: "{{ playbook_dir }}/../../autobot-shared/"
-        dest: "{{ code_base_dir }}/autobot-shared/"
-        delete: false
-        rsync_opts:
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
-      when: "'main' in group_names or 'npu_worker' in group_names or 'browser_worker' in group_names"
+      shell: |
+        rsync -avz \
+          --exclude=__pycache__ --exclude='*.pyc' --exclude=.git \
+          --rsync-path='sudo rsync' \
+          -e 'ssh -i /home/autobot/.ssh/autobot_key -o StrictHostKeyChecking=no' \
+          {{ dev_repo_root }}/autobot-shared/ \
+          autobot@{{ ansible_host }}:{{ code_base_dir }}/autobot-shared/
+      delegate_to: 01-Backend
+      when: "'main' in group_names or 'npu_worker' in group_names or 'browser_worker' in group_names or 'aiml' in group_names"
       tags: [shared, library]
 
   post_tasks:
@@ -339,6 +373,8 @@
         - autobot-backend
         - autobot-npu-worker
         - autobot-playwright
+        - autobot-ai-stack
+        - autobot-chromadb
         - nginx
       when:
         - verify_health | bool

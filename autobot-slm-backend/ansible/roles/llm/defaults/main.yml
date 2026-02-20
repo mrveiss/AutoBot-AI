@@ -27,9 +27,14 @@ llm_host: "0.0.0.0"
 llm_port: 11434
 
 # Concurrency settings
-llm_max_loaded_models: 3     # Models kept hot in RAM simultaneously
+llm_max_loaded_models: 5     # Models kept hot in RAM (58GB total, 37GB free)
 llm_num_parallel: 4          # Concurrent requests per loaded model
 llm_keep_alive: "10m"        # Idle time before unloading a model
+
+# Performance tuning
+llm_flash_attention: true    # Faster attention computation
+llm_kv_cache_type: "q8_0"   # Quantized KV cache (less memory, faster)
+llm_num_threads: 16          # Physical cores (Ultra 9 185H: 16P+6E)
 
 # GPU settings
 llm_num_gpu: 0  # 0 = auto, -1 = CPU only

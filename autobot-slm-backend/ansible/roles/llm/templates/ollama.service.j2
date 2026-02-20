@@ -15,6 +15,15 @@ Environment="OLLAMA_MODELS={{ llm_models_dir }}"
 Environment="OLLAMA_MAX_LOADED_MODELS={{ llm_max_loaded_models }}"
 Environment="OLLAMA_NUM_PARALLEL={{ llm_num_parallel }}"
 Environment="OLLAMA_KEEP_ALIVE={{ llm_keep_alive }}"
+{% if llm_flash_attention | default(false) %}
+Environment="OLLAMA_FLASH_ATTENTION=1"
+{% endif %}
+{% if llm_kv_cache_type | default('') | length > 0 %}
+Environment="OLLAMA_KV_CACHE_TYPE={{ llm_kv_cache_type }}"
+{% endif %}
+{% if llm_num_threads | default(0) > 0 %}
+Environment="OLLAMA_NUM_THREADS={{ llm_num_threads }}"
+{% endif %}
 {% if llm_num_gpu != 0 %}
 Environment="OLLAMA_NUM_GPU={{ llm_num_gpu }}"
 {% endif %}
