@@ -114,6 +114,10 @@ const updateSummary = computed(() => {
 const hasUpdates = computed(() => {
   return (updateSummary.value?.total_updates ?? 0) > 0
 })
+
+// Issue #1019: Per-service health counts from backend
+const serviceSummary = computed(() => props.node.service_summary ?? null)
+const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0)
 </script>
 
 <template>
@@ -325,6 +329,24 @@ const hasUpdates = computed(() => {
     <!-- No Health Data -->
     <div v-else class="text-xs text-gray-400 italic mb-3 py-4 text-center">
       No health data available
+    </div>
+
+    <!-- Service Health Summary (Issue #1019) -->
+    <div
+      v-if="serviceSummary && serviceSummary.total > 0"
+      class="flex items-center gap-2 mb-3 text-xs"
+      aria-label="Service health summary"
+    >
+      <span class="text-gray-500">Services:</span>
+      <span v-if="serviceSummary.running > 0" class="inline-flex items-center gap-1 text-green-600">
+        <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>{{ serviceSummary.running }}
+      </span>
+      <span v-if="serviceSummary.stopped > 0" class="inline-flex items-center gap-1 text-gray-500">
+        <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>{{ serviceSummary.stopped }}
+      </span>
+      <span v-if="hasFailedServices" class="inline-flex items-center gap-1 text-red-600 font-medium">
+        <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>{{ serviceSummary.failed }}
+      </span>
     </div>
 
     <!-- Footer -->

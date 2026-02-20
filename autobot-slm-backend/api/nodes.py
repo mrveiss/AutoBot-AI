@@ -25,6 +25,7 @@ from models.database import (
     NodeEvent,
     NodeRole,
     NodeStatus,
+    Service,
     Setting,
 )
 from models.schemas import (
@@ -56,7 +57,7 @@ from services.auth import get_current_user
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
@@ -326,6 +327,39 @@ async def _create_registration_event(
     )
 
 
+async def _get_service_counts(
+    db: AsyncSession, node_ids: list[str]
+) -> dict[str, dict[str, int]]:
+    """Fetch per-node service status counts.
+
+    Issue #1019: Returns {node_id: {running: N, stopped: N, failed: N, total: N}}.
+    """
+    if not node_ids:
+        return {}
+
+    rows = await db.execute(
+        select(
+            Service.node_id,
+            Service.status,
+            func.count().label("cnt"),
+        )
+        .where(Service.node_id.in_(node_ids))
+        .group_by(Service.node_id, Service.status)
+    )
+
+    counts: dict[str, dict[str, int]] = {}
+    for node_id, status_val, cnt in rows:
+        if node_id not in counts:
+            counts[node_id] = {"running": 0, "stopped": 0, "failed": 0, "total": 0}
+        key = (
+            status_val if status_val in ("running", "stopped", "failed") else "stopped"
+        )
+        counts[node_id][key] += cnt
+        counts[node_id]["total"] += cnt
+
+    return counts
+
+
 @router.get("", response_model=NodeListResponse)
 async def list_nodes(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -349,8 +383,18 @@ async def list_nodes(
     result = await db.execute(query)
     nodes = result.scalars().all()
 
+    # Issue #1019: Fetch per-node service counts
+    node_ids = [n.node_id for n in nodes]
+    svc_counts = await _get_service_counts(db, node_ids)
+
+    node_responses = []
+    for n in nodes:
+        resp = NodeResponse.model_validate(n)
+        resp.service_summary = svc_counts.get(n.node_id)
+        node_responses.append(resp)
+
     return NodeListResponse(
-        nodes=[NodeResponse.model_validate(n) for n in nodes],
+        nodes=node_responses,
         total=total,
         page=page,
         per_page=per_page,

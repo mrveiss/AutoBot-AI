@@ -95,6 +95,8 @@ export interface SLMNode {
   code_status?: 'up_to_date' | 'outdated' | 'unknown'
   code_version?: string
   a2a_card?: A2AAgentCard | null
+  // Issue #1019: Per-service health summary counts
+  service_summary?: { running: number; stopped: number; failed: number; total: number } | null
 }
 
 /**
