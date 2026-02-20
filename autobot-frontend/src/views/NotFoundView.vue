@@ -15,11 +15,11 @@
 
         <!-- Navigation Options -->
         <div class="action-buttons">
-          <router-link to="/chat" class="btn btn-primary">
+          <router-link to="/chat" class="btn-action-primary">
             <i class="fas fa-home"></i>
             <span>Go to Chat</span>
           </router-link>
-          <button @click="$router.go(-1)" class="btn btn-secondary">
+          <button @click="$router.go(-1)" class="btn-action-secondary">
             <i class="fas fa-arrow-left"></i>
             <span>Go Back</span>
           </button>
@@ -82,7 +82,7 @@
 }
 
 .error-icon i {
-  font-size: 4rem;
+  font-size: var(--text-6xl);
   color: var(--text-muted);
 }
 
@@ -91,14 +91,14 @@
  * ============================================ */
 
 .error-title {
-  font-size: var(--font-size-3xl);
+  font-size: var(--text-3xl);
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: var(--spacing-md);
 }
 
 .error-description {
-  font-size: var(--font-size-xl);
+  font-size: var(--text-xl);
   color: var(--text-secondary);
   margin-bottom: var(--spacing-2xl);
 }
@@ -115,40 +115,16 @@
   margin-bottom: var(--spacing-2xl);
 }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-sm);
+/* Override action button sizing for 404 page */
+.action-buttons .btn-action-primary,
+.action-buttons .btn-action-secondary {
   padding: var(--spacing-sm) var(--spacing-lg);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-base);
-  font-weight: 500;
+  font-size: var(--text-base);
   text-decoration: none;
-  transition: all var(--transition-fast);
-  border: 1px solid transparent;
-  cursor: pointer;
 }
 
-.btn-primary {
-  background: var(--color-primary);
-  color: var(--text-inverse);
-}
-
-.btn-primary:hover {
-  background: var(--color-primary-hover);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.btn-secondary {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border-color: var(--border-color);
-}
-
-.btn-secondary:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--border-color-dark);
+.action-buttons .btn-action-primary:hover,
+.action-buttons .btn-action-secondary:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
@@ -160,11 +136,11 @@
 .quick-links-section {
   margin-top: var(--spacing-2xl);
   padding-top: var(--spacing-2xl);
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-default);
 }
 
 .quick-links-title {
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: var(--spacing-lg);
@@ -187,9 +163,9 @@
   background: var(--bg-secondary);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
-  transition: all var(--transition-normal);
+  transition: all var(--duration-200) var(--ease-in-out);
   text-decoration: none;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-default);
 }
 
 .quick-link-card:hover {
@@ -199,12 +175,12 @@
 }
 
 .quick-link-card i {
-  font-size: 1.5rem;
+  font-size: var(--text-2xl);
   color: var(--color-primary);
 }
 
 .quick-link-card span {
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -215,15 +191,15 @@
 
 @media (max-width: 768px) {
   .error-icon i {
-    font-size: 3rem;
+    font-size: var(--text-5xl);
   }
 
   .error-title {
-    font-size: var(--font-size-2xl);
+    font-size: var(--text-2xl);
   }
 
   .error-description {
-    font-size: var(--font-size-base);
+    font-size: var(--text-base);
   }
 
   .action-buttons {
@@ -231,7 +207,8 @@
     align-items: stretch;
   }
 
-  .btn {
+  .action-buttons .btn-action-primary,
+  .action-buttons .btn-action-secondary {
     justify-content: center;
   }
 
