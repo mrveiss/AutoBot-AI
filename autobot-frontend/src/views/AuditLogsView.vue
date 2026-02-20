@@ -1,26 +1,20 @@
 <template>
-  <div class="audit-logs-view view-container">
-    <div class="w-full px-4 pt-4 pb-6">
+  <div class="audit-logs-view">
       <!-- Page Header -->
       <div class="page-header">
-        <div class="header-content">
-          <h1>
-            <i class="fas fa-shield-halved"></i>
-            Audit Logs
-          </h1>
-          <p class="header-description">
-            Security audit trail and activity monitoring
-          </p>
+        <div class="page-header-content">
+          <h2 class="page-title">Audit Logs</h2>
+          <p class="page-subtitle">Security audit trail and activity monitoring</p>
         </div>
         <div class="header-actions">
           <button
-            :class="['btn', isPolling ? 'btn-active' : 'btn-secondary']"
+            :class="['btn-action-secondary', { 'btn-polling-active': isPolling }]"
             @click="togglePolling"
           >
             <i :class="isPolling ? 'fas fa-pause' : 'fas fa-play'"></i>
             {{ isPolling ? 'Pause Updates' : 'Auto-refresh' }}
           </button>
-          <button class="btn btn-danger" @click="showCleanupModal = true">
+          <button class="btn-action-danger" @click="showCleanupModal = true">
             <i class="fas fa-trash-alt"></i>
             Cleanup
           </button>
@@ -56,7 +50,7 @@
       <div v-if="initError" class="error-banner">
         <i class="fas fa-exclamation-circle"></i>
         <span>{{ initError }}</span>
-        <button class="btn btn-secondary btn-small" @click="initError = null">
+        <button class="btn-dismiss" @click="initError = null">
           <i class="fas fa-times"></i>
         </button>
       </div>
@@ -151,7 +145,7 @@
               <i class="fas fa-trash-alt"></i>
               Cleanup Audit Logs
             </h3>
-            <button class="btn btn-icon" @click="showCleanupModal = false">
+            <button class="modal-close" @click="showCleanupModal = false">
               <i class="fas fa-times"></i>
             </button>
           </div>
@@ -179,11 +173,11 @@
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-secondary" @click="showCleanupModal = false">
+            <button class="btn-action-secondary" @click="showCleanupModal = false">
               Cancel
             </button>
             <button
-              class="btn btn-danger"
+              class="btn-action-danger"
               :disabled="!cleanupConfirmed"
               @click="performCleanup"
             >
@@ -193,7 +187,6 @@
           </div>
         </div>
       </div>
-    </div>
   </div>
 </template>
 
@@ -343,104 +336,62 @@ async function performCleanup() {
 
 <style scoped>
 .audit-logs-view {
-  min-height: 100%;
-}
-
-.page-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: var(--spacing-6);
+  flex-direction: column;
+  height: 100%;
+  padding: var(--spacing-5);
+  background: var(--bg-primary);
+  overflow-y: auto;
 }
 
-.header-content h1 {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-3);
-  margin: 0 0 var(--spacing-1) 0;
-  font-size: var(--font-size-2xl);
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.header-content h1 i {
-  color: var(--color-primary);
-}
-
-.header-description {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
+/* Header actions */
 .header-actions {
   display: flex;
   gap: var(--spacing-2);
 }
 
-.btn {
+/* Polling active state override */
+.btn-polling-active {
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+  border-color: var(--color-primary);
+}
+
+/* Danger button */
+.btn-action-danger {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-default);
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
-  cursor: pointer;
-  transition: all var(--duration-200) var(--ease-in-out);
-  border: none;
-}
-
-.btn-secondary {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-default);
-}
-
-.btn-secondary:hover {
-  background: var(--bg-hover);
-}
-
-.btn-active {
-  background: var(--color-primary);
-  color: white;
-}
-
-.btn-danger {
+  color: var(--text-on-error);
   background: var(--color-error);
-  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--duration-150) var(--ease-in-out);
 }
 
-.btn-danger:hover:not(:disabled) {
-  background: var(--color-error-dark);
+.btn-action-danger:hover:not(:disabled) {
+  background: var(--color-error-hover);
 }
 
-.btn-danger:disabled {
+.btn-action-danger:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.btn-icon {
-  padding: var(--spacing-2);
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-}
-
-.btn-icon:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
+/* Error banner */
 .error-banner {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
   padding: var(--spacing-3) var(--spacing-4);
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: var(--radius-default);
-  color: rgb(185, 28, 28);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  border-radius: var(--radius-md);
+  color: var(--color-error);
   margin-bottom: var(--spacing-4);
 }
 
@@ -453,59 +404,31 @@ async function performCleanup() {
   font-size: var(--text-sm);
 }
 
-.btn-small {
+.btn-dismiss {
   padding: var(--spacing-1) var(--spacing-2);
-}
-
-.tab-nav {
-  display: flex;
-  gap: var(--spacing-1);
-  margin-bottom: var(--spacing-4);
-  border-bottom: 1px solid var(--border-default);
-  padding-bottom: var(--spacing-1);
-}
-
-.tab-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
   background: transparent;
   border: none;
-  border-radius: var(--radius-default) var(--radius-default) 0 0;
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--duration-200) var(--ease-in-out);
+  border-radius: var(--radius-md);
 }
 
-.tab-btn:hover {
+.btn-dismiss:hover {
+  background: var(--bg-tertiary);
   color: var(--text-primary);
-  background: var(--bg-hover);
 }
 
-.tab-btn.active {
-  color: var(--color-primary);
-  background: var(--bg-card);
-  border-bottom: 2px solid var(--color-primary);
-}
-
+/* Tab content */
 .tab-content {
   animation: fadeIn var(--duration-200) var(--ease-in-out);
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
+/* Failures filter */
 .failures-header {
   display: flex;
   justify-content: flex-end;
@@ -526,7 +449,7 @@ async function performCleanup() {
 .failure-filter select {
   padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-default);
+  border-radius: var(--radius-md);
   font-size: var(--text-sm);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -536,7 +459,7 @@ async function performCleanup() {
 .timeline-drawer {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-dropdown);
 }
 
 .drawer-backdrop {
@@ -552,45 +475,42 @@ async function performCleanup() {
   bottom: 0;
   width: 480px;
   max-width: 100%;
-  background: var(--bg-base);
+  background: var(--bg-primary);
   box-shadow: var(--shadow-xl);
   animation: slideIn var(--duration-300) var(--ease-in-out);
 }
 
 @keyframes slideIn {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
 
 /* Cleanup Modal */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.75);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: var(--z-modal);
   padding: var(--spacing-4);
 }
 
 .modal-content {
-  background: var(--bg-card);
+  background: var(--bg-secondary);
   border-radius: var(--radius-lg);
   max-width: 500px;
   width: 100%;
   overflow: hidden;
+  box-shadow: var(--shadow-2xl);
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-4);
+  padding: var(--spacing-5);
   border-bottom: 1px solid var(--border-default);
 }
 
@@ -598,6 +518,7 @@ async function performCleanup() {
   margin: 0;
   font-size: var(--text-lg);
   font-weight: var(--font-semibold);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
@@ -607,8 +528,21 @@ async function performCleanup() {
   color: var(--color-error);
 }
 
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: var(--text-lg);
+  cursor: pointer;
+  padding: var(--spacing-1);
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+}
+
 .modal-body {
-  padding: var(--spacing-4);
+  padding: var(--spacing-5);
 }
 
 .warning-banner {
@@ -616,10 +550,10 @@ async function performCleanup() {
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-3);
-  background: rgba(234, 179, 8, 0.1);
-  border: 1px solid rgba(234, 179, 8, 0.3);
-  border-radius: var(--radius-default);
-  color: rgb(161, 98, 7);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-md);
+  color: var(--color-warning);
   font-size: var(--text-sm);
   margin-bottom: var(--spacing-4);
 }
@@ -644,7 +578,7 @@ async function performCleanup() {
 .cleanup-form select {
   padding: var(--spacing-2) var(--spacing-3);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-default);
+  border-radius: var(--radius-md);
   font-size: var(--text-sm);
   background: var(--bg-input);
   color: var(--text-primary);
@@ -652,8 +586,8 @@ async function performCleanup() {
 
 .cleanup-confirm {
   padding: var(--spacing-3);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-default);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
 }
 
 .cleanup-confirm label {
@@ -674,25 +608,15 @@ async function performCleanup() {
 .modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: var(--spacing-2);
-  padding: var(--spacing-4);
+  gap: var(--spacing-3);
+  padding: var(--spacing-5);
   border-top: 1px solid var(--border-default);
-  background: var(--bg-secondary);
 }
 
 @media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    gap: var(--spacing-4);
-  }
-
   .header-actions {
     width: 100%;
     justify-content: flex-end;
-  }
-
-  .tab-nav {
-    overflow-x: auto;
   }
 
   .drawer-content {
