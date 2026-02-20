@@ -9,6 +9,7 @@
  */
 
 import { ref, computed, watch } from 'vue'
+import type { ChatMessage } from '@/stores/useChatStore'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useChatController } from '@/models/controllers'
 import { useChatStore } from '@/stores/useChatStore'
@@ -40,8 +41,8 @@ const errorMessage = ref('')
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _recognition: any = null
-let _lastMessageCount = 0
-let _pendingResponse = false
+// Response message types that should be spoken (skip thoughts/planning/debug)
+const _SPEAKABLE_TYPES = new Set(['response', 'message'])
 
 function _generateId(): string {
   return `vb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -70,7 +71,6 @@ export function useVoiceConversation() {
     state.value = 'idle'
     bubbles.value = []
     errorMessage.value = ''
-    _lastMessageCount = _getCurrentMessageCount()
     logger.debug('Voice conversation activated')
   }
 
@@ -79,7 +79,6 @@ export function useVoiceConversation() {
     isActive.value = false
     state.value = 'idle'
     currentTranscript.value = ''
-    _pendingResponse = false
     logger.debug('Voice conversation deactivated')
   }
 
@@ -171,54 +170,52 @@ export function useVoiceConversation() {
       timestamp: Date.now(),
     })
 
-    _lastMessageCount = _getCurrentMessageCount()
-    _pendingResponse = true
-
     try {
-      await controller.sendMessage(text, {
-        use_knowledge: false,
-      })
+      await controller.sendMessage(text, { use_knowledge: false })
+
+      // Streaming complete — find the last assistant response
+      const response = _getLastAssistantContent()
+      if (response && isActive.value) {
+        bubbles.value.push({
+          id: _generateId(),
+          sender: 'assistant',
+          content: response,
+          timestamp: Date.now(),
+        })
+
+        state.value = 'speaking'
+        await speak(response, true)
+
+        // If speak() failed (e.g. TTS 403), isSpeaking never
+        // became true so the watcher won't recover — do it here.
+        if (!isSpeaking.value && state.value === 'speaking') {
+          state.value = 'idle'
+          logger.debug('TTS did not start, recovering to idle')
+        }
+      } else {
+        state.value = 'idle'
+      }
     } catch (err) {
       logger.error('Failed to send voice transcript:', err)
       errorMessage.value = 'Failed to send message. Try again.'
       state.value = 'idle'
-      _pendingResponse = false
     }
   }
 
-  function _getCurrentMessageCount(): number {
+  function _getLastAssistantContent(): string | null {
     const session = store.sessions.find(
-      (s) => s.id === store.currentSessionId
+      (s) => s.id === store.currentSessionId,
     )
-    return session?.messages?.length ?? 0
-  }
-
-  // Watch for new assistant messages to trigger TTS playback
-  watch(
-    () => {
-      const session = store.sessions.find(
-        (s) => s.id === store.currentSessionId
-      )
-      const msgs = session?.messages ?? []
-      const last = msgs[msgs.length - 1]
-      return last?.sender === 'assistant' ? last.content : null
-    },
-    (newContent) => {
-      if (!isActive.value || !_pendingResponse || !newContent) return
-
-      _pendingResponse = false
-
-      bubbles.value.push({
-        id: _generateId(),
-        sender: 'assistant',
-        content: newContent,
-        timestamp: Date.now(),
-      })
-
-      state.value = 'speaking'
-      speak(newContent, true)
+    const msgs: ChatMessage[] = session?.messages ?? []
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const msg = msgs[i]
+      if (msg.sender !== 'assistant' || !msg.content) continue
+      // Skip thought/planning/debug — only speak actual responses
+      if (msg.type && !_SPEAKABLE_TYPES.has(msg.type)) continue
+      return msg.content
     }
-  )
+    return null
+  }
 
   // Watch isSpeaking to transition back to idle when TTS finishes
   watch(isSpeaking, (speaking) => {
