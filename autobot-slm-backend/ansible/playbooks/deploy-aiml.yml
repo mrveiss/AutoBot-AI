@@ -41,7 +41,7 @@
 
     - name: Verify ChromaDB health
       ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ chromadb_port | default(8000) }}/api/v1/heartbeat"
+        url: "http://127.0.0.1:{{ chromadb_port | default(8000) }}/api/v2/heartbeat"
         return_content: true
       register: chromadb_health
       failed_when: chromadb_health.status != 200
@@ -50,7 +50,7 @@
 
     - name: Verify AI Stack API health
       ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ ai_port | default(8080) }}/api/health"
+        url: "http://127.0.0.1:{{ ai_port | default(8080) }}/health"
         return_content: true
       register: ai_stack_health
       failed_when: ai_stack_health.status != 200
