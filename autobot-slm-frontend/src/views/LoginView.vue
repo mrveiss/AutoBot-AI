@@ -78,6 +78,7 @@ onMounted(async () => {
 
 <template>
   <main
+    id="main-content"
     class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4"
     aria-label="Login page"
   >
@@ -123,7 +124,7 @@ onMounted(async () => {
                 required
                 autocomplete="username"
                 aria-required="true"
-                class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 transition-colors"
                 placeholder="Enter your username"
               />
             </div>
