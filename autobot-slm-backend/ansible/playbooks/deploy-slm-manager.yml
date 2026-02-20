@@ -42,6 +42,14 @@
   roles:
     - role: postgresql
       tags: ['postgresql']
+      vars:
+        # #1038: Backend on .20 connects to PostgreSQL here for user management.
+        # Must listen on all interfaces and allow subnet access.
+        postgresql_listen_addresses: "*"
+        pg_hba_remote_access:
+          - database: autobot_users
+            user: slm_app
+            address: "172.16.168.0/24"
     - role: slm_manager
     - role: monitoring
       tags: ['monitoring']
