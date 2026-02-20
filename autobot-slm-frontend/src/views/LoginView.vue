@@ -148,7 +148,7 @@ onMounted(async () => {
                 required
                 autocomplete="current-password"
                 aria-required="true"
-                class="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                class="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 transition-colors"
                 placeholder="Enter your password"
               />
               <button
@@ -213,7 +213,7 @@ onMounted(async () => {
               maxlength="8"
               autocomplete="one-time-code"
               aria-label="6-digit authentication code"
-              class="block w-full text-center text-2xl tracking-widest py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              class="block w-full text-center text-2xl tracking-widest py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
               placeholder="000000"
               @keyup.enter="handleMFAVerify"
             />
