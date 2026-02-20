@@ -36,5 +36,5 @@ llm_flash_attention: true    # Faster attention computation
 llm_kv_cache_type: "q8_0"   # Quantized KV cache (less memory, faster)
 llm_num_threads: 16          # Physical cores (Ultra 9 185H: 16P+6E)
 
-# GPU settings
-llm_num_gpu: 0  # 0 = auto, -1 = CPU only
+# GPU settings (RTX 4070 Laptop 8GB VRAM — auto-detected via CUDA)
+llm_num_gpu: 0  # 0 = auto (offloads all layers that fit VRAM), -1 = CPU only
