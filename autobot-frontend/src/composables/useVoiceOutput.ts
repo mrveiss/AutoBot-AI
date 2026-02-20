@@ -3,8 +3,9 @@
  * Copyright (c) 2025 mrveiss
  * Author: mrveiss
  *
- * useVoiceOutput.ts - TTS voice output composable (#928)
+ * useVoiceOutput.ts - TTS voice output composable (#928, #1031)
  * Manages voice output toggle state and plays synthesized audio via Kani-TTS-2.
+ * Supports both single-shot speak() and streaming playAudioChunk() for full-duplex.
  */
 
 import { ref } from 'vue'
@@ -21,38 +22,76 @@ const voiceOutputEnabled = ref<boolean>(
 )
 const isSpeaking = ref<boolean>(false)
 
-let _currentAudio: HTMLAudioElement | null = null
+// AudioContext survives expired user gestures — once resumed, it stays unlocked.
+// new Audio().play() requires a fresh gesture each time and fails after delay.
+let _audioContext: AudioContext | null = null
+let _currentSource: AudioBufferSourceNode | null = null
+
+// Queue for streaming audio chunks (#1031)
+let _chunkQueue: ArrayBuffer[] = []
+let _isPlayingChunks = false
+
+function _getOrCreateContext(): AudioContext {
+  if (!_audioContext) {
+    _audioContext = new AudioContext()
+  }
+  return _audioContext
+}
+
+/** Call from a user-gesture handler to unlock audio for the session. */
+function unlockAudio(): void {
+  const ctx = _getOrCreateContext()
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch((e) => logger.warn('AudioContext resume failed:', e))
+  }
+}
 
 function _stopCurrentAudio(): void {
-  if (_currentAudio) {
-    _currentAudio.pause()
-    _currentAudio.src = ''
-    _currentAudio = null
+  if (_currentSource) {
+    try { _currentSource.stop() } catch { /* already stopped */ }
+    _currentSource = null
   }
+  _chunkQueue = []
+  _isPlayingChunks = false
   isSpeaking.value = false
 }
 
-function _playAudioBlob(blob: Blob): void {
-  _stopCurrentAudio()
-  const url = URL.createObjectURL(blob)
-  const audio = new Audio(url)
-  _currentAudio = audio
+async function _playAudioBuffer(arrayBuffer: ArrayBuffer): Promise<void> {
+  const ctx = _getOrCreateContext()
+  if (ctx.state === 'suspended') await ctx.resume()
+  const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0))
+  const source = ctx.createBufferSource()
+  source.buffer = audioBuffer
+  source.connect(ctx.destination)
+  _currentSource = source
   isSpeaking.value = true
-  audio.onended = () => {
-    URL.revokeObjectURL(url)
-    isSpeaking.value = false
-    _currentAudio = null
-  }
-  audio.onerror = (e) => {
-    logger.error('Audio playback error:', e)
-    URL.revokeObjectURL(url)
-    isSpeaking.value = false
-    _currentAudio = null
-  }
-  audio.play().catch((e) => {
-    logger.error('Audio play() rejected:', e)
-    isSpeaking.value = false
+
+  return new Promise<void>((resolve) => {
+    source.onended = () => {
+      if (_currentSource === source) {
+        _currentSource = null
+      }
+      resolve()
+    }
+    source.start(0)
   })
+}
+
+async function _drainChunkQueue(): Promise<void> {
+  if (_isPlayingChunks) return
+  _isPlayingChunks = true
+
+  while (_chunkQueue.length > 0) {
+    const chunk = _chunkQueue.shift()!
+    try {
+      await _playAudioBuffer(chunk)
+    } catch (e) {
+      logger.error('Chunk playback error:', e)
+    }
+  }
+
+  _isPlayingChunks = false
+  isSpeaking.value = false
 }
 
 export function useVoiceOutput() {
@@ -81,10 +120,33 @@ export function useVoiceOutput() {
         return
       }
       const blob = await response.blob()
-      _playAudioBlob(blob)
+      const arrayBuffer = await blob.arrayBuffer()
+      await _playAudioBuffer(arrayBuffer)
     } catch (e) {
       logger.error('speak() error:', e)
+      isSpeaking.value = false
     }
+  }
+
+  /** Queue a base64-encoded WAV chunk for sequential playback (#1031). */
+  function playAudioChunk(base64Data: string): void {
+    try {
+      const binary = atob(base64Data)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i)
+      }
+      _chunkQueue.push(bytes.buffer)
+      isSpeaking.value = true
+      _drainChunkQueue()
+    } catch (e) {
+      logger.error('playAudioChunk error:', e)
+    }
+  }
+
+  /** Stop any current or queued audio immediately (#1031). */
+  function stopSpeaking(): void {
+    _stopCurrentAudio()
   }
 
   return {
@@ -92,5 +154,8 @@ export function useVoiceOutput() {
     isSpeaking,
     toggleVoiceOutput,
     speak,
+    unlockAudio,
+    playAudioChunk,
+    stopSpeaking,
   }
 }

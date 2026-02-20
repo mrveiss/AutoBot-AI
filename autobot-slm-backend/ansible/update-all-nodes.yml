@@ -242,6 +242,13 @@
       when: "'frontend' in group_names"
       tags: [frontend, user-frontend]
 
+    - name: "[PLAY 2] Frontend | Install npm dependencies"
+      command:
+        cmd: npm install
+        chdir: "{{ code_base_dir }}/autobot-frontend"
+      when: "'frontend' in group_names"
+      tags: [frontend, user-frontend]
+
     - name: "[PLAY 2] Frontend | Rebuild production dist"
       command:
         cmd: npx vite build

@@ -38,9 +38,7 @@
                 aria-label="Conversation mode"
               >
                 <option value="walkie-talkie">Walkie-talkie</option>
-                <option value="hands-free" disabled>
-                  Hands-free (soon)
-                </option>
+                <option value="hands-free">Hands-free</option>
                 <option value="full-duplex" disabled>
                   Full-duplex (soon)
                 </option>
@@ -115,6 +113,39 @@
             </div>
           </Transition>
 
+          <!-- Hands-free controls (#1030) -->
+          <div
+            v-if="voiceConversation.mode.value === 'hands-free'"
+            class="voice-overlay__hf-controls"
+          >
+            <!-- Amplitude meter -->
+            <div class="voice-overlay__amplitude">
+              <div
+                class="voice-overlay__amplitude-bar"
+                :style="{ width: `${voiceConversation.audioLevel.value * 100}%` }"
+              ></div>
+            </div>
+
+            <!-- Silence threshold slider -->
+            <div class="voice-overlay__threshold">
+              <label class="voice-overlay__threshold-label">
+                Silence timeout
+              </label>
+              <input
+                type="range"
+                min="500"
+                max="3000"
+                step="100"
+                :value="voiceConversation.silenceThreshold.value"
+                @input="voiceConversation.silenceThreshold.value = Number(($event.target as HTMLInputElement).value)"
+                class="voice-overlay__threshold-slider"
+              />
+              <span class="voice-overlay__threshold-value">
+                {{ (voiceConversation.silenceThreshold.value / 1000).toFixed(1) }}s
+              </span>
+            </div>
+          </div>
+
           <!-- Mic Control Area -->
           <div class="voice-overlay__controls">
             <!-- Pulse rings (visible when listening) -->
@@ -186,12 +217,24 @@ const micIcon = computed(() => {
   }
 })
 
+const isHandsFree = computed(
+  () => voiceConversation.mode.value === 'hands-free',
+)
+
 const micHint = computed(() => {
   switch (voiceConversation.state.value) {
-    case 'listening': return 'Tap to stop'
-    case 'processing': return 'Waiting for response...'
-    case 'speaking': return 'AutoBot is responding...'
-    default: return 'Tap to speak'
+    case 'listening':
+      return isHandsFree.value
+        ? 'Speak naturally — auto-detects when you stop'
+        : 'Tap to stop'
+    case 'processing':
+      return isHandsFree.value ? 'Transcribing...' : 'Waiting for response...'
+    case 'speaking':
+      return 'AutoBot is responding...'
+    default:
+      return isHandsFree.value
+        ? 'Tap to start hands-free listening'
+        : 'Tap to speak'
   }
 })
 
@@ -570,6 +613,83 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   color: var(--text-muted, #64748b);
   letter-spacing: 0.02em;
+}
+
+/* ============================================
+   Hands-free controls (#1030)
+   ============================================ */
+
+.voice-overlay__hf-controls {
+  padding: 0.75rem 1.25rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+/* Amplitude meter */
+.voice-overlay__amplitude {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(148, 163, 184, 0.1);
+  overflow: hidden;
+}
+
+.voice-overlay__amplitude-bar {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #60a5fa, #818cf8);
+  transition: width 0.1s ease-out;
+  min-width: 0;
+}
+
+/* Silence threshold */
+.voice-overlay__threshold {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.voice-overlay__threshold-label {
+  font-size: 0.6875rem;
+  color: var(--text-muted, #64748b);
+  white-space: nowrap;
+}
+
+.voice-overlay__threshold-slider {
+  flex: 1;
+  height: 4px;
+  appearance: none;
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.voice-overlay__threshold-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #60a5fa;
+  border: 2px solid var(--bg-card, #0f172a);
+  cursor: pointer;
+}
+
+.voice-overlay__threshold-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #60a5fa;
+  border: 2px solid var(--bg-card, #0f172a);
+  cursor: pointer;
+}
+
+.voice-overlay__threshold-value {
+  font-size: 0.6875rem;
+  color: #93c5fd;
+  min-width: 2rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ============================================

@@ -55,6 +55,7 @@ from backend.api.vnc_manager import router as vnc_router
 from backend.api.vnc_mcp import router as vnc_mcp_router
 from backend.api.vnc_proxy import router as vnc_proxy_router
 from backend.api.voice import router as voice_router
+from backend.api.voice_stream import router as voice_stream_router
 from backend.api.wake_word import router as wake_word_router
 from backend.plugin_manager import router as plugin_manager_router
 
@@ -186,6 +187,7 @@ def _get_service_routers() -> list:
         (llm_providers_router, "/llm", ["llm", "providers"], "llm_providers"),
         (redis_router, "/redis", ["redis"], "redis"),
         (voice_router, "/voice", ["voice"], "voice"),
+        (voice_stream_router, "/voice", ["voice", "websocket"], "voice_stream"),
         (wake_word_router, "/wake_word", ["wake_word", "voice"], "wake_word"),
         (vnc_router, "/vnc", ["vnc"], "vnc"),
         (vnc_proxy_router, "/vnc-proxy", ["vnc-proxy"], "vnc_proxy"),
