@@ -11,14 +11,25 @@ llm_models_dir: /var/lib/ollama
 llm_install_ollama: true
 llm_pull_models: false
 
-# Default models to pull
+# Default models to pull (all models used by backend agents)
 llm_default_models:
-  - mistral:7b-instruct
-  - nomic-embed-text
+  - mistral:7b-instruct      # Default LLM for all agents
+  - nomic-embed-text          # Embeddings (vectorization, RAG, memory graph)
+  - llama3.2:1b               # Tier 1 fast ops (env analyzer, codebase analytics)
+  - llama3.2:3b               # Tier 2 processing
+  - llama3.2:latest           # Agent think tool reasoning
+  - gemma2:2b                 # Tiered routing simple tier
+  - deepseek-r1:14b           # Multi-provider fallback
+  - codellama:13b             # Code generation
 
 # Server settings
 llm_host: "0.0.0.0"
 llm_port: 11434
+
+# Concurrency settings
+llm_max_loaded_models: 3     # Models kept hot in RAM simultaneously
+llm_num_parallel: 4          # Concurrent requests per loaded model
+llm_keep_alive: "10m"        # Idle time before unloading a model
 
 # GPU settings
 llm_num_gpu: 0  # 0 = auto, -1 = CPU only
