@@ -278,10 +278,6 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Version Info -->
-      <p class="text-center text-slate-500 text-sm mt-6">
-        SLM Admin v1.0.0
-      </p>
     </div>
   </main>
 </template>
