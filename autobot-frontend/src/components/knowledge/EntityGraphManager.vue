@@ -293,7 +293,7 @@ async function refreshStats(): Promise<void> {
 
 async function fetchGraphStats(): Promise<void> {
   try {
-    const response = await apiClient.get('/api/knowledge/unified/graph?max_facts=0')
+    const response = await apiClient.get('/api/knowledge_base/unified/graph?max_facts=0')
     const data = await parseApiResponse(response)
     const graphData = data?.data || data
 

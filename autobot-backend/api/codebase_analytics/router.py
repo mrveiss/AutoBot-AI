@@ -27,8 +27,8 @@ from .endpoints import (
     stats,
 )
 
-# Create main router with common prefix and tags
-router = APIRouter(prefix="/codebase", tags=["codebase-analytics"])
+# Create main router — prefix provided by analytics_routers.py registry (#1027)
+router = APIRouter(tags=["codebase-analytics"])
 
 # Include all endpoint routers
 router.include_router(indexing.router)
