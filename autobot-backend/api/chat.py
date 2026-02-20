@@ -19,6 +19,11 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from auth_middleware import get_current_user
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.constants.threshold_constants import CategoryDefaults, TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
@@ -43,11 +48,6 @@ from backend.utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import models - DISABLED: Models don't exist yet
 # from backend.models.conversation import ConversationModel
@@ -1129,6 +1129,76 @@ async def send_chat_message_by_id(
             chat_id,
             message,
             request_data.get("context", {}),
+            request_id,
+        )
+    )
+
+
+async def _stream_graph_resume(
+    chat_workflow_manager,
+    chat_id: str,
+    decision: dict,
+    request_id: str,
+):
+    """Stream graph resume after command approval interrupt (#1043)."""
+    try:
+        yield (
+            f"data: {json.dumps({'type': 'start', 'session_id': chat_id, 'request_id': request_id})}\n\n"
+        )
+
+        async for msg in chat_workflow_manager.resume_graph(
+            session_id=chat_id, decision=decision
+        ):
+            msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
+            yield f"data: {json.dumps(msg_data)}\n\n"
+
+        yield (f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n")
+
+    except Exception as e:
+        logger.error("[%s] Graph resume error: %s", request_id, e, exc_info=True)
+        yield (
+            f"data: {json.dumps({'type': 'error', 'content': f'Error: {e}', 'request_id': request_id})}\n\n"
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="resume_chat_graph",
+    error_code_prefix="CHAT",
+)
+@router.post("/chats/{chat_id}/resume")
+async def resume_chat_graph(
+    chat_id: str,
+    current_user: dict = Depends(get_current_user),
+    request_data: dict = Body(default={}),
+    request: Request = None,
+    ownership: Dict = Depends(validate_chat_ownership),
+):
+    """Resume a paused chat graph after command approval (#1043).
+
+    The graph pauses via LangGraph interrupt when a command needs
+    approval. This endpoint resumes it with the user's decision.
+
+    Body:
+        approved (bool): Whether the command was approved
+        reason (str, optional): Reason for denial
+    """
+    request_id = generate_request_id()
+    log_request_context(request, "resume_chat_graph", request_id)
+
+    chat_workflow_manager = await get_chat_workflow_manager(request)
+    _validate_workflow_manager(chat_workflow_manager)
+
+    decision = {
+        "approved": request_data.get("approved", False),
+        "reason": request_data.get("reason", ""),
+    }
+
+    return _create_streaming_response(
+        _stream_graph_resume(
+            chat_workflow_manager,
+            chat_id,
+            decision,
             request_id,
         )
     )
