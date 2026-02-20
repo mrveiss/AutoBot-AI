@@ -380,6 +380,8 @@ export interface NodeService {
   sub_state: string | null
   main_pid: number | null
   memory_bytes: number | null
+  // Issue #1019: extra_data may include error_message for failed services
+  extra_data: Record<string, unknown>
   last_checked: string | null
   created_at: string
   updated_at: string

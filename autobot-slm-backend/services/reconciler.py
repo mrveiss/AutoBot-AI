@@ -1285,6 +1285,10 @@ class ReconcilerService:
             if status not in [s.value for s in ServiceStatus]:
                 status = ServiceStatus.UNKNOWN.value
 
+            # Issue #1019: Capture error context for failed services
+            error_msg = svc_data.get("error_message", "")
+            svc_extra = {"error_message": error_msg} if error_msg else {}
+
             if service:
                 # Update existing
                 service.status = status
@@ -1295,6 +1299,13 @@ class ReconcilerService:
                 service.enabled = svc_data.get("enabled", False)
                 service.description = svc_data.get("description")
                 service.last_checked = now
+                # Store/clear error context in extra_data
+                existing_extra = service.extra_data or {}
+                if error_msg:
+                    existing_extra["error_message"] = error_msg
+                else:
+                    existing_extra.pop("error_message", None)
+                service.extra_data = existing_extra
             else:
                 # Create new - auto-categorize based on service name
                 category = categorize_service(service_name)
@@ -1310,6 +1321,7 @@ class ReconcilerService:
                     enabled=svc_data.get("enabled", False),
                     description=svc_data.get("description"),
                     last_checked=now,
+                    extra_data=svc_extra,
                 )
                 db.add(service)
 

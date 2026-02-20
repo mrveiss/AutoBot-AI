@@ -165,6 +165,8 @@ class NodeResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     a2a_card: Optional[Dict[str, Any]] = None
+    # Issue #1019: Per-service health summary counts
+    service_summary: Optional[Dict[str, int]] = None
     extra_data: Optional[Dict[str, Any]] = Field(None, exclude=True)
 
     model_config = {"from_attributes": True}
@@ -662,6 +664,8 @@ class ServiceResponse(BaseModel):
     protocol: str = "http"
     endpoint_path: Optional[str] = None
     is_discoverable: bool = True
+    # Issue #1019: extra_data includes error_message for failed services
+    extra_data: Dict = Field(default_factory=dict)
     last_checked: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
