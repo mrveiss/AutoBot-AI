@@ -8,10 +8,10 @@ This module handles AI Stack connection initialization and agent verification
 for the AutoBot backend.
 """
 
-from backend.services.ai_stack_client import get_ai_stack_client
 from fastapi import FastAPI
 
 from autobot_shared.logging_manager import get_logger
+from backend.services.ai_stack_client import get_ai_stack_client
 
 logger = get_logger(__name__, "backend")
 
@@ -49,9 +49,10 @@ async def initialize_ai_stack(app: FastAPI, update_status_fn, append_error_fn) -
         # Test AI Stack connectivity
         ai_client = await get_ai_stack_client()
         health_status = await ai_client.health_check()
+        app.state.ai_stack_client = ai_client
 
         if health_status["status"] == "healthy":
-            await update_status_fn("ai_stack", "ready")
+            await update_status_fn("ai_stack", "connected")
             log_initialization_step(
                 "AI Stack", "AI Stack connection established", 50, True
             )
@@ -61,30 +62,34 @@ async def initialize_ai_stack(app: FastAPI, update_status_fn, append_error_fn) -
                 agents_info = await ai_client.list_available_agents()
                 agent_count = len(agents_info.get("agents", []))
                 await update_status_fn("ai_stack_agents", "ready")
-
-                # Store agent info in app state for reference
                 app.state.ai_stack_agents = agents_info
-                app.state.ai_stack_client = ai_client
 
                 log_initialization_step(
-                    "AI Stack", f"Verified {agent_count} AI agents available", 100, True
+                    "AI Stack",
+                    f"Verified {agent_count} AI agents available",
+                    100,
+                    True,
                 )
-
             except Exception as e:
                 logger.warning("AI Stack agent verification failed: %s", e)
                 await update_status_fn("ai_stack_agents", "partial")
                 await append_error_fn(f"Agent verification: {str(e)}")
 
         else:
-            await update_status_fn("ai_stack", "degraded")
+            logger.warning(
+                "AI Stack API unreachable at %s — agent routing disabled",
+                ai_client.base_url,
+            )
+            await update_status_fn("ai_stack", "error")
             await append_error_fn("AI Stack health check failed")
+            ai_client.start_retry_loop()
             log_initialization_step(
-                "AI Stack", "AI Stack connection degraded", 100, False
+                "AI Stack", "AI Stack unreachable — retry enabled", 100, False
             )
 
     except Exception as e:
-        logger.error("AI Stack initialization failed: %s", e)
-        await update_status_fn("ai_stack", "failed")
+        logger.warning("AI Stack API unreachable — agent routing disabled: %s", e)
+        await update_status_fn("ai_stack", "error")
         await append_error_fn(f"AI Stack init: {str(e)}")
         log_initialization_step(
             "AI Stack", f"Initialization failed: {str(e)}", 100, False

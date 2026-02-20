@@ -24,13 +24,26 @@ def _service_status(state: Any, attr: str) -> str:
     return "ready" if getattr(state, attr, None) else "unavailable"
 
 
+def _ai_stack_status(state: Any) -> str:
+    """Return AI Stack status from client's connection_status property."""
+    client = getattr(state, "ai_stack_client", None)
+    if not client:
+        return "unavailable"
+    status = getattr(client, "connection_status", "unknown")
+    if status == "connected":
+        return "connected"
+    if status == "error":
+        return "error"
+    return "unknown"
+
+
 def _build_services_status(state: Any) -> Dict[str, str]:
     """Build per-service status dict from app.state attributes."""
     return {
         "knowledge_base": _service_status(state, "knowledge_base"),
         "chat_workflow": _service_status(state, "chat_workflow_manager"),
         "llm_sync": _service_status(state, "background_llm_sync"),
-        "ai_stack": _service_status(state, "ai_stack_client"),
+        "ai_stack": _ai_stack_status(state),
         "ai_stack_agents": _service_status(state, "ai_stack_agents"),
         "graph_rag": _service_status(state, "graph_rag_service"),
     }
@@ -86,7 +99,7 @@ def register_root_endpoints(app: FastAPI) -> None:
         """Health endpoint with per-service breakdown and capabilities."""
         state = request.app.state
         services = _build_services_status(state)
-        ai_stack_ready = services.get("ai_stack") == "ready"
+        ai_stack_ready = services.get("ai_stack") == "connected"
         ai_agents_ready = services.get("ai_stack_agents") == "ready"
         return {
             "status": "healthy",

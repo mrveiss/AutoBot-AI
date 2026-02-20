@@ -17,7 +17,6 @@ from contextlib import asynccontextmanager
 
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
-from config import ConfigManager
 from fastapi import FastAPI
 from security_layer import SecurityLayer
 
@@ -31,6 +30,7 @@ from backend.services.slm_client import init_slm_client, shutdown_slm_client
 from backend.type_defs.common import Metadata
 from backend.user_management.database import init_database
 from backend.utils.background_llm_sync import BackgroundLLMSync
+from config import ConfigManager
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -657,9 +657,17 @@ async def _init_background_llm_sync(app: FastAPI):
             if ai_stack_health.get("status") == "healthy":
                 logger.info("✅ [ 90%] AI Stack: AI Stack fully available")
             else:
-                logger.info("🔄 [ 90%] AI Stack: AI Stack partially available")
+                logger.warning(
+                    "AI Stack API unreachable at %s — agent routing disabled",
+                    ai_stack_client.base_url,
+                )
+                ai_stack_client.start_retry_loop()
         except Exception:
-            logger.info("🔄 [ 90%] AI Stack: AI Stack partially available")
+            logger.warning(
+                "AI Stack API unreachable at %s — agent routing disabled",
+                ai_stack_client.base_url,
+            )
+            ai_stack_client.start_retry_loop()
 
     except Exception as sync_error:
         logger.warning("Background LLM sync initialization failed: %s", sync_error)

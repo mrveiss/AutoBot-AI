@@ -16,10 +16,10 @@ from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
 import aiohttp
-from backend.constants.network_constants import NetworkConstants
-from backend.type_defs.common import Metadata
 
 from autobot_shared.http_client import get_http_client
+from backend.constants.network_constants import NetworkConstants
+from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -83,9 +83,13 @@ class AIStackClient:
     the AI Stack VM.
     """
 
+    RETRY_INTERVAL_SECONDS = 60
+
     def __init__(self, base_url: Optional[str] = None):
         """Initialize AI Stack client with base URL and HTTP client configuration."""
-        # Get configuration
+        # Connection status: "unknown" -> "connected" | "error"
+        self.connection_status: str = "unknown"
+        self._retry_task: Optional[asyncio.Task] = None
 
         # Use NetworkConstants for AI Stack configuration
         ai_stack_config = {
@@ -101,9 +105,7 @@ class AIStackClient:
             host = ai_stack_config.get("host")
             port = ai_stack_config.get("port")
             if not host or not port:
-                raise ValueError(
-                    "AI Stack configuration missing 'host' or 'port' in unified_config_manager"
-                )
+                raise ValueError("AI Stack configuration missing 'host' or 'port'")
             base_url = f"http://{host}:{port}"
         self.base_url = base_url.rstrip("/")
         self.http_client = get_http_client()
@@ -145,9 +147,36 @@ class AIStackClient:
         logger.info("AI Stack client connected to %s", self.base_url)
 
     async def close(self):
-        """Close the HTTP session."""
-        # HTTPClient singleton doesn't need to be closed per instance
+        """Close the HTTP session and stop retry loop."""
+        self.stop_retry_loop()
         logger.info("AI Stack client session closed")
+
+    def start_retry_loop(self) -> None:
+        """Start background task that retries AI Stack health every 60s."""
+        if self._retry_task and not self._retry_task.done():
+            return  # Already running
+        self._retry_task = asyncio.create_task(self._retry_health_loop())
+
+    def stop_retry_loop(self) -> None:
+        """Cancel the background retry task."""
+        if self._retry_task and not self._retry_task.done():
+            self._retry_task.cancel()
+            self._retry_task = None
+
+    async def _retry_health_loop(self) -> None:
+        """Periodically check AI Stack health and update status."""
+        while True:
+            await asyncio.sleep(self.RETRY_INTERVAL_SECONDS)
+            try:
+                result = await self.health_check()
+                if result["status"] == "healthy":
+                    logger.info(
+                        "AI Stack API now reachable at %s",
+                        self.base_url,
+                    )
+                    return  # Stop retrying once connected
+            except Exception:
+                pass  # health_check already sets connection_status
 
     async def _make_request(
         self,
@@ -220,15 +249,17 @@ class AIStackClient:
         raise AIStackError("All retry attempts failed")
 
     async def health_check(self) -> Metadata:
-        """Check AI Stack health status."""
+        """Check AI Stack health status and update connection_status."""
         try:
             response = await self._make_request("GET", "/api/health")
+            self.connection_status = "connected"
             return {
                 "status": "healthy",
                 "ai_stack_response": response,
                 "timestamp": datetime.utcnow().isoformat(),
             }
         except AIStackError as e:
+            self.connection_status = "error"
             return {
                 "status": "unhealthy",
                 "error": e.message,
