@@ -120,6 +120,20 @@
       tags: ['npu-worker', 'provision']
 
 # -------------------------------------------------------------------
+# Phase 5c: Standalone LLM nodes (GPU-aware — #1040)
+# -------------------------------------------------------------------
+- name: "Provision Phase 5c: LLM Nodes"
+  hosts: llm_nodes
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: "LLM | Deploy LLM role (GPU auto-detected)"
+      ansible.builtin.include_role:
+        name: llm
+      tags: ['llm', 'provision']
+
+# -------------------------------------------------------------------
 # Phase 6: Automation layer (Browser)
 # -------------------------------------------------------------------
 - name: "Provision Phase 6: Browser Automation"
@@ -155,6 +169,7 @@
           - "  03-AI-Stack     : autobot-ai-stack, llm, autobot-slm-agent"
           - "  04-Databases    : autobot-database, autobot-slm-agent"
           - "  browser-auto    : autobot-browser-worker, autobot-slm-agent"
+          - "  05-LLM-CPU      : llm (GPU-aware), autobot-slm-agent"
           - ""
           - "All nodes have: common + autobot-slm-agent + node_exporter"
           - "  (node_exporter deployed by slm_agent role, not a separate phase)"

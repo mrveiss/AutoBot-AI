@@ -24,6 +24,7 @@ Usage:
 import threading
 from typing import Optional
 
+from .graph import ChatState, build_chat_graph, get_compiled_graph
 from .manager import ChatWorkflowManager
 from .models import WorkflowSession
 
@@ -51,8 +52,11 @@ async def initialize_chat_workflow_manager() -> bool:
 
 # Export main classes and functions
 __all__ = [
+    "ChatState",
     "ChatWorkflowManager",
     "WorkflowSession",
+    "build_chat_graph",
     "get_chat_workflow_manager",
+    "get_compiled_graph",
     "initialize_chat_workflow_manager",
 ]

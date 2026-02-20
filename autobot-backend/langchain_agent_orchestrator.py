@@ -5,31 +5,24 @@ import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
-from langchain.agents import Tool, initialize_agent
-from langchain.agents.agent_types import AgentType
+from langchain.agents import AgentType, Tool, initialize_agent
 
 try:
     from langchain_community.llms import Ollama  # type: ignore
 except ImportError:
-    try:
-        from langchain.llms import Ollama
-    except ImportError:
-        try:
-            from langchain_community.llms.ollama import Ollama  # type: ignore
-        except ImportError:
-            # Fallback - will cause runtime error if used
-            Ollama = None
-            logging.warning(
-                "Ollama integration not available. Install 'langchain-community' "
-                "package for Ollama support."
-            )
+    Ollama = None
+    logging.warning(
+        "Ollama integration not available. Install 'langchain-community' "
+        "package for Ollama support."
+    )
 
-from backend.constants.model_constants import ModelConstants
-from backend.utils.service_registry import get_service_url
 from event_manager import event_manager
 from knowledge_base import KnowledgeBase
 from tools import ToolRegistry
 from worker_node import WorkerNode
+
+from backend.constants.model_constants import ModelConstants
+from backend.utils.service_registry import get_service_url
 
 
 class LangChainAgentOrchestrator:
