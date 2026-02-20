@@ -91,6 +91,7 @@ class VMConfig(BaseSettings):
     npu: str = Field(default="172.16.168.22", alias="AUTOBOT_NPU_WORKER_HOST")
     redis: str = Field(default="172.16.168.23", alias="AUTOBOT_REDIS_HOST")
     aistack: str = Field(default="172.16.168.24", alias="AUTOBOT_AI_STACK_HOST")
+    chromadb: str = Field(default="172.16.168.24", alias="AUTOBOT_CHROMADB_HOST")
     browser: str = Field(default="172.16.168.25", alias="AUTOBOT_BROWSER_SERVICE_HOST")
     slm: str = Field(default="172.16.168.19", alias="AUTOBOT_SLM_HOST")  # Issue #768
     ollama: str = Field(default="127.0.0.1", alias="AUTOBOT_OLLAMA_HOST")
@@ -112,6 +113,7 @@ class PortConfig(BaseSettings):
     vnc: int = Field(default=6080, alias="AUTOBOT_VNC_PORT")
     browser: int = Field(default=3000, alias="AUTOBOT_BROWSER_SERVICE_PORT")
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
+    chromadb: int = Field(default=8000, alias="AUTOBOT_CHROMADB_PORT")
     npu: int = Field(default=8081, alias="AUTOBOT_NPU_WORKER_PORT")
     tts: int = Field(default=8082, alias="AUTOBOT_TTS_WORKER_PORT")  # Issue #928
     slm: int = Field(default=8000, alias="AUTOBOT_SLM_PORT")  # Issue #768
