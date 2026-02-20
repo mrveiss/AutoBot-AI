@@ -25,7 +25,7 @@ ANALYTICS_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("backend.api.analytics", "/analytics", ["analytics"], "analytics"),
     (
         "backend.api.codebase_analytics",
-        "/analytics",
+        "/analytics/codebase",
         ["codebase-analytics"],
         "codebase_analytics",
     ),

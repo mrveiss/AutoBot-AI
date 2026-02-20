@@ -20,6 +20,11 @@ from datetime import datetime
 from typing import Optional
 
 from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.code_intelligence.anti_pattern_detector import (
     AntiPatternDetector,
     AntiPatternSeverity,
@@ -38,11 +43,6 @@ from backend.code_intelligence.security_analyzer import (
     SecuritySeverity,
     get_vulnerability_types,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -669,11 +669,27 @@ async def _generate_report_response(
 
 
 class AnalysisRequest(BaseModel):
-    """Request model for code analysis."""
+    """Request model for code analysis (directory or inline code)."""
 
-    path: str = Field(
-        ...,
+    path: Optional[str] = Field(
+        default=None,
         description="Directory path to analyze",
+    )
+    code: Optional[str] = Field(
+        default=None,
+        description="Inline code to analyze",
+    )
+    language: Optional[str] = Field(
+        default=None,
+        description="Language of the inline code",
+    )
+    filename: Optional[str] = Field(
+        default=None,
+        description="Virtual filename for inline code",
+    )
+    include_suggestions: Optional[bool] = Field(
+        default=None,
+        description="Whether to include improvement suggestions",
     )
     exclude_dirs: Optional[list] = Field(
         default=None,
@@ -681,7 +697,7 @@ class AnalysisRequest(BaseModel):
     )
     min_severity: Optional[str] = Field(
         default=None,
-        description="Minimum severity level to include (info, low, medium, high, critical)",
+        description="Minimum severity level to include",
     )
 
 
@@ -702,14 +718,21 @@ async def analyze_codebase(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """
-    Analyze a codebase for anti-patterns and code smells.
+    Analyze code for anti-patterns and quality issues.
 
-    Issue #744: Requires admin authentication.
-    Issue #620: Refactored using Extract Method pattern.
-
-    Scans all Python files in the specified directory and returns
-    a comprehensive report of detected anti-patterns.
+    Accepts either a directory path for bulk analysis or inline code.
+    Issue #1008: Added inline code analysis support.
     """
+    # Inline code analysis (frontend sends {code, language, filename})
+    if request.code is not None:
+        return _analyze_inline_code(request)
+
+    # Directory-based analysis (original behavior)
+    if not request.path:
+        raise HTTPException(
+            status_code=422,
+            detail="Either 'path' or 'code' must be provided",
+        )
     await _validate_path_exists(request.path)
     await _validate_path_is_directory(request.path)
 
@@ -736,6 +759,108 @@ async def analyze_codebase(
             status_code=500,
             detail=f"Analysis failed: {str(e)}",
         )
+
+
+def _analyze_inline_code(request: AnalysisRequest) -> JSONResponse:
+    """Analyze inline code snippet. Issue #1008."""
+    code = request.code
+    lines = code.split("\n")
+    line_count = len(lines)
+    language = request.language or "python"
+
+    # Basic metrics computation
+    non_empty = [ln for ln in lines if ln.strip()]
+    comment_lines = [ln for ln in lines if ln.strip().startswith("#")]
+    comment_ratio = len(comment_lines) / len(non_empty) if non_empty else 0.0
+
+    # Count functions and classes
+    func_count = sum(1 for ln in lines if ln.strip().startswith("def "))
+    class_count = sum(1 for ln in lines if ln.strip().startswith("class "))
+
+    # Quality scoring heuristic
+    quality_score = 85.0
+    issues = []
+    if line_count > 300:
+        quality_score -= 10
+        issues.append(
+            {
+                "severity": "medium",
+                "category": "quality",
+                "message": "File exceeds 300 lines",
+            }
+        )
+    if func_count > 0:
+        avg_func_len = line_count / func_count
+        if avg_func_len > 50:
+            quality_score -= 5
+            issues.append(
+                {
+                    "severity": "low",
+                    "category": "quality",
+                    "message": "Average function length exceeds 50 lines",
+                }
+            )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "id": f"inline-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "code": code[:500],
+            "language": language,
+            "filename": request.filename or "inline",
+            "metrics": {
+                "lines_of_code": line_count,
+                "cyclomatic_complexity": func_count + 1,
+                "maintainability_index": quality_score,
+                "code_duplication_percent": 0.0,
+                "comment_ratio": round(comment_ratio, 3),
+                "function_count": func_count,
+                "class_count": class_count,
+            },
+            "quality_score": quality_score,
+            "issues": issues,
+            "suggestions": [],
+            "timestamp": datetime.now().isoformat(),
+        },
+    )
+
+
+class SuggestionsRequest(BaseModel):
+    """Request model for code suggestions. Issue #1006."""
+
+    code: str = Field(..., description="Code to get suggestions for")
+    language: Optional[str] = Field(
+        default="python", description="Programming language"
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_suggestions",
+    error_code_prefix="CODE_INTEL",
+)
+@router.post("/suggestions")
+async def get_code_suggestions(
+    request: SuggestionsRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Return code improvement suggestions. Issue #1006."""
+    lines = request.code.split("\n")
+    suggestions = []
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("def ") and len(stripped) > 80:
+            suggestions.append(
+                {
+                    "id": f"sug-{i}",
+                    "type": "style",
+                    "priority": "low",
+                    "title": "Long function signature",
+                    "description": f"Line {i + 1} is long",
+                    "impact": "readability",
+                }
+            )
+    return {"suggestions": suggestions}
 
 
 @with_error_handling(

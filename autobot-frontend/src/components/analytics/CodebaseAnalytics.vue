@@ -5303,28 +5303,15 @@ const resetState = () => {
   notify('State reset - ready to analyze', 'success')
 }
 
-// FIXED: Check NPU worker endpoint directly (not via backend proxy)
+// Issue #1007: NPU health check via backend proxy (avoids CORS/mixed content)
 const testNpuConnection = async () => {
   const startTime = Date.now()
 
   try {
-    const npuWorkerUrl = `http://${import.meta.env.VITE_NPU_WORKER_HOST || NetworkConstants.NPU_WORKER_VM_IP}:${import.meta.env.VITE_NPU_WORKER_PORT || NetworkConstants.NPU_WORKER_PORT}`
-    const npuEndpoint = `${npuWorkerUrl}/health`
-    const response = await fetch(npuEndpoint, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
-    })
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Status ${response.status}: ${errorText}`)
-    }
-    const data = await response.json()
+    const data = await ApiClient.get('/api/npu/health')
     const responseTime = Date.now() - startTime
-    const npuStatus = data.available ? 'Available' : 'Not Available'
-    notify(`NPU: ${npuStatus} (${responseTime}ms)`, data.available ? 'success' : 'warning')
+    const npuStatus = data.available || data.status === 'ok' ? 'Available' : 'Not Available'
+    notify(`NPU: ${npuStatus} (${responseTime}ms)`, data.available || data.status === 'ok' ? 'success' : 'warning')
   } catch (error: unknown) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)

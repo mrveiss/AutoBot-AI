@@ -18,12 +18,12 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 import xxhash
-from config import ConfigManager
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.http_client import get_http_client
 from autobot_shared.tracing import get_tracer
 from backend.constants.model_constants import ModelConstants
+from config import ConfigManager
 
 from .cache import CachedResponse, get_llm_cache
 from .hardware import HardwareDetector
@@ -320,7 +320,7 @@ class LLMInterface:
         )
         connection_pool = ConnectionPoolManager(
             PoolConfig(
-                max_connections_per_host=cloud_config.get("connection_pool_size", 100),
+                max_connections=cloud_config.get("connection_pool_size", 100),
             )
         )
         return rate_limiter, connection_pool

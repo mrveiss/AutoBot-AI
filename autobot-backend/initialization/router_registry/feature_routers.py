@@ -39,7 +39,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "orchestrator",
     ),
     (
-        "backend.services.workflow_automation",
+        "backend.api.workflow_automation",
         "/workflow-automation",
         ["workflow-automation"],
         "workflow_automation",

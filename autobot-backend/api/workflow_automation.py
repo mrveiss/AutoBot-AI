@@ -14,17 +14,27 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from auth_middleware import get_current_user
-from backend.api.simple_terminal_websocket import SimpleTerminalWebSocket
-from enhanced_orchestrator import EnhancedOrchestrator
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-
-# Import existing orchestrator and workflow components
-from orchestrator import Orchestrator
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/workflow_automation", tags=["workflow_automation"])
+# Issue #1009: Graceful fallback when orchestrator deps unavailable
+try:
+    from enhanced_orchestrator import EnhancedOrchestrator
+    from orchestrator import Orchestrator
+
+    from backend.api.simple_terminal_websocket import SimpleTerminalWebSocket
+
+    _WORKFLOW_DEPS_AVAILABLE = True
+except ImportError:
+    SimpleTerminalWebSocket = None
+    EnhancedOrchestrator = None
+    Orchestrator = None
+    _WORKFLOW_DEPS_AVAILABLE = False
+    logger.warning("Workflow automation deps unavailable (orchestrator not found)")
+
+router = APIRouter(tags=["workflow_automation"])
 
 
 class WorkflowStepStatus(Enum):
@@ -619,8 +629,17 @@ class WorkflowAutomationManager:
         ]
 
 
-# Global workflow manager instance
-workflow_manager = WorkflowAutomationManager()
+# Global workflow manager instance — only created when deps are available
+workflow_manager = WorkflowAutomationManager() if _WORKFLOW_DEPS_AVAILABLE else None
+
+
+def _require_workflow():
+    """Raise 503 if workflow deps are unavailable (Issue #1009)."""
+    if not _WORKFLOW_DEPS_AVAILABLE or workflow_manager is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Workflow automation unavailable: missing dependencies",
+        )
 
 
 # API Endpoints
@@ -634,6 +653,7 @@ async def create_workflow(
 
     Issue #744: Requires authenticated user.
     """
+    _require_workflow()
     try:
         workflow_steps = [
             WorkflowStep(
@@ -679,6 +699,7 @@ async def start_workflow(
 
     Issue #744: Requires authenticated user.
     """
+    _require_workflow()
     try:
         success = await workflow_manager.start_workflow_execution(workflow_id)
 
@@ -705,6 +726,7 @@ async def control_workflow(
 
     Issue #744: Requires authenticated user.
     """
+    _require_workflow()
     try:
         success = await workflow_manager.handle_workflow_control(request)
 
@@ -733,6 +755,7 @@ async def get_workflow_status(
 
     Issue #744: Requires authenticated user.
     """
+    _require_workflow()
     try:
         status = workflow_manager.get_workflow_status(workflow_id)
 
@@ -755,6 +778,7 @@ async def get_active_workflows(
 
     Issue #744: Requires authenticated user.
     """
+    _require_workflow()
     try:
         workflows = []
         for workflow_id in workflow_manager.active_workflows:
@@ -779,6 +803,7 @@ async def create_workflow_from_chat(
 
     Issue #744: Requires authenticated user.
     """
+    _require_workflow()
     try:
         user_request = request.get("user_request", "")
         session_id = request.get("session_id", "")
@@ -816,6 +841,9 @@ async def create_workflow_from_chat(
 @router.websocket("/workflow_ws/{session_id}")
 async def workflow_websocket(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for real-time workflow communication"""
+    if not _WORKFLOW_DEPS_AVAILABLE or workflow_manager is None:
+        await websocket.close(code=1013, reason="Workflow automation unavailable")
+        return
     await websocket.accept()
 
     # Register WebSocket connection

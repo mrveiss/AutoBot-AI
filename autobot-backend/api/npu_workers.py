@@ -36,6 +36,10 @@ import logging
 from typing import List, Optional
 
 from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,
@@ -45,10 +49,6 @@ from backend.models.npu_models import (
     WorkerTestResult,
 )
 from backend.services.npu_worker_manager import get_worker_manager
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import JSONResponse
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -648,6 +648,49 @@ async def get_npu_status(admin_check: bool = Depends(check_admin_permission)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve NPU status: {str(e)}",
+        )
+
+
+# ==============================================
+# NPU HEALTH PROXY (Issue #1007)
+# ==============================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="proxy_npu_health",
+    error_code_prefix="NPU_WORKERS",
+)
+@router.get("/npu/health")
+async def proxy_npu_health():
+    """
+    Proxy NPU worker health check to avoid CORS/mixed content.
+
+    Issue #1007: Frontend must not fetch NPU directly from browser.
+    """
+    from autobot_shared.ssot_config import config as ssot_config
+
+    npu_host = ssot_config.get_host("npu_worker", "172.16.168.22")
+    npu_port = ssot_config.get_port("npu_worker", 8081)
+    url = f"http://{npu_host}:{npu_port}/health"
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(url)
+            return JSONResponse(
+                status_code=resp.status_code,
+                content=resp.json(),
+            )
+    except httpx.ConnectError:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "offline", "detail": "NPU worker unreachable"},
+        )
+    except Exception as e:
+        logger.error("NPU health proxy failed: %s", e)
+        return JSONResponse(
+            status_code=502,
+            content={"status": "error", "detail": str(e)},
         )
 
 
