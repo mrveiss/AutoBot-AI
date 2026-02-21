@@ -3,8 +3,12 @@
 # Author: mrveiss
 """
 Knowledge Base MCP Bridge
-Exposes knowledge base operations as MCP tools for LLM access
-Integrates with LangChain, LlamaIndex, and Redis Vector Store
+Exposes knowledge base operations as MCP tools for LLM access.
+Integrates with LlamaIndex, Redis Vector Store, and ChatOllama (langchain 1.x).
+
+Issue #1047: Removed LangChainAgentOrchestrator (legacy 0.1 API). QA chain
+now uses ChatOllama directly. All tool capabilities merged into LangGraph
+graph (chat_workflow/graph.py).
 """
 
 import asyncio
@@ -13,24 +17,23 @@ import threading
 from typing import List, Optional
 
 from auth_middleware import get_current_user
-from backend.type_defs.common import Metadata
 from config import config as global_config_manager
 from fastapi import APIRouter, Depends
 from knowledge_base import KnowledgeBase
-from langchain_agent_orchestrator import LangChainAgentOrchestrator
 from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
+from backend.constants.model_constants import ModelConstants
+from backend.type_defs.common import Metadata
+from backend.utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])
 
 # Initialize components with thread-safe locks (Issue #395)
 knowledge_base = None
-langchain_orchestrator = None
 _knowledge_base_lock = threading.Lock()
-_langchain_orchestrator_lock = threading.Lock()
 
 
 def get_knowledge_base():
@@ -55,24 +58,30 @@ def get_vectors_redis_client():
     return get_redis_client(database="vectors")
 
 
-def get_langchain_orchestrator():
-    """Get LangChain orchestrator for advanced tool usage.
+def _get_chat_ollama():
+    """Get a ChatOllama instance for LLM calls (langchain 1.x).
 
-    Issue #395: Added thread-safe lazy initialization with double-check locking.
+    Issue #1047: Replaces LangChainAgentOrchestrator.llm with ChatOllama.
+    Uses SSOT config for Ollama endpoint and model selection.
     """
-    global langchain_orchestrator
-    if langchain_orchestrator is None:
-        with _langchain_orchestrator_lock:
-            # Double-check after acquiring lock to prevent race condition
-            if langchain_orchestrator is None:
-                # Initialize with knowledge base
-                kb = get_knowledge_base()
-                langchain_orchestrator = LangChainAgentOrchestrator(
-                    config={},
-                    worker_node=None,  # Will be initialized if needed
-                    knowledge_base=kb,
-                )
-    return langchain_orchestrator
+    try:
+        from langchain_ollama import ChatOllama
+    except ImportError:
+        logger.warning("langchain-ollama not installed — QA chain LLM unavailable")
+        return None
+
+    try:
+        from config import config as cfg
+
+        llm_config = cfg.get_llm_config()
+        model = ModelConstants.DEFAULT_OLLAMA_MODEL
+        base_url = llm_config.get("ollama", {}).get(
+            "base_url", get_service_url("ollama")
+        )
+        return ChatOllama(model=model, base_url=base_url, temperature=0.7)
+    except Exception as exc:
+        logger.warning("Failed to create ChatOllama: %s", exc)
+        return None
 
 
 class MCPTool(BaseModel):
@@ -609,28 +618,25 @@ async def mcp_langchain_qa_chain(
         # Combine context
         context = "\n\n".join([r.get("content", "") for r in search_results])
 
-        # Use LangChain for QA if available
-        orchestrator = get_langchain_orchestrator()
-        if orchestrator and orchestrator.available:
-            # Use LangChain QA chain
-            prompt = (
-                f"Based on the following context, answer this question:"
-                f"{question}\n\nContext:\n{context}"
-            )
+        # Issue #1047: Use ChatOllama (langchain 1.x) for QA
+        prompt = (
+            f"Based on the following context, answer this question: "
+            f"{question}\n\nContext:\n{context}"
+        )
 
-            answer = await asyncio.to_thread(orchestrator.llm.predict, prompt)
+        chat_llm = _get_chat_ollama()
+        if chat_llm:
+            answer = await chat_llm.ainvoke(prompt)
+            answer = answer.content if hasattr(answer, "content") else str(answer)
+        elif hasattr(kb, "llm") and kb.llm:
+            # Fallback to knowledge base LLM (LlamaIndex)
+            answer = await asyncio.to_thread(kb.llm.complete, prompt)
+            answer = str(answer)
         else:
-            # Fallback to knowledge base LLM
-            if hasattr(kb, "llm") and kb.llm:
-                prompt = (
-                    f"Based on the following context, answer this question:"
-                    f"{question}\n\nContext:\n{context}"
-                )
-
-                answer = await asyncio.to_thread(kb.llm.complete, prompt)
-                answer = str(answer)
-            else:
-                answer = f"Based on the search results: {search_results[0].get('content', '')[:500]}..."
+            answer = (
+                f"Based on the search results: "
+                f"{search_results[0].get('content', '')[:500]}..."
+            )
 
         return {
             "success": True,

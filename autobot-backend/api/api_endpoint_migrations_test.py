@@ -28,8 +28,9 @@ class TestChatHealthEndpoint:
     @pytest.mark.asyncio
     async def test_health_check_returns_degraded_when_service_unavailable(self):
         """Test health check returns HTTP 503 when services degraded"""
-        from backend.api.chat import chat_health_check
         from fastapi import Request
+
+        from backend.api.chat import chat_health_check
 
         # Mock request with unavailable llm_service
         mock_request = Mock(spec=Request)
@@ -48,8 +49,9 @@ class TestChatHealthEndpoint:
     @pytest.mark.asyncio
     async def test_health_check_returns_healthy_when_all_services_available(self):
         """Test health check returns HTTP 200 when all services healthy"""
-        from backend.api.chat import chat_health_check
         from fastapi import Request
+
+        from backend.api.chat import chat_health_check
 
         # Mock request with all services available
         mock_request = Mock(spec=Request)
@@ -85,8 +87,9 @@ class TestChatStatsEndpoint:
     @pytest.mark.asyncio
     async def test_stats_endpoint_error_handling(self):
         """Test that stats endpoint decorator handles errors properly"""
-        from backend.api.chat import chat_statistics
         from fastapi import HTTPException, Request
+
+        from backend.api.chat import chat_statistics
 
         # Mock request that will cause exception
         mock_request = Mock(spec=Request)
@@ -112,9 +115,10 @@ class TestChatMessageEndpoint:
     @pytest.mark.asyncio
     async def test_message_endpoint_validates_empty_content(self):
         """Test that message endpoint still validates empty content"""
-        from backend.api.chat import send_message
         from fastapi import Request
         from pydantic import BaseModel
+
+        from backend.api.chat import send_message
 
         # Create ChatMessage mock
         class ChatMessage(BaseModel):
@@ -138,8 +142,9 @@ class TestKnowledgeHealthEndpoint:
     @pytest.mark.asyncio
     async def test_knowledge_health_returns_unhealthy_when_kb_none(self):
         """Test health check returns unhealthy when KB not initialized"""
-        from backend.api.knowledge import get_knowledge_health
         from fastapi import Request
+
+        from backend.api.knowledge import get_knowledge_health
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -161,8 +166,9 @@ class TestKnowledgeSearchEndpoint:
     @pytest.mark.asyncio
     async def test_search_returns_empty_when_kb_none(self):
         """Test search returns empty results when KB not initialized"""
-        from backend.api.knowledge import search_knowledge
         from fastapi import Request
+
+        from backend.api.knowledge import search_knowledge
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -307,9 +313,10 @@ class TestChatStreamEndpoint:
     @pytest.mark.asyncio
     async def test_stream_endpoint_validates_empty_content(self):
         """Test that stream endpoint validates empty message content"""
-        from backend.api.chat import stream_message
         from fastapi import Request
         from pydantic import BaseModel
+
+        from backend.api.chat import stream_message
 
         # Create ChatMessage mock
         class ChatMessage(BaseModel):
@@ -333,8 +340,9 @@ class TestChatSessionsEndpoints:
     @pytest.mark.asyncio
     async def test_list_sessions_raises_error_when_manager_none(self):
         """Test list_sessions raises InternalError when manager not initialized"""
-        from backend.api.chat import list_sessions
         from fastapi import Request
+
+        from backend.api.chat import list_sessions
 
         mock_request = Mock(spec=Request)
 
@@ -349,9 +357,10 @@ class TestChatSessionsEndpoints:
     @pytest.mark.asyncio
     async def test_create_session_preserves_auth_logic(self):
         """Test create_session preserves authentication metadata logic"""
-        from backend.api.chat import create_session
         from fastapi import Request
         from pydantic import BaseModel
+
+        from backend.api.chat import create_session
 
         # Create SessionCreate mock
         class SessionCreate(BaseModel):
@@ -422,8 +431,9 @@ class TestSessionCRUDEndpoints:
     @pytest.mark.asyncio
     async def test_get_session_messages_validates_session_id(self):
         """Test GET /sessions/{id} validates session_id format"""
-        from backend.api.chat import get_session_messages
         from fastapi import Request
+
+        from backend.api.chat import get_session_messages
 
         mock_request = Mock(spec=Request)
         mock_ownership = {"valid": True}
@@ -445,9 +455,10 @@ class TestSessionCRUDEndpoints:
     @pytest.mark.asyncio
     async def test_update_session_preserves_ownership_security(self):
         """Test PUT /sessions/{id} preserves ownership validation"""
-        from backend.api.chat import update_session
         from fastapi import Request
         from pydantic import BaseModel
+
+        from backend.api.chat import update_session
 
         # Create SessionUpdate mock
         class SessionUpdate(BaseModel):
@@ -480,8 +491,9 @@ class TestSessionCRUDEndpoints:
     @pytest.mark.asyncio
     async def test_delete_session_preserves_file_handling_logic(self):
         """Test DELETE /sessions/{id} preserves file handling inner try-catch"""
-        from backend.api.chat import delete_session
         from fastapi import Request
+
+        from backend.api.chat import delete_session
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -565,8 +577,9 @@ class TestSessionExportAndManagementEndpoints:
     @pytest.mark.asyncio
     async def test_export_session_validates_format(self):
         """Test GET /sessions/{id}/export validates export format"""
-        from backend.api.chat import export_session
         from fastapi import Request
+
+        from backend.api.chat import export_session
 
         mock_request = Mock(spec=Request)
 
@@ -585,8 +598,9 @@ class TestSessionExportAndManagementEndpoints:
     @pytest.mark.asyncio
     async def test_save_chat_preserves_message_merge_logic(self):
         """Test POST /chats/{id}/save preserves message merging inner try-catch"""
-        from backend.api.chat import save_chat_by_id
         from fastapi import Request
+
+        from backend.api.chat import save_chat_by_id
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -620,8 +634,9 @@ class TestSessionExportAndManagementEndpoints:
     @pytest.mark.asyncio
     async def test_delete_chat_preserves_ownership_security(self):
         """Test DELETE /chats/{id} preserves ownership validation"""
-        from backend.api.chat import delete_chat_by_id
         from fastapi import Request
+
+        from backend.api.chat import delete_chat_by_id
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -699,8 +714,9 @@ class TestListChatsEndpoint:
     @pytest.mark.asyncio
     async def test_list_chats_raises_error_when_manager_none(self):
         """Test GET /chats raises InternalError when manager not initialized"""
-        from backend.api.chat import list_chats
         from fastapi import Request
+
+        from backend.api.chat import list_chats
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -714,8 +730,9 @@ class TestListChatsEndpoint:
     @pytest.mark.asyncio
     async def test_list_chats_preserves_inner_error_handling(self):
         """Test GET /chats preserves inner try-catch for AttributeError"""
-        from backend.api.chat import list_chats
         from fastapi import Request
+
+        from backend.api.chat import list_chats
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -782,8 +799,9 @@ class TestSendChatMessageByIdEndpoint:
     @pytest.mark.asyncio
     async def test_send_chat_message_raises_validation_error_when_message_empty(self):
         """Test POST /chats/{chat_id}/message raises ValidationError when message is empty"""
-        from backend.api.chat import send_chat_message_by_id
         from fastapi import Request
+
+        from backend.api.chat import send_chat_message_by_id
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -803,8 +821,9 @@ class TestSendChatMessageByIdEndpoint:
         self,
     ):
         """Test POST /chats/{chat_id}/message raises InternalError when services unavailable"""
-        from backend.api.chat import send_chat_message_by_id
         from fastapi import Request
+
+        from backend.api.chat import send_chat_message_by_id
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -2210,8 +2229,9 @@ class TestSearchManPagesEndpoint:
     @pytest.mark.asyncio
     async def test_search_man_pages_offline_state(self):
         """Verify endpoint handles offline state gracefully"""
-        from backend.api.knowledge import search_man_pages
         from fastapi import Request
+
+        from backend.api.knowledge import search_man_pages
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -2231,8 +2251,9 @@ class TestSearchManPagesEndpoint:
     @pytest.mark.asyncio
     async def test_search_man_pages_filters_results(self):
         """Verify endpoint filters for man pages only"""
-        from backend.api.knowledge import search_man_pages
         from fastapi import Request
+
+        from backend.api.knowledge import search_man_pages
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -2303,8 +2324,9 @@ class TestClearAllKnowledgeEndpoint:
     @pytest.mark.asyncio
     async def test_clear_all_offline_state(self):
         """Verify endpoint handles offline state gracefully"""
-        from backend.api.knowledge import clear_all_knowledge
         from fastapi import Request
+
+        from backend.api.knowledge import clear_all_knowledge
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -2324,8 +2346,9 @@ class TestClearAllKnowledgeEndpoint:
     @pytest.mark.asyncio
     async def test_clear_all_uses_clear_all_method(self):
         """Verify endpoint uses clear_all method when available"""
-        from backend.api.knowledge import clear_all_knowledge
         from fastapi import Request
+
+        from backend.api.knowledge import clear_all_knowledge
 
         mock_request = Mock(spec=Request)
         mock_request.app = Mock()
@@ -29213,16 +29236,16 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         add_source = inspect.getsource(knowledge_mcp.mcp_add_to_knowledge_base)
         self.assertIn("DocumentAddRequest", add_source)
 
-    def test_batch_162_migration_preserves_langchain_orchestrator(self):
-        """Verify migration preserves get_langchain_orchestrator dependency"""
+    def test_batch_162_migration_uses_chat_ollama(self):
+        """Verify QA chain uses ChatOllama after #1047 migration."""
         from api import knowledge_mcp
 
-        # Verify get_langchain_orchestrator is defined
-        self.assertTrue(hasattr(knowledge_mcp, "get_langchain_orchestrator"))
+        # Verify _get_chat_ollama replaces get_langchain_orchestrator
+        self.assertTrue(hasattr(knowledge_mcp, "_get_chat_ollama"))
 
         # Verify it's used in mcp_langchain_qa_chain
         qa_source = inspect.getsource(knowledge_mcp.mcp_langchain_qa_chain)
-        self.assertIn("get_langchain_orchestrator()", qa_source)
+        self.assertIn("_get_chat_ollama()", qa_source)
 
     def test_batch_162_migration_preserves_redis_manager(self):
         """Verify migration preserves get_redis_manager dependency"""
