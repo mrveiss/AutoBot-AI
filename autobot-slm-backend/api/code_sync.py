@@ -474,7 +474,8 @@ async def sync_node(
     # Build playbook parameters
     # Use node_id (maps to slm_node_id in Ansible inventory) not hostname —
     # hostname is user-editable and can drift from inventory host names (#921)
-    limit = [node.node_id]
+    # Issue #1091: Include localhost so Play 0 (archive build) runs
+    limit = ["localhost", node.node_id]
     tags = []
     if not request.restart:
         tags.append("!restart")  # Skip restart tasks
@@ -589,7 +590,8 @@ async def _sync_single_node(executor, node_state: NodeSyncState, restart: bool) 
     try:
         # Build playbook parameters
         # Use node_id (maps to slm_node_id in Ansible inventory) not hostname (#921)
-        limit = [node_state.node_id]
+        # Issue #1091: Include localhost so Play 0 (archive build) runs
+        limit = ["localhost", node_state.node_id]
         tags = []
         if not restart:
             tags.append("!restart")  # Skip restart tasks

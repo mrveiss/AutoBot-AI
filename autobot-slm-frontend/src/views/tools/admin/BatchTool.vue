@@ -59,6 +59,10 @@ const newJob = ref({
 })
 
 let refreshInterval: ReturnType<typeof setInterval> | null = null
+// Issue #1092: Stop polling on repeated auth failures
+let consecutiveErrors = 0
+const MAX_CONSECUTIVE_ERRORS = 3
+const backendAvailable = ref(true)
 
 // Computed
 const filteredJobs = computed(() => {
@@ -108,11 +112,12 @@ async function loadJobs(): Promise<void> {
   error.value = null
 
   try {
-    // Issue #835 - use named function from useAutobotApi
     const data = await api.listBatchJobs()
     jobs.value = (data.jobs as BatchJob[]) || []
+    consecutiveErrors = 0
+    backendAvailable.value = true
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load jobs'
+    handlePollError(e)
   } finally {
     loading.value = false
   }
@@ -120,15 +125,51 @@ async function loadJobs(): Promise<void> {
 
 async function loadStats(): Promise<void> {
   try {
-    // Issue #835 - use named function from useAutobotApi
     const data = await api.getBatchJobHealth()
-    stats.value = (data as unknown as BatchStats) || { total_jobs: 0, running_jobs: 0, completed_jobs: 0, failed_jobs: 0 }
-  } catch (e) {
-    logger.error('Failed to load stats:', e)
+    stats.value = (data as unknown as BatchStats) || {
+      total_jobs: 0,
+      running_jobs: 0,
+      completed_jobs: 0,
+      failed_jobs: 0,
+    }
+  } catch {
+    // Stats errors handled by handlePollError in loadJobs
   }
 }
 
+// Issue #1092: Stop polling after repeated failures
+function handlePollError(e: unknown): void {
+  consecutiveErrors++
+  if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+    stopPolling()
+    backendAvailable.value = false
+    error.value = 'AutoBot backend unreachable. Polling paused.'
+    logger.warn(
+      'Batch polling stopped after %d consecutive errors',
+      consecutiveErrors,
+    )
+  } else {
+    error.value = e instanceof Error ? e.message : 'Failed to load jobs'
+  }
+}
+
+function stopPolling(): void {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+    refreshInterval = null
+  }
+}
+
+function resumePolling(): void {
+  consecutiveErrors = 0
+  backendAvailable.value = true
+  error.value = null
+  refreshData()
+  refreshInterval = setInterval(() => refreshData(), 10000)
+}
+
 async function refreshData(): Promise<void> {
+  if (!backendAvailable.value) return
   await Promise.all([loadJobs(), loadStats()])
 }
 
@@ -196,9 +237,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
+  stopPolling()
 })
 </script>
 
@@ -303,8 +342,19 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <!-- Issue #1092: Backend unavailable banner with retry -->
+    <div v-if="!backendAvailable" class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
+      <span class="text-amber-800">AutoBot backend unreachable. Polling paused.</span>
+      <button
+        @click="resumePolling"
+        class="px-3 py-1.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+      >
+        Retry
+      </button>
+    </div>
+
     <!-- Error Message -->
-    <div v-if="error" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+    <div v-if="error && backendAvailable" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
       {{ error }}
     </div>
 
