@@ -24,6 +24,7 @@ Related to Issue #760 Phase 2.
 import asyncio
 import logging
 import os
+import ssl
 import time
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional
@@ -118,6 +119,18 @@ class ServiceDiscoveryCache:
         """Clear entire cache."""
         self._cache.clear()
         logger.debug("Cleared service discovery cache")
+
+
+def _create_permissive_ssl_context():
+    """Create SSL context that accepts self-signed certificates.
+
+    Used for internal SLM communication where nginx uses self-signed TLS.
+    Issue #1048.
+    """
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 
 class ServiceNotConfiguredError(Exception):
@@ -267,7 +280,11 @@ class SLMClient:
             headers = {}
             if self.auth_token:
                 headers["Authorization"] = f"Bearer {self.auth_token}"
-            self._http_session = aiohttp.ClientSession(headers=headers)
+            # Accept self-signed certs for internal HTTPS (#1048)
+            connector = aiohttp.TCPConnector(ssl=_create_permissive_ssl_context())
+            self._http_session = aiohttp.ClientSession(
+                headers=headers, connector=connector
+            )
         return self._http_session
 
     async def connect(self) -> None:
@@ -469,8 +486,15 @@ class SLMClient:
         logger.info("Connecting to WebSocket at %s", ws_url)
 
         try:
+            # Accept self-signed certs for wss:// connections (#1048)
+            ws_ssl = (
+                _create_permissive_ssl_context()
+                if ws_url.startswith("wss://")
+                else None
+            )
             async with websockets.connect(
                 ws_url,
+                ssl=ws_ssl,
                 additional_headers=(
                     {"Authorization": f"Bearer {self.auth_token}"}
                     if self.auth_token
