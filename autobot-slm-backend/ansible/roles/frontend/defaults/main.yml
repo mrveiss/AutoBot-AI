@@ -29,6 +29,10 @@ backend_host: "172.16.168.20"
 backend_port: 8443
 backend_protocol: "https"
 
+# Issue #1098: Backend upstream health tracking
+backend_max_fails: 3
+backend_fail_timeout: "30s"
+
 # TLS Configuration
 frontend_tls_cert_dir: /etc/autobot/certs
 frontend_tls_cert: "{{ frontend_tls_cert_dir }}/server-cert.pem"

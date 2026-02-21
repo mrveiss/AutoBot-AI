@@ -134,6 +134,24 @@
     group: root
   tags: ['slm', 'tls']
 
+# Issue #1103: Prevent nginx start when SSL cert missing
+- name: "SLM | Create nginx systemd override directory"
+  ansible.builtin.file:
+    path: /etc/systemd/system/nginx.service.d
+    state: directory
+    mode: "0755"
+  tags: ['slm', 'nginx', 'tls']
+
+- name: "SLM | Deploy nginx SSL cert pre-check"
+  ansible.builtin.template:
+    src: nginx-override.conf.j2
+    dest: /etc/systemd/system/nginx.service.d/ssl-cert-check.conf
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart nginx
+  tags: ['slm', 'nginx', 'tls']
+
 # ==========================================================
 # Backend Python venv and dependencies
 # ==========================================================
