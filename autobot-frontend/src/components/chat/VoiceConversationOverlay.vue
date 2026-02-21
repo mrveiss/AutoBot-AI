@@ -227,29 +227,44 @@ const micIcon = computed(() => {
   }
 })
 
+const isFullDuplex = computed(
+  () => voiceConversation.mode.value === 'full-duplex',
+)
 const isHandsFree = computed(
   () => voiceConversation.mode.value === 'hands-free',
+)
+const isAutoMode = computed(
+  () => isFullDuplex.value || isHandsFree.value,
 )
 
 const micHint = computed(() => {
   switch (voiceConversation.state.value) {
     case 'listening':
-      return isHandsFree.value
+      return isAutoMode.value
         ? 'Speak naturally — auto-detects when you stop'
         : 'Tap to stop'
     case 'processing':
       return isHandsFree.value ? 'Transcribing...' : 'Waiting for response...'
     case 'speaking':
-      return 'AutoBot is responding...'
+      return isFullDuplex.value
+        ? 'Tap or speak to interrupt'
+        : 'AutoBot is responding...'
     default:
-      return isHandsFree.value
-        ? 'Tap to start hands-free listening'
+      return isAutoMode.value
+        ? 'Listening will start automatically'
         : 'Tap to speak'
   }
 })
 
 function handleMicClick(): void {
   voiceConversation.toggleListening()
+}
+
+function handleModeChange(event: Event): void {
+  const target = event.target as HTMLSelectElement
+  voiceConversation.setMode(
+    target.value as 'walkie-talkie' | 'hands-free' | 'full-duplex',
+  )
 }
 
 function close(): void {
