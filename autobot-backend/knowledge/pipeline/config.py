@@ -8,6 +8,7 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
 import logging
+import re
 from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
@@ -70,11 +71,15 @@ def _validate_stage_config(stage_config: list, stage_name: str) -> None:
     if not isinstance(stage_config, list):
         raise ValueError(f"{stage_name} config must be a list")
 
+    _safe_name = re.compile(r"^[a-zA-Z0-9_-]+$")
     for idx, task_config in enumerate(stage_config):
         if not isinstance(task_config, dict):
             raise ValueError(f"{stage_name}[{idx}] must be a dict")
         if "task" not in task_config:
             raise ValueError(f"{stage_name}[{idx}] missing 'task' field")
+        task_name = task_config["task"]
+        if not isinstance(task_name, str) or not _safe_name.match(task_name):
+            raise ValueError(f"{stage_name}[{idx}] invalid task name")
 
 
 def get_default_config() -> Dict[str, Any]:
