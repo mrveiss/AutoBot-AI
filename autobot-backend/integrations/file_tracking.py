@@ -14,8 +14,9 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from backend.utils.activity_tracker import track_file_activity
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.utils.activity_tracker import track_file_activity
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ async def track_file_operation(
         if path_obj.suffix:
             file_type = path_obj.suffix.lstrip(".")
     except Exception:  # nosec B110 - silently handle invalid paths
-        pass
+        logger.debug("Suppressed exception in try block", exc_info=True)
 
     try:
         activity_id = await track_file_activity(

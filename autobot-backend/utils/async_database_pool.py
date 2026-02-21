@@ -19,7 +19,8 @@ import aiosqlite
 
 # Import shared database helpers (Issue #292 - Eliminate duplicate code)
 from backend.constants.threshold_constants import TimingConstants
-from backend.utils.database_helpers import join_results  # noqa: F401 - re-export
+from backend.utils.database_helpers import \
+    join_results  # noqa: F401 - re-export
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ class AsyncSQLiteConnectionPool:
         try:
             await conn.close()
         except Exception:
-            pass  # nosec B110 - Best-effort cleanup, errors safely ignored
+            logger.debug("Suppressed exception in try block", exc_info=True)
 
     async def _create_connection(self) -> aiosqlite.Connection:
         """Create a new async SQLite connection with optimized settings."""

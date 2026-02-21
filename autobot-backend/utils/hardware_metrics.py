@@ -1579,7 +1579,7 @@ def _store_performance_in_redis(
         )
         phase9_monitor.redis_client.expire(key, 3600)  # 1 hour retention
     except Exception:
-        pass  # nosec B110 - Non-critical metric logging
+        logger.debug("Suppressed exception in try block", exc_info=True)
 
 
 # Performance monitoring decorator for functions

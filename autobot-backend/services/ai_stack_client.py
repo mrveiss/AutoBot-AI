@@ -183,7 +183,7 @@ class AIStackClient:
                     )
                     return  # Stop retrying once connected
             except Exception:
-                pass  # health_check already sets connection_status
+                logger.debug("Suppressed exception in try block", exc_info=True)
 
     async def _make_request(
         self,

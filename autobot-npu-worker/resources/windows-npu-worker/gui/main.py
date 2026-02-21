@@ -9,9 +9,9 @@ import sys
 import traceback
 from pathlib import Path
 
-from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -25,9 +25,9 @@ logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler(crash_log, encoding='utf-8'),
-        logging.StreamHandler()
-    ]
+        logging.FileHandler(crash_log, encoding="utf-8"),
+        logging.StreamHandler(),
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -43,10 +43,10 @@ def exception_hook(exc_type, exc_value, exc_tb):
             QMessageBox.critical(
                 None,
                 "Critical Error",
-                f"An unexpected error occurred:\n\n{exc_value}\n\nCheck gui_crash.log for details."
+                f"An unexpected error occurred:\n\n{exc_value}\n\nCheck gui_crash.log for details.",
             )
     except Exception:
-        pass
+        logger.debug("Suppressed exception in try block", exc_info=True)
 
     # Call the default handler
     sys.__excepthook__(exc_type, exc_value, exc_tb)
@@ -76,6 +76,7 @@ def main():
         # Load application configuration
         logger.debug("Loading AppConfig")
         from gui.utils.app_config import AppConfig
+
         config = AppConfig()
 
         # Set application icon
@@ -87,6 +88,7 @@ def main():
         # Create and show main window
         logger.debug("Creating MainWindow")
         from gui.windows.main_window import MainWindow
+
         main_window = MainWindow(config)
 
         logger.debug("Showing MainWindow")
@@ -102,10 +104,10 @@ def main():
             QMessageBox.critical(
                 None,
                 "Startup Error",
-                f"Failed to start NPU Worker GUI:\n\n{e}\n\nCheck gui_crash.log for details."
+                f"Failed to start NPU Worker GUI:\n\n{e}\n\nCheck gui_crash.log for details.",
             )
         except Exception:
-            pass
+            logger.debug("Suppressed exception in try block", exc_info=True)
         sys.exit(1)
 
 

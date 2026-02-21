@@ -16,11 +16,12 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 import aiohttp
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.path_constants import PATH
-from backend.constants.threshold_constants import RetryConfig, ServiceDiscoveryConfig
 
 from autobot_shared.http_client import get_http_client
+from backend.constants.network_constants import NetworkConstants
+from backend.constants.path_constants import PATH
+from backend.constants.threshold_constants import (RetryConfig,
+                                                   ServiceDiscoveryConfig)
 
 logger = logging.getLogger(__name__)
 
@@ -492,7 +493,7 @@ class ServiceDiscovery:
                 if degraded:
                     return degraded
         except Exception:
-            pass  # Ignore JSON parsing errors for simple endpoints
+            logger.debug("Suppressed exception in try block", exc_info=True)
 
         return ServiceStatus.HEALTHY
 
@@ -571,9 +572,11 @@ class ServiceDiscovery:
             "status": service_data["status"].value,
             "url": service_data["url"],
             "required": service_data["required"],
-            "last_check": service_data["last_check"].isoformat()
-            if service_data["last_check"]
-            else None,
+            "last_check": (
+                service_data["last_check"].isoformat()
+                if service_data["last_check"]
+                else None
+            ),
             "response_time": service_data["response_time"],
             "consecutive_failures": service_data["consecutive_failures"],
             "error": service_data["error"],

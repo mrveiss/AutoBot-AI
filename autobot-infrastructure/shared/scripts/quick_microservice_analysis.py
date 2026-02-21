@@ -33,7 +33,7 @@ def _analyze_single_api_file(api_file: Path) -> dict | None:
         if endpoint_count > 0:
             return {"name": api_file.stem, "endpoints": endpoint_count}
     except Exception:
-        pass
+        logger.debug("Suppressed exception in try block", exc_info=True)
     return None
 
 
@@ -365,11 +365,11 @@ def quick_microservice_analysis():
 
     analysis["migration_assessment"] = {
         "readiness_score": readiness_score,
-        "readiness_level": "high"
-        if readiness_score >= 7
-        else "medium"
-        if readiness_score >= 4
-        else "low",
+        "readiness_level": (
+            "high"
+            if readiness_score >= 7
+            else "medium" if readiness_score >= 4 else "low"
+        ),
         "total_services": len(recommendations),
         "migration_phases": phases,
         "estimated_total_duration_weeks": sum(

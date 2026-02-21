@@ -428,7 +428,7 @@ class RegexPatternDetector:
                 return "re.sub(r'pattern', 'replacement', text)"
 
         except Exception:  # nosec B110 - fallback to default suggestion
-            pass
+            logger.debug("Suppressed exception in try block", exc_info=True)
 
         return "re.sub(r'pattern', 'replacement', text)"
 

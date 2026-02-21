@@ -116,9 +116,9 @@ class AutoBotMonitor:
                         "memory_total_mb": int(parts[2].strip()),
                         "utilization_percent": int(parts[3].strip()),
                         "temperature_c": int(parts[4].strip()),
-                        "power_draw_w": float(parts[5].strip())
-                        if len(parts) > 5
-                        else 0,
+                        "power_draw_w": (
+                            float(parts[5].strip()) if len(parts) > 5 else 0
+                        ),
                     }
             return {"available": False, "error": "nvidia-smi failed"}
         except Exception as e:
@@ -162,7 +162,7 @@ class AutoBotMonitor:
                     npu_status["driver_available"] = True
                     return
         except Exception:
-            pass
+            logger.debug("Suppressed exception in try block", exc_info=True)
 
     def _check_intel_gpu_top(self, npu_status: Dict[str, Any]) -> None:
         """Check Intel GPU Top for NPU info (Issue #315 - extracted)."""
@@ -178,7 +178,7 @@ class AutoBotMonitor:
                 if "NPU" in output or "Neural" in output:
                     npu_status["driver_available"] = True
         except Exception:
-            pass
+            logger.debug("Suppressed exception in try block", exc_info=True)
 
     def get_system_resources(self) -> Dict[str, Any]:
         """Get system resource utilization."""
@@ -386,9 +386,11 @@ class AutoBotMonitor:
                     "search_module": health_data.get(
                         "redis_search_module_loaded", False
                     ),
-                    "connection": "connected"
-                    if health_data.get("redis_status") == "connected"
-                    else "disconnected",
+                    "connection": (
+                        "connected"
+                        if health_data.get("redis_status") == "connected"
+                        else "disconnected"
+                    ),
                 }
             else:
                 services["redis"] = {
@@ -456,9 +458,9 @@ class AutoBotMonitor:
                     "success": True,
                     "response_time_seconds": round(response_time, 2),
                     "response_length": len(data.get("response", "")),
-                    "tokens_per_second": "calculated"
-                    if "response" in data
-                    else "unknown",
+                    "tokens_per_second": (
+                        "calculated" if "response" in data else "unknown"
+                    ),
                 }
             return {"success": False, "error": f"HTTP {response.status_code}"}
         except Exception as e:

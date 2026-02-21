@@ -8,15 +8,13 @@ Issue #381: Extracted from model_optimizer.py god class refactoring.
 Contains model filtering and selection logic.
 """
 
+import logging
 from typing import List
 
-from .types import (
-    ModelInfo,
-    ModelPerformanceLevel,
-    SystemResources,
-    TaskComplexity,
-    TaskRequest,
-)
+from .types import (ModelInfo, ModelPerformanceLevel, SystemResources,
+                    TaskComplexity, TaskRequest)
+
+logger = logging.getLogger(__name__)
 
 
 class ModelSelector:
@@ -91,7 +89,7 @@ class ModelClassifier:
                     return ModelPerformanceLevel.STANDARD
                 return ModelPerformanceLevel.ADVANCED
         except Exception:
-            pass
+            logger.debug("Suppressed exception in try block", exc_info=True)
         return None
 
     def classify_model_performance(

@@ -29,11 +29,9 @@ from config import config
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 
-from autobot_shared.ssot_config import (
-    get_agent_endpoint_explicit,
-    get_agent_model_explicit,
-    get_agent_provider_explicit,
-)
+from autobot_shared.ssot_config import (get_agent_endpoint_explicit,
+                                        get_agent_model_explicit,
+                                        get_agent_provider_explicit)
 
 logger = logging.getLogger(__name__)
 
@@ -331,7 +329,7 @@ class LibrarianAssistantAgent:
             if desc_element:
                 description = await desc_element.get_attribute("content") or ""
         except Exception:  # nosec B110 - optional metadata extraction
-            pass
+            logger.debug("Suppressed exception in try block", exc_info=True)
         domain = urlparse(url).netloc.lower()
         is_trusted = any(trusted in domain for trusted in self.trusted_domains)
         return {
