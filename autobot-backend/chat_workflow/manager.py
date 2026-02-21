@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 import re
+import uuid
 from typing import Any, Dict, FrozenSet, List, Optional
 
 from async_chat_workflow import WorkflowMessage
@@ -2500,15 +2501,13 @@ before summarizing.
                     session_id,
                 )
 
-            # Persist final assistant response
-            await chat_mgr.add_message(
-                sender="assistant",
-                text=llm_response,
-                message_type="llm_response",
-                session_id=session_id,
-            )
+            # NOTE: Removed duplicate llm_response persistence (#1064).
+            # The per-message loop above already persists the final
+            # response; a second add_message with type="llm_response"
+            # created a duplicate that survived content-based dedup.
             logger.info(
-                "✅ Persisted complete conversation to chat history: session=%s, workflow_messages=%d",
+                "Persisted conversation to chat history: "
+                "session=%s, workflow_messages=%d",
                 session_id,
                 len(workflow_messages),
             )
@@ -2834,10 +2833,13 @@ before summarizing.
             if hasattr(data, "to_dict"):
                 yield data
             else:
+                # Preserve original ID to prevent poll-cycle churn (#1064)
+                msg_id = data.get("id") or str(uuid.uuid4())
                 yield WorkflowMessage(
                     type=data.get("type", "response"),
                     content=data.get("content", ""),
                     metadata=data.get("metadata", {}),
+                    id=msg_id,
                 )
 
         await graph_task
@@ -2943,10 +2945,13 @@ before summarizing.
             if hasattr(data, "to_dict"):
                 yield data
             else:
+                # Preserve original ID to prevent poll-cycle churn (#1064)
+                msg_id = data.get("id") or str(uuid.uuid4())
                 yield WorkflowMessage(
                     type=data.get("type", "response"),
                     content=data.get("content", ""),
                     metadata=data.get("metadata", {}),
+                    id=msg_id,
                 )
 
         await graph_task
