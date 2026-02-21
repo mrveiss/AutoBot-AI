@@ -164,11 +164,13 @@ function _handleWsMessage(msg: any): void {
 }
 
 function _onSpeakingDone(): void {
-  if (mode.value === 'full-duplex' && isActive.value) {
-    state.value = 'idle'
+  state.value = 'idle'
+  if (!isActive.value) return
+  if (mode.value === 'full-duplex') {
     _startListeningInternal()
-  } else {
-    state.value = 'idle'
+  } else if (mode.value === 'hands-free' && _sileroVad) {
+    // Hands-free auto-resumes via Silero VAD (already running)
+    state.value = 'listening'
   }
 }
 
@@ -539,6 +541,7 @@ export function useVoiceConversation() {
 
   function deactivate(): void {
     _stopRecognition()
+    _stopHandsFree()
     _disconnectWs()
     _teardownVad()
     stopSpeaking()
@@ -580,6 +583,7 @@ export function useVoiceConversation() {
 
     if (wasActive) {
       _stopRecognition()
+      _stopHandsFree()
       _disconnectWs()
       _teardownVad()
       stopSpeaking()
@@ -592,6 +596,8 @@ export function useVoiceConversation() {
     if (wasActive && newMode === 'full-duplex') {
       _connectWs()
       _initVad().then(() => _startListeningInternal())
+    } else if (wasActive && newMode === 'hands-free') {
+      _startHandsFree()
     }
     logger.debug('Mode switched to:', newMode)
   }
@@ -615,6 +621,7 @@ export function useVoiceConversation() {
     isActive,
     errorMessage,
     wsConnected,
+    audioLevel,
     isListening,
     isProcessing,
     stateLabel,

@@ -242,10 +242,20 @@
       when: "'frontend' in group_names"
       tags: [frontend, user-frontend]
 
+    - name: "[PLAY 2] Frontend | Fix ownership before build"
+      file:
+        path: "{{ code_base_dir }}/autobot-frontend"
+        owner: autobot
+        group: autobot
+        recurse: true
+      when: "'frontend' in group_names"
+      tags: [frontend, user-frontend]
+
     - name: "[PLAY 2] Frontend | Install npm dependencies"
       command:
         cmd: npm install
         chdir: "{{ code_base_dir }}/autobot-frontend"
+      become_user: autobot
       when: "'frontend' in group_names"
       tags: [frontend, user-frontend]
 
@@ -253,6 +263,7 @@
       command:
         cmd: npx vite build
         chdir: "{{ code_base_dir }}/autobot-frontend"
+      become_user: autobot
       when: "'frontend' in group_names"
       tags: [frontend, user-frontend]
 
