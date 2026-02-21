@@ -9,7 +9,10 @@ Verifies that all new API endpoints are properly registered.
 Run this after server startup to ensure endpoints are accessible.
 """
 
+import logging
 import sys
+
+logger = logging.getLogger(__name__)
 
 
 def extract_routes_from_file(filepath: str) -> list:
@@ -31,35 +34,35 @@ def extract_routes_from_file(filepath: str) -> list:
 
 def main():
     """Main verification function."""
-    print("=" * 80)
-    print("SLM Server - API Endpoint Verification")
-    print("=" * 80)
-    print()
+    logger.info("%s", "=" * 80)
+    logger.info("SLM Server - API Endpoint Verification")
+    logger.info("%s", "=" * 80)
+    logger.info("")
 
     # Check nodes.py endpoints
-    print("Nodes API (api/nodes.py):")
-    print("-" * 80)
+    logger.info("Nodes API (api/nodes.py):")
+    logger.info("%s", "-" * 80)
     nodes_routes = extract_routes_from_file("api/nodes.py")
     for method, func in nodes_routes:
-        print(f"  {method}")
-        print(f"    └─ {func}")
-    print(f"\n  Total: {len(nodes_routes)} endpoints")
-    print()
+        logger.info(f"  {method}")
+        logger.info(f"    └─ {func}")
+    logger.info(f"\n  Total: {len(nodes_routes)} endpoints")
+    logger.info("")
 
     # Check updates.py endpoints
-    print("Updates API (api/updates.py):")
-    print("-" * 80)
+    logger.info("Updates API (api/updates.py):")
+    logger.info("%s", "-" * 80)
     updates_routes = extract_routes_from_file("api/updates.py")
     for method, func in updates_routes:
-        print(f"  {method}")
-        print(f"    └─ {func}")
-    print(f"\n  Total: {len(updates_routes)} endpoints")
-    print()
+        logger.info(f"  {method}")
+        logger.info(f"    └─ {func}")
+    logger.info(f"\n  Total: {len(updates_routes)} endpoints")
+    logger.info("")
 
     # Summary
-    print("=" * 80)
-    print("Summary of New Endpoints:")
-    print("=" * 80)
+    logger.info("%s", "=" * 80)
+    logger.info("Summary of New Endpoints:")
+    logger.info("%s", "=" * 80)
     new_endpoints = [
         ("POST", "/api/nodes/test-connection", "Test SSH connection"),
         ("GET", "/api/nodes/{node_id}/events", "Get node events"),
@@ -71,16 +74,16 @@ def main():
     ]
 
     for method, endpoint, description in new_endpoints:
-        print(f"  {method:6} {endpoint:45} - {description}")
+        logger.info(f"  {method:6} {endpoint:45} - {description}")
 
-    print()
-    print(f"Total new endpoints: {len(new_endpoints)}")
-    print()
+    logger.info("")
+    logger.info(f"Total new endpoints: {len(new_endpoints)}")
+    logger.info("")
 
     # Database models
-    print("=" * 80)
-    print("New Database Models:")
-    print("=" * 80)
+    logger.info("%s", "=" * 80)
+    logger.info("New Database Models:")
+    logger.info("%s", "=" * 80)
     models = [
         ("NodeEvent", "Lifecycle event tracking"),
         ("Certificate", "PKI certificate management"),
@@ -90,29 +93,30 @@ def main():
     ]
 
     for model, description in models:
-        print(f"  {model:20} - {description}")
+        logger.info(f"  {model:20} - {description}")
 
-    print()
-    print("=" * 80)
-    print("Verification Complete!")
-    print("=" * 80)
-    print()
-    print("Next steps:")
-    print("  1. Install dependencies: pip install -r requirements.txt")
-    print(
+    logger.info("")
+    logger.info("%s", "=" * 80)
+    logger.info("Verification Complete!")
+    logger.info("%s", "=" * 80)
+    logger.info("")
+    logger.info("Next steps:")
+    logger.info("  1. Install dependencies: pip install -r requirements.txt")
+    logger.info(
         "  2. Run migration: python migrations/add_events_certificates_updates_tables.py"
     )
-    print("  3. Start server: python main.py")
-    print("  4. View API docs: http://localhost:8080/api/docs")
-    print()
+    logger.info("  3. Start server: python main.py")
+    logger.info("  4. View API docs: http://localhost:8080/api/docs")
+    logger.info("")
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     try:
         main()
     except FileNotFoundError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        print(
+        logger.info(f"Error: {e}", file=sys.stderr)
+        logger.info(
             "Make sure to run this script from the slm-server directory.",
             file=sys.stderr,
         )

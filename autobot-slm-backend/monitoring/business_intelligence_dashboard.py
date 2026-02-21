@@ -7,6 +7,8 @@ Advanced analytics, ROI tracking, and performance insights for the distributed s
 import asyncio
 import json
 import logging
+
+logger = logging.getLogger(__name__)
 import os
 import statistics
 from dataclasses import asdict, dataclass
@@ -521,21 +523,31 @@ class BusinessIntelligenceDashboard:
             system = metrics.get("system", {})
 
             utilization = {
-                "cpu": system.get("cpu_percent", 0)
-                if isinstance(system.get("cpu_percent"), _NUMERIC_TYPES)
-                else 0,  # Issue #380
-                "memory": system.get("memory_percent", 0)
-                if isinstance(system.get("memory_percent"), _NUMERIC_TYPES)
-                else 0,  # Issue #380
-                "storage": system.get("disk_percent", 0)
-                if isinstance(system.get("disk_percent"), _NUMERIC_TYPES)
-                else 0,  # Issue #380
-                "gpu": system.get("gpu_utilization", 0)
-                if system.get("gpu_utilization") is not None
-                else 0,
-                "npu": system.get("npu_utilization", 0)
-                if system.get("npu_utilization") is not None
-                else 0,
+                "cpu": (
+                    system.get("cpu_percent", 0)
+                    if isinstance(system.get("cpu_percent"), _NUMERIC_TYPES)
+                    else 0
+                ),  # Issue #380
+                "memory": (
+                    system.get("memory_percent", 0)
+                    if isinstance(system.get("memory_percent"), _NUMERIC_TYPES)
+                    else 0
+                ),  # Issue #380
+                "storage": (
+                    system.get("disk_percent", 0)
+                    if isinstance(system.get("disk_percent"), _NUMERIC_TYPES)
+                    else 0
+                ),  # Issue #380
+                "gpu": (
+                    system.get("gpu_utilization", 0)
+                    if system.get("gpu_utilization") is not None
+                    else 0
+                ),
+                "npu": (
+                    system.get("npu_utilization", 0)
+                    if system.get("npu_utilization") is not None
+                    else 0
+                ),
                 "network": 30.0,  # Estimated network utilization
             }
 
@@ -988,6 +1000,7 @@ class BusinessIntelligenceDashboard:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     import argparse
 
     async def main():
@@ -1013,35 +1026,41 @@ if __name__ == "__main__":
 
         if args.roi:
             roi_metrics = await bi_dashboard.calculate_roi_metrics()
-            print("📈 ROI Analysis:")
-            print(
+            logger.info("📈 ROI Analysis:")
+            logger.info(
                 f"Total Hardware Investment: ${roi_metrics.hardware_investment_usd:,.2f}"
             )
-            print(
+            logger.info(
                 f"Monthly Operational Cost: ${roi_metrics.operational_cost_monthly_usd:,.2f}"
             )
-            print(f"Total ROI: {roi_metrics.total_roi_percent:.1f}%")
-            print(f"Break Even: {roi_metrics.break_even_months:.1f} months")
+            logger.info(f"Total ROI: {roi_metrics.total_roi_percent:.1f}%")
+            logger.info(f"Break Even: {roi_metrics.break_even_months:.1f} months")
 
         elif args.health:
             health_score = await bi_dashboard.calculate_system_health_score()
-            print("🏥 System Health Score:")
-            print(f"Overall: {health_score.overall_score:.1f}/100")
-            print(f"Availability: {health_score.availability_score:.1f}/100")
-            print(f"Performance: {health_score.performance_score:.1f}/100")
-            print(f"Security: {health_score.security_score:.1f}/100")
-            print(f"Efficiency: {health_score.efficiency_score:.1f}/100")
+            logger.info("🏥 System Health Score:")
+            logger.info(f"Overall: {health_score.overall_score:.1f}/100")
+            logger.info(f"Availability: {health_score.availability_score:.1f}/100")
+            logger.info(f"Performance: {health_score.performance_score:.1f}/100")
+            logger.info(f"Security: {health_score.security_score:.1f}/100")
+            logger.info(f"Efficiency: {health_score.efficiency_score:.1f}/100")
 
         elif args.generate:
-            print("🚀 Generating comprehensive BI dashboard...")
+            logger.info("🚀 Generating comprehensive BI dashboard...")
             report = await bi_dashboard.generate_comprehensive_dashboard_report()
-            print("✅ Dashboard generated successfully!")
-            print("📊 Report summary:")
+            logger.info("✅ Dashboard generated successfully!")
+            logger.info("📊 Report summary:")
             summary = report.get("summary", {})
-            print(f"  Overall Health: {summary.get('overall_health_score', 0):.1f}/100")
-            print(f"  Total ROI: {summary.get('total_roi_percent', 0):.1f}%")
-            print(f"  Monthly Cost: ${summary.get('monthly_operational_cost', 0):.2f}")
+            logger.info(
+                f"  Overall Health: {summary.get('overall_health_score', 0):.1f}/100"
+            )
+            logger.info(f"  Total ROI: {summary.get('total_roi_percent', 0):.1f}%")
+            logger.info(
+                f"  Monthly Cost: ${summary.get('monthly_operational_cost', 0):.2f}"
+            )
             optimization_potential = summary.get("total_optimization_potential", 0)
-            print(f"  Optimization Potential: ${optimization_potential:.2f}/month")
+            logger.info(
+                f"  Optimization Potential: ${optimization_potential:.2f}/month"
+            )
 
     asyncio.run(main())
