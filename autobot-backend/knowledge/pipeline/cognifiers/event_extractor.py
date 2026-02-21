@@ -7,13 +7,18 @@ Event Extractor Cognifier - Extract temporal events from text.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from llm_interface_pkg import LLMInterface
+
 from backend.knowledge.pipeline.base import BaseCognifier, PipelineContext
+from backend.knowledge.pipeline.cognifiers.llm_utils import (
+    build_entity_map,
+    parse_llm_json_response,
+)
 from backend.knowledge.pipeline.models.chunk import ProcessedChunk
 from backend.knowledge.pipeline.models.entity import Entity
 from backend.knowledge.pipeline.models.event import (
@@ -22,7 +27,6 @@ from backend.knowledge.pipeline.models.event import (
     TemporalType,
 )
 from backend.knowledge.pipeline.registry import TaskRegistry
-from llm_interface_pkg import LLMInterface
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +76,7 @@ class EventExtractor(BaseCognifier):
         """
         chunks: List[ProcessedChunk] = context.chunks
         entities: List[Entity] = context.entities
-        entity_map = self._build_entity_map(entities)
+        entity_map = build_entity_map(entities)
         all_events: List[TemporalEvent] = []
 
         for i in range(0, len(chunks), self.batch_size):
@@ -83,14 +87,6 @@ class EventExtractor(BaseCognifier):
         context.events = all_events
         logger.info("Extracted %s events", len(all_events))
         return context
-
-    def _build_entity_map(self, entities: List[Entity]) -> Dict[str, Entity]:
-        """Build name-to-entity mapping."""
-        entity_map: Dict[str, Entity] = {}
-        for entity in entities:
-            entity_map[entity.name.lower()] = entity
-            entity_map[entity.canonical_name] = entity
-        return entity_map
 
     async def _process_batch(
         self,
@@ -117,24 +113,10 @@ class EventExtractor(BaseCognifier):
             response = await self.llm.chat_completion(
                 messages=[{"role": "user", "content": prompt}]
             )
-            raw_events = self._parse_llm_response(response.content)
+            raw_events = parse_llm_json_response(response.content)
             return self._convert_to_events(raw_events, chunk, entity_map, context)
         except Exception as e:
             logger.error("Event extraction failed: %s", e)
-            return []
-
-    def _parse_llm_response(self, content: str) -> List[Dict[str, Any]]:
-        """Parse LLM JSON response."""
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            if "```json" in content:
-                json_str = content.split("```json")[1].split("```")[0].strip()
-                return json.loads(json_str)
-            elif "```" in content:
-                json_str = content.split("```")[1].split("```")[0].strip()
-                return json.loads(json_str)
-            logger.warning("Could not parse event response")
             return []
 
     def _convert_to_events(
@@ -176,7 +158,7 @@ class EventExtractor(BaseCognifier):
                     participants=participant_ids,
                     location=raw.get("location"),
                     source_chunk_ids=[chunk.id],
-                    source_document_id=context.document_id or chunk.document_id,
+                    source_document_id=(context.document_id or chunk.document_id),
                     confidence=float(raw.get("confidence", 0.8)),
                 )
                 events.append(event)
@@ -197,18 +179,18 @@ class EventExtractor(BaseCognifier):
                     int(iso_match.group(1)),
                     int(iso_match.group(2)),
                     int(iso_match.group(3)),
+                    tzinfo=timezone.utc,
                 )
             except ValueError:
                 pass
 
         # Relative patterns
+        now = datetime.now(timezone.utc)
         if "today" in expression.lower():
-            return datetime.now().replace(hour=0, minute=0, second=0)
+            return now.replace(hour=0, minute=0, second=0, microsecond=0)
         if "yesterday" in expression.lower():
-            from datetime import timedelta
-
-            return (datetime.now() - timedelta(days=1)).replace(
-                hour=0, minute=0, second=0
+            return (now - timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0
             )
 
         return None

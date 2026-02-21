@@ -7,6 +7,7 @@ Pipeline Configuration - Default pipeline configurations.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
+import copy
 import logging
 import re
 from typing import Any, Dict
@@ -59,7 +60,7 @@ def load_pipeline_config(config_dict: Dict[str, Any]) -> Dict[str, Any]:
 
 def _validate_stage_config(stage_config: list, stage_name: str) -> None:
     """
-    Validate stage configuration. Helper for load_pipeline_config (Issue #665).
+    Validate stage configuration. Helper for load_pipeline_config (#665).
 
     Args:
         stage_config: List of task configurations
@@ -87,6 +88,6 @@ def get_default_config() -> Dict[str, Any]:
     Get the default knowledge enrichment pipeline configuration.
 
     Returns:
-        Default pipeline configuration dict
+        Default pipeline configuration dict (deep copy)
     """
-    return DEFAULT_KNOWLEDGE_PIPELINE.copy()
+    return copy.deepcopy(DEFAULT_KNOWLEDGE_PIPELINE)

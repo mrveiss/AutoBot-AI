@@ -7,11 +7,11 @@ Entity Model - Extracted entity representation for ECL pipeline.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 EntityType = Literal[
     "PERSON",
@@ -25,6 +25,11 @@ EntityType = Literal[
 ]
 
 
+def _utcnow() -> datetime:
+    """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
+    return datetime.now(timezone.utc)
+
+
 class Entity(BaseModel):
     """
     Represents an extracted entity from document processing.
@@ -32,6 +37,10 @@ class Entity(BaseModel):
     Entities are named objects, concepts, or things identified in text
     with relationships to other entities and supporting evidence.
     """
+
+    model_config = ConfigDict(
+        json_encoders={datetime: lambda v: v.isoformat(), UUID: str},
+    )
 
     id: UUID = Field(default_factory=uuid4, description="Unique entity ID")
     name: str = Field(..., description="Entity name as mentioned in text")
@@ -55,16 +64,8 @@ class Entity(BaseModel):
         default=1, description="Number of times entity was extracted"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Entity creation timestamp"
+        default_factory=_utcnow, description="Entity creation timestamp"
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Last update timestamp"
+        default_factory=_utcnow, description="Last update timestamp"
     )
-
-    class Config:
-        """Pydantic model configuration."""
-
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            UUID: lambda v: str(v),
-        }

@@ -7,13 +7,18 @@ Summary Model - Hierarchical summary representation for ECL pipeline.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Literal, Optional
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 SummaryLevel = Literal["chunk", "section", "document"]
+
+
+def _utcnow() -> datetime:
+    """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
+    return datetime.now(timezone.utc)
 
 
 class Summary(BaseModel):
@@ -23,6 +28,10 @@ class Summary(BaseModel):
     Summaries can be generated at chunk, section, or document level
     with parent-child relationships for drill-down navigation.
     """
+
+    model_config = ConfigDict(
+        json_encoders={datetime: lambda v: v.isoformat(), UUID: str},
+    )
 
     id: UUID = Field(default_factory=uuid4, description="Unique summary ID")
     content: str = Field(..., description="Summary text")
@@ -48,13 +57,5 @@ class Summary(BaseModel):
         default=0.0, description="Ratio of summary to original text length"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Summary creation timestamp"
+        default_factory=_utcnow, description="Summary creation timestamp"
     )
-
-    class Config:
-        """Pydantic model configuration."""
-
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            UUID: lambda v: str(v),
-        }
