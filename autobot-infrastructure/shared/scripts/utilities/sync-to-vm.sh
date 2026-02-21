@@ -50,6 +50,67 @@ declare -A VMS=(
 SSH_KEY="${AUTOBOT_SSH_KEY:-$HOME/.ssh/autobot_key}"
 REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
 
+# =============================================================================
+# Git Safety Check (#1056)
+# Warns when syncing from non-standard branches or with uncommitted changes.
+# sync-to-vm.sh deploys the working tree (including uncommitted code).
+# For production deploys, use update-all-nodes.yml (git archive based).
+# =============================================================================
+ALLOWED_BRANCHES=("Dev_new_gui" "main")
+SKIP_GIT_CHECK="${SKIP_GIT_CHECK:-false}"
+
+git_safety_check() {
+    if [ "$SKIP_GIT_CHECK" = "true" ]; then
+        return 0
+    fi
+
+    local repo_root
+    repo_root="$(git -C "$(pwd)" rev-parse --show-toplevel 2>/dev/null)" || return 0
+
+    local branch
+    branch="$(git -C "$repo_root" branch --show-current 2>/dev/null)"
+    local dirty
+    dirty="$(git -C "$repo_root" status --porcelain 2>/dev/null)"
+    local commit
+    commit="$(git -C "$repo_root" log -1 --format='%h %s' 2>/dev/null)"
+
+    local branch_ok=false
+    for allowed in "${ALLOWED_BRANCHES[@]}"; do
+        if [ "$branch" = "$allowed" ]; then
+            branch_ok=true
+            break
+        fi
+    done
+
+    if [ "$branch_ok" = false ] || [ -n "$dirty" ]; then
+        echo ""
+        log_warn "=========================================="
+        log_warn "  Git Safety Check"
+        log_warn "=========================================="
+        log_warn "  Branch: $branch"
+        log_warn "  Commit: $commit"
+        if [ "$branch_ok" = false ]; then
+            log_warn "  Branch is NOT in allowed list: ${ALLOWED_BRANCHES[*]}"
+        fi
+        if [ -n "$dirty" ]; then
+            log_warn "  Working tree has uncommitted changes"
+            log_warn "  (these WILL be synced to the target)"
+        fi
+        log_warn ""
+        log_warn "  This script syncs the working tree (rsync)."
+        log_warn "  For production: use update-all-nodes.yml (git archive)."
+        log_warn "  To skip this check: SKIP_GIT_CHECK=true"
+        log_warn "=========================================="
+        echo ""
+
+        read -r -t 10 -p "Continue? [Y/n] " response || response="y"
+        if [[ "$response" =~ ^[Nn] ]]; then
+            log_error "Aborted by user"
+            exit 1
+        fi
+    fi
+}
+
 # Show usage
 show_usage() {
     echo "Usage: $0 <vm-name> <local-path> <remote-path> [options]"
@@ -218,6 +279,10 @@ sync_to_vm() {
 }
 
 # Main execution
+
+# Run git safety check before any sync operation
+git_safety_check
+
 if [ "$VM_NAME" = "all" ]; then
     log_header "Syncing to all VMs"
     successful=0
