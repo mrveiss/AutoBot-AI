@@ -1,76 +1,151 @@
 ---
-# AutoBot - Update All Fleet Nodes
-# Syncs latest code from development machine to all fleet VMs
-# Rebuilds frontends and restarts services
+# AutoBot - Update All Fleet Nodes (Git-Based Deploy)
+# Deploys committed code from a specific git ref to all fleet VMs.
+# Uses git archive to ensure only committed code is deployed (#1056).
+#
+# Previously used rsync from the working tree, which could deploy
+# uncommitted or feature-branch code to production (caused #1047).
+#
+# Usage:
+#   ansible-playbook playbooks/update-all-nodes.yml
+#   ansible-playbook playbooks/update-all-nodes.yml -e deploy_ref=Dev_new_gui
+#   ansible-playbook playbooks/update-all-nodes.yml -e deploy_ref=abc1234
+#   ansible-playbook playbooks/update-all-nodes.yml -e skip_branch_check=true
 
-- name: Update All Fleet Nodes with Latest Code
+# =============================================================================
+# PLAY 0: Pre-flight Git Safety Check & Create Deploy Archives
+# =============================================================================
+- name: "Play 0 - Pre-flight & Build Archives"
   hosts: localhost
   gather_facts: false
+
   vars:
-    local_autobot_root: "/home/kali/Desktop/AutoBot"
+    git_repo_root: "/home/kali/Desktop/AutoBot"
+    deploy_ref: "HEAD"
+    allowed_branches:
+      - Dev_new_gui
+      - main
+    skip_branch_check: false
+    deploy_tmp: "/tmp/autobot-deploy"
 
   tasks:
-    - name: Display update start
+    - name: "[PRE-FLIGHT] Verify git repo exists"
+      stat:
+        path: "{{ git_repo_root }}/.git"
+      register: git_repo
+
+    - name: "[PRE-FLIGHT] Abort if git repo missing"
+      fail:
+        msg: >-
+          Git repo not found at {{ git_repo_root }}.
+          This playbook must run from the dev machine (.20).
+      when: not git_repo.stat.exists
+
+    - name: "[PRE-FLIGHT] Get current git branch"
+      command: git -C {{ git_repo_root }} branch --show-current
+      register: git_branch
+      changed_when: false
+
+    - name: "[PRE-FLIGHT] Resolve deploy ref to commit"
+      command: >-
+        git -C {{ git_repo_root }}
+        log -1 --format='%h %s' {{ deploy_ref }}
+      register: deploy_info
+      changed_when: false
+
+    - name: "[PRE-FLIGHT] Check for uncommitted changes"
+      command: git -C {{ git_repo_root }} status --porcelain
+      register: git_dirty
+      changed_when: false
+
+    - name: "[PRE-FLIGHT] Display deployment summary"
       debug:
         msg:
-          - "╔═══════════════════════════════════════════════════╗"
-          - "║  AutoBot Fleet Code Update                       ║"
-          - "╚═══════════════════════════════════════════════════╝"
+          - "======================================================="
+          - "  AutoBot Fleet Code Update (Git-Based Deploy)"
+          - "======================================================="
           - ""
-          - "Syncing latest code to all 9 fleet nodes..."
+          - "  Branch:  {{ git_branch.stdout }}"
+          - "  Ref:     {{ deploy_ref }}"
+          - "  Commit:  {{ deploy_info.stdout }}"
+          - "  Dirty:   {{ 'YES (ignored - only committed code deployed)' if git_dirty.stdout else 'Clean' }}"
+          - "  Method:  git archive"
+          - ""
 
+    - name: "[PRE-FLIGHT] ABORT - Not on allowed branch"
+      fail:
+        msg: >-
+          Branch '{{ git_branch.stdout }}' not in allowed list
+          ({{ allowed_branches | join(', ') }}).
+          Override: -e skip_branch_check=true
+          Or deploy specific ref: -e deploy_ref=Dev_new_gui
+      when:
+        - not skip_branch_check | bool
+        - deploy_ref == 'HEAD'
+        - git_branch.stdout not in allowed_branches
+
+    - name: "[PRE-FLIGHT] Create deploy archive directory"
+      file:
+        path: "{{ deploy_tmp }}"
+        state: directory
+        mode: '0755'
+
+    - name: "[PRE-FLIGHT] Create component archives"
+      shell: >-
+        git -C {{ git_repo_root }} archive {{ deploy_ref }}
+        -- {{ item.path }} | gzip > {{ deploy_tmp }}/{{ item.name }}.tar.gz
+      loop:
+        - { name: slm-backend, path: autobot-slm-backend/ }
+        - { name: slm-frontend, path: autobot-slm-frontend/ }
+        - { name: shared, path: autobot-shared/ }
+        - { name: backend, path: autobot-backend/ }
+        - { name: frontend, path: autobot-frontend/ }
+        - { name: npu-worker, path: autobot-npu-worker/ }
+        - { name: browser-worker, path: autobot-browser-worker/ }
+      loop_control:
+        label: "{{ item.name }}"
+      changed_when: true
+
+    - name: "[PRE-FLIGHT] Archives ready"
+      debug:
+        msg: "7 deploy archives created from {{ deploy_ref }}"
+
+# =============================================================================
+# PLAY 1: Update SLM Server First
+# =============================================================================
 - name: "Play 1 - Update SLM Server First"
   hosts: slm_server
   gather_facts: false
   serial: 1
+
   vars:
-    local_autobot_root: "/home/kali/Desktop/AutoBot"
+    deploy_tmp: "/tmp/autobot-deploy"
 
   tasks:
     - name: "[PLAY 1] Starting SLM Server Update"
       debug:
         msg:
-          - "╔═══════════════════════════════════════════════════════════════╗"
-          - "║  PLAY 1: SLM Server Update (Issue #880)                      ║"
-          - "╚═══════════════════════════════════════════════════════════════╝"
-          - "Target: {{ inventory_hostname }} ({{ ansible_host }})"
-          - "Action: Code sync + service restart"
-          - "═══════════════════════════════════════════════════════════════"
+          - "======================================================="
+          - "  PLAY 1: SLM Server Update (git archive)"
+          - "======================================================="
+          - "  Target: {{ inventory_hostname }} ({{ ansible_host }})"
 
-    - name: "[PLAY 1] SLM | Sync autobot-slm-backend code"
-      ansible.posix.synchronize:
-        src: "{{ local_autobot_root }}/autobot-slm-backend/"
-        dest: "/opt/autobot/autobot-slm-backend/"
-        delete: false
-        rsync_opts:
-          - "--exclude=venv"
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
-          - "--exclude=node_modules"
-          - "--exclude=*.log"
+    - name: "[PLAY 1] SLM | Deploy autobot-slm-backend"
+      unarchive:
+        src: "{{ deploy_tmp }}/slm-backend.tar.gz"
+        dest: /opt/autobot/
       become: true
 
-    - name: "[PLAY 1] SLM | Sync autobot-slm-frontend code"
-      ansible.posix.synchronize:
-        src: "{{ local_autobot_root }}/autobot-slm-frontend/"
-        dest: "/opt/autobot/autobot-slm-frontend/"
-        delete: false
-        rsync_opts:
-          - "--exclude=node_modules"
-          - "--exclude=dist"
-          - "--exclude=.git"
+    - name: "[PLAY 1] SLM | Deploy autobot-slm-frontend"
+      unarchive:
+        src: "{{ deploy_tmp }}/slm-frontend.tar.gz"
+        dest: /opt/autobot/
       become: true
 
-    - name: "[PLAY 1] SLM | Sync autobot-shared code"
-      ansible.posix.synchronize:
-        src: "{{ local_autobot_root }}/autobot-shared/"
-        dest: "/opt/autobot/autobot-shared/"
-        delete: false
-        rsync_opts:
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
+    - name: "[PLAY 1] SLM | Deploy autobot-shared"
+      unarchive:
+        src: "{{ deploy_tmp }}/shared.tar.gz"
+        dest: /opt/autobot/
       become: true
 
     - name: "[PLAY 1] SLM | Rebuild frontend production build"
@@ -94,7 +169,7 @@
 
     - name: "[PLAY 1] SLM | Wait for backend to be ready"
       wait_for:
-        host: 172.16.168.19
+        host: "{{ ansible_host }}"
         port: 443
         timeout: 60
         delay: 5
@@ -102,7 +177,7 @@
 
     - name: "[PLAY 1] SLM | Login to get auth token"
       uri:
-        url: "https://172.16.168.19/api/auth/login"
+        url: "https://{{ ansible_host }}/api/auth/login"
         method: POST
         body_format: json
         body:
@@ -116,7 +191,7 @@
 
     - name: "[PLAY 1] SLM | Mark node as synced in DB"
       uri:
-        url: "https://172.16.168.19/api/code-sync/nodes/00-SLM-Manager/mark-synced"
+        url: "https://{{ ansible_host }}/api/code-sync/nodes/00-SLM-Manager/mark-synced"
         method: POST
         headers:
           Authorization: "Bearer {{ slm_login_play1.json.access_token }}"
@@ -131,19 +206,23 @@
     - name: "[PLAY 1] SLM Update Complete"
       debug:
         msg:
-          - "✅ SLM Server Updated Successfully"
-          - "   - Backend synced and restarted"
-          - "   - Frontend built and nginx restarted"
+          - "SLM Server updated"
+          - "  Backend deployed + restarted"
+          - "  Frontend built + nginx restarted"
 
+# =============================================================================
+# PLAY 2: Update All Other Infrastructure Nodes
+# =============================================================================
 - name: "Play 2 - Update Other Infrastructure Nodes"
   hosts: infrastructure:!slm_server
   gather_facts: false
-  serial: 3  # Process up to 3 nodes at a time
+  serial: 3
+
   vars:
-    local_autobot_root: "/home/kali/Desktop/AutoBot"
+    deploy_tmp: "/tmp/autobot-deploy"
 
   pre_tasks:
-    - name: "[PLAY 2] Login to SLM API to get auth token"
+    - name: "[PLAY 2] Login to SLM API"
       uri:
         url: "https://172.16.168.19/api/auth/login"
         method: POST
@@ -168,26 +247,23 @@
     - name: "[PLAY 2] Starting Node Update"
       debug:
         msg:
-          - "╔═══════════════════════════════════════════════════════════════╗"
-          - "║  PLAY 2: Infrastructure Node Update (Issue #880)             ║"
-          - "╚═══════════════════════════════════════════════════════════════╝"
-          - "Target: {{ inventory_hostname }} ({{ ansible_host }})"
-          - "Action: Code sync + service restart"
-          - "Batch: Processing up to 3 nodes at a time"
-          - "═══════════════════════════════════════════════════════════════"
+          - "======================================================="
+          - "  PLAY 2: Node Update (git archive)"
+          - "======================================================="
+          - "  Target: {{ inventory_hostname }} ({{ ansible_host }})"
 
-    # Backend (172.16.168.20)
-    # NOTE: Use shell rsync (runs ON the target) rather than synchronize (runs
-    # FROM the SLM controller). The git repo at local_autobot_root only exists
-    # on the dev machine (.20), not on the SLM server (.19). Running as root
-    # (become: true) gives access to /home/kali/Desktop/AutoBot. (#913)
-    - name: "[PLAY 2] Backend | Sync autobot-backend (local rsync on target)"
-      shell: |
-        rsync -avz --delete \
-          --exclude=venv --exclude=__pycache__ --exclude='*.pyc' \
-          --exclude=.git --exclude=data --exclude=logs \
-          {{ local_autobot_root }}/autobot-backend/ \
-          /opt/autobot/autobot-backend/
+    # ----- Backend (172.16.168.20) -----
+    - name: "[PLAY 2] Backend | Deploy autobot-backend"
+      unarchive:
+        src: "{{ deploy_tmp }}/backend.tar.gz"
+        dest: /opt/autobot/
+      become: true
+      when: "'01-Backend' in inventory_hostname"
+
+    - name: "[PLAY 2] Backend | Deploy autobot-shared"
+      unarchive:
+        src: "{{ deploy_tmp }}/shared.tar.gz"
+        dest: /opt/autobot/
       become: true
       when: "'01-Backend' in inventory_hostname"
 
@@ -199,23 +275,15 @@
       become: true
       when: "'01-Backend' in inventory_hostname"
 
-    # Frontend (172.16.168.21)
-    # NOTE: Use shell rsync delegated to 01-Backend (where git repo lives)
-    # instead of synchronize (which runs FROM the SLM controller that
-    # doesn't have autobot-frontend code). Same pattern as Backend. (#913)
-    - name: "[PLAY 2] Frontend | Sync autobot-frontend code"
-      shell: |
-        rsync -avz \
-          --exclude=node_modules --exclude=dist --exclude=.git \
-          --rsync-path='sudo rsync' \
-          -e 'ssh -i /home/autobot/.ssh/autobot_key -o StrictHostKeyChecking=no' \
-          {{ local_autobot_root }}/autobot-frontend/ \
-          autobot@{{ ansible_host }}:/opt/autobot/autobot-frontend/
+    # ----- Frontend (172.16.168.21) -----
+    - name: "[PLAY 2] Frontend | Deploy autobot-frontend"
+      unarchive:
+        src: "{{ deploy_tmp }}/frontend.tar.gz"
+        dest: /opt/autobot/
       become: true
-      delegate_to: 01-Backend
       when: "'02-Frontend' in inventory_hostname"
 
-    - name: "[PLAY 2] Frontend | Fix ownership of frontend directory"
+    - name: "[PLAY 2] Frontend | Fix ownership"
       file:
         path: /opt/autobot/autobot-frontend
         owner: autobot
@@ -228,6 +296,8 @@
       command:
         cmd: npx vite build
         chdir: /opt/autobot/autobot-frontend
+      become_user: autobot
+      become: true
       when: "'02-Frontend' in inventory_hostname"
       register: frontend_build
 
@@ -238,59 +308,35 @@
       become: true
       when: "'02-Frontend' in inventory_hostname"
 
-    # NPU Worker (172.16.168.22)
-    # NOTE: Delegate to 01-Backend where git repo lives (#913)
-    - name: "[PLAY 2] NPU | Sync autobot-npu-worker code"
-      shell: |
-        rsync -avz \
-          --exclude=__pycache__ --exclude='*.pyc' --exclude=.git \
-          --rsync-path='sudo rsync' \
-          -e 'ssh -i /home/autobot/.ssh/autobot_key -o StrictHostKeyChecking=no' \
-          {{ local_autobot_root }}/autobot-npu-worker/ \
-          autobot@{{ ansible_host }}:/opt/autobot/autobot-npu-worker/
+    # ----- NPU Worker (172.16.168.22) -----
+    - name: "[PLAY 2] NPU | Deploy autobot-npu-worker"
+      unarchive:
+        src: "{{ deploy_tmp }}/npu-worker.tar.gz"
+        dest: /opt/autobot/
       become: true
-      delegate_to: 01-Backend
-      when: "'03-NPU' in inventory_hostname or 'npu-worker' in inventory_hostname"
+      when: >-
+        '03-NPU' in inventory_hostname or
+        'npu-worker' in inventory_hostname
 
-    # Browser (172.16.168.25)
-    # NOTE: Delegate to 01-Backend where git repo lives (#913)
-    - name: "[PLAY 2] Browser | Sync autobot-browser-worker code"
-      shell: |
-        rsync -avz \
-          --exclude=__pycache__ --exclude='*.pyc' --exclude=.git \
-          --rsync-path='sudo rsync' \
-          -e 'ssh -i /home/autobot/.ssh/autobot_key -o StrictHostKeyChecking=no' \
-          {{ local_autobot_root }}/autobot-browser-worker/ \
-          autobot@{{ ansible_host }}:/opt/autobot/autobot-browser-worker/
+    # ----- Browser Worker (172.16.168.25) -----
+    - name: "[PLAY 2] Browser | Deploy autobot-browser-worker"
+      unarchive:
+        src: "{{ deploy_tmp }}/browser-worker.tar.gz"
+        dest: /opt/autobot/
       become: true
-      delegate_to: 01-Backend
-      when: "'05-Browser' in inventory_hostname or 'browser-automation' in inventory_hostname"
+      when: >-
+        '05-Browser' in inventory_hostname or
+        'browser-automation' in inventory_hostname
 
-    # Shared (all nodes)
-    # NOTE: For 01-Backend (.20), the git repo exists locally so we use a shell
-    # rsync. For other nodes, synchronize pushes from the SLM controller which
-    # already has /opt/autobot/autobot-shared/ (synced via sync-to-slm.sh). (#913)
-    - name: "[PLAY 2] Backend | Sync autobot-shared (local rsync on target)"
-      shell: |
-        rsync -avz --delete \
-          --exclude=__pycache__ --exclude='*.pyc' --exclude=.git \
-          {{ local_autobot_root }}/autobot-shared/ \
-          /opt/autobot/autobot-shared/
-      become: true
-      when: "'01-Backend' in inventory_hostname"
-
-    - name: "[PLAY 2] Other Nodes | Sync autobot-shared from SLM cache"
-      ansible.posix.synchronize:
-        src: "/opt/autobot/autobot-shared/"
-        dest: "/opt/autobot/autobot-shared/"
-        delete: false
-        rsync_opts:
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
+    # ----- Shared (non-backend nodes) -----
+    - name: "[PLAY 2] Shared | Deploy autobot-shared"
+      unarchive:
+        src: "{{ deploy_tmp }}/shared.tar.gz"
+        dest: /opt/autobot/
       become: true
       when: "'01-Backend' not in inventory_hostname"
 
+    # ----- Mark synced -----
     - name: "[PLAY 2] Mark node as synced in SLM DB"
       uri:
         url: "https://172.16.168.19/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
@@ -301,15 +347,18 @@
         body: "{}"
         body_format: json
         validate_certs: false
-        status_code: [200, 404]  # 404 = node not in SLM yet, that's ok
+        status_code: [200, 404]
       delegate_to: localhost
       ignore_errors: true
 
     - name: "[PLAY 2] Node Update Complete"
       debug:
-        msg: "✅ {{ inventory_hostname }} updated successfully"
+        msg: "{{ inventory_hostname }} updated"
 
-- name: "Play 3 - Verify All Services"
+# =============================================================================
+# PLAY 3: Verify + Cleanup
+# =============================================================================
+- name: "Play 3 - Verify & Cleanup"
   hosts: localhost
   gather_facts: false
 
@@ -325,22 +374,23 @@
       register: slm_health
       ignore_errors: true
 
+    - name: Clean up deploy archives
+      file:
+        path: /tmp/autobot-deploy
+        state: absent
+
     - name: Display update summary
       debug:
         msg:
           - ""
-          - "╔═══════════════════════════════════════════════════════════════╗"
-          - "║  Fleet Update Complete (Issue #880)                          ║"
-          - "╚═══════════════════════════════════════════════════════════════╝"
+          - "======================================================="
+          - "  Fleet Update Complete (Git-Based Deploy)"
+          - "======================================================="
           - ""
-          - "✅ Code synced to all nodes"
-          - "✅ Frontends rebuilt (SLM + User)"
-          - "✅ Services restarted"
+          - "  Method:  git archive (only committed code)"
+          - "  SLM:     {{ slm_health.json.status | default('Check manually') }}"
+          - "  Nodes:   {{ slm_health.json.nodes_online | default('?') }}/{{ slm_health.json.nodes_total | default('9') }}"
           - ""
-          - "SLM Health: {{ slm_health.json.status | default('Check manually') }}"
-          - "Nodes Online: {{ slm_health.json.nodes_online | default('?') }}/{{ slm_health.json.nodes_total | default('9') }}"
-          - ""
-          - "Access points:"
-          - "  - SLM Admin: https://172.16.168.19/"
-          - "  - User Frontend: https://172.16.168.21/"
+          - "  SLM Admin:     https://172.16.168.19/"
+          - "  User Frontend: https://172.16.168.21/"
           - ""
