@@ -28,20 +28,6 @@
         </select>
       </div>
 
-      <div class="control-group">
-        <label for="max-hops">
-          Max Hops: <strong>{{ maxHops }}</strong>
-        </label>
-        <input
-          id="max-hops"
-          v-model.number="maxHops"
-          type="range"
-          min="1"
-          max="5"
-          step="1"
-          class="range-input"
-        />
-      </div>
     </div>
 
     <!-- Loading -->
@@ -136,7 +122,6 @@ const {
 } = useKnowledgeGraph()
 
 const selectedRelType = ref('')
-const maxHops = ref(1)
 
 const uniqueRelTypes = computed(() => {
   const types = new Set(
@@ -307,7 +292,6 @@ watch(() => props.entityId, fetchRelationships)
   width: 100%;
   height: 2px;
   background: var(--color-primary);
-  position: relative;
 }
 
 .connector-label {
@@ -322,12 +306,10 @@ watch(() => props.entityId, fetchRelationships)
 .connector-arrow {
   width: 0;
   height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-top: 6px solid var(--color-primary);
-  transform: rotate(-90deg);
-  position: absolute;
-  right: -3px;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 6px solid var(--color-primary);
+  align-self: center;
 }
 
 .rel-description {
