@@ -37,6 +37,74 @@
 
 ---
 
+## CORE DEVELOPMENT RULES (MANDATORY — APPLIES TO EVERY AGENT AND EVERY TOOL)
+
+These four rules override convenience, speed, and assumptions. No exceptions.
+
+### Rule 1: Check Before Writing
+
+**Before writing a single line of code or documentation:**
+
+- Search for existing implementations using Grep/Glob or `git log --oneline --grep="<topic>"`
+- Check existing docs: `ls docs/`, `gh issue list`, recent commits
+- Review related files in the same module/directory
+- Search Memory MCP: `mcp__memory__search_nodes` for prior decisions
+- Only after confirming nothing exists should you write new code or docs
+
+> Violation: Writing a utility that already exists in `autobot-shared/` or a doc that duplicates an existing guide.
+
+### Rule 2: Reuse Existing Code
+
+**Always prefer existing code over new code:**
+
+- Import and call existing utilities, helpers, and services
+- Extend existing classes/functions rather than duplicating logic
+- Use `autobot-shared/` utilities before writing custom implementations
+- If similar code exists elsewhere, refactor to share it — never copy-paste
+
+> Violation: Writing a new Redis helper when `autobot_shared.redis_client.get_redis_client` already exists.
+
+### Rule 3: Standardize for Reuse
+
+**Write code that others can reuse:**
+
+- Place shared logic in `autobot-shared/` or the appropriate shared module
+- Match existing naming, signatures, and patterns in the codebase
+- Generalize implementations when the cost is low (no over-engineering)
+- Avoid one-off implementations that can't be called from elsewhere
+
+> Violation: Hardcoding a value that belongs in SSOT config, or writing a private helper that duplicates a public one.
+
+### Rule 4: Clarify Requirements Before Starting
+
+**Before touching any code, ensure the requirements are complete enough to build the right thing the first time:**
+
+- Read the full issue/PRD and identify every gap, ambiguity, or missing edge case
+- Ask all clarifying questions UP FRONT in a single pass — not mid-implementation
+- Do not start until you can describe the complete expected end result in concrete terms
+- Goal: eliminate double work and unneeded fixes caused by an incomplete specification
+
+**Questions to ask before starting:**
+- What is the exact expected input and output?
+- Are there edge cases or error states that must be handled?
+- Are there UI/UX, performance, or security constraints not stated?
+- Does this touch other systems that need coordinating changes?
+
+> Violation: Starting implementation from a vague issue, hitting an ambiguity midway, and having to rework completed code — or delivering something that doesn't match what was actually wanted.
+
+### Rule 5: Verify Before Reporting Complete
+
+**Before claiming any work is done, show evidence it works:**
+
+- Run the relevant test, lint check, curl, or build command and include the output
+- Never say "done", "fixed", or "complete" without proof — assertions require evidence
+- If the change touches multiple layers (backend + frontend, multiple nodes), verify each one
+- If verification is not possible locally, explicitly state what was checked and what still needs confirmation on the target environment
+
+> Violation: Saying "the bug is fixed" after editing a file without running the code, or reporting success without showing test/lint output.
+
+---
+
 ## PROJECT STACK
 
 **Primary Languages & Verification:**
