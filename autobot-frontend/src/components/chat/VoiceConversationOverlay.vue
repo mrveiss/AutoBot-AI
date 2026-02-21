@@ -182,7 +182,8 @@
                 }"
                 :disabled="
                   voiceConversation.state.value === 'processing' ||
-                  voiceConversation.state.value === 'speaking'
+                  (voiceConversation.state.value === 'speaking'
+                    && !isFullDuplex)
                 "
                 :aria-label="voiceConversation.stateLabel.value"
               >
@@ -220,9 +221,11 @@ const conversationRef = ref<HTMLElement | null>(null)
 
 const micIcon = computed(() => {
   switch (voiceConversation.state.value) {
-    case 'listening': return 'fas fa-stop'
+    case 'listening':
+      return isAutoMode.value ? 'fas fa-microphone' : 'fas fa-stop'
     case 'processing': return 'fas fa-spinner fa-spin'
-    case 'speaking': return 'fas fa-volume-up'
+    case 'speaking':
+      return isFullDuplex.value ? 'fas fa-hand-paper' : 'fas fa-volume-up'
     default: return 'fas fa-microphone'
   }
 })

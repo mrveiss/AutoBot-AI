@@ -330,6 +330,17 @@ function _stopRecognition(): void {
   currentTranscript.value = ''
 }
 
+/** Resume listening for auto modes (hands-free / full-duplex) after idle. */
+function _resumeAutoListening(): void {
+  state.value = 'idle'
+  if (!isActive.value) return
+  if (mode.value === 'full-duplex') {
+    _startListeningInternal()
+  } else if (mode.value === 'hands-free' && _sileroVad) {
+    state.value = 'listening'
+  }
+}
+
 /** Process a finalized transcript: add bubble, send to LLM, speak response. */
 function _dispatchTranscript(text: string): void {
   const store = useChatStore()
@@ -361,8 +372,7 @@ function _dispatchTranscript(text: string): void {
     }
 
     if (!response || !isActive.value) {
-      state.value = 'idle'
-      if (mode.value === 'full-duplex') _startListeningInternal()
+      _resumeAutoListening()
       return
     }
 
@@ -375,8 +385,7 @@ function _dispatchTranscript(text: string): void {
 
     const speechText = _sanitizeForSpeech(response)
     if (!speechText) {
-      state.value = 'idle'
-      if (mode.value === 'full-duplex') _startListeningInternal()
+      _resumeAutoListening()
       return
     }
 
@@ -393,8 +402,7 @@ function _dispatchTranscript(text: string): void {
   }).catch((err) => {
     logger.error('Failed to send voice transcript:', err)
     errorMessage.value = 'Failed to send message. Try again.'
-    state.value = 'idle'
-    if (mode.value === 'full-duplex') _startListeningInternal()
+    _resumeAutoListening()
   })
 }
 
