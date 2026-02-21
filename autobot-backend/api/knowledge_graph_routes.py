@@ -60,12 +60,20 @@ class EventSearchRequest(BaseModel):
 async def run_pipeline(request: PipelineRunRequest):
     """Run the Extract-Cognify-Load pipeline on a document."""
     try:
-        from knowledge.pipeline.config import load_pipeline_config
+        from knowledge.pipeline.base import PipelineContext
+        from knowledge.pipeline.config import get_default_config, load_pipeline_config
         from knowledge.pipeline.runner import PipelineRunner
 
-        config = load_pipeline_config(request.config)
+        if request.config:
+            config = load_pipeline_config(request.config)
+        else:
+            config = get_default_config()
+
         runner = PipelineRunner(config)
-        result = await runner.run(request.document_id)
+        context = PipelineContext()
+        context.document_id = UUID(request.document_id)
+
+        result = await runner.run(request.document_id, context)
 
         return PipelineRunResponse(
             document_id=request.document_id,
@@ -82,7 +90,7 @@ async def run_pipeline(request: PipelineRunRequest):
         logger.error("Pipeline execution failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Pipeline execution failed: {e}",
+            detail="Pipeline execution failed",
         )
 
 
@@ -300,7 +308,7 @@ def _list_entities_from_redis(redis_client, entity_type, query, limit) -> list:
                 if not entity_data:
                     continue
 
-                if entity_type and entity_data.get("type") != entity_type:
+                if entity_type and entity_data.get("entity_type") != entity_type:
                     continue
 
                 if query:
@@ -337,7 +345,10 @@ def _get_relationships_from_redis(
             if not rel_data:
                 continue
 
-            if relationship_type and rel_data.get("type") != relationship_type:
+            if (
+                relationship_type
+                and rel_data.get("relationship_type") != relationship_type
+            ):
                 continue
 
             relationships.append(rel_data)

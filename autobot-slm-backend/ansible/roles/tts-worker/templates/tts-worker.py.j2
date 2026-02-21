@@ -3,19 +3,23 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-TTS Worker - Kani-TTS-2 text-to-speech service.
-Handles synthesis and zero-shot voice cloning requests. (#928)
+TTS Worker - Pocket TTS text-to-speech service (#1054).
+
+Handles synthesis with reusable voice profiles.
+Voice profiles are .safetensors files stored in VOICES_DIR.
 """
 
 import asyncio
 import io
+import json
 import logging
 import os
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 import numpy as np
-import soundfile as sf
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -26,89 +30,146 @@ logging.basicConfig(
 )
 logger = logging.getLogger("tts-worker")
 
-TTS_HOST = os.getenv("TTS_HOST", "0.0.0.0")
-TTS_PORT = int(os.getenv("TTS_PORT", "8082"))
-TTS_MODEL_ID = os.getenv("TTS_MODEL_ID", "nineninesix/kani-tts-2-en")
-TTS_DEVICE = os.getenv("TTS_DEVICE", "cpu")
-TTS_MODELS_DIR = Path(os.getenv("TTS_MODELS_DIR", "/var/lib/autobot/models/tts"))
+TTS_HOST = os.getenv("TTS_HOST", "{{ tts_host }}")
+TTS_PORT = int(os.getenv("TTS_PORT", "{{ tts_port }}"))
+VOICES_DIR = Path(os.getenv("TTS_VOICES_DIR", "{{ tts_voices_dir }}"))
+MODELS_DIR = Path(os.getenv("TTS_MODELS_DIR", "{{ tts_models_dir }}"))
 
-app = FastAPI(title="AutoBot TTS Worker", version="1.0.0")
+# Built-in Pocket TTS voices
+BUILTIN_VOICES = [
+    "alba", "marius", "javert", "jean",
+    "fantine", "cosette", "eponine", "azelma",
+]
+DEFAULT_VOICE = "alba"
+
+app = FastAPI(title="AutoBot TTS Worker", version="2.0.0")
 
 _model = None
-_embedder = None
 _model_loaded = False
 _model_error: Optional[str] = None
+_voice_cache: dict = {}  # voice_id -> voice_state
 
 
-def _load_tts_model() -> Tuple[bool, Optional[str]]:
-    """Load Kani-TTS-2 via kani_tts package. Returns (success, error_msg)."""
-    global _model, _embedder
+def _load_model():
+    """Load Pocket TTS model. Returns (success, error_msg)."""
+    global _model
     try:
-        from kani_tts import KaniTTS, SpeakerEmbedder
-
-        TTS_MODELS_DIR.mkdir(parents=True, exist_ok=True)
-        _model = KaniTTS(TTS_MODEL_ID)
-        _embedder = SpeakerEmbedder()
-        logger.info("TTS model loaded: %s on %s", TTS_MODEL_ID, TTS_DEVICE)
+        from pocket_tts import TTSModel
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        VOICES_DIR.mkdir(parents=True, exist_ok=True)
+        _model = TTSModel.load_model()
+        logger.info(
+            "Pocket TTS model loaded (sample_rate=%d)",
+            _model.sample_rate,
+        )
         return True, None
     except Exception as e:
-        logger.error("Failed to load TTS model %s: %s", TTS_MODEL_ID, e)
+        logger.error("Failed to load Pocket TTS: %s", e)
         return False, str(e)
 
 
-def _to_wav_bytes(audio: np.ndarray, sample_rate: int) -> bytes:
-    """Convert float32 audio array to 16-bit WAV bytes."""
-    audio_f32 = audio.astype(np.float32)
-    peak = max(abs(audio_f32.max()), abs(audio_f32.min()), 1e-8)
+def _get_voice_state(voice_id: str):
+    """Get voice state, using cache for repeated calls."""
+    if voice_id in _voice_cache:
+        return _voice_cache[voice_id]
+
+    if voice_id in BUILTIN_VOICES:
+        state = _model.get_state_for_audio_prompt(voice_id)
+    else:
+        sf_path = VOICES_DIR / f"{voice_id}.safetensors"
+        if not sf_path.exists():
+            raise ValueError(f"Voice profile not found: {voice_id}")
+        state = _model.get_state_for_audio_prompt(str(sf_path))
+
+    _voice_cache[voice_id] = state
+    return state
+
+
+def _get_metadata_path() -> Path:
+    """Path to voice profiles metadata file."""
+    return VOICES_DIR / "metadata.json"
+
+
+def _load_metadata() -> dict:
+    """Load voice profiles metadata."""
+    path = _get_metadata_path()
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))
+    return {"voices": {}}
+
+
+def _save_metadata(meta: dict) -> None:
+    """Save voice profiles metadata."""
+    path = _get_metadata_path()
+    path.write_text(
+        json.dumps(meta, indent=2), encoding="utf-8"
+    )
+
+
+def _to_wav_bytes(audio_tensor, sample_rate: int) -> bytes:
+    """Convert torch audio tensor to 16-bit WAV bytes."""
+    import soundfile as sf
+    audio_np = audio_tensor.numpy().astype(np.float32)
+    if audio_np.ndim > 1:
+        audio_np = audio_np.squeeze()
+    peak = max(abs(audio_np.max()), abs(audio_np.min()), 1e-8)
     if peak > 1.0:
-        audio_f32 = audio_f32 / peak
+        audio_np = audio_np / peak
     buf = io.BytesIO()
-    sf.write(buf, audio_f32, sample_rate, format="WAV", subtype="PCM_16")
+    sf.write(
+        buf, audio_np, sample_rate, format="WAV", subtype="PCM_16"
+    )
     buf.seek(0)
     return buf.read()
 
 
-def _run_synthesis(text: str) -> bytes:
-    """Synchronous TTS synthesis via KaniTTS."""
-    audio, _ = _model(text)
+def _run_synthesis(text: str, voice_id: str) -> bytes:
+    """Synchronous TTS synthesis with voice profile."""
+    voice_state = _get_voice_state(voice_id)
+    audio = _model.generate_audio(voice_state, text)
     return _to_wav_bytes(audio, _model.sample_rate)
 
 
-def _run_clone_synthesis(text: str, ref_bytes: bytes) -> bytes:
-    """Synchronous voice-cloned synthesis using reference audio."""
-    import tempfile
+def _run_create_voice(name: str, audio_path: str) -> str:
+    """Extract voice embedding and save as .safetensors."""
+    from pocket_tts import export_model_state
+    vid = str(uuid.uuid4())[:8]
+    voice_state = _model.get_state_for_audio_prompt(audio_path)
+    sf_path = VOICES_DIR / f"{vid}.safetensors"
+    export_model_state(voice_state, str(sf_path))
 
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-        tmp.write(ref_bytes)
-        ref_path = tmp.name
-    try:
-        speaker_emb = _embedder.embed_audio_file(ref_path)
-        audio, _ = _model(text, speaker_emb=speaker_emb)
-        return _to_wav_bytes(audio, _model.sample_rate)
-    finally:
-        os.unlink(ref_path)
+    meta = _load_metadata()
+    meta["voices"][vid] = {
+        "name": name,
+        "created": datetime.now(timezone.utc).isoformat(),
+        "file": f"{vid}.safetensors",
+    }
+    _save_metadata(meta)
+    _voice_cache[vid] = voice_state
+    logger.info("Voice profile created: %s (%s)", name, vid)
+    return vid
 
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    """Load TTS model on startup in thread pool to avoid blocking."""
+    """Load Pocket TTS model on startup."""
     global _model_loaded, _model_error
     loop = asyncio.get_event_loop()
-    success, err = await loop.run_in_executor(None, _load_tts_model)
+    success, err = await loop.run_in_executor(None, _load_model)
     _model_loaded = success
     _model_error = err
 
 
 @app.get("/health")
 async def health() -> JSONResponse:
-    """Health check endpoint with model status."""
-    payload: dict = {
+    """Health check with model status."""
+    payload = {
         "status": "healthy" if _model_loaded else "degraded",
         "service": "tts-worker",
-        "version": "1.0.0",
-        "model_id": TTS_MODEL_ID,
+        "version": "2.0.0",
+        "engine": "pocket-tts",
         "model_loaded": _model_loaded,
-        "device": TTS_DEVICE,
+        "sample_rate": _model.sample_rate if _model else 0,
     }
     if _model_error:
         payload["error"] = _model_error
@@ -116,43 +177,107 @@ async def health() -> JSONResponse:
 
 
 @app.post("/tts/synthesize")
-async def synthesize(text: str = Form(...)) -> StreamingResponse:
-    """Synthesize speech from text. Returns audio/wav stream."""
+async def synthesize(
+    text: str = Form(...),
+    voice_id: str = Form(DEFAULT_VOICE),
+) -> StreamingResponse:
+    """Synthesize speech from text. Returns audio/wav."""
     if not _model_loaded:
-        raise HTTPException(status_code=503, detail=f"TTS model not ready: {_model_error}")
+        raise HTTPException(
+            503, detail=f"Model not ready: {_model_error}"
+        )
     loop = asyncio.get_event_loop()
     try:
-        wav_bytes = await loop.run_in_executor(None, _run_synthesis, text)
+        wav = await loop.run_in_executor(
+            None, _run_synthesis, text, voice_id
+        )
+    except ValueError as e:
+        raise HTTPException(404, detail=str(e)) from e
     except Exception as e:
         logger.error("Synthesis error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Synthesis failed: {e}") from e
+        raise HTTPException(
+            500, detail=f"Synthesis failed: {e}"
+        ) from e
     return StreamingResponse(
-        io.BytesIO(wav_bytes),
+        io.BytesIO(wav),
         media_type="audio/wav",
-        headers={"Content-Disposition": "attachment; filename=speech.wav"},
+        headers={
+            "Content-Disposition": "attachment; filename=speech.wav"
+        },
     )
 
 
-@app.post("/tts/clone-voice")
-async def clone_voice(
-    text: str = Form(...),
-    reference_audio: UploadFile = File(...),
-) -> StreamingResponse:
-    """Zero-shot voice cloning: synthesize text in the voice of reference_audio."""
+@app.get("/voices")
+async def list_voices() -> JSONResponse:
+    """List all available voice profiles."""
+    voices = []
+    for name in BUILTIN_VOICES:
+        voices.append(
+            {"id": name, "name": name, "builtin": True}
+        )
+    meta = _load_metadata()
+    for vid, info in meta.get("voices", {}).items():
+        voices.append({
+            "id": vid,
+            "name": info.get("name", vid),
+            "builtin": False,
+            "created": info.get("created", ""),
+        })
+    return JSONResponse(voices)
+
+
+@app.post("/voices/create")
+async def create_voice(
+    name: str = Form(...),
+    audio: UploadFile = File(...),
+) -> JSONResponse:
+    """Create voice profile from reference audio."""
     if not _model_loaded:
-        raise HTTPException(status_code=503, detail=f"TTS model not ready: {_model_error}")
-    ref_bytes = await reference_audio.read()
+        raise HTTPException(
+            503, detail=f"Model not ready: {_model_error}"
+        )
+    import tempfile
+    audio_bytes = await audio.read()
+    suffix = Path(audio.filename or "ref.wav").suffix or ".wav"
+    with tempfile.NamedTemporaryFile(
+        suffix=suffix, delete=False
+    ) as tmp:
+        tmp.write(audio_bytes)
+        tmp_path = tmp.name
     loop = asyncio.get_event_loop()
     try:
-        wav_bytes = await loop.run_in_executor(None, _run_clone_synthesis, text, ref_bytes)
+        vid = await loop.run_in_executor(
+            None, _run_create_voice, name, tmp_path
+        )
     except Exception as e:
-        logger.error("Voice clone error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Voice clone failed: {e}") from e
-    return StreamingResponse(
-        io.BytesIO(wav_bytes),
-        media_type="audio/wav",
-        headers={"Content-Disposition": "attachment; filename=cloned_speech.wav"},
-    )
+        logger.error("Voice creation error: %s", e)
+        raise HTTPException(
+            500, detail=f"Voice creation failed: {e}"
+        ) from e
+    finally:
+        os.unlink(tmp_path)
+    return JSONResponse({"id": vid, "name": name})
+
+
+@app.delete("/voices/{voice_id}")
+async def delete_voice(voice_id: str) -> JSONResponse:
+    """Delete a custom voice profile."""
+    if voice_id in BUILTIN_VOICES:
+        raise HTTPException(
+            400, detail="Cannot delete built-in voice"
+        )
+    meta = _load_metadata()
+    if voice_id not in meta.get("voices", {}):
+        raise HTTPException(
+            404, detail=f"Voice not found: {voice_id}"
+        )
+    sf_path = VOICES_DIR / f"{voice_id}.safetensors"
+    if sf_path.exists():
+        sf_path.unlink()
+    del meta["voices"][voice_id]
+    _save_metadata(meta)
+    _voice_cache.pop(voice_id, None)
+    return JSONResponse({"deleted": voice_id})
 
 
 @app.get("/")
@@ -160,20 +285,27 @@ async def root() -> dict:
     """Root endpoint."""
     return {
         "service": "AutoBot TTS Worker",
-        "version": "1.0.0",
-        "endpoints": ["/health", "/tts/synthesize", "/tts/clone-voice"],
+        "version": "2.0.0",
+        "engine": "pocket-tts",
+        "endpoints": [
+            "/health", "/tts/synthesize",
+            "/voices", "/voices/create",
+        ],
     }
 
 
 def main() -> None:
-    """Start TTS worker service."""
+    """Start TTS worker."""
     logger.info("=" * 60)
-    logger.info("TTS Worker starting (Kani-TTS-2)")
+    logger.info("TTS Worker starting (Pocket TTS)")
     logger.info("Binding to %s:%d", TTS_HOST, TTS_PORT)
-    logger.info("Model: %s  Device: %s", TTS_MODEL_ID, TTS_DEVICE)
-    logger.info("Model cache: %s", TTS_MODELS_DIR)
+    logger.info("Voices dir: %s", VOICES_DIR)
+    logger.info("Models dir: %s", MODELS_DIR)
     logger.info("=" * 60)
-    uvicorn.run(app, host=TTS_HOST, port=TTS_PORT, log_level="info", access_log=True)
+    uvicorn.run(
+        app, host=TTS_HOST, port=TTS_PORT,
+        log_level="info", access_log=True,
+    )
 
 
 if __name__ == "__main__":

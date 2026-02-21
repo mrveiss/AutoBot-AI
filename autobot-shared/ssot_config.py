@@ -93,6 +93,7 @@ class VMConfig(BaseSettings):
     aistack: str = Field(default="172.16.168.24", alias="AUTOBOT_AI_STACK_HOST")
     chromadb: str = Field(default="172.16.168.24", alias="AUTOBOT_CHROMADB_HOST")
     browser: str = Field(default="172.16.168.25", alias="AUTOBOT_BROWSER_SERVICE_HOST")
+    tts: str = Field(default="172.16.168.22", alias="AUTOBOT_TTS_WORKER_HOST")
     slm: str = Field(default="172.16.168.19", alias="AUTOBOT_SLM_HOST")  # Issue #768
     ollama: str = Field(default="127.0.0.1", alias="AUTOBOT_OLLAMA_HOST")
 
@@ -972,8 +973,8 @@ class AutoBotConfig(BaseSettings):
 
     @property
     def tts_worker_url(self) -> str:
-        """Get the TTS Worker (Kani-TTS-2) service URL. (#928)"""
-        return f"http://{self.vm.npu}:{self.port.tts}"
+        """Get the TTS Worker (Pocket TTS) service URL. (#1054)"""
+        return f"http://{self.vm.tts}:{self.port.tts}"
 
     @property
     def browser_service_url(self) -> str:
@@ -1043,6 +1044,8 @@ class AutoBotConfig(BaseSettings):
             "ai_stack": self.vm.aistack,
             "browser": self.vm.browser,
             "ollama": self.vm.ollama,
+            "tts": self.vm.tts,
+            "tts_worker": self.vm.tts,
         }
         return vm_map.get(vm_name.lower())
 
@@ -1060,6 +1063,7 @@ class AutoBotConfig(BaseSettings):
             "main-host": self.vm.main,
             "frontend": self.vm.frontend,
             "npu-worker": self.vm.npu,
+            "tts-worker": self.vm.tts,
             "redis": self.vm.redis,
             "ai-stack": self.vm.aistack,
             "browser": self.vm.browser,
