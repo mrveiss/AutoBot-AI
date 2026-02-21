@@ -19,7 +19,8 @@ from typing import Any, Dict
 
 # Import shared database helpers (Issue #292 - Eliminate duplicate code)
 from backend.constants.threshold_constants import TimingConstants
-from backend.utils.database_helpers import join_results  # noqa: F401 - re-export
+from backend.utils.database_helpers import \
+    join_results  # noqa: F401 - re-export
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,7 @@ class SQLiteConnectionPool:
             logger.debug("Reused connection from pool")
             return conn
         except Exception:
-            pass  # Pool empty, try to create new
+            logger.debug("Suppressed exception in try block", exc_info=True)
 
         # Pool exhausted, create new connection if under limit
         with self._lock:
@@ -141,7 +142,7 @@ class SQLiteConnectionPool:
         try:
             conn.close()
         except Exception:
-            pass  # Best-effort cleanup
+            logger.debug("Suppressed exception in try block", exc_info=True)
 
     @contextmanager
     def get_connection(self):

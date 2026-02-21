@@ -23,6 +23,8 @@ import psutil
 
 from autobot_shared.network_constants import NetworkConstants
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class NPUMetrics:
@@ -190,9 +192,9 @@ else:
                     memory_total_mb=memory_total,
                     power_draw_watts=None,  # Requires Intel NPU monitoring tools
                     temperature_celsius=None,
-                    operations_per_second=1000.0 / inference_latency
-                    if inference_latency > 0
-                    else 0,
+                    operations_per_second=(
+                        1000.0 / inference_latency if inference_latency > 0 else 0
+                    ),
                     inference_latency_ms=inference_latency,
                     throughput_mbps=100.0,  # Estimated
                     error_count=0,
@@ -323,7 +325,7 @@ else:
                 process.kill()
                 await process.wait()
         except Exception:
-            pass  # nosec B110 - NPU check failed, not available
+            self.logger.debug("Suppressed exception in try block", exc_info=True)
         return None
 
     async def monitor_knowledge_base_search(
@@ -661,15 +663,19 @@ else:
                 report["hardware_efficiency"] = {
                     "npu_utilization": npu_metrics.utilization_percent,
                     "npu_memory_usage": (
-                        npu_metrics.memory_used_mb / npu_metrics.memory_total_mb * 100
-                    )
-                    if npu_metrics.memory_total_mb > 0
-                    else 0,
-                    "inference_performance": "excellent"
-                    if npu_metrics.inference_latency_ms < 100
-                    else "good"
-                    if npu_metrics.inference_latency_ms < 300
-                    else "needs_optimization",
+                        (npu_metrics.memory_used_mb / npu_metrics.memory_total_mb * 100)
+                        if npu_metrics.memory_total_mb > 0
+                        else 0
+                    ),
+                    "inference_performance": (
+                        "excellent"
+                        if npu_metrics.inference_latency_ms < 100
+                        else (
+                            "good"
+                            if npu_metrics.inference_latency_ms < 300
+                            else "needs_optimization"
+                        )
+                    ),
                 }
 
             # Store the report

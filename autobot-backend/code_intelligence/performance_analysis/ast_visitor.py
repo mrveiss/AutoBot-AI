@@ -9,25 +9,19 @@ Contains the AST visitor that analyzes code for performance patterns.
 """
 
 import ast
+import logging
 from typing import Dict, List, Optional
 
-from .patterns import (
-    BLOCKING_IO_OPERATIONS,
-    BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE,
-    BLOCKING_IO_PATTERNS_MEDIUM_CONFIDENCE,
-    DB_OBJECTS,
-    DB_OPERATIONS_CONTEXTUAL,
-    DB_OPERATIONS_FALSE_POSITIVES,
-    DB_OPERATIONS_HIGH_CONFIDENCE,
-    LEGACY_DB_OPERATIONS,
-    SAFE_PATTERNS,
-)
-from .types import (
-    COMPLEXITY_LEVELS,
-    PerformanceIssue,
-    PerformanceIssueType,
-    PerformanceSeverity,
-)
+from .patterns import (BLOCKING_IO_OPERATIONS,
+                       BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE,
+                       BLOCKING_IO_PATTERNS_MEDIUM_CONFIDENCE, DB_OBJECTS,
+                       DB_OPERATIONS_CONTEXTUAL, DB_OPERATIONS_FALSE_POSITIVES,
+                       DB_OPERATIONS_HIGH_CONFIDENCE, LEGACY_DB_OPERATIONS,
+                       SAFE_PATTERNS)
+from .types import (COMPLEXITY_LEVELS, PerformanceIssue, PerformanceIssueType,
+                    PerformanceSeverity)
+
+logger = logging.getLogger(__name__)
 
 
 class PerformanceASTVisitor(ast.NodeVisitor):
@@ -711,5 +705,5 @@ class PerformanceASTVisitor(ast.NodeVisitor):
                 lines = self.source_lines[start - 1 : end]
                 return "\n".join(lines)
         except Exception:
-            pass  # nosec B110 - Intentionally return empty for invalid ranges
+            logger.debug("Suppressed exception in try block", exc_info=True)
         return ""

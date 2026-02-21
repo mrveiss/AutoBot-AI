@@ -71,7 +71,7 @@ def get_local_ip(backend_host: str) -> str:
             try:
                 sock.close()
             except Exception:
-                pass
+                logger.debug("Suppressed exception in try block", exc_info=True)
 
 
 async def fetch_bootstrap_config(
@@ -133,7 +133,9 @@ async def fetch_bootstrap_config(
         async with aiohttp.ClientSession(timeout=session_timeout) as session:
             for attempt in range(retries):
                 try:
-                    async with session.post(backend_url, json=bootstrap_request) as response:
+                    async with session.post(
+                        backend_url, json=bootstrap_request
+                    ) as response:
                         if response.status == 200:
                             data = await response.json()
                             if data.get("success"):
@@ -146,7 +148,9 @@ async def fetch_bootstrap_config(
                                 )
                                 return _bootstrap_config
                             else:
-                                logger.warning("Bootstrap failed: %s", data.get("message"))
+                                logger.warning(
+                                    "Bootstrap failed: %s", data.get("message")
+                                )
                         else:
                             text = await response.text()
                             logger.warning(
@@ -174,7 +178,7 @@ async def fetch_bootstrap_config(
 
                 # Wait before retry (exponential backoff)
                 if attempt < retries - 1:
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(2**attempt)
 
         logger.error("Failed to fetch bootstrap config after %d attempts", retries)
         return None

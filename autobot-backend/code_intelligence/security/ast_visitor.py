@@ -8,23 +8,17 @@ Issue #712: Extracted from security_analyzer.py for modularity.
 """
 
 import ast
+import logging
 from typing import Dict, List, Optional, Set
 
-from .constants import (
-    DEBUG_MODE_VARS,
-    HTTP_METHODS,
-    INSECURE_RANDOM_FUNCS,
-    LOAD_FUNCS,
-    OWASP_MAPPING,
-    PICKLE_MODULES,
-    VALIDATION_ATTRS,
-    VALIDATION_FUNCS,
-    WEAK_HASH_ALGORITHMS,
-    YAML_LOADER_ARGS,
-    SecuritySeverity,
-    VulnerabilityType,
-)
+from .constants import (DEBUG_MODE_VARS, HTTP_METHODS, INSECURE_RANDOM_FUNCS,
+                        LOAD_FUNCS, OWASP_MAPPING, PICKLE_MODULES,
+                        VALIDATION_ATTRS, VALIDATION_FUNCS,
+                        WEAK_HASH_ALGORITHMS, YAML_LOADER_ARGS,
+                        SecuritySeverity, VulnerabilityType)
 from .finding import SecurityFinding
+
+logger = logging.getLogger(__name__)
 
 
 class SecurityASTVisitor(ast.NodeVisitor):
@@ -414,5 +408,5 @@ class SecurityASTVisitor(ast.NodeVisitor):
                 lines = self.source_lines[start - 1 : end]
                 return "\n".join(lines)
         except Exception:
-            pass
+            logger.debug("Suppressed exception in try block", exc_info=True)
         return ""

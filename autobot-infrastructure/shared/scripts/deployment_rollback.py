@@ -125,7 +125,7 @@ class RollbackManager:
                 with open(self.deployment_info_file, "r") as f:
                     return json.load(f)
             except Exception:
-                pass  # Deployment info file corrupt or unreadable
+                logger.debug("Suppressed exception in try block", exc_info=True)
 
         # Fallback deployment info
         return {
@@ -150,7 +150,7 @@ class RollbackManager:
             if result.returncode == 0:
                 return result.stdout.strip()[:8]
         except Exception:
-            pass  # Git command failed, return unknown below
+            logger.debug("Suppressed exception in try block", exc_info=True)
         return "unknown"
 
     def list_available_versions(self) -> List[Dict[str, Any]]:

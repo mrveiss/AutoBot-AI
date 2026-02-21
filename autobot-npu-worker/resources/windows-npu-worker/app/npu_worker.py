@@ -31,7 +31,7 @@ if sys.platform == "win32":
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
             sys.stderr.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
-            pass  # Service mode may not support reconfiguration
+            logger.debug("Suppressed exception in try block", exc_info=True)
 import threading
 from collections import OrderedDict
 from datetime import datetime
@@ -116,7 +116,7 @@ def get_device_priority() -> List[str]:
         if isinstance(priority, list) and len(priority) > 0:
             return priority
     except Exception:
-        pass
+        logger.debug("Suppressed exception in try block", exc_info=True)
     return DEVICE_PRIORITY
 
 
@@ -142,7 +142,7 @@ def get_parallel_device_config() -> Dict[str, Any]:
         if isinstance(parallel_config, dict):
             return {**default_config, **parallel_config}
     except Exception:
-        pass
+        logger.debug("Suppressed exception in try block", exc_info=True)
     return default_config
 
 
@@ -1185,7 +1185,9 @@ class WindowsNPUWorker:
                         try:
                             device_info = self._model_manager.get_device_info()
                         except Exception:
-                            pass
+                            logger.debug(
+                                "Suppressed exception in try block", exc_info=True
+                            )
 
                     return PairResponse(
                         success=True,
@@ -1522,7 +1524,8 @@ class WindowsNPUWorker:
         Issue #640: Pass existing worker_id to prevent duplicate registrations.
         """
         try:
-            from utils.config_bootstrap import fetch_bootstrap_config, get_worker_id
+            from utils.config_bootstrap import (fetch_bootstrap_config,
+                                                get_worker_id)
 
             backend_config = config.get("backend", {})
             service_config = config.get("service", {})
@@ -1958,9 +1961,9 @@ class WindowsNPUWorker:
                     {
                         "index": i,
                         "similarity": float(similarity),
-                        "metadata": document_metadata[i]
-                        if i < len(document_metadata)
-                        else {},
+                        "metadata": (
+                            document_metadata[i] if i < len(document_metadata) else {}
+                        ),
                     }
                 )
 
@@ -2133,11 +2136,9 @@ class WindowsNPUWorker:
         try:
             # Import network info utilities
             sys.path.insert(0, str(Path(__file__).parent.parent))
-            from gui.utils.network_info import (
-                format_connection_info_box,
-                get_network_interfaces,
-                get_platform_info,
-            )
+            from gui.utils.network_info import (format_connection_info_box,
+                                                get_network_interfaces,
+                                                get_platform_info)
 
             port = config.get("service", {}).get("port", 8082)
             interfaces = get_network_interfaces()

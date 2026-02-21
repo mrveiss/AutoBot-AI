@@ -421,7 +421,7 @@ class DevelopmentSpeedupAgent:
         except OSError as e:
             self.logger.debug("Failed to read file %s: %s", result.file_path, e)
         except Exception:
-            pass
+            self.logger.debug("Suppressed exception in try block", exc_info=True)
         return None
 
     async def analyze_imports_and_dependencies(self, root_path: str) -> Dict[str, Any]:
@@ -684,7 +684,7 @@ class DevelopmentSpeedupAgent:
             except OSError as e:
                 self.logger.debug("Failed to read file %s: %s", file_path, e)
             except Exception:
-                pass
+                self.logger.debug("Suppressed exception in try block", exc_info=True)
 
         return opportunities
 

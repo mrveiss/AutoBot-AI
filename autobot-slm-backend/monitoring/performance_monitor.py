@@ -26,6 +26,8 @@ from config import ConfigManager
 from autobot_shared.network_constants import NetworkConstants
 from autobot_shared.redis_client import get_redis_client
 
+logger = logging.getLogger(__name__)
+
 # Create singleton config instance
 config = ConfigManager()
 
@@ -263,7 +265,7 @@ class PerformanceMonitor:
                 process.kill()
                 await process.wait()
         except Exception:
-            pass  # nosec B110 - NPU check failed, likely not available
+            self.logger.debug("Suppressed exception in try block", exc_info=True)
         return None
 
     async def test_service_performance(
@@ -299,9 +301,9 @@ class PerformanceMonitor:
                             response_time=response_time,
                             status_code=response.status,
                             is_healthy=is_healthy,
-                            error_message=None
-                            if is_healthy
-                            else f"HTTP {response.status}",
+                            error_message=(
+                                None if is_healthy else f"HTTP {response.status}"
+                            ),
                         )
         except Exception as e:
             response_time = time.time() - start_time

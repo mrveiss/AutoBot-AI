@@ -684,7 +684,7 @@ class SecretsManager:
                     # Get last 10 events
                     recent_activity = audit_log[-10:]
                 except Exception:
-                    pass  # Audit log unreadable, activity remains empty
+                    logger.debug("Suppressed exception in try block", exc_info=True)
 
         return {
             "generated_at": datetime.now().isoformat(),

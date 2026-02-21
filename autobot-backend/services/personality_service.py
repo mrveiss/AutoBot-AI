@@ -147,7 +147,7 @@ class PersonalityManager:
                         {"id": pid, "name": data.get("name", pid), "is_system": True}
                     )
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception in try block", exc_info=True)
         index: Dict = {"active_id": "default", "enabled": True, "profiles": profiles}
         self._write_index(index)
         return index

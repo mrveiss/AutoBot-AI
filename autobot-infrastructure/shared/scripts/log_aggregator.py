@@ -28,6 +28,7 @@ Usage:
 import argparse
 import asyncio
 import json
+import logging
 import re
 import sys
 import threading
@@ -612,7 +613,7 @@ class LogAggregator:
                         if datetime.fromisoformat(a["timestamp"]) > cutoff_time
                     ]
             except Exception:
-                pass  # Alert filtering failed, alerts remain empty
+                logger.debug("Suppressed exception in try block", exc_info=True)
 
         return analysis
 

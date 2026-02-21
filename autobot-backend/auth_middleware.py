@@ -495,13 +495,14 @@ class AuthenticationMiddleware:
 
         # Single-user mode: bypass auth (mirrors check_admin_permission behavior)
         try:
-            from user_management.config import DeploymentMode, get_deployment_config
+            from user_management.config import (DeploymentMode,
+                                                get_deployment_config)
 
             deployment_config = get_deployment_config()
             if deployment_config.mode == DeploymentMode.SINGLE_USER:
                 return self._get_auth_disabled_user()
         except Exception:
-            pass  # Gracefully continue if config unavailable
+            logger.debug("Suppressed exception in try block", exc_info=True)
 
         # Try authentication methods in priority order
         user = self._extract_user_from_jwt(request)

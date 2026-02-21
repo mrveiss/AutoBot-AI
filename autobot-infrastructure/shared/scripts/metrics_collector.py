@@ -343,7 +343,7 @@ class MetricsCollector:
             )
 
         except Exception:
-            pass  # Redis metrics unavailable
+            logger.debug("Suppressed exception in try block", exc_info=True)
 
         return metrics
 
@@ -448,7 +448,7 @@ class MetricsCollector:
                 if file_date < cutoff_date:
                     file_path.unlink()
             except Exception:
-                pass  # File cleanup failed, skip
+                logger.debug("Suppressed exception in try block", exc_info=True)
 
     def load_alerts(self, config_file: str) -> None:
         """Load alert configurations from file."""
@@ -661,7 +661,7 @@ class MetricsCollector:
                         if not metric_name or metric_data["name"] == metric_name:
                             disk_metrics.append(Metric(**metric_data))
             except Exception:
-                pass  # Metrics file read/parse error
+                logger.debug("Suppressed exception in try block", exc_info=True)
         return disk_metrics
 
     def _compute_metric_stats(self, values: List[float]) -> Dict[str, Any]:

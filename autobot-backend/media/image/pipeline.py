@@ -28,9 +28,7 @@ except ImportError:
 # Optional: existing VisionProcessor for AI-powered analysis
 try:
     from multimodal_processor.processors.vision import (
-        VISION_MODELS_AVAILABLE,
-        VisionProcessor,
-    )
+        VISION_MODELS_AVAILABLE, VisionProcessor)
 
     _VISION_PROCESSOR_AVAILABLE = VISION_MODELS_AVAILABLE
 except ImportError:
@@ -155,7 +153,7 @@ class ImagePipeline(BasePipeline):
                     if k in exif
                 }
         except Exception:
-            pass
+            logger.debug("Suppressed exception in try block", exc_info=True)
         return meta
 
     async def _run_vision_analysis(

@@ -327,7 +327,7 @@ class OSDetector:
         except OSError as e:
             logger.debug("Failed to read /proc/version: %s", e)
         except Exception:  # nosec B110 - WSL detection fallback
-            pass
+            logger.debug("Suppressed exception in try block", exc_info=True)
 
         return False
 
