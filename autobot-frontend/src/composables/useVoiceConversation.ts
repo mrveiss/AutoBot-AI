@@ -59,8 +59,8 @@ let _sileroVad: any = null
 // Response message types that should be spoken (skip thoughts/planning/debug)
 const _SPEAKABLE_TYPES = new Set(['response', 'message'])
 
-// Max chars to send to TTS — Kani-TTS-2 on CPU takes ~10s per sentence
-const _MAX_SPEECH_CHARS = 200
+// Max chars to send to TTS — Pocket TTS at ~200ms/chunk (#1054)
+const _MAX_SPEECH_CHARS = 2000
 
 function _generateId(): string {
   return `vb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`

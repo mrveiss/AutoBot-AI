@@ -103,9 +103,10 @@ async def voice_speak_api(
 async def voice_synthesize_api(
     request: Request,
     text: str = Form(...),
+    voice_id: str = Form(""),
     user_role: str = Form("user"),
 ):
-    """Synthesize speech via Kani-TTS-2 worker. Returns audio/wav stream."""
+    """Synthesize speech via Pocket TTS worker. Returns audio/wav stream."""
     security_layer = request.app.state.security_layer
     if not security_layer.check_permission(user_role, "allow_voice_speak"):
         security_layer.audit_log(
@@ -117,7 +118,7 @@ async def voice_synthesize_api(
         )
 
     tts = get_tts_client()
-    wav_bytes = await tts.synthesize(text)
+    wav_bytes = await tts.synthesize(text, voice_id=voice_id)
     security_layer.audit_log(
         "voice_synthesize", user_role, "success", {"text_preview": text[:50]}
     )
@@ -140,7 +141,7 @@ async def voice_clone_api(
     reference_audio: UploadFile = File(...),
     user_role: str = Form("user"),
 ):
-    """Zero-shot voice cloning via Kani-TTS-2. Returns audio/wav stream."""
+    """Zero-shot voice cloning via TTS worker. Returns audio/wav stream."""
     security_layer = request.app.state.security_layer
     if not security_layer.check_permission(user_role, "allow_voice_speak"):
         security_layer.audit_log(
@@ -162,6 +163,41 @@ async def voice_clone_api(
         media_type="audio/wav",
         headers={"Content-Disposition": "attachment; filename=cloned_speech.wav"},
     )
+
+
+# ------------------------------------------------------------------
+# Voice profile management (#1054)
+# ------------------------------------------------------------------
+
+
+@router.get("/voices")
+async def voice_list_api():
+    """List available voice profiles from TTS worker."""
+    tts = get_tts_client()
+    voices = await tts.list_voices()
+    return voices
+
+
+@router.post("/voices/create")
+async def voice_create_api(
+    name: str = Form(...),
+    audio: UploadFile = File(...),
+):
+    """Create a voice profile from reference audio."""
+    audio_bytes = await audio.read()
+    tts = get_tts_client()
+    result = await tts.create_voice(name, audio_bytes, audio.filename or "ref.wav")
+    return result
+
+
+@router.delete("/voices/{voice_id}")
+async def voice_delete_api(voice_id: str):
+    """Delete a custom voice profile."""
+    tts = get_tts_client()
+    success = await tts.delete_voice(voice_id)
+    if not success:
+        return JSONResponse(status_code=404, content={"error": "Voice not found"})
+    return {"deleted": voice_id}
 
 
 # ------------------------------------------------------------------
