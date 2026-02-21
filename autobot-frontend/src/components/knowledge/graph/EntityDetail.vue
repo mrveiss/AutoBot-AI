@@ -1,7 +1,14 @@
 <!-- AutoBot - Knowledge Graph Pipeline (Issue #759) -->
 <template>
-  <div class="entity-detail-overlay" @click.self="$emit('close')">
-    <div class="entity-detail">
+  <div
+    class="entity-detail-overlay"
+    role="dialog"
+    aria-modal="true"
+    :aria-label="`Entity details: ${entity.name}`"
+    @click.self="$emit('close')"
+    @keydown.escape="$emit('close')"
+  >
+    <div ref="panelRef" class="entity-detail" tabindex="-1">
       <!-- Header -->
       <div class="detail-header">
         <div class="header-left">
@@ -20,7 +27,11 @@
             {{ entity.type }}
           </span>
         </div>
-        <button class="close-btn" @click="$emit('close')">
+        <button
+          class="close-btn"
+          aria-label="Close entity details"
+          @click="$emit('close')"
+        >
           <i class="fas fa-times"></i>
         </button>
       </div>
@@ -122,13 +133,6 @@
       <div class="detail-actions">
         <button
           class="action-btn"
-          @click="$emit('view-relationships', entity.id)"
-        >
-          <i class="fas fa-sitemap"></i>
-          View Full Relationships
-        </button>
-        <button
-          class="action-btn"
           @click="$emit('view-timeline', entity.name)"
         >
           <i class="fas fa-clock"></i>
@@ -144,11 +148,18 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { computed, onMounted } from 'vue'
+import {
+  computed,
+  onMounted,
+  onUnmounted,
+  ref,
+  nextTick,
+} from 'vue'
 import {
   useKnowledgeGraph,
   type Entity,
 } from '@/composables/useKnowledgeGraph'
+import { getEntityTypeColor as getTypeColor } from '../constants'
 
 const props = defineProps<{
   entity: Entity
@@ -156,7 +167,6 @@ const props = defineProps<{
 
 defineEmits<{
   (e: 'close'): void
-  (e: 'view-relationships', entityId: string): void
   (e: 'view-timeline', entityName: string): void
 }>()
 
@@ -167,20 +177,32 @@ const {
   error: relError,
 } = useKnowledgeGraph()
 
-const typeColorMap: Record<string, string> = {
-  person: 'rgba(59, 130, 246, 0.8)',
-  organization: 'rgba(168, 85, 247, 0.8)',
-  location: 'rgba(34, 197, 94, 0.8)',
-  concept: 'rgba(249, 115, 22, 0.8)',
-  technology: 'rgba(14, 165, 233, 0.8)',
-  event: 'rgba(244, 63, 94, 0.8)',
-  document: 'rgba(107, 114, 128, 0.8)',
-  other: 'rgba(156, 163, 175, 0.8)',
+const panelRef = ref<HTMLElement | null>(null)
+let previouslyFocused: Element | null = null
+
+function trapFocus(e: KeyboardEvent): void {
+  if (e.key !== 'Tab' || !panelRef.value) return
+  const focusable = panelRef.value.querySelectorAll<HTMLElement>(
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+  )
+  if (focusable.length === 0) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
+  }
 }
 
-function getTypeColor(type: string): string {
-  return typeColorMap[type.toLowerCase()] ?? typeColorMap.other
-}
+onUnmounted(() => {
+  document.removeEventListener('keydown', trapFocus)
+  if (previouslyFocused instanceof HTMLElement) {
+    previouslyFocused.focus()
+  }
+})
 
 const propertyEntries = computed(() => {
   return Object.entries(props.entity.properties || {})
@@ -192,7 +214,11 @@ function formatValue(value: unknown): string {
   return String(value)
 }
 
-onMounted(() => {
+onMounted(async () => {
+  previouslyFocused = document.activeElement
+  document.addEventListener('keydown', trapFocus)
+  await nextTick()
+  panelRef.value?.focus()
   getRelationships(props.entity.id)
 })
 </script>
