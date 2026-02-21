@@ -1140,6 +1140,50 @@ async def node_heartbeat(
     )
 
 
+class NodeHealthResponse(BaseModel):
+    """Health check response for a single node (#1062)."""
+
+    status: str
+    cpu_percent: float
+    memory_percent: float
+    disk_percent: float
+    last_heartbeat: Optional[str] = None
+    services: List[dict] = []
+
+
+@router.get("/{node_id}/health", response_model=NodeHealthResponse)
+async def get_node_health(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeHealthResponse:
+    """Get health metrics for a single node (#1062)."""
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+
+    svc_result = await db.execute(select(Service).where(Service.node_id == node_id))
+    services = svc_result.scalars().all()
+
+    heartbeat_str = None
+    if node.last_heartbeat:
+        heartbeat_str = node.last_heartbeat.isoformat()
+
+    return NodeHealthResponse(
+        status=node.status or "unknown",
+        cpu_percent=node.cpu_percent or 0.0,
+        memory_percent=node.memory_percent or 0.0,
+        disk_percent=node.disk_percent or 0.0,
+        last_heartbeat=heartbeat_str,
+        services=[
+            {"name": s.service_name, "status": s.status or "unknown"} for s in services
+        ],
+    )
+
+
 @router.post("/{node_id}/enroll")
 async def enroll_node(
     node_id: str,
