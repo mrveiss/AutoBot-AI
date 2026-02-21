@@ -66,7 +66,6 @@ Issue #753: User preference management interface
 <script setup lang="ts">
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
-import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SettingsView')
