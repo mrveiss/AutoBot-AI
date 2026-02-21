@@ -87,7 +87,8 @@ def _get_default_admin_url() -> str:
         return get_config().slm_url
     except Exception:
         # Fallback for standalone deployments without full AutoBot
-        return "http://172.16.168.19:8000"
+        slm_host = os.getenv("SLM_HOST", "172.16.168.19")
+        return f"http://{slm_host}:8000"
 
 
 DEFAULT_ADMIN_URL = _get_default_admin_url()
