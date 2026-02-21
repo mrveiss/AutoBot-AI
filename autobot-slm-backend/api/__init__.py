@@ -19,6 +19,7 @@ from .config import router as config_router
 from .deployments import router as deployments_router
 from .discovery import router as discovery_router
 from .errors import router as errors_router
+from .events import router as events_router
 from .external_agents import router as external_agents_router
 from .health import router as health_router
 from .infrastructure import router as infrastructure_router
@@ -50,6 +51,7 @@ __all__ = [
     "deployments_router",
     "settings_router",
     "errors_router",
+    "events_router",
     "external_agents_router",
     "health_router",
     "stateful_router",
