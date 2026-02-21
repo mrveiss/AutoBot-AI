@@ -393,6 +393,19 @@ onBeforeUnmount(() => {
   color: rgba(148, 163, 184, 0.4);
 }
 
+/* WS connection indicator (full-duplex) */
+.voice-overlay__ws-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.6);
+  transition: background 0.2s;
+}
+
+.voice-overlay__ws-indicator--connected {
+  background: rgba(34, 197, 94, 0.8);
+}
+
 .voice-overlay__close-btn {
   width: 2rem;
   height: 2rem;
