@@ -22,11 +22,10 @@ import yaml
 if TYPE_CHECKING:
     from backend.utils.service_client import ServiceHTTPClient
 
-from backend.constants.threshold_constants import LLMDefaults, TimingConstants
+from utils.service_registry import get_service_url
 
 from autobot_shared.http_client import HTTPClientManager, get_http_client
-
-from .utils.service_registry import get_service_url
+from backend.constants.threshold_constants import LLMDefaults, TimingConstants
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import torch
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine
@@ -21,17 +20,12 @@ from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.ssot_config import config
 from backend.models.ml_model import MLModel
-from backend.training.completion_trainer import CompletionTrainer
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["ml-models"])
 
-# Database setup
-DATABASE_URL = (
-    f"postgresql://{config.database.user}:{config.database.password}"
-    f"@{config.database.host}:{config.database.port}/{config.database.name}"
-)
+# Database setup — deferred to avoid crash when config.database is unavailable
 _engine = None
 _SessionLocal = None
 
@@ -42,14 +36,25 @@ def _get_session():
     Deferred from module level to avoid DB connection at import time (Issue #940).
     """
     global _engine, _SessionLocal
-    if _engine is None:
-        _engine = create_engine(DATABASE_URL)
+    if _SessionLocal is None:
+        db_url = (
+            f"postgresql://{config.database.user}:{config.database.password}"
+            f"@{config.database.host}:{config.database.port}/{config.database.name}"
+        )
+        _engine = create_engine(db_url)
         _SessionLocal = sessionmaker(bind=_engine)
     return _SessionLocal()
 
 
+def _get_trainer_class():
+    """Lazy import CompletionTrainer to avoid torchmetrics at module load."""
+    from backend.training.completion_trainer import CompletionTrainer
+
+    return CompletionTrainer
+
+
 # Active model cache
-_active_model: Optional[CompletionTrainer] = None
+_active_model = None
 _active_version: Optional[str] = None
 
 
@@ -138,7 +143,7 @@ async def train_model(request: TrainRequest, background_tasks: BackgroundTasks):
             start_time = time.time()
 
             # Initialize trainer
-            trainer = CompletionTrainer(
+            trainer = _get_trainer_class()(
                 language=request.language, pattern_type=request.pattern_type
             )
 
@@ -299,7 +304,7 @@ async def activate_model(version: str):
         db.commit()
 
         # Load model into memory
-        trainer = CompletionTrainer()
+        trainer = _get_trainer_class()()
         trainer.load_checkpoint(version)
         _active_model = trainer
         _active_version = version
@@ -370,6 +375,8 @@ async def predict_completion(request: PredictRequest):
         # Tokenize context
         tokenizer = _active_model.train_loader.dataset.tokenizer
         context_ids = tokenizer.encode(request.context, max_length=128)
+        import torch
+
         input_tensor = torch.tensor([context_ids], dtype=torch.long).to(
             _active_model.device
         )
