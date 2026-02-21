@@ -129,37 +129,17 @@
 
 import { ref } from 'vue'
 import type { TemporalEvent } from '@/composables/useKnowledgeGraph'
+import {
+  getEventTypeColor as getEventColor,
+  getEventTypeIcon as getEventIcon,
+} from '../constants'
 
-defineProps<{
+const props = defineProps<{
   events: TemporalEvent[]
   loading: boolean
 }>()
 
 const expandedEvent = ref<string | null>(null)
-
-const eventColorMap: Record<string, string> = {
-  action: 'rgba(59, 130, 246, 0.9)',
-  decision: 'rgba(168, 85, 247, 0.9)',
-  change: 'rgba(249, 115, 22, 0.9)',
-  milestone: 'rgba(34, 197, 94, 0.9)',
-  occurrence: 'rgba(107, 114, 128, 0.9)',
-}
-
-const eventIconMap: Record<string, string> = {
-  action: 'fas fa-bolt',
-  decision: 'fas fa-gavel',
-  change: 'fas fa-exchange-alt',
-  milestone: 'fas fa-flag',
-  occurrence: 'fas fa-circle',
-}
-
-function getEventColor(type: string): string {
-  return eventColorMap[type.toLowerCase()] ?? eventColorMap.occurrence
-}
-
-function getEventIcon(type: string): string {
-  return eventIconMap[type.toLowerCase()] ?? eventIconMap.occurrence
-}
 
 function formatTimestamp(event: TemporalEvent): string {
   if (event.timestamp) {
@@ -181,9 +161,16 @@ function formatDateMarker(event: TemporalEvent): string {
   return event.temporal_expression ?? ''
 }
 
+function getDateKey(event: TemporalEvent): string {
+  if (!event.timestamp) return ''
+  return new Date(event.timestamp).toLocaleDateString()
+}
+
 function shouldShowDateMarker(index: number): boolean {
-  // Show date marker for first event and when date changes
-  return index === 0
+  if (index === 0) return true
+  const current = getDateKey(props.events[index])
+  const previous = getDateKey(props.events[index - 1])
+  return current !== previous && current !== ''
 }
 
 function toggleExpand(eventId: string): void {

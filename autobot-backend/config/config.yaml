@@ -10,6 +10,13 @@ backend:
   llm:
     ollama:
       endpoint: http://127.0.0.1:11434
+      # GPU endpoint for model-to-endpoint routing (#1070)
+      # When set, models in gpu_models are routed here instead of the default endpoint.
+      # gpu_endpoint: http://172.16.168.20:11434
+      # gpu_models:
+      #   - "mistral:7b-instruct"
+      #   - "deepseek-r1:14b"
+      #   - "codellama:13b"
 
 # Infrastructure host overrides
 # Fallback path for _get_ollama_endpoint_fallback() via get_host("ollama")

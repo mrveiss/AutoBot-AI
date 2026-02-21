@@ -93,6 +93,22 @@ class LLMHandlerMixin:
             logger.error("Failed to load Ollama endpoint from config: %s", e)
             return self._get_ollama_endpoint_fallback()
 
+    def _get_ollama_endpoint_for_model(self, model_name: str) -> str:
+        """Get Ollama endpoint routed by model name (#1070).
+
+        GPU models are sent to gpu_endpoint; others to the default.
+        Returns URL with /api/generate suffix.
+        """
+        try:
+            base_url = global_config_manager.get_ollama_endpoint_for_model(model_name)
+            if base_url and base_url.startswith(_VALID_URL_SCHEMES):
+                if not base_url.endswith("/api/generate"):
+                    base_url = base_url.rstrip("/") + "/api/generate"
+                return base_url
+        except Exception as e:
+            logger.warning("Model endpoint routing failed: %s", e)
+        return self._get_ollama_endpoint()
+
     def _get_personality_preamble(self) -> str:
         """Return personality block if enabled, else empty string.
 
@@ -246,7 +262,9 @@ NEVER teach commands - ALWAYS execute them."""
         self, session: WorkflowSession, message: str, use_knowledge: bool = True
     ) -> Dict[str, Any]:
         """Prepare LLM request parameters including endpoint, model, and prompt."""
-        ollama_endpoint = self._get_ollama_endpoint()
+        selected_model = self._get_selected_model()
+        # Issue #1070: resolve endpoint AFTER model so GPU models route correctly
+        ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
         system_prompt = self._get_system_prompt()
         conversation_context = self._build_conversation_context(session)
 
@@ -262,7 +280,6 @@ NEVER teach commands - ALWAYS execute them."""
         full_prompt = self._build_full_prompt(
             system_prompt, knowledge_context, conversation_context, message
         )
-        selected_model = self._get_selected_model()
 
         logger.info(
             "[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint
@@ -537,8 +554,9 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         self, command: str, stdout: str, stderr: str, return_code: int
     ) -> str:
         """Get LLM interpretation for command results (non-streaming)."""
-        ollama_endpoint = global_config_manager.get_ollama_url()
         selected_model = global_config_manager.get_selected_model()
+        # Issue #1070: route to correct endpoint based on model
+        ollama_endpoint = global_config_manager.get_ollama_url_for_model(selected_model)
 
         logger.info(
             f"[interpret_terminal_command] Starting interpretation "

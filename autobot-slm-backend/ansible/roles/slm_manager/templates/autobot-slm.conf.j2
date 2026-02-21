@@ -35,6 +35,9 @@ server {
     # Issue #1015: Content Security Policy
     add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';" always;
 
+    # Issue #1090: Allow SLM agent event sync payloads (typically 1.5-2MB)
+    client_max_body_size 10m;
+
     # Logging
     access_log {{ slm_log_dir }}/nginx-access.log;
     error_log {{ slm_log_dir }}/nginx-error.log;
@@ -65,8 +68,8 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
     }
 
     # Health check endpoint (bypass auth)
