@@ -12,6 +12,8 @@
 import { ref, computed, watch } from 'vue'
 import type { ChatMessage } from '@/stores/useChatStore'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
+import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
+import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
 import { useChatController } from '@/models/controllers'
 import { useChatStore } from '@/stores/useChatStore'
 import { getBackendWsUrl } from '@/config/ssot-config'
@@ -390,7 +392,8 @@ function _dispatchTranscript(text: string): void {
     }
 
     if (mode.value === 'full-duplex' && wsConnected.value) {
-      _sendWs({ type: 'speak', text: speechText })
+      const { selectedVoiceId } = useVoiceProfiles()
+      _sendWs({ type: 'speak', text: speechText, voice_id: selectedVoiceId.value })
     } else {
       state.value = 'speaking'
       speak(speechText, true).then(() => {

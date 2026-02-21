@@ -76,7 +76,7 @@ async def _send_json(ws: WebSocket, data: dict) -> bool:
             await ws.send_json(data)
             return True
     except Exception:
-        pass
+        logger.debug("Suppressed exception", exc_info=True)
     return False
 
 
@@ -84,6 +84,7 @@ async def _synthesize_and_stream(
     ws: WebSocket,
     text: str,
     cancel_event: asyncio.Event,
+    voice_id: str = "",
 ) -> None:
     """Synthesize TTS for text and stream audio chunks to client.
 
@@ -101,7 +102,7 @@ async def _synthesize_and_stream(
 
         try:
             tts = get_tts_client()
-            wav_bytes = await tts.synthesize(chunk_text)
+            wav_bytes = await tts.synthesize(chunk_text, voice_id=voice_id)
             audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
 
             if cancel_event.is_set():
@@ -153,13 +154,16 @@ async def _start_tts_stream(
     cancel_event: asyncio.Event,
     set_state_fn,
     get_state_fn,
+    voice_id: str = "",
 ) -> Optional[asyncio.Task]:
     """Start TTS synthesis and stream audio to client (#1031)."""
     if not text:
         return None
     cancel_event.clear()
     await set_state_fn("speaking")
-    task = asyncio.create_task(_synthesize_and_stream(ws, text, cancel_event))
+    task = asyncio.create_task(
+        _synthesize_and_stream(ws, text, cancel_event, voice_id=voice_id)
+    )
 
     async def _on_done(t: asyncio.Task) -> None:
         try:
@@ -219,6 +223,7 @@ async def voice_stream_ws(websocket: WebSocket) -> None:
                     cancel_tts,
                     _set_state,
                     lambda: current_state,
+                    voice_id=msg.get("voice_id", ""),
                 )
 
             elif msg_type == "ping":
