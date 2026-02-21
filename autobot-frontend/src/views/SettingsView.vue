@@ -42,8 +42,22 @@ Issue #753: User preference management interface
           </div>
         </section>
 
-        <!-- Future sections can be added here -->
-        <!-- Example: Notifications, Privacy, Account, etc. -->
+        <!-- Voice Section -->
+        <section class="settings-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <i class="fas fa-microphone"></i>
+              Voice
+            </h2>
+            <p class="section-description">
+              Configure text-to-speech voice and voice profiles
+            </p>
+          </div>
+
+          <div class="section-content">
+            <VoiceSettingsPanel />
+          </div>
+        </section>
       </div>
     </div>
   </div>
@@ -51,6 +65,7 @@ Issue #753: User preference management interface
 
 <script setup lang="ts">
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
+import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SettingsView')

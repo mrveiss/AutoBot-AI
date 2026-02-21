@@ -2,7 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
-# TTS Worker Role - Kani-TTS-2 text-to-speech service (#928)
+# TTS Worker Role - Pocket TTS text-to-speech service (#1054)
 ---
 
 # ============================================================
@@ -76,6 +76,7 @@
     - "{{ tts_install_dir }}"
     - "{{ tts_log_dir }}"
     - "{{ tts_models_dir }}"
+    - "{{ tts_voices_dir }}"
   tags: ['tts', 'dirs']
 
 # ============================================================
@@ -116,62 +117,27 @@
   become_user: "{{ tts_user }}"
   tags: ['tts', 'packages']
 
-- name: "TTS Worker | Install torch + torchaudio CPU-only (avoids 4GB NVIDIA CUDA wheels)"
+- name: "TTS Worker | Install torch CPU-only (Pocket TTS requires >=2.5)"
   ansible.builtin.pip:
     name:
-      - torch>=2.0.0
-      - torchaudio>=2.0.0
+      - "torch>=2.5.0"
     virtualenv: "{{ tts_install_dir }}/venv"
     state: present
     extra_args: "--index-url https://download.pytorch.org/whl/cpu --timeout 300"
   become_user: "{{ tts_user }}"
-  when: "not tts_device.startswith('cuda')"
   tags: ['tts', 'packages']
 
-- name: "TTS Worker | Install torch + torchaudio with CUDA support (GPU node)"
+- name: "TTS Worker | Install pocket-tts and audio dependencies"
   ansible.builtin.pip:
     name:
-      - torch>=2.0.0
-      - torchaudio>=2.0.0
-    virtualenv: "{{ tts_install_dir }}/venv"
-    state: present
-    extra_args: "--timeout 300"
-  become_user: "{{ tts_user }}"
-  when: "tts_device.startswith('cuda')"
-  tags: ['tts', 'packages']
-
-- name: "TTS Worker | Install kani-tts-2 package and audio dependencies"
-  ansible.builtin.pip:
-    name:
-      - kani-tts-2
+      - pocket-tts
       - soundfile>=0.12.0
       - numpy>=1.24.0
-      - huggingface_hub>=0.20.0
+      - scipy>=1.10.0
     virtualenv: "{{ tts_install_dir }}/venv"
     state: present
     extra_args: "--timeout 300"
   become_user: "{{ tts_user }}"
-  tags: ['tts', 'packages']
-
-- name: "TTS Worker | Pin transformers==4.56.0 (required by kani-tts-2)"
-  ansible.builtin.pip:
-    name:
-      - "transformers==4.56.0"
-    virtualenv: "{{ tts_install_dir }}/venv"
-    state: present
-    extra_args: "--upgrade --timeout 300"
-  become_user: "{{ tts_user }}"
-  tags: ['tts', 'packages']
-
-- name: "TTS Worker | Force-reinstall torchaudio CPU build (kani-tts-2 dep may pull CUDA)"
-  ansible.builtin.pip:
-    name:
-      - "torchaudio==2.10.0+cpu"
-    virtualenv: "{{ tts_install_dir }}/venv"
-    state: present
-    extra_args: "--index-url https://download.pytorch.org/whl/cpu --force-reinstall --timeout 300"
-  become_user: "{{ tts_user }}"
-  when: "not tts_device.startswith('cuda')"
   tags: ['tts', 'packages']
 
 # ============================================================

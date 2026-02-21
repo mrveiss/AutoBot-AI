@@ -103,6 +103,27 @@ These four rules override convenience, speed, and assumptions. No exceptions.
 
 > Violation: Saying "the bug is fixed" after editing a file without running the code, or reporting success without showing test/lint output.
 
+### Rule 6: Report Every Discovered Problem
+
+**"It was already there" is never a reason to ignore a problem.**
+
+Every bug, inconsistency, security issue, hardcoded value, broken function, or tech debt found while working on anything — regardless of whether it is related to the current task — must be reported:
+
+- Create a GitHub issue immediately with description, severity, and where it was found
+- Report it to the user and ask for direction: fix now, fix after current task, or defer
+- Do not assume someone else knows about it
+- Do not leave it unreported because it is out of scope for the current issue
+
+**There are no exceptions based on:**
+- The problem existing before your change
+- The problem being in a different module or system
+- The problem seeming minor or low priority
+- The current task being unrelated
+
+**Workflow:** See [Discovered Problems Policy](#session-boundaries-mandatory) for the full handling steps, critical vs non-critical classification, and required GitHub issue format.
+
+> Violation: Noticing a hardcoded IP, broken error handler, missing auth check, or any other defect and not creating a GitHub issue for it because "it's not my task."
+
 ---
 
 ## PROJECT STACK
