@@ -87,6 +87,8 @@ class PipelineRunner:
         for task_config in extract_config:
             task_name = task_config["task"]
             task_class = TaskRegistry.get_task("extract", task_name)
+            if task_class is None:
+                raise ValueError(f"Extractor '{task_name}' not registered")
             task_instance = task_class(**task_config.get("params", {}))
 
             async for item in task_instance.process(input_data, context):
@@ -106,24 +108,25 @@ class PipelineRunner:
             context: Pipeline context
 
         Returns:
-            Dict of cognified data by category (entities, relationships, etc.)
+            Dict of cognified data by category
         """
         cognify_config = self.config.get("cognify", [])
-        cognified_data: Dict[str, List[Any]] = {
-            "entities": [],
-            "relationships": [],
-            "events": [],
-            "summaries": [],
-        }
+        context.chunks = extracted_data
 
         for task_config in cognify_config:
             task_name = task_config["task"]
-            output_type = task_config.get("output_type", "entities")
             task_class = TaskRegistry.get_task("cognify", task_name)
+            if task_class is None:
+                raise ValueError(f"Cognifier '{task_name}' not registered")
             task_instance = task_class(**task_config.get("params", {}))
+            context = await task_instance.process(context)
 
-            results = await task_instance.process(extracted_data, context)
-            cognified_data[output_type].extend(results)
+        cognified_data: Dict[str, List[Any]] = {
+            "entities": list(context.entities),
+            "relationships": list(context.relationships),
+            "events": list(context.events),
+            "summaries": list(context.summaries),
+        }
 
         self._log_cognify_stats(cognified_data)
         return cognified_data
@@ -155,15 +158,18 @@ class PipelineRunner:
         """
         load_config = self.config.get("load", [])
 
+        context.entities = cognified_data.get("entities", [])
+        context.relationships = cognified_data.get("relationships", [])
+        context.events = cognified_data.get("events", [])
+        context.summaries = cognified_data.get("summaries", [])
+
         for task_config in load_config:
             task_name = task_config["task"]
-            data_type = task_config.get("data_type", "entities")
             task_class = TaskRegistry.get_task("load", task_name)
+            if task_class is None:
+                raise ValueError(f"Loader '{task_name}' not registered")
             task_instance = task_class(**task_config.get("params", {}))
-
-            data_to_load = cognified_data.get(data_type, [])
-            if data_to_load:
-                await task_instance.load(data_to_load, context)
+            await task_instance.load(context)
 
         logger.info("Load stage: persisted all data")
 

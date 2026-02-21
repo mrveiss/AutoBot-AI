@@ -40,12 +40,16 @@ class TemporalEvent(BaseModel):
     temporal_expression: str = Field(
         default="", description="Original temporal expression from text"
     )
-    temporal_type: TemporalType = Field(..., description="Temporal classification")
+    temporal_type: TemporalType = Field(
+        default="point", description="Temporal classification"
+    )
     participants: List[UUID] = Field(
         default_factory=list, description="Entity IDs of event participants"
     )
     location: Optional[str] = Field(None, description="Event location (if mentioned)")
-    event_type: EventType = Field(..., description="Event classification")
+    event_type: EventType = Field(
+        default="occurrence", description="Event classification"
+    )
     source_chunk_ids: List[UUID] = Field(
         default_factory=list, description="Chunks where event was mentioned"
     )
