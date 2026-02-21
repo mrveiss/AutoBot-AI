@@ -11,9 +11,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 
+from pydantic import BaseModel, Field, validator
+
 from backend.constants.network_constants import NetworkConstants
 from backend.constants.threshold_constants import CategoryDefaults
-from pydantic import BaseModel, Field, validator
 
 # Issue #380: Module-level tuple for URL scheme validation
 _VALID_URL_SCHEMES = ("http://", "https://")
@@ -84,7 +85,7 @@ class NPUWorkerConfig(BaseModel):
         return v
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "id": "npu-worker-1",
                 "name": "Primary NPU Worker",
@@ -126,7 +127,7 @@ class NPUWorkerStatus(BaseModel):
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "id": "npu-worker-1",
                 "status": "online",
@@ -162,7 +163,7 @@ class NPUWorkerMetrics(BaseModel):
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "id": "npu-worker-1",
                 "avg_response_time_ms": 245.8,
@@ -203,7 +204,7 @@ class LoadBalancingConfig(BaseModel):
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "strategy": "least-loaded",
                 "health_check_interval": 30,
@@ -261,7 +262,7 @@ class NPUWorkerDetails(BaseModel):
         }
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "config": {
                     "id": "npu-worker-1",
@@ -328,7 +329,7 @@ class WorkerHeartbeat(BaseModel):
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "worker_id": "windows_npu_worker_abc123",
                 "status": "online",
@@ -362,7 +363,7 @@ class WorkerTestResult(BaseModel):
     )
 
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "worker_id": "npu-worker-1",
                 "success": True,

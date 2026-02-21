@@ -27,13 +27,22 @@ router = APIRouter(tags=["code-completion"])
 # Initialize context analyzer
 context_analyzer = ContextAnalyzer()
 
-# Database setup
-DATABASE_URL = (
-    f"postgresql://{config.database.user}:{config.database.password}"
-    f"@{config.database.host}:{config.database.port}/{config.database.name}"
-)
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine)
+# Database setup — deferred to avoid crash when config.database is unavailable
+_engine = None
+_SessionLocal = None
+
+
+def _get_db_session():
+    """Get database session, initializing engine on first call."""
+    global _engine, _SessionLocal
+    if _SessionLocal is None:
+        db_url = (
+            f"postgresql://{config.database.user}:{config.database.password}"
+            f"@{config.database.host}:{config.database.port}/{config.database.name}"
+        )
+        _engine = create_engine(db_url)
+        _SessionLocal = sessionmaker(bind=_engine)
+    return _SessionLocal()
 
 
 # =============================================================================
@@ -118,7 +127,7 @@ async def extract_patterns(request: ExtractionRequest):
         patterns_dict = extractor.extract_from_codebase(languages=request.languages)
 
         # Store patterns in database
-        db = SessionLocal()
+        db = _get_db_session()
         try:
             total_stored = 0
             for pattern_type, patterns in patterns_dict.items():
@@ -186,7 +195,7 @@ async def list_patterns(
     - **page_size**: Results per page (1-100)
     - **sort_by**: Sort field (frequency, acceptance_rate, created_at)
     """
-    db = SessionLocal()
+    db = _get_db_session()
     try:
         query = db.query(CodePattern)
 
@@ -263,7 +272,7 @@ async def search_patterns(request: PatternSearchRequest):
     - Function names
     - Categories
     """
-    db = SessionLocal()
+    db = _get_db_session()
     try:
         query = db.query(CodePattern)
 
@@ -312,7 +321,7 @@ async def search_patterns(request: PatternSearchRequest):
 @router.get("/statistics")
 async def get_statistics():
     """Get pattern extraction statistics."""
-    db = SessionLocal()
+    db = _get_db_session()
     try:
         stats = {
             "total_patterns": db.query(CodePattern).count(),
