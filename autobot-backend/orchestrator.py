@@ -8,7 +8,7 @@ This module consolidates all orchestrator implementations into a single,
 comprehensive orchestrator that integrates the best features from:
 - src/orchestrator.py (main orchestrator)
 - src/enhanced_orchestrator.py (enhanced features)
-- src/langchain_agent_orchestrator.py (LangChain integration)
+- chat_workflow/graph.py (LangGraph StateGraph — Issue #1043, replaces legacy LangChain)
 """
 
 import asyncio
@@ -20,15 +20,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
-from backend.constants.threshold_constants import LLMDefaults, TimingConstants
-
-# Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
-from backend.utils.agent_selection import find_best_agent_for_task as _find_best_agent
-from backend.utils.agent_selection import release_agent as _release_agent
-from backend.utils.agent_selection import reserve_agent as _reserve_agent
-from backend.utils.agent_selection import (
-    update_agent_performance as _update_performance,
-)
 from config import config_manager
 from conversation import ConversationManager
 from llm_interface import LLMInterface
@@ -45,6 +36,15 @@ from orchestration import (
 from task_execution_tracker import Priority, TaskType, task_tracker
 
 from autobot_shared.logging_manager import get_logger
+from backend.constants.threshold_constants import LLMDefaults, TimingConstants
+
+# Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
+from backend.utils.agent_selection import find_best_agent_for_task as _find_best_agent
+from backend.utils.agent_selection import release_agent as _release_agent
+from backend.utils.agent_selection import reserve_agent as _reserve_agent
+from backend.utils.agent_selection import (
+    update_agent_performance as _update_performance,
+)
 
 logger = get_logger("orchestrator")
 
