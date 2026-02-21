@@ -202,6 +202,16 @@ class ServiceConfigMixin:
             f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.OLLAMA_PORT}"
         )
 
+    def get_ollama_url_for_model(self, model_name: str) -> str:
+        """Get Ollama URL routed by model name (#1070).
+
+        Delegates to ModelConfigMixin.get_ollama_endpoint_for_model
+        which checks gpu_endpoint/gpu_models in config.yaml.
+        Falls back to get_ollama_url() if GPU routing is not
+        configured or the model is not a GPU model.
+        """
+        return self.get_ollama_endpoint_for_model(model_name)
+
     def get_redis_url(self) -> str:
         """Get the Redis service URL from configuration (backward compatibility)"""
         env_url = os.getenv("AUTOBOT_REDIS_URL")
