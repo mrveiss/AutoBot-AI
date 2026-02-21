@@ -39,6 +39,7 @@
                 aria-label="Conversation mode"
               >
                 <option value="walkie-talkie">Walkie-talkie</option>
+                <option value="hands-free">Hands-free</option>
                 <option value="full-duplex">Full-duplex</option>
               </select>
 
