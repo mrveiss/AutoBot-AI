@@ -1,0 +1,172 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-commit Hook: No print() / console.* in Production Code
+# ===========================================================
+#
+# Blocks commits containing:
+# - Python print() calls in production code
+# - TypeScript/Vue console.log/warn/error/debug/info in production code
+#
+# Intentional exceptions:
+# - Test files (*_test.py, *.spec.ts, *.e2e_test.*, *-test.js)
+# - debugUtils.ts, RumConsoleHelper.ts (logging infrastructure)
+# - Lines with "# noqa: print" or "// noqa: console" comments
+#
+# Issue: #1082 - Pre-commit hooks not blocking print/console violations
+#
+# Install: pre-commit install (uses .pre-commit-config.yaml)
+
+set -uo pipefail
+
+# Colors (matching existing hooks pattern)
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+VIOLATIONS=0
+
+# Get staged Python files (production code only)
+get_staged_python_files() {
+    git diff --cached --name-only --diff-filter=ACM 2>/dev/null | \
+        grep -E '\.py$' | \
+        grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
+        grep -v -E '(_test\.py$|\.e2e_test\.py$|\.integration_test\.py$|\.performance_test\.py$)' | \
+        grep -v -E '(conftest\.py$|test_.*\.py$)' | \
+        grep -v -E '(autobot-infrastructure/)' || true
+}
+
+# Get staged TypeScript/Vue files (production code only)
+get_staged_ts_files() {
+    git diff --cached --name-only --diff-filter=ACM 2>/dev/null | \
+        grep -E '\.(ts|vue|js)$' | \
+        grep -v -E '(node_modules|\.venv|venv|archive|temp|dist)' | \
+        grep -v -E '(\.spec\.(ts|js)$|\.test\.(ts|js)$|\.e2e\.(ts|js)$|-test\.(ts|js)$)' | \
+        grep -v -E '(debugUtils\.ts$|RumConsoleHelper\.ts$)' | \
+        grep -v -E '(\.d\.ts$|vite\.config\.(ts|js)$|vitest\.config\.(ts|js)$)' | \
+        grep -v -E '(autobot-infrastructure/)' || true
+}
+
+# Check a Python file for print() calls
+check_python_print() {
+    local file="$1"
+    local line_num=0
+
+    while IFS= read -r line; do
+        ((line_num++))
+
+        # Skip empty lines
+        [[ -z "$line" ]] && continue
+
+        # Skip comments
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
+        # Skip noqa exemption
+        echo "$line" | grep -q 'noqa: print' && continue
+
+        # Skip string definitions containing "print" (not actual calls)
+        # Match actual print( calls — word boundary before print
+        if echo "$line" | grep -qE '(^|[^a-zA-Z0-9_.])print\s*\('; then
+            echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}"
+            echo "    ${line:0:100}"
+            ((VIOLATIONS++))
+        fi
+    done < "$file"
+}
+
+# Check a TypeScript/Vue file for console.* calls
+check_ts_console() {
+    local file="$1"
+    local line_num=0
+
+    while IFS= read -r line; do
+        ((line_num++))
+
+        # Skip empty lines
+        [[ -z "$line" ]] && continue
+
+        # Skip comments (single-line)
+        [[ "$line" =~ ^[[:space:]]*//.* ]] && continue
+
+        # Skip noqa exemption
+        echo "$line" | grep -q 'noqa: console' && continue
+
+        # Skip lines inside JSDoc/multiline comments (starts with *)
+        [[ "$line" =~ ^[[:space:]]*\* ]] && continue
+
+        # Match console.log/warn/error/debug/info calls
+        if echo "$line" | grep -qE 'console\.(log|warn|error|debug|info)\s*\('; then
+            echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}"
+            echo "    ${line:0:100}"
+            ((VIOLATIONS++))
+        fi
+    done < "$file"
+}
+
+main() {
+    echo -e "${BOLD}${CYAN}Pre-commit: No print()/console.* in Production Code${NC}"
+    echo "Issue #1082 - Logging Standard Enforcement"
+    echo "================================================"
+    echo ""
+
+    local py_files ts_files
+    py_files=$(get_staged_python_files)
+    ts_files=$(get_staged_ts_files)
+
+    if [[ -z "$py_files" ]] && [[ -z "$ts_files" ]]; then
+        echo -e "${GREEN}No production files staged for commit.${NC}"
+        exit 0
+    fi
+
+    # Check Python files
+    if [[ -n "$py_files" ]]; then
+        local py_count
+        py_count=$(echo "$py_files" | wc -l)
+        echo -e "Scanning ${BOLD}${py_count}${NC} Python file(s) for print()..."
+        echo ""
+
+        for file in $py_files; do
+            [[ -f "$file" ]] && check_python_print "$file"
+        done
+    fi
+
+    # Check TypeScript/Vue files
+    if [[ -n "$ts_files" ]]; then
+        local ts_count
+        ts_count=$(echo "$ts_files" | wc -l)
+        echo -e "Scanning ${BOLD}${ts_count}${NC} TypeScript/Vue file(s) for console.*..."
+        echo ""
+
+        for file in $ts_files; do
+            [[ -f "$file" ]] && check_ts_console "$file"
+        done
+    fi
+
+    echo ""
+    echo "================================================"
+
+    if [[ $VIOLATIONS -gt 0 ]]; then
+        echo -e "${RED}COMMIT BLOCKED: $VIOLATIONS print()/console.* violation(s) found${NC}"
+        echo ""
+        echo "Quick fixes:"
+        echo "  Python:     import logging; logger = logging.getLogger(__name__)"
+        echo "              logger.info('Message: %s', data)"
+        echo ""
+        echo "  TypeScript: import { createLogger } from '@/utils/debugUtils'"
+        echo "              const logger = createLogger('ComponentName')"
+        echo ""
+        echo "Exempt a line: add '# noqa: print' or '// noqa: console'"
+        echo ""
+        exit 1
+    else
+        echo -e "${GREEN}No print()/console.* violations found!${NC}"
+        exit 0
+    fi
+}
+
+main "$@"
