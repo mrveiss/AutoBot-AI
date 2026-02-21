@@ -25,6 +25,7 @@ from api import (
     deployments_router,
     discovery_router,
     errors_router,
+    events_router,
     external_agents_router,
     fleet_services_router,
     health_router,
@@ -264,6 +265,7 @@ app.include_router(maintenance_router, prefix="/api")
 app.include_router(monitoring_router, prefix="/api")
 app.include_router(performance_router, prefix="/api")
 app.include_router(errors_router, prefix="/api")
+app.include_router(events_router, prefix="/api")
 app.include_router(external_agents_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
 app.include_router(node_vnc_router, prefix="/api")

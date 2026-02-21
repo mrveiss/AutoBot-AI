@@ -69,7 +69,7 @@
   become: false
   ansible.builtin.command:
     cmd: git rev-parse HEAD
-    chdir: "{{ playbook_dir }}/../.."
+    chdir: "{{ playbook_dir }}/../../.."
   register: git_commit_result
   changed_when: false
   failed_when: false
