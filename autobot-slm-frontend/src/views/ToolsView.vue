@@ -261,7 +261,7 @@ async function runRedisCommand(): Promise<void> {
     }
 
     // Execute via ansible ad-hoc
-    const response = await fetch(`/api/nodes/${targetNode.node_id}/execute`, {
+    const response = await fetch(`/api/nodes/${targetNode.node_id}/exec`, {
       method: 'POST',
       headers: {
         ...authStore.getAuthHeaders(),
@@ -297,7 +297,7 @@ async function runAnsibleCommand(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(`/api/nodes/${selectedNode.value}/execute`, {
+    const response = await fetch(`/api/nodes/${selectedNode.value}/exec`, {
       method: 'POST',
       headers: {
         ...authStore.getAuthHeaders(),
