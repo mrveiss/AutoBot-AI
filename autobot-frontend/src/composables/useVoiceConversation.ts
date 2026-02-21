@@ -508,14 +508,14 @@ export function useVoiceConversation() {
   const isProcessing = computed(() => state.value === 'processing')
 
   const stateLabel = computed(() => {
-    const duplex = mode.value === 'full-duplex'
+    const auto = mode.value === 'full-duplex' || mode.value === 'hands-free'
     switch (state.value) {
       case 'idle':
-        return duplex ? 'Ready — speak anytime' : 'Tap to speak'
+        return auto ? 'Ready — speak anytime' : 'Tap to speak'
       case 'listening': return 'Listening...'
       case 'processing': return 'Processing...'
       case 'speaking':
-        return duplex
+        return mode.value === 'full-duplex'
           ? 'Speaking — interrupt anytime'
           : 'AutoBot is speaking...'
       default: return ''
@@ -558,11 +558,20 @@ export function useVoiceConversation() {
     }
     if (state.value !== 'idle') return
     unlockAudio()
-    _startListeningInternal()
+    if (mode.value === 'hands-free') {
+      _startHandsFree()
+    } else {
+      _startListeningInternal()
+    }
   }
 
   function stopListening(): void {
-    if (_recognition) _recognition.stop()
+    if (mode.value === 'hands-free') {
+      _stopHandsFree()
+      state.value = 'idle'
+    } else if (_recognition) {
+      _recognition.stop()
+    }
   }
 
   function toggleListening(): void {
@@ -622,6 +631,7 @@ export function useVoiceConversation() {
     errorMessage,
     wsConnected,
     audioLevel,
+    silenceThreshold,
     isListening,
     isProcessing,
     stateLabel,
