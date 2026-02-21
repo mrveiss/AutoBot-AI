@@ -9,6 +9,8 @@ Issue #396: Converted blocking subprocess.run to asyncio.create_subprocess_exec.
 import asyncio
 import json
 import logging
+
+logger = logging.getLogger(__name__)
 import os
 import statistics
 import time
@@ -157,9 +159,9 @@ core = ov.Core()
 devices = core.available_devices
 npu_devices = [d for d in devices if "NPU" in d or "AI_BOOST" in d]
 if npu_devices:
-    print(f"NPU_FOUND:{npu_devices[0]}")
+    print(f"NPU_FOUND:{npu_devices[0]}")  # noqa: print
 else:
-    print("NPU_NOT_FOUND")
+    print("NPU_NOT_FOUND")  # noqa: print
 """
             process = await asyncio.create_subprocess_exec(
                 "python3",
@@ -719,6 +721,7 @@ async def monitor_llm_request(request_data: Dict) -> LLMPerformanceMetrics:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     import argparse
 
     async def main():
@@ -736,13 +739,13 @@ if __name__ == "__main__":
         await analytics.initialize_redis_connection()
 
         if args.test:
-            print("Testing AI performance monitoring...")
+            logger.info("Testing AI performance monitoring...")
 
             # Test NPU metrics
             npu_metrics = await analytics.collect_npu_metrics()
             if npu_metrics:
-                print(f"NPU Utilization: {npu_metrics.utilization_percent:.1f}%")
-                print(
+                logger.info(f"NPU Utilization: {npu_metrics.utilization_percent:.1f}%")
+                logger.info(
                     f"NPU Inference Latency: {npu_metrics.inference_latency_ms:.1f}ms"
                 )
 
@@ -750,15 +753,17 @@ if __name__ == "__main__":
             mm_metrics = await analytics.monitor_multimodal_pipeline(
                 "text", {"size_mb": 1.0}
             )
-            print(f"Multi-modal Processing Time: {mm_metrics.processing_time_ms:.1f}ms")
+            logger.info(
+                f"Multi-modal Processing Time: {mm_metrics.processing_time_ms:.1f}ms"
+            )
 
             # Test knowledge base monitoring
             kb_metrics = await analytics.monitor_knowledge_base_search("test query")
-            print(f"Knowledge Search Time: {kb_metrics.search_time_ms:.1f}ms")
+            logger.info(f"Knowledge Search Time: {kb_metrics.search_time_ms:.1f}ms")
 
         if args.report:
-            print("Generating AI performance report...")
+            logger.info("Generating AI performance report...")
             report = await analytics.generate_ai_performance_report()
-            print(json.dumps(report, indent=2, default=str))
+            logger.info("%s", json.dumps(report, indent=2, default=str))
 
     asyncio.run(main())

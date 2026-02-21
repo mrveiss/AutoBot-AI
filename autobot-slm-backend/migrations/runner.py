@@ -223,14 +223,14 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     db_url = sys.argv[1] if len(sys.argv) > 1 else get_db_url()
-    print(f"Running migrations on PostgreSQL: {db_url}")
+    logger.info(f"Running migrations on PostgreSQL: {db_url}")
 
     results = run_all_migrations(db_url)
 
     if results:
-        print("\nMigration Results:")
+        logger.info("\nMigration Results:")
         for name, success, message in results:
             status = "✓" if success else "✗"
-            print(f"  {status} {message}")
+            logger.info(f"  {status} {message}")
     else:
-        print("No migrations to run")
+        logger.info("No migrations to run")

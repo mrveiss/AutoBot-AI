@@ -955,21 +955,22 @@ class SecureCommandExecutor:
 
 # Example usage and testing
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     async def example_approval_callback(approval_data: Dict[str, Any]) -> bool:
         """Example approval callback that auto-approves safe commands"""
-        print("\n🔒 Approval Request:")
-        print(f"Command: {approval_data['command']}")
-        print(f"Risk: {approval_data['risk']}")
-        print(f"Reasons: {', '.join(approval_data['reasons'])}")
+        logger.info("\n🔒 Approval Request:")
+        logger.info(f"Command: {approval_data['command']}")
+        logger.info(f"Risk: {approval_data['risk']}")
+        logger.info(f"Reasons: {', '.join(approval_data['reasons'])}")
 
         # In real implementation, this would ask the user
         # For demo, auto-approve moderate risk, deny high risk
         if approval_data["risk"] == "moderate":
-            print("✅ Auto-approved (moderate risk)")
+            logger.info("✅ Auto-approved (moderate risk)")
             return True
         else:
-            print("❌ Auto-denied (high risk)")
+            logger.info("❌ Auto-denied (high risk)")
             return False
 
     async def test_commands():
@@ -994,19 +995,19 @@ if __name__ == "__main__":
         ]
 
         for cmd in test_cases:
-            print(f"\n{'='*60}")
-            print(f"Testing: {cmd}")
+            logger.info(f"\n{'='*60}")
+            logger.info(f"Testing: {cmd}")
             result = await executor.run_shell_command(cmd)
-            print(f"Status: {result['status']}")
-            print(f"Security: {result.get('security', {})}")
+            logger.info(f"Status: {result['status']}")
+            logger.info(f"Security: {result.get('security', {})}")
             if result["stdout"]:
-                print(f"Output: {result['stdout'][:100]}...")
+                logger.info(f"Output: {result['stdout'][:100]}...")
 
         # Show command history
-        print(f"\n{'='*60}")
-        print("Command History:")
+        logger.info(f"\n{'='*60}")
+        logger.info("Command History:")
         for entry in executor.get_command_history():
-            print(
+            logger.info(
                 f"- {entry['command']}: {entry['risk']} "
                 f"(approved: {entry.get('approved', 'N/A')}, "
                 f"executed: {entry['executed']})"

@@ -670,6 +670,7 @@ def check_rate_limit_risk() -> Dict[str, Any]:
 
 # Example usage and testing
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     # Example usage
     monitor = ClaudeAPIMonitor()
 
@@ -687,10 +688,10 @@ if __name__ == "__main__":
 
     # Get statistics
     stats = monitor.get_comprehensive_stats()
-    print(f"Total calls: {stats['basic_stats']['total_calls']}")
-    print(f"Risk level: {stats['risk_prediction']['risk_level']}")
+    logger.info(f"Total calls: {stats['basic_stats']['total_calls']}")
+    logger.info(f"Risk level: {stats['risk_prediction']['risk_level']}")
 
     # Get recommendations
     recommendations = monitor.get_optimization_recommendations()
     for rec in recommendations:
-        print(f"Recommendation: {rec['message']} - {rec['action']}")
+        logger.info(f"Recommendation: {rec['message']} - {rec['action']}")

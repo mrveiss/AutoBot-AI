@@ -10,6 +10,8 @@ Issue #396: Converted blocking subprocess.run to asyncio.create_subprocess_exec.
 import asyncio
 import json
 import logging
+
+logger = logging.getLogger(__name__)
 import os
 import time
 import traceback
@@ -252,7 +254,7 @@ class PerformanceMonitor:
             process = await asyncio.create_subprocess_exec(
                 "python3",
                 "-c",
-                'import openvino as ov; print("NPU Available")',
+                'import openvino as ov; print("NPU Available")',  # noqa: print
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -711,66 +713,70 @@ def _print_performance_report(metrics: dict) -> None:
 
     Helper for main (#832).
     """
-    print("\n" + "=" * 80)
-    print("AutoBot Performance Report")
-    print("=" * 80)
+    logger.info("%s", "\n" + "=" * 80)
+    logger.info("AutoBot Performance Report")
+    logger.info("%s", "=" * 80)
 
     # System metrics
     sys_metrics = metrics.get("system")
     if sys_metrics:
-        print("\n🖥️  System Metrics:")
-        print(f"   CPU Usage: {sys_metrics.cpu_percent:.1f}%")
+        logger.info("\n🖥️  System Metrics:")
+        logger.info(f"   CPU Usage: {sys_metrics.cpu_percent:.1f}%")
         mem_pct = sys_metrics.memory_percent
         mem_avail = sys_metrics.memory_available_gb
-        print(f"   Memory Usage: {mem_pct:.1f}% ({mem_avail:.1f}GB available)")
+        logger.info(f"   Memory Usage: {mem_pct:.1f}% ({mem_avail:.1f}GB available)")
         disk_pct = sys_metrics.disk_percent
         disk_free = sys_metrics.disk_free_gb
-        print(f"   Disk Usage: {disk_pct:.1f}% ({disk_free:.1f}GB free)")
-        print(f"   Load Average: {sys_metrics.load_average}")
-        print(f"   Process Count: {sys_metrics.process_count}")
+        logger.info(f"   Disk Usage: {disk_pct:.1f}% ({disk_free:.1f}GB free)")
+        logger.info(f"   Load Average: {sys_metrics.load_average}")
+        logger.info(f"   Process Count: {sys_metrics.process_count}")
         if sys_metrics.gpu_utilization is not None:
-            print(f"   GPU Utilization: {sys_metrics.gpu_utilization:.1f}%")
+            logger.info(f"   GPU Utilization: {sys_metrics.gpu_utilization:.1f}%")
         if sys_metrics.npu_utilization is not None:
-            print(f"   NPU Utilization: {sys_metrics.npu_utilization:.1f}%")
+            logger.info(f"   NPU Utilization: {sys_metrics.npu_utilization:.1f}%")
 
     # Service status
     services = metrics.get("services", [])
     if services:
-        print("\n🔧 Service Status:")
+        logger.info("\n🔧 Service Status:")
         for service in services:
             status = "✅ UP" if service.is_healthy else "❌ DOWN"
-            print(f"   {service.service_name}: {status} ({service.response_time:.3f}s)")
+            logger.info(
+                f"   {service.service_name}: {status} ({service.response_time:.3f}s)"
+            )
 
     # Database performance
     databases = metrics.get("databases", [])
     if databases:
-        print("\n🗄️  Database Performance:")
+        logger.info("\n🗄️  Database Performance:")
         for db in databases:
             conn = db.connection_time
             ops = db.operations_per_second
-            print(f"   {db.database_type}: {conn:.3f}s connection, {ops:.1f} ops/s")
+            logger.info(
+                f"   {db.database_type}: {conn:.3f}s connection, {ops:.1f} ops/s"
+            )
 
     # Inter-VM performance
     inter_vm = metrics.get("inter_vm", [])
     if inter_vm:
-        print("\n🔗 Inter-VM Communication:")
+        logger.info("\n🔗 Inter-VM Communication:")
         for vm in inter_vm:
             lat = vm.latency_ms
             loss = vm.packet_loss_percent
-            print(
+            logger.info(
                 f"   {vm.source_vm} → {vm.target_vm}: {lat:.1f}ms latency, {loss:.1f}% loss"
             )
 
     # Alerts
     alerts = metrics.get("alerts", [])
     if alerts:
-        print("\n🚨 Alerts:")
+        logger.info("\n🚨 Alerts:")
         for alert in alerts:
-            print(f"   {alert}")
+            logger.info(f"   {alert}")
     else:
-        print("\n✅ No performance alerts")
+        logger.info("\n✅ No performance alerts")
 
-    print("\n" + "=" * 80)
+    logger.info("%s", "\n" + "=" * 80)
 
 
 async def main():

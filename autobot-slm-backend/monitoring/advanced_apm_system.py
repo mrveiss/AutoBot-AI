@@ -12,6 +12,8 @@ import hashlib
 import inspect
 import json
 import logging
+
+logger = logging.getLogger(__name__)
 import os
 import statistics
 import threading
@@ -698,9 +700,11 @@ class AdvancedAPMSystem:
         return {
             "total_requests": len(api_metrics),
             "average_response_time": statistics.mean(response_times),
-            "p95_response_time": sorted(response_times)[int(len(response_times) * 0.95)]
-            if response_times
-            else 0,
+            "p95_response_time": (
+                sorted(response_times)[int(len(response_times) * 0.95)]
+                if response_times
+                else 0
+            ),
             "error_rate": (error_count / len(api_metrics)) * 100,
             "requests_per_minute": len(
                 [
@@ -782,9 +786,9 @@ class AdvancedAPMSystem:
                 "cache_performance": cache_summary,
                 "database_performance": db_summary,
                 "alerting": alerts_summary,
-                "system_health": "healthy"
-                if len(self.active_alerts) == 0
-                else "degraded",
+                "system_health": (
+                    "healthy" if len(self.active_alerts) == 0 else "degraded"
+                ),
             }
 
         except Exception as e:
@@ -885,6 +889,7 @@ def track_database(database: str, operation: str = "query"):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     import argparse
 
     async def main():
@@ -903,7 +908,7 @@ if __name__ == "__main__":
         await apm.initialize_redis_connection()
 
         if args.test:
-            print("🧪 Testing APM functionality...")
+            logger.info("🧪 Testing APM functionality...")
 
             # Test API tracking
             trace_id = "test_trace_123"
@@ -919,32 +924,32 @@ if __name__ == "__main__":
                 "redis", "query", 50.0, True, rows_affected=10
             )
 
-            print("✅ APM test completed")
+            logger.info("✅ APM test completed")
 
         elif args.report:
-            print("📊 Generating APM report...")
+            logger.info("📊 Generating APM report...")
             report = await apm.generate_apm_report()
-            print(json.dumps(report, indent=2, default=str))
+            logger.info("%s", json.dumps(report, indent=2, default=str))
 
         elif args.monitor:
-            print("🚀 Starting APM monitoring...")
-            print("📊 Performance Summary:")
+            logger.info("🚀 Starting APM monitoring...")
+            logger.info("📊 Performance Summary:")
             while True:
                 summary = await apm.get_performance_summary()
-                print(f"System Health: {summary.get('system_health', 'unknown')}")
-                print(
+                logger.info(f"System Health: {summary.get('system_health', 'unknown')}")
+                logger.info(
                     f"Active Alerts: {summary.get('alerting', {}).get('active_alerts', 0)}"
                 )
 
                 api_perf = summary.get("api_performance", {})
                 if api_perf:
-                    print(f"API Requests: {api_perf.get('total_requests', 0)}")
-                    print(
+                    logger.info(f"API Requests: {api_perf.get('total_requests', 0)}")
+                    logger.info(
                         f"Avg Response Time: {api_perf.get('average_response_time', 0):.2f}ms"
                     )
-                    print(f"Error Rate: {api_perf.get('error_rate', 0):.2f}%")
+                    logger.info(f"Error Rate: {api_perf.get('error_rate', 0):.2f}%")
 
-                print("=" * 50)
+                logger.info("%s", "=" * 50)
                 await asyncio.sleep(30)  # Update every 30 seconds
 
     asyncio.run(main())
