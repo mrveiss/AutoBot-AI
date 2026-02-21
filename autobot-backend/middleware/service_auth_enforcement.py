@@ -15,9 +15,10 @@ from collections import defaultdict
 from typing import Dict, List
 
 import structlog
-from backend.security.service_auth import validate_service_auth
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
+
+from backend.security.service_auth import validate_service_auth
 
 logger = structlog.get_logger()
 
@@ -83,7 +84,7 @@ EXEMPT_PATHS: List[str] = [
     # Infrastructure monitoring (visible to users)
     "/api/infrastructure",
     # Additional user-facing endpoints
-    "/api/orchestration",
+    "/api/orchestrator",
     "/api/workflow",
     "/api/embeddings",
     "/api/voice",

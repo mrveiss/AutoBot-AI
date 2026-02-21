@@ -170,8 +170,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["feedback", "learning-loop"],
         "feedback",
     ),
-    # Orchestration and caching
-    ("backend.api.orchestration", "/orchestration", ["orchestration"], "orchestration"),
+    # Caching
     (
         "backend.api.cache_management",
         "/cache-management",
