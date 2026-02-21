@@ -7,11 +7,16 @@ Chunk Model - ProcessedChunk representation for ECL pipeline.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+def _utcnow() -> datetime:
+    """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
+    return datetime.now(timezone.utc)
 
 
 class ProcessedChunk(BaseModel):
@@ -21,6 +26,10 @@ class ProcessedChunk(BaseModel):
     Each chunk maintains references to its source document and position
     within that document, along with metadata for downstream processing.
     """
+
+    model_config = ConfigDict(
+        json_encoders={datetime: lambda v: v.isoformat(), UUID: str},
+    )
 
     id: UUID = Field(default_factory=uuid4, description="Unique chunk identifier")
     content: str = Field(..., description="Chunk text content")
@@ -41,13 +50,5 @@ class ProcessedChunk(BaseModel):
         default=0, description="Character offset where chunk ends in document"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Chunk creation timestamp"
+        default_factory=_utcnow, description="Chunk creation timestamp"
     )
-
-    class Config:
-        """Pydantic model configuration."""
-
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            UUID: lambda v: str(v),
-        }

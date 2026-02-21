@@ -7,16 +7,17 @@ Entity Extractor Cognifier - Extract named entities from text chunks.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-import json
 import logging
 from typing import Any, Dict, List
 from uuid import UUID
 
+from llm_interface_pkg import LLMInterface
+
 from backend.knowledge.pipeline.base import BaseCognifier, PipelineContext
+from backend.knowledge.pipeline.cognifiers.llm_utils import parse_llm_json_response
 from backend.knowledge.pipeline.models.chunk import ProcessedChunk
 from backend.knowledge.pipeline.models.entity import Entity, EntityType
 from backend.knowledge.pipeline.registry import TaskRegistry
-from llm_interface_pkg import LLMInterface
 
 logger = logging.getLogger(__name__)
 
@@ -92,26 +93,10 @@ class EntityExtractor(BaseCognifier):
             response = await self.llm.chat_completion(
                 messages=[{"role": "user", "content": prompt}]
             )
-            raw_entities = self._parse_llm_response(response.content)
+            raw_entities = parse_llm_json_response(response.content)
             return self._convert_to_entities(raw_entities, chunk, context.document_id)
         except Exception as e:
             logger.error("Entity extraction failed: %s", e)
-            return []
-
-    def _parse_llm_response(self, content: str) -> List[Dict[str, Any]]:
-        """Parse LLM JSON response."""
-        try:
-            # Try parsing as JSON array
-            return json.loads(content)
-        except json.JSONDecodeError:
-            # Try extracting JSON from markdown code block
-            if "```json" in content:
-                json_str = content.split("```json")[1].split("```")[0].strip()
-                return json.loads(json_str)
-            elif "```" in content:
-                json_str = content.split("```")[1].split("```")[0].strip()
-                return json.loads(json_str)
-            logger.warning("Could not parse LLM response as JSON")
             return []
 
     def _convert_to_entities(

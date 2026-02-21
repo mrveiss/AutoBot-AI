@@ -7,17 +7,21 @@ Hierarchical Summarizer Cognifier - Generate multi-level summaries.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-import json
 import logging
-from typing import Any, Dict, List
+from typing import Dict, List
 from uuid import UUID
 
+from llm_interface_pkg import LLMInterface
+
 from backend.knowledge.pipeline.base import BaseCognifier, PipelineContext
+from backend.knowledge.pipeline.cognifiers.llm_utils import (
+    build_entity_map,
+    parse_llm_json_response,
+)
 from backend.knowledge.pipeline.models.chunk import ProcessedChunk
 from backend.knowledge.pipeline.models.entity import Entity
 from backend.knowledge.pipeline.models.summary import Summary, SummaryLevel
 from backend.knowledge.pipeline.registry import TaskRegistry
-from llm_interface_pkg import LLMInterface
 
 logger = logging.getLogger(__name__)
 
@@ -74,20 +78,17 @@ class HierarchicalSummarizer(BaseCognifier):
         """
         chunks: List[ProcessedChunk] = context.chunks
         entities: List[Entity] = context.entities
-        entity_map = self._build_entity_map(entities)
+        entity_map = build_entity_map(entities, include_canonical=False)
 
-        # Level 1: Chunk summaries
         chunk_summaries = await self._generate_chunk_summaries(
             chunks, entity_map, context
         )
 
-        # Level 2: Section summaries
         sections = self._group_into_sections(chunks)
         section_summaries = await self._generate_section_summaries(
             sections, chunk_summaries, entity_map, context
         )
 
-        # Level 3: Document summary
         document_summary = await self._generate_document_summary(
             section_summaries, entity_map, context
         )
@@ -99,13 +100,6 @@ class HierarchicalSummarizer(BaseCognifier):
         context.summaries = all_summaries
         logger.info("Generated %s summaries", len(all_summaries))
         return context
-
-    def _build_entity_map(self, entities: List[Entity]) -> Dict[str, Entity]:
-        """Build name-to-entity mapping."""
-        entity_map: Dict[str, Entity] = {}
-        for entity in entities:
-            entity_map[entity.name.lower()] = entity
-        return entity_map
 
     def _group_into_sections(
         self, chunks: List[ProcessedChunk]
@@ -163,7 +157,6 @@ class HierarchicalSummarizer(BaseCognifier):
             )
 
             if summary:
-                # Link to child chunk summaries
                 for chunk_id in chunk_ids:
                     if chunk_id in chunk_summary_map:
                         child = chunk_summary_map[chunk_id]
@@ -198,7 +191,6 @@ class HierarchicalSummarizer(BaseCognifier):
         )
 
         if summary:
-            # Link to child section summaries
             for section in section_summaries:
                 section.parent_summary_id = summary.id
                 summary.child_summary_ids.append(section.id)
@@ -220,7 +212,7 @@ class HierarchicalSummarizer(BaseCognifier):
             response = await self.llm.chat_completion(
                 messages=[{"role": "user", "content": prompt}]
             )
-            parsed = self._parse_llm_response(response.content)
+            parsed = parse_llm_json_response(response.content, fallback_dict=True)
 
             key_entity_ids = self._resolve_entity_ids(
                 parsed.get("key_entities", []), entity_map
@@ -243,21 +235,10 @@ class HierarchicalSummarizer(BaseCognifier):
             logger.error("Summarization failed: %s", e)
             return None
 
-    def _parse_llm_response(self, content: str) -> Dict[str, Any]:
-        """Parse LLM JSON response."""
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            if "```json" in content:
-                json_str = content.split("```json")[1].split("```")[0].strip()
-                return json.loads(json_str)
-            elif "```" in content:
-                json_str = content.split("```")[1].split("```")[0].strip()
-                return json.loads(json_str)
-            return {"summary": content, "key_topics": [], "key_entities": []}
-
     def _resolve_entity_ids(
-        self, entity_names: List[str], entity_map: Dict[str, Entity]
+        self,
+        entity_names: List[str],
+        entity_map: Dict[str, Entity],
     ) -> List[UUID]:
         """Resolve entity names to IDs."""
         ids = []

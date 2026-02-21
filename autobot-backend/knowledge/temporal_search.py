@@ -23,7 +23,7 @@ class TemporalSearchService:
         Initialize temporal search service.
 
         Args:
-            redis_client: Redis client instance
+            redis_client: Async Redis client instance
         """
         self.redis = redis_client
 
@@ -41,7 +41,7 @@ class TemporalSearchService:
         Args:
             start_date: Range start datetime
             end_date: Range end datetime
-            event_types: Filter by event types (action, decision, etc.)
+            event_types: Filter by event types
             participants: Filter by participant entity IDs
             limit: Maximum results
 
@@ -52,8 +52,12 @@ class TemporalSearchService:
             start_score = start_date.timestamp()
             end_score = end_date.timestamp()
 
-            event_ids = self.redis.zrangebyscore(
-                "timeline:global", start_score, end_score, start=0, num=limit
+            event_ids = await self.redis.zrangebyscore(
+                "timeline:global",
+                start_score,
+                end_score,
+                start=0,
+                num=limit,
             )
 
             events = []
@@ -98,17 +102,14 @@ class TemporalSearchService:
             List of events ordered by timestamp
         """
         try:
-            # Lookup entity ID by name
-            entity_id = self._get_entity_id_by_name(entity_name)
+            entity_id = await self._get_entity_id_by_name(entity_name)
             if not entity_id:
                 logger.warning("Entity not found: %s", entity_name)
                 return []
 
-            # Get event IDs for this entity
             event_key = f"entity:{entity_id}:events"
-            event_ids = self.redis.smembers(event_key)
+            event_ids = await self.redis.smembers(event_key)
 
-            # Fetch and sort events by timestamp
             events = []
             for event_id in event_ids:
                 event = await self._get_event(event_id)
@@ -129,7 +130,10 @@ class TemporalSearchService:
             return []
 
     async def find_causal_chain(
-        self, event_id: UUID, direction: str = "forward", max_depth: int = 5
+        self,
+        event_id: UUID,
+        direction: str = "forward",
+        max_depth: int = 5,
     ) -> List[dict]:
         """
         Find causal chain of events (causes or effects).
@@ -147,7 +151,12 @@ class TemporalSearchService:
             visited: Set[str] = set()
 
             await self._traverse_causal_chain(
-                str(event_id), direction, max_depth, 0, chain, visited
+                str(event_id),
+                direction,
+                max_depth,
+                0,
+                chain,
+                visited,
             )
 
             logger.info(
@@ -182,31 +191,35 @@ class TemporalSearchService:
 
         chain.append(event)
 
-        # Get causal links
         if direction == "forward":
             link_key = f"event:{event_id}:effects"
         else:
             link_key = f"event:{event_id}:causes"
 
-        linked_ids = self.redis.smembers(link_key)
+        linked_ids = await self.redis.smembers(link_key)
 
         for linked_id in linked_ids:
             await self._traverse_causal_chain(
-                linked_id, direction, max_depth, current_depth + 1, chain, visited
+                linked_id,
+                direction,
+                max_depth,
+                current_depth + 1,
+                chain,
+                visited,
             )
 
-    def _get_entity_id_by_name(self, entity_name: str) -> Optional[str]:
+    async def _get_entity_id_by_name(self, entity_name: str) -> Optional[str]:
         """Lookup entity ID by canonical name."""
         canonical_name = entity_name.lower().strip()
         name_key = f"entity:name:{canonical_name}"
-        entity_id = self.redis.get(name_key)
+        entity_id = await self.redis.get(name_key)
         return entity_id.decode() if entity_id else None
 
     async def _get_event(self, event_id: str) -> Optional[dict]:
         """Retrieve event data from Redis JSON."""
         try:
             key = f"event:{event_id}"
-            event_data = self.redis.json().get(key)
+            event_data = await self.redis.json().get(key)
             return event_data
         except Exception as e:
             logger.warning("Failed to get event %s: %s", event_id, e)

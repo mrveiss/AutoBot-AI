@@ -7,11 +7,11 @@ Relationship Model - Entity relationship representation for ECL pipeline.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 RelationType = Literal[
     "CAUSES",
@@ -40,6 +40,11 @@ RelationType = Literal[
 ]
 
 
+def _utcnow() -> datetime:
+    """Return timezone-aware UTC now (replaces deprecated datetime.utcnow)."""
+    return datetime.now(timezone.utc)
+
+
 class Relationship(BaseModel):
     """
     Represents a directed relationship between two entities.
@@ -47,6 +52,10 @@ class Relationship(BaseModel):
     Relationships capture semantic connections extracted from text,
     with optional bidirectionality for symmetric relations.
     """
+
+    model_config = ConfigDict(
+        json_encoders={datetime: lambda v: v.isoformat(), UUID: str},
+    )
 
     id: UUID = Field(default_factory=uuid4, description="Unique relationship ID")
     source_entity_id: UUID = Field(
@@ -72,16 +81,8 @@ class Relationship(BaseModel):
         default_factory=list, description="Chunks where relationship was found"
     )
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Relationship creation timestamp"
+        default_factory=_utcnow, description="Relationship creation timestamp"
     )
     updated_at: datetime = Field(
-        default_factory=datetime.utcnow, description="Last update timestamp"
+        default_factory=_utcnow, description="Last update timestamp"
     )
-
-    class Config:
-        """Pydantic model configuration."""
-
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            UUID: lambda v: str(v),
-        }

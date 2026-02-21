@@ -10,13 +10,12 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 import logging
 from typing import List
 
+from autobot_shared.redis_client import get_redis_client
 from backend.knowledge.pipeline.base import BaseLoader, PipelineContext
 from backend.knowledge.pipeline.models.entity import Entity
 from backend.knowledge.pipeline.models.event import TemporalEvent
 from backend.knowledge.pipeline.models.relationship import Relationship
 from backend.knowledge.pipeline.registry import TaskRegistry
-
-from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +41,7 @@ class RedisGraphLoader(BaseLoader):
         Args:
             context: Pipeline context with entities, relationships, events
         """
-        self.redis_client = get_redis_client(async_client=False, database=self.database)
+        self.redis_client = get_redis_client(async_client=True, database=self.database)
 
         entities: List[Entity] = context.entities
         relationships: List[Relationship] = context.relationships
@@ -58,9 +57,10 @@ class RedisGraphLoader(BaseLoader):
             await self._load_events(events)
 
         logger.info(
-            f"Loaded {len(entities)} entities, "
-            f"{len(relationships)} relationships, "
-            f"{len(events)} events to Redis"
+            "Loaded %s entities, %s relationships, %s events to Redis",
+            len(entities),
+            len(relationships),
+            len(events),
         )
 
     async def _load_entities(self, entities: List[Entity]) -> None:
@@ -69,11 +69,10 @@ class RedisGraphLoader(BaseLoader):
             for entity in entities:
                 key = f"entity:{entity.id}"
                 entity_data = entity.model_dump(mode="json")
-                self.redis_client.json().set(key, "$", entity_data)
+                await self.redis_client.json().set(key, "$", entity_data)
 
-                # Index by name for lookup
                 name_key = f"entity:name:{entity.canonical_name}"
-                self.redis_client.set(name_key, str(entity.id))
+                await self.redis_client.set(name_key, str(entity.id))
 
             logger.info("Loaded %s entities to Redis", len(entities))
         except Exception as e:
@@ -85,24 +84,22 @@ class RedisGraphLoader(BaseLoader):
             for rel in relationships:
                 key = f"relationship:{rel.id}"
                 rel_data = rel.model_dump(mode="json")
-                self.redis_client.json().set(key, "$", rel_data)
+                await self.redis_client.json().set(key, "$", rel_data)
 
-                # Index relationships by source and target
                 source_key = f"entity:{rel.source_entity_id}:relationships"
-                self.redis_client.sadd(source_key, str(rel.id))
+                await self.redis_client.sadd(source_key, str(rel.id))
 
                 target_key = f"entity:{rel.target_entity_id}:relationships"
-                self.redis_client.sadd(target_key, str(rel.id))
+                await self.redis_client.sadd(target_key, str(rel.id))
 
-                # For bidirectional relationships, add reverse index
                 if rel.bidirectional:
-                    self._add_bidirectional_index(rel)
+                    await self._add_bidirectional_index(rel)
 
             logger.info("Loaded %s relationships to Redis", len(relationships))
         except Exception as e:
             logger.error("Failed to load relationships to Redis: %s", e)
 
-    def _add_bidirectional_index(self, rel: Relationship) -> None:
+    async def _add_bidirectional_index(self, rel: Relationship) -> None:
         """Add reverse index for bidirectional relationship."""
         reverse_key = f"relationship:reverse:{rel.id}"
         reverse_data = {
@@ -111,7 +108,7 @@ class RedisGraphLoader(BaseLoader):
             "relationship_type": rel.relationship_type,
             "original_id": str(rel.id),
         }
-        self.redis_client.json().set(reverse_key, "$", reverse_data)
+        await self.redis_client.json().set(reverse_key, "$", reverse_data)
 
     async def _load_events(self, events: List[TemporalEvent]) -> None:
         """Load temporal events to Redis with timeline indexing."""
@@ -119,17 +116,17 @@ class RedisGraphLoader(BaseLoader):
             for event in events:
                 key = f"event:{event.id}"
                 event_data = event.model_dump(mode="json")
-                self.redis_client.json().set(key, "$", event_data)
+                await self.redis_client.json().set(key, "$", event_data)
 
-                # Add to timeline sorted set (score = timestamp)
                 if event.timestamp:
                     score = event.timestamp.timestamp()
-                    self.redis_client.zadd("timeline:global", {str(event.id): score})
+                    await self.redis_client.zadd(
+                        "timeline:global", {str(event.id): score}
+                    )
 
-                # Index events by participants
                 for participant_id in event.participants:
                     participant_key = f"entity:{participant_id}:events"
-                    self.redis_client.sadd(participant_key, str(event.id))
+                    await self.redis_client.sadd(participant_key, str(event.id))
 
             logger.info("Loaded %s events to Redis", len(events))
         except Exception as e:

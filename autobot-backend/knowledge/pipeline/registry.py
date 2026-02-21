@@ -7,7 +7,10 @@ Task Registry for ECL Knowledge Pipeline.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
+import logging
 from typing import Any, Callable, Dict, Type
+
+logger = logging.getLogger(__name__)
 
 
 class TaskRegistry:
@@ -30,6 +33,13 @@ class TaskRegistry:
         """
 
         def decorator(extractor_class: Type[Any]) -> Type[Any]:
+            if name in cls._extractors:
+                logger.warning(
+                    "Overwriting extractor '%s' (%s -> %s)",
+                    name,
+                    cls._extractors[name].__name__,
+                    extractor_class.__name__,
+                )
             cls._extractors[name] = extractor_class
             return extractor_class
 
@@ -48,6 +58,13 @@ class TaskRegistry:
         """
 
         def decorator(cognifier_class: Type[Any]) -> Type[Any]:
+            if name in cls._cognifiers:
+                logger.warning(
+                    "Overwriting cognifier '%s' (%s -> %s)",
+                    name,
+                    cls._cognifiers[name].__name__,
+                    cognifier_class.__name__,
+                )
             cls._cognifiers[name] = cognifier_class
             return cognifier_class
 
@@ -66,6 +83,13 @@ class TaskRegistry:
         """
 
         def decorator(loader_class: Type[Any]) -> Type[Any]:
+            if name in cls._loaders:
+                logger.warning(
+                    "Overwriting loader '%s' (%s -> %s)",
+                    name,
+                    cls._loaders[name].__name__,
+                    loader_class.__name__,
+                )
             cls._loaders[name] = loader_class
             return loader_class
 
