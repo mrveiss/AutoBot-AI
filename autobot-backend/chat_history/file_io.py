@@ -91,7 +91,7 @@ class FileIOMixin:
         # Create temporary file in same directory (required for atomic rename)
         # Issue #718: Use dedicated executor to avoid blocking on saturated pool
         fd, temp_path = await self._run_in_io_executor(
-            tempfile.mkstemp, dir_path, ".tmp_chat_", ".json"
+            tempfile.mkstemp, ".json", ".tmp_chat_", dir_path
         )
 
         try:
