@@ -234,9 +234,13 @@ async def generate_response(state: ChatState, config: dict) -> dict:
                 llm_response, should_continue = item
             else:
                 msg_dict = item.to_dict() if hasattr(item, "to_dict") else item
-                messages.append(msg_dict)
+                # Stream ALL messages for real-time display
                 if stream_cb:
                     stream_cb(msg_dict)
+                # Only persist non-streaming chunks (#1064)
+                is_streaming = msg_dict.get("metadata", {}).get("streaming", False)
+                if not is_streaming:
+                    messages.append(msg_dict)
 
     except aiohttp.ClientError as exc:
         logger.error("LLM call failed: %s", exc)
@@ -357,9 +361,13 @@ async def execute_tools(state: ChatState, config: dict) -> dict:
             break_loop, _ = item
         else:
             msg_dict = item.to_dict() if hasattr(item, "to_dict") else item
-            messages.append(msg_dict)
+            # Stream ALL messages for real-time display
             if stream_cb:
                 stream_cb(msg_dict)
+            # Only persist non-streaming chunks (#1064)
+            is_streaming = msg_dict.get("metadata", {}).get("streaming", False)
+            if not is_streaming:
+                messages.append(msg_dict)
             # Track execution results
             if isinstance(item, dict) and item.get("type") == "execution_summary":
                 exec_history.append(item)
