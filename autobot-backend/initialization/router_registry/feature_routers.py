@@ -115,7 +115,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("backend.api.personality", "/personality", ["personality"], "personality"),
     # Self-improving tasks — adaptive task refinement and outcome learning (Issue #930)
     (
-        "api.agents_self_improvement",
+        "backend.api.agents_self_improvement",
         "/agents",
         ["self-improvement", "agents"],
         "agents_self_improvement",
@@ -153,19 +153,19 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "ide_integration",
     ),
     (
-        "routers.code_completion",
+        "backend.routers.code_completion",
         "/code-completion",
         ["code-completion", "patterns", "ml"],
         "code_completion",
     ),
     (
-        "routers.model_management",
+        "backend.routers.model_management",
         "/code-completion/model",
         ["ml-models", "training", "serving"],
         "model_management",
     ),
     (
-        "routers.feedback",
+        "backend.routers.feedback",
         "/code-completion/feedback",
         ["feedback", "learning-loop"],
         "feedback",
