@@ -33,10 +33,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
+from autobot_shared.redis_client import get_redis_client
 from backend.constants.threshold_constants import StringParsingConstants
 from backend.type_defs.common import Metadata
-
-from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +62,7 @@ class FeatureFlags:
         self._cache = {}
         self._cache_ttl = 5  # seconds
         self._last_refresh = {}
+        self._enforcement_default_logged = False
 
     async def _get_redis(self):
         """Get Redis connection for feature flags (uses cache DB)"""
@@ -88,8 +88,12 @@ class FeatureFlags:
                     mode_str = mode_str.decode()
                 return EnforcementMode(mode_str)
 
-            # Default to DISABLED if not set
-            logger.warning("Enforcement mode not set, defaulting to DISABLED")
+            # Default to DISABLED if not set (log once at INFO, then DEBUG)
+            if not self._enforcement_default_logged:
+                logger.info("Enforcement mode not set, defaulting to DISABLED")
+                self._enforcement_default_logged = True
+            else:
+                logger.debug("Enforcement mode not set, using default DISABLED")
             return EnforcementMode.DISABLED
 
         except Exception as e:
