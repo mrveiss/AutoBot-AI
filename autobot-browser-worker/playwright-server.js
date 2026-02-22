@@ -645,7 +645,7 @@ app.post('/test-frontend', async (req, res) => {
 
 let navPage = null;
 
-async function getNavPage() {
+async function ensureNavPage() {
   const b = await initBrowser();
   if (!navPage || navPage.isClosed()) {
     navPage = await b.newPage();
@@ -655,6 +655,11 @@ async function getNavPage() {
     logger.info('Persistent navigation page created');
   }
   return navPage;
+}
+
+async function captureNavScreenshot() {
+  const buf = await navPage.screenshot({ type: 'png' });
+  return buf.toString('base64');
 }
 
 app.get('/status', (req, res) => {
@@ -673,7 +678,7 @@ app.post('/navigate', async (req, res) => {
   }
   logger.info('Navigate request:', url);
   try {
-    const p = await getNavPage();
+    const p = await ensureNavPage();
     if (url === 'javascript:history.back()') {
       await p.goBack({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
     } else if (url === 'javascript:history.forward()') {
@@ -693,13 +698,141 @@ app.post('/navigate', async (req, res) => {
 app.post('/screenshot', async (req, res) => {
   logger.info('Screenshot request');
   try {
-    const p = await getNavPage();
+    const p = await ensureNavPage();
     const buf = await p.screenshot({ type: 'png', fullPage: false });
     const b64 = buf.toString('base64');
     res.json({ success: true, screenshot: b64, timestamp: new Date().toISOString() });
   } catch (error) {
     logger.error('Screenshot error:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/back', async (req, res) => {
+  try {
+    const p = await ensureNavPage();
+    await p.goBack({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+    res.json({ success: true, url: p.url(), title: await p.title() });
+  } catch (error) {
+    logger.error('Back error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/forward', async (req, res) => {
+  try {
+    const p = await ensureNavPage();
+    await p.goForward({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+    res.json({ success: true, url: p.url(), title: await p.title() });
+  } catch (error) {
+    logger.error('Forward error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/reload', async (req, res) => {
+  try {
+    const p = await ensureNavPage();
+    await p.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
+    res.json({ success: true, url: p.url(), title: await p.title() });
+  } catch (error) {
+    logger.error('Reload error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// =============================================================================
+// MCP automation dispatcher – browser_mcp.py sends POST /automation with
+// { action, params } payload to control a dedicated MCP browser page.
+// =============================================================================
+
+let mcpPage = null;
+
+async function ensureMcpPage() {
+  const b = await initBrowser();
+  if (!mcpPage || mcpPage.isClosed()) {
+    mcpPage = await b.newPage();
+    logger.info('MCP automation page created');
+  }
+  return mcpPage;
+}
+
+app.post('/automation', async (req, res) => {
+  const { action, params = {} } = req.body;
+  if (!action) {
+    return res.status(400).json({ success: false, error: 'action is required' });
+  }
+  logger.info('Automation action:', action);
+  try {
+    const page = await ensureMcpPage();
+    let result = {};
+    switch (action) {
+      case 'navigate': {
+        const timeout = params.timeout || 30000;
+        const waitUntil = params.wait_until || 'domcontentloaded';
+        await page.goto(params.url, { waitUntil, timeout });
+        result = { title: await page.title(), url: page.url() };
+        break;
+      }
+      case 'click': {
+        await page.click(params.selector, { timeout: params.timeout || 10000 });
+        result = { success: true };
+        break;
+      }
+      case 'fill': {
+        await page.fill(params.selector, params.value, { timeout: params.timeout || 10000 });
+        result = { success: true };
+        break;
+      }
+      case 'screenshot': {
+        const opts = { type: 'png', fullPage: params.full_page || false };
+        if (params.selector) {
+          const el = await page.$(params.selector);
+          const buf = el ? await el.screenshot(opts) : await page.screenshot(opts);
+          result = { image: buf.toString('base64') };
+        } else {
+          result = { image: (await page.screenshot(opts)).toString('base64') };
+        }
+        break;
+      }
+      case 'evaluate': {
+        const evalResult = await page.evaluate(params.script);
+        result = { result: evalResult };
+        break;
+      }
+      case 'wait_for_selector': {
+        await page.waitForSelector(params.selector, {
+          timeout: params.timeout || 10000,
+          state: params.state || 'visible',
+        });
+        result = { success: true };
+        break;
+      }
+      case 'get_text': {
+        result = { text: await page.textContent(params.selector) };
+        break;
+      }
+      case 'get_attribute': {
+        result = { value: await page.getAttribute(params.selector, params.attribute) };
+        break;
+      }
+      case 'select': {
+        await page.selectOption(params.selector, params.value);
+        result = { success: true };
+        break;
+      }
+      case 'hover': {
+        await page.hover(params.selector);
+        result = { success: true };
+        break;
+      }
+      default:
+        return res.status(400).json({ success: false, error: `Unknown action: ${action}` });
+    }
+    res.json({ success: true, action, result, timestamp: new Date().toISOString() });
+  } catch (error) {
+    logger.error('Automation error:', action, error);
+    res.status(500).json({ success: false, error: error.message, action });
   }
 });
 
