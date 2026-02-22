@@ -9,12 +9,6 @@ Provides native API access to containerized Playwright functionality
 import logging
 
 import aiohttp
-from config import ConfigManager
-from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.http_client import get_http_client
 from backend.constants.network_constants import NetworkConstants
 from backend.services.playwright_service import (
     get_playwright_service,
@@ -23,6 +17,12 @@ from backend.services.playwright_service import (
     send_test_message_embedded,
     test_frontend_embedded,
 )
+from config import ConfigManager
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from pydantic import BaseModel
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_client import get_http_client
 
 # Create singleton config instance
 config = ConfigManager()
@@ -507,6 +507,77 @@ async def go_forward():
         raise HTTPException(
             status_code=500, detail=f"Forward navigation failed: {str(e)}"
         )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="worker_status",
+    error_code_prefix="PLAYWRIGHT",
+)
+@router.get("/worker-status")
+async def get_worker_status():
+    """
+    Get browser worker connectivity status from Browser VM (#1130)
+
+    Proxies to Browser VM /status endpoint which checks the persistent navPage.
+    """
+    try:
+        http_client = get_http_client()
+        async with await http_client.get(
+            f"{BROWSER_VM_URL}/status",
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as response:
+            result = await response.json()
+            logger.info("Worker status: %s", result.get("status"))
+            return result
+    except aiohttp.ClientError as e:
+        logger.warning("Browser VM unreachable: %s", e)
+        return {
+            "status": "disconnected",
+            "browser_connected": False,
+            "page_open": False,
+        }
+    except Exception as e:
+        logger.error("Worker status error: %s", e)
+        return {"status": "error", "browser_connected": False, "page_open": False}
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="worker_screenshot",
+    error_code_prefix="PLAYWRIGHT",
+)
+@router.post("/worker-screenshot")
+async def take_worker_screenshot():
+    """
+    Take screenshot of the persistent navigation page on Browser VM (#1130)
+
+    Unlike /screenshot which takes a fresh-page screenshot for a given URL,
+    this returns a screenshot of the current state of the persistent navPage.
+    """
+    try:
+        http_client = get_http_client()
+        async with await http_client.post(
+            f"{BROWSER_VM_URL}/screenshot",
+            json={},
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as response:
+            result = await response.json()
+            if response.status == 200:
+                logger.info("Worker screenshot captured")
+                return result
+            else:
+                logger.error("Worker screenshot failed: %s", result)
+                raise HTTPException(
+                    status_code=response.status,
+                    detail=result.get("error", "Screenshot failed"),
+                )
+    except aiohttp.ClientError as e:
+        logger.error("Browser VM connection error: %s", e)
+        raise HTTPException(status_code=503, detail=f"Browser VM unavailable: {str(e)}")
+    except Exception as e:
+        logger.error("Worker screenshot error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Screenshot failed: {str(e)}")
 
 
 @with_error_handling(

@@ -22,14 +22,9 @@
       <!-- Placeholder for terminal layout -->
     </div>
 
-    <!-- Browser Tab Content (Issue #73: Browser sessions tied to chat like terminal) -->
+    <!-- Browser Tab Content (Issue #1130: screenshot-based visual browser) -->
     <div v-else-if="activeTab === 'browser'" class="flex-1 flex flex-col min-h-0">
-      <ChatBrowser
-        :key="currentSessionId || 'default'"
-        :chat-session-id="currentSessionId"
-        :auto-connect="true"
-        class="flex-1"
-      />
+      <VisualBrowserPanel class="flex-1" />
     </div>
 
     <!-- noVNC Tab Content (Issue #715: Dynamic hosts from user config) -->
@@ -134,7 +129,7 @@ const logger = createLogger('ChatTabContent')
 import ChatMessages from './ChatMessages.vue'
 import ChatInput from './ChatInput.vue'
 import FileBrowser from '@/components/file-browser/FileBrowser.vue'
-import ChatBrowser from '@/components/chat/ChatBrowser.vue'  // Issue #73: Browser sessions tied to chat
+import VisualBrowserPanel from '@/components/chat/VisualBrowserPanel.vue'  // Issue #1130: screenshot-based browser
 import HostSelector from '@/components/ui/HostSelector.vue'  // Issue #715: Dynamic host selection
 import SSHTerminal from '@/components/terminal/SSHTerminal.vue'    // Issue #715: SSH terminal component
 
