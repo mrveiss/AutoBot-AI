@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Default paths
 VERSION_FILE_PATH = Path("/var/lib/slm-agent/version.json")
-AGENT_CODE_PATH = Path("/opt/slm-agent")
+AGENT_CODE_PATH = Path("/opt/autobot/autobot-slm-agent")  # #1121/#1129
 
 
 class AgentVersion:

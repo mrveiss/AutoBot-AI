@@ -17,3 +17,9 @@
     path: /opt/autobot/slm-agent
     state: absent
   tags: ['clean']
+
+- name: "SLM Agent | Clean: pre-#1129 flat install at /opt/slm-agent"
+  ansible.builtin.file:
+    path: /opt/slm-agent
+    state: absent
+  tags: ['clean']
