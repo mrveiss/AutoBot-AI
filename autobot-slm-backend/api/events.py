@@ -9,10 +9,10 @@ import logging
 import uuid
 from typing import Any, Dict, List
 
-from database import get_db
 from fastapi import APIRouter, Depends
 from models.database import EventSeverity, Node, NodeEvent
 from pydantic import BaseModel
+from services.database import get_db
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
