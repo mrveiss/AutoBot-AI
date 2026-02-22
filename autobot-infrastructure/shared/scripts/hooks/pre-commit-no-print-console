@@ -66,8 +66,8 @@ check_python_print() {
         # Skip comments
         [[ "$line" =~ ^[[:space:]]*# ]] && continue
 
-        # Skip noqa exemption
-        echo "$line" | grep -q 'noqa: print' && continue
+        # Skip noqa exemption (specific "noqa: print" or bare "noqa" suppressing all rules)
+        echo "$line" | grep -qE '# noqa(: print)?($| )' && continue
 
         # Skip string definitions containing "print" (not actual calls)
         # Match actual print( calls — word boundary before print

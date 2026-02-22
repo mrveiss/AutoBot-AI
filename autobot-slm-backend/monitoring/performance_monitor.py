@@ -252,7 +252,7 @@ class PerformanceMonitor:
             process = await asyncio.create_subprocess_exec(
                 "python3",
                 "-c",
-                'import openvino as ov; print("NPU Available")',  # noqa: print
+                'import openvino as ov; print("NPU Available")',  # noqa
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
