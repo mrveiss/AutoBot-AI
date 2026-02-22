@@ -4,7 +4,7 @@
  * Author: mrveiss
  *
  * useVoiceOutput.ts - TTS voice output composable (#928, #1031)
- * Manages voice output toggle state and plays synthesized audio via Kani-TTS-2.
+ * Manages voice output toggle state and plays synthesized audio via Pocket TTS.
  * Supports both single-shot speak() and streaming playAudioChunk() for full-duplex.
  */
 

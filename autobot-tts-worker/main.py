@@ -1,7 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""AutoBot TTS Worker - Kani-TTS-2 text-to-speech service.
+"""AutoBot TTS Worker - Pocket TTS text-to-speech service.
 
 Deploys to: 172.16.168.22 (NPU VM) on port 8082
 
