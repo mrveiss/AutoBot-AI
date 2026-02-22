@@ -691,9 +691,13 @@ class ChatWorkflowManager(
         transition_content: Optional[str],
         current_message_type: str,
     ) -> None:
-        """Stream chunk content to the streaming message. Issue #620."""
-        if just_transitioned and transition_content:
-            streaming_msg.stream(transition_content)
+        """Stream chunk content to the streaming message. Issue #620, #1140."""
+        if just_transitioned:
+            # Only stream transition_content (text after the tag); skip chunk_text
+            # (which is just the closing ] of the tag) to prevent ] leaking into
+            # the new message when transition_content is empty.
+            if transition_content:
+                streaming_msg.stream(transition_content)
         else:
             streaming_msg.stream(chunk_text)
         streaming_msg.set_metadata("display_type", current_message_type)
