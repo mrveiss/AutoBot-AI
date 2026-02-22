@@ -439,7 +439,7 @@ async def _get_most_recent_log_file(log_dir: str) -> Optional[str]:
 async def _read_recent_log_lines(log_path: str, limit: int) -> List[str]:
     """Read recent lines from a log file (Issue #315 - extracted helper)."""
     try:
-        async with aiofiles.open(log_path, "r") as f:
+        async with aiofiles.open(log_path, "r", encoding="utf-8") as f:
             content = await f.read()
             lines = content.splitlines(keepends=True)
             return lines[-limit:] if len(lines) > limit else lines
@@ -1010,7 +1010,7 @@ async def clear_log(
         # Issue #514: Use per-file locking to prevent concurrent write corruption
         file_lock = await _get_log_file_lock(str(file_path))
         async with file_lock:
-            async with aiofiles.open(file_path, "w") as f:
+            async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
                 await f.write("")
 
         return {"message": f"Log file {filename} cleared successfully"}

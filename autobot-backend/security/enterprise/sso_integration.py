@@ -137,7 +137,7 @@ class SSOIntegrationFramework:
         """Load SSO configuration"""
         try:
             if Path(self.config_path).exists():
-                with open(self.config_path, "r") as f:
+                with open(self.config_path, "r", encoding="utf-8") as f:
                     return yaml.safe_load(f)
             else:
                 default_config = self._get_default_config()
@@ -246,7 +246,7 @@ class SSOIntegrationFramework:
             provider_files = list(self.providers_path.glob("*.json"))
 
             for provider_file in provider_files:
-                with open(provider_file, "r") as f:
+                with open(provider_file, "r", encoding="utf-8") as f:
                     provider_data = json.load(f)
 
                 # Convert datetime strings

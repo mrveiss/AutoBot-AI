@@ -819,7 +819,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
             }
 
         try:
-            async with aiofiles.open(summary_file, "r") as f:
+            async with aiofiles.open(summary_file, "r", encoding="utf-8") as f:
                 content = await f.read()
                 summary = json.loads(content)
 
@@ -901,7 +901,7 @@ class MachineAwareSystemKnowledgeManager(SystemKnowledgeManager):
         yaml_files = await asyncio.to_thread(lambda: list(man_pages_dir.glob("*.yaml")))
         for yaml_file in yaml_files:
             try:
-                async with aiofiles.open(yaml_file, "r") as f:
+                async with aiofiles.open(yaml_file, "r", encoding="utf-8") as f:
                     content = await f.read()
                     knowledge_data = yaml.safe_load(content)
 

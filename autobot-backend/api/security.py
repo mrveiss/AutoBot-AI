@@ -184,7 +184,7 @@ def _parse_audit_log_lines(lines: list, limit: int) -> list:
 async def _read_audit_log_file(log_file: str, limit: int) -> list:
     """Read and parse audit log file. (Issue #315 - extracted)"""
     try:
-        async with aiofiles.open(log_file, "r") as f:
+        async with aiofiles.open(log_file, "r", encoding="utf-8") as f:
             lines = await f.readlines()
         return _parse_audit_log_lines(lines, limit)
     except FileNotFoundError:

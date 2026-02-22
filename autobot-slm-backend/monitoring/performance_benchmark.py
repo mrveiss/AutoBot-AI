@@ -790,7 +790,7 @@ class PerformanceBenchmark:
             openvino_script = (
                 "import openvino as ov; "
                 "core = ov.Core(); "
-                "print(core.available_devices)"
+                "print(core.available_devices)"  # noqa: print
             )
             process = await asyncio.create_subprocess_exec(
                 "python3",
@@ -1000,7 +1000,7 @@ class PerformanceBenchmark:
             "system_benchmark": asdict(system_benchmark),
         }
 
-        with open(json_file, "w") as f:
+        with open(json_file, "w", encoding="utf-8") as f:
             json.dump(benchmark_data, f, indent=2)
 
         self.logger.info(f"📊 Benchmark results saved to: {json_file}")

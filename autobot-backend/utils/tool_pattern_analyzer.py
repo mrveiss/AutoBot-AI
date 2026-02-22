@@ -899,7 +899,7 @@ class ToolPatternAnalyzer:
                 "recommendations": self.get_optimization_recommendations(),
             }
 
-            with open(file_path, "w") as f:
+            with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2, default=str)
 
             logger.info("Analysis report exported to %s", file_path)
@@ -1007,6 +1007,6 @@ if __name__ == "__main__":
 
         # Get insights
         insights = await get_optimization_insights()
-        print(json.dumps(insights, indent=2, default=str))
+        print(json.dumps(insights, indent=2, default=str))  # noqa: print
 
     asyncio.run(example())

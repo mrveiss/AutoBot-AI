@@ -364,7 +364,7 @@ def load_service_credentials_from_env() -> tuple[str, str]:
         raise ValueError(f"Service key file not found: {key_file_path}")
 
     # Parse .env file to extract SERVICE_KEY
-    with open(key_file, "r") as f:
+    with open(key_file, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line.startswith("SERVICE_KEY="):
