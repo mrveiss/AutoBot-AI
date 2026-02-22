@@ -110,11 +110,11 @@ export function useVoiceOutput() {
     if (isSpeaking.value) _stopCurrentAudio()
 
     try {
-      const { selectedVoiceId } = useVoiceProfiles()
+      const { effectiveVoiceId } = useVoiceProfiles()
       const formData = new FormData()
       formData.append('text', text)
-      if (selectedVoiceId.value) {
-        formData.append('voice_id', selectedVoiceId.value)
+      if (effectiveVoiceId.value) {
+        formData.append('voice_id', effectiveVoiceId.value)
       }
       const response = await fetchWithAuth('/api/voice/synthesize', {
         method: 'POST',

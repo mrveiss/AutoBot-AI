@@ -418,8 +418,8 @@ function _dispatchTranscript(text: string): void {
     }
 
     if (mode.value === 'full-duplex' && wsConnected.value) {
-      const { selectedVoiceId } = useVoiceProfiles()
-      _sendWs({ type: 'speak', text: speechText, voice_id: selectedVoiceId.value })
+      const { effectiveVoiceId } = useVoiceProfiles()
+      _sendWs({ type: 'speak', text: speechText, voice_id: effectiveVoiceId.value })
     } else {
       state.value = 'speaking'
       speak(speechText, true).then(() => {
