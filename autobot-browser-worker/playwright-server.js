@@ -5,6 +5,7 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 
 let browser = null;
+let navPage = null; // Persistent navigation page for visual browser (#1130)
 
 async function initBrowser() {
   try {
@@ -56,6 +57,100 @@ app.get('/health', (req, res) => {
     browser_connected: browser ? browser.isConnected() : false
   });
 });
+
+// --- Persistent navigation page helpers (#1130) ---
+
+async function ensureNavPage() {
+  const b = await initBrowser();
+  if (!navPage || navPage.isClosed()) {
+    navPage = await b.newPage();
+    await navPage.setExtraHTTPHeaders({
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    });
+    logger.info('Created new navPage');
+  }
+  return navPage;
+}
+
+async function captureNavScreenshot() {
+  const buf = await navPage.screenshot({ type: 'png' });
+  return buf.toString('base64');
+}
+
+app.get('/status', async (req, res) => {
+  try {
+    const connected = browser && browser.isConnected();
+    const pageOpen = navPage && !navPage.isClosed();
+    const currentUrl = pageOpen ? navPage.url() : null;
+    res.json({ status: connected ? 'connected' : 'disconnected', browser_connected: connected, page_open: pageOpen, current_url: currentUrl });
+  } catch (e) {
+    res.status(500).json({ status: 'error', browser_connected: false, page_open: false, error: e.message });
+  }
+});
+
+app.post('/navigate', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ success: false, error: 'url required' });
+  try {
+    const page = await ensureNavPage();
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const screenshot = await captureNavScreenshot();
+    res.json({ success: true, url: page.url(), title: await page.title(), screenshot });
+  } catch (e) {
+    logger.error('navigate error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/screenshot', async (req, res) => {
+  try {
+    const page = await ensureNavPage();
+    const screenshot = await captureNavScreenshot();
+    res.json({ success: true, screenshot, url: page.url(), title: await page.title() });
+  } catch (e) {
+    logger.error('screenshot error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/back', async (req, res) => {
+  try {
+    const page = await ensureNavPage();
+    await page.goBack({ waitUntil: 'domcontentloaded', timeout: 15000 });
+    const screenshot = await captureNavScreenshot();
+    res.json({ success: true, url: page.url(), title: await page.title(), screenshot });
+  } catch (e) {
+    logger.error('back error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/forward', async (req, res) => {
+  try {
+    const page = await ensureNavPage();
+    await page.goForward({ waitUntil: 'domcontentloaded', timeout: 15000 });
+    const screenshot = await captureNavScreenshot();
+    res.json({ success: true, url: page.url(), title: await page.title(), screenshot });
+  } catch (e) {
+    logger.error('forward error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/reload', async (req, res) => {
+  try {
+    const page = await ensureNavPage();
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
+    const screenshot = await captureNavScreenshot();
+    res.json({ success: true, url: page.url(), title: await page.title(), screenshot });
+  } catch (e) {
+    console.error('reload error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// --- End persistent navigation page endpoints ---
+
 
 app.post('/search', async (req, res) => {
   console.log('🔍 Received search request:', req.body);
