@@ -1,0 +1,116 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-commit Hook: No Direct Redis Connections in Production Code
+# ==============================================================
+#
+# Blocks commits containing:
+# - Direct redis.Redis() instantiation in production code
+# - Direct aioredis.Redis() instantiation in production code
+#
+# Intentional exceptions:
+# - autobot-shared/redis_client.py (the canonical client definition)
+# - autobot-infrastructure/ (standalone scripts that can't import autobot_shared)
+# - Test files (*_test.py, *.integration_test.py, etc.)
+# - Lines with "# noqa: redis" comments
+#
+# Issue: #1086 - Pre-commit check to flag redis.Redis() in new code
+#
+# Install: pre-commit install (uses .pre-commit-config.yaml)
+
+set -uo pipefail
+
+# Colors (matching existing hooks pattern)
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+VIOLATIONS=0
+
+# Get staged Python files (production code only)
+get_staged_python_files() {
+    git diff --cached --name-only --diff-filter=ACM 2>/dev/null | \
+        grep -E '\.py$' | \
+        grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
+        grep -v -E '(_test\.py$|\.e2e_test\.py$|\.integration_test\.py$|\.performance_test\.py$)' | \
+        grep -v -E '(conftest\.py$|test_.*\.py$)' | \
+        grep -v -E '^autobot-infrastructure/' | \
+        grep -v -E '^autobot-shared/redis_client\.py$' || true
+}
+
+# Check a Python file for direct redis.Redis() calls
+check_direct_redis() {
+    local file="$1"
+    local line_num=0
+
+    while IFS= read -r line; do
+        ((line_num++))
+
+        # Skip empty lines
+        [[ -z "$line" ]] && continue
+
+        # Skip comments
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+
+        # Skip noqa exemption
+        echo "$line" | grep -q 'noqa: redis' && continue
+
+        # Match redis.Redis( or aioredis.Redis( — direct instantiation
+        if echo "$line" | grep -qE '(^|[[:space:]])((aio)?redis)\.Redis\s*\('; then
+            echo -e "  ${RED}VIOLATION${NC} ${file}:${line_num}"
+            echo "    ${line:0:100}"
+            ((VIOLATIONS++))
+        fi
+    done < "$file"
+}
+
+main() {
+    echo -e "${BOLD}${CYAN}Pre-commit: No Direct Redis Connections in Production Code${NC}"
+    echo "Issue #1086 - Redis Client Standard Enforcement"
+    echo "================================================"
+    echo ""
+
+    local py_files
+    py_files=$(get_staged_python_files)
+
+    if [[ -z "$py_files" ]]; then
+        echo -e "${GREEN}No production Python files staged for commit.${NC}"
+        exit 0
+    fi
+
+    local py_count
+    py_count=$(echo "$py_files" | wc -l)
+    echo -e "Scanning ${BOLD}${py_count}${NC} Python file(s) for direct redis.Redis() usage..."
+    echo ""
+
+    for file in $py_files; do
+        [[ -f "$file" ]] && check_direct_redis "$file"
+    done
+
+    echo ""
+    echo "================================================"
+
+    if [[ $VIOLATIONS -gt 0 ]]; then
+        echo -e "${RED}COMMIT BLOCKED: $VIOLATIONS direct Redis connection(s) found${NC}"
+        echo ""
+        echo "Quick fix:"
+        echo "  from autobot_shared.redis_client import get_redis_client"
+        echo "  redis_client = get_redis_client(async_client=False, database=\"main\")"
+        echo ""
+        echo "Available databases: main, knowledge, prompts, analytics"
+        echo ""
+        echo "Exempt a line (standalone scripts only): add '# noqa: redis'"
+        echo ""
+        exit 1
+    else
+        echo -e "${GREEN}No direct Redis connection violations found!${NC}"
+        exit 0
+    fi
+}
+
+main "$@"

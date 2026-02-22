@@ -546,7 +546,7 @@ class BackupManager:
                     return json.load(metadata_file)
 
         except Exception:
-            pass  # Archive read/parse error, metadata unavailable
+            logger.debug("Suppressed exception in try block", exc_info=True)
 
         return None
 

@@ -16,6 +16,7 @@ Architecture:
 """
 
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -25,7 +26,7 @@ from typing_extensions import TypedDict
 
 logger = logging.getLogger(__name__)
 
-# Redis connection for checkpointer (fleet: 172.16.168.23)
+# Redis connection for checkpointer
 _REDIS_URI = None  # Set lazily from SSOT config
 _checkpointer = None
 
@@ -524,7 +525,8 @@ async def get_redis_checkpointer() -> AsyncRedisSaver:
         redis_port = ssot.redis.port
         _REDIS_URI = f"redis://{redis_host}:{redis_port}"
     except Exception:
-        _REDIS_URI = "redis://172.16.168.23:6379"
+        redis_host = os.environ.get("AUTOBOT_REDIS_HOST", "172.16.168.23")
+        _REDIS_URI = f"redis://{redis_host}:6379"
         logger.warning(
             "SSOT config unavailable, using fallback Redis URI: %s",
             _REDIS_URI,

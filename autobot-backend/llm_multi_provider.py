@@ -7,6 +7,7 @@ error handling, and monitoring.
 """
 
 import asyncio
+import logging
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -285,7 +286,7 @@ class OllamaProvider(LLMProvider):
                             model["name"] for model in models_data.get("models", [])
                         ]
         except Exception:
-            pass  # nosec B110 - Fallback to config models on connection error
+            logger.debug("Suppressed exception in try block", exc_info=True)
         return self.config.available_models
 
 

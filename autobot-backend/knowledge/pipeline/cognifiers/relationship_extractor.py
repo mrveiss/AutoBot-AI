@@ -7,16 +7,20 @@ Relationship Extractor Cognifier - Extract entity relationships.
 Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 """
 
-import json
 import logging
 from typing import Any, Dict, List
 
+from llm_interface_pkg import LLMInterface
+
 from backend.knowledge.pipeline.base import BaseCognifier, PipelineContext
+from backend.knowledge.pipeline.cognifiers.llm_utils import (
+    build_entity_map,
+    parse_llm_json_response,
+)
 from backend.knowledge.pipeline.models.chunk import ProcessedChunk
 from backend.knowledge.pipeline.models.entity import Entity
 from backend.knowledge.pipeline.models.relationship import Relationship, RelationType
 from backend.knowledge.pipeline.registry import TaskRegistry
-from llm_interface_pkg import LLMInterface
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +78,7 @@ class RelationshipExtractor(BaseCognifier):
             logger.warning("No entities for relationship extraction")
             return context
 
-        entity_map = self._build_entity_map(entities)
+        entity_map = build_entity_map(entities)
         all_relationships: List[Relationship] = []
 
         for i in range(0, len(chunks), self.batch_size):
@@ -85,14 +89,6 @@ class RelationshipExtractor(BaseCognifier):
         context.relationships = all_relationships
         logger.info("Extracted %s relationships", len(all_relationships))
         return context
-
-    def _build_entity_map(self, entities: List[Entity]) -> Dict[str, Entity]:
-        """Build name-to-entity mapping."""
-        entity_map: Dict[str, Entity] = {}
-        for entity in entities:
-            entity_map[entity.name.lower()] = entity
-            entity_map[entity.canonical_name] = entity
-        return entity_map
 
     async def _process_batch(
         self,
@@ -122,7 +118,7 @@ class RelationshipExtractor(BaseCognifier):
             response = await self.llm.chat_completion(
                 messages=[{"role": "user", "content": prompt}]
             )
-            raw_rels = self._parse_llm_response(response.content)
+            raw_rels = parse_llm_json_response(response.content)
             return self._convert_to_relationships(raw_rels, chunk, entity_map)
         except Exception as e:
             logger.error("Relationship extraction failed: %s", e)
@@ -134,20 +130,6 @@ class RelationshipExtractor(BaseCognifier):
         if not relevant:
             relevant = entities[:20]
         return "\n".join([f"- {e.name} ({e.entity_type})" for e in relevant])
-
-    def _parse_llm_response(self, content: str) -> List[Dict[str, Any]]:
-        """Parse LLM JSON response."""
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            if "```json" in content:
-                json_str = content.split("```json")[1].split("```")[0].strip()
-                return json.loads(json_str)
-            elif "```" in content:
-                json_str = content.split("```")[1].split("```")[0].strip()
-                return json.loads(json_str)
-            logger.warning("Could not parse relationship response")
-            return []
 
     def _convert_to_relationships(
         self,

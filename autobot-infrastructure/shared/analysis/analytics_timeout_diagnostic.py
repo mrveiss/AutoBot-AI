@@ -32,12 +32,18 @@ class AnalyticsRedisOptimizer:
         self.connection_pool = None
 
     async def initialize(self):
-        """Initialize optimized Redis connection"""
+        """Initialize optimized Redis connection.
+
+        Issue #1086: Direct redis.Redis() used because this standalone diagnostic
+        script cannot import autobot_shared.redis_client (requires full backend).
+        """
         try:
+            redis_host = os.getenv("AUTOBOT_REDIS_HOST", "localhost")
+            redis_port = int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
             # Create connection pool for better performance
             self.connection_pool = redis.ConnectionPool(
-                host=NetworkConstants.REDIS_VM_IP,
-                port=NetworkConstants.REDIS_PORT,
+                host=redis_host,
+                port=redis_port,
                 db=8,
                 max_connections=10,
                 socket_timeout=5,  # Reduced from default 30s

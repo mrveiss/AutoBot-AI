@@ -8,6 +8,7 @@ Author: mrveiss
 """
 
 import json
+import logging
 import statistics
 import time
 from dataclasses import asdict, dataclass, field
@@ -16,6 +17,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import pytest
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -106,7 +109,7 @@ class BenchmarkRunner:
             try:
                 func()
             except Exception:
-                pass
+                logger.debug("Suppressed exception in try block", exc_info=True)
 
         # Actual benchmark runs
         times_ms: List[float] = []
@@ -197,7 +200,7 @@ class BenchmarkRunner:
                 else:
                     func()
             except Exception:
-                pass
+                logger.debug("Suppressed exception in try block", exc_info=True)
 
         # Actual benchmark runs
         times_ms: List[float] = []

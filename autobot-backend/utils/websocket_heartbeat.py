@@ -14,8 +14,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, FrozenSet, Optional, Set
 
-from backend.constants.threshold_constants import TimingConstants
 from fastapi import WebSocket, WebSocketDisconnect
+
+from backend.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -149,9 +150,9 @@ class WebSocketManager:
                 else:
                     # Reset state and try again
                     async with self._lock:
-                        self.connection_states[
-                            connection_id
-                        ] = ConnectionState.CONNECTED
+                        self.connection_states[connection_id] = (
+                            ConnectionState.CONNECTED
+                        )
 
     async def _send_heartbeat(
         self, connection_id: str, websocket: WebSocket, current_time: float
@@ -253,7 +254,7 @@ class WebSocketManager:
                     }
                 )
         except Exception:
-            pass  # Ignore errors when disconnecting
+            logger.debug("Suppressed exception in try block", exc_info=True)
 
         # Clean up under lock
         async with self._lock:

@@ -19,6 +19,7 @@ from api import (
     autobot_teams_router,
     autobot_users_router,
     blue_green_router,
+    browser_router,
     code_sync_router,
     config_router,
     deployments_router,
@@ -249,6 +250,7 @@ app.add_middleware(
 )
 
 app.include_router(health_router, prefix="/api")
+app.include_router(browser_router, prefix="/api")
 app.include_router(agents_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(nodes_router, prefix="/api")

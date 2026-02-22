@@ -451,7 +451,7 @@ class PerformanceAnalyzer:
                                 code_snippet=self._get_code_snippet(
                                     lines, child.lineno, 3
                                 ),
-                                suggestion=f"Use async equivalent: asyncio.sleep, aiohttp, asyncio.subprocess, etc.",
+                                suggestion="Use async equivalent: asyncio.sleep, aiohttp, asyncio.subprocess, etc.",
                                 estimated_impact="high",
                             )
                         )
@@ -527,9 +527,11 @@ class PerformanceAnalyzer:
 
         classifications = {
             "memory_leaks": {
-                "severity": "critical"
-                if any(leak in code_match for leak in ["open(", "Popen("])
-                else "high",
+                "severity": (
+                    "critical"
+                    if any(leak in code_match for leak in ["open(", "Popen("])
+                    else "high"
+                ),
                 "description": f"Potential memory leak: {category}",
                 "suggestion": "Use context managers (with statements) or ensure proper resource cleanup",
             },
@@ -540,22 +542,22 @@ class PerformanceAnalyzer:
             },
             "inefficient_loops": {
                 "severity": "medium",
-                "description": f"Inefficient loop pattern detected",
+                "description": "Inefficient loop pattern detected",
                 "suggestion": "Consider list comprehensions, vectorization, or algorithm optimization",
             },
             "database_issues": {
                 "severity": "high",
-                "description": f"Database efficiency issue",
+                "description": "Database efficiency issue",
                 "suggestion": "Use connection pooling, bulk operations, and proper indexing",
             },
             "concurrency_issues": {
                 "severity": "high",
-                "description": f"Potential race condition or concurrency issue",
+                "description": "Potential race condition or concurrency issue",
                 "suggestion": "Add proper synchronization (locks, queues) or use async patterns",
             },
             "resource_waste": {
                 "severity": "low",
-                "description": f"Resource waste detected",
+                "description": "Resource waste detected",
                 "suggestion": "Optimize resource usage and eliminate redundant operations",
             },
         }
@@ -665,8 +667,8 @@ class PerformanceAnalyzer:
 
         example_templates = {
             "memory_leaks": {
-                "before": 'f = open("file.txt", "r")\ndata = f.read()',
-                "after": 'with open("file.txt", "r") as f:\n    data = f.read()',
+                "before": 'f = open("file.txt", "r", encoding="utf-8")\ndata = f.read()',
+                "after": 'with open("file.txt", "r", encoding="utf-8") as f:\n    data = f.read()',
             },
             "blocking_calls": {
                 "before": "async def func():\n    time.sleep(1)",
@@ -792,34 +794,40 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== Performance Analysis Results ===")
-    print(f"Total performance issues: {results['total_performance_issues']}")
-    print(f"Critical issues: {results['critical_issues']}")
-    print(f"High priority issues: {results['high_priority_issues']}")
-    print(f"Optimization recommendations: {results['recommendations_count']}")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    print("\n=== Performance Analysis Results ===")  # noqa: print
+    print(  # noqa: print
+        f"Total performance issues: {results['total_performance_issues']}"
+    )  # noqa: print
+    print(f"Critical issues: {results['critical_issues']}")  # noqa: print
+    print(f"High priority issues: {results['high_priority_issues']}")  # noqa: print
+    print(  # noqa: print
+        f"Optimization recommendations: {results['recommendations_count']}"
+    )  # noqa: print
+    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Print category breakdown
-    print(f"\n=== Issue Categories ===")
+    print("\n=== Issue Categories ===")  # noqa: print
     for category, count in results["categories"].items():
-        print(f"{category}: {count}")
+        print(f"{category}: {count}")  # noqa: print
 
     # Print top critical issues
-    print(f"\n=== Critical Performance Issues ===")
+    print("\n=== Critical Performance Issues ===")  # noqa: print
     critical_issues = [
         i for i in results["performance_details"] if i["severity"] == "critical"
     ]
     for i, issue in enumerate(critical_issues[:5], 1):
-        print(f"\n{i}. {issue['type']} in {issue['file']}:{issue['line']}")
-        print(f"   Description: {issue['description']}")
-        print(f"   Suggestion: {issue['suggestion']}")
+        print(  # noqa: print
+            f"\n{i}. {issue['type']} in {issue['file']}:{issue['line']}"
+        )  # noqa: print
+        print(f"   Description: {issue['description']}")  # noqa: print
+        print(f"   Suggestion: {issue['suggestion']}")  # noqa: print
 
     # Print optimization recommendations
-    print(f"\n=== Optimization Recommendations ===")
+    print("\n=== Optimization Recommendations ===")  # noqa: print
     for i, rec in enumerate(results["optimization_recommendations"][:3], 1):
-        print(f"\n{i}. {rec['title']} ({rec['priority']} priority)")
-        print(f"   {rec['description']}")
-        print(f"   Files affected: {len(rec['affected_files'])}")
+        print(f"\n{i}. {rec['title']} ({rec['priority']} priority)")  # noqa: print
+        print(f"   {rec['description']}")  # noqa: print
+        print(f"   Files affected: {len(rec['affected_files'])}")  # noqa: print
 
 
 if __name__ == "__main__":

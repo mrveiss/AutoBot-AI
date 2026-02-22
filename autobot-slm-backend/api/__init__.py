@@ -13,6 +13,7 @@ from .auth import router as auth_router
 from .autobot_teams import router as autobot_teams_router
 from .autobot_users import router as autobot_users_router
 from .blue_green import router as blue_green_router
+from .browser import router as browser_router
 from .code_sync import router as code_sync_router
 from .config import node_config_router
 from .config import router as config_router
@@ -45,6 +46,7 @@ from .websocket import router as websocket_router
 
 __all__ = [
     "agents_router",
+    "browser_router",
     "api_keys_router",
     "auth_router",
     "nodes_router",

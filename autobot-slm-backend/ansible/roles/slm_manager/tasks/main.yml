@@ -134,6 +134,24 @@
     group: root
   tags: ['slm', 'tls']
 
+# Issue #1103: Prevent nginx start when SSL cert missing
+- name: "SLM | Create nginx systemd override directory"
+  ansible.builtin.file:
+    path: /etc/systemd/system/nginx.service.d
+    state: directory
+    mode: "0755"
+  tags: ['slm', 'nginx', 'tls']
+
+- name: "SLM | Deploy nginx SSL cert pre-check"
+  ansible.builtin.template:
+    src: nginx-override.conf.j2
+    dest: /etc/systemd/system/nginx.service.d/ssl-cert-check.conf
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart nginx
+  tags: ['slm', 'nginx', 'tls']
+
 # ==========================================================
 # Backend Python venv and dependencies
 # ==========================================================
@@ -317,11 +335,29 @@
     - reload nginx
   tags: ['slm', 'nginx']
 
-- name: "SLM | Enable nginx site"
+- name: "SLM | Stat sites-enabled file to detect non-symlink (#1122)"
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
+  register: nginx_sites_enabled_stat
+  become: yes
+  tags: ['slm', 'nginx']
+
+- name: "SLM | Remove standalone sites-enabled file if not a symlink (#1122)"
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
+    state: absent
+  become: yes
+  when:
+    - nginx_sites_enabled_stat.stat.exists
+    - not nginx_sites_enabled_stat.stat.islnk
+  tags: ['slm', 'nginx']
+
+- name: "SLM | Enable nginx site (symlink to sites-available)"
   ansible.builtin.file:
     src: /etc/nginx/sites-available/{{ slm_nginx_config }}
     dest: /etc/nginx/sites-enabled/{{ slm_nginx_config }}
     state: link
+  become: yes
   notify: reload nginx
   tags: ['slm', 'nginx']
 

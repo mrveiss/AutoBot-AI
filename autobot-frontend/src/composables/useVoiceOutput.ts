@@ -11,6 +11,7 @@
 import { ref } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
 
 const logger = createLogger('useVoiceOutput')
 
@@ -109,8 +110,12 @@ export function useVoiceOutput() {
     if (isSpeaking.value) _stopCurrentAudio()
 
     try {
+      const { selectedVoiceId } = useVoiceProfiles()
       const formData = new FormData()
       formData.append('text', text)
+      if (selectedVoiceId.value) {
+        formData.append('voice_id', selectedVoiceId.value)
+      }
       const response = await fetchWithAuth('/api/voice/synthesize', {
         method: 'POST',
         body: formData,

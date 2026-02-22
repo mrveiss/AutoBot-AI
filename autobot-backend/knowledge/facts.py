@@ -97,7 +97,7 @@ async def _build_warmup_success_result(
                 is_gpu=device_info.is_gpu,
             )
     except Exception:
-        pass  # nosec B110 - Non-critical device info, intentional no-op
+        logger.debug("Suppressed exception in try block", exc_info=True)
     logger.info(
         "NPU warmup complete: %d dimensions in %.1fms", len(embedding), warmup_time
     )
@@ -597,9 +597,8 @@ class FactsMixin:
             return
 
         # Import sanitization utility
-        from knowledge.utils import (
-            sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb,
-        )
+        from knowledge.utils import \
+            sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb
 
         # Sanitize metadata for ChromaDB
         sanitized_metadata = _sanitize_metadata_for_chromadb(metadata)

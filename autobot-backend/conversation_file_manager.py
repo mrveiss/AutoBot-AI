@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import aiosqlite
 import redis.asyncio as async_redis
+
 from backend.constants.threshold_constants import TimingConstants
 
 # Module-level project root constant (Issue #380 - avoid repeated Path computation)
@@ -506,7 +507,7 @@ class ConversationFileManager:
 
         connection = self._get_db_connection()
         try:
-            with open(schema_path, "r") as f:
+            with open(schema_path, "r", encoding="utf-8") as f:
                 schema_sql = f.read()
 
             # Validate SQL syntax before execution

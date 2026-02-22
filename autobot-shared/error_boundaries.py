@@ -20,6 +20,9 @@ error messages to users.
 """
 
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Re-export all public API from the package for backward compatibility
 from backend.utils.error_boundaries import (
@@ -98,6 +101,7 @@ __all__ = [
 
 # CLI for error boundary management
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     import argparse
 
     parser = argparse.ArgumentParser(description="AutoBot Error Boundary Management")
@@ -110,11 +114,11 @@ if __name__ == "__main__":
 
     if args.stats:
         stats = get_error_statistics()
-        print("Error Statistics:")
-        print(json.dumps(stats, indent=2))
+        logger.info("Error Statistics:")
+        logger.info(json.dumps(stats, indent=2))
 
     elif args.test:
-        print("Testing Error Boundary System...")
+        logger.info("Testing Error Boundary System...")
 
         @error_boundary(component="test", function="divide")
         def test_divide(a, b):
@@ -123,16 +127,16 @@ if __name__ == "__main__":
 
         # Test normal operation
         result = test_divide(10, 2)
-        print(f"Normal operation: 10 / 2 = {result}")
+        logger.info(f"Normal operation: 10 / 2 = {result}")
 
         # Test error handling
         try:
             result = test_divide(10, 0)
-            print(f"Error handling: 10 / 0 = {result}")
+            logger.info(f"Error handling: 10 / 0 = {result}")
         except Exception as e:
-            print(f"Error caught: {e}")
+            logger.info(f"Error caught: {e}")
 
-        print("Error boundary system test completed")
+        logger.info("Error boundary system test completed")
 
     else:
-        print("Use --stats to show statistics or --test to test the system")
+        logger.info("Use --stats to show statistics or --test to test the system")

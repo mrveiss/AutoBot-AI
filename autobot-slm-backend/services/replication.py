@@ -14,11 +14,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from config import settings
 from models.database import Node, Replication, ReplicationStatus
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -564,7 +563,7 @@ class ReplicationService:
             if process.returncode == 0:
                 return stdout.decode().strip()
         except Exception:
-            pass
+            logger.debug("Suppressed exception in try block", exc_info=True)
         return ""
 
     async def _run_ansible_replication(

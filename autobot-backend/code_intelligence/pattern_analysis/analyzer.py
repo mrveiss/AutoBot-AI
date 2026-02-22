@@ -18,15 +18,9 @@ from .complexity_analyzer import ComplexityAnalyzer
 from .refactoring_generator import RefactoringSuggestionGenerator
 from .regex_detector import RegexPatternDetector
 from .storage import store_patterns_batch
-from .types import (
-    CodeLocation,
-    CodePattern,
-    DuplicatePattern,
-    ModularizationSuggestion,
-    PatternAnalysisReport,
-    PatternSeverity,
-    PatternType,
-)
+from .types import (CodeLocation, CodePattern, DuplicatePattern,
+                    ModularizationSuggestion, PatternAnalysisReport,
+                    PatternSeverity, PatternType)
 
 logger = logging.getLogger(__name__)
 
@@ -252,7 +246,7 @@ class CodePatternAnalyzer:
                     file_count += 1
                     line_count += len(lines)
             except Exception:  # nosec B110 - file read errors ignored
-                pass
+                logger.debug("Suppressed exception in try block", exc_info=True)
 
         return file_count, line_count
 
@@ -475,9 +469,9 @@ class CodePatternAnalyzer:
             locations=locations,
             suggestion=group.refactoring_suggestion or "Extract into shared function",
             confidence=min(group.similarity_range) if group.similarity_range else 0.8,
-            similarity_score=min(group.similarity_range)
-            if group.similarity_range
-            else 1.0,
+            similarity_score=(
+                min(group.similarity_range) if group.similarity_range else 1.0
+            ),
             canonical_code=canonical,
             code_reduction_potential=group.total_duplicated_lines
             - (group.total_duplicated_lines // len(group.instances)),
@@ -636,12 +630,12 @@ class CodePatternAnalyzer:
             "code_content": regex_opp.current_code,
             "embedding": await self._generate_embedding(regex_opp.current_code),
             "metadata": {
-                "file_path": regex_opp.locations[0].file_path
-                if regex_opp.locations
-                else "",
-                "start_line": regex_opp.locations[0].start_line
-                if regex_opp.locations
-                else 0,
+                "file_path": (
+                    regex_opp.locations[0].file_path if regex_opp.locations else ""
+                ),
+                "start_line": (
+                    regex_opp.locations[0].start_line if regex_opp.locations else 0
+                ),
                 "suggested_regex": regex_opp.suggested_regex,
                 "severity": regex_opp.severity.value,
             },
@@ -693,7 +687,7 @@ class CodePatternAnalyzer:
                 if embedding:
                     return embedding
             except Exception:  # nosec B110 - cache miss handled by fallback
-                pass
+                logger.debug("Suppressed exception in try block", exc_info=True)
 
         # Fallback: Simple hash-based pseudo-embedding for testing
         # In production, this should use actual embeddings

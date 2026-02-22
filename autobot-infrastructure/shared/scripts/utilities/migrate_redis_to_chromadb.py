@@ -129,7 +129,7 @@ class RedisToChromaDBMigration:
                 try:
                     self.chroma_client.delete_collection(collection_name)
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception in try block", exc_info=True)
 
             self.chroma_collection = self.chroma_client.get_or_create_collection(
                 name=collection_name,

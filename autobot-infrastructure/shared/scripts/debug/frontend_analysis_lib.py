@@ -10,12 +10,15 @@ Consolidates duplicate code from debug_frontend_browser.py and debug_frontend_br
 Issue: #148 - Extract frontend analysis library (Phase 3 - 200 line reduction)
 """
 
+import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from playwright.sync_api import Page, sync_playwright
+
+logger = logging.getLogger(__name__)
 
 
 class IssueSeverity(Enum):
@@ -288,7 +291,7 @@ class FrontendDebugger:
                     page.screenshot(path=error_screenshot)
                     self._log(f"Error screenshot saved to: {error_screenshot}")
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception in try block", exc_info=True)
 
             finally:
                 browser.close()

@@ -17,13 +17,11 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 import aiohttp
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.threshold_constants import (
-    ServiceDiscoveryConfig,
-    TimingConstants,
-)
 
 from autobot_shared.http_client import get_http_client
+from backend.constants.network_constants import NetworkConstants
+from backend.constants.threshold_constants import (ServiceDiscoveryConfig,
+                                                   TimingConstants)
 
 logger = logging.getLogger(__name__)
 
@@ -350,7 +348,7 @@ class DistributedServiceDiscovery:
                     endpoint.last_check = time.time()
                     return True
         except Exception:
-            pass  # nosec B110 - intentional fallback for health check failures
+            logger.debug("Suppressed exception in try block", exc_info=True)
         return False
 
     async def _check_http_health(self, endpoint: ServiceEndpoint) -> bool:

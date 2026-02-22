@@ -54,7 +54,7 @@ def _store_performance_in_redis(
         )
         _redis_client.expire(key, 3600)  # 1 hour retention
     except Exception:
-        pass  # nosec B110 - Non-critical: Redis metrics storage failure
+        logger.debug("Suppressed exception in try block", exc_info=True)
 
 
 def _create_async_wrapper(func, category: str):

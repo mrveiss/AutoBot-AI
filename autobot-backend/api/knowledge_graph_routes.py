@@ -115,8 +115,10 @@ async def list_entities(
     try:
         from autobot_shared.redis_client import get_redis_client
 
-        redis_client = get_redis_client(async_client=False, database="knowledge")
-        entities = _list_entities_from_redis(redis_client, entity_type, query, limit)
+        redis_client = get_redis_client(async_client=True, database="knowledge")
+        entities = await _list_entities_from_redis(
+            redis_client, entity_type, query, limit
+        )
         return {"entities": entities, "total": len(entities)}
 
     except Exception as e:
@@ -135,8 +137,8 @@ async def get_entity_relationships(
     try:
         from autobot_shared.redis_client import get_redis_client
 
-        redis_client = get_redis_client(async_client=False, database="knowledge")
-        relationships = _get_relationships_from_redis(
+        redis_client = get_redis_client(async_client=True, database="knowledge")
+        relationships = await _get_relationships_from_redis(
             redis_client, entity_id, relationship_type, limit
         )
         return {
@@ -170,7 +172,7 @@ async def search_events(
 
         from autobot_shared.redis_client import get_redis_client
 
-        redis_client = get_redis_client(async_client=False, database="knowledge")
+        redis_client = get_redis_client(async_client=True, database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)
 
         start = datetime.fromisoformat(start_date) if start_date else datetime.min
@@ -206,7 +208,7 @@ async def get_event_timeline(
 
         from autobot_shared.redis_client import get_redis_client
 
-        redis_client = get_redis_client(async_client=False, database="knowledge")
+        redis_client = get_redis_client(async_client=True, database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)
 
         events = await temporal_svc.get_event_timeline(
@@ -299,7 +301,7 @@ async def drill_down_summary(
 # --- Helper functions ---
 
 
-def _list_entities_from_redis(redis_client, entity_type, query, limit) -> list:
+async def _list_entities_from_redis(redis_client, entity_type, query, limit) -> list:
     """List entities from Redis with optional filtering.
 
     Helper for list_entities endpoint (#759). Skips index keys
@@ -311,7 +313,7 @@ def _list_entities_from_redis(redis_client, entity_type, query, limit) -> list:
     count = 0
 
     while count < limit:
-        cursor, keys = redis_client.scan(cursor=cursor, match=pattern, count=100)
+        cursor, keys = await redis_client.scan(cursor=cursor, match=pattern, count=100)
         for key in keys:
             if count >= limit:
                 break
@@ -319,7 +321,7 @@ def _list_entities_from_redis(redis_client, entity_type, query, limit) -> list:
             if key_str.count(":") > 1:
                 continue
             try:
-                entity_data = redis_client.json().get(key)
+                entity_data = await redis_client.json().get(key)
                 if not entity_data:
                     continue
                 if entity_type and entity_data.get("entity_type") != entity_type:
@@ -339,7 +341,7 @@ def _list_entities_from_redis(redis_client, entity_type, query, limit) -> list:
     return entities
 
 
-def _get_relationships_from_redis(
+async def _get_relationships_from_redis(
     redis_client, entity_id, relationship_type, limit
 ) -> list:
     """Get relationships for an entity from Redis.
@@ -350,9 +352,9 @@ def _get_relationships_from_redis(
     rel_key = f"entity:{entity_id}:relationships"
 
     try:
-        rel_ids = redis_client.smembers(rel_key)
+        rel_ids = await redis_client.smembers(rel_key)
         for rel_id in list(rel_ids)[:limit]:
-            rel_data = redis_client.json().get(f"relationship:{rel_id}")
+            rel_data = await redis_client.json().get(f"relationship:{rel_id}")
             if not rel_data:
                 continue
             if (

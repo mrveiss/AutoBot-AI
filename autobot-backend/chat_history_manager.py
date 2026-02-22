@@ -185,7 +185,7 @@ class ChatHistoryManager:
         # Default to file storage
         if os.path.exists(self.history_file):
             try:
-                with open(self.history_file, "r") as f:
+                with open(self.history_file, "r", encoding="utf-8") as f:
                     self.history = json.load(f)
             except json.JSONDecodeError as e:
                 self.history = []
@@ -215,7 +215,7 @@ class ChatHistoryManager:
         """
         # Save to file for persistence
         try:
-            with open(self.history_file, "w") as f:
+            with open(self.history_file, "w", encoding="utf-8") as f:
                 json.dump(self.history, f, indent=2)
         except Exception as e:
             logging.error(f"Error saving chat history to {self.history_file}: {str(e)}")
@@ -287,7 +287,7 @@ class ChatHistoryManager:
                     chat_path = os.path.join(chats_directory, filename)
 
                     try:
-                        with open(chat_path, "r") as f:
+                        with open(chat_path, "r", encoding="utf-8") as f:
                             file_content = f.read()
                         chat_data = self._decrypt_data(file_content)
 
@@ -328,7 +328,7 @@ class ChatHistoryManager:
                 logging.warning(f"Chat session {session_id} not found")
                 return []
 
-            with open(chat_file, "r") as f:
+            with open(chat_file, "r", encoding="utf-8") as f:
                 file_content = f.read()
 
             # Decrypt data if encryption is enabled
@@ -480,7 +480,7 @@ class ChatHistoryManager:
                 return False
 
             # Load existing chat data
-            with open(chat_file, "r") as f:
+            with open(chat_file, "r", encoding="utf-8") as f:
                 chat_data = json.load(f)
 
             # Update name and last modified time
@@ -488,7 +488,7 @@ class ChatHistoryManager:
             chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
             # Save updated data
-            with open(chat_file, "w") as f:
+            with open(chat_file, "w", encoding="utf-8") as f:
                 json.dump(chat_data, f, indent=2)
 
             logging.info(f"Chat session '{session_id}' name updated to '{name}'")
@@ -507,21 +507,23 @@ if __name__ == "__main__":
         os.remove(test_file)
 
     manager = ChatHistoryManager(test_file)
-    print("Initial history:", manager.get_all_messages())
+    print("Initial history:", manager.get_all_messages())  # noqa: print
 
     manager.add_message("user", "Hello there!")
     manager.add_message("bot", "Hi! How can I help?")
     manager.add_message(
         "thought", '{"tool_name": "greet"}', "thought", {"tool_name": "greet"}
     )
-    print("History after adding messages:", manager.get_all_messages())
+    print("History after adding messages:", manager.get_all_messages())  # noqa: print
 
     # Simulate new instance loading
     new_manager = ChatHistoryManager(test_file)
-    print("History loaded by new manager:", new_manager.get_all_messages())
+    print(  # noqa: print
+        "History loaded by new manager:", new_manager.get_all_messages()
+    )  # noqa: print
 
     new_manager.clear_history()
-    print("History after clearing:", new_manager.get_all_messages())
+    print("History after clearing:", new_manager.get_all_messages())  # noqa: print
 
     if os.path.exists(test_file):
         os.remove(test_file)

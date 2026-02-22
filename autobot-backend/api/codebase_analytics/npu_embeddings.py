@@ -449,9 +449,9 @@ async def warmup_npu_for_codebase() -> Dict[str, Any]:
             result["npu_available"] = True
             result["warmup_time_ms"] = warmup_time
             result["embedding_dimensions"] = len(embeddings[0])
-            result[
-                "message"
-            ] = f"NPU connection warmed up for codebase indexing in {warmup_time:.1f}ms"
+            result["message"] = (
+                f"NPU connection warmed up for codebase indexing in {warmup_time:.1f}ms"
+            )
 
             # Get device info
             if client:
@@ -462,7 +462,7 @@ async def warmup_npu_for_codebase() -> Dict[str, Any]:
                         result["is_npu"] = device_info.is_npu
                         result["is_gpu"] = device_info.is_gpu
                 except Exception:
-                    pass
+                    logger.debug("Suppressed exception in try block", exc_info=True)
 
             logger.info(
                 "Codebase NPU warmup complete: %d dimensions in %.1fms",

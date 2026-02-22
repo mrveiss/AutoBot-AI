@@ -44,9 +44,8 @@ SEMANTIC_ANALYSIS_AVAILABLE = False
 SemanticAnalysisMixin = None
 
 try:
-    from code_intelligence.analytics_infrastructure import (
-        SemanticAnalysisMixin as _SemanticAnalysisMixin,
-    )
+    from code_intelligence.analytics_infrastructure import \
+        SemanticAnalysisMixin as _SemanticAnalysisMixin
 
     SemanticAnalysisMixin = _SemanticAnalysisMixin
     SEMANTIC_ANALYSIS_AVAILABLE = True
@@ -191,9 +190,11 @@ class PredictionResult:
             "high_risk_count": self.high_risk_count,
             "predicted_bugs": self.predicted_bugs,
             # Issue #468: Return None if no historical accuracy data, otherwise round
-            "accuracy_score": round(self.accuracy_score, 1)
-            if self.accuracy_score is not None
-            else None,
+            "accuracy_score": (
+                round(self.accuracy_score, 1)
+                if self.accuracy_score is not None
+                else None
+            ),
             "accuracy_available": self.accuracy_score is not None,
             "risk_distribution": self.risk_distribution,
             "files": [fa.to_dict() for fa in self.file_assessments],
@@ -836,7 +837,7 @@ class BugPredictor(_BaseClass):
             try:
                 last_date = datetime.fromisoformat(bugs[0].get("date", ""))
             except Exception:
-                pass  # nosec B110 - intentional fallback for invalid dates
+                logger.debug("Suppressed exception in try block", exc_info=True)
 
         return {"count": count, "score": score, "last_date": last_date}
 

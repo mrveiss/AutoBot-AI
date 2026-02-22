@@ -22,6 +22,8 @@ from business_intelligence_dashboard import BusinessIntelligenceDashboard
 # Import monitoring components
 from performance_monitor import ALERT_THRESHOLDS, PerformanceMonitor
 
+logger = logging.getLogger(__name__)
+
 
 class ComprehensiveMonitoringController:
     """Central controller for AutoBot's comprehensive monitoring system."""
@@ -393,9 +395,9 @@ class ComprehensiveMonitoringController:
                 "overall_score": round(overall_health, 1),
                 "status": status,
                 "component_scores": {
-                    "bi_dashboard": bi_health.get("overall_score", 0)
-                    if bi_health
-                    else 0,
+                    "bi_dashboard": (
+                        bi_health.get("overall_score", 0) if bi_health else 0
+                    ),
                     "performance": perf_health,
                     "apm": apm_health,
                 },
@@ -525,18 +527,26 @@ class ComprehensiveMonitoringController:
             instant_report = {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "report_type": "instant_comprehensive",
-                "performance_data": results[0]
-                if not isinstance(results[0], Exception)
-                else {"error": str(results[0])},
-                "ai_analytics_data": results[1]
-                if not isinstance(results[1], Exception)
-                else {"error": str(results[1])},
-                "bi_dashboard_data": results[2]
-                if not isinstance(results[2], Exception)
-                else {"error": str(results[2])},
-                "apm_data": results[3]
-                if not isinstance(results[3], Exception)
-                else {"error": str(results[3])},
+                "performance_data": (
+                    results[0]
+                    if not isinstance(results[0], Exception)
+                    else {"error": str(results[0])}
+                ),
+                "ai_analytics_data": (
+                    results[1]
+                    if not isinstance(results[1], Exception)
+                    else {"error": str(results[1])}
+                ),
+                "bi_dashboard_data": (
+                    results[2]
+                    if not isinstance(results[2], Exception)
+                    else {"error": str(results[2])}
+                ),
+                "apm_data": (
+                    results[3]
+                    if not isinstance(results[3], Exception)
+                    else {"error": str(results[3])}
+                ),
             }
 
             # Store instant report
@@ -579,42 +589,42 @@ async def main():
     controller = ComprehensiveMonitoringController()
 
     if args.instant_report:
-        print("⚡ Generating instant comprehensive report...")
+        logger.info("⚡ Generating instant comprehensive report...")
         report = await controller.generate_instant_report()
-        print("✅ Instant report generated")
-        print("📊 Summary:")
-        print(f"  Timestamp: {report.get('timestamp')}")
-        print(
+        logger.info("✅ Instant report generated")
+        logger.info("📊 Summary:")
+        logger.info(f"  Timestamp: {report.get('timestamp')}")
+        logger.info(
             f"  Performance: {'✅' if 'error' not in report.get('performance_data', {}) else '❌'}"
         )
-        print(
+        logger.info(
             f"  AI Analytics: {'✅' if 'error' not in report.get('ai_analytics_data', {}) else '❌'}"
         )
-        print(
+        logger.info(
             f"  BI Dashboard: {'✅' if 'error' not in report.get('bi_dashboard_data', {}) else '❌'}"
         )
-        print(
+        logger.info(
             f"  APM System: {'✅' if 'error' not in report.get('apm_data', {}) else '❌'}"
         )
 
     elif args.status:
         status = await controller.get_current_status()
-        print("📊 Monitoring System Status:")
-        print(f"  Active: {status['monitoring_active']}")
-        print(f"  Systems Initialized: {status['systems_initialized']}")
-        print(f"  Monitoring Intervals: {status['intervals']}")
+        logger.info("📊 Monitoring System Status:")
+        logger.info(f"  Active: {status['monitoring_active']}")
+        logger.info(f"  Systems Initialized: {status['systems_initialized']}")
+        logger.info(f"  Monitoring Intervals: {status['intervals']}")
 
     elif args.start:
-        print("🚀 Starting AutoBot Comprehensive Monitoring System...")
-        print("📊 Monitoring intervals:")
+        logger.info("🚀 Starting AutoBot Comprehensive Monitoring System...")
+        logger.info("📊 Monitoring intervals:")
         for system, interval in controller.intervals.items():
-            print(f"  {system}: {interval}s")
-        print("Press Ctrl+C to stop monitoring")
+            logger.info(f"  {system}: {interval}s")
+        logger.info("Press Ctrl+C to stop monitoring")
 
         try:
             await controller.start_comprehensive_monitoring()
         except KeyboardInterrupt:
-            print("\n🛑 Monitoring stopped by user")
+            logger.info("\n🛑 Monitoring stopped by user")
         finally:
             controller.stop_monitoring()
 

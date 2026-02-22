@@ -29,9 +29,7 @@ from typing import Any, Dict, FrozenSet, List, Optional, Set
 # Issue #554: Import analytics infrastructure for semantic analysis
 try:
     from code_intelligence.analytics_infrastructure import (
-        SIMILARITY_MEDIUM,
-        SemanticAnalysisMixin,
-    )
+        SIMILARITY_MEDIUM, SemanticAnalysisMixin)
 
     HAS_ANALYTICS_INFRASTRUCTURE = True
 except ImportError:
@@ -720,7 +718,7 @@ class SecurityASTVisitor(ast.NodeVisitor):
                 lines = self.source_lines[start - 1 : end]
                 return "\n".join(lines)
         except Exception:
-            pass  # nosec B110 - Intentionally return empty for invalid ranges
+            logger.debug("Suppressed exception in try block", exc_info=True)
         return ""
 
 
@@ -1033,9 +1031,7 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
         Scores now degrade gracefully instead of immediately hitting 0.
         """
         from code_intelligence.shared.scoring import (
-            calculate_score_from_severity_counts,
-            get_risk_level_from_score,
-        )
+            calculate_score_from_severity_counts, get_risk_level_from_score)
 
         by_severity, by_type, by_owasp = self._aggregate_findings_by_category()
         security_score = calculate_score_from_severity_counts(by_severity)
@@ -1200,9 +1196,9 @@ class SecurityAnalyzer(SemanticAnalysisMixin):
                     "description": "description",
                     "owasp_category": "owasp_category",
                 },
-                min_similarity=SIMILARITY_MEDIUM
-                if HAS_ANALYTICS_INFRASTRUCTURE
-                else 0.7,
+                min_similarity=(
+                    SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7
+                ),
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)

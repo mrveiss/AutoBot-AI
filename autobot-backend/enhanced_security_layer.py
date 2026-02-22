@@ -519,7 +519,7 @@ class EnhancedSecurityLayer:
         }
 
         try:
-            with open(self.audit_log_file, "a") as f:
+            with open(self.audit_log_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(log_entry) + "\n")
             logger.debug("Audit log: %s by %s - %s", action, user, outcome)
         except Exception as e:
@@ -541,7 +541,7 @@ class EnhancedSecurityLayer:
         command_history = []
 
         try:
-            with open(self.audit_log_file, "r") as f:
+            with open(self.audit_log_file, "r", encoding="utf-8") as f:
                 for line in f:
                     # Use helper for parsing and filtering (Issue #315: depth reduction)
                     entry = _parse_audit_log_entry(line, user)
@@ -580,11 +580,12 @@ class EnhancedSecurityLayer:
 
 # Test the enhanced security layer
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     async def test_security():
         """Test security layer with various commands and user roles."""
-        print("Testing Enhanced Security Layer")
-        print("=" * 60)
+        logger.info("Testing Enhanced Security Layer")
+        logger.info("%s", "=" * 60)
 
         # Create enhanced security layer
         security = EnhancedSecurityLayer()
@@ -599,26 +600,26 @@ if __name__ == "__main__":
         ]
 
         for cmd, role in test_commands:
-            print(f"\nTesting: {cmd} (as {role})")
+            logger.info(f"\nTesting: {cmd} (as {role})")
             result = await security.execute_command(cmd, f"{role}_user", role)
-            print(f"Result: {result['status']}")
+            logger.info(f"Result: {result['status']}")
             if result.get("security"):
-                print(f"Security: {result['security']}")
+                logger.info(f"Security: {result['security']}")
             if result["stderr"]:
-                print(f"Error: {result['stderr']}")
+                logger.info(f"Error: {result['stderr']}")
             if result["stdout"]:
-                print(f"Output: {result['stdout'][:100]}...")
+                logger.info(f"Output: {result['stdout'][:100]}...")
 
         # Show command history
-        print("\n" + "=" * 60)
-        print("Command History:")
+        logger.info("%s", "\n" + "=" * 60)
+        logger.info("Command History:")
         history = security.get_command_history(limit=10)
         for entry in history:
-            print(
+            logger.info(
                 f"- {entry['timestamp']}: {entry['user']} - "
                 f"{entry['action']} - {entry['outcome']}"
             )
             if "command" in entry.get("details", {}):
-                print(f"  Command: {entry['details']['command']}")
+                logger.info(f"  Command: {entry['details']['command']}")
 
     asyncio.run(test_security())

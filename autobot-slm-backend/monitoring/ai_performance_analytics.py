@@ -23,6 +23,8 @@ import psutil
 
 from autobot_shared.network_constants import NetworkConstants
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class NPUMetrics:
@@ -155,9 +157,9 @@ core = ov.Core()
 devices = core.available_devices
 npu_devices = [d for d in devices if "NPU" in d or "AI_BOOST" in d]
 if npu_devices:
-    print(f"NPU_FOUND:{npu_devices[0]}")
+    print(f"NPU_FOUND:{npu_devices[0]}")  # noqa: print
 else:
-    print("NPU_NOT_FOUND")
+    print("NPU_NOT_FOUND")  # noqa: print
 """
             process = await asyncio.create_subprocess_exec(
                 "python3",
@@ -190,9 +192,9 @@ else:
                     memory_total_mb=memory_total,
                     power_draw_watts=None,  # Requires Intel NPU monitoring tools
                     temperature_celsius=None,
-                    operations_per_second=1000.0 / inference_latency
-                    if inference_latency > 0
-                    else 0,
+                    operations_per_second=(
+                        1000.0 / inference_latency if inference_latency > 0 else 0
+                    ),
                     inference_latency_ms=inference_latency,
                     throughput_mbps=100.0,  # Estimated
                     error_count=0,
@@ -323,7 +325,7 @@ else:
                 process.kill()
                 await process.wait()
         except Exception:
-            pass  # nosec B110 - NPU check failed, not available
+            self.logger.debug("Suppressed exception in try block", exc_info=True)
         return None
 
     async def monitor_knowledge_base_search(
@@ -661,15 +663,19 @@ else:
                 report["hardware_efficiency"] = {
                     "npu_utilization": npu_metrics.utilization_percent,
                     "npu_memory_usage": (
-                        npu_metrics.memory_used_mb / npu_metrics.memory_total_mb * 100
-                    )
-                    if npu_metrics.memory_total_mb > 0
-                    else 0,
-                    "inference_performance": "excellent"
-                    if npu_metrics.inference_latency_ms < 100
-                    else "good"
-                    if npu_metrics.inference_latency_ms < 300
-                    else "needs_optimization",
+                        (npu_metrics.memory_used_mb / npu_metrics.memory_total_mb * 100)
+                        if npu_metrics.memory_total_mb > 0
+                        else 0
+                    ),
+                    "inference_performance": (
+                        "excellent"
+                        if npu_metrics.inference_latency_ms < 100
+                        else (
+                            "good"
+                            if npu_metrics.inference_latency_ms < 300
+                            else "needs_optimization"
+                        )
+                    ),
                 }
 
             # Store the report
@@ -713,6 +719,7 @@ async def monitor_llm_request(request_data: Dict) -> LLMPerformanceMetrics:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     import argparse
 
     async def main():
@@ -730,13 +737,13 @@ if __name__ == "__main__":
         await analytics.initialize_redis_connection()
 
         if args.test:
-            print("Testing AI performance monitoring...")
+            logger.info("Testing AI performance monitoring...")
 
             # Test NPU metrics
             npu_metrics = await analytics.collect_npu_metrics()
             if npu_metrics:
-                print(f"NPU Utilization: {npu_metrics.utilization_percent:.1f}%")
-                print(
+                logger.info(f"NPU Utilization: {npu_metrics.utilization_percent:.1f}%")
+                logger.info(
                     f"NPU Inference Latency: {npu_metrics.inference_latency_ms:.1f}ms"
                 )
 
@@ -744,15 +751,17 @@ if __name__ == "__main__":
             mm_metrics = await analytics.monitor_multimodal_pipeline(
                 "text", {"size_mb": 1.0}
             )
-            print(f"Multi-modal Processing Time: {mm_metrics.processing_time_ms:.1f}ms")
+            logger.info(
+                f"Multi-modal Processing Time: {mm_metrics.processing_time_ms:.1f}ms"
+            )
 
             # Test knowledge base monitoring
             kb_metrics = await analytics.monitor_knowledge_base_search("test query")
-            print(f"Knowledge Search Time: {kb_metrics.search_time_ms:.1f}ms")
+            logger.info(f"Knowledge Search Time: {kb_metrics.search_time_ms:.1f}ms")
 
         if args.report:
-            print("Generating AI performance report...")
+            logger.info("Generating AI performance report...")
             report = await analytics.generate_ai_performance_report()
-            print(json.dumps(report, indent=2, default=str))
+            logger.info("%s", json.dumps(report, indent=2, default=str))
 
     asyncio.run(main())

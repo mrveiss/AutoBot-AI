@@ -486,7 +486,7 @@ def _get_local_ip(backend_host: str) -> str:
             try:
                 sock.close()
             except Exception:
-                pass
+                logger.debug("Suppressed exception in try block", exc_info=True)
 
 
 async def get_telemetry_client(config: dict) -> Optional[BackendTelemetryClient]:
