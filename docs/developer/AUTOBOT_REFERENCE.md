@@ -38,7 +38,7 @@ cd autobot-slm-backend/ansible && ansible-playbook playbooks/<playbook>.yml --sy
 | Service | IP:Port | Component | Purpose |
 |---------|---------|-----------|---------|
 | SLM Server | 172.16.168.19:443 | `autobot-slm-backend/` + `autobot-slm-frontend/` | SLM backend + admin UI (nginx+SSL) |
-| Main (WSL) | 172.16.168.20:8001 | `autobot-backend/` | Backend API + VNC (6080) |
+| Main (WSL) | 172.16.168.20:8443 | `autobot-backend/` | Backend API + VNC (6080) |
 | Frontend VM | 172.16.168.21:443 | `autobot-frontend/` | User frontend (nginx+SSL, production build) |
 | NPU VM | 172.16.168.22:8081 | `autobot-npu-worker/` | Hardware AI acceleration |
 | Redis VM | 172.16.168.23:6379 | - | Data layer (Redis Stack) |

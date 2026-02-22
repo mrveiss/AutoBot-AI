@@ -90,7 +90,7 @@ New file `api/discovery.py`:
     "port": 8001,
     "protocol": "http",
     "endpoint_path": "/api",
-    "url": "http://172.16.168.20:8001/api",
+    "url": "https://172.16.168.20:8443/api",
     "healthy": true,
     "node_id": "node-main"
 }

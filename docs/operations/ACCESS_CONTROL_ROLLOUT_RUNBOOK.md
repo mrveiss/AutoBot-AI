@@ -22,7 +22,7 @@ Deploy access control enforcement to eliminate CVSS 9.1 vulnerability: **Broken 
 
 - [ ] All 6 VMs accessible (172.16.168.21-25)
 - [ ] Redis healthy (172.16.168.23:6379)
-- [ ] Backend API responding (172.16.168.20:8001)
+- [ ] Backend API responding (172.16.168.20:8443)
 - [ ] SSH keys configured (`~/.ssh/autobot_key`)
 - [ ] Python virtual environment activated
 - [ ] No ongoing deployments or maintenance
@@ -190,7 +190,7 @@ asyncio.run(main())
 **Performance Validation:**
 ```bash
 # Backend API response times should be < +10ms
-curl -w "@curl-format.txt" -o /dev/null -s "http://172.16.168.20:8001/api/health"
+curl -w "@curl-format.txt" -o /dev/null -s "https://172.16.168.20:8443/api/health"
 ```
 
 **Rollback:** Disable audit middleware (requires backend restart)
@@ -417,7 +417,7 @@ asyncio.run(main())
 **Test 1: Cross-User Access Attempt**
 ```bash
 # Attempt to access another user's session (should fail)
-curl -X GET "http://172.16.168.20:8001/api/chat/sessions/OTHER_USER_SESSION_ID" \
+curl -X GET "https://172.16.168.20:8443/api/chat/sessions/OTHER_USER_SESSION_ID" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -w "\nHTTP Status: %{http_code}\n"
 ```
@@ -426,7 +426,7 @@ curl -X GET "http://172.16.168.20:8001/api/chat/sessions/OTHER_USER_SESSION_ID" 
 **Test 2: Unauthenticated Access**
 ```bash
 # Attempt without authentication (should fail)
-curl -X GET "http://172.16.168.20:8001/api/chat/sessions/SESSION_ID" \
+curl -X GET "https://172.16.168.20:8443/api/chat/sessions/SESSION_ID" \
   -w "\nHTTP Status: %{http_code}\n"
 ```
 **Expected:** HTTP 401 Unauthorized

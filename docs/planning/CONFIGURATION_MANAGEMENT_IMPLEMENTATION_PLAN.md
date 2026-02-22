@@ -1172,10 +1172,10 @@ VM_HOSTNAME=vm1-frontend                  # VM identifier for distributed reload
 4. **Verify Deployment:**
    ```bash
    # Check validation endpoint
-   curl http://172.16.168.20:8001/api/config/validate
+   curl https://172.16.168.20:8443/api/config/validate
 
    # Check sync status
-   curl http://172.16.168.20:8001/api/settings/sync-status
+   curl https://172.16.168.20:8443/api/settings/sync-status
    ```
 
 5. **Enable Hot Reload:**

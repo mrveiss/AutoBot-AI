@@ -13,7 +13,7 @@
 ```
 Status: healthy
 Uptime: Operational
-API Endpoint: http://172.16.168.20:8001
+API Endpoint: https://172.16.168.20:8443
 ```
 
 **Frontend Accessibility**: ✅ Accessible
@@ -77,7 +77,7 @@ Error patterns: None detected
 
 **Service Communication Pattern**:
 ```
-Backend (172.16.168.20:8001)
+Backend (172.16.168.20:8443)
     ├─> NPU Worker (172.16.168.22:8081)      [passive receiver]
     ├─> AI Stack (172.16.168.24:8080)        [passive receiver]
     └─> Browser Service (172.16.168.25:3000) [passive receiver]
@@ -139,8 +139,8 @@ Backend (172.16.168.20:8001)
 **Attack Vector**:
 ```bash
 # Currently succeeds (vulnerability exploitable)
-curl -X POST http://172.16.168.20:8001/api/npu/heartbeat
-curl -X POST http://172.16.168.20:8001/api/ai-stack/results
+curl -X POST https://172.16.168.20:8443/api/npu/heartbeat
+curl -X POST https://172.16.168.20:8443/api/ai-stack/results
 ```
 
 ### Post-Enforcement State
@@ -153,7 +153,7 @@ curl -X POST http://172.16.168.20:8001/api/ai-stack/results
 **Attack Prevention**:
 ```bash
 # Will return 401 Unauthorized
-curl -X POST http://172.16.168.20:8001/api/npu/heartbeat
+curl -X POST https://172.16.168.20:8443/api/npu/heartbeat
 # Response: {"detail": "Missing authentication headers", "authenticated": false}
 ```
 
@@ -182,7 +182,7 @@ export SERVICE_AUTH_ENFORCEMENT_MODE=false
 bash run_autobot.sh --restart
 
 # Verify rollback
-curl http://172.16.168.20:8001/api/health
+curl https://172.16.168.20:8443/api/health
 ```
 
 **Recovery Time**: < 2 minutes

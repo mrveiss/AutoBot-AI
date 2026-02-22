@@ -261,7 +261,7 @@ vite --host localhost --port 5173
 uvicorn main:app --host 0.0.0.0 --port 8001
 
 # Accessed from frontend VM:
-# http://172.16.168.20:8001/api/chat
+# https://172.16.168.20:8443/api/chat
 ```
 
 **Frontend on VM1** (172.16.168.21):
@@ -294,7 +294,7 @@ bind 0.0.0.0
 from autobot_shared.network_constants import NetworkConstants
 
 backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}/api/chat"
-# Result: http://172.16.168.20:8001/api/chat
+# Result: https://172.16.168.20:8443/api/chat
 
 redis_host = NetworkConstants.REDIS_VM_IP
 # Result: 172.16.168.23
@@ -310,10 +310,10 @@ redis_host = "localhost"
 
 ```bash
 # From main machine, test backend accessibility
-curl http://172.16.168.20:8001/api/health
+curl https://172.16.168.20:8443/api/health
 
 # From frontend VM, test backend accessibility
-ssh autobot@172.16.168.21 "curl http://172.16.168.20:8001/api/health"
+ssh autobot@172.16.168.21 "curl https://172.16.168.20:8443/api/health"
 
 # From any VM, test Redis
 redis-cli -h 172.16.168.23 ping
@@ -545,7 +545,7 @@ curl https://172.16.168.21                 # Frontend
 
 | VM | IP:Port | Service | Purpose |
 |----|---------|---------|---------|
-| **Main (WSL)** | 172.16.168.20:8001 | Backend API | FastAPI backend, business logic |
+| **Main (WSL)** | 172.16.168.20:8443 | Backend API | FastAPI backend, business logic |
 | **Main (WSL)** | 172.16.168.20:6080 | VNC Desktop | noVNC web-based terminal |
 | **VM1 Frontend** | 172.16.168.21:5173 | Web UI | Vue.js frontend (SINGLE SERVER) |
 | **VM2 NPU Worker** | 172.16.168.22:8081 | AI Acceleration | Hardware NPU for AI tasks |
@@ -783,7 +783,7 @@ ps aux | grep uvicorn  # Backend (main machine)
 netstat -tulpn | grep 8001  # Should show 0.0.0.0:8001
 
 # 3. Test from source VM
-ssh autobot@172.16.168.21 "curl http://172.16.168.20:8001/api/health"
+ssh autobot@172.16.168.21 "curl https://172.16.168.20:8443/api/health"
 ```
 
 ### VM Out of Sync

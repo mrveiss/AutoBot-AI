@@ -173,7 +173,7 @@ export function useSlmWebSocket() {
   const events = ref<SLMEvent[]>([])
 
   const connect = () => {
-    socket.value = new WebSocket('ws://172.16.168.20:8001/v1/slm/ws')
+    socket.value = new WebSocket('wss://172.16.168.20:8443/v1/slm/ws')
     // Handle messages, reconnection, etc.
   }
 

@@ -311,7 +311,7 @@ mcp__memory__create_entities --entities '[{"name": "Research 2025", "entityType"
 
 **✅ CORRECT Network Configuration:**
 - Backend binding: `0.0.0.0:8001` (accessible from all network interfaces)
-- Frontend URLs: `172.16.168.20:8001` (actual IP for remote access)
+- Frontend URLs: `172.16.168.20:8443` (actual IP for remote access)
 - Inter-VM communication: Use specific VM IPs (172.16.168.21-25)
 
 [150+ more lines of detailed rules and examples]
@@ -325,7 +325,7 @@ mcp__memory__create_entities --entities '[{"name": "Research 2025", "entityType"
 
 | Service | Bind Address | Access From VMs |
 |---------|-------------|----------------|
-| Backend API | `0.0.0.0:8001` | `172.16.168.20:8001` |
+| Backend API | `0.0.0.0:8001` | `172.16.168.20:8443` |
 | Frontend | `0.0.0.0:5173` | `172.16.168.21:5173` |
 | Redis | `0.0.0.0:6379` | `172.16.168.23:6379` |
 

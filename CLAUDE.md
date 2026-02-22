@@ -234,7 +234,7 @@ git diff --staged           # Ensure nothing unexpectedly left staged
 2. **Correct Python interpreter:** `which python3` — Main: Python 3.12 conda env; SLM/fleet: Python 3.10 venv `/opt/autobot/venv`
 3. **Database migrations current:** `cd /opt/autobot && source venv/bin/activate && alembic current`
 4. **Service actually restarted:** `sudo systemctl status autobot-backend --no-pager && journalctl -u autobot-backend -n 50 --no-pager`
-5. **Endpoints responding:** `curl -s http://localhost:8001/api/health | jq`
+5. **Endpoints responding:** `curl -sk https://localhost:8443/api/health | jq`
 6. **No errors in recent logs:** `journalctl -u autobot-backend --since "30 seconds ago" | grep -i error`
 
 Only proceed to next task if ALL six checks pass.

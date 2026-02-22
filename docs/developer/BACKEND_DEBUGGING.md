@@ -164,7 +164,7 @@ ss -tlnp | grep PORT
 curl -s --max-time 5 http://127.0.0.1:8001/api/health
 
 # From another host
-curl -s --max-time 5 http://172.16.168.20:8001/api/health
+curl -s --max-time 5 https://172.16.168.20:8443/api/health
 ```
 
 ### 4. Network path check

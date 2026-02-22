@@ -31,7 +31,7 @@ bash run_autobot.sh --restart
 # ✅ [ 88%] Entity Extractor: Entity extractor initialized successfully
 
 # 4. Verify new endpoints are available
-curl http://172.16.168.20:8001/api/entities/extract/health
+curl https://172.16.168.20:8443/api/entities/extract/health
 
 # Expected response:
 # {
@@ -49,7 +49,7 @@ curl http://172.16.168.20:8001/api/entities/extract/health
 
 ```bash
 # Test entity extraction with sample conversation
-curl -X POST http://172.16.168.20:8001/api/entities/extract \
+curl -X POST https://172.16.168.20:8443/api/entities/extract \
   -H "Content-Type: application/json" \
   -d '{
     "conversation_id": "test-123",
@@ -115,7 +115,7 @@ git revert HEAD  # Or specific commit
 bash run_autobot.sh --dev
 
 # 4. Verify core services still working
-curl http://172.16.168.20:8001/api/health
+curl https://172.16.168.20:8443/api/health
 ```
 
 The new routers are optional - if they fail to load, backend continues with core functionality.

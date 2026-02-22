@@ -242,7 +242,7 @@ pip install numpy>=1.24.0
 
 2. **Network Architecture:**
    ```
-   WSL2 Backend (172.16.168.20:8001)
+   WSL2 Backend (172.16.168.20:8443)
        ↓ HTTP
    Windows NPU Worker (Windows Host:8082)
        ↓ OpenVINO/NPU

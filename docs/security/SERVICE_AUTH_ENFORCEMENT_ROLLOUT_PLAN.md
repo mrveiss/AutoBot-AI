@@ -323,7 +323,7 @@ echo "Current time: $(date)"
 echo "Hours elapsed: (calculate)"
 
 # Verify system stability
-curl -s http://172.16.168.20:8001/api/health | jq -r '.status'
+curl -s https://172.16.168.20:8443/api/health | jq -r '.status'
 # Expected: "healthy"
 
 # Check service keys still present
@@ -357,7 +357,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    ```bash
    # On NPU Worker (VM 22), find backend API calls
    ssh -i ~/.ssh/autobot_key autobot@172.16.168.22
-   grep -r "http://172.16.168.20:8001" /home/autobot/npu-worker/
+   grep -r "https://172.16.168.20:8443" /home/autobot/npu-worker/
    ```
 
    Example locations to update:
@@ -402,7 +402,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    async def send_results(results):
        async with httpx.AsyncClient() as client:
            response = await client.post(
-               "http://172.16.168.20:8001/api/npu/results",
+               "https://172.16.168.20:8443/api/npu/results",
                json=results
            )
    ```
@@ -414,7 +414,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    async def send_results(results):
        client = create_service_client_from_env()
        response = await client.post(
-           "http://172.16.168.20:8001/api/npu/results",
+           "https://172.16.168.20:8443/api/npu/results",
            json=results
        )
        await client.close()
@@ -464,7 +464,7 @@ grep "Service auth failed" logs/backend.log | tail -50
 1. **Identify backend API call locations in AI Stack**
    ```bash
    ssh -i ~/.ssh/autobot_key autobot@172.16.168.24
-   grep -r "http://172.16.168.20:8001" /home/autobot/ai-stack/
+   grep -r "https://172.16.168.20:8443" /home/autobot/ai-stack/
    ```
 
 2. **Deploy ServiceHTTPClient to AI Stack**
@@ -516,7 +516,7 @@ grep "Service auth failed" logs/backend.log | tail -50
 1. **Identify backend API call locations in Browser Service**
    ```bash
    ssh -i ~/.ssh/autobot_key autobot@172.16.168.25
-   grep -r "http://172.16.168.20:8001" /home/autobot/browser-service/
+   grep -r "https://172.16.168.20:8443" /home/autobot/browser-service/
    ```
 
 2. **Deploy ServiceHTTPClient to Browser Service**
@@ -568,7 +568,7 @@ grep "Service auth failed" logs/backend.log | tail -50
 1. **Does Frontend VM make server-side API calls to backend?**
    ```bash
    ssh -i ~/.ssh/autobot_key autobot@172.16.168.21
-   grep -r "http://172.16.168.20:8001" /home/autobot/autobot-user-frontend/
+   grep -r "https://172.16.168.20:8443" /home/autobot/autobot-user-frontend/
    ```
 
 2. **Are these calls from browser or from server-side code?**
@@ -625,7 +625,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    # End-to-end workflow tests
 
    # Test 1: Chat with AI (involves AI Stack)
-   curl -X POST http://172.16.168.20:8001/api/chat \
+   curl -X POST https://172.16.168.20:8443/api/chat \
      -H "Content-Type: application/json" \
      -d '{"message": "Hello", "session_id": "test"}'
 
@@ -641,7 +641,7 @@ grep "Service auth failed" logs/backend.log | tail -50
    # Verify authentication overhead is minimal (< 10ms)
    # Compare pre-auth vs post-auth response times
 
-   ab -n 100 -c 10 http://172.16.168.20:8001/api/health
+   ab -n 100 -c 10 https://172.16.168.20:8443/api/health
    # Note: Average response time
 
    # Should be similar to pre-authentication baseline
@@ -790,7 +790,7 @@ curl http://172.16.168.22:8081/health
 
        # Service health
        echo "Service Health:"
-       curl -s http://172.16.168.20:8001/api/health | jq -r '.status' 2>/dev/null || echo "ERROR"
+       curl -s https://172.16.168.20:8443/api/health | jq -r '.status' 2>/dev/null || echo "ERROR"
 
        sleep 10
    done
@@ -826,7 +826,7 @@ curl http://172.16.168.22:8081/health
 
    # Verify rollback
    sleep 5
-   status=$(curl -s http://172.16.168.20:8001/api/health | jq -r '.status')
+   status=$(curl -s https://172.16.168.20:8443/api/health | jq -r '.status')
 
    if [ "$status" = "healthy" ]; then
        echo "✅ Rollback successful - Enforcement mode disabled"
@@ -874,15 +874,15 @@ curl http://172.16.168.22:8081/health
 
    ```bash
    # Backend health check
-   curl -s http://172.16.168.20:8001/api/health | jq
+   curl -s https://172.16.168.20:8443/api/health | jq
    # Expected: {"status": "healthy", ...}
 
    # Frontend accessibility test (should still work)
-   curl -s http://172.16.168.20:8001/api/settings | jq
+   curl -s https://172.16.168.20:8443/api/settings | jq
    # Expected: 200 OK (exempt path)
 
    # Service-only path test (should require auth)
-   curl -s http://172.16.168.20:8001/api/npu/internal
+   curl -s https://172.16.168.20:8443/api/npu/internal
    # Expected: 401 Unauthorized (if called without auth)
    ```
 
@@ -909,7 +909,7 @@ curl http://172.16.168.22:8081/health
 
 ```bash
 # 1. Backend health
-curl -s http://172.16.168.20:8001/api/health | jq -r '.status'
+curl -s https://172.16.168.20:8443/api/health | jq -r '.status'
 
 # 2. Authentication metrics (last hour)
 cutoff=$(date -d '1 hour ago' '+%Y-%m-%d %H:%M')
@@ -929,7 +929,7 @@ echo "Auth Success: $success | Failed: $failed | Blocked: $blocked"
 # - Trigger browser automation → Verify completion
 
 # 4. Frontend accessibility
-curl -s http://172.16.168.20:8001/api/settings > /dev/null
+curl -s https://172.16.168.20:8443/api/settings > /dev/null
 echo "Frontend access: $?"  # Should be 0 (success)
 ```
 
@@ -987,7 +987,7 @@ echo "Frontend access: $?"  # Should be 0 (success)
    for path in "/api/chat" "/api/settings" "/api/knowledge" "/api/terminal"; do
        echo "Testing: $path"
        status=$(curl -s -o /dev/null -w '%{http_code}' \
-                "http://172.16.168.20:8001$path")
+                "https://172.16.168.20:8443$path")
 
        if [ "$status" != "200" ] && [ "$status" != "404" ]; then
            echo "❌ FAILED: $path returned $status (expected 200 or 404)"
@@ -1005,7 +1005,7 @@ echo "Frontend access: $?"  # Should be 0 (success)
    for path in "/api/npu/internal" "/api/ai-stack/internal" "/api/browser/internal"; do
        echo "Testing: $path (should be blocked)"
        status=$(curl -s -o /dev/null -w '%{http_code}' \
-                "http://172.16.168.20:8001$path")
+                "https://172.16.168.20:8443$path")
 
        if [ "$status" = "401" ] || [ "$status" = "403" ]; then
            echo "✅ PASSED: $path properly blocked ($status)"
@@ -1020,7 +1020,7 @@ echo "Frontend access: $?"  # Should be 0 (success)
    ```bash
    # Test emergency override mechanism
 
-   curl -X GET "http://172.16.168.20:8001/api/npu/internal" \
+   curl -X GET "https://172.16.168.20:8443/api/npu/internal" \
         -H "X-Override-Token: YOUR_OVERRIDE_TOKEN" \
         -v
 
@@ -1061,7 +1061,7 @@ sed -i 's/SERVICE_AUTH_ENFORCEMENT_MODE=true/SERVICE_AUTH_ENFORCEMENT_MODE=false
 bash run_autobot.sh --restart
 
 # Verify rollback
-curl -s http://172.16.168.20:8001/api/health | jq -r '.status'
+curl -s https://172.16.168.20:8443/api/health | jq -r '.status'
 # Expected: "healthy"
 
 # Confirm enforcement disabled
@@ -1192,7 +1192,7 @@ grep SERVICE_AUTH_ENFORCEMENT_MODE .env
 
        # Verify backend healthy
        sleep 5
-       status=$(curl -s http://172.16.168.20:8001/api/health | jq -r '.status')
+       status=$(curl -s https://172.16.168.20:8443/api/health | jq -r '.status')
 
        if [ "$status" != "healthy" ]; then
            echo "❌ Backend health check failed at ${pct}% - Rolling back"
@@ -1272,7 +1272,7 @@ grep SERVICE_AUTH_ENFORCEMENT_MODE .env
 
        echo
        echo "Service Health:"
-       curl -s http://172.16.168.20:8001/api/health | jq -r '.status' 2>/dev/null || echo "ERROR"
+       curl -s https://172.16.168.20:8443/api/health | jq -r '.status' 2>/dev/null || echo "ERROR"
 
        sleep 10
    done
@@ -1293,7 +1293,7 @@ grep SERVICE_AUTH_ENFORCEMENT_MODE .env
    echo "Current time: $(date)"
 
    # Verify all services still healthy
-   curl -s http://172.16.168.20:8001/api/health | jq
+   curl -s https://172.16.168.20:8443/api/health | jq
 
    # Review recent authentication logs
    grep "Service authenticated successfully" logs/backend.log | tail -20
@@ -1371,7 +1371,7 @@ grep SERVICE_AUTH_ENFORCEMENT_MODE .env
 
    ```bash
    # Load testing with authentication
-   ab -n 1000 -c 50 http://172.16.168.20:8001/api/health
+   ab -n 1000 -c 50 https://172.16.168.20:8443/api/health
 
    # Compare to baseline (from Phase 2)
    # Authentication overhead should still be < 10ms
@@ -1383,7 +1383,7 @@ grep SERVICE_AUTH_ENFORCEMENT_MODE .env
    # Attempt unauthenticated access to service-only paths
    for path in "/api/npu/internal" "/api/ai-stack/internal" "/api/browser/internal"; do
        status=$(curl -s -o /dev/null -w '%{http_code}' \
-                "http://172.16.168.20:8001$path")
+                "https://172.16.168.20:8443$path")
 
        if [ "$status" = "401" ] || [ "$status" = "403" ]; then
            echo "✅ $path properly secured"
@@ -1422,7 +1422,7 @@ System automatically executes rollback script - no manual intervention needed.
 bash scripts/rollback-enforcement.sh
 
 # Verify system restored
-curl -s http://172.16.168.20:8001/api/health | jq
+curl -s https://172.16.168.20:8443/api/health | jq
 
 # Review logs to identify issue
 grep "ERROR\|FAILED" logs/backend.log | tail -50
@@ -1473,7 +1473,7 @@ grep "ERROR\|FAILED" logs/backend.log | tail -50
    bash run_autobot.sh --restart
 
    # Verify configuration
-   curl -s http://172.16.168.20:8001/api/health | jq
+   curl -s https://172.16.168.20:8443/api/health | jq
    ```
 
 #### Step 4.2: Production Hardening
@@ -1724,7 +1724,7 @@ grep "ERROR\|FAILED" logs/backend.log | tail -50
 
    # System health
    echo "Backend Health:"
-   curl -s http://172.16.168.20:8001/api/health | jq -r '.status'
+   curl -s https://172.16.168.20:8443/api/health | jq -r '.status'
 
    echo
    echo "=== Report Complete ==="
@@ -1777,7 +1777,7 @@ nohup python -m uvicorn backend.app_factory:app --host 0.0.0.0 --port 8001 > log
 sleep 5
 
 # Step 4: Verify rollback
-status=$(curl -s http://172.16.168.20:8001/api/health | jq -r '.status' 2>/dev/null)
+status=$(curl -s https://172.16.168.20:8443/api/health | jq -r '.status' 2>/dev/null)
 
 if [ "$status" = "healthy" ]; then
     echo "✅ EMERGENCY ROLLBACK SUCCESSFUL"
@@ -1837,7 +1837,7 @@ bash run_autobot.sh --restart
 sleep 10
 
 # Backend health
-health=$(curl -s http://172.16.168.20:8001/api/health | jq -r '.status')
+health=$(curl -s https://172.16.168.20:8443/api/health | jq -r '.status')
 echo "Backend health: $health"
 
 # Service connectivity
@@ -1848,7 +1848,7 @@ done
 
 # Frontend accessibility
 for path in "/api/chat" "/api/settings" "/api/knowledge"; do
-    status=$(curl -s -o /dev/null -w '%{http_code}' "http://172.16.168.20:8001$path")
+    status=$(curl -s -o /dev/null -w '%{http_code}' "https://172.16.168.20:8443$path")
     echo "Frontend path $path: $status"
 done
 
@@ -1957,7 +1957,7 @@ echo "System restored to logging-only mode"
 
 **Quick Health Check:**
 ```bash
-curl -s http://172.16.168.20:8001/api/health | jq
+curl -s https://172.16.168.20:8443/api/health | jq
 ```
 
 **Authentication Metrics (Last Hour):**
@@ -2008,7 +2008,7 @@ echo
 
 # Test 1: Backend Health
 echo "[Test 1] Backend Health Check"
-health=$(curl -s http://172.16.168.20:8001/api/health | jq -r '.status')
+health=$(curl -s https://172.16.168.20:8443/api/health | jq -r '.status')
 if [ "$health" = "healthy" ]; then
     echo "✅ PASSED: Backend is healthy"
 else
@@ -2022,7 +2022,7 @@ passed=0
 failed=0
 
 for path in "/api/chat" "/api/settings" "/api/knowledge" "/api/terminal"; do
-    status=$(curl -s -o /dev/null -w '%{http_code}' "http://172.16.168.20:8001$path")
+    status=$(curl -s -o /dev/null -w '%{http_code}' "https://172.16.168.20:8443$path")
     if [ "$status" = "200" ] || [ "$status" = "404" ]; then
         echo "✅ $path: $status"
         ((passed++))
@@ -2041,7 +2041,7 @@ passed=0
 failed=0
 
 for path in "/api/npu/internal" "/api/ai-stack/internal" "/api/browser/internal"; do
-    status=$(curl -s -o /dev/null -w '%{http_code}' "http://172.16.168.20:8001$path")
+    status=$(curl -s -o /dev/null -w '%{http_code}' "https://172.16.168.20:8443$path")
     if [ "$status" = "401" ] || [ "$status" = "403" ]; then
         echo "✅ $path: Blocked ($status)"
         ((passed++))

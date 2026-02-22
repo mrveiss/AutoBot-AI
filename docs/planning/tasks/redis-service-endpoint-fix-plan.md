@@ -27,7 +27,7 @@ The Redis service control component in the frontend is calling incorrect API end
 - ✅ Registered at: `/api/redis-service/status` (EXISTS)
 - ✅ Registered at: `/api/redis-service/health` (EXISTS)
 - ✅ Router prefix: `/redis-service` (line 445 in app_factory.py)
-- ✅ Full URL: `http://172.16.168.20:8001/api/redis-service/*`
+- ✅ Full URL: `https://172.16.168.20:8443/api/redis-service/*`
 
 **Root Cause**: URL path mismatch - frontend expects `/services/redis` but backend provides `/redis-service`.
 
@@ -181,7 +181,7 @@ this.baseEndpoint = '/api/redis-service'
 **Test Commands:**
 ```bash
 # Test status endpoint
-curl http://172.16.168.20:8001/api/redis-service/status
+curl https://172.16.168.20:8443/api/redis-service/status
 
 # Expected Response:
 {
@@ -193,7 +193,7 @@ curl http://172.16.168.20:8001/api/redis-service/status
 }
 
 # Test health endpoint
-curl http://172.16.168.20:8001/api/redis-service/health
+curl https://172.16.168.20:8443/api/redis-service/health
 
 # Expected Response:
 {
@@ -512,7 +512,7 @@ git checkout HEAD autobot-user-frontend/src/services/RedisServiceAPI.js
 └─────────────────────────┼──────────────────────────────────┘
                           │
                           │ HTTP GET/POST
-                          │ http://172.16.168.20:8001/api/redis-service/*
+                          │ https://172.16.168.20:8443/api/redis-service/*
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────────┐

@@ -1227,7 +1227,7 @@ grep "enable_auth: true" /home/kali/Desktop/AutoBot/config/config.yaml
 pip list | grep -E "fastapi|pydantic|jwt"
 
 # 3. Verify backend running
-curl http://172.16.168.20:8001/api/health
+curl https://172.16.168.20:8443/api/health
 
 # 4. Verify frontend accessible
 curl http://172.16.168.21:5173
@@ -1286,14 +1286,14 @@ pytest tests/integration/test_file_auth_integration.py -v
 
 # Step 3.3: Manual API testing
 # Try to access file endpoint without auth (should fail with 401)
-curl http://172.16.168.20:8001/api/files/view?path=test.txt
+curl https://172.16.168.20:8443/api/files/view?path=test.txt
 
 # Try with valid token (should succeed)
-TOKEN=$(curl -X POST http://172.16.168.20:8001/api/auth/login \
+TOKEN=$(curl -X POST https://172.16.168.20:8443/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"developer","password":"dev123secure"}' | jq -r .token)
 
-curl http://172.16.168.20:8001/api/files/view?path=test.txt \
+curl https://172.16.168.20:8443/api/files/view?path=test.txt \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -1379,7 +1379,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "supervisorctl restart autobot-f
 ./run_autobot.sh --restart
 
 # Step 4: Verify system operational
-curl http://172.16.168.20:8001/api/health
+curl https://172.16.168.20:8443/api/health
 curl http://172.16.168.21:5173
 ```
 
@@ -1390,7 +1390,7 @@ curl http://172.16.168.21:5173
 # 1. All file endpoints return 401 without auth
 for endpoint in view upload delete download create list; do
   echo "Testing /api/files/$endpoint"
-  response=$(curl -s -o /dev/null -w "%{http_code}" http://172.16.168.20:8001/api/files/$endpoint)
+  response=$(curl -s -o /dev/null -w "%{http_code}" https://172.16.168.20:8443/api/files/$endpoint)
   if [ "$response" = "401" ]; then
     echo "✓ $endpoint requires auth"
   else
@@ -1399,7 +1399,7 @@ for endpoint in view upload delete download create list; do
 done
 
 # 2. Authenticated requests work correctly
-TOKEN=$(curl -X POST http://172.16.168.20:8001/api/auth/login \
+TOKEN=$(curl -X POST https://172.16.168.20:8443/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"developer","password":"dev123secure"}' | jq -r .token)
 
@@ -1407,7 +1407,7 @@ for endpoint in view list; do
   echo "Testing authenticated /api/files/$endpoint"
   response=$(curl -s -o /dev/null -w "%{http_code}" \
     -H "Authorization: Bearer $TOKEN" \
-    "http://172.16.168.20:8001/api/files/$endpoint?path=.")
+    "https://172.16.168.20:8443/api/files/$endpoint?path=.")
   if [ "$response" = "200" ]; then
     echo "✓ $endpoint works with auth"
   else
@@ -1541,14 +1541,14 @@ Authorization: Bearer {jwt_token}
 
 **Getting a Token**:
 ```bash
-curl -X POST http://172.16.168.20:8001/api/auth/login \
+curl -X POST https://172.16.168.20:8443/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"your_username","password":"your_password"}'
 ```
 
 **Example Authenticated Request**:
 ```bash
-curl -X GET http://172.16.168.20:8001/api/files/view?path=test.txt \
+curl -X GET https://172.16.168.20:8443/api/files/view?path=test.txt \
   -H "Authorization: Bearer {your_token}"
 ```
 

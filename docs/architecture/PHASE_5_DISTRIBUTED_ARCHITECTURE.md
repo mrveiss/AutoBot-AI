@@ -156,7 +156,7 @@ server {
 
     # API proxy to main host
     location /api/ {
-        proxy_pass http://172.16.168.20:8001/api/;
+        proxy_pass https://172.16.168.20:8443/api/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -166,7 +166,7 @@ server {
 
     # WebSocket proxy
     location /ws/ {
-        proxy_pass http://172.16.168.20:8001/ws/;
+        proxy_pass https://172.16.168.20:8443/ws/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "Upgrade";
@@ -559,7 +559,7 @@ sudo systemctl enable autobot-browser.service
 # Comprehensive health check system
 health_checks = {
     "main_host": {
-        "backend_api": "http://172.16.168.20:8001/api/health",
+        "backend_api": "https://172.16.168.20:8443/api/health",
         "ollama_service": "http://127.0.0.1:11434/api/tags",
         "vnc_desktop": "tcp://127.0.0.1:5900"
     },
@@ -753,7 +753,7 @@ python3 scripts/health_check_all_vms.py
 
 # 2. Update knowledge base indices  
 echo "Optimizing knowledge base..."
-curl -X POST http://172.16.168.20:8001/api/knowledge_base/optimize
+curl -X POST https://172.16.168.20:8443/api/knowledge_base/optimize
 
 # 3. Clear expired cache entries
 echo "Cleaning Redis cache..."
@@ -787,4 +787,4 @@ echo "Maintenance completed successfully"
 - System Health Dashboard: `http://172.16.168.21/health`
 - Redis Insight: `http://172.16.168.23:8002`
 - VNC Desktop Access: `http://127.0.0.1:6080`
-- API Documentation: `http://172.16.168.20:8001/docs`
+- API Documentation: `https://172.16.168.20:8443/docs`

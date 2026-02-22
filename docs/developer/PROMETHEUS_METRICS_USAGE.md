@@ -295,7 +295,7 @@ scrape_configs:
     scrape_interval: 15s
     metrics_path: '/api/monitoring/metrics'
     static_configs:
-      - targets: ['172.16.168.20:8001']
+      - targets: ['172.16.168.20:8443']
 ```
 
 ### Alert Rules

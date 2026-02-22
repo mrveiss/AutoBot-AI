@@ -306,7 +306,7 @@ ansible all -i ansible/inventory/production.yml \
 **Test 1: Backend → Redis Health Check**
 ```bash
 # Backend should now send auth headers to Redis API
-curl -v http://172.16.168.20:8001/api/redis/health
+curl -v https://172.16.168.20:8443/api/redis/health
 ```
 
 **Expected Log** (backend.log):
@@ -318,7 +318,7 @@ curl -v http://172.16.168.20:8001/api/redis/health
 ```bash
 # NPU worker should authenticate when registering
 ssh autobot@172.16.168.22 \
-  "curl -X POST http://172.16.168.20:8001/api/npu/register"
+  "curl -X POST https://172.16.168.20:8443/api/npu/register"
 ```
 
 **Expected Log** (backend.log):
@@ -431,7 +431,7 @@ ansible all -i ansible/inventory/production.yml -m shell -a "systemctl status au
 curl http://172.16.168.21:5173
 
 # Check backend accessible
-curl http://172.16.168.20:8001/api/health
+curl https://172.16.168.20:8443/api/health
 ```
 
 ---

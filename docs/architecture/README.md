@@ -23,7 +23,7 @@ AutoBot is an AI-powered automation platform built on a distributed 6-VM archite
 ```mermaid
 graph TB
     User[User Browser] --> Frontend[VM1: Frontend<br/>172.16.168.21:5173]
-    Frontend --> Backend[Main: Backend API<br/>172.16.168.20:8001]
+    Frontend --> Backend[Main: Backend API<br/>172.16.168.20:8443]
     Backend --> Redis[VM3: Redis Stack<br/>172.16.168.23:6379]
     Backend --> AI[VM4: AI Stack<br/>172.16.168.24:8080]
     Backend --> NPU[VM2: NPU Worker<br/>172.16.168.22:8081]

@@ -132,7 +132,7 @@ python -m uvicorn backend.app_factory:app --host 0.0.0.0 --port 8001 --reload
 ### Step 2: Verify Backend Running
 
 ```bash
-curl http://172.16.168.20:8001/api/health
+curl https://172.16.168.20:8443/api/health
 # Expected: {"status": "healthy", ...}
 ```
 
@@ -175,12 +175,12 @@ Expected audit entries for denied access:
 
 ```bash
 # Test 1: Authorized access (should succeed)
-curl -X GET http://172.16.168.20:8001/api/chat/sessions/YOUR_SESSION_ID \
+curl -X GET https://172.16.168.20:8443/api/chat/sessions/YOUR_SESSION_ID \
   -H "X-Username: admin"
 # Expected: 200 OK with messages
 
 # Test 2: Unauthorized access (should be blocked)
-curl -X GET http://172.16.168.20:8001/api/chat/sessions/SOMEONE_ELSES_SESSION \
+curl -X GET https://172.16.168.20:8443/api/chat/sessions/SOMEONE_ELSES_SESSION \
   -H "X-Username: attacker"
 # Expected: 403 Forbidden {"detail": "You do not have permission to access this conversation"}
 ```
@@ -238,7 +238,7 @@ pytest tests/security/test_access_control_penetration.py -v
 ```bash
 # Ownership validation should add < 10ms overhead
 curl -w "@curl-format.txt" -o /dev/null -s \
-  http://172.16.168.20:8001/api/chat/sessions/YOUR_SESSION
+  https://172.16.168.20:8443/api/chat/sessions/YOUR_SESSION
 # time_total should be < previous_time + 10ms
 ```
 
@@ -261,7 +261,7 @@ pkill -f "uvicorn.*backend"
 python -m uvicorn backend.app_factory:app --host 0.0.0.0 --port 8001 --reload
 
 # 3. Verify rollback
-curl http://172.16.168.20:8001/api/health
+curl https://172.16.168.20:8443/api/health
 ```
 
 ### Full Rollback with Git

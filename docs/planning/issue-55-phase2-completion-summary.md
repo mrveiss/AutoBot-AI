@@ -400,7 +400,7 @@ The following issues were discovered and fixed during test execution:
 ### Basic Entity Extraction
 
 ```bash
-curl -X POST http://172.16.168.20:8001/api/entities/extract \
+curl -X POST https://172.16.168.20:8443/api/entities/extract \
   -H "Content-Type: application/json" \
   -d '{
     "conversation_id": "conv-123",
@@ -414,7 +414,7 @@ curl -X POST http://172.16.168.20:8001/api/entities/extract \
 ### Batch Extraction
 
 ```bash
-curl -X POST http://172.16.168.20:8001/api/entities/extract-batch \
+curl -X POST https://172.16.168.20:8443/api/entities/extract-batch \
   -H "Content-Type: application/json" \
   -d '{
     "conversations": [
@@ -433,7 +433,7 @@ curl -X POST http://172.16.168.20:8001/api/entities/extract-batch \
 ### Health Check
 
 ```bash
-curl http://172.16.168.20:8001/api/entities/extract/health
+curl https://172.16.168.20:8443/api/entities/extract/health
 ```
 
 ---

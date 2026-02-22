@@ -399,7 +399,7 @@ cat vite.config.ts | grep -A 10 proxy
 # Expected proxy configuration:
 # proxy: {
 #   '/api': {
-#     target: 'http://172.16.168.20:8001',
+#     target: 'https://172.16.168.20:8443',
 #     changeOrigin: true
 #   }
 # }

@@ -691,14 +691,14 @@ Implement model-specific configuration system with centralized ContextWindowMana
 3. **Service Auth Verification:**
    ```bash
    # Attempt unauthorized request
-   curl http://172.16.168.20:8001/api/internal/test
+   curl https://172.16.168.20:8443/api/internal/test
    # Should return 401 Unauthorized
    ```
 
 4. **Context Window Verification:**
    ```bash
    # Check active model config
-   curl http://172.16.168.20:8001/api/model/config
+   curl https://172.16.168.20:8443/api/model/config
    ```
 
 ---
@@ -775,7 +775,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.20 "sudo systemctl restart autobot-
 **After Each Deployment:**
 ```bash
 # Backend health
-curl http://172.16.168.20:8001/api/health
+curl https://172.16.168.20:8443/api/health
 
 # Redis connectivity
 redis-cli -h 172.16.168.23 ping
@@ -784,7 +784,7 @@ redis-cli -h 172.16.168.23 ping
 curl http://172.16.168.21:5173
 
 # WebSocket health
-wscat -c ws://172.16.168.20:8001/ws/chat
+wscat -c wss://172.16.168.20:8443/ws/chat
 ```
 
 ### Rollback Procedures

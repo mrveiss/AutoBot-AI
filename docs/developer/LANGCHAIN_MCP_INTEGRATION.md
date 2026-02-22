@@ -44,7 +44,7 @@ from langchain.tools import Tool, StructuredTool
 from langchain_anthropic import ChatAnthropic
 
 # AutoBot backend configuration
-AUTOBOT_BACKEND_URL = "http://172.16.168.20:8001"
+AUTOBOT_BACKEND_URL = "https://172.16.168.20:8443"
 
 
 async def call_mcp_tool(

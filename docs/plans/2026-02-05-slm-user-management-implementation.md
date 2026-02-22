@@ -1223,7 +1223,7 @@ cd /home/kali/Desktop/AutoBot
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8001
 
 # Test login endpoint
-curl -X POST http://172.16.168.20:8001/api/auth/login \
+curl -X POST https://172.16.168.20:8443/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "testuser", "password": "testpass"}'
 ```
@@ -1634,7 +1634,7 @@ Expected: JWT token
 **Step 2: Test AutoBot user login**
 
 ```bash
-curl -X POST http://172.16.168.20:8001/api/auth/login \
+curl -X POST https://172.16.168.20:8443/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "autobot_admin", "password": "ChangeMe123!"}'
 ```
@@ -1666,7 +1666,7 @@ Expected: Created user JSON
 **Step 4: Test AutoBot can authenticate new user**
 
 ```bash
-curl -X POST http://172.16.168.20:8001/api/auth/login \
+curl -X POST https://172.16.168.20:8443/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "testuser", "password": "TestPass123!"}'
 ```

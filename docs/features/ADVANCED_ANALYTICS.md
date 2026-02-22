@@ -278,7 +278,7 @@ Add to your Prometheus configuration:
 scrape_configs:
   - job_name: 'autobot'
     static_configs:
-      - targets: ['172.16.168.20:8001']
+      - targets: ['172.16.168.20:8443']
     metrics_path: '/api/analytics/export/prometheus'
     scrape_interval: 30s
 ```

@@ -1269,7 +1269,7 @@ export default {
 **Priority:** P0 (Critical - Real-Time Updates)
 
 **Acceptance Criteria:**
-- [ ] WebSocket endpoint: `ws://172.16.168.20:8001/ws/services/redis/status`
+- [ ] WebSocket endpoint: `wss://172.16.168.20:8443/ws/services/redis/status`
 - [ ] Authentication via token (URL parameter or header)
 - [ ] Broadcast service status changes to all subscribed clients
 - [ ] Message types: service_status, service_event, auto_recovery
@@ -1854,7 +1854,7 @@ import time
 from httpx import AsyncClient
 
 async def load_test_status_endpoint(duration_seconds: int = 60):
-    client = AsyncClient(base_url="http://172.16.168.20:8001")
+    client = AsyncClient(base_url="https://172.16.168.20:8443")
 
     request_count = 0
     error_count = 0
