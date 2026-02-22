@@ -22,7 +22,7 @@ from typing import Any, Dict
 try:
     import redis
 except ImportError:
-    print("ERROR: redis-py not installed. Install: pip install redis", file=sys.stderr)
+    sys.stderr.write("ERROR: redis-py not installed. Install: pip install redis\n")
     sys.exit(1)
 
 
@@ -30,13 +30,19 @@ class AutoBotInventory:
     """Generate Ansible inventory from AutoBot service registry"""
 
     def __init__(self):
-        self.redis_host = os.getenv("REDIS_HOST", "172.16.168.23")
+        self.redis_host = os.getenv(
+            "REDIS_HOST", os.getenv("AUTOBOT_REDIS_HOST", "localhost")
+        )
         self.redis_port = int(os.getenv("REDIS_PORT", "6379"))
         self.redis_db = int(os.getenv("REDIS_DB", "0"))
         self.inventory = {"_meta": {"hostvars": {}}}
 
     def connect_redis(self):
-        """Connect to Redis server"""
+        """Connect to Redis server.
+
+        Issue #1086: Direct redis.Redis() required — Ansible dynamic inventory
+        script runs standalone without access to autobot_shared.
+        """
         try:
             client = redis.Redis(
                 host=self.redis_host,
@@ -48,11 +54,10 @@ class AutoBotInventory:
             client.ping()
             return client
         except Exception as e:
-            print(
-                f"ERROR: Cannot connect to Redis at {self.redis_host}:{self.redis_port}",
-                file=sys.stderr,
+            sys.stderr.write(
+                f"ERROR: Cannot connect to Redis at {self.redis_host}:{self.redis_port}\n"
             )
-            print(f"       {str(e)}", file=sys.stderr)
+            sys.stderr.write(f"       {str(e)}\n")
             return None
 
     def get_hosts_from_redis(self, redis_client) -> Dict[str, Any]:
@@ -90,7 +95,9 @@ class AutoBotInventory:
                         "last_seen": host_data.get("last_seen", "never"),
                     }
         except Exception as e:
-            print(f"WARNING: Error fetching hosts from Redis: {e}", file=sys.stderr)
+            sys.stderr.write(
+                f"WARNING: Error fetching hosts from Redis: {e}\n"
+            )
 
         return hosts
 
@@ -99,9 +106,8 @@ class AutoBotInventory:
         hosts = self.get_hosts_from_redis(redis_client)
 
         if not hosts:
-            print(
-                "WARNING: No hosts found in Redis, using fallback static inventory",
-                file=sys.stderr,
+            sys.stderr.write(
+                "WARNING: No hosts found in Redis, using fallback static inventory\n"
             )
             return self.build_fallback_inventory()
 
@@ -169,9 +175,9 @@ def main():
     inventory = AutoBotInventory()
 
     if args.list:
-        print(inventory.list_inventory())
+        print(inventory.list_inventory())  # noqa: print
     elif args.host:
-        print(inventory.host_vars(args.host))
+        print(inventory.host_vars(args.host))  # noqa: print
     else:
         parser.print_help()
         sys.exit(1)
