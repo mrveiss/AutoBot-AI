@@ -8,13 +8,10 @@ import os
 from typing import Any, Dict, List, Optional
 
 import yaml
-
-logger = logging.getLogger(__name__)
-
-# Import the centralized ConfigManager
+from backend.constants.network_constants import NetworkConstants
 from config import config as global_config_manager
 
-from backend.constants.network_constants import NetworkConstants
+logger = logging.getLogger(__name__)
 
 # Performance optimization: O(1) lookup for boolean string values (Issue #326)
 BOOLEAN_TRUE_VALUES = {"true", "1", "yes"}
