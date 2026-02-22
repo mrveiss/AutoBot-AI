@@ -11,10 +11,10 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-from backend.constants.network_constants import NetworkConstants
-
 # Import the centralized ConfigManager
 from config import config as global_config_manager
+
+from backend.constants.network_constants import NetworkConstants
 
 # Performance optimization: O(1) lookup for boolean string values (Issue #326)
 BOOLEAN_TRUE_VALUES = {"true", "1", "yes"}
@@ -248,7 +248,7 @@ class SecurityLayer:
         # For this demo, simple append-only.
 
         try:
-            with open(self.audit_log_file, "a") as f:
+            with open(self.audit_log_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(log_entry) + "\n")
             logger.debug("Audit log: %s by %s - %s", action, user, outcome)
         except Exception as e:
@@ -281,16 +281,18 @@ class SecurityLayer:
 if __name__ == "__main__":
     # Ensure config.yaml exists for testing
     if not os.path.exists("config/config.yaml"):
-        print("config/config.yaml not found. Copying from template for testing.")
+        print(  # noqa: print
+            "config/config.yaml not found. Copying from template for testing."
+        )  # noqa: print
         os.makedirs("config", exist_ok=True)
-        with open("config/config.yaml.template", "r") as f_template:
-            with open("config/config.yaml", "w") as f_config:
+        with open("config/config.yaml.template", "r", encoding="utf-8") as f_template:
+            with open("config/config.yaml", "w", encoding="utf-8") as f_config:
                 f_config.write(f_template.read())
 
     # Test with authentication disabled (default)
-    print("\n--- Testing with Authentication DISABLED ---")
+    print("\n--- Testing with Authentication DISABLED ---")  # noqa: print
     security = SecurityLayer()
-    print(
+    print(  # noqa: print
         "Can 'user' execute shell command? "
         f"{security.check_permission('user', 'allow_shell_execute')}"
     )
@@ -299,7 +301,7 @@ if __name__ == "__main__":
     )
 
     # Temporarily enable auth in config for testing
-    with open("config/config.yaml", "r") as f:
+    with open("config/config.yaml", "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
     cfg["security_config"]["enable_auth"] = True
     cfg["security_config"]["allowed_users"] = {
@@ -310,32 +312,32 @@ if __name__ == "__main__":
         "admin": {"permissions": ["allow_all"]},
         "testuser_role": {"permissions": ["allow_goal_submission", "allow_kb_read"]},
     }
-    with open("config/config.yaml", "w") as f:
+    with open("config/config.yaml", "w", encoding="utf-8") as f:
         yaml.safe_dump(cfg, f, indent=2)
 
-    print("\n--- Testing with Authentication ENABLED ---")
+    print("\n--- Testing with Authentication ENABLED ---")  # noqa: print
     security_enabled = SecurityLayer()
 
     # Test authentication
-    print(
+    print(  # noqa: print
         "Authenticate 'testuser': "
         f"{security_enabled.authenticate_user('testuser', 'password123')}"
     )
-    print(
+    print(  # noqa: print
         "Authenticate 'baduser': "
         f"{security_enabled.authenticate_user('baduser', 'wrongpass')}"
     )
 
     # Test permissions
-    print(
+    print(  # noqa: print
         "Can 'admin' execute shell command? "
         f"{security_enabled.check_permission('admin', 'allow_shell_execute')}"
     )
-    print(
+    print(  # noqa: print
         "Can 'testuser_role' execute shell command? "
         f"{security_enabled.check_permission('testuser_role', 'allow_shell_execute')}"
     )
-    print(
+    print(  # noqa: print
         "Can 'testuser_role' submit goal? "
         f"{security_enabled.check_permission('testuser_role', 'allow_goal_submission')}"
     )
@@ -352,8 +354,8 @@ if __name__ == "__main__":
     )
 
     # Clean up config for next run
-    with open("config/config.yaml", "r") as f:
+    with open("config/config.yaml", "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
     cfg["security_config"]["enable_auth"] = False
-    with open("config/config.yaml", "w") as f:
+    with open("config/config.yaml", "w", encoding="utf-8") as f:
         yaml.safe_dump(cfg, f, indent=2)

@@ -8,7 +8,7 @@ Usage:
     python generate_inventory.py --host <hostname>
 
 Environment variables:
-    REDIS_HOST: Redis server address (default: 172.16.168.23)
+    REDIS_HOST: Redis server address (default: localhost)
     REDIS_PORT: Redis server port (default: 6379)
     REDIS_DB: Redis database number (default: 0)
 """
@@ -88,16 +88,16 @@ class AutoBotInventory:
                         "ansible_host": host_data.get("ip", "127.0.0.1"),
                         "vm_role": host_data.get("role", "unknown"),
                         "vm_hostname": hostname,
-                        "services": host_data.get("services", "").split(",")
-                        if host_data.get("services")
-                        else [],
+                        "services": (
+                            host_data.get("services", "").split(",")
+                            if host_data.get("services")
+                            else []
+                        ),
                         "status": host_data.get("status", "unknown"),
                         "last_seen": host_data.get("last_seen", "never"),
                     }
         except Exception as e:
-            sys.stderr.write(
-                f"WARNING: Error fetching hosts from Redis: {e}\n"
-            )
+            sys.stderr.write(f"WARNING: Error fetching hosts from Redis: {e}\n")
 
         return hosts
 

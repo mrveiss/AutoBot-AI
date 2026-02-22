@@ -26,12 +26,12 @@ from api.vnc_humanization import (
     simulate_mouse_curve,
 )
 from auth_middleware import check_admin_permission
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import with_error_handling
+from backend.constants.network_constants import NetworkConstants
+from backend.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -1130,7 +1130,7 @@ async def vnc_ocr_text(
             tmp_path = tmp_file.name
 
         # Load image
-        image = Image.open(tmp_path)
+        image = Image.open(tmp_path, encoding="utf-8")
 
         # Crop to region if specified
         if request.region and all(

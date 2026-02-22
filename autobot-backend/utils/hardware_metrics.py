@@ -18,8 +18,6 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 import psutil
-import redis
-from config_helper import cfg
 
 # Import existing monitoring infrastructure
 
@@ -200,18 +198,10 @@ class Phase9PerformanceMonitor:
     def _initialize_redis(self):
         """Initialize Redis client for metrics storage. Issue #694."""
         try:
-            # Use SSOT config for Redis connection
-            from autobot_shared.ssot_config import get_config
+            from autobot_shared.redis_client import get_redis_client
 
-            ssot_config = get_config()
-
-            self.redis_client = redis.Redis(
-                host=ssot_config.vm.redis,
-                port=6379,
-                db=cfg.get("redis.databases.metrics.db", 4),
-                decode_responses=True,
-                socket_timeout=5.0,
-                socket_connect_timeout=2.0,
+            self.redis_client = get_redis_client(
+                async_client=False, database="analytics"
             )
             self.redis_client.ping()
             self.logger.info("Redis client initialized for performance metrics")
@@ -1632,19 +1622,25 @@ if __name__ == "__main__":
 
     async def test_phase9_monitoring():
         """Test Phase 9 performance monitoring"""
-        print("Testing Phase 9 Performance Monitoring System...")
+        print("Testing Phase 9 Performance Monitoring System...")  # noqa: print
 
         # Collect metrics
         metrics = await phase9_monitor.collect_all_metrics()
-        print(f"Collected metrics: {json.dumps(metrics, indent=2, default=str)}")
+        print(  # noqa: print
+            f"Collected metrics: {json.dumps(metrics, indent=2, default=str)}"
+        )  # noqa: print
 
         # Get dashboard
         dashboard = phase9_monitor.get_current_performance_dashboard()
-        print(f"Performance dashboard: {json.dumps(dashboard, indent=2, default=str)}")
+        print(  # noqa: print
+            f"Performance dashboard: {json.dumps(dashboard, indent=2, default=str)}"
+        )  # noqa: print
 
         # Get recommendations
         recommendations = phase9_monitor.get_performance_optimization_recommendations()
-        print(f"Optimization recommendations: {json.dumps(recommendations, indent=2)}")
+        print(  # noqa: print
+            f"Optimization recommendations: {json.dumps(recommendations, indent=2)}"
+        )  # noqa: print
 
     # Run test
     asyncio.run(test_phase9_monitoring())

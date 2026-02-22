@@ -883,12 +883,12 @@ if __name__ == "__main__":
     if not os.path.exists("config/config.yaml"):
         logger.info("config/config.yaml not found. Copying from template for testing.")
         os.makedirs("config", exist_ok=True)
-        with open("config/config.yaml.template", "r") as f_template:
-            with open("config/config.yaml", "w") as f_config:
+        with open("config/config.yaml.template", "r", encoding="utf-8") as f_template:
+            with open("config/config.yaml", "w", encoding="utf-8") as f_config:
                 f_config.write(f_template.read())
 
     # Add voice_interface section to config.yaml for testing
-    with open("config/config.yaml", "r") as f:
+    with open("config/config.yaml", "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
     if "voice_interface" not in cfg:
         cfg["voice_interface"] = {
@@ -896,7 +896,7 @@ if __name__ == "__main__":
             "continuous_listening": False,
             "push_to_talk_key": "space",
         }
-        with open("config/config.yaml", "w") as f:
+        with open("config/config.yaml", "w", encoding="utf-8") as f:
             yaml.safe_dump(cfg, f, indent=2)
 
     async def test_voice_interface():
@@ -915,7 +915,7 @@ if __name__ == "__main__":
         logger.info("\n--- Testing Text-to-Speech ---")
         # await vi.speak_text("Hello, I am AutoBot. How can I help you today?")
 
-        print(
+        print(  # noqa: print
             "\n--- Testing continuous listening (requires manual stop "
             "or external trigger) ---"
         )
@@ -932,7 +932,7 @@ if __name__ == "__main__":
         #         elif text_result["status"] == "timeout":
         #             logger.info("No speech detected, continuing to listen...")
         #         else:
-        #             print(
+        #             print(  # noqa: print
         #                 "Error in continuous listening: "
         #                 f"{text_result['message']}"
         #             )
