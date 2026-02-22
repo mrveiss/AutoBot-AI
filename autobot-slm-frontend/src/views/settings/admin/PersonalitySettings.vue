@@ -15,6 +15,7 @@
  */
 
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 import {
   usePersonality,
   TONE_OPTIONS,
@@ -36,6 +37,7 @@ const {
   resetProfile,
   toggleEnabled,
 } = usePersonality()
+const authStore = useAuthStore()
 
 // ---- local state ----
 const selectedId = ref<string | null>(null)
@@ -51,7 +53,7 @@ const voiceList = ref<{ id: string; name: string; builtin: boolean }[]>([])
 
 async function fetchVoices() {
   try {
-    const token = localStorage.getItem('autobot_access_token') || ''
+    const token = authStore.token || localStorage.getItem('autobot_access_token') || ''
     const res = await fetch('/autobot-api/voice/voices', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
@@ -188,6 +190,7 @@ async function handleDuplicate() {
     operating_style: [...base.operating_style],
     off_limits: [...base.off_limits],
     custom_notes: base.custom_notes,
+    voice_id: base.voice_id,
   }
   const result = await createProfile(copy)
   if (result) {
