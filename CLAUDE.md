@@ -1,20 +1,21 @@
 # AutoBot Development Instructions
 
+> **Reference material** (IPs, playbooks, commands): [`docs/developer/AUTOBOT_REFERENCE.md`](docs/developer/AUTOBOT_REFERENCE.md)
 > **Status updates:** [`docs/system-state.md`](docs/system-state.md)
 
 ---
 
-## WORKFLOW REQUIREMENTS (MANDATORY)
+## Quick Reference
 
-**Every Task Must:**
+**Every task must:**
 
-1. **Link to GitHub Issue** - ALL work in https://github.com/mrveiss/AutoBot-AI (MANDATORY)
+1. **Link to GitHub Issue** — ALL work in https://github.com/mrveiss/AutoBot-AI (MANDATORY)
 2. **Search Memory MCP** first: `mcp__memory__search_nodes`
-3. **Break down into subtasks** - Add as checklist in GitHub issue
+3. **Break down into subtasks** — Add as checklist in GitHub issue
 4. **Use specialized agents** for complex tasks
-5. **Code review is mandatory** - use `code-reviewer` agent
+5. **Code review is mandatory** — use `code-reviewer` agent
 6. **Update GitHub Issue** throughout work with progress comments
-7. **Complete properly** - All code committed, criteria met, issue closed with summary
+7. **Complete properly** — All code committed, criteria met, issue closed with summary
 8. **Store in Memory MCP** at session end
 
 **Before proceeding, verify:**
@@ -26,34 +27,39 @@
 - Fixing root cause (not workaround)? If NO: STOP
 - Integration needs both frontend AND backend? If YES: Plan BOTH
 
-**Before marking complete:**
-
-- ALL code committed with issue refs?
-- ALL acceptance criteria verified?
-- Closing summary added to issue?
-- Issue closed?
-
 **If ANY fails then STOP and correct immediately**
 
 ---
 
-## CORE DEVELOPMENT RULES (MANDATORY — APPLIES TO EVERY AGENT AND EVERY TOOL)
+## CORE RULES (MANDATORY — EVERY AGENT, EVERY TOOL)
 
-These four rules override convenience, speed, and assumptions. No exceptions.
+These six rules override convenience, speed, and assumptions. No exceptions.
 
-### Rule 1: Check Before Writing
+---
+
+## Rule 1: Check Before Writing
 
 **Before writing a single line of code or documentation:**
 
-- Search for existing implementations using Grep/Glob or `git log --oneline --grep="<topic>"`
+- Search for existing implementations: `grep`/`glob` or `git log --oneline --grep="<topic>"`
 - Check existing docs: `ls docs/`, `gh issue list`, recent commits
 - Review related files in the same module/directory
 - Search Memory MCP: `mcp__memory__search_nodes` for prior decisions
 - Only after confirming nothing exists should you write new code or docs
 
-> Violation: Writing a utility that already exists in `autobot-shared/` or a doc that duplicates an existing guide.
+**Before implementing anything, verify:**
+1. Is the issue still open? `gh issue view <number>`
+2. Are there any existing PRs or branches? `gh pr list | grep <issue>`
+3. Any recent commits? `git log --oneline -20 --grep="<keywords>"`
+4. Is there already code that partially implements this? Quick grep/glob search
 
-### Rule 2: Reuse Existing Code
+If you find existing work, USE IT — don't reimplement from scratch.
+
+> Violation: Writing a utility that already exists in `autobot-shared/`, or starting implementation without checking for an existing PR.
+
+---
+
+## Rule 2: Reuse Existing Code
 
 **Always prefer existing code over new code:**
 
@@ -62,9 +68,38 @@ These four rules override convenience, speed, and assumptions. No exceptions.
 - Use `autobot-shared/` utilities before writing custom implementations
 - If similar code exists elsewhere, refactor to share it — never copy-paste
 
-> Violation: Writing a new Redis helper when `autobot_shared.redis_client.get_redis_client` already exists.
+**Redis Client — always use canonical utility:**
 
-### Rule 3: Standardize for Reuse
+```python
+from autobot_shared.redis_client import get_redis_client
+redis_client = get_redis_client(async_client=False, database="main")
+# NEVER: redis.Redis(host="172.16.168.23", ...)
+```
+
+Databases: `main`, `knowledge`, `prompts`, `analytics`
+
+**Hardcoding Prevention — always use SSOT config:**
+
+```python
+from autobot_shared.ssot_config import config
+redis_host = config.redis.host
+```
+
+```typescript
+import { getBackendUrl } from '@/config/ssot-config'
+```
+
+Pre-commit hook enforces this. Guide: [`docs/developer/HARDCODING_PREVENTION.md`](docs/developer/HARDCODING_PREVENTION.md)
+
+**Network Configuration — never hardcode IPs:**
+
+Always check existing config files for correct network ranges. Use environment variables or SSOT config. Flag any hardcoded IPs in legacy code for removal.
+
+> Violation: Writing a new Redis helper when `autobot_shared.redis_client.get_redis_client` already exists, or hardcoding `172.16.168.23`.
+
+---
+
+## Rule 3: Standardize for Reuse
 
 **Write code that others can reuse:**
 
@@ -73,611 +108,32 @@ These four rules override convenience, speed, and assumptions. No exceptions.
 - Generalize implementations when the cost is low (no over-engineering)
 - Avoid one-off implementations that can't be called from elsewhere
 
-> Violation: Hardcoding a value that belongs in SSOT config, or writing a private helper that duplicates a public one.
+**Function Length:**
 
-### Rule 4: Clarify Requirements Before Starting
+| Lines | Action |
+|-------|--------|
+| ≤30 | Ideal |
+| 31–50 | Consider refactoring |
+| 51–65 | Must refactor before merge |
+| >65 | Immediate refactoring required |
 
-**Before touching any code, ensure the requirements are complete enough to build the right thing the first time:**
+Use **Extract Method** pattern: create `_helper_function()` with docstring referencing parent issue.
 
-- Read the full issue/PRD and identify every gap, ambiguity, or missing edge case
-- Ask all clarifying questions UP FRONT in a single pass — not mid-implementation
-- Do not start until you can describe the complete expected end result in concrete terms
-- Goal: eliminate double work and unneeded fixes caused by an incomplete specification
+**File Naming — FORBIDDEN suffixes:** `_fix`, `_v2`, `_optimized`, `_new`, `_temp`, `_backup`, `_old`, date suffixes. Version control handles versions.
 
-**Questions to ask before starting:**
-- What is the exact expected input and output?
-- Are there edge cases or error states that must be handled?
-- Are there UI/UX, performance, or security constraints not stated?
-- Does this touch other systems that need coordinating changes?
+**Consolidation:** When merging duplicate code — preserve ALL features + choose BEST implementation. Never drop features for convenience.
 
-> Violation: Starting implementation from a vague issue, hitting an ambiguity midway, and having to rework completed code — or delivering something that doesn't match what was actually wanted.
-
-### Rule 5: Verify Before Reporting Complete
-
-**Before claiming any work is done, show evidence it works:**
-
-- Run the relevant test, lint check, curl, or build command and include the output
-- Never say "done", "fixed", or "complete" without proof — assertions require evidence
-- If the change touches multiple layers (backend + frontend, multiple nodes), verify each one
-- If verification is not possible locally, explicitly state what was checked and what still needs confirmation on the target environment
-
-> Violation: Saying "the bug is fixed" after editing a file without running the code, or reporting success without showing test/lint output.
-
-### Rule 6: Report Every Discovered Problem
-
-**"It was already there" is never a reason to ignore a problem.**
-
-Every bug, inconsistency, security issue, hardcoded value, broken function, or tech debt found while working on anything — regardless of whether it is related to the current task — must be reported:
-
-- Create a GitHub issue immediately with description, severity, and where it was found
-- Report it to the user and ask for direction: fix now, fix after current task, or defer
-- Do not assume someone else knows about it
-- Do not leave it unreported because it is out of scope for the current issue
-
-**There are no exceptions based on:**
-- The problem existing before your change
-- The problem being in a different module or system
-- The problem seeming minor or low priority
-- The current task being unrelated
-
-**Workflow:** See [Discovered Problems Policy](#session-boundaries-mandatory) for the full handling steps, critical vs non-critical classification, and required GitHub issue format.
-
-> Violation: Noticing a hardcoded IP, broken error handler, missing auth check, or any other defect and not creating a GitHub issue for it because "it's not my task."
-
----
-
-## PROJECT STACK
-
-**Primary Languages & Verification:**
-
-- **Python (Backend, Ansible, SLM):**
-  - After ANY Python changes: `ruff check <file>` to verify linting
-  - Run tests: `python -m pytest <test-file> -v`
-  - Common issues: E501 (line length), F821 (undefined names), bare excepts
-
-- **TypeScript (Frontend - Vue 3):**
-  - After ANY TypeScript changes: `npm run type-check` or `npx tsc --noEmit`
-  - After ANY Vue changes: `npm run lint`
-  - Build verification: `npm run build` (must succeed before deployment)
-  - Common issues: Type mismatches, unused imports, missing interface definitions
-
-- **YAML (Ansible, Config):**
-  - Syntax check: `ansible-playbook --syntax-check <playbook>`
-  - Lint: `ansible-lint <playbook>`
-  - Common issues: Indentation, missing required keys, invalid variable references
-
-**Build Check Pattern:**
-
-```bash
-# Before committing backend changes
-ruff check autobot-backend/path/to/changed/file.py
-
-# Before committing frontend changes
-cd autobot-frontend && npm run type-check && npm run lint
-
-# Before committing Ansible changes
-cd autobot-slm-backend/ansible && ansible-playbook playbooks/<playbook>.yml --syntax-check
-```
-
-**If build/lint checks fail, fix them BEFORE committing. Never commit broken code.**
-
----
-
-## GENERAL WORKFLOW
-
-**Implementation First:**
-
-- Prefer **direct implementation** over extended brainstorming/design phases unless the user explicitly asks for a design doc
-- When the user says "work on issue #X", start with a brief plan (max 10 lines) then proceed to implementation
-- Do NOT invoke brainstorming skills when direct answers are needed
-- Skip lengthy design documents unless specifically requested
-
-**Front-Load Verification:**
-
-- Before implementing anything, verify:
-  1. Is the issue still open? `gh issue view <number>`
-  2. Are there any existing PRs or branches? `gh pr list | grep <issue>`
-  3. Is there already code that partially implements this? Quick grep/glob search
-- Show brief status summary before proceeding with implementation
-
-**Implementation Approach:**
-
-- For large features spanning backend + frontend, complete and commit backend fully before starting frontend
-- When a session is getting long, commit completed work incrementally rather than waiting until everything is done
-- After writing each file, verify it exists on disk before moving to the next step
-- When a fix applies to a component that runs on multiple nodes, explicitly check: "Are there other nodes/services with this same component?" Fix all of them, not just the first one found
-- If implementation has 10+ tasks, commit after each logical group (e.g., every 2-3 tasks)
-- Incremental commits protect progress and simplify recovery if sessions need to end
-- If approaching context limit mid-implementation: stop at the current phase boundary, commit what's done, then add a GitHub comment on the issue summarizing completed work and exact next steps remaining
-
----
-
-## IMPLEMENTATION PRINCIPLES (MANDATORY)
-
-### Simplicity First
-
-**Always prefer the simplest approach:**
-
-- When the user asks to remove/fix something, do NOT add extra validation, stat checks, or defensive code unless specifically requested
-- If the scope is unclear, ASK for clarification rather than assuming a more complex approach
-- Solve the stated problem - don't over-engineer for hypothetical edge cases
-- Simple solutions are easier to maintain, debug, and verify
-
-**Examples of over-engineering to AVOID:**
-
-❌ User says "remove X" → You add existence checks, logging, backups, rollback mechanisms
-✅ User says "remove X" → You remove X
-
-❌ User says "fix bug Y" → You refactor surrounding code, add new abstractions
-✅ User says "fix bug Y" → You fix bug Y with minimal changes
-
-### Architecture Confirmation
-
-**Before implementing ANY task where the approach isn't obvious, confirm with the user:**
-
-This applies not just to deployment/startup but to any ambiguous task — if there are multiple valid approaches and you're not sure which the user wants, state your intended approach and wait for confirmation.
-
-- Startup methods: Do NOT assume `systemd` vs `bash run_autobot.sh` vs `docker-compose` - ask or check CLAUDE.md
-- Deployment strategies: Do NOT assume Ansible vs manual sync vs Docker - verify the correct method
-- Architectural patterns: Do NOT create separate "modes" when extending existing code - ask if a new mode is actually needed
-- Service restart methods: Do NOT guess - check existing infrastructure or ask
-
-**Common mistakes to avoid:**
-
-- Assuming systemd when the project uses custom bash scripts
-- Creating a new "partition mode" when the existing mode just needs extension
-- Adding unnecessary reboots to workflows
-- Implementing manual approaches when Ansible playbooks exist
-- Assuming docker when services run directly via systemd
-
-**Required confirmation format:**
-
-Before implementing, state:
-1. **Approach:** What method/pattern you'll use
-2. **Assumptions:** What you're assuming about architecture, startup, deployment
-3. **Scope:** What will change and what will stay the same
-
-Wait for user confirmation before writing code.
-
-### Fix Already-Implemented Work
-
-**Always check if work already exists:**
-
-Before implementing a fix or feature:
-1. Check GitHub: `gh issue view <number>` - is it already closed?
-2. Check PRs: `gh pr list | grep <keywords>` - does a PR already exist?
-3. Check recent commits: `git log --oneline -20 --grep="<keywords>"` - was it recently done?
-4. Grep the codebase: Search for function names, error messages, or related code
-
-If you find existing work, USE IT - don't reimplement from scratch.
-
----
-
-## GIT WORKFLOW (MANDATORY)
-
-**Branch Strategy:**
-
-- Always target `Dev_new_gui` branch for PRs and merges unless explicitly told otherwise
-- Before merging or integrating branches, verify the target branch is `Dev_new_gui`, not `main`
-- After completing work, clean up: delete remote feature branches and prune stale branches
-
-**Pre-Flight Checks (run BEFORE making ANY code changes):**
-
-1. Verify current branch: `git branch --show-current`
-2. Check for uncommitted work: `git status`
-3. Check for stashes: `git stash list` - if present, ask user how to handle
-4. Verify target merge branch exists and is up to date:
-   ```bash
-   git fetch origin Dev_new_gui
-   git log --oneline origin/Dev_new_gui -3
-   ```
-5. Confirm the working branch is correct for this issue
-
-**Post-Commit Verification:**
-
-- After EVERY commit, immediately verify it landed correctly:
-  ```bash
-  git log --oneline -1        # Verify commit message and branch
-  git diff --staged           # Ensure nothing unexpectedly left staged
-  ```
-
-**If anything looks wrong, STOP and notify user immediately**
-
----
-
-## SESSION BOUNDARIES (MANDATORY)
-
-### One Issue Per Session Rule
-
-**When an issue is complete:**
-- ✅ Report completion with summary
-- ✅ Verify issue is closed: `gh issue view <number>`
-- ❌ DO NOT auto-start other existing issues
-- ❌ DO NOT suggest working on related issues without asking
-- ❌ DO NOT scan for more work
-
-**Wait for explicit user instruction** before starting new work.
-
-### Discovered Problems Policy
-
-**If you discover a NEW problem (not in GitHub):**
-
-1. **Create GitHub issue immediately:**
-```bash
-gh issue create --title "Bug: <description>" --body "## Problem
-<what's wrong>
-
-## Discovered During
-Working on #<original-issue>
-
-## Impact
-<severity: critical/high/medium/low>"
-```
-
-2. **Ask user if should fix now:**
-```
-Created issue #<new-number> for <problem>.
-Should I:
-a) Fix it now (will delay current work)
-b) Finish current issue first, then fix
-c) Leave for later
-```
-
-3. **If critical/blocking:** Recommend fixing immediately
-4. **If minor:** Recommend deferring
-
-**If you discover a problem ALREADY in GitHub:**
-- ❌ DO NOT auto-start working on it
-- ✅ Note it: "FYI: Issue #<number> also affects this area"
-- ✅ Link it if related: Comment on original issue mentioning the connection
-
-**If you discover technical debt / refactoring opportunity:**
-- ❌ DO NOT refactor without permission
-- ✅ Create issue: "Refactor: <opportunity>" with rationale
-- ✅ Note: "Created #<number> for future improvement"
-
-### Scope Examples
-
-**✅ GOOD (fixes discovered bug):**
-```
-While implementing #100, discovered critical bug:
-authentication bypass in user_login().
-
-Created issue #150 for this security issue.
-
-Recommend fixing NOW before continuing #100
-(affects the code we're modifying). Proceed?
-```
-
-**✅ GOOD (defers non-critical issue):**
-```
-While implementing #100, noticed suboptimal
-caching in get_user(). Created issue #151.
-
-Deferring to stay focused on #100.
-```
-
-**❌ BAD (drifts to existing issue):**
-```
-Completed #100. I see issue #101 is related
-and I could fix it quickly...
-[starts working without permission]
-```
-
-**❌ BAD (fixes non-critical without asking):**
-```
-While implementing #100, noticed typo in docstring.
-Let me fix that real quick...
-[fixes without creating issue or asking]
-```
-
-### Critical vs Non-Critical Discovered Issues
-
-**Fix immediately WITHOUT asking if:**
-- Security vulnerability in code you're modifying
-- Data corruption risk
-- Syntax error that breaks tests
-- Import error blocking your changes
-
-**Create issue + ASK before fixing if:**
-- Performance problem (not critical)
-- Code smell / tech debt
-- Missing documentation
-- UI/UX improvement opportunity
-- Refactoring opportunity
-
-**Create issue + DEFER (don't ask) if:**
-- Minor style issues
-- Optimization opportunities
-- "Nice to have" improvements
-- Unrelated bugs in other areas
-
-### Multi-Session Coordination
-
-**If running parallel sessions on different issues:**
-- Each session stays in its issue scope
-- If Session A discovers bug in Session B's area → Create issue, let user coordinate
-- Do NOT cross-contaminate: "I'll fix this while Session B works on that"
-
----
-
-## MEMORY HYGIENE (MANDATORY)
-
-**Rules for `~/.claude/projects/.../memory/MEMORY.md`:**
-
-- **Line limit:** Target <150 lines. Hard limit 200 (file is truncated after line 200).
-- **One line per issue:** Each closed issue gets exactly one line: `#NNN: phrase. Commit abc1234.`
-- **Archive threshold:** When Recent Completed exceeds 30 items → move to `completed-history.md`
-- **Prune gotchas:** Delete notes that reference resolved issues or duplicate CLAUDE.md content
-- **Source of truth split:** CLAUDE.md owns stable patterns/standards. MEMORY.md owns recent state only.
-
-**End-of-session ritual (60 seconds):**
-
-1. Did I close any issues? → Move from Open Work to Recent Completed (1 line each)
-2. Did any gotcha get resolved? → Delete it
-3. Is Recent Completed >30 items? → Archive oldest batch to `completed-history.md`
-4. Is MEMORY.md >150 lines? → Trim now using `/memory-cleanup` skill
-
-**Run `/memory-cleanup`** for a guided walkthrough of this ritual.
-
----
-
-## MULTI-AGENT SAFETY (MANDATORY)
-
-### Git Operations
-
-- Do NOT create/apply/drop `git stash` entries unless explicitly requested
-- Do NOT switch branches unless explicitly requested
-- Do NOT modify `git worktree` checkouts unless explicitly requested
-- When pushing, use `git pull --rebase` to integrate changes (never discard others' work)
-
-### Scoped Commits
-
-- When user says "commit", scope to YOUR changes only
-- When user says "commit all", commit everything in grouped chunks
-- Focus reports on your edits; avoid guard-rail disclaimers unless blocked
-
-### File Handling
-
-- When you see unrecognized files, keep going
-- Focus on your changes and commit only those
-- End with brief "other files present" note only if relevant
-
----
-
-## CODE OWNERSHIP (MANDATORY - UNBREAKABLE)
-
-**mrveiss** is the **SOLE OWNER and AUTHOR** of ALL AutoBot code. No exceptions.
+**Code Ownership:** `mrveiss` is the SOLE OWNER and AUTHOR of ALL AutoBot code.
 
 ```python
-# File header template
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 ```
 
----
+**UTF-8 Encoding:** Always use `encoding='utf-8'` explicitly. Guide: [`docs/developer/UTF8_ENFORCEMENT.md`](docs/developer/UTF8_ENFORCEMENT.md)
 
-## EDIT STRATEGY (MANDATORY)
-
-**Incremental Edits Only:**
-
-- Prefer incremental `Edit` operations over full file `Write` for files longer than 50 lines
-- Never rewrite entire files when only a few sections need changes
-- If an edit is interrupted/rejected, switch to smaller, targeted edits rather than retrying the same large change
-- Large file rewrites are the #1 cause of user interruptions - avoid them
-
-**When to Use Write vs Edit:**
-
-- `Write`: New files, files under 50 lines, complete file generation
-- `Edit`: Existing files over 50 lines, targeted changes, refactoring
-- If unsure, default to `Edit` for existing files
-
----
-
-## CRITICAL POLICIES
-
-### No Temporary Fixes (ZERO TOLERANCE)
-
-- No quick fixes, workarounds, disabling functionality
-- No hardcoding to bypass issues, try/catch hiding errors
-- No "TODO: fix later" comments
-- YES: Identify root problem, fix underlying issue, verify, remove workarounds
-
-### Function Length (50 lines or less)
-
-| Lines | Action |
-|-------|--------|
-| 30 or less | Ideal |
-| 31-50 | Consider refactoring |
-| 51-65 | Must refactor before merge |
-| More than 65 | Immediate refactoring required |
-
-Use **Extract Method** pattern: Create `_helper_function()` with docstring referencing parent issue.
-
-### File Naming
-
-**FORBIDDEN**: `_fix`, `_v2`, `_optimized`, `_new`, `_temp`, `_backup`, `_old`, date suffixes
-
-Use permanent, descriptive names. Version control handles versions.
-
-### Consolidation Rules
-
-When merging duplicate code: **Preserve ALL features** + **Choose BEST implementation**. Never drop features for convenience.
-
-### Pre-commit & Linting (Critical)
-
-**Pre-commit hooks may revert your edits:**
-
-- Be aware that pre-commit hooks (linters, formatters) run on every commit and may revert or modify staged changes
-- After ANY commit attempt, verify changes were actually committed:
-  ```bash
-  git log -1 --stat  # Check what was committed
-  git diff           # Verify no uncommitted changes remain
-  ```
-
-- If hooks revert edits, fix the underlying issue (don't retry blindly)
-- Common hook failures: line length (E501), trailing whitespace, hardcoded values
-- Always run `git diff --staged` after staging to verify changes survive hook processing
-- If hooks keep reverting changes, investigate the hook config before retrying - do not blindly retry commits
-- Never mix unrelated staged files; stage and commit in focused batches
-
-**Line length enforcement:**
-
-- Maximum line length: 100 characters (enforced by flake8)
-- Hook will reject commits with E501 violations
-- Use the PostToolUse hook (auto-lint after edits) to catch before commit
-
-**Bulk operations (linting, imports, refactoring):**
-
-- Commit in small batches (10-15 files max)
-- Verify each batch passes hooks before continuing
-- Never attempt "fix all violations" in one commit
-- Pattern: Fix → Verify → Commit → Repeat
-
-**If pre-commit hook fails:**
-
-```bash
-# See what failed
-git status
-
-# Fix the specific issue (don't skip hooks with --no-verify)
-# If the hook AUTO-MODIFIED a file (formatter/linter), re-stage those files:
-# git add <hook-modified-files>
-# Then re-commit (the hook change is now staged)
-
-# Verify success
-git log -1 --stat
-```
-
-**Red flags (STOP if you see these):**
-- Attempting `git commit --no-verify` (bypassing hooks)
-- Bulk commit of 50+ files without verification
-- Re-committing same files repeatedly (hook is rejecting them)
-- "I'll fix the linting in a follow-up commit" (fix it NOW)
-
----
-
-## GITHUB ISSUE TRACKING
-
-**Repository:** https://github.com/mrveiss/AutoBot-AI
-
-**Commit format:** `<type>(scope): <description> (#issue-number)`
-
-**Issue is complete ONLY when:**
-
-1. All code committed with issue refs
-2. All acceptance criteria verified
-3. Tests passing
-4. Code reviewed
-5. Closing summary added
-6. Issue status = closed
-
-### GitHub Workflow (MANDATORY)
-
-**Always close the issue on GitHub after implementation is complete:**
-
-- Do NOT mark work as done until `gh issue close <number>` has been run successfully
-- Verify issue closure with `gh issue view <number>` after closing
-- Add a closing comment summarizing what was done before closing
-
-**Commit with correct issue references:**
-
-- Always verify the issue number matches the work being done
-- Before committing, double-check: "Is this commit for issue #X?"
-- Example: `git commit -m "feat: Add feature (#123)"` not `(#456)`
-
-### PR Workflow
-
-**Review Mode** (PR link only):
-
-- Read `gh pr view/diff`
-- Do NOT switch branches
-- Do NOT change code
-
-**Landing Mode:**
-
-1. Create integration branch from `main`
-2. Bring in PR commits (prefer rebase for linear history)
-3. Apply fixes, add changelog
-4. Run full gate locally BEFORE committing
-5. Commit with contributor attribution
-6. Merge back to `main`
-7. Switch to `main` (never stay on topic branch)
-
----
-
-## RELEASE CHANNELS
-
-- **stable**: Tagged releases only (e.g., `vYYYY.M.D`)
-- **beta**: Prerelease tags `vYYYY.M.D-beta.N`
-- **dev**: Moving head on `main` (no tag)
-
----
-
-## TECHNICAL STANDARDS
-
-### Debugging Discipline
-
-**Hypothesize before running commands:**
-
-When diagnosing a problem, form a hypothesis first — don't fire off diagnostic commands at random:
-1. State your hypothesis: "I think X is caused by Y because Z"
-2. List the 3-4 specific commands that would confirm or reject it
-3. Run them in that order
-4. Update the hypothesis based on results before running more commands
-
-This prevents the "1,686 Bash invocations" pattern where trial-and-error burns time without converging on root cause.
-
-### Error Handling
-
-**Auto-retry on transient errors:**
-
-- When encountering API 500 errors or tool interruptions, automatically retry up to 2 times before asking the user
-- Do NOT stop and wait for 'continue' on transient errors
-- Only escalate to user if retry attempts fail
-- Log retry attempts: "Retrying (attempt 2/2)..."
-
-### Hardcoding Prevention
-
-```python
-# Use SSOT config
-from autobot_shared.ssot_config import config
-redis_host = config.redis.host
-```
-
-```typescript
-// Use SSOT config
-import { getBackendUrl } from '@/config/ssot-config'
-```
-
-Pre-commit hook enforces this. Guide: [`docs/developer/HARDCODING_PREVENTION.md`](docs/developer/HARDCODING_PREVENTION.md)
-
-### Network Configuration
-
-**Never assume or hardcode IP subnets:**
-
-- Always check existing configuration files for the correct network ranges before making changes
-- Never hardcode IP addresses - use environment variables or SSOT config
-- The project is actively removing hardcoded IPs in favor of environment variables and dynamic configuration
-- If you see hardcoded IPs in legacy code, flag them for removal
-
-### Redis Client
-
-```python
-# ALWAYS use canonical utility
-from autobot_shared.redis_client import get_redis_client
-redis_client = get_redis_client(async_client=False, database="main")
-# NEVER: redis.Redis(host="172.16.168.23", ...)
-```
-
-Databases: `main`, `knowledge`, `prompts`, `analytics`
-
-### UTF-8 Encoding
-
-Always use `encoding='utf-8'` explicitly. Guide: [`docs/developer/UTF8_ENFORCEMENT.md`](docs/developer/UTF8_ENFORCEMENT.md)
-
-### Logging
+**Logging:**
 
 ```python
 # Backend
@@ -692,383 +148,291 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('ComponentName')
 ```
 
-No `console.*` or `print()` - pre-commit blocks these.
+No `console.*` or `print()` — pre-commit blocks these.
+
+> Violation: Hardcoding a value that belongs in SSOT config, or writing a private helper that duplicates a public one.
 
 ---
 
-## INFRASTRUCTURE
+## Rule 4: Clarify Requirements Before Starting
 
-### Service Layout (172.16.168.19-27)
+**Before touching any code, ensure requirements are complete:**
 
-| Service | IP:Port | Component | Purpose |
-|---------|---------|-----------|---------|
-| SLM Server | 172.16.168.19:443 | `autobot-slm-backend/` + `autobot-slm-frontend/` | SLM backend + admin UI (nginx+SSL) |
-| Main (WSL) | 172.16.168.20:8001 | `autobot-backend/` | Backend API + VNC (6080) |
-| Frontend VM | 172.16.168.21:443 | `autobot-frontend/` | User frontend (nginx+SSL, production build) |
-| NPU VM | 172.16.168.22:8081 | `autobot-npu-worker/` | Hardware AI acceleration |
-| Redis VM | 172.16.168.23:6379 | - | Data layer (Redis Stack) |
-| AI Stack VM | 172.16.168.24:8080 | - | AI processing |
-| Browser VM | 172.16.168.25:3000 | `autobot-browser-worker/` | Playwright automation |
-| Reserved | 172.16.168.26 | - | (Unassigned) |
-| Reserved | 172.16.168.27 | - | (Unassigned) |
+- Read the full issue/PRD and identify every gap, ambiguity, or missing edge case
+- Ask all clarifying questions UP FRONT in a single pass — not mid-implementation
+- Do not start until you can describe the complete expected end result in concrete terms
 
-### Component Architecture (CRITICAL - Don't Mix Up!)
+**Questions to ask before starting:**
+- What is the exact expected input and output?
+- Are there edge cases or error states that must be handled?
+- Are there UI/UX, performance, or security constraints not stated?
+- Does this touch other systems that need coordinating changes?
 
-| Directory | Deploys To | Description |
-|-----------|------------|-------------|
-| `autobot-backend/` | 172.16.168.20 (Main) | Core AutoBot backend - AI agents, chat, tools |
-| `autobot-frontend/` | 172.16.168.21 (Frontend VM) | User chat interface (Vue 3, nginx+SSL) |
-| `autobot-slm-backend/` | 172.16.168.19 (SLM) | **SLM backend** - Fleet management, monitoring |
-| `autobot-slm-frontend/` | 172.16.168.19 (SLM) | **SLM admin dashboard** - Vue 3 UI (nginx+SSL) |
-| `autobot-npu-worker/` | 172.16.168.22 (NPU) | NPU acceleration worker |
-| `autobot-browser-worker/` | 172.16.168.25 (Browser) | Playwright automation worker |
-| `autobot-shared/` | All backends | Common utilities (redis, config, logging) |
-| `autobot-infrastructure/` | Dev machine | Per-role infrastructure (not deployed) |
+**Simplicity First — always prefer the simplest approach:**
 
-**Before editing, verify:**
+- When the user asks to remove/fix something, do NOT add extra validation or defensive code unless requested
+- If the scope is unclear, ASK rather than assuming a more complex approach
+- Solve the stated problem — don't over-engineer for hypothetical edge cases
 
-- `autobot-backend/` and `autobot-frontend/` are for Main AutoBot functionality
-- `autobot-slm-*` is for SLM fleet management (different system!)
-- `autobot-shared/` is for Shared code deployed with each backend
+**Architecture Confirmation — before implementing any ambiguous task, state:**
+1. **Approach:** What method/pattern you'll use
+2. **Assumptions:** What you're assuming about architecture, startup, deployment
+3. **Scope:** What will change and what will stay the same
 
-**CRITICAL Project Structure Rules:**
+Wait for user confirmation before writing code. Do NOT assume `systemd` vs `docker-compose`, Ansible vs manual, new mode vs extending existing.
 
-- The frontend is in `autobot-slm-frontend/`, NOT `autobot-vue`
-- Worktrees should be created in `../worktrees/issue-<number>/` (check existing pattern first)
-- Never assume directory structure - verify with `ls` before creating paths
-- Ansible playbooks and roles are in `autobot-slm-backend/ansible/`, NOT `autobot-infrastructure/ansible/`
-- The primary working branch is `Dev_new_gui`
-- Test files are colocated next to their source files, not in a separate `tests/` directory
-- Import paths use the colocated structure - never use stale `from src.` imports for migrated modules
+**No Temporary Fixes (ZERO TOLERANCE):**
+- No quick fixes, workarounds, or disabling functionality
+- No hardcoding to bypass issues, try/catch hiding errors
+- No "TODO: fix later" comments
+- Identify root problem → fix underlying issue → verify → remove workarounds
 
-### Infrastructure Directory Structure
-
-The infrastructure folder uses a per-role organization:
-
-```text
-autobot-infrastructure/
-├── autobot-backend/            # User backend: docker, tests, config, scripts, templates
-├── autobot-frontend/           # User frontend infra
-├── autobot-slm-backend/        # SLM backend infra
-├── autobot-slm-frontend/       # SLM frontend infra
-├── autobot-npu-worker/         # NPU worker infra
-├── autobot-browser-worker/     # Browser worker infra
-└── shared/                     # Shared infrastructure
-    ├── scripts/                # Common utilities, sync scripts
-    ├── certs/                  # Certificate management
-    ├── config/                 # Shared configurations
-    ├── docker/                 # Shared docker resources
-    ├── mcp/                    # MCP server configs
-    ├── tools/                  # Development tools
-    ├── tests/                  # Shared test utilities
-    └── analysis/               # Analysis tools
-```
-
-**Sync commands:**
-
-```bash
-# User backend to Main server
-./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh main autobot-backend/
-
-# User frontend to Frontend VM
-./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh frontend autobot-frontend/
-
-# SLM backend + frontend to SLM server
-./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh slm autobot-slm-backend/
-./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh slm autobot-slm-frontend/
-
-# NPU worker to NPU VM
-./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh npu autobot-npu-worker/
-
-# Browser worker to Browser VM
-./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh browser autobot-browser-worker/
-```
-
-### Ansible Deployment (PRIMARY METHOD)
-
-**23 Ansible roles available** in `autobot-slm-backend/ansible/roles/`:
-- Infrastructure: `common`, `dns`, `distributed_setup`, `time_sync`
-- Services: `backend`, `frontend`, `redis`, `postgresql`, `monitoring`
-- AI/ML: `llm`, `npu-worker`, `ai-stack`, `agent_config`
-- Security: `service_auth`, `access_control`, `centralized_logging`
-- Management: `slm_manager`, `slm_agent`, `browser`, `vnc`
-
-**Before multi-step Ansible deployments:**
-- Verify SSH access and sudo work on ALL target nodes first: `ansible all -m ping` and `ansible all -m command -a "sudo id"`
-- Verify all target hosts appear in inventory before running — missing hosts = silent partial deployment
-- Use SLM service management (`/orchestration` page or `slm-service-control.yml`) to restart services on fleet nodes — never restart manually via SSH unless SLM itself is the broken component
-
-**Common Playbooks:**
-```bash
-cd autobot-slm-backend/ansible
-
-# Full fleet deployment
-ansible-playbook playbooks/deploy-full.yml
-
-# Service control (start/stop/restart any service)
-ansible-playbook playbooks/slm-service-control.yml -e "service=autobot-backend action=restart"
-
-# Deploy specific components
-ansible-playbook playbooks/deploy-full.yml --tags frontend,backend
-
-# Deploy to specific nodes
-ansible-playbook playbooks/deploy-full.yml --limit slm_server
-```
-
-**Use Ansible for:**
-- Production deployments
-- Service orchestration (start/stop/restart)
-- Configuration management
-- Multi-node operations
-
-### Frontend Deployment (CRITICAL)
-
-- `.19` serves SLM admin frontend via nginx+SSL (production build)
-- `.21` serves User frontend via nginx+SSL (production build)
-- **FORBIDDEN**: `npm run dev` on any VM — production builds only
-- **Ansible deployment:** `ansible-playbook playbooks/deploy-full.yml --tags frontend`
-- **Manual sync:** `./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh frontend autobot-frontend/`
-
-### Local-Only Development (ZERO TOLERANCE)
-
-**NEVER edit on remote VMs** - No version control, no backup, VMs are ephemeral.
-
-1. Edit in `/home/kali/Desktop/AutoBot/`
-2. Deploy via Ansible or sync: `./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh <vm> <component>/`
-
-### Infrastructure as Code (MANDATORY)
-
-**ALL configuration changes MUST go through Ansible - NO exceptions.**
-
-This ensures:
-- Configuration is version-controlled and tracked in git
-- Changes are reproducible across all environments
-- No configuration drift between VMs
-- Easy rollback if something breaks
-- Documentation built-in (playbooks are self-documenting)
-
-**FORBIDDEN: Direct config changes on VMs**
-
-❌ **NEVER do this:**
-```bash
-# Editing config files directly on VMs
-ssh autobot@172.16.168.20 "vim /etc/systemd/system/autobot-backend.service"
-ssh autobot@172.16.168.20 "echo 'NEW_VAR=value' >> /opt/autobot/.env"
-ssh autobot@172.16.168.20 "systemctl daemon-reload && systemctl restart autobot-backend"
-```
-
-These changes will be LOST when:
-- VM is rebuilt or replaced
-- Ansible playbook runs (overwrites manual changes)
-- Someone else deploys from clean Ansible state
-
-✅ **ALWAYS do this instead:**
-
-```bash
-# 1. Edit Ansible configuration locally
-vim autobot-slm-backend/ansible/roles/backend/templates/autobot-backend.service.j2
-vim autobot-slm-backend/ansible/roles/backend/defaults/main.yml
-
-# 2. Commit the change
-git add ansible/
-git commit -m "feat(ansible): update backend service configuration"
-
-# 3. Deploy via Ansible
-cd autobot-slm-backend/ansible
-ansible-playbook playbooks/deploy-full.yml --tags backend
-
-# 4. Verify change took effect
-ssh autobot@172.16.168.20 "systemctl status autobot-backend"
-```
-
-**Configuration Change Workflow:**
-
-| Change Type | Ansible Location | Deployment Command |
-|-------------|------------------|-------------------|
-| Service files (systemd) | `roles/*/templates/*.service.j2` | `ansible-playbook deploy-full.yml --tags backend` |
-| Environment variables | `roles/*/templates/.env.j2` or `defaults/main.yml` | `ansible-playbook deploy-full.yml --tags backend` |
-| Nginx config | `roles/frontend/templates/nginx.conf.j2` | `ansible-playbook deploy-full.yml --tags frontend,nginx` |
-| System packages | `roles/common/tasks/main.yml` | `ansible-playbook deploy-full.yml --tags common` |
-| Database credentials | `roles/postgresql/defaults/main.yml` | `ansible-playbook deploy-full.yml --tags postgresql` |
-| Redis config | `roles/redis/templates/redis.conf.j2` | `ansible-playbook deploy-full.yml --tags redis` |
-| TLS certificates | `roles/slm_manager/tasks/tls.yml` | `ansible-playbook deploy-full.yml --tags tls` |
-
-**Emergency Override (use ONLY in critical production incidents):**
-
-If you MUST make a direct change in an emergency:
-
-1. Make the temporary change to fix the incident
-2. **IMMEDIATELY** create a GitHub issue documenting what was changed
-3. Within 24 hours, replicate the change in Ansible
-4. Deploy Ansible to overwrite the manual change
-5. Close the issue once Ansible matches production
-
-**Red Flags (STOP if you see these):**
-- "Let me quickly edit this config on the VM..."
-- "Just a small change, I'll update Ansible later..."
-- "Ansible is too slow, I'll do it manually..."
-- "This is just for testing, I won't forget..."
-
-Every manual change creates **configuration debt** that will cause problems later.
-
-### Deployment Verification Checklist (MANDATORY)
-
-**After deploying changes to ANY remote server, ALWAYS verify:**
-
-1. **No .env override conflicts:**
-   ```bash
-   # Check if .env is overriding dynamic config
-   grep -E "(HOST|PORT|PASSWORD)" /path/to/.env
-   ```
-   - If .env has static values that should be dynamic, STOP and fix
-
-2. **Correct Python interpreter:**
-   ```bash
-   # Verify which Python is being used
-   which python3
-   /opt/autobot/venv/bin/python --version
-   ```
-   - Wrong Python path = missing modules, version mismatches
-   - Main backend: Python 3.12 (conda env `/home/autobot/miniconda3/envs/autobot-backend`)
-   - SLM/fleet nodes: Python 3.10 (Ubuntu 22.04 venv at `/opt/autobot/venv`)
-   - Python 3.13+: `aioredis` requires compatibility shim — `from redis import asyncio as aioredis`
-
-3. **Database migrations current:**
-   ```bash
-   # Check migration status
-   cd /opt/autobot && source venv/bin/activate
-   alembic current  # or your migration command
-   ```
-   - Out-of-sync migrations = 500 errors, schema mismatches
-
-4. **Service actually restarted:**
-   ```bash
-   # Don't trust "systemctl restart" success
-   sudo systemctl status autobot-backend --no-pager
-   journalctl -u autobot-backend -n 50 --no-pager
-   ```
-   - Check logs for startup errors, not just systemd status
-
-5. **Endpoints responding correctly:**
-   ```bash
-   # Hit affected endpoints
-   curl -s http://localhost:8001/api/health | jq
-   curl -s https://172.16.168.19/api/nodes | jq '.[] | .status'
-   ```
-   - Verify actual response, not just HTTP 200
-
-6. **No errors in recent logs:**
-   ```bash
-   # Check for errors in last 30 seconds
-   journalctl -u autobot-backend --since "30 seconds ago" | grep -i error
-   ```
-   - Silent failures are common - logs reveal truth
-
-**Only proceed to next task if ALL six checks pass.**
-
-**If ANY check fails:**
-- ❌ Do NOT move on hoping it will fix itself
-- ❌ Do NOT deploy more changes on top of broken state
-- ✅ DO stop and fix the issue immediately
-- ✅ DO re-run all six checks after fixing
+> Violation: Starting implementation from a vague issue, or creating a "partition mode" when the existing mode just needs extension.
 
 ---
 
-## AGENT DELEGATION
+## Rule 5: Verify Before Reporting Complete
 
-### Task Execution Strategy
+**Before claiming any work is done, show evidence it works:**
 
-**Prefer direct implementation over subagents:**
+- Run the relevant test, lint check, curl, or build command and include the output
+- Never say "done", "fixed", or "complete" without proof
+- If the change touches multiple layers (backend + frontend, multiple nodes), verify each one
 
-- Reserve Task agents for true exploration/research of unfamiliar code areas
-- Use direct edits for implementation work on known codebases (faster and more reliable)
-- Only use subagents when explicitly asked to explore or for truly parallel independent tasks
+**Issue is complete ONLY when:**
 
-**When using subagent tasks:**
+1. All code committed with issue refs
+2. All acceptance criteria verified
+3. Tests passing
+4. Code reviewed
+5. Closing summary added to issue
+6. Issue status = closed
 
-- Keep each task **focused and time-bounded**
-- If a subagent task is interrupted or rejected by the user, switch to **direct implementation immediately**
-- Do NOT retry subagent dispatch after rejection
-- Break large tasks into smaller subagent units (prefer 3 small tasks over 1 large task)
+**Pre-commit & Linting:**
 
-### Subagent Safety Guidelines
+- Maximum line length: 100 characters (enforced by flake8/ruff)
+- After ANY commit attempt, verify changes were actually committed:
+  ```bash
+  git log -1 --stat
+  git diff
+  ```
+- If hooks revert edits, fix the underlying issue (don't retry blindly)
+- Never mix unrelated staged files — stage and commit in focused batches
+- Bulk operations: commit in batches of 10–15 files max
+- **NEVER** use `git commit --no-verify`
+
+**Post-commit verification:**
+
+```bash
+git log --oneline -1        # Verify commit message and branch
+git diff --staged           # Ensure nothing unexpectedly left staged
+```
+
+**Deployment Verification Checklist — after deploying to ANY remote server:**
+
+1. **No .env override conflicts:** `grep -E "(HOST|PORT|PASSWORD)" /path/to/.env`
+2. **Correct Python interpreter:** `which python3` — Main: Python 3.12 conda env; SLM/fleet: Python 3.10 venv `/opt/autobot/venv`
+3. **Database migrations current:** `cd /opt/autobot && source venv/bin/activate && alembic current`
+4. **Service actually restarted:** `sudo systemctl status autobot-backend --no-pager && journalctl -u autobot-backend -n 50 --no-pager`
+5. **Endpoints responding:** `curl -s http://localhost:8001/api/health | jq`
+6. **No errors in recent logs:** `journalctl -u autobot-backend --since "30 seconds ago" | grep -i error`
+
+Only proceed to next task if ALL six checks pass.
+
+> Violation: Saying "the bug is fixed" after editing a file without running the code.
+
+---
+
+## Rule 6: Report Every Discovered Problem
+
+**"It was already there" is never a reason to ignore a problem.**
+
+Every bug, inconsistency, security issue, hardcoded value, or tech debt found — regardless of current task — must be reported:
+
+- Create a GitHub issue immediately with description, severity, and location
+- Report to the user and ask for direction: fix now, fix after current task, or defer
+- Do not assume someone else knows about it
+
+**Discovered Problems Policy:**
+
+If you discover a NEW problem (not in GitHub):
+
+```bash
+gh issue create --title "Bug: <description>" --body "## Problem
+<what's wrong>
+
+## Discovered During
+Working on #<original-issue>
+
+## Impact
+<severity: critical/high/medium/low>"
+```
+
+Then ask:
+```
+Created issue #<new-number> for <problem>.
+Should I: a) Fix now  b) Finish current issue first  c) Leave for later
+```
+
+If you discover a problem ALREADY in GitHub:
+- ❌ DO NOT auto-start working on it
+- ✅ Note it and link if related
+
+If you discover technical debt:
+- ❌ DO NOT refactor without permission
+- ✅ Create issue: "Refactor: <opportunity>"
+- ✅ Note: "Created #<number> for future improvement"
+
+**Classification:**
+
+Fix immediately WITHOUT asking:
+- Security vulnerability in code you're modifying
+- Data corruption risk
+- Syntax error that breaks tests
+- Import error blocking your changes
+
+Create issue + ASK before fixing:
+- Performance problem, code smell, missing documentation, refactoring opportunity
+
+Create issue + DEFER (don't ask):
+- Minor style issues, optimization opportunities, unrelated bugs
+
+**One Issue Per Session Rule:**
+
+When an issue is complete:
+- ✅ Report completion with summary
+- ✅ Verify issue is closed: `gh issue view <number>`
+- ❌ DO NOT auto-start other existing issues
+- ❌ DO NOT suggest working on related issues without asking
+- ❌ DO NOT scan for more work
+
+**Wait for explicit user instruction** before starting new work.
+
+**Multi-Session Coordination:**
+
+Each session stays in its issue scope. If Session A discovers a bug in Session B's area → create issue, let user coordinate.
+
+> Violation: Noticing a broken error handler and not creating a GitHub issue because "it's not my task."
+
+---
+
+## Operational Standards
+
+### General Workflow
+
+**Implementation First:**
+- Prefer direct implementation over extended brainstorming/design phases
+- When the user says "work on issue #X", brief plan (max 10 lines) then implement
+- Do NOT invoke brainstorming skills when direct answers are needed
+
+**Implementation Approach:**
+- For large features (backend + frontend), complete and commit backend fully first
+- Commit completed work incrementally — don't wait until everything is done
+- After writing each file, verify it exists on disk before moving on
+- When a fix applies to a component on multiple nodes: check all nodes, fix all of them
+- If approaching context limit: stop at phase boundary, commit, add GitHub comment with next steps
+
+### Git Workflow
+
+**Branch Strategy:**
+- Always target `Dev_new_gui` for PRs and merges unless explicitly told otherwise
+- After completing work: delete remote feature branches and prune stale branches
+
+**Pre-Flight Checks (before ANY code changes):**
+1. Verify current branch: `git branch --show-current`
+2. Check for uncommitted work: `git status`
+3. Check for stashes: `git stash list` — if present, ask user how to handle
+4. Verify target branch: `git fetch origin Dev_new_gui && git log --oneline origin/Dev_new_gui -3`
+
+### Memory Hygiene
+
+**Rules for `~/.claude/projects/.../memory/MEMORY.md`:**
+- Target <150 lines. Hard limit 200 (truncated after).
+- One line per closed issue: `#NNN: phrase. Commit abc1234.`
+- Archive when Recent Completed exceeds 30 items → `completed-history.md`
+- CLAUDE.md owns stable patterns. MEMORY.md owns recent state only.
+
+**End-of-session ritual:**
+1. Close any issues? → Move to Recent Completed (1 line each)
+2. Any gotcha resolved? → Delete it
+3. Recent Completed >30? → Archive oldest batch
+4. MEMORY.md >150 lines? → Trim with `/memory-cleanup`
+
+### Multi-Agent Safety
+
+**Git Operations:**
+- Do NOT create/apply/drop `git stash` unless explicitly requested
+- Do NOT switch branches unless explicitly requested
+- When pushing, use `git pull --rebase` (never discard others' work)
+
+**Scoped Commits:**
+- "commit" = YOUR changes only
+- "commit all" = everything in grouped chunks
+
+**File Handling:** When you see unrecognized files, keep going. Focus on your changes.
+
+### Edit Strategy
+
+- Prefer incremental `Edit` over full file `Write` for files longer than 50 lines
+- Never rewrite entire files when only a few sections need changes
+- `Write`: new files, files under 50 lines
+- `Edit`: existing files over 50 lines, targeted changes
+
+### Agent Delegation
+
+**Prefer direct implementation over subagents** — reserve agents for exploration/research of unfamiliar areas.
 
 **Before spawning parallel subagents:**
+1. Verify worktree: `ls -la ../worktrees/ 2>/dev/null || mkdir -p ../worktrees/`
+2. Test one agent first before dispatching many
+3. If agent hangs >5 minutes, fail fast
+4. Fallback plan: switch to sequential branch-based implementation
 
-1. **Verify worktree permissions:** Run `ls -la ../worktrees/ 2>/dev/null || mkdir -p ../worktrees/` to ensure directory exists and is writable
-2. **Test single agent first:** Before dispatching 4-6 parallel agents, spawn ONE agent to verify the workflow works
-3. **Set timeouts:** If an agent appears to hang for >5 minutes, fail fast and report back rather than blocking indefinitely
-4. **Have fallback plan:** If worktree/permission approach fails, immediately switch to sequential branch-based implementation
+**If subagent fails:** Switch to direct implementation immediately. Do NOT retry.
 
-**If subagent fails:**
+**Subagent success pattern:** Pre-flight → test one agent → dispatch parallel → monitor → fallback to sequential if needed.
 
-- ❌ Do NOT retry the same subagent approach multiple times
-- ❌ Do NOT spawn more agents hoping they'll succeed
-- ✅ DO switch to direct implementation in the main repo
-- ✅ DO document what failed for future improvement
+**R-P-I Workflow** (ONLY for): `code-skeptic` (risk analysis), `systems-architect` (architecture design)
 
-**Subagent success pattern:**
+**Available Agents:**
+- Implementation: `senior-backend-engineer`, `frontend-engineer`, `database-engineer`, `devops-engineer`, `testing-engineer`, `code-reviewer` (MANDATORY), `documentation-engineer`
+- Analysis: `code-skeptic`, `systems-architect`, `performance-engineer`, `security-auditor`, `ai-ml-engineer`
+- Planning: `project-task-planner`, `project-manager`
 
-```
-1. Pre-flight: Verify worktree setup, test with one agent
-2. Dispatch: Launch parallel agents with clear scoped tasks
-3. Monitor: Check for hangs, permission errors, or timeouts
-4. Fallback: Switch to sequential if parallel fails
-```
+### GitHub Workflow
 
-### R-P-I Workflow (ONLY for these agents)
+**Commit format:** `<type>(scope): <description> (#issue-number)`
 
-- `code-skeptic` - Risk analysis
-- `systems-architect` - Architecture design
+**Always close the issue after implementation:**
+- Run `gh issue close <number>` and verify with `gh issue view <number>`
+- Add closing comment summarizing what was done
 
-### Available Agents
+**PR Workflow — Review Mode** (PR link only): read `gh pr view/diff`, do NOT switch branches or change code.
 
-**Implementation:** `senior-backend-engineer`, `frontend-engineer`, `database-engineer`, `devops-engineer`, `testing-engineer`, `code-reviewer` (MANDATORY), `documentation-engineer`
+**PR Workflow — Landing Mode:**
+1. Create integration branch from `main`
+2. Bring in PR commits (prefer rebase)
+3. Apply fixes, add changelog
+4. Run full gate locally before committing
+5. Commit with contributor attribution
+6. Merge back to `main`
 
-**Analysis:** `code-skeptic`, `systems-architect`, `performance-engineer`, `security-auditor`, `ai-ml-engineer`
+### Debugging Discipline
 
-**Planning:** `project-task-planner`, `project-manager`
+Form a hypothesis before running commands:
+1. State: "I think X is caused by Y because Z"
+2. List 3–4 specific commands that confirm or reject it
+3. Run them in order
+4. Update hypothesis before running more
 
-```bash
-# Launch parallel agents
-Task(subagent_type="senior-backend-engineer", description="...", prompt="...")
-Task(subagent_type="code-reviewer", description="Review changes", prompt="...")
-```
+### Error Handling
 
----
-
-## QUICK COMMANDS
-
-```bash
-# Startup (local dev) - Use SLM orchestration or systemctl
-# GUI: https://172.16.168.19/orchestration
-# CLI: scripts/start-services.sh start
-# Direct: sudo systemctl start autobot-backend
-
-# Health checks
-# NOTE: .20 backend must be tested from another VM (WSL2 loopback limitation - see docs/developer/WSL2_NETWORKING.md)
-ssh autobot@172.16.168.19 'curl --insecure https://172.16.168.20:8443/api/health'
-redis-cli -h 172.16.168.23 ping
-
-# Ansible Deployment (production)
-cd autobot-slm-backend/ansible
-ansible-playbook playbooks/deploy-full.yml                    # Full deployment
-ansible-playbook playbooks/slm-service-control.yml -e "service=autobot-backend action=restart"
-
-# Manual sync to VMs (dev/manual operations)
-./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh main autobot-backend/
-./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh frontend autobot-slm-frontend/
-./autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh slm autobot-slm-backend/
-
-# Memory MCP
-mcp__memory__search_nodes --query "keywords"
-mcp__memory__create_entities --entities '[{"name": "...", "entityType": "...", "observations": [...]}]'
-```
+Auto-retry on transient errors (API 500, tool interruptions) up to 2 times before asking the user. Log: "Retrying (attempt 2/2)..."
 
 ---
 
-## DOCUMENTATION
+## Reference
 
-**Key docs:** [`docs/developer/PHASE_5_DEVELOPER_SETUP.md`](docs/developer/PHASE_5_DEVELOPER_SETUP.md) | [`docs/api/COMPREHENSIVE_API_DOCUMENTATION.md`](docs/api/COMPREHENSIVE_API_DOCUMENTATION.md) | [`docs/system-state.md`](docs/system-state.md)
+Lookup tables, IPs, playbooks, sync commands, quick commands:
 
-**Guides:** `docs/developer/` - HARDCODING_PREVENTION, REDIS_CLIENT_USAGE, UTF8_ENFORCEMENT, INFRASTRUCTURE_DEPLOYMENT, SSOT_CONFIG_GUIDE
+→ **[`docs/developer/AUTOBOT_REFERENCE.md`](docs/developer/AUTOBOT_REFERENCE.md)**
