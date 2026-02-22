@@ -257,9 +257,13 @@ def _get_agent_routers() -> list:
 
 
 def _get_plugin_routers() -> list:
-    """Get plugin management routers (Issue #730)."""
+    """Get plugin management routers (Issue #730).
+
+    plugin_manager.py routes already include /plugins in their paths,
+    so registration prefix must be empty to avoid double-prefix (#1105).
+    """
     return [
-        (plugin_manager_router, "/plugins", ["plugins"], "plugin_manager"),
+        (plugin_manager_router, "", ["plugins"], "plugin_manager"),
     ]
 
 
