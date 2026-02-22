@@ -41,7 +41,7 @@ export function useVoiceProfiles() {
         return
       }
       const data = await res.json()
-      voices.value = data.voices || []
+      voices.value = Array.isArray(data) ? data : (data.voices || [])
     } catch (e) {
       logger.error('fetchVoices error:', e)
       error.value = String(e)
