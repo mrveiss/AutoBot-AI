@@ -36,6 +36,7 @@ export interface PersonalityProfile {
   operating_style: string[]
   off_limits: string[]
   custom_notes: string
+  voice_id: string
   is_system: boolean
   created_by: string
   created_at: string
@@ -50,6 +51,7 @@ export interface ProfileCreate {
   operating_style?: string[]
   off_limits?: string[]
   custom_notes?: string
+  voice_id?: string
 }
 
 export interface ProfileUpdate {
@@ -60,6 +62,7 @@ export interface ProfileUpdate {
   operating_style?: string[]
   off_limits?: string[]
   custom_notes?: string
+  voice_id?: string
 }
 
 export const TONE_OPTIONS = [
