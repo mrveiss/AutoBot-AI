@@ -12,8 +12,6 @@ import hashlib
 import inspect
 import json
 import logging
-
-logger = logging.getLogger(__name__)
 import os
 import statistics
 import threading
@@ -28,6 +26,8 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 
 from autobot_shared.network_constants import NetworkConstants
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

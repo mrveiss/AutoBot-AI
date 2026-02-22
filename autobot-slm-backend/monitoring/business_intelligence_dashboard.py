@@ -7,8 +7,6 @@ Advanced analytics, ROI tracking, and performance insights for the distributed s
 import asyncio
 import json
 import logging
-
-logger = logging.getLogger(__name__)
 import os
 import statistics
 from dataclasses import asdict, dataclass
@@ -25,6 +23,8 @@ from jinja2 import Template
 from performance_monitor import ALERT_THRESHOLDS
 
 from autobot_shared.network_constants import NetworkConstants
+
+logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for numeric type checks
 _NUMERIC_TYPES = (int, float)

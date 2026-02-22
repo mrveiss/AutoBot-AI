@@ -52,11 +52,13 @@ def _connect_to_redis() -> redis.Redis:
     Connect to Redis and return client.
 
     Issue #281: Extracted from migrate_category_indexes to reduce function length.
+    Issue #1086: Direct redis.Redis() used because this standalone migration script
+    cannot import autobot_shared.redis_client (requires full backend dependency tree).
 
     Returns:
         Redis client or None if connection failed.
     """
-    redis_host = os.getenv("AUTOBOT_REDIS_HOST", "172.16.168.23")
+    redis_host = os.getenv("AUTOBOT_REDIS_HOST", "localhost")
     redis_port = int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
     redis_password = os.getenv("REDIS_PASSWORD") or os.getenv("AUTOBOT_REDIS_PASSWORD")
     redis_db = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))

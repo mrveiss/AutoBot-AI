@@ -8,8 +8,10 @@ Standalone Redis Client for Windows NPU Worker
 This module provides Redis client initialization with connection pooling,
 retry logic, and health monitoring for the Windows NPU worker.
 
-STANDALONE DESIGN: This is a self-contained utility for the Windows NPU worker
-deployment. It does NOT import from utils and has its own implementation.
+STANDALONE DESIGN (Issue #1086): This is a self-contained utility for the Windows
+NPU worker deployment. Direct redis.Redis() instantiation is required because
+autobot_shared.redis_client cannot be imported on Windows. Has its own connection
+pooling, retry logic, and health monitoring.
 
 Issue #725: Added mTLS support for secure Redis connections.
 

@@ -8,8 +8,6 @@ AI analytics, business intelligence, and APM systems.
 import asyncio
 import json
 import logging
-
-logger = logging.getLogger(__name__)
 import os
 import signal
 import time
@@ -23,6 +21,8 @@ from business_intelligence_dashboard import BusinessIntelligenceDashboard
 
 # Import monitoring components
 from performance_monitor import ALERT_THRESHOLDS, PerformanceMonitor
+
+logger = logging.getLogger(__name__)
 
 
 class ComprehensiveMonitoringController:

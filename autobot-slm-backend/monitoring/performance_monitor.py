@@ -10,8 +10,6 @@ Issue #396: Converted blocking subprocess.run to asyncio.create_subprocess_exec.
 import asyncio
 import json
 import logging
-
-logger = logging.getLogger(__name__)
 import os
 import time
 import traceback

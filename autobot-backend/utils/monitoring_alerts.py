@@ -13,9 +13,6 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-import redis
-from config_helper import cfg
-
 logger = logging.getLogger(__name__)
 
 
@@ -138,14 +135,10 @@ class RedisNotificationChannel(AlertNotificationChannel):
     def _initialize_redis(self):
         """Initialize Redis connection"""
         try:
-            self.redis_client = redis.Redis(
-                host=cfg.get("redis.host"),
-                port=cfg.get("redis.port"),
-                password=cfg.get("redis.password"),
-                db=cfg.get("redis.databases.metrics", 4),
-                decode_responses=True,
-                socket_timeout=2,
-                socket_connect_timeout=1,
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_client = get_redis_client(
+                async_client=False, database="analytics"
             )
         except Exception as e:
             logger.warning(f"Could not initialize Redis for alerts: {e}")
@@ -296,14 +289,10 @@ class MonitoringAlertsManager:
     def _initialize_redis(self):
         """Initialize Redis connection for alert storage"""
         try:
-            self.redis_client = redis.Redis(
-                host=cfg.get("redis.host"),
-                port=cfg.get("redis.port"),
-                password=cfg.get("redis.password"),
-                db=cfg.get("redis.databases.metrics", 4),
-                decode_responses=True,
-                socket_timeout=2,
-                socket_connect_timeout=1,
+            from autobot_shared.redis_client import get_redis_client
+
+            self.redis_client = get_redis_client(
+                async_client=False, database="analytics"
             )
         except Exception as e:
             logger.warning(f"Could not initialize Redis for alert storage: {e}")

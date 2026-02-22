@@ -519,7 +519,7 @@ class EnhancedSecurityLayer:
         }
 
         try:
-            with open(self.audit_log_file, "a") as f:
+            with open(self.audit_log_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(log_entry) + "\n")
             logger.debug("Audit log: %s by %s - %s", action, user, outcome)
         except Exception as e:
@@ -541,7 +541,7 @@ class EnhancedSecurityLayer:
         command_history = []
 
         try:
-            with open(self.audit_log_file, "r") as f:
+            with open(self.audit_log_file, "r", encoding="utf-8") as f:
                 for line in f:
                     # Use helper for parsing and filtering (Issue #315: depth reduction)
                     entry = _parse_audit_log_entry(line, user)

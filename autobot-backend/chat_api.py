@@ -51,7 +51,7 @@ class ChatAPI:
                 "type": "response",
             }
         ]
-        with open(chat_file, "w") as f:
+        with open(chat_file, "w", encoding="utf-8") as f:
             json.dump(initial_message, f, indent=2)
         logger.info(f"Created new chat {chat_id}")
         return {"chatId": chat_id}
@@ -78,7 +78,7 @@ class ChatAPI:
 
             if chat_file.exists():
                 try:
-                    with open(chat_file, "r") as f:
+                    with open(chat_file, "r", encoding="utf-8") as f:
                         messages = json.load(f)
                     logger.info(f"Found {len(messages)} messages for chat {chat_id}")
                     return messages
@@ -127,7 +127,7 @@ class ChatAPI:
 
             # Save to file
             chat_file = self.get_chat_file_path(chat_id)
-            with open(chat_file, "w") as f:
+            with open(chat_file, "w", encoding="utf-8") as f:
                 json.dump(cleaned_messages, f, indent=2)
             logger.info(
                 f"Saved {len(cleaned_messages)} cleaned messages for chat {chat_id}"
@@ -149,7 +149,7 @@ class ChatAPI:
                     "type": "response",
                 }
             ]
-            with open(chat_file, "w") as f:
+            with open(chat_file, "w", encoding="utf-8") as f:
                 json.dump(initial_message, f, indent=2)
             logger.info(f"Reset chat {chat_id}")
             return {"status": "success"}
