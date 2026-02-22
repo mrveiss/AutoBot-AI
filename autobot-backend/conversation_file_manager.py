@@ -29,8 +29,13 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import aiosqlite
 import redis.asyncio as async_redis
-
 from backend.constants.threshold_constants import TimingConstants
+from config import unified_config_manager
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import RedisError
+from redis.exceptions import TimeoutError as RedisTimeoutError
+
+from autobot_shared.redis_client import get_redis_client as get_redis_manager
 
 # Module-level project root constant (Issue #380 - avoid repeated Path computation)
 _PROJECT_ROOT = Path(__file__).parent.parent
@@ -86,13 +91,6 @@ class FileInfo:
             self.uploaded_by,
         )
 
-
-from config import unified_config_manager
-from redis.exceptions import ConnectionError as RedisConnectionError
-from redis.exceptions import RedisError
-from redis.exceptions import TimeoutError as RedisTimeoutError
-
-from autobot_shared.redis_client import get_redis_client as get_redis_manager
 
 logger = logging.getLogger(__name__)
 
@@ -1364,10 +1362,8 @@ class ConversationFileManager:
 
 
 # Global instance (singleton pattern, thread-safe)
-import asyncio as _asyncio
-
 _conversation_file_manager_instance: Optional[ConversationFileManager] = None
-_conversation_file_manager_lock = _asyncio.Lock()
+_conversation_file_manager_lock = asyncio.Lock()
 
 
 async def get_conversation_file_manager() -> ConversationFileManager:
