@@ -216,14 +216,14 @@ class MonitorControl:
 
         if Path(config_path).exists():
             try:
-                with open(config_path, "r") as f:
+                with open(config_path, "r", encoding="utf-8") as f:
                     loaded_config = yaml.safe_load(f)
                     default_config.update(loaded_config)
             except Exception as e:
                 logger.warning(f"Error loading config: {e}, using defaults")
         else:
             # Create default config file
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 yaml.dump(default_config, f, default_flow_style=False)
 
         return MonitoringConfig(**default_config)

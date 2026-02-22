@@ -188,7 +188,9 @@ class DisplayDetector:
     def _try_framebuffer_resolution(self) -> Optional[Tuple[int, int]]:
         """Try to get resolution from framebuffer info"""
         try:
-            with open("/sys/class/graphics/fb0/virtual_size", "r") as f:
+            with open(
+                "/sys/class/graphics/fb0/virtual_size", "r", encoding="utf-8"
+            ) as f:
                 size = f.read().strip()
                 if "," in size:
                     width, height = size.split(",")

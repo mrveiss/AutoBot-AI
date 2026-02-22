@@ -100,7 +100,7 @@ class NPUWorkerManager:
                 self._save_workers_to_config()
                 return
 
-            with open(self.config_file, "r") as f:
+            with open(self.config_file, "r", encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
 
             # Load workers using helper (Issue #315: reduced nesting)

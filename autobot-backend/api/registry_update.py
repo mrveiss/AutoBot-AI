@@ -18,7 +18,7 @@ def add_phase9_monitoring_to_registry():
     registry_file = f"{base_dir}/backend/api/registry.py"
 
     # Read the current file
-    with open(registry_file, "r") as f:
+    with open(registry_file, "r", encoding="utf-8") as f:
         content = f.read()
 
     # Find the monitoring section and add the Phase 9 monitoring router
@@ -38,7 +38,7 @@ def add_phase9_monitoring_to_registry():
     updated_content = re.sub(pattern, replacement, content, flags=re.DOTALL)
 
     # Write the updated content back
-    with open(registry_file, "w") as f:
+    with open(registry_file, "w", encoding="utf-8") as f:
         f.write(updated_content)
 
     logger.info("Phase 9 monitoring router added to registry successfully!")

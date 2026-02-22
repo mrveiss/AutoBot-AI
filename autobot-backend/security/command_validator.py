@@ -34,7 +34,7 @@ class CommandValidator:
     def _load_config(self, config_path: str) -> Dict:
         """Load the allowed commands configuration."""
         try:
-            with open(config_path, "r") as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             logger.error("Failed to load command config: %s", e)

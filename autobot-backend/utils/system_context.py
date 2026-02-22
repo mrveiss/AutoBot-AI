@@ -25,7 +25,7 @@ def _parse_os_release_field(field_prefix: str) -> Optional[str]:
     os_release_path = Path("/etc/os-release")
     if not os_release_path.exists():
         return None
-    with open(os_release_path, "r") as f:
+    with open(os_release_path, "r", encoding="utf-8") as f:
         for line in f:
             if line.startswith(field_prefix):
                 value = line.split("=", 1)[1].strip().strip('"').strip("'")

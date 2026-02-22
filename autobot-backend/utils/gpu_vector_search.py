@@ -186,7 +186,7 @@ class GPUVectorIndex:
     def _detect_wsl(self) -> bool:
         """Detect if running in Windows Subsystem for Linux."""
         try:
-            with open("/proc/version", "r") as f:
+            with open("/proc/version", "r", encoding="utf-8") as f:
                 return "microsoft" in f.read().lower()
         except Exception:
             return False

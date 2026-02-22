@@ -51,7 +51,7 @@ class DomainSecurityConfig:
             return self._get_default_config()
 
         try:
-            with open(config_file, "r") as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
         except Exception as e:
             logger.error("Failed to load domain security config: %s", e)

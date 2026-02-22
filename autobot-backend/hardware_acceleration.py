@@ -342,7 +342,7 @@ class HardwareAccelerationManager:
 
             # Get more detailed CPU info if available
             try:
-                with open("/proc/cpuinfo", "r") as f:
+                with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
                     cpuinfo = f.read()
                     if "model name" in cpuinfo:
                         model_line = [

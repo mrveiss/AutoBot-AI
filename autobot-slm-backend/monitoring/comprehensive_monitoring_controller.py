@@ -476,7 +476,7 @@ class ComprehensiveMonitoringController:
                 self.reports_path / f"consolidated_monitoring_report_{timestamp}.json"
             )
 
-            with open(report_file, "w") as f:
+            with open(report_file, "w", encoding="utf-8") as f:
                 json.dump(report, f, indent=2, default=str)
 
             self.logger.info(f"📋 Consolidated report saved: {report_file}")

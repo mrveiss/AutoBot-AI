@@ -13,8 +13,8 @@ slm_heartbeat_interval: 30
 slm_agent_user: autobot
 slm_agent_group: autobot
 
-# Installation directories
-slm_agent_dir: /opt/slm-agent
+# Installation directories (#1121/#1129: role-centric layout under /opt/autobot/)
+slm_agent_dir: /opt/autobot/autobot-slm-agent
 slm_agent_data_dir: /var/lib/slm-agent
 
 # Python dependencies for the agent
