@@ -451,7 +451,7 @@ class PerformanceAnalyzer:
                                 code_snippet=self._get_code_snippet(
                                     lines, child.lineno, 3
                                 ),
-                                suggestion=f"Use async equivalent: asyncio.sleep, aiohttp, asyncio.subprocess, etc.",
+                                suggestion="Use async equivalent: asyncio.sleep, aiohttp, asyncio.subprocess, etc.",
                                 estimated_impact="high",
                             )
                         )
@@ -542,22 +542,22 @@ class PerformanceAnalyzer:
             },
             "inefficient_loops": {
                 "severity": "medium",
-                "description": f"Inefficient loop pattern detected",
+                "description": "Inefficient loop pattern detected",
                 "suggestion": "Consider list comprehensions, vectorization, or algorithm optimization",
             },
             "database_issues": {
                 "severity": "high",
-                "description": f"Database efficiency issue",
+                "description": "Database efficiency issue",
                 "suggestion": "Use connection pooling, bulk operations, and proper indexing",
             },
             "concurrency_issues": {
                 "severity": "high",
-                "description": f"Potential race condition or concurrency issue",
+                "description": "Potential race condition or concurrency issue",
                 "suggestion": "Add proper synchronization (locks, queues) or use async patterns",
             },
             "resource_waste": {
                 "severity": "low",
-                "description": f"Resource waste detected",
+                "description": "Resource waste detected",
                 "suggestion": "Optimize resource usage and eliminate redundant operations",
             },
         }
@@ -794,7 +794,7 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== Performance Analysis Results ===")  # noqa: print
+    print("\n=== Performance Analysis Results ===")  # noqa: print
     print(  # noqa: print
         f"Total performance issues: {results['total_performance_issues']}"
     )  # noqa: print
@@ -806,12 +806,12 @@ async def main():
     print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Print category breakdown
-    print(f"\n=== Issue Categories ===")  # noqa: print
+    print("\n=== Issue Categories ===")  # noqa: print
     for category, count in results["categories"].items():
         print(f"{category}: {count}")  # noqa: print
 
     # Print top critical issues
-    print(f"\n=== Critical Performance Issues ===")  # noqa: print
+    print("\n=== Critical Performance Issues ===")  # noqa: print
     critical_issues = [
         i for i in results["performance_details"] if i["severity"] == "critical"
     ]
@@ -823,7 +823,7 @@ async def main():
         print(f"   Suggestion: {issue['suggestion']}")  # noqa: print
 
     # Print optimization recommendations
-    print(f"\n=== Optimization Recommendations ===")  # noqa: print
+    print("\n=== Optimization Recommendations ===")  # noqa: print
     for i, rec in enumerate(results["optimization_recommendations"][:3], 1):
         print(f"\n{i}. {rec['title']} ({rec['priority']} priority)")  # noqa: print
         print(f"   {rec['description']}")  # noqa: print
