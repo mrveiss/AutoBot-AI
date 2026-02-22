@@ -14,10 +14,9 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from auth_middleware import check_admin_permission
+from backend.services.personality_service import get_personality_manager
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
-
-from backend.services.personality_service import get_personality_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["personality"])
@@ -50,6 +49,7 @@ class ProfileDetail(BaseModel):
     created_by: str
     created_at: str
     updated_at: str
+    voice_id: str = ""
 
 
 class ProfileCreate(BaseModel):
@@ -60,6 +60,7 @@ class ProfileCreate(BaseModel):
     operating_style: List[str] = []
     off_limits: List[str] = []
     custom_notes: str = ""
+    voice_id: str = ""
 
     @field_validator("tone")
     @classmethod
@@ -77,6 +78,7 @@ class ProfileUpdate(BaseModel):
     operating_style: Optional[List[str]] = None
     off_limits: Optional[List[str]] = None
     custom_notes: Optional[str] = None
+    voice_id: Optional[str] = None
 
     @field_validator("tone")
     @classmethod
@@ -110,6 +112,7 @@ def _profile_to_detail(p) -> ProfileDetail:
         operating_style=p.operating_style,
         off_limits=p.off_limits,
         custom_notes=p.custom_notes,
+        voice_id=p.voice_id,  # (#1135)
         is_system=p.is_system,
         created_by=p.created_by,
         created_at=p.created_at,
