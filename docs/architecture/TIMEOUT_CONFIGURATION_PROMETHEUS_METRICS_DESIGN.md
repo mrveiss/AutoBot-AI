@@ -841,7 +841,7 @@ global:
 scrape_configs:
   - job_name: 'autobot-backend'
     static_configs:
-      - targets: ['172.16.168.20:8001']  # Main machine backend
+      - targets: ['172.16.168.20:8443']  # Main machine backend
         labels:
           service: 'autobot'
           component: 'backend'
@@ -1268,7 +1268,7 @@ async def test_metrics_collection_overhead():
 - Dashboard: "AutoBot Timeout & Performance Monitoring"
 
 **Metrics Endpoint:**
-- URL: `http://172.16.168.20:8001/monitoring/metrics`
+- URL: `https://172.16.168.20:8443/monitoring/metrics`
 - Format: Prometheus text format
 - Refresh: Real-time
 

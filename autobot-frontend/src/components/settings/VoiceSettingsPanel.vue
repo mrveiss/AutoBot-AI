@@ -61,6 +61,12 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
       <i class="fas fa-spinner fa-spin"></i> Loading voices...
     </div>
 
+    <div v-if="personalityVoiceId" class="personality-voice-hint">
+      <i class="fas fa-user-circle"></i>
+      Active personality overrides voice selection:
+      <strong>{{ voices.find(v => v.id === personalityVoiceId)?.name ?? personalityVoiceId }}</strong>
+    </div>
+
     <div v-if="error" class="error-msg">{{ error }}</div>
 
     <!-- Add Voice -->
@@ -134,12 +140,15 @@ const logger = createLogger('VoiceSettingsPanel')
 const {
   voices,
   selectedVoiceId,
+  effectiveVoiceId,
+  personalityVoiceId,
   loading,
   error,
   fetchVoices,
   selectVoice,
   createVoice,
   deleteVoice,
+  fetchPersonalityVoice,
 } = useVoiceProfiles()
 
 const showAddDialog = ref(false)
@@ -155,6 +164,7 @@ let recordedChunks: Blob[] = []
 
 onMounted(() => {
   fetchVoices()
+  fetchPersonalityVoice()
 })
 
 function triggerFileUpload() {
@@ -437,5 +447,21 @@ async function handleDelete(voiceId: string, name: string) {
 .submit-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.personality-voice-hint {
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 12px);
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid var(--color-primary, #60a5fa);
+  border-radius: var(--radius-md, 6px);
+  color: var(--text-secondary, #94a3b8);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 6px);
+}
+
+.personality-voice-hint strong {
+  color: var(--color-primary, #60a5fa);
 }
 </style>

@@ -78,7 +78,7 @@ Run the detection script manually to audit the entire codebase:
 
 ```python
 # BAD - Hardcoded values
-url = "http://172.16.168.20:8001/api/chat"
+url = "https://172.16.168.20:8443/api/chat"
 redis_host = "172.16.168.23"
 redis_port = 6379
 
@@ -94,7 +94,7 @@ redis_port = config.redis.port
 
 ```typescript
 // BAD - Hardcoded values
-const url = "http://172.16.168.20:8001/api/chat"
+const url = "https://172.16.168.20:8443/api/chat"
 
 // GOOD - Use SSOT config
 import { getBackendUrl } from '@/config/ssot-config'

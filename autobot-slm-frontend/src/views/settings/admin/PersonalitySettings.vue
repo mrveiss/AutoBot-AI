@@ -15,6 +15,7 @@
  */
 
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 import {
   usePersonality,
   TONE_OPTIONS,
@@ -36,6 +37,7 @@ const {
   resetProfile,
   toggleEnabled,
 } = usePersonality()
+const authStore = useAuthStore()
 
 // ---- local state ----
 const selectedId = ref<string | null>(null)
@@ -45,6 +47,24 @@ const successMsg = ref<string | null>(null)
 const showNewDialog = ref(false)
 const newName = ref('')
 const confirmDeleteId = ref<string | null>(null)
+
+// ---- voice list for personality voice assignment (#1135) ----
+const voiceList = ref<{ id: string; name: string; builtin: boolean }[]>([])
+
+async function fetchVoices() {
+  try {
+    const token = authStore.token || localStorage.getItem('autobot_access_token') || ''
+    const res = await fetch('/autobot-api/voice/voices', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (res.ok) {
+      const data = await res.json()
+      voiceList.value = Array.isArray(data) ? data : (data.voices || [])
+    }
+  } catch {
+    // voice list unavailable — selector will show empty
+  }
+}
 
 const isActive = computed(() => selectedId.value === (profiles.value.find((p) => p.active)?.id ?? null))
 
@@ -88,6 +108,7 @@ async function selectProfile(id: string) {
       operating_style: [...full.operating_style],
       off_limits: [...full.off_limits],
       custom_notes: full.custom_notes,
+      voice_id: full.voice_id ?? '',
       is_system: full.is_system,
       created_by: full.created_by,
     })
@@ -106,6 +127,7 @@ async function handleSave() {
     operating_style: editForm.operating_style as string[],
     off_limits: editForm.off_limits as string[],
     custom_notes: editForm.custom_notes,
+    voice_id: editForm.voice_id as string,
   })
   saving.value = false
   if (result) {
@@ -168,6 +190,7 @@ async function handleDuplicate() {
     operating_style: [...base.operating_style],
     off_limits: [...base.off_limits],
     custom_notes: base.custom_notes,
+    voice_id: base.voice_id,
   }
   const result = await createProfile(copy)
   if (result) {
@@ -187,8 +210,7 @@ function showSuccess(msg: string) {
 }
 
 onMounted(async () => {
-  await fetchProfiles()
-  await fetchActive()
+  await Promise.all([fetchProfiles(), fetchActive(), fetchVoices()])
   if (profiles.value.length > 0) {
     await selectProfile(profiles.value[0].id)
   }
@@ -466,6 +488,25 @@ onMounted(async () => {
               placeholder="Any additional freeform instructions…"
               class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
             />
+          </div>
+
+          <!-- Voice Assignment (#1135) -->
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Voice</label>
+            <select
+              v-model="editForm.voice_id"
+              class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            >
+              <option value="">None (use user's voice setting)</option>
+              <option
+                v-for="v in voiceList"
+                :key="v.id"
+                :value="v.id"
+              >{{ v.name }}{{ v.builtin ? ' (built-in)' : '' }}</option>
+            </select>
+            <p class="mt-1 text-xs text-gray-400">
+              When this personality is active, voice output will use the selected voice.
+            </p>
           </div>
 
           <!-- Save button -->

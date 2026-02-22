@@ -179,7 +179,7 @@ class PerformanceOptimizer:
 
         if config_path.exists():
             try:
-                with open(config_path, "r") as f:
+                with open(config_path, "r", encoding="utf-8") as f:
                     loaded_config = yaml.safe_load(f)
                     # Merge with defaults
                     default_config.update(loaded_config)
@@ -189,7 +189,7 @@ class PerformanceOptimizer:
                 )
         else:
             # Create default config file
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 yaml.dump(default_config, f, default_flow_style=False)
 
         return default_config

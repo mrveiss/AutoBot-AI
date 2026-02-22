@@ -124,6 +124,38 @@
             </div>
           </Transition>
 
+          <!-- Insecure-context warning (#1059) — shown when mic-dependent mode selected
+               but browser blocks getUserMedia due to an untrusted certificate -->
+          <Transition name="fade">
+            <div
+              v-if="showInsecureContextWarning"
+              class="voice-overlay__cert-warning"
+            >
+              <p class="voice-overlay__cert-warning-title">
+                <i class="fas fa-lock-open mr-2"></i>Mic access blocked
+              </p>
+              <p class="voice-overlay__cert-warning-body">
+                Your browser requires a trusted HTTPS certificate to use the
+                microphone. To fix, choose one of:
+              </p>
+              <ol class="voice-overlay__cert-warning-steps">
+                <li>
+                  Install the <strong>AutoBot Internal CA</strong> cert as a
+                  trusted root in your OS/browser.
+                </li>
+                <li>
+                  In Chrome/Edge, open
+                  <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>,
+                  add <code>{{ currentOrigin }}</code>, and restart.
+                </li>
+              </ol>
+              <p class="voice-overlay__cert-warning-fallback">
+                <i class="fas fa-info-circle mr-1"></i>
+                Walkie-talkie mode works without a trusted cert.
+              </p>
+            </div>
+          </Transition>
+
           <!-- Hands-free controls (#1030) -->
           <div
             v-if="voiceConversation.mode.value === 'hands-free'"
@@ -240,6 +272,13 @@ const isHandsFree = computed(
 const isAutoMode = computed(
   () => isFullDuplex.value || isHandsFree.value,
 )
+
+// Show insecure-context warning when a mic-dependent mode is active
+// but the browser can't provide getUserMedia (#1059)
+const showInsecureContextWarning = computed(
+  () => isAutoMode.value && !voiceConversation.micAccessAvailable.value,
+)
+const currentOrigin = window.location.origin
 
 const micHint = computed(() => {
   switch (voiceConversation.state.value) {
@@ -531,6 +570,51 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(239, 68, 68, 0.2);
   color: #fca5a5;
   font-size: 0.8125rem;
+}
+
+/* Insecure-context cert warning (#1059) */
+.voice-overlay__cert-warning {
+  margin: 0 1.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #fcd34d;
+  font-size: 0.8125rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.voice-overlay__cert-warning-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.voice-overlay__cert-warning-body {
+  color: #fde68a;
+}
+
+.voice-overlay__cert-warning-steps {
+  padding-left: 1.25rem;
+  list-style: decimal;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.voice-overlay__cert-warning-steps code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  word-break: break-all;
+}
+
+.voice-overlay__cert-warning-fallback {
+  color: #94a3b8;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
 }
 
 /* Controls area */

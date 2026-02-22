@@ -7,7 +7,7 @@
 ## ✅ Pre-Flight Checklist
 
 ### System Status
-- [x] Backend running: http://172.16.168.20:8001
+- [x] Backend running: https://172.16.168.20:8443
 - [x] Frontend running: http://172.16.168.21:5173
 - [x] Redis running: 172.16.168.23:6379
 - [x] All VMs accessible
@@ -228,7 +228,7 @@ After implementation, verify these criteria:
 - [ ] Fresh deployment scenario tested
 - [ ] Existing deployment scenario tested
 - [ ] All 6 VMs can perform file operations
-- [ ] Health check accessible: `curl http://172.16.168.20:8001/api/health`
+- [ ] Health check accessible: `curl https://172.16.168.20:8443/api/health`
 
 ---
 
@@ -251,7 +251,7 @@ sqlite3 /home/kali/Desktop/AutoBot/data/conversation_files.db "SELECT * FROM sch
 # Should show: 1.0.0
 
 # 4. Test health check
-curl http://172.16.168.20:8001/api/health
+curl https://172.16.168.20:8443/api/health
 # Should show database status as "healthy"
 
 # 5. Run unit tests
@@ -261,7 +261,7 @@ pytest tests/unit/test_conversation_file_manager.py -v --cov=src.conversation_fi
 pytest tests/distributed/test_db_initialization.py -v -m integration
 
 # 7. Test file upload (end-to-end)
-curl -X POST http://172.16.168.20:8001/api/files/conversation/upload \
+curl -X POST https://172.16.168.20:8443/api/files/conversation/upload \
   -F "file=@test.txt" \
   -F "session_id=test-session"
 ```

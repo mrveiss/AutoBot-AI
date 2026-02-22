@@ -264,7 +264,7 @@ async def get_dashboard_html():
         dashboard_path = await generator.generate_html_dashboard()
 
         # Read and return HTML content - PERFORMANCE FIX: Convert to async file I/O
-        async with aiofiles.open(dashboard_path, "r") as f:
+        async with aiofiles.open(dashboard_path, "r", encoding="utf-8") as f:
             html_content = await f.read()
 
         return HTMLResponse(content=html_content)

@@ -263,7 +263,7 @@ class CompletionTrainer:
             "timestamp": timestamp,
         }
         metadata_path = self.model_dir / f"completion_model_{version}_meta.json"
-        with open(metadata_path, "w") as f:
+        with open(metadata_path, "w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=2)
 
         # Update best model symlink

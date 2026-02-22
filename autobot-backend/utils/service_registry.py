@@ -292,7 +292,7 @@ class ServiceRegistry:
     def _load_config_file(self, config_file: str):
         """Load services from configuration file"""
         try:
-            with open(config_file, "r") as f:
+            with open(config_file, "r", encoding="utf-8") as f:
                 if config_file.endswith(".yaml") or config_file.endswith(".yml"):
                     config = yaml.safe_load(f)
                 else:

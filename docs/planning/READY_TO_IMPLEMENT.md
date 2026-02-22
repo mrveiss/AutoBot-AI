@@ -50,7 +50,7 @@
 
 ### System Health ✅
 
-- ✅ Backend running: http://172.16.168.20:8001
+- ✅ Backend running: https://172.16.168.20:8443
 - ✅ Frontend running: http://172.16.168.21:5173
 - ✅ Redis running: 172.16.168.23:6379
 - ✅ All 6 VMs operational
@@ -199,7 +199,7 @@ Create custom prompts for each agent based on their task sections
 
 ### Backend Status
 ```
-✅ Running: http://172.16.168.20:8001
+✅ Running: https://172.16.168.20:8443
 ✅ Health: All services operational
 ✅ Redis: Connected and healthy
 ```
@@ -211,7 +211,7 @@ Create custom prompts for each agent based on their task sections
 ✅ Redis (VM3):      172.16.168.23:6379
 ✅ AI Stack (VM4):   172.16.168.24:8080
 ✅ Browser (VM5):    172.16.168.25:3000
-✅ Main (VM0):       172.16.168.20:8001
+✅ Main (VM0):       172.16.168.20:8443
 ```
 
 ### Documentation Status

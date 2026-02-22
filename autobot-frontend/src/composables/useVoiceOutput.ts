@@ -4,7 +4,7 @@
  * Author: mrveiss
  *
  * useVoiceOutput.ts - TTS voice output composable (#928, #1031)
- * Manages voice output toggle state and plays synthesized audio via Kani-TTS-2.
+ * Manages voice output toggle state and plays synthesized audio via Pocket TTS.
  * Supports both single-shot speak() and streaming playAudioChunk() for full-duplex.
  */
 
@@ -110,11 +110,11 @@ export function useVoiceOutput() {
     if (isSpeaking.value) _stopCurrentAudio()
 
     try {
-      const { selectedVoiceId } = useVoiceProfiles()
+      const { effectiveVoiceId } = useVoiceProfiles()
       const formData = new FormData()
       formData.append('text', text)
-      if (selectedVoiceId.value) {
-        formData.append('voice_id', selectedVoiceId.value)
+      if (effectiveVoiceId.value) {
+        formData.append('voice_id', effectiveVoiceId.value)
       }
       const response = await fetchWithAuth('/api/voice/synthesize', {
         method: 'POST',

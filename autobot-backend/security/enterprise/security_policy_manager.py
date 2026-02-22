@@ -148,7 +148,7 @@ class SecurityPolicyManager:
         """Load security policy configuration"""
         try:
             if Path(self.config_path).exists():
-                with open(self.config_path, "r") as f:
+                with open(self.config_path, "r", encoding="utf-8") as f:
                     return yaml.safe_load(f)
             else:
                 default_config = self._get_default_config()
@@ -203,7 +203,7 @@ class SecurityPolicyManager:
             policy_files = list(self.policies_path.glob("*.json"))
 
             for policy_file in policy_files:
-                with open(policy_file, "r") as f:
+                with open(policy_file, "r", encoding="utf-8") as f:
                     policy_data = json.load(f)
 
                 # Convert datetime strings back to objects

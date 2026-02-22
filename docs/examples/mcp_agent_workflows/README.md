@@ -65,7 +65,7 @@ AUTOBOT_BACKEND_URL = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConsta
 Set `AUTOBOT_BACKEND_URL` for standalone usage:
 
 ```bash
-export AUTOBOT_BACKEND_URL="http://172.16.168.20:8001"
+export AUTOBOT_BACKEND_URL="https://172.16.168.20:8443"
 python -m examples.mcp_agent_workflows.research_workflow
 ```
 

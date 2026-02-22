@@ -1145,7 +1145,7 @@ USE_DISTRIBUTED_LOCKS = os.getenv("USE_DISTRIBUTED_LOCKS", "false") == "true"
 **3. Rollback Procedures**
 ```bash
 # Quick rollback (disable feature flag)
-curl -X POST http://172.16.168.20:8001/api/admin/feature-flags \
+curl -X POST https://172.16.168.20:8443/api/admin/feature-flags \
   -d '{"USE_ASYNC_REDIS": false}'
 
 # Full rollback (revert deployment)
@@ -1511,7 +1511,7 @@ await memory_graph.create_relation(
 **Level 1: Feature Flag Disable (30 seconds)**
 ```bash
 # Instant rollback via API
-curl -X POST http://172.16.168.20:8001/api/admin/feature-flags \
+curl -X POST https://172.16.168.20:8443/api/admin/feature-flags \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -d '{
     "USE_ASYNC_REDIS": false,

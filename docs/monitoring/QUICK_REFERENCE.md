@@ -61,7 +61,7 @@ Navigate: **AutoBot UI → Monitoring → Dashboards**
 ssh autobot@172.16.168.19 'systemctl status prometheus grafana-server alertmanager'
 
 # Backend metrics endpoint
-curl http://172.16.168.20:8001/api/monitoring/metrics | head
+curl https://172.16.168.20:8443/api/monitoring/metrics | head
 ```
 
 ### Restart Services
@@ -88,7 +88,7 @@ ssh autobot@172.16.168.19 'sudo journalctl -u alertmanager -f'
 ### Check Metrics
 ```bash
 # Test backend metrics endpoint
-curl http://172.16.168.20:8001/api/monitoring/metrics
+curl https://172.16.168.20:8443/api/monitoring/metrics
 
 # Check Prometheus targets
 curl http://172.16.168.19:9090/api/v1/targets | python3 -m json.tool
@@ -104,7 +104,7 @@ curl "http://172.16.168.19:9090/api/v1/query?query=autobot_cpu_usage_percent"
 ### Quick Health Check
 ```bash
 # One-liner to check all services
-echo "Backend:"; curl -s http://172.16.168.20:8001/api/health > /dev/null && echo "✅ UP" || echo "❌ DOWN"; \
+echo "Backend:"; curl -s https://172.16.168.20:8443/api/health > /dev/null && echo "✅ UP" || echo "❌ DOWN"; \
 echo "Prometheus:"; curl -s http://172.16.168.19:9090/-/healthy > /dev/null && echo "✅ UP" || echo "❌ DOWN"; \
 echo "Grafana:"; curl -s http://172.16.168.19:3000/api/health > /dev/null && echo "✅ UP" || echo "❌ DOWN"; \
 echo "AlertManager:"; curl -s http://172.16.168.19:9093/-/healthy > /dev/null && echo "✅ UP" || echo "❌ DOWN"
@@ -127,7 +127,7 @@ curl -s http://172.16.168.19:9090/api/v1/targets | \
 
 **Check 1**: Backend metrics endpoint
 ```bash
-curl http://172.16.168.20:8001/api/monitoring/metrics
+curl https://172.16.168.20:8443/api/monitoring/metrics
 # Should return Prometheus-format metrics
 ```
 

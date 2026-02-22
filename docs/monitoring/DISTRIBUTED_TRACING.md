@@ -333,7 +333,7 @@ Features:
 Tracing status is included in the backend health check:
 
 ```bash
-curl http://172.16.168.20:8001/api/health | jq '.services.distributed_tracing'
+curl https://172.16.168.20:8443/api/health | jq '.services.distributed_tracing'
 # Returns: "ready" or "pending" or "failed"
 ```
 

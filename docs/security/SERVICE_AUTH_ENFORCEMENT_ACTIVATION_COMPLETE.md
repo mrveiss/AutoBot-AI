@@ -77,7 +77,7 @@ INFO: 172.16.168.20:45814 - "GET /api/npu/heartbeat HTTP/1.1" 401 Unauthorized
 
 **Attack Prevention**:
 ```bash
-curl http://172.16.168.20:8001/api/npu/heartbeat
+curl https://172.16.168.20:8443/api/npu/heartbeat
 # Returns: 401 Unauthorized - Attack BLOCKED ✅
 ```
 

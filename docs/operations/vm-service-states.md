@@ -23,7 +23,7 @@ offline services through circuit breakers and intelligent log suppression.
 
 | Service | VM | IP:Port | Description |
 |---------|-----|---------|-------------|
-| **Backend API** | Main (WSL) | 172.16.168.20:8001 | Core backend - must always be running |
+| **Backend API** | Main (WSL) | 172.16.168.20:8443 | Core backend - must always be running |
 | **Redis** | VM3 | 172.16.168.23:6379 | Data layer - required for caching, sessions, queues |
 
 **If these are offline**: System will not function properly. Immediate attention required.

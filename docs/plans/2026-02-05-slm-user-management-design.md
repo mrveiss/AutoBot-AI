@@ -329,7 +329,7 @@ Minimal changes - just update API connection:
 ```typescript
 // autobot-user-frontend/src/stores/auth.ts
 // No changes - still connects to Main Backend
-const API_BASE = 'http://172.16.168.20:8001/api'
+const API_BASE = 'https://172.16.168.20:8443/api'
 
 // Main Backend now connects to 172.16.168.23:5432/autobot_users
 // Frontend doesn't need to know about SLM

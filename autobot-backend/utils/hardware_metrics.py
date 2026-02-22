@@ -228,7 +228,7 @@ class Phase9PerformanceMonitor:
         """Check if Intel NPU is available"""
         try:
             # Check CPU model for Intel Ultra series
-            with open("/proc/cpuinfo", "r") as f:
+            with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
                 cpuinfo = f.read()
                 if "Intel(R) Core(TM) Ultra" in cpuinfo:
                     # Check for OpenVINO NPU support
@@ -388,7 +388,7 @@ class Phase9PerformanceMonitor:
     def _check_wsl_environment(self) -> bool:
         """Check if running in WSL environment"""
         try:
-            with open("/proc/version", "r") as f:
+            with open("/proc/version", "r", encoding="utf-8") as f:
                 version_info = f.read()
                 return "WSL" in version_info or "Microsoft" in version_info
         except Exception:

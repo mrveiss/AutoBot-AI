@@ -124,7 +124,7 @@ class ComplianceManager:
         """Load compliance configuration"""
         try:
             if os.path.exists(self.config_path):
-                with open(self.config_path, "r") as f:
+                with open(self.config_path, "r", encoding="utf-8") as f:
                     return yaml.safe_load(f)
             else:
                 # Create default config

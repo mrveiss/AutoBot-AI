@@ -626,7 +626,7 @@ If agents must work sequentially:
 After each deployment:
 ```bash
 # Backend health
-curl http://172.16.168.20:8001/api/health
+curl https://172.16.168.20:8443/api/health
 
 # Redis connectivity
 redis-cli -h 172.16.168.23 --user main-backend --pass <password> ping
@@ -636,7 +636,7 @@ curl -H "X-Service-ID: test" http://172.16.168.22:8081/api/process
 # Should return 401 (no valid signature)
 
 # Chat functionality
-curl -X POST http://172.16.168.20:8001/api/chat/stream \
+curl -X POST https://172.16.168.20:8443/api/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"message": "test", "session_id": "test"}'
 ```

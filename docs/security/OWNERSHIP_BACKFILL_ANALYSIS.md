@@ -434,12 +434,12 @@ redis-cli -h 172.16.168.23 -p 6379 -n 0 GET "chat_session_owner:d40d0c19-2d76-4a
 **Step 4: Functional Testing**
 ```bash
 # Test ownership validation API
-curl -X POST http://172.16.168.20:8001/api/chat/sessions/d40d0c19-2d76-4af7-98dd-d1c6a07619ac/validate \
+curl -X POST https://172.16.168.20:8443/api/chat/sessions/d40d0c19-2d76-4af7-98dd-d1c6a07619ac/validate \
     -H "Authorization: Bearer <admin_token>"
 # Expected: 200 OK with authorized=true
 
 # Test unauthorized access (should fail after auth enabled)
-curl -X GET http://172.16.168.20:8001/api/chat/sessions/d40d0c19-2d76-4af7-98dd-d1c6a07619ac \
+curl -X GET https://172.16.168.20:8443/api/chat/sessions/d40d0c19-2d76-4af7-98dd-d1c6a07619ac \
     -H "Authorization: Bearer <different_user_token>"
 # Expected: 403 Forbidden (when auth enabled)
 ```

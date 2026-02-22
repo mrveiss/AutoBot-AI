@@ -141,7 +141,7 @@ ansible all -i ansible/inventory/production.yml -m shell -a "uptime && free -h |
 ansible all -i ansible/inventory/production.yml -m shell -a "systemctl status autobot-* --no-pager -l"
 
 # Network connectivity test
-ansible all -i ansible/inventory/production.yml -m shell -a "ping -c 3 172.16.168.20 && curl -s http://172.16.168.20:8001/api/health || echo 'Connection failed'"
+ansible all -i ansible/inventory/production.yml -m shell -a "ping -c 3 172.16.168.20 && curl -s https://172.16.168.20:8443/api/health || echo 'Connection failed'"
 ```
 
 ## Troubleshooting Commands

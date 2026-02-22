@@ -162,7 +162,7 @@ This document outlines the architecture for a comprehensive code vectorization a
         "job_id": "uuid-v4",
         "estimated_time": 120,  # seconds
         "total_files": 450,
-        "websocket_channel": "ws://172.16.168.20:8001/ws/vectorization/{job_id}"
+        "websocket_channel": "wss://172.16.168.20:8443/ws/vectorization/{job_id}"
     }
 }
 

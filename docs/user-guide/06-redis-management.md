@@ -59,7 +59,7 @@ Redis is a critical component of AutoBot that provides:
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              Backend API (Main Machine)                      │
-│           http://172.16.168.20:8001                         │
+│           https://172.16.168.20:8443                         │
 │                                                              │
 │  [Redis Service Manager]                                    │
 │   - Service Control Logic                                   │

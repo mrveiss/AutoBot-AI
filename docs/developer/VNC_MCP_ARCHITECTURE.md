@@ -23,7 +23,7 @@ AutoBot now provides complete VNC observation capabilities through the **Model C
        │ VNC requests
        ↓
 ┌──────────────────────────────────────────────────┐
-│          Backend (172.16.168.20:8001)            │
+│          Backend (172.16.168.20:8443)            │
 │                                                  │
 │  ┌────────────────────┐  ┌────────────────────┐ │
 │  │  VNC Proxy         │  │  VNC MCP Bridge    │ │
@@ -109,7 +109,7 @@ await record_observation(vnc_type, "disconnection", {"status": "closed"})
 http://172.16.168.25:6080/vnc.html/vnc.html  // ❌ duplicate
 
 // After (FIXED):
-http://172.16.168.20:8001/api/vnc-proxy/browser/vnc.html  // ✅ via backend
+https://172.16.168.20:8443/api/vnc-proxy/browser/vnc.html  // ✅ via backend
 ```
 
 ---
@@ -303,24 +303,24 @@ VNC proxy records: All WebSocket frames to MCP
 ### Test VNC Proxy
 ```bash
 # Check browser VNC status
-curl http://172.16.168.20:8001/api/vnc-proxy/browser/status
+curl https://172.16.168.20:8443/api/vnc-proxy/browser/status
 
 # Access noVNC client
-curl http://172.16.168.20:8001/api/vnc-proxy/browser/vnc.html
+curl https://172.16.168.20:8443/api/vnc-proxy/browser/vnc.html
 ```
 
 ### Test MCP Tools
 ```bash
 # List available VNC MCP tools
-curl http://172.16.168.20:8001/api/vnc/mcp/tools
+curl https://172.16.168.20:8443/api/vnc/mcp/tools
 
 # Check VNC status via MCP
-curl -X POST http://172.16.168.20:8001/api/vnc/mcp/check_vnc_status \
+curl -X POST https://172.16.168.20:8443/api/vnc/mcp/check_vnc_status \
   -H "Content-Type: application/json" \
   -d '{"vnc_type": "browser"}'
 
 # Get browser VNC context
-curl -X POST http://172.16.168.20:8001/api/vnc/mcp/get_browser_vnc_context
+curl -X POST https://172.16.168.20:8443/api/vnc/mcp/get_browser_vnc_context
 ```
 
 ---

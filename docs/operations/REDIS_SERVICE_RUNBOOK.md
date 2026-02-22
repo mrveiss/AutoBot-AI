@@ -69,7 +69,7 @@ This runbook provides operational procedures for managing the Redis service with
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                   Main Machine (WSL)                     │
-│              172.16.168.20:8001                         │
+│              172.16.168.20:8443                         │
 │                                                         │
 │  ┌─────────────────────────────────────────────────┐  │
 │  │  RedisServiceManager                            │  │
@@ -238,7 +238,7 @@ Operators can view health status in multiple places:
 
 2. **API Endpoint:**
    ```bash
-   curl http://172.16.168.20:8001/api/services/redis/health
+   curl https://172.16.168.20:8443/api/services/redis/health
    ```
 
 3. **Command Line:**
@@ -430,7 +430,7 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.23 \
 **Manual Reset Procedure:**
 ```bash
 # After fixing root cause, reset circuit breaker
-curl -X POST http://172.16.168.20:8001/api/services/redis/reset-circuit-breaker \
+curl -X POST https://172.16.168.20:8443/api/services/redis/reset-circuit-breaker \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
@@ -559,7 +559,7 @@ Before performing manual operations:
 
 5. **Verify health:**
    ```bash
-   curl http://172.16.168.20:8001/api/services/redis/health
+   curl https://172.16.168.20:8443/api/services/redis/health
    ```
 
 6. **Confirm dependent services recovered:**
@@ -641,7 +641,7 @@ Before performing manual operations:
 2. **Notify immediately:**
    ```bash
    # Send emergency notification
-   curl -X POST http://172.16.168.20:8001/api/notifications/emergency \
+   curl -X POST https://172.16.168.20:8443/api/notifications/emergency \
      -H "Authorization: Bearer $ADMIN_TOKEN" \
      -d '{"message": "Redis emergency stop initiated", "reason": "..."}'
    ```
@@ -1089,7 +1089,7 @@ scp -i ~/.ssh/autobot_key \
 4. **Verify full system recovery:**
    ```bash
    # Test all health checks
-   curl http://172.16.168.20:8001/api/services/redis/health
+   curl https://172.16.168.20:8443/api/services/redis/health
 
    # Test from backend
    redis-cli -h 172.16.168.23 PING
@@ -1219,7 +1219,7 @@ scp -i ~/.ssh/autobot_key \
    redis-cli -h 172.16.168.23 INFO server | grep redis_version
 
    # Run health checks
-   curl http://172.16.168.20:8001/api/services/redis/health
+   curl https://172.16.168.20:8443/api/services/redis/health
 
    # Test functionality
    redis-cli -h 172.16.168.23 SET test "upgrade-success"
@@ -1604,7 +1604,7 @@ redis-cli -h 172.16.168.23 PING
 ssh autobot@172.16.168.23 "systemctl status redis-server"
 
 # Full health via API
-curl http://172.16.168.20:8001/api/services/redis/health
+curl https://172.16.168.20:8443/api/services/redis/health
 
 # Memory usage
 redis-cli -h 172.16.168.23 INFO memory | grep used_memory_human

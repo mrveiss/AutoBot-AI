@@ -57,10 +57,10 @@ Verify that backend endpoints exist and return expected data structures.
 **Commands:**
 ```bash
 # Test VM status endpoint
-curl -X GET http://172.16.168.20:8001/api/service-monitor/vms/status
+curl -X GET https://172.16.168.20:8443/api/service-monitor/vms/status
 
 # Test services endpoint
-curl -X GET http://172.16.168.20:8001/api/service-monitor/services
+curl -X GET https://172.16.168.20:8443/api/service-monitor/services
 ```
 
 ---

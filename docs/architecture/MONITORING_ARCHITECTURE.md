@@ -88,7 +88,7 @@ global:
 scrape_configs:
   - job_name: 'autobot-backend'
     static_configs:
-      - targets: ['172.16.168.20:8001']
+      - targets: ['172.16.168.20:8443']
     metrics_path: '/api/monitoring/metrics'
 
   - job_name: 'npu-worker'
@@ -386,7 +386,7 @@ type DashboardType =
 
 1. Check backend metrics endpoint:
    ```bash
-   curl http://172.16.168.20:8001/api/monitoring/metrics | head
+   curl https://172.16.168.20:8443/api/monitoring/metrics | head
    ```
 
 2. Check Prometheus targets:

@@ -41,7 +41,7 @@
 ### Data Flow
 
 ```
-AutoBot Backend (172.16.168.20:8001)
+AutoBot Backend (172.16.168.20:8443)
     ↓
     Exposes /api/monitoring/metrics (Prometheus format)
     ↓
@@ -125,7 +125,7 @@ async def metrics_endpoint():
     return Response(content=metrics_data, media_type=CONTENT_TYPE_LATEST)
 ```
 
-**Endpoint**: `http://172.16.168.20:8001/api/monitoring/metrics`
+**Endpoint**: `https://172.16.168.20:8443/api/monitoring/metrics`
 
 **Registered in**: `backend/app_factory_enhanced.py`
 
@@ -137,7 +137,7 @@ async def metrics_endpoint():
 scrape_configs:
   - job_name: 'autobot-backend'
     static_configs:
-      - targets: ['172.16.168.20:8001']
+      - targets: ['172.16.168.20:8443']
         labels:
           instance: 'autobot-main'
           service: 'backend-api'
@@ -326,7 +326,7 @@ The backend exposes the following metrics at `/api/monitoring/metrics`:
 | **Grafana Direct** | http://172.16.168.19:3000 | admin / autobot |
 | **Prometheus** | http://172.16.168.19:9090 | N/A (no auth) |
 | **AlertManager** | http://172.16.168.19:9093 | N/A (no auth) |
-| **Backend Metrics** | http://172.16.168.20:8001/api/monitoring/metrics | N/A |
+| **Backend Metrics** | https://172.16.168.20:8443/api/monitoring/metrics | N/A |
 
 ### Recommended Access Method
 
@@ -407,7 +407,7 @@ The backend exposes the following metrics at `/api/monitoring/metrics`:
 curl http://172.16.168.19:9090/-/healthy  # Prometheus
 curl http://172.16.168.19:3000/api/health # Grafana
 curl http://172.16.168.19:9093/-/healthy  # AlertManager
-curl http://172.16.168.20:8001/api/monitoring/metrics | head # Backend
+curl https://172.16.168.20:8443/api/monitoring/metrics | head # Backend
 
 # Check targets
 curl http://172.16.168.19:9090/api/v1/targets
@@ -475,7 +475,7 @@ Targets monitored: 9
 **Problem**: No data in dashboards
 ```bash
 # Check backend metrics endpoint
-curl http://172.16.168.20:8001/api/monitoring/metrics
+curl https://172.16.168.20:8443/api/monitoring/metrics
 
 # Check Prometheus targets
 curl http://172.16.168.19:9090/api/v1/targets

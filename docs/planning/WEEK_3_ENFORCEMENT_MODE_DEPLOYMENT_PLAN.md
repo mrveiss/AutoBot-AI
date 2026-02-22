@@ -395,7 +395,7 @@ bash run_autobot.sh --restart
 tail -f logs/backend.log | grep "service"
 
 # Check enforcement working
-curl -X POST http://172.16.168.20:8001/api/npu/test
+curl -X POST https://172.16.168.20:8443/api/npu/test
 # Should return 401 Unauthorized (no auth headers)
 ```
 

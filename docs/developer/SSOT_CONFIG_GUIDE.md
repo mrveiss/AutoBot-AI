@@ -40,7 +40,7 @@ redis_url = config.redis.url              # Full connection URL
 llm_model = config.llm.default_model      # "llama3.2:3b"
 
 # Get full URL for a service
-api_url = config.backend.url              # "http://172.16.168.20:8001"
+api_url = config.backend.url              # "https://172.16.168.20:8443"
 ```
 
 ### TypeScript (Frontend)
@@ -53,7 +53,7 @@ const config = getConfig()
 const backendHost = config.backend.host   // "172.16.168.20"
 
 // Get full URLs
-const apiUrl = getBackendUrl()            // "http://172.16.168.20:8001"
+const apiUrl = getBackendUrl()            // "https://172.16.168.20:8443"
 const redisUrl = getRedisUrl()            // Full Redis connection URL
 ```
 
@@ -216,7 +216,7 @@ client = redis.Redis(
 
 **Before (hardcoded):**
 ```typescript
-const API_URL = "http://172.16.168.20:8001"
+const API_URL = "https://172.16.168.20:8443"
 ```
 
 **After (SSOT):**

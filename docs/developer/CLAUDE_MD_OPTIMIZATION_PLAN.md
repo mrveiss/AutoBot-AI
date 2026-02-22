@@ -165,7 +165,7 @@ Each subtask should be:
 
 | Service | IP:Port | Purpose |
 |---------|---------|---------|
-| **Main Machine (WSL)** | 172.16.168.20:8001 | Backend API + VNC Desktop (6080) |
+| **Main Machine (WSL)** | 172.16.168.20:8443 | Backend API + VNC Desktop (6080) |
 | **VM1 Frontend** | 172.16.168.21:5173 | Web interface (SINGLE FRONTEND) |
 | **VM2 NPU Worker** | 172.16.168.22:8081 | Hardware AI acceleration |
 | **VM3 Redis** | 172.16.168.23:6379 | Data layer |

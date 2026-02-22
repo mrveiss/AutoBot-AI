@@ -65,7 +65,7 @@
 **Commands**:
 ```bash
 # Verify backend is running
-curl -s http://172.16.168.20:8001/api/health | jq
+curl -s https://172.16.168.20:8443/api/health | jq
 
 # Check recent authentication failures (should be 0)
 tail -100 logs/backend.log | grep -c "Service auth failed"
@@ -133,19 +133,19 @@ Service-only paths: ['/api/npu/results', '/api/npu/heartbeat', ...]
 
 ```bash
 # Health check
-curl -s http://172.16.168.20:8001/api/health
+curl -s https://172.16.168.20:8443/api/health
 
 # Frontend config
-curl -s http://172.16.168.20:8001/api/frontend-config
+curl -s https://172.16.168.20:8443/api/frontend-config
 
 # Chat list
-curl -s http://172.16.168.20:8001/api/chats
+curl -s https://172.16.168.20:8443/api/chats
 
 # NPU workers (frontend Settings panel)
-curl -s http://172.16.168.20:8001/api/npu/workers
+curl -s https://172.16.168.20:8443/api/npu/workers
 
 # Cache stats
-curl -s http://172.16.168.20:8001/api/cache/stats
+curl -s https://172.16.168.20:8443/api/cache/stats
 ```
 
 **Expected**: All requests return 200 OK (no authentication required)
@@ -154,9 +154,9 @@ curl -s http://172.16.168.20:8001/api/cache/stats
 
 ```bash
 # These should return 401 Unauthorized without service authentication
-curl -s -w "\nHTTP Status: %{http_code}\n" http://172.16.168.20:8001/api/npu/heartbeat
-curl -s -w "\nHTTP Status: %{http_code}\n" http://172.16.168.20:8001/api/ai-stack/results
-curl -s -w "\nHTTP Status: %{http_code}\n" http://172.16.168.20:8001/api/browser/internal
+curl -s -w "\nHTTP Status: %{http_code}\n" https://172.16.168.20:8443/api/npu/heartbeat
+curl -s -w "\nHTTP Status: %{http_code}\n" https://172.16.168.20:8443/api/ai-stack/results
+curl -s -w "\nHTTP Status: %{http_code}\n" https://172.16.168.20:8443/api/browser/internal
 ```
 
 **Expected**: All return 401 with `{"detail": "...", "authenticated": false}`
@@ -279,7 +279,7 @@ tail -50 logs/backend.log | grep "Service Authentication"
 # Should see: "Service Authentication in LOGGING MODE (enforcement disabled)"
 
 # Test frontend
-curl http://172.16.168.20:8001/api/health
+curl https://172.16.168.20:8443/api/health
 curl http://172.16.168.21:5173
 ```
 

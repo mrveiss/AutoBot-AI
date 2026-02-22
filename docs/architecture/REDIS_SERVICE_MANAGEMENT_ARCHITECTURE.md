@@ -84,7 +84,7 @@ This document defines the architecture for Redis service management features in 
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                    Backend API (Main: 172.16.168.20:8001)           │
+│                    Backend API (Main: 172.16.168.20:8443)           │
 │  ┌───────────────────────────────────────────────────────────────┐  │
 │  │  /api/services/redis (ServiceManagementRouter)                │  │
 │  │  ┌─────────────────────────────────────────────────────────┐  │  │
@@ -888,7 +888,7 @@ async def auto_recover(self) -> RecoveryResult:
 
 ### 4.2 WebSocket Real-Time Updates
 
-**Endpoint:** `ws://172.16.168.20:8001/ws/services/redis/status`
+**Endpoint:** `wss://172.16.168.20:8443/ws/services/redis/status`
 
 **Authentication:** Required (token in URL or header)
 
@@ -2372,7 +2372,7 @@ from httpx import AsyncClient
 async def load_test_status_endpoint(duration_seconds: int = 60):
     """Load test status endpoint for sustained period"""
 
-    client = AsyncClient(base_url="http://172.16.168.20:8001")
+    client = AsyncClient(base_url="https://172.16.168.20:8443")
 
     request_count = 0
     error_count = 0

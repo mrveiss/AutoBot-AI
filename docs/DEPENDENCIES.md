@@ -164,7 +164,7 @@ Key packages:
 - @heroicons/vue
 
 ### Nginx Configuration
-- Proxy to backend: http://172.16.168.20:8001
+- Proxy to backend: https://172.16.168.20:8443
 - WebSocket support for /ws endpoint
 - TLS certificates: `/etc/ssl/certs/autobot.{crt,key}`
 

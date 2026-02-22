@@ -86,7 +86,7 @@ import { getConfig, getBackendUrl } from '@/config/ssot-config'
 
 | Pattern | Replace With |
 |---------|--------------|
-| `"http://172.16.168.20:8001"` | `getBackendUrl()` |
+| `"https://172.16.168.20:8443"` | `getBackendUrl()` |
 | `"172.16.168.20"` | `getConfig().backend.host` |
 | `8001` | `getConfig().backend.port` |
 

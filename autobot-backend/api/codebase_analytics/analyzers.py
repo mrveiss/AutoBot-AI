@@ -538,7 +538,7 @@ def _check_file_write_without_lock(
     - Files in non-concurrent contexts (scripts, tests, init)
     - Append mode (safer than write mode)
 
-    Example: with open(path, 'w') as f: ... (without file lock)
+    Example: with open(path, 'w', encoding="utf-8") as f: ... (without file lock)
     """
     for item in stmt.items:
         if not isinstance(item.context_expr, ast.Call):

@@ -214,7 +214,7 @@ client = create_service_client_from_env()
 ### Test 3: Authenticated HTTP Request ✅
 
 ```python
-response = await client.get("http://172.16.168.20:8001/api/system/health")
+response = await client.get("https://172.16.168.20:8443/api/system/health")
 # Returns: 200 OK with auth headers
 ```
 
@@ -300,7 +300,7 @@ response = await client.get("http://172.16.168.20:8001/api/system/health")
 **Monitoring Commands**:
 ```bash
 # Quick health check (run every 4 hours)
-curl -s http://172.16.168.20:8001/api/health | jq -r '.status'
+curl -s https://172.16.168.20:8443/api/health | jq -r '.status'
 
 # Authentication warnings (last hour)
 grep "Service auth failed" logs/backend.log | tail -100

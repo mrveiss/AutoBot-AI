@@ -40,7 +40,7 @@ class ContextWindowManager:
             return self._get_default_config()
 
         try:
-            with open(path, "r") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
 
             logger.info("✅ Loaded config for %s models", len(config["models"]))

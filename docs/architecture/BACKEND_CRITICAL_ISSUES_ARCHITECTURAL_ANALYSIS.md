@@ -27,7 +27,7 @@ This architectural analysis examines how 6 critical backend issues identified in
 AutoBot operates as a sophisticated distributed system across 6 virtual machines:
 
 ```
-VM0 (Main Host WSL): Backend API (172.16.168.20:8001) + Ollama + VNC Desktop
+VM0 (Main Host WSL): Backend API (172.16.168.20:8443) + Ollama + VNC Desktop
 VM1 (Frontend): Vue.js web interface (172.16.168.21:5173)
 VM2 (NPU Worker): Intel NPU + GPU acceleration (172.16.168.22:8081)
 VM3 (Redis Stack): Centralized data layer (172.16.168.23:6379) - 11 specialized databases
@@ -618,7 +618,7 @@ class TestDistributedFileOperations:
     async def test_file_upload_from_frontend_vm(self):
         """Test file upload flow: Frontend VM → Backend → Redis → Storage."""
         # Simulate frontend VM uploading file
-        client = AsyncTestClient(backend_url="http://172.16.168.20:8001")
+        client = AsyncTestClient(backend_url="https://172.16.168.20:8443")
 
         file_content = b"test content"
         response = await client.post(
