@@ -1,5 +1,7 @@
 {
   "role": "autobot-slm-agent",
+  "required": true,
+  "degraded_without": [],
   "version": "{{ slm_agent_version | default(git_commit) | default('unknown') }}",
   "deploy_path": "{{ slm_agent_dir }}",
   "pythonpath": "{{ slm_agent_dir }}",
@@ -9,6 +11,8 @@
     "pip install aiohttp psutil"
   ],
   "depends_on": [],
+  "compatible_with": ["*"],
+  "incompatible_with": [],
   "node_id": "{{ slm_node_id }}",
   "deployed_at": "{{ ansible_date_time.iso8601 }}"
 }
