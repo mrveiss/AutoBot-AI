@@ -108,6 +108,18 @@ repos:
         stages: [pre-commit]
         description: "Blocks commits with functions >65 lines, warns for 51-65 lines"
 
+  # No direct redis.Redis() in production code (Issue #1086)
+  - repo: local
+    hooks:
+      - id: no-direct-redis
+        name: No Direct Redis Connections in Production Code (Issue #1086)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-direct-redis
+        language: script
+        types: [python]
+        pass_filenames: false
+        stages: [pre-commit]
+        description: "Blocks commits with direct redis.Redis() — use get_redis_client() instead"
+
   # No print()/console.* in production code (Issue #1082)
   - repo: local
     hooks:
