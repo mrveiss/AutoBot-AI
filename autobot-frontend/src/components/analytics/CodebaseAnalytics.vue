@@ -2659,6 +2659,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { NetworkConstants } from '@/constants/network.ts'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -3659,7 +3660,7 @@ onMounted(async () => {
 const checkCurrentIndexingJob = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/index/current`)
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/current`)
     if (response.ok) {
       const data = await response.json()
       if (data.has_active_job) {
@@ -3707,7 +3708,7 @@ const stopJobPolling = () => {
 const pollJobStatus = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/index/current`)
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/current`)
     if (response.ok) {
       const data = await response.json()
       currentJobStatus.value = data.status
@@ -3798,7 +3799,7 @@ const pollIntermediateResults = async () => {
     const backendUrl = await appConfig.getServiceUrl('backend')
 
     // Poll for problems found so far
-    const problemsResponse = await fetch(`${backendUrl}/api/analytics/codebase/problems`)
+    const problemsResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/problems`)
     if (problemsResponse.ok) {
       const problemsData = await problemsResponse.json()
       // Always update problems (even if empty) to reflect current state
@@ -3806,7 +3807,7 @@ const pollIntermediateResults = async () => {
     }
 
     // Poll for stats - update codebaseStats but don't overwrite progressStatus
-    const statsResponse = await fetch(`${backendUrl}/api/analytics/codebase/stats`)
+    const statsResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/stats`)
     if (statsResponse.ok) {
       const statsData = await statsResponse.json()
       if (statsData.stats) {
@@ -3829,7 +3830,7 @@ const cancelIndexingJob = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/index/cancel`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/cancel`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -3946,7 +3947,7 @@ const loadChartData = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/analytics/charts`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/analytics/charts`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -3988,7 +3989,7 @@ const loadUnifiedReport = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/unified/report`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/unified/report`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4060,7 +4061,7 @@ const loadDependencyData = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/analytics/dependencies`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/analytics/dependencies`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4103,7 +4104,7 @@ const loadImportTreeData = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/analytics/import-tree`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/analytics/import-tree`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4152,7 +4153,7 @@ const loadCallGraphData = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/analytics/call-graph`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/analytics/call-graph`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4204,7 +4205,7 @@ const loadDeclarations = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const declarationsEndpoint = `${backendUrl}/api/analytics/codebase/declarations`
-    const response = await fetch(declarationsEndpoint, {
+    const response = await fetchWithAuth(declarationsEndpoint, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4229,7 +4230,7 @@ const loadDuplicates = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const duplicatesEndpoint = `${backendUrl}/api/analytics/codebase/duplicates`
-    const response = await fetch(duplicatesEndpoint, {
+    const response = await fetchWithAuth(duplicatesEndpoint, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4254,7 +4255,7 @@ const loadHardcodes = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const hardcodesEndpoint = `${backendUrl}/api/analytics/codebase/hardcodes`
-    const response = await fetch(hardcodesEndpoint, {
+    const response = await fetchWithAuth(hardcodesEndpoint, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4279,7 +4280,7 @@ const loadConfigDuplicates = async () => {
   configDuplicatesError.value = ''
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/config-duplicates`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/config-duplicates`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4315,7 +4316,7 @@ const loadBugPrediction = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     // Issue #608: Remove artificial limit to analyze all Python files
-    const response = await fetch(`${backendUrl}/api/analytics/bug-prediction/analyze?limit=1000`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/bug-prediction/analyze?limit=1000`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4354,7 +4355,7 @@ const loadApiEndpointAnalysis = async () => {
   apiEndpointsError.value = ''
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/endpoint-analysis`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/endpoint-analysis`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4390,7 +4391,7 @@ const loadSecurityScore = async () => {
   securityScoreError.value = ''
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/code-intelligence/security/score?path=${encodeURIComponent(rootPath.value)}`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/code-intelligence/security/score?path=${encodeURIComponent(rootPath.value)}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4435,7 +4436,7 @@ const loadPerformanceScore = async () => {
   performanceScoreError.value = ''
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/code-intelligence/performance/score?path=${encodeURIComponent(rootPath.value)}`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/code-intelligence/performance/score?path=${encodeURIComponent(rootPath.value)}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4477,7 +4478,7 @@ const loadRedisHealth = async () => {
   redisHealthError.value = ''
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/code-intelligence/redis/health-score?path=${encodeURIComponent(rootPath.value)}`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/code-intelligence/redis/health-score?path=${encodeURIComponent(rootPath.value)}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4485,16 +4486,20 @@ const loadRedisHealth = async () => {
       }
     })
     if (!response.ok) {
-      throw new Error(`Redis health endpoint returned ${response.status}`)
+      if (response.status === 504) {
+        throw new Error('Analysis timed out — codebase too large for real-time scan')
+      }
+      const detail = await response.json().catch(() => null)
+      throw new Error(detail?.detail || `Redis health endpoint returned ${response.status}`)
     }
     const data = await response.json()
     if (data.status === 'success') {
       redisHealth.value = {
-        redis_health_score: data.redis_health_score || 0,
+        redis_health_score: data.health_score ?? data.redis_health_score ?? 0,
         grade: data.grade || 'N/A',
         status_message: data.status_message || '',
         total_files: data.total_files || 0,
-        total_issues: data.total_issues || 0,
+        total_issues: data.total_optimizations || data.total_issues || 0,
         files_with_issues: data.files_with_issues || 0
       }
     } else if (data.status === 'no_data') {
@@ -4517,7 +4522,7 @@ const loadSecurityFindings = async () => {
   loadingSecurityFindings.value = true
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/code-intelligence/security/analyze`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/code-intelligence/security/analyze`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -4548,7 +4553,7 @@ const loadPerformanceFindings = async () => {
   loadingPerformanceFindings.value = true
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/code-intelligence/performance/analyze`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/code-intelligence/performance/analyze`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -4579,7 +4584,7 @@ const loadRedisOptimizations = async () => {
   loadingRedisOptimizations.value = true
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/code-intelligence/redis/analyze`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/code-intelligence/redis/analyze`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -4653,7 +4658,7 @@ const loadEnvironmentAnalysis = async () => {
       url += `&llm_model=${encodeURIComponent(aiFilteringModel.value)}`
       url += `&filter_priority=${encodeURIComponent(aiFilteringPriority.value)}`
     }
-    const response = await fetch(url, {
+    const response = await fetchWithAuth(url, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4700,7 +4705,7 @@ const loadOwnershipAnalysis = async () => {
   ownershipError.value = ''
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/ownership/analysis?path=${encodeURIComponent(rootPath.value)}`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/ownership/analysis?path=${encodeURIComponent(rootPath.value)}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4789,7 +4794,7 @@ const indexCodebase = async () => {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const indexEndpoint = `${backendUrl}/api/analytics/codebase/index`
 
-    const response = await fetch(indexEndpoint, {
+    const response = await fetchWithAuth(indexEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -4834,7 +4839,7 @@ const getCodebaseStats = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const statsEndpoint = `${backendUrl}/api/analytics/codebase/stats`
-    const response = await fetch(statsEndpoint)
+    const response = await fetchWithAuth(statsEndpoint)
     if (!response.ok) {
       throw new Error(`Stats endpoint returned ${response.status}`)
     }
@@ -4859,7 +4864,7 @@ const getProblemsReport = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const problemsEndpoint = `${backendUrl}/api/analytics/codebase/problems`
-    const response = await fetch(problemsEndpoint)
+    const response = await fetchWithAuth(problemsEndpoint)
     if (!response.ok) {
       throw new Error(`Problems endpoint returned ${response.status}`)
     }
@@ -4887,7 +4892,7 @@ const getDeclarationsData = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const declarationsEndpoint = `${backendUrl}/api/analytics/codebase/declarations`
-    const response = await fetch(declarationsEndpoint, {
+    const response = await fetchWithAuth(declarationsEndpoint, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4922,7 +4927,7 @@ const getDuplicatesData = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const duplicatesEndpoint = `${backendUrl}/api/analytics/codebase/duplicates`
-    const response = await fetch(duplicatesEndpoint, {
+    const response = await fetchWithAuth(duplicatesEndpoint, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4957,7 +4962,7 @@ const getHardcodesData = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const hardcodesEndpoint = `${backendUrl}/api/analytics/codebase/hardcodes`
-    const response = await fetch(hardcodesEndpoint, {
+    const response = await fetchWithAuth(hardcodesEndpoint, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -4997,7 +5002,7 @@ const getApiEndpointCoverage = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/endpoint-analysis`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/endpoint-analysis`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -5051,7 +5056,7 @@ const getCrossLanguageAnalysis = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/cross-language/summary`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cross-language/summary`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -5119,7 +5124,7 @@ const loadCrossLanguageDetails = async () => {
     const backendUrl = await appConfig.getServiceUrl('backend')
 
     // Load DTO mismatches
-    const dtoResponse = await fetch(`${backendUrl}/api/analytics/codebase/cross-language/dto-mismatches`)
+    const dtoResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cross-language/dto-mismatches`)
     if (dtoResponse.ok) {
       const dtoData = await dtoResponse.json()
       if (dtoData.status === 'success' && crossLanguageAnalysis.value) {
@@ -5128,7 +5133,7 @@ const loadCrossLanguageDetails = async () => {
     }
 
     // Load API mismatches
-    const apiResponse = await fetch(`${backendUrl}/api/analytics/codebase/cross-language/api-mismatches`)
+    const apiResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cross-language/api-mismatches`)
     if (apiResponse.ok) {
       const apiData = await apiResponse.json()
       if (apiData.status === 'success' && crossLanguageAnalysis.value) {
@@ -5140,7 +5145,7 @@ const loadCrossLanguageDetails = async () => {
     }
 
     // Load validation duplications
-    const valResponse = await fetch(`${backendUrl}/api/analytics/codebase/cross-language/validation-duplications`)
+    const valResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cross-language/validation-duplications`)
     if (valResponse.ok) {
       const valData = await valResponse.json()
       if (valData.status === 'success' && crossLanguageAnalysis.value) {
@@ -5149,7 +5154,7 @@ const loadCrossLanguageDetails = async () => {
     }
 
     // Load semantic matches
-    const matchResponse = await fetch(`${backendUrl}/api/analytics/codebase/cross-language/semantic-matches?min_similarity=0.7&limit=20`)
+    const matchResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cross-language/semantic-matches?min_similarity=0.7&limit=20`)
     if (matchResponse.ok) {
       const matchData = await matchResponse.json()
       if (matchData.status === 'success' && crossLanguageAnalysis.value) {
@@ -5170,7 +5175,7 @@ const runCrossLanguageAnalysis = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/cross-language/analyze`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cross-language/analyze`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -5302,28 +5307,15 @@ const resetState = () => {
   notify('State reset - ready to analyze', 'success')
 }
 
-// FIXED: Check NPU worker endpoint directly (not via backend proxy)
+// Issue #1007: NPU health check via backend proxy (avoids CORS/mixed content)
 const testNpuConnection = async () => {
   const startTime = Date.now()
 
   try {
-    const npuWorkerUrl = `http://${import.meta.env.VITE_NPU_WORKER_HOST || NetworkConstants.NPU_WORKER_VM_IP}:${import.meta.env.VITE_NPU_WORKER_PORT || NetworkConstants.NPU_WORKER_PORT}`
-    const npuEndpoint = `${npuWorkerUrl}/health`
-    const response = await fetch(npuEndpoint, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
-    })
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Status ${response.status}: ${errorText}`)
-    }
-    const data = await response.json()
+    const data = await ApiClient.get('/api/npu/health')
     const responseTime = Date.now() - startTime
-    const npuStatus = data.available ? 'Available' : 'Not Available'
-    notify(`NPU: ${npuStatus} (${responseTime}ms)`, data.available ? 'success' : 'warning')
+    const npuStatus = data.available || data.status === 'ok' ? 'Available' : 'Not Available'
+    notify(`NPU: ${npuStatus} (${responseTime}ms)`, data.available || data.status === 'ok' ? 'success' : 'warning')
   } catch (error: unknown) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -5343,7 +5335,7 @@ const testAllEndpoints = async () => {
     // Test declarations
     try {
       const declarationsEndpoint = `${backendUrl}/api/analytics/codebase/declarations`
-      const response = await fetch(declarationsEndpoint)
+      const response = await fetchWithAuth(declarationsEndpoint)
       results.push(`Declarations: ${response.ok ? '✅' : '❌'} (${response.status})`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -5353,7 +5345,7 @@ const testAllEndpoints = async () => {
     // Test duplicates
     try {
       const duplicatesEndpoint = `${backendUrl}/api/analytics/codebase/duplicates`
-      const response = await fetch(duplicatesEndpoint)
+      const response = await fetchWithAuth(duplicatesEndpoint)
       results.push(`Duplicates: ${response.ok ? '✅' : '❌'} (${response.status})`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -5363,7 +5355,7 @@ const testAllEndpoints = async () => {
     // Test hardcodes
     try {
       const hardcodesEndpoint = `${backendUrl}/api/analytics/codebase/hardcodes`
-      const response = await fetch(hardcodesEndpoint)
+      const response = await fetchWithAuth(hardcodesEndpoint)
       results.push(`Hardcodes: ${response.ok ? '✅' : '❌'} (${response.status})`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -5373,7 +5365,7 @@ const testAllEndpoints = async () => {
     // Test NPU
     try {
       const npuEndpoint = `${backendUrl}/api/monitoring/hardware/npu`
-      const response = await fetch(npuEndpoint)
+      const response = await fetchWithAuth(npuEndpoint)
       results.push(`NPU: ${response.ok ? '✅' : '❌'} (${response.status})`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -5383,7 +5375,7 @@ const testAllEndpoints = async () => {
     // Test stats
     try {
       const statsEndpoint = `${backendUrl}/api/analytics/codebase/stats`
-      const response = await fetch(statsEndpoint)
+      const response = await fetchWithAuth(statsEndpoint)
       results.push(`Stats: ${response.ok ? '✅' : '❌'} (${response.status})`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -5415,7 +5407,7 @@ const runCodeSmellAnalysis = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const analyzeEndpoint = `${backendUrl}/api/code-intelligence/analyze`
-    const response = await fetch(analyzeEndpoint, {
+    const response = await fetchWithAuth(analyzeEndpoint, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -5459,7 +5451,7 @@ const getCodeHealthScore = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const healthEndpoint = `${backendUrl}/api/code-intelligence/health-score?path=${encodeURIComponent(rootPath.value)}`
-    const response = await fetch(healthEndpoint, {
+    const response = await fetchWithAuth(healthEndpoint, {
       method: 'GET',
       headers: {
         'Accept': 'application/json'
@@ -5499,7 +5491,7 @@ const exportReport = async (quick: boolean = true) => {
     const backendUrl = await appConfig.getServiceUrl('backend')
     // Use quick mode by default for responsive UI - skips expensive analyses
     const reportEndpoint = `${backendUrl}/api/analytics/codebase/report?format=markdown&quick=${quick}`
-    const response = await fetch(reportEndpoint, {
+    const response = await fetchWithAuth(reportEndpoint, {
       method: 'GET',
       headers: {
         'Accept': 'text/markdown'
@@ -5592,7 +5584,7 @@ const exportSection = async (section: SectionType, format: 'md' | 'json' = 'md')
       // Issue #631: Fetch full data from export endpoint to avoid truncation
       try {
         const backendUrl = await appConfig.getServiceUrl('backend')
-        const exportResponse = await fetch(`${backendUrl}/api/analytics/codebase/env-analysis/export`, {
+        const exportResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/env-analysis/export`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
         })
@@ -5961,7 +5953,7 @@ const clearCache = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/codebase/cache`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cache`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json'
@@ -6037,7 +6029,7 @@ const runFullAnalysis = async () => {
 const loadSystemOverview = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/dashboard/overview`)
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/dashboard/overview`)
 
     if (!response.ok) {
       throw new Error(`Status ${response.status}`)
@@ -6082,7 +6074,7 @@ const loadSystemOverview = async () => {
 const loadCommunicationPatterns = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetch(`${backendUrl}/api/analytics/communication/patterns`)
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/communication/patterns`)
 
     if (!response.ok) {
       throw new Error(`Status ${response.status}`)
@@ -6126,15 +6118,15 @@ const loadCodeQuality = async () => {
     const backendUrl = await appConfig.getServiceUrl('backend')
 
     // Fetch health score from quality API
-    const healthResponse = await fetch(`${backendUrl}/api/quality/health-score`)
+    const healthResponse = await fetchWithAuth(`${backendUrl}/api/quality/health-score`)
     const healthData = healthResponse.ok ? await healthResponse.json() : null
 
     // Fetch duplicates count
-    const duplicatesResponse = await fetch(`${backendUrl}/api/analytics/codebase/duplicates`)
+    const duplicatesResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/duplicates`)
     const duplicatesData = duplicatesResponse.ok ? await duplicatesResponse.json() : null
 
     // Fetch technical debt summary
-    const debtResponse = await fetch(`${backendUrl}/api/debt/summary`)
+    const debtResponse = await fetchWithAuth(`${backendUrl}/api/debt/summary`)
     const debtData = debtResponse.ok ? await debtResponse.json() : null
 
     // Issue #543: Handle no_data status from backend
@@ -6166,15 +6158,15 @@ const loadPerformanceMetrics = async () => {
     const backendUrl = await appConfig.getServiceUrl('backend')
 
     // Fetch performance summary from performance analytics
-    const summaryResponse = await fetch(`${backendUrl}/api/performance/summary`)
+    const summaryResponse = await fetchWithAuth(`${backendUrl}/api/performance/summary`)
     const summaryData = summaryResponse.ok ? await summaryResponse.json() : null
 
     // Fetch monitoring status for uptime
-    const monitoringResponse = await fetch(`${backendUrl}/api/monitoring/status`)
+    const monitoringResponse = await fetchWithAuth(`${backendUrl}/api/monitoring/status`)
     const monitoringData = monitoringResponse.ok ? await monitoringResponse.json() : null
 
     // Fetch quality metrics for performance breakdown
-    const qualityResponse = await fetch(`${backendUrl}/api/quality/health-score`)
+    const qualityResponse = await fetchWithAuth(`${backendUrl}/api/quality/health-score`)
     const qualityData = qualityResponse.ok ? await qualityResponse.json() : null
 
     // Issue #543: Handle no_data status from backend

@@ -1,6 +1,7 @@
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
+# Issue #1040: GPU-aware Ollama service configuration
 [Unit]
 Description=Ollama LLM Service
 After=network-online.target
@@ -12,8 +13,22 @@ User={{ llm_user }}
 Group={{ llm_group }}
 Environment="OLLAMA_HOST={{ llm_host }}:{{ llm_port }}"
 Environment="OLLAMA_MODELS={{ llm_models_dir }}"
-{% if llm_num_gpu != 0 %}
-Environment="OLLAMA_NUM_GPU={{ llm_num_gpu }}"
+Environment="OLLAMA_MAX_LOADED_MODELS={{ _llm_effective_max_loaded | default(llm_max_loaded_models) }}"
+Environment="OLLAMA_NUM_PARALLEL={{ _llm_effective_num_parallel | default(llm_num_parallel) }}"
+Environment="OLLAMA_KEEP_ALIVE={{ _llm_effective_keep_alive | default(llm_keep_alive) }}"
+{% if llm_flash_attention | default(false) %}
+Environment="OLLAMA_FLASH_ATTENTION=1"
+{% endif %}
+{% if llm_kv_cache_type | default('') | length > 0 %}
+Environment="OLLAMA_KV_CACHE_TYPE={{ llm_kv_cache_type }}"
+{% endif %}
+{% set effective_threads = llm_num_threads | default(0) | int %}
+{% if effective_threads > 0 %}
+Environment="OLLAMA_NUM_THREADS={{ effective_threads }}"
+{% endif %}
+{% set effective_gpu = _llm_effective_num_gpu | default(llm_num_gpu) | int %}
+{% if effective_gpu != 0 %}
+Environment="OLLAMA_NUM_GPU={{ effective_gpu }}"
 {% endif %}
 ExecStart=/usr/local/bin/ollama serve
 Restart=always

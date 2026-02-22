@@ -324,6 +324,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('LLMPatternDashboard')
@@ -479,7 +480,7 @@ const toggleSteps = (type: string) => {
 // API Calls
 const fetchStats = async () => {
   try {
-    const response = await fetch('/api/llm-patterns/stats?days=7')
+    const response = await fetchWithAuth('/api/llm-patterns/stats?days=7')
     if (response.ok) {
       stats.value = await response.json()
     }
@@ -490,7 +491,7 @@ const fetchStats = async () => {
 
 const fetchRecommendations = async () => {
   try {
-    const response = await fetch('/api/llm-patterns/recommendations')
+    const response = await fetchWithAuth('/api/llm-patterns/recommendations')
     if (response.ok) {
       const data = await response.json()
       recommendations.value = data.recommendations || []
@@ -502,7 +503,7 @@ const fetchRecommendations = async () => {
 
 const fetchModelComparison = async () => {
   try {
-    const response = await fetch('/api/llm-patterns/model-comparison')
+    const response = await fetchWithAuth('/api/llm-patterns/model-comparison')
     if (response.ok) {
       const data = await response.json()
       modelComparison.value = data.models || []
@@ -514,7 +515,7 @@ const fetchModelComparison = async () => {
 
 const fetchCategoryDistribution = async () => {
   try {
-    const response = await fetch('/api/llm-patterns/category-distribution')
+    const response = await fetchWithAuth('/api/llm-patterns/category-distribution')
     if (response.ok) {
       categoryData.value = await response.json()
     }
@@ -525,7 +526,7 @@ const fetchCategoryDistribution = async () => {
 
 const fetchCacheOpportunities = async () => {
   try {
-    const response = await fetch('/api/llm-patterns/cache-opportunities')
+    const response = await fetchWithAuth('/api/llm-patterns/cache-opportunities')
     if (response.ok) {
       const data = await response.json()
       cacheOpportunities.value = data.opportunities || []
@@ -539,7 +540,7 @@ const runAnalysis = async () => {
   if (!analyzePrompt.value) return
 
   try {
-    const response = await fetch('/api/llm-patterns/analyze', {
+    const response = await fetchWithAuth('/api/llm-patterns/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

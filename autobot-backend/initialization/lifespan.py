@@ -15,14 +15,8 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
-from backend.knowledge_factory import get_or_create_knowledge_base
-from backend.services.slm_client import init_slm_client, shutdown_slm_client
-from backend.type_defs.common import Metadata
-from backend.user_management.database import init_database
-from backend.utils.background_llm_sync import BackgroundLLMSync
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
-from config import UnifiedConfigManager
 from fastapi import FastAPI
 from security_layer import SecurityLayer
 
@@ -31,6 +25,12 @@ from autobot_shared.tracing import (
     instrument_redis,
     shutdown_tracing,
 )
+from backend.knowledge_factory import get_or_create_knowledge_base
+from backend.services.slm_client import init_slm_client, shutdown_slm_client
+from backend.type_defs.common import Metadata
+from backend.user_management.database import init_database
+from backend.utils.background_llm_sync import BackgroundLLMSync
+from config import ConfigManager
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -110,6 +110,19 @@ async def _init_skills_tables() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(SkillsBase.metadata.create_all)
     logger.info("Skills tables initialized")
+
+
+async def _init_skills_discovery() -> None:
+    """Discover and register builtin skills at startup."""
+    from backend.api.skills import _get_manager
+
+    manager = _get_manager()
+    result = await manager.initialize()
+    logger.info(
+        "Skills discovered: %d registered, categories: %s",
+        result.get("total_registered", 0),
+        result.get("categories", []),
+    )
 
 
 async def _init_chat_history_manager(app: FastAPI) -> None:
@@ -209,7 +222,7 @@ async def initialize_critical_services(app: FastAPI):
     try:
         # Initialize configuration - CRITICAL
         logger.info("✅ [ 10%] Config: Loading unified configuration...")
-        config = UnifiedConfigManager()
+        config = ConfigManager()
         app.state.config = config
         await update_app_state("config", config)
         logger.info("✅ [ 10%] Config: Configuration loaded successfully")
@@ -287,12 +300,13 @@ async def initialize_critical_services(app: FastAPI):
         # Issue #743: Register caches with CacheCoordinator for memory optimization
         await _init_cache_coordinator()
 
-        # Initialize skills system tables (non-blocking, SQLite-backed)
+        # Initialize skills system tables and discover builtin skills (non-blocking)
         try:
             await _init_skills_tables()
+            await _init_skills_discovery()
         except Exception as skills_db_error:
             logger.warning(
-                "Skills table initialization failed (non-critical): %s", skills_db_error
+                "Skills initialization failed (non-critical): %s", skills_db_error
             )
 
         logger.info("✅ [ 60%] PHASE 1 COMPLETE: All critical services operational")
@@ -542,9 +556,8 @@ async def _init_memory_graph(app: FastAPI):
     try:
         from autobot_memory_graph import AutoBotMemoryGraph
 
-        memory_graph = AutoBotMemoryGraph(
-            chat_history_manager=app.state.chat_history_manager
-        )
+        memory_graph = AutoBotMemoryGraph()
+        memory_graph.chat_history_manager = app.state.chat_history_manager
         await memory_graph.initialize()
         app.state.memory_graph = memory_graph
         await update_app_state("memory_graph", memory_graph)
@@ -644,9 +657,17 @@ async def _init_background_llm_sync(app: FastAPI):
             if ai_stack_health.get("status") == "healthy":
                 logger.info("✅ [ 90%] AI Stack: AI Stack fully available")
             else:
-                logger.info("🔄 [ 90%] AI Stack: AI Stack partially available")
+                logger.warning(
+                    "AI Stack API unreachable at %s — agent routing disabled",
+                    ai_stack_client.base_url,
+                )
+                ai_stack_client.start_retry_loop()
         except Exception:
-            logger.info("🔄 [ 90%] AI Stack: AI Stack partially available")
+            logger.warning(
+                "AI Stack API unreachable at %s — agent routing disabled",
+                ai_stack_client.base_url,
+            )
+            ai_stack_client.start_retry_loop()
 
     except Exception as sync_error:
         logger.warning("Background LLM sync initialization failed: %s", sync_error)
@@ -671,23 +692,24 @@ async def initialize_background_services(app: FastAPI):
         )
         logger.info("=== PHASE 2: Background Services Initialization ===")
 
-        # Issue #876: ALL PHASE 2 DISABLED TEMPORARILY - isolating event loop deadlock
-        # await _init_knowledge_base(app)
-        # await _init_npu_worker_websocket()
-        # await _warmup_npu_connection()
-        # await _init_memory_graph(app)
-        # await _init_slm_client()
-        # await _init_background_llm_sync(app)
-        # await _init_documentation_watcher()
-        # await _init_log_forwarding()
-        # await _init_slm_reconciler(app)
-        # await _init_metrics_collection()
+        # Issue #876: Root cause fixed — metrics collector no longer calls backend
+        # self-health endpoint (circular deadlock). Phase 2 re-enabled (#970).
+        await _init_knowledge_base(app)
+        await _init_npu_worker_websocket()
+        await _warmup_npu_connection()
+        await _init_memory_graph(app)
+        await _init_slm_client()
+        await _init_background_llm_sync(app)
+        await _init_documentation_watcher()
+        await _init_log_forwarding()
+        await _init_slm_reconciler(app)
+        await _init_metrics_collection()
 
         await update_app_state_multi(
             initialization_status="ready",
-            initialization_message="Phase 1 only (Phase 2 disabled)",
+            initialization_message="All services initialized",
         )
-        logger.info("✅ [100%] PHASE 2 SKIPPED: Testing with Phase 1 only")
+        logger.info("✅ [100%] PHASE 2 COMPLETE: All background services initialized")
 
     except Exception as e:
         logger.error("Background initialization encountered errors: %s", e)

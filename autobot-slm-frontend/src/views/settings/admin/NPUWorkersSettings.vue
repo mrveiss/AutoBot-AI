@@ -11,10 +11,8 @@
  */
 
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
-import { useAuthStore } from '@/stores/auth'
 import { useAutobotApi, type NPUWorker } from '@/composables/useAutobotApi'
 
-const authStore = useAuthStore()
 const api = useAutobotApi()
 
 // State
@@ -77,8 +75,7 @@ async function fetchWorkers(): Promise<void> {
   error.value = null
 
   try {
-    const response = await api.getNPUWorkers()
-    workers.value = response.data || []
+    workers.value = await api.getNPUWorkers()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load workers'
   } finally {
@@ -89,8 +86,8 @@ async function fetchWorkers(): Promise<void> {
 async function fetchLoadBalancingConfig(): Promise<void> {
   try {
     const response = await api.getNPULoadBalancingConfig()
-    if (response.data) {
-      Object.assign(loadBalancingConfig, response.data)
+    if (response) {
+      Object.assign(loadBalancingConfig, response)
     }
   } catch (e) {
     // Config endpoint may not be available
@@ -157,11 +154,9 @@ async function saveWorker(): Promise<void> {
         capabilities: workerForm.capabilities,
       })
     } else {
-      await api.pairNPUWorker({
-        name: workerForm.name,
+      await api.pairNPUWorker(workerForm.ip_address, {
+        hostname: workerForm.name,
         ip_address: workerForm.ip_address,
-        port: workerForm.port,
-        platform: workerForm.platform,
       })
     }
 

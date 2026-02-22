@@ -11,13 +11,16 @@ User={{ backend_user }}
 Group={{ backend_group }}
 WorkingDirectory={{ backend_code_dir | default(backend_install_dir) }}
 Environment="PATH=/home/{{ backend_user }}/miniconda3/envs/autobot-backend/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir | default(backend_install_dir) }}:{{ backend_install_dir }}/autobot-shared"
+Environment="PYTHONPATH={{ backend_install_dir }}:{{ backend_code_dir | default(backend_install_dir) }}:{{ backend_install_dir | dirname }}/autobot-shared:{{ backend_install_dir | dirname }}"
 EnvironmentFile=/opt/autobot/.env
 EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys') }}/{{ service_auth_service_id | default('main-backend') }}.env
 # Issue #891: Removed ExecStartPre symlink creation - causes infinite import loops with fixed backend imports
-ExecStart={{ backend_code_dir }}/venv/bin/uvicorn main:app --host {{ backend_host }} --port {{ backend_port }} --workers {{ backend_workers }} --ssl-keyfile /etc/autobot/certs/server-key.pem --ssl-certfile /etc/autobot/certs/server-cert.pem
+ExecStart={{ backend_code_dir }}/venv/bin/uvicorn main:app --host {{ backend_host }} --port {{ backend_port }} --workers {{ backend_workers }}
 Restart=always
+# Issue #957: nginx holds port {{ backend_nginx_port }}; WDF rule tied to nginx not uvicorn
 RestartSec=5
+StartLimitInterval=120
+StartLimitBurst=5
 StandardOutput=append:{{ backend_log_dir }}/backend.log
 StandardError=append:{{ backend_log_dir }}/backend-error.log
 

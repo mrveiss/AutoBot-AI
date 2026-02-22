@@ -18,12 +18,12 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 import xxhash
-from backend.constants.model_constants import ModelConstants
-from config import UnifiedConfigManager
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.http_client import get_http_client
 from autobot_shared.tracing import get_tracer
+from backend.constants.model_constants import ModelConstants
+from config import ConfigManager
 
 from .cache import CachedResponse, get_llm_cache
 from .hardware import HardwareDetector
@@ -84,7 +84,7 @@ except ImportError:
     UsageRecordRequest = None
     logger.debug("LLM Pattern Analyzer not available - usage tracking disabled")
 
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 # Issue #697: OpenTelemetry tracer for LLM operations
 _llm_tracer = get_tracer("autobot.llm")
@@ -273,14 +273,10 @@ class LLMInterface:
                 speculation_enabled=opt_config.get("local", {}).get(
                     "speculation_enabled", False
                 ),
-                flash_attention_enabled=True,
-                cuda_graphs_enabled=True,
                 prompt_compression_enabled=opt_config.get("prompt_compression", {}).get(
                     "enabled", True
                 ),
-                response_caching_enabled=opt_config.get("cache", {}).get(
-                    "enabled", True
-                ),
+                cache_enabled=opt_config.get("cache", {}).get("enabled", True),
             )
         )
 
@@ -324,7 +320,7 @@ class LLMInterface:
         )
         connection_pool = ConnectionPoolManager(
             PoolConfig(
-                max_connections_per_host=cloud_config.get("connection_pool_size", 100),
+                max_connections=cloud_config.get("connection_pool_size", 100),
             )
         )
         return rate_limiter, connection_pool

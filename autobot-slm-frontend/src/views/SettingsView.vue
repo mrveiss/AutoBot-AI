@@ -15,13 +15,10 @@
 
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
-const authStore = useAuthStore()
 
-const loading = ref(false)
 const error = ref<string | null>(null)
 const success = ref<string | null>(null)
 
@@ -40,6 +37,7 @@ const tabs = [
   { id: 'users', name: 'Users', path: '/settings/admin/users', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
   { id: 'cache', name: 'Cache', path: '/settings/admin/cache', icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4' },
   { id: 'prompts', name: 'Prompts', path: '/settings/admin/prompts', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z' },
+  { id: 'personality', name: 'Personality', path: '/settings/admin/personality', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
   { id: 'log-forwarding', name: 'Log Forwarding', path: '/settings/admin/log-forwarding', icon: 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8' },
   { id: 'npu-workers', name: 'NPU Workers', path: '/settings/admin/npu-workers', icon: 'M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z' },
 ]
@@ -55,13 +53,6 @@ function navigateTo(path: string) {
   router.push(path)
 }
 
-// Clear messages after delay
-function clearMessages() {
-  setTimeout(() => {
-    success.value = null
-    error.value = null
-  }, 5000)
-}
 
 onMounted(() => {
   // If we're at /settings exactly, redirect to /settings/general

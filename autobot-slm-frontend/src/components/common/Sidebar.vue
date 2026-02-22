@@ -46,6 +46,8 @@ const navItems = [
   { name: 'Updates', path: '/updates', icon: 'updates' },
   // Issue #731: Skills system management
   { name: 'Skills', path: '/skills', icon: 'skills' },
+  // Issue #963: External A2A Agent Registry
+  { name: 'External Agents', path: '/external-agents', icon: 'agents' },
   { name: 'Maintenance', path: '/maintenance', icon: 'wrench' },
   { name: 'Settings', path: '/settings', icon: 'cog' },
   { name: 'Performance', path: '/performance', icon: 'performance' },

@@ -3,7 +3,7 @@
 <!-- Author: mrveiss -->
 <template>
   <div class="drafts-tab space-y-3">
-    <div v-if="drafts.length === 0" class="text-center py-12 text-gray-400">
+    <div v-if="!Array.isArray(drafts) || drafts.length === 0" class="text-center py-12 text-gray-400">
       No draft skills. AutoBot will generate skills here when it detects capability gaps.
     </div>
     <div
@@ -57,12 +57,13 @@ interface DraftSkill {
 const props = defineProps<{ drafts: readonly Record<string, unknown>[] }>()
 defineEmits<{ test: [id: string]; promote: [id: string] }>()
 
-const typedDrafts = computed<DraftSkill[]>(() =>
-  props.drafts.map((d) => ({
+const typedDrafts = computed<DraftSkill[]>(() => {
+  if (!Array.isArray(props.drafts)) return []
+  return props.drafts.map((d) => ({
     id: String(d['id'] ?? ''),
     name: String(d['name'] ?? 'Unnamed Skill'),
     gap_reason: d['gap_reason'] != null ? String(d['gap_reason']) : undefined,
     skill_md: d['skill_md'] != null ? String(d['skill_md']) : undefined,
-  })),
-)
+  }))
+})
 </script>

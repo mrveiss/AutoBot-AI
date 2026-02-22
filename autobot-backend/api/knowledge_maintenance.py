@@ -22,6 +22,9 @@ from datetime import datetime
 from pathlib import Path as PathLib
 
 from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import Pydantic models from dedicated module
 from backend.api.knowledge_models import (
@@ -39,9 +42,6 @@ from backend.api.knowledge_models import (
 )
 from backend.constants.threshold_constants import QueryDefaults
 from backend.knowledge_factory import get_or_create_knowledge_base
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -698,7 +698,7 @@ def _check_orphaned_fact(key: str, metadata_str) -> tuple:
 
     try:
         metadata = json.loads(metadata_str)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, TypeError):
         logger.warning("Failed to parse metadata for %s", key)
         return False, False, None
 
@@ -706,11 +706,15 @@ def _check_orphaned_fact(key: str, metadata_str) -> tuple:
     if not file_path:
         return False, False, None
 
-    # This is a file-based fact
-    if PathLib(file_path).exists():
-        return True, False, None
+    try:
+        # This is a file-based fact
+        if PathLib(file_path).exists():
+            return True, False, None
+    except (OSError, ValueError) as e:
+        # Invalid path or permission error — treat as orphan
+        logger.warning("Error checking path for %s: %s", key, e)
 
-    # File doesn't exist - this is an orphan
+    # File doesn't exist or path check failed - this is an orphan
     return (
         True,
         True,
@@ -833,7 +837,9 @@ async def find_orphaned_facts(
     )
 
     logger.info(
-        f"Checked {total_checked} facts with file paths, found {len(orphaned_facts)} orphans"
+        "Checked %d facts with file paths, found %d orphans",
+        total_checked,
+        len(orphaned_facts),
     )
 
     return _build_orphan_response(total_checked, orphaned_facts)

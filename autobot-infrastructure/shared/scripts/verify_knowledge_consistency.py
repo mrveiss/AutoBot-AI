@@ -25,12 +25,12 @@ from typing import Any, Dict, List, Optional, Tuple
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from config import UnifiedConfigManager
+from config import ConfigManager
 from knowledge_base import KnowledgeBase
 from utils.redis_client import get_redis_client
 
 # Initialize unified config
-config = UnifiedConfigManager()
+config = ConfigManager()
 # from utils.semantic_chunker import SemanticChunker  # Skip if not available
 
 logging.basicConfig(level=logging.INFO)

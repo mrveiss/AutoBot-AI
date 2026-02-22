@@ -9,12 +9,12 @@ Issue #54 - Advanced Wake Word Detection Optimization
 import logging
 from typing import List
 
-from backend.services.wake_word_service import get_wake_word_detector
-from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from backend.services.wake_word_service import WakeWordDetector, get_wake_word_detector
+from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["wake_word", "voice"])
@@ -48,6 +48,7 @@ class WakeWordConfigRequest(BaseModel):
     cooldown_seconds: float = None
     adaptive_threshold: bool = None
     max_false_positive_rate: float = None
+    max_cpu_percent: float = None  # Issue #927: CPU cap for always-on detection
 
 
 class AddWakeWordRequest(BaseModel):
@@ -196,6 +197,8 @@ async def update_wake_word_config(request: WakeWordConfigRequest) -> Metadata:
         updates["adaptive_threshold"] = request.adaptive_threshold
     if request.max_false_positive_rate is not None:
         updates["max_false_positive_rate"] = request.max_false_positive_rate
+    if request.max_cpu_percent is not None:
+        updates["max_cpu_percent"] = request.max_cpu_percent
 
     if updates:
         detector.update_config(updates)
@@ -294,3 +297,64 @@ async def disable_wake_word() -> Metadata:
         "message": "Wake word detection disabled",
         "config": detector.get_config(),
     }
+
+
+# -------------------------------------------------------------------------
+# Background listening loop endpoints (issue #927: CPU optimization)
+# -------------------------------------------------------------------------
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="start_listening",
+    error_code_prefix="WAKE_WORD",
+)
+@router.post("/listening/start")
+async def start_listening() -> Metadata:
+    """
+    Start the always-on background listening loop.
+
+    The loop runs with CPU-aware duty cycling: it automatically throttles
+    polling frequency when CPU usage approaches max_cpu_percent.
+    """
+    detector: WakeWordDetector = get_wake_word_detector()
+    await detector.start_listening()
+    return {
+        "success": True,
+        "message": "Background listening started",
+        "status": detector.get_listening_status(),
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="stop_listening",
+    error_code_prefix="WAKE_WORD",
+)
+@router.post("/listening/stop")
+async def stop_listening() -> Metadata:
+    """Stop the always-on background listening loop."""
+    detector: WakeWordDetector = get_wake_word_detector()
+    await detector.stop_listening()
+    return {
+        "success": True,
+        "message": "Background listening stopped",
+        "status": detector.get_listening_status(),
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_listening_status",
+    error_code_prefix="WAKE_WORD",
+)
+@router.get("/listening/status")
+async def get_listening_status() -> Metadata:
+    """
+    Get background listening status including real-time CPU metrics.
+
+    Returns duty cycle, throttle event count, and current CPU usage
+    to help operators tune max_cpu_percent for their hardware.
+    """
+    detector: WakeWordDetector = get_wake_word_detector()
+    return detector.get_listening_status()

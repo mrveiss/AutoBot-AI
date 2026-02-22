@@ -277,7 +277,7 @@ async def get_threat_intel_status(request: Request):
     their rate limit status, and cache statistics.
     """
     try:
-        threat_service = get_threat_intelligence_service()
+        threat_service = await get_threat_intelligence_service()
         status = await threat_service.get_service_status()
 
         return ThreatIntelStatusResponse(
@@ -305,7 +305,7 @@ async def check_url_reputation(request: Request, url_request: URLCheckRequest):
     aggregated threat score. Results are cached for 2 hours.
     """
     try:
-        threat_service = get_threat_intelligence_service()
+        threat_service = await get_threat_intelligence_service()
 
         if not threat_service.is_any_service_configured:
             return URLCheckResponse(
@@ -349,8 +349,8 @@ async def get_domain_security_stats(request: Request):
     threat intelligence integration status, and recent activity.
     """
     try:
-        domain_manager = get_domain_security_manager()
-        threat_service = get_threat_intelligence_service()
+        domain_manager = await get_domain_security_manager()
+        threat_service = await get_threat_intelligence_service()
 
         # Get threat intel status
         threat_status = await threat_service.get_service_status()

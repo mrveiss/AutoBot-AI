@@ -1,0 +1,22 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+[Unit]
+Description=AutoBot ChromaDB Vector Database
+After=network.target
+
+[Service]
+Type=simple
+User={{ ai_user }}
+Group={{ ai_group }}
+WorkingDirectory={{ ai_install_dir }}
+Environment="PATH={{ ai_install_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile={{ ai_install_dir }}/.env
+ExecStart={{ ai_install_dir }}/venv/bin/chroma run --host {{ chromadb_host }} --port {{ chromadb_port }} --path {{ chromadb_persist_dir }}
+Restart=always
+RestartSec=10
+StandardOutput=append:{{ ai_log_dir }}/chromadb.log
+StandardError=append:{{ ai_log_dir }}/chromadb-error.log
+
+[Install]
+WantedBy=multi-user.target

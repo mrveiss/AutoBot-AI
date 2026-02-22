@@ -102,7 +102,7 @@ async function loadAgents(): Promise<void> {
   try {
     // Issue #835 - use named function from useAutobotApi
     const data = await api.getAvailableAgents() as Record<string, unknown>[]
-    agents.value = (Array.isArray(data) ? data : []) as Agent[]
+    agents.value = (Array.isArray(data) ? data : []) as unknown as Agent[]
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load agents'
   } finally {

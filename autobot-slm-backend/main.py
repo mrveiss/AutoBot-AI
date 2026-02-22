@@ -24,6 +24,8 @@ from api import (
     deployments_router,
     discovery_router,
     errors_router,
+    events_router,
+    external_agents_router,
     fleet_services_router,
     health_router,
     infrastructure_router,
@@ -55,6 +57,7 @@ from api.roles import router as roles_router
 from config import settings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from services.a2a_card_fetcher import start_card_refresh_task
 from services.database import db_service
 from services.git_tracker import start_version_checker
 from services.reconciler import reconciler_service
@@ -138,16 +141,25 @@ async def lifespan(app: FastAPI):
     start_schedule_executor()
     logger.info("Schedule executor started")
 
+    # Start A2A card refresh background task (Issue #962)
+    a2a_card_task = start_card_refresh_task()
+    logger.info("A2A card refresh task started")
+
     logger.info("SLM Backend ready")
 
     yield
 
     logger.info("Shutting down SLM Backend")
     version_checker_task.cancel()
+    a2a_card_task.cancel()
     try:
         await version_checker_task
     except asyncio.CancelledError:
         logger.info("Version checker stopped")
+    try:
+        await a2a_card_task
+    except asyncio.CancelledError:
+        logger.info("A2A card refresh task stopped")
     stop_schedule_executor()
     logger.info("Schedule executor stopped")
     await reconciler_service.stop()
@@ -251,6 +263,8 @@ app.include_router(maintenance_router, prefix="/api")
 app.include_router(monitoring_router, prefix="/api")
 app.include_router(performance_router, prefix="/api")
 app.include_router(errors_router, prefix="/api")
+app.include_router(events_router, prefix="/api")
+app.include_router(external_agents_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
 app.include_router(node_vnc_router, prefix="/api")
 app.include_router(vnc_router, prefix="/api")

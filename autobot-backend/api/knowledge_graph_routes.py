@@ -9,15 +9,19 @@ hierarchical summarization, and document processing.
 """
 
 import logging
+import re
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query
+from auth_middleware import get_current_user
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_SAFE_NAME_RE = re.compile(r"^[\w .'-]{1,200}$")
 
 
 # --- Request/Response Models ---
@@ -57,15 +61,26 @@ class EventSearchRequest(BaseModel):
 
 
 @router.post("/pipeline/run", response_model=PipelineRunResponse)
-async def run_pipeline(request: PipelineRunRequest):
+async def run_pipeline(
+    request: PipelineRunRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """Run the Extract-Cognify-Load pipeline on a document."""
     try:
-        from knowledge.pipeline.config import load_pipeline_config
+        from knowledge.pipeline.base import PipelineContext
+        from knowledge.pipeline.config import get_default_config, load_pipeline_config
         from knowledge.pipeline.runner import PipelineRunner
 
-        config = load_pipeline_config(request.config)
+        if request.config:
+            config = load_pipeline_config(request.config)
+        else:
+            config = get_default_config()
+
         runner = PipelineRunner(config)
-        result = await runner.run(request.document_id)
+        context = PipelineContext()
+        context.document_id = UUID(request.document_id)
+
+        result = await runner.run(request.document_id, context)
 
         return PipelineRunResponse(
             document_id=request.document_id,
@@ -82,7 +97,7 @@ async def run_pipeline(request: PipelineRunRequest):
         logger.error("Pipeline execution failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Pipeline execution failed: {e}",
+            detail="Pipeline execution failed",
         )
 
 
@@ -94,19 +109,19 @@ async def list_entities(
     entity_type: Optional[str] = Query(None),
     query: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user),
 ):
     """List extracted entities with optional filters."""
     try:
         from autobot_shared.redis_client import get_redis_client
 
         redis_client = get_redis_client(async_client=False, database="knowledge")
-
         entities = _list_entities_from_redis(redis_client, entity_type, query, limit)
         return {"entities": entities, "total": len(entities)}
 
     except Exception as e:
         logger.error("Entity listing failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Entity listing failed")
 
 
 @router.get("/entities/{entity_id}/relationships")
@@ -114,13 +129,13 @@ async def get_entity_relationships(
     entity_id: str,
     relationship_type: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get relationships for a specific entity."""
     try:
         from autobot_shared.redis_client import get_redis_client
 
         redis_client = get_redis_client(async_client=False, database="knowledge")
-
         relationships = _get_relationships_from_redis(
             redis_client, entity_id, relationship_type, limit
         )
@@ -132,7 +147,7 @@ async def get_entity_relationships(
 
     except Exception as e:
         logger.error("Relationship fetch failed for %s: %s", entity_id, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Relationship fetch failed")
 
 
 # --- Temporal Event Endpoints ---
@@ -145,6 +160,7 @@ async def search_events(
     event_types: Optional[str] = Query(None, description="Comma-separated event types"),
     entity_name: Optional[str] = Query(None),
     limit: int = Query(100, ge=1, le=500),
+    current_user: dict = Depends(get_current_user),
 ):
     """Search temporal events with filters."""
     try:
@@ -157,11 +173,8 @@ async def search_events(
         redis_client = get_redis_client(async_client=False, database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)
 
-        # Parse dates
         start = datetime.fromisoformat(start_date) if start_date else datetime.min
         end = datetime.fromisoformat(end_date) if end_date else datetime.now()
-
-        # Parse event types
         types_list = (
             [t.strip() for t in event_types.split(",")] if event_types else None
         )
@@ -172,20 +185,22 @@ async def search_events(
             event_types=types_list,
             limit=limit,
         )
-
         return {"events": events, "total": len(events)}
 
     except Exception as e:
         logger.error("Event search failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Event search failed")
 
 
 @router.get("/events/{entity_name}/timeline")
 async def get_event_timeline(
     entity_name: str,
     limit: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user),
 ):
     """Get chronological timeline of events for an entity."""
+    if not _SAFE_NAME_RE.match(entity_name):
+        raise HTTPException(status_code=400, detail="Invalid entity name")
     try:
         from knowledge.temporal_search import TemporalSearchService
 
@@ -197,7 +212,6 @@ async def get_event_timeline(
         events = await temporal_svc.get_event_timeline(
             entity_name=entity_name, limit=limit
         )
-
         return {
             "entity_name": entity_name,
             "events": events,
@@ -206,7 +220,7 @@ async def get_event_timeline(
 
     except Exception as e:
         logger.error("Timeline fetch failed for %s: %s", entity_name, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Timeline fetch failed")
 
 
 # --- Summary Endpoints ---
@@ -216,9 +230,11 @@ async def get_event_timeline(
 async def search_summaries(
     query: str = Query(..., description="Search query"),
     level: Optional[str] = Query(
-        None, description="Filter by level: chunk, section, document"
+        None,
+        description="Filter by level: chunk, section, document",
     ),
     top_k: int = Query(10, ge=1, le=50),
+    current_user: dict = Depends(get_current_user),
 ):
     """Vector search on summary embeddings."""
     try:
@@ -231,16 +247,18 @@ async def search_summaries(
         summaries = await summary_svc.search_summaries(
             query=query, level=level, top_k=top_k
         )
-
         return {"summaries": summaries, "total": len(summaries)}
 
     except Exception as e:
         logger.error("Summary search failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Summary search failed")
 
 
 @router.get("/documents/{document_id}/overview")
-async def get_document_overview(document_id: str):
+async def get_document_overview(
+    document_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Get document overview with hierarchical summaries."""
     try:
         from knowledge.summary_search import SummarySearchService
@@ -250,16 +268,18 @@ async def get_document_overview(document_id: str):
         summary_svc = SummarySearchService(chromadb_client)
 
         overview = await summary_svc.get_document_overview(UUID(document_id))
-
         return overview
 
     except Exception as e:
         logger.error("Document overview failed for %s: %s", document_id, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Document overview failed")
 
 
 @router.get("/summaries/{summary_id}/drill-down")
-async def drill_down_summary(summary_id: str):
+async def drill_down_summary(
+    summary_id: str,
+    current_user: dict = Depends(get_current_user),
+):
     """Navigate from summary to children or source chunks."""
     try:
         from knowledge.summary_search import SummarySearchService
@@ -273,7 +293,7 @@ async def drill_down_summary(summary_id: str):
 
     except Exception as e:
         logger.error("Drill down failed for %s: %s", summary_id, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Drill down failed")
 
 
 # --- Helper functions ---
@@ -282,9 +302,9 @@ async def drill_down_summary(summary_id: str):
 def _list_entities_from_redis(redis_client, entity_type, query, limit) -> list:
     """List entities from Redis with optional filtering.
 
-    Helper for list_entities endpoint (Issue #759).
+    Helper for list_entities endpoint (#759). Skips index keys
+    like entity:<id>:relationships (#1073 SEC-4).
     """
-
     entities = []
     cursor = 0
     pattern = "entity:*"
@@ -295,25 +315,24 @@ def _list_entities_from_redis(redis_client, entity_type, query, limit) -> list:
         for key in keys:
             if count >= limit:
                 break
+            key_str = key.decode() if isinstance(key, bytes) else key
+            if key_str.count(":") > 1:
+                continue
             try:
                 entity_data = redis_client.json().get(key)
                 if not entity_data:
                     continue
-
-                if entity_type and entity_data.get("type") != entity_type:
+                if entity_type and entity_data.get("entity_type") != entity_type:
                     continue
-
                 if query:
                     name = entity_data.get("name", "").lower()
                     if query.lower() not in name:
                         continue
-
                 entities.append(entity_data)
                 count += 1
             except Exception as e:
                 logger.debug("Skipping entity key: %s", e)
                 continue
-
         if cursor == 0:
             break
 
@@ -325,7 +344,7 @@ def _get_relationships_from_redis(
 ) -> list:
     """Get relationships for an entity from Redis.
 
-    Helper for get_entity_relationships endpoint (Issue #759).
+    Helper for get_entity_relationships endpoint (#759).
     """
     relationships = []
     rel_key = f"entity:{entity_id}:relationships"
@@ -336,10 +355,11 @@ def _get_relationships_from_redis(
             rel_data = redis_client.json().get(f"relationship:{rel_id}")
             if not rel_data:
                 continue
-
-            if relationship_type and rel_data.get("type") != relationship_type:
+            if (
+                relationship_type
+                and rel_data.get("relationship_type") != relationship_type
+            ):
                 continue
-
             relationships.append(rel_data)
     except Exception as e:
         logger.warning("Relationship lookup failed: %s", e)

@@ -15,16 +15,12 @@
  * accessible labels on action buttons.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
-
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
 
 // Tool definitions - all tools integrated into SLM (Issue #729)
 const tools = [
@@ -265,7 +261,7 @@ async function runRedisCommand(): Promise<void> {
     }
 
     // Execute via ansible ad-hoc
-    const response = await fetch(`/api/nodes/${targetNode.node_id}/execute`, {
+    const response = await fetch(`/api/nodes/${targetNode.node_id}/exec`, {
       method: 'POST',
       headers: {
         ...authStore.getAuthHeaders(),
@@ -301,7 +297,7 @@ async function runAnsibleCommand(): Promise<void> {
   result.value = null
 
   try {
-    const response = await fetch(`/api/nodes/${selectedNode.value}/execute`, {
+    const response = await fetch(`/api/nodes/${selectedNode.value}/exec`, {
       method: 'POST',
       headers: {
         ...authStore.getAuthHeaders(),
@@ -434,7 +430,7 @@ onMounted(async () => {
             <button
               @click="runNetworkTest"
               :disabled="loading || !selectedNode"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 flex items-center gap-2"
             >
               <svg v-if="loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -462,7 +458,7 @@ onMounted(async () => {
             <button
               @click="runHealthCheck"
               :disabled="loading || !selectedNode"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 flex items-center gap-2"
             >
               <svg v-if="loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -503,7 +499,7 @@ onMounted(async () => {
               <button
                 @click="serviceAction('start')"
                 :disabled="loading || !selectedNode || !selectedService"
-                class="px-4 py-2 bg-success-600 text-white rounded-lg hover:bg-success-700 transition-colors disabled:opacity-50"
+                class="px-4 py-2 bg-success-600 text-white rounded-lg hover:bg-success-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
                 :aria-label="`Start ${selectedService || 'service'}`"
               >
                 Start
@@ -511,7 +507,7 @@ onMounted(async () => {
               <button
                 @click="serviceAction('stop')"
                 :disabled="loading || !selectedNode || !selectedService"
-                class="px-4 py-2 bg-danger-600 text-white rounded-lg hover:bg-danger-700 transition-colors disabled:opacity-50"
+                class="px-4 py-2 bg-danger-600 text-white rounded-lg hover:bg-danger-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
                 :aria-label="`Stop ${selectedService || 'service'}`"
               >
                 Stop
@@ -519,7 +515,7 @@ onMounted(async () => {
               <button
                 @click="serviceAction('restart')"
                 :disabled="loading || !selectedNode || !selectedService"
-                class="px-4 py-2 bg-warning-600 text-white rounded-lg hover:bg-warning-700 transition-colors disabled:opacity-50"
+                class="px-4 py-2 bg-warning-600 text-white rounded-lg hover:bg-warning-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
                 :aria-label="`Restart ${selectedService || 'service'}`"
               >
                 Restart
@@ -570,7 +566,7 @@ onMounted(async () => {
             <button
               @click="getServiceLogs"
               :disabled="loading || !selectedNode || !selectedService"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 flex items-center gap-2"
             >
               <svg v-if="loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -598,7 +594,7 @@ onMounted(async () => {
             <button
               @click="runRedisCommand"
               :disabled="loading || !redisCommand"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 flex items-center gap-2"
             >
               <svg v-if="loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -641,7 +637,7 @@ onMounted(async () => {
             <button
               @click="runAnsibleCommand"
               :disabled="loading || !selectedNode || !ansibleCommand"
-              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400 flex items-center gap-2"
             >
               <svg v-if="loading" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />

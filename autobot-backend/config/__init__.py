@@ -47,8 +47,8 @@ if TYPE_CHECKING:
         Config,
         get_vnc_direct_url,
     )
-    from config.manager import UnifiedConfigManager, get_unified_config_manager
-    from config.settings import UnifiedConfigSettings
+    from config.manager import ConfigManager, get_config_manager
+    from config.settings import ConfigSettings
 
 # Cache for lazily imported modules/objects
 _lazy_cache: dict = {}
@@ -57,23 +57,35 @@ _lazy_cache: dict = {}
 def _lazy_import_manager():
     """Lazily import the manager module."""
     if "manager" not in _lazy_cache:
-        from config.manager import UnifiedConfigManager, get_unified_config_manager
+        from config.manager import (
+            ConfigManager,
+            UnifiedConfigManager,
+            get_config_manager,
+            get_unified_config_manager,
+        )
 
         _lazy_cache["manager"] = {
+            "ConfigManager": ConfigManager,
+            "get_config_manager": get_config_manager,
+            # Deprecated aliases
             "UnifiedConfigManager": UnifiedConfigManager,
             "get_unified_config_manager": get_unified_config_manager,
         }
         # Initialize singleton
-        _lazy_cache["unified_config_manager"] = get_unified_config_manager()
+        _lazy_cache["config_manager"] = get_config_manager()
     return _lazy_cache["manager"]
 
 
 def _lazy_import_settings():
     """Lazily import the settings module."""
     if "settings" not in _lazy_cache:
-        from config.settings import UnifiedConfigSettings
+        from config.settings import ConfigSettings, UnifiedConfigSettings
 
-        _lazy_cache["settings"] = {"UnifiedConfigSettings": UnifiedConfigSettings}
+        _lazy_cache["settings"] = {
+            "ConfigSettings": ConfigSettings,
+            # Deprecated alias
+            "UnifiedConfigSettings": UnifiedConfigSettings,
+        }
     return _lazy_cache["settings"]
 
 
@@ -116,31 +128,36 @@ def _lazy_import_compat():
 
 def __getattr__(name: str):
     """Lazy attribute lookup for module-level imports."""
-    # Manager-related attributes
-    if name in ("UnifiedConfigManager", "get_unified_config_manager"):
+    # Manager-related attributes (new names + deprecated aliases)
+    if name in (
+        "ConfigManager",
+        "get_config_manager",
+        "UnifiedConfigManager",
+        "get_unified_config_manager",
+    ):
         return _lazy_import_manager()[name]
 
-    if name == "unified_config_manager":
+    if name in ("config_manager", "unified_config_manager"):
         _lazy_import_manager()
-        return _lazy_cache["unified_config_manager"]
+        return _lazy_cache["config_manager"]
 
     # Backward compatibility aliases
-    if name in ("config_manager", "global_config_manager", "config", "cfg"):
+    if name in ("global_config_manager", "config", "cfg"):
         _lazy_import_manager()
-        return _lazy_cache["unified_config_manager"]
+        return _lazy_cache["config_manager"]
 
     if name == "legacy_config":
         _lazy_import_manager()
         compat = _lazy_import_compat()
         if "legacy_config" not in _lazy_cache:
             _lazy_cache["legacy_config"] = compat["Config"](
-                _lazy_cache["unified_config_manager"]
+                _lazy_cache["config_manager"]
             )
         return _lazy_cache["legacy_config"]
 
-    # Settings
-    if name == "UnifiedConfigSettings":
-        return _lazy_import_settings()["UnifiedConfigSettings"]
+    # Settings (new name + deprecated alias)
+    if name in ("ConfigSettings", "UnifiedConfigSettings"):
+        return _lazy_import_settings()[name]
 
     # Compat constants and classes
     compat_names = {
@@ -168,62 +185,68 @@ def __getattr__(name: str):
 def get_config(key: str, default=None):
     """Get configuration value"""
     _lazy_import_manager()
-    return _lazy_cache["unified_config_manager"].get(key, default)
+    return _lazy_cache["config_manager"].get(key, default)
 
 
 def get_config_section(section: str):
     """Get configuration section"""
     _lazy_import_manager()
-    return _lazy_cache["unified_config_manager"].get_nested(section, {})
+    return _lazy_cache["config_manager"].get_nested(section, {})
 
 
 def get_llm_config():
     """Get LLM configuration"""
     _lazy_import_manager()
-    return _lazy_cache["unified_config_manager"].get_llm_config()
+    return _lazy_cache["config_manager"].get_llm_config()
 
 
 def get_redis_config():
     """Get Redis configuration"""
     _lazy_import_manager()
-    return _lazy_cache["unified_config_manager"].get_redis_config()
+    return _lazy_cache["config_manager"].get_redis_config()
 
 
 def reload_config():
     """Reload configuration from files"""
     _lazy_import_manager()
-    _lazy_cache["unified_config_manager"].reload()
+    _lazy_cache["config_manager"].reload()
 
 
 def validate_config():
     """Validate configuration and return status"""
     _lazy_import_manager()
-    return _lazy_cache["unified_config_manager"].validate_config()
+    return _lazy_cache["config_manager"].validate_config()
+
+
+def is_feature_enabled(feature: str) -> bool:
+    """Check if a feature is enabled (e.g. 'multimodal.vision', 'npu')."""
+    _lazy_import_manager()
+    return _lazy_cache["config_manager"].is_feature_enabled(feature)
 
 
 # Async convenience functions
 async def get_config_manager_async():
     """Get async config manager instance"""
     _lazy_import_manager()
-    return _lazy_cache["unified_config_manager"]
+    return _lazy_cache["config_manager"]
 
 
 async def load_config_async(config_type: str = "main"):
     """Load configuration asynchronously"""
     _lazy_import_manager()
-    return await _lazy_cache["unified_config_manager"].load_config_async(config_type)
+    return await _lazy_cache["config_manager"].load_config_async(config_type)
 
 
 async def save_config_async(config_type: str, data):
     """Save configuration asynchronously"""
     _lazy_import_manager()
-    await _lazy_cache["unified_config_manager"].save_config_async(config_type, data)
+    await _lazy_cache["config_manager"].save_config_async(config_type, data)
 
 
 async def get_config_value_async(config_type: str, key: str, default=None):
     """Get configuration value asynchronously"""
     _lazy_import_manager()
-    return await _lazy_cache["unified_config_manager"].get_config_value_async(
+    return await _lazy_cache["config_manager"].get_config_value_async(
         config_type, key, default
     )
 
@@ -231,21 +254,24 @@ async def get_config_value_async(config_type: str, key: str, default=None):
 async def set_config_value_async(config_type: str, key: str, value):
     """Set configuration value asynchronously"""
     _lazy_import_manager()
-    await _lazy_cache["unified_config_manager"].set_config_value_async(
-        config_type, key, value
-    )
+    await _lazy_cache["config_manager"].set_config_value_async(config_type, key, value)
 
 
 # Export all public symbols
 __all__ = [
     # Core manager
+    "ConfigManager",
+    "config_manager",
+    "get_config_manager",
+    # Deprecated aliases (remove after one release cycle)
     "UnifiedConfigManager",
     "unified_config_manager",
     "get_unified_config_manager",
     # Settings
+    "ConfigSettings",
+    # Deprecated alias (remove after one release cycle)
     "UnifiedConfigSettings",
     # Backward compatibility aliases
-    "config_manager",
     "global_config_manager",
     "config",
     "cfg",

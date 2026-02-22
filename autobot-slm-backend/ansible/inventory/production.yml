@@ -104,8 +104,11 @@ all:
             - desktop-access
       vars:
         # WSL machine configuration (local)
-        backend_port: 8443
-        backend_protocol: "https"
+        # Issue #957: nginx holds 8443 (TLS); uvicorn binds plain HTTP on localhost:8001
+        backend_host: "127.0.0.1"    # uvicorn bind address (localhost only)
+        backend_port: 8001           # uvicorn plain HTTP port (internal)
+        backend_nginx_port: 8443     # nginx external TLS port (LAN-facing)
+        backend_protocol: "http"     # uvicorn no longer terminates TLS
         terminal_port: 7681
         novnc_port: 6080
         vnc_port: 5900
@@ -126,6 +129,7 @@ all:
             disk_gb: 50      # LVM expansion target
           services:
             - npu-worker
+            - tts-worker
             - openvino
             - python3
             - hardware-acceleration
@@ -137,6 +141,8 @@ all:
       vars:
         # NPU Worker-specific configuration
         npu_worker_port: 8081
+        # TTS Worker (#928)
+        tts_worker_port: 8082
         openvino_device: "AUTO"  # Auto-detect NPU > GPU > CPU
         python_version: "3.11"
         worker_threads: 2
@@ -183,8 +189,7 @@ all:
             disk_gb: 50      # LVM expansion target
           services:
             - ai-stack
-            - ollama
-            - model-server
+            - chromadb
           hardware_features:
             gpu_passthrough: true
       vars:

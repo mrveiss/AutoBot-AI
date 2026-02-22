@@ -15,18 +15,27 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 import aiofiles
+
+from config import ConfigManager
+
+try:
+    from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    Browser = BrowserContext = Page = async_playwright = None  # type: ignore[assignment]
+    PLAYWRIGHT_AVAILABLE = False
+from source_attribution import SourceType, track_source
+
 from backend.constants.network_constants import ServiceURLs
 from backend.constants.security_constants import SecurityConstants
 from backend.constants.threshold_constants import TimingConstants
 from backend.utils.display_utils import get_playwright_config
-from config import UnifiedConfigManager
-from playwright.async_api import Browser, BrowserContext, Page, async_playwright
-from source_attribution import SourceType, track_source
 
 logger = logging.getLogger(__name__)
 
 # Create singleton config instance
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 # Issue #665: JavaScript snippets for content extraction
 _JS_EXTRACT_TEXT = """
@@ -181,6 +190,12 @@ class ResearchBrowserSession:
 
     async def initialize(self, headless: bool = False):
         """Initialize the browser session."""
+        if not PLAYWRIGHT_AVAILABLE:
+            self.status = "error"
+            raise RuntimeError(
+                "Playwright is not installed on this node. "
+                "Install with: pip install playwright && playwright install chromium"
+            )
         try:
             self.playwright = await async_playwright().start()
 

@@ -11,24 +11,6 @@
     <!-- Controls -->
     <div class="chain-controls">
       <div class="control-group">
-        <label>Direction</label>
-        <div class="toggle-group">
-          <button
-            :class="['toggle-btn', { active: direction === 'causes' }]"
-            @click="direction = 'causes'"
-          >
-            <i class="fas fa-arrow-right"></i> Causes
-          </button>
-          <button
-            :class="['toggle-btn', { active: direction === 'caused_by' }]"
-            @click="direction = 'caused_by'"
-          >
-            <i class="fas fa-arrow-left"></i> Caused By
-          </button>
-        </div>
-      </div>
-
-      <div class="control-group">
         <label for="max-depth">
           Max Depth: <strong>{{ maxDepth }}</strong>
         </label>
@@ -121,10 +103,6 @@
 import { ref, onMounted, watch } from 'vue'
 import type { TemporalEvent } from '@/composables/useKnowledgeGraph'
 import { useKnowledgeGraph } from '@/composables/useKnowledgeGraph'
-import { createLogger } from '@/utils/debugUtils'
-
-const logger = createLogger('CausalChainViewer')
-
 const props = defineProps<{
   eventId: string
   initialEvents?: TemporalEvent[]
@@ -132,7 +110,6 @@ const props = defineProps<{
 
 const { getTimeline, loading } = useKnowledgeGraph()
 
-const direction = ref<'causes' | 'caused_by'>('causes')
 const maxDepth = ref(5)
 const chainEvents = ref<TemporalEvent[]>([])
 
@@ -166,7 +143,7 @@ async function loadChain(): Promise<void> {
 
 onMounted(loadChain)
 
-watch([direction, maxDepth], loadChain)
+watch(maxDepth, loadChain)
 watch(() => props.eventId, loadChain)
 </script>
 
@@ -215,33 +192,6 @@ watch(() => props.eventId, loadChain)
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   color: var(--text-primary);
-}
-
-.toggle-group {
-  display: flex;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  padding: 2px;
-}
-
-.toggle-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-md);
-  border: none;
-  background: transparent;
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--duration-200);
-}
-
-.toggle-btn.active {
-  background: var(--bg-card);
-  color: var(--color-primary);
-  box-shadow: var(--shadow-sm);
 }
 
 .range-input {

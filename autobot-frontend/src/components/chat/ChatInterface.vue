@@ -31,6 +31,24 @@
         >
           <!-- File Panel Toggle Button (injected into header) -->
           <template #actions>
+            <!-- Voice Output Toggle (#928) -->
+            <button
+              @click="toggleVoiceOutput"
+              class="header-btn"
+              :class="{ 'bg-electric-100 text-electric-600': voiceOutputEnabled }"
+              :title="voiceOutputEnabled ? 'Voice output on — click to mute' : 'Voice output off — click to enable'"
+            >
+              <i :class="isSpeaking ? 'fas fa-volume-up animate-pulse' : voiceOutputEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute'"></i>
+            </button>
+            <!-- Voice Conversation (#1029) -->
+            <button
+              @click="openVoiceConversation"
+              class="header-btn"
+              :class="{ 'bg-electric-100 text-electric-600': showVoiceOverlay }"
+              title="Voice chat — talk to AutoBot"
+            >
+              <i class="fas fa-headset"></i>
+            </button>
             <button
               v-if="store.currentSessionId"
               @click="toggleFilePanel"
@@ -115,11 +133,18 @@
         />
       </div>
     </div>
+
+    <!-- Voice Conversation Overlay (#1029) -->
+    <VoiceConversationOverlay
+      @close="showVoiceOverlay = false"
+    />
   </ErrorBoundary>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue'
+import { useVoiceOutput } from '@/composables/useVoiceOutput'
+import { useVoiceConversation } from '@/composables/useVoiceConversation'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
@@ -146,11 +171,24 @@ import ChatFilePanel from './ChatFilePanel.vue'
 import KnowledgePersistenceDialog from '@/components/knowledge/KnowledgePersistenceDialog.vue'
 import CommandPermissionDialog from '@/components/ui/CommandPermissionDialog.vue'
 import WorkflowProgressWidget from '@/components/workflow/WorkflowProgressWidget.vue'
+import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 // Stores and controller
 const store = useChatStore()
 const controller = useChatController()
 const appStore = useAppStore()
+
+// Voice output (#928)
+const { voiceOutputEnabled, isSpeaking, toggleVoiceOutput, speak } = useVoiceOutput()
+
+// Voice conversation (#1029)
+const voiceConversation = useVoiceConversation()
+const showVoiceOverlay = ref(false)
+function openVoiceConversation(): void {
+  showVoiceOverlay.value = true
+  voiceConversation.activate()
+}
 
 // Toast notifications
 const { showToast } = useToast()
@@ -484,7 +522,7 @@ const onCommandCommented = async (commentData: any) => {
         `/api/agent-terminal/sessions/${pendingCommand.value.terminalSessionId}/approve`
       )
 
-      const response = await fetch(approvalUrl, {
+      const response = await fetchWithAuth(approvalUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -745,6 +783,22 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
     showFilePanel.value = false
   }
 })
+
+// Auto-speak last assistant message when voice output is enabled (#928)
+// Skip when voice conversation is active — it handles its own TTS (#1029)
+watch(
+  () => {
+    const session = store.sessions.find(s => s.id === store.currentSessionId)
+    const msgs = session?.messages ?? []
+    const last = msgs[msgs.length - 1]
+    return last?.sender === 'assistant' ? last.content : null
+  },
+  (newContent, oldContent) => {
+    if (newContent && newContent !== oldContent && !voiceConversation.isActive.value) {
+      speak(newContent)
+    }
+  }
+)
 </script>
 
 <style scoped>

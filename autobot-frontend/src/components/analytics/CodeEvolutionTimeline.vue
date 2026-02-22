@@ -211,6 +211,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 // @ts-ignore - Component may not have type declarations
 import BaseButton from '@/components/ui/BaseButton.vue'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { useToast } from '@/composables/useToast'
 
 interface TimelinePoint {
@@ -328,9 +329,9 @@ async function fetchTimeline() {
 
     // Issue #552: Fixed path - backend uses /api/evolution/* not /api/analytics/evolution/*
     const [timelineRes, trendsRes, patternsRes] = await Promise.all([
-      fetch(`/api/evolution/timeline?${params}`),
-      fetch(`/api/evolution/trends?days=${selectedDays.value}`),
-      fetch('/api/evolution/patterns')
+      fetchWithAuth(`/api/evolution/timeline?${params}`),
+      fetchWithAuth(`/api/evolution/trends?days=${selectedDays.value}`),
+      fetchWithAuth('/api/evolution/patterns')
     ])
 
     if (!timelineRes.ok || !trendsRes.ok) {
@@ -363,7 +364,7 @@ async function exportData() {
     const endDate = new Date().toISOString().split('T')[0]
 
     // Issue #552: Fixed path - backend uses /api/evolution/* not /api/analytics/evolution/*
-    const response = await fetch(
+    const response = await fetchWithAuth(
       `/api/evolution/export?format=csv&start_date=${startDate}&end_date=${endDate}`
     )
 

@@ -352,6 +352,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import type { Ref } from 'vue'
 import type { AutomationResults, SearchData, TestData, MessageData } from '@/types/browser'
 import appConfig from '@/config/AppConfig.js'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import apiClient from '@/utils/ApiClient.ts'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -499,7 +500,7 @@ export default {
         // Second API call - try to connect to Playwright service
         let healthResponse = null
         try {
-          healthResponse = await fetch(`${playwrightApiUrl.value}/health`)
+          healthResponse = await fetchWithAuth(`${playwrightApiUrl.value}/health`)
         } catch (playwrightError) {
           // Will be handled in onSuccess
         }

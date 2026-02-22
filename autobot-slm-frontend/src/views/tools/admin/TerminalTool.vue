@@ -11,7 +11,7 @@
  * Note: Full xterm.js integration requires terminal components migration.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
 import { getHosts } from '@/config/ssot-config'
 
@@ -49,8 +49,6 @@ interface Tab {
 const tabs = ref<Tab[]>([
   { id: 'tab-1', name: 'Terminal 1', hostId: 'main', active: true }
 ])
-
-const activeTab = computed(() => tabs.value.find(t => t.active))
 
 function addTab(): void {
   const newId = `tab-${Date.now()}`

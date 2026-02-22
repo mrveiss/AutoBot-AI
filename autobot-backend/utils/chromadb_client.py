@@ -18,10 +18,12 @@ async variants to prevent event loop blocking. See Issue #369.
 """
 
 import logging
+import os
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 import chromadb
+from chromadb.config import Settings as ChromaSettings
 
 # Re-export async utilities for convenient imports
 from backend.utils.async_chromadb_client import (
@@ -30,12 +32,15 @@ from backend.utils.async_chromadb_client import (
     get_async_chromadb_client,
     wrap_collection_async,
 )
-from chromadb.config import Settings as ChromaSettings
 
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+# Remote ChromaDB config — set AUTOBOT_CHROMADB_HOST to enable HTTP client
+_CHROMADB_HOST = os.getenv("AUTOBOT_CHROMADB_HOST", "")
+_CHROMADB_PORT = int(os.getenv("AUTOBOT_CHROMADB_PORT", "8000"))
 
 # Module exports
 __all__ = [
@@ -48,36 +53,51 @@ __all__ = [
 
 
 def get_chromadb_client(
-    db_path: str, allow_reset: bool = False, anonymized_telemetry: bool = False
-) -> chromadb.PersistentClient:
+    db_path: str = "",
+    allow_reset: bool = False,
+    anonymized_telemetry: bool = False,
+) -> Union[chromadb.HttpClient, chromadb.PersistentClient]:
     """
-    Create a ChromaDB persistent client with consistent configuration.
+    Create a ChromaDB client with consistent configuration.
+
+    Uses remote HttpClient when AUTOBOT_CHROMADB_HOST is set, otherwise
+    falls back to local PersistentClient for development.
 
     Args:
-        db_path: Path to the ChromaDB database directory
+        db_path: Path for local PersistentClient (ignored when remote)
         allow_reset: Whether to allow database resets (default: False)
         anonymized_telemetry: Whether to enable telemetry (default: False)
 
     Returns:
-        Configured ChromaDB PersistentClient
-
-    Raises:
-        Exception: If client initialization fails
+        Configured ChromaDB client (Http or Persistent)
     """
     try:
-        # Ensure directory exists
-        chroma_path = Path(db_path)
-        chroma_path.mkdir(parents=True, exist_ok=True)
+        if _CHROMADB_HOST:
+            client = chromadb.HttpClient(
+                host=_CHROMADB_HOST,
+                port=_CHROMADB_PORT,
+                settings=ChromaSettings(
+                    anonymized_telemetry=anonymized_telemetry,
+                ),
+            )
+            logger.info(
+                "ChromaDB HTTP client connected to %s:%s",
+                _CHROMADB_HOST,
+                _CHROMADB_PORT,
+            )
+            return client
 
-        # Create persistent client with standardized settings
+        # Fallback: local PersistentClient
+        chroma_path = Path(db_path or "data/chromadb")
+        chroma_path.mkdir(parents=True, exist_ok=True)
         client = chromadb.PersistentClient(
             path=str(chroma_path),
             settings=ChromaSettings(
-                allow_reset=allow_reset, anonymized_telemetry=anonymized_telemetry
+                allow_reset=allow_reset,
+                anonymized_telemetry=anonymized_telemetry,
             ),
         )
-
-        logger.info("ChromaDB client initialized at: %s", chroma_path)
+        logger.info("ChromaDB persistent client at: %s", chroma_path)
         return client
 
     except Exception as e:

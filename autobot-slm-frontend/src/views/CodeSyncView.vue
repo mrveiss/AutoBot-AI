@@ -11,7 +11,7 @@
  * and scheduled update management.
  */
 
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, type DeepReadonly } from 'vue'
 import {
   useCodeSync,
   type PendingNode,
@@ -43,7 +43,7 @@ const syncStage = ref<string | null>(null)
 
 // Schedule state (Issue #741 - Phase 7)
 const showScheduleModal = ref(false)
-const editingSchedule = ref<UpdateSchedule | null>(null)
+const editingSchedule = ref<DeepReadonly<UpdateSchedule> | null>(null)
 const runningScheduleId = ref<number | null>(null)
 
 // Role-based sync state (Issue #779)
@@ -183,7 +183,7 @@ async function handleSyncAll(): Promise<void> {
   })
 
   if (result.success) {
-    const count = result.nodes?.length || codeSync.pendingNodes.value.length
+    const count = result.nodes_queued || codeSync.pendingNodes.value.length
     successMessage.value = `Successfully queued sync for ${count} node${count > 1 ? 's' : ''}`
 
     // Auto-dismiss after 5 seconds
@@ -263,7 +263,7 @@ function openCreateScheduleModal(): void {
   showScheduleModal.value = true
 }
 
-function openEditScheduleModal(schedule: UpdateSchedule): void {
+function openEditScheduleModal(schedule: DeepReadonly<UpdateSchedule>): void {
   editingSchedule.value = schedule
   showScheduleModal.value = true
 }
@@ -286,7 +286,7 @@ async function handleSaveSchedule(scheduleData: ScheduleCreateRequest): Promise<
   closeScheduleModal()
 }
 
-async function handleDeleteSchedule(schedule: UpdateSchedule): Promise<void> {
+async function handleDeleteSchedule(schedule: DeepReadonly<UpdateSchedule>): Promise<void> {
   if (!confirm(`Delete schedule "${schedule.name}"?`)) return
 
   const success = await codeSync.deleteSchedule(schedule.id)
@@ -295,12 +295,12 @@ async function handleDeleteSchedule(schedule: UpdateSchedule): Promise<void> {
   }
 }
 
-async function handleToggleSchedule(schedule: UpdateSchedule): Promise<void> {
+async function handleToggleSchedule(schedule: DeepReadonly<UpdateSchedule>): Promise<void> {
   await codeSync.toggleSchedule(schedule.id, !schedule.enabled)
   logger.info('Schedule toggled:', schedule.id, !schedule.enabled)
 }
 
-async function handleRunSchedule(schedule: UpdateSchedule): Promise<void> {
+async function handleRunSchedule(schedule: DeepReadonly<UpdateSchedule>): Promise<void> {
   runningScheduleId.value = schedule.id
   const result = await codeSync.runSchedule(schedule.id)
   runningScheduleId.value = null
@@ -332,17 +332,6 @@ function describeCron(expression: string): string {
 }
 
 // =============================================================================
-// WebSocket Progress Tracking (Issue #880)
-// =============================================================================
-
-function handleSyncProgress(data: any): void {
-  if (data.node_id && data.stage && data.message) {
-    syncProgress.value.set(data.node_id, data.message)
-    syncStage.value = data.stage
-    logger.debug('Sync progress:', data.stage, data.message)
-  }
-}
-
 // =============================================================================
 // Lifecycle
 // =============================================================================
@@ -357,18 +346,6 @@ onMounted(async () => {
     codeSourceComposable.fetchCodeSource(),
   ])
 
-  // Subscribe to WebSocket sync progress updates (Issue #880)
-  try {
-    const { useSlmWebSocket } = await import('@/composables/useSlmWebSocket')
-    const ws = useSlmWebSocket()
-    ws.subscribe('sync_progress', (message: any) => {
-      if (message.data) {
-        handleSyncProgress(message.data)
-      }
-    })
-  } catch (error) {
-    logger.warn('Failed to subscribe to sync progress:', error)
-  }
 })
 </script>
 
@@ -854,8 +831,8 @@ onMounted(async () => {
     <!-- Schedule Modal -->
     <ScheduleModal
       :show="showScheduleModal"
-      :schedule="editingSchedule"
-      :nodes="codeSync.pendingNodes.value"
+      :schedule="(editingSchedule as any)"
+      :nodes="(codeSync.pendingNodes.value as any)"
       @close="closeScheduleModal"
       @save="handleSaveSchedule"
     />

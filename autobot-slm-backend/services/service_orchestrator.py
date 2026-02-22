@@ -83,14 +83,14 @@ _SERVICE_DEFINITIONS = {
         working_dir="/opt/autobot/autobot-backend",
         description="FastAPI backend API server",
     ),
-    # Frontend (Vue.js on frontend VM)
+    # Frontend (Vue.js on frontend VM, served by nginx on HTTPS 443)
     "frontend": ServiceDefinition(
         name="frontend",
         service_type=AutoBotServiceType.FRONTEND,
         default_host_env="AUTOBOT_FRONTEND_HOST",
         default_port_env="AUTOBOT_FRONTEND_PORT",
         default_host="172.16.168.21",
-        default_port=5173,
+        default_port=443,  # Production nginx serves HTTPS on 443
         systemd_service="nginx",  # Production uses nginx
         start_command=(
             "cd /opt/autobot/autobot-slm-frontend && "
@@ -98,10 +98,10 @@ _SERVICE_DEFINITIONS = {
         ),
         stop_command="pkill -f 'npm.*dev' || pkill -f 'vite.*5173'",
         health_check_path="/",
-        health_check_type="http",
+        health_check_type="https",  # Production nginx serves HTTPS
         requires_sudo=False,
         working_dir="/opt/autobot/autobot-slm-frontend",
-        description="Vue.js frontend development server",
+        description="Vue.js frontend (nginx+SSL)",
     ),
     # Redis Stack (database VM)
     "redis": ServiceDefinition(
@@ -136,7 +136,9 @@ _SERVICE_DEFINITIONS = {
         requires_sudo=False,
         description="NPU hardware AI acceleration worker",
     ),
-    # AI Stack (Ollama runs on main/code-source machine)
+    # AI Stack (Ollama runs on main WSL machine .20, port 11434)
+    # NOTE: Ollama binds to 127.0.0.1 by default on .20 - health check from
+    # SLM (.19) will fail unless Ollama is configured to bind to 0.0.0.0
     "ai-stack": ServiceDefinition(
         name="ai-stack",
         service_type=AutoBotServiceType.AI_STACK,
@@ -165,7 +167,7 @@ _SERVICE_DEFINITIONS = {
             "nohup node playwright-server.js > /tmp/browser.log 2>&1 &"
         ),
         stop_command="pkill -f 'playwright-server'",
-        health_check_path="/",
+        health_check_path="/health",
         health_check_type="http",
         requires_sudo=False,
         working_dir="/opt/autobot/autobot-browser-worker",
@@ -179,7 +181,7 @@ _SERVICE_DEFINITIONS = {
         default_port_env="SLM_PORT",
         default_host="127.0.0.1",  # Self-check: uvicorn binds localhost-only
         default_port=8000,
-        systemd_service="slm-backend",
+        systemd_service="autobot-slm-backend",
         health_check_path="/api/health",
         health_check_type="http",
         requires_sudo=True,
@@ -820,20 +822,12 @@ class ServiceOrchestrator:
         return process.returncode == 0
 
     async def _check_redis_health(self, host: str, port: int) -> bool:
-        """Check Redis health via PING."""
-        password = os.environ.get("AUTOBOT_REDIS_PASSWORD", "")
-        cmd = ["redis-cli", "-h", host, "-p", str(port)]
-        if password:
-            cmd.extend(["-a", password, "--no-auth-warning"])
-        cmd.append("ping")
+        """Check Redis health via TCP port check.
 
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        stdout, _ = await process.communicate()
-        return b"PONG" in stdout
+        Uses asyncio TCP connection instead of redis-cli subprocess
+        to avoid requiring redis-cli on the SLM server.
+        """
+        return await self._check_port_open(host, port)
 
     async def _check_ssh_health(self, host: str) -> bool:
         """Check if SSH connection is possible."""

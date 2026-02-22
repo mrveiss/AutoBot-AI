@@ -17,8 +17,11 @@ backend_version: main
 backend_deploy_from_git: true
 
 # Server settings
-backend_host: "0.0.0.0"
-backend_port: 8443  # Issue #858/#861: HTTPS port
+# Issue #957: nginx holds port 8443 (TLS) permanently; uvicorn binds plain HTTP on localhost.
+# Windows Defender Firewall rule is evaluated once for nginx, never for uvicorn restarts.
+backend_host: "127.0.0.1"   # uvicorn: localhost only (nginx proxies from LAN)
+backend_port: 8001           # uvicorn: plain HTTP port (internal)
+backend_nginx_port: 8443     # nginx: external TLS port (LAN-facing)
 backend_workers: 4
 
 # Celery worker settings (Issue #863)

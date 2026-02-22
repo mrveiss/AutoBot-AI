@@ -16,7 +16,6 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from config import settings
 from models.database import (
     Deployment,
     DeploymentStatus,
@@ -33,6 +32,8 @@ from models.database import (
 from services.service_categorizer import categorize_service
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -1284,6 +1285,10 @@ class ReconcilerService:
             if status not in [s.value for s in ServiceStatus]:
                 status = ServiceStatus.UNKNOWN.value
 
+            # Issue #1019: Capture error context for failed services
+            error_msg = svc_data.get("error_message", "")
+            svc_extra = {"error_message": error_msg} if error_msg else {}
+
             if service:
                 # Update existing
                 service.status = status
@@ -1294,6 +1299,13 @@ class ReconcilerService:
                 service.enabled = svc_data.get("enabled", False)
                 service.description = svc_data.get("description")
                 service.last_checked = now
+                # Store/clear error context in extra_data
+                existing_extra = service.extra_data or {}
+                if error_msg:
+                    existing_extra["error_message"] = error_msg
+                else:
+                    existing_extra.pop("error_message", None)
+                service.extra_data = existing_extra
             else:
                 # Create new - auto-categorize based on service name
                 category = categorize_service(service_name)
@@ -1309,8 +1321,21 @@ class ReconcilerService:
                     enabled=svc_data.get("enabled", False),
                     description=svc_data.get("description"),
                     last_checked=now,
+                    extra_data=svc_extra,
                 )
                 db.add(service)
+
+        # Remove stale services no longer reported by the agent (#1018)
+        discovered_names = {s.get("name") for s in discovered_services if s.get("name")}
+        if discovered_names:
+            stale_result = await db.execute(
+                select(Service).where(
+                    Service.node_id == node_id,
+                    Service.service_name.notin_(discovered_names),
+                )
+            )
+            for stale_svc in stale_result.scalars().all():
+                await db.delete(stale_svc)
 
         # Note: commit happens in the calling method (update_node_heartbeat)
 

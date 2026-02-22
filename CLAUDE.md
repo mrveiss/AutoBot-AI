@@ -37,6 +37,74 @@
 
 ---
 
+## CORE DEVELOPMENT RULES (MANDATORY — APPLIES TO EVERY AGENT AND EVERY TOOL)
+
+These four rules override convenience, speed, and assumptions. No exceptions.
+
+### Rule 1: Check Before Writing
+
+**Before writing a single line of code or documentation:**
+
+- Search for existing implementations using Grep/Glob or `git log --oneline --grep="<topic>"`
+- Check existing docs: `ls docs/`, `gh issue list`, recent commits
+- Review related files in the same module/directory
+- Search Memory MCP: `mcp__memory__search_nodes` for prior decisions
+- Only after confirming nothing exists should you write new code or docs
+
+> Violation: Writing a utility that already exists in `autobot-shared/` or a doc that duplicates an existing guide.
+
+### Rule 2: Reuse Existing Code
+
+**Always prefer existing code over new code:**
+
+- Import and call existing utilities, helpers, and services
+- Extend existing classes/functions rather than duplicating logic
+- Use `autobot-shared/` utilities before writing custom implementations
+- If similar code exists elsewhere, refactor to share it — never copy-paste
+
+> Violation: Writing a new Redis helper when `autobot_shared.redis_client.get_redis_client` already exists.
+
+### Rule 3: Standardize for Reuse
+
+**Write code that others can reuse:**
+
+- Place shared logic in `autobot-shared/` or the appropriate shared module
+- Match existing naming, signatures, and patterns in the codebase
+- Generalize implementations when the cost is low (no over-engineering)
+- Avoid one-off implementations that can't be called from elsewhere
+
+> Violation: Hardcoding a value that belongs in SSOT config, or writing a private helper that duplicates a public one.
+
+### Rule 4: Clarify Requirements Before Starting
+
+**Before touching any code, ensure the requirements are complete enough to build the right thing the first time:**
+
+- Read the full issue/PRD and identify every gap, ambiguity, or missing edge case
+- Ask all clarifying questions UP FRONT in a single pass — not mid-implementation
+- Do not start until you can describe the complete expected end result in concrete terms
+- Goal: eliminate double work and unneeded fixes caused by an incomplete specification
+
+**Questions to ask before starting:**
+- What is the exact expected input and output?
+- Are there edge cases or error states that must be handled?
+- Are there UI/UX, performance, or security constraints not stated?
+- Does this touch other systems that need coordinating changes?
+
+> Violation: Starting implementation from a vague issue, hitting an ambiguity midway, and having to rework completed code — or delivering something that doesn't match what was actually wanted.
+
+### Rule 5: Verify Before Reporting Complete
+
+**Before claiming any work is done, show evidence it works:**
+
+- Run the relevant test, lint check, curl, or build command and include the output
+- Never say "done", "fixed", or "complete" without proof — assertions require evidence
+- If the change touches multiple layers (backend + frontend, multiple nodes), verify each one
+- If verification is not possible locally, explicitly state what was checked and what still needs confirmation on the target environment
+
+> Violation: Saying "the bug is fixed" after editing a file without running the code, or reporting success without showing test/lint output.
+
+---
+
 ## PROJECT STACK
 
 **Primary Languages & Verification:**
@@ -95,8 +163,11 @@ cd autobot-slm-backend/ansible && ansible-playbook playbooks/<playbook>.yml --sy
 
 - For large features spanning backend + frontend, complete and commit backend fully before starting frontend
 - When a session is getting long, commit completed work incrementally rather than waiting until everything is done
+- After writing each file, verify it exists on disk before moving to the next step
+- When a fix applies to a component that runs on multiple nodes, explicitly check: "Are there other nodes/services with this same component?" Fix all of them, not just the first one found
 - If implementation has 10+ tasks, commit after each logical group (e.g., every 2-3 tasks)
 - Incremental commits protect progress and simplify recovery if sessions need to end
+- If approaching context limit mid-implementation: stop at the current phase boundary, commit what's done, then add a GitHub comment on the issue summarizing completed work and exact next steps remaining
 
 ---
 
@@ -121,7 +192,9 @@ cd autobot-slm-backend/ansible && ansible-playbook playbooks/<playbook>.yml --sy
 
 ### Architecture Confirmation
 
-**Before implementing, confirm assumptions with the user:**
+**Before implementing ANY task where the approach isn't obvious, confirm with the user:**
+
+This applies not just to deployment/startup but to any ambiguous task — if there are multiple valid approaches and you're not sure which the user wants, state your intended approach and wait for confirmation.
 
 - Startup methods: Do NOT assume `systemd` vs `bash run_autobot.sh` vs `docker-compose` - ask or check CLAUDE.md
 - Deployment strategies: Do NOT assume Ansible vs manual sync vs Docker - verify the correct method
@@ -307,6 +380,27 @@ Let me fix that real quick...
 
 ---
 
+## MEMORY HYGIENE (MANDATORY)
+
+**Rules for `~/.claude/projects/.../memory/MEMORY.md`:**
+
+- **Line limit:** Target <150 lines. Hard limit 200 (file is truncated after line 200).
+- **One line per issue:** Each closed issue gets exactly one line: `#NNN: phrase. Commit abc1234.`
+- **Archive threshold:** When Recent Completed exceeds 30 items → move to `completed-history.md`
+- **Prune gotchas:** Delete notes that reference resolved issues or duplicate CLAUDE.md content
+- **Source of truth split:** CLAUDE.md owns stable patterns/standards. MEMORY.md owns recent state only.
+
+**End-of-session ritual (60 seconds):**
+
+1. Did I close any issues? → Move from Open Work to Recent Completed (1 line each)
+2. Did any gotcha get resolved? → Delete it
+3. Is Recent Completed >30 items? → Archive oldest batch to `completed-history.md`
+4. Is MEMORY.md >150 lines? → Trim now using `/memory-cleanup` skill
+
+**Run `/memory-cleanup`** for a guided walkthrough of this ritual.
+
+---
+
 ## MULTI-AGENT SAFETY (MANDATORY)
 
 ### Git Operations
@@ -427,7 +521,9 @@ When merging duplicate code: **Preserve ALL features** + **Choose BEST implement
 git status
 
 # Fix the specific issue (don't skip hooks with --no-verify)
-# Re-stage and re-commit
+# If the hook AUTO-MODIFIED a file (formatter/linter), re-stage those files:
+# git add <hook-modified-files>
+# Then re-commit (the hook change is now staged)
 
 # Verify success
 git log -1 --stat
@@ -499,6 +595,18 @@ git log -1 --stat
 ---
 
 ## TECHNICAL STANDARDS
+
+### Debugging Discipline
+
+**Hypothesize before running commands:**
+
+When diagnosing a problem, form a hypothesis first — don't fire off diagnostic commands at random:
+1. State your hypothesis: "I think X is caused by Y because Z"
+2. List the 3-4 specific commands that would confirm or reject it
+3. Run them in that order
+4. Update the hypothesis based on results before running more commands
+
+This prevents the "1,686 Bash invocations" pattern where trial-and-error burns time without converging on root cause.
 
 ### Error Handling
 
@@ -664,6 +772,11 @@ autobot-infrastructure/
 - Security: `service_auth`, `access_control`, `centralized_logging`
 - Management: `slm_manager`, `slm_agent`, `browser`, `vnc`
 
+**Before multi-step Ansible deployments:**
+- Verify SSH access and sudo work on ALL target nodes first: `ansible all -m ping` and `ansible all -m command -a "sudo id"`
+- Verify all target hosts appear in inventory before running — missing hosts = silent partial deployment
+- Use SLM service management (`/orchestration` page or `slm-service-control.yml`) to restart services on fleet nodes — never restart manually via SSH unless SLM itself is the broken component
+
 **Common Playbooks:**
 ```bash
 cd autobot-slm-backend/ansible
@@ -795,6 +908,9 @@ Every manual change creates **configuration debt** that will cause problems late
    /opt/autobot/venv/bin/python --version
    ```
    - Wrong Python path = missing modules, version mismatches
+   - Main backend: Python 3.12 (conda env `/home/autobot/miniconda3/envs/autobot-backend`)
+   - SLM/fleet nodes: Python 3.10 (Ubuntu 22.04 venv at `/opt/autobot/venv`)
+   - Python 3.13+: `aioredis` requires compatibility shim — `from redis import asyncio as aioredis`
 
 3. **Database migrations current:**
    ```bash

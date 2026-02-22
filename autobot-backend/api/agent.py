@@ -20,6 +20,11 @@ from typing import Dict, List, Optional
 
 import aiohttp
 from auth_middleware import check_admin_permission, get_current_user
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.constants.threshold_constants import TimingConstants
 from backend.dependencies import get_config, get_knowledge_base
 from backend.monitoring.prometheus_metrics import get_metrics_manager
@@ -30,11 +35,6 @@ from backend.utils.response_helpers import (
     create_success_response,
     handle_ai_stack_error,
 )
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -1382,14 +1382,12 @@ async def analyze_development_task(
     error_code_prefix="AGENT",
 )
 @router.get("/agents/available")
-async def list_available_agents(
-    current_user: dict = Depends(get_current_user),
-):
+async def list_available_agents():
     """
     List all available AI Stack agents with their capabilities.
 
     Issue #281: Refactored to use module-level AGENT_CAPABILITIES constant.
-    Issue #744: Requires authenticated user.
+    Issue #987: Removed auth requirement — read-only status, accessible to SLM admin.
     """
     try:
         ai_client = await get_ai_stack_client()
@@ -1432,12 +1430,10 @@ async def list_available_agents(
     error_code_prefix="AGENT",
 )
 @router.get("/agents/status")
-async def get_agents_status(
-    current_user: dict = Depends(get_current_user),
-):
+async def get_agents_status():
     """Get comprehensive status of all AI Stack agents.
 
-    Issue #744: Requires authenticated user.
+    Issue #987: Removed auth requirement — read-only status, accessible to SLM admin.
     """
     try:
         ai_client = await get_ai_stack_client()

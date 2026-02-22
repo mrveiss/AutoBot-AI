@@ -21,11 +21,24 @@ Usage:
     )
 """
 
+import logging
 import threading
 from typing import Optional
 
 from .manager import ChatWorkflowManager
 from .models import WorkflowSession
+
+logger = logging.getLogger(__name__)
+
+# Issue #1047: LangGraph imports are conditional — langgraph is in
+# requirements.txt but may fail on fresh installs before pip install.
+try:
+    from .graph import ChatState, build_chat_graph, get_compiled_graph
+except ImportError:
+    ChatState = None  # type: ignore[assignment,misc]
+    build_chat_graph = None  # type: ignore[assignment]
+    get_compiled_graph = None  # type: ignore[assignment]
+    logger.warning("langgraph not installed — graph features disabled")
 
 # Global instance for easy access (thread-safe)
 _workflow_manager: Optional[ChatWorkflowManager] = None
@@ -51,8 +64,11 @@ async def initialize_chat_workflow_manager() -> bool:
 
 # Export main classes and functions
 __all__ = [
+    "ChatState",
     "ChatWorkflowManager",
     "WorkflowSession",
+    "build_chat_graph",
     "get_chat_workflow_manager",
+    "get_compiled_graph",
     "initialize_chat_workflow_manager",
 ]

@@ -660,7 +660,23 @@ export function useAutobotApi() {
     services?: { name: string; status: string }[]
   }> {
     const response = await client.get('/health/detailed')
-    return response.data
+    const data = response.data
+    // Issue #997: Backend returns metrics nested in components as "12.5%" strings.
+    // Transform to flat numeric fields expected by AdminMonitoringView.
+    const components: Record<string, string> = data.components || {}
+    const parsePct = (s: string | undefined): number | undefined => {
+      if (!s) return undefined
+      const n = parseFloat(s)
+      return isNaN(n) ? undefined : n
+    }
+    return {
+      status: data.status,
+      cpu_percent: parsePct(components.cpu_usage),
+      memory_percent: parsePct(components.memory_usage),
+      disk_percent: parsePct(components.disk_usage),
+      uptime_seconds: data.uptime_seconds,
+      services: data.services,
+    }
   }
 
   async function getErrorStatistics(): Promise<{

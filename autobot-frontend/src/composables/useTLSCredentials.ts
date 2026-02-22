@@ -13,6 +13,7 @@
 
 import { ref, computed } from 'vue'
 import { getSLMUrl } from '@/config/ssot-config'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { showSubtleErrorNotification } from '@/utils/cacheManagement'
 import { createLogger } from '@/utils/debugUtils'
 

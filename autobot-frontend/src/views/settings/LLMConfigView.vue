@@ -9,7 +9,7 @@
  */
 
 import { ref, onMounted, computed } from 'vue'
-import { useLlmConfig } from '@/composables/useLlmConfig'
+import { useLlmConfig, type LLMConfig } from '@/composables/useLlmConfig'
 import { useLlmHealth } from '@/composables/useLlmHealth'
 import LLMProviderCard from '@/components/llm/LLMProviderCard.vue'
 import LLMHealthMonitor from '@/components/llm/LLMHealthMonitor.vue'
@@ -20,11 +20,14 @@ const logger = createLogger('LLMConfigView')
 const {
   config,
   providers,
+  models,
   currentProvider,
   isLoading: configLoading,
   error: configError,
   fetchProviders,
   fetchConfig,
+  updateConfig,
+  fetchModels,
   switchProvider,
   testProviderConnection,
 } = useLlmConfig({ autoFetch: false })
@@ -32,6 +35,7 @@ const {
 const {
   healthMetrics,
   healthSummary,
+  usageStats,
   isLoading: healthLoading,
   error: healthError,
   lastUpdate,
@@ -41,6 +45,9 @@ const {
 const activeTab = ref<'providers' | 'health' | 'usage'>('providers')
 const showConfigModal = ref(false)
 const selectedProvider = ref<string | null>(null)
+const configForm = ref({ api_key: '', model: '', endpoint: '', temperature: 0.7, max_tokens: 2048 })
+const isSavingConfig = ref(false)
+const configTestResult = ref<{ success: boolean; message: string } | null>(null)
 
 const isLoading = computed(() => configLoading.value || healthLoading.value)
 const error = computed(() => configError.value || healthError.value)
@@ -71,15 +78,50 @@ async function handleTest(providerName: string) {
   }
 }
 
-function handleConfigure(providerName: string) {
+async function handleConfigure(providerName: string) {
   logger.debug('Opening configuration for provider:', providerName)
   selectedProvider.value = providerName
+  configForm.value = { api_key: '', model: '', endpoint: '', temperature: 0.7, max_tokens: 2048 }
+  configTestResult.value = null
   showConfigModal.value = true
+  await fetchModels(providerName)
 }
 
 function closeConfigModal() {
   showConfigModal.value = false
   selectedProvider.value = null
+  configTestResult.value = null
+}
+
+async function handleSaveConfig(): Promise<void> {
+  if (!selectedProvider.value) return
+  isSavingConfig.value = true
+  configTestResult.value = null
+  const payload: Partial<LLMConfig> = {
+    provider: selectedProvider.value,
+    model: configForm.value.model || undefined,
+    endpoint: configForm.value.endpoint || undefined,
+    temperature: configForm.value.temperature,
+    max_tokens: configForm.value.max_tokens,
+  }
+  if (configForm.value.api_key) payload.api_key = configForm.value.api_key
+  const saved = await updateConfig(payload)
+  isSavingConfig.value = false
+  if (saved) {
+    closeConfigModal()
+    await loadData()
+  }
+}
+
+async function handleTestConfig(): Promise<void> {
+  if (!selectedProvider.value) return
+  isSavingConfig.value = true
+  configTestResult.value = null
+  const result = await testProviderConnection(selectedProvider.value)
+  isSavingConfig.value = false
+  configTestResult.value = result
+    ? { success: result.success, message: result.message || result.error || 'Test complete' }
+    : { success: false, message: 'Test failed — no response' }
 }
 
 async function handleRefresh() {
@@ -219,44 +261,163 @@ onMounted(async () => {
       <div v-show="activeTab === 'usage'">
         <div class="bg-autobot-bg-card rounded shadow-sm border border-default p-6">
           <h3 class="text-lg font-semibold text-primary mb-4">Usage Statistics</h3>
-          <div class="text-center py-12 text-secondary">
+          <div v-if="healthLoading && usageStats.length === 0" class="flex justify-center py-12">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-autobot-primary"></div>
+          </div>
+          <div v-else-if="usageStats.length === 0" class="text-center py-12 text-secondary">
             <svg class="mx-auto h-12 w-12 text-autobot-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
-            <p class="mt-4">Usage statistics coming soon</p>
+            <p class="mt-4">No usage data available yet</p>
+          </div>
+          <div v-else class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+              <thead>
+                <tr class="border-b border-default text-left">
+                  <th class="pb-3 pr-4 font-medium text-secondary">Provider</th>
+                  <th class="pb-3 pr-4 font-medium text-secondary">Model</th>
+                  <th class="pb-3 pr-4 font-medium text-secondary text-right">Requests</th>
+                  <th class="pb-3 pr-4 font-medium text-secondary text-right">Total Tokens</th>
+                  <th class="pb-3 pr-4 font-medium text-secondary text-right">Avg Latency</th>
+                  <th class="pb-3 font-medium text-secondary text-right">Cost (USD)</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-default">
+                <tr
+                  v-for="stat in usageStats"
+                  :key="`${stat.provider}-${stat.model}`"
+                  class="hover:bg-autobot-bg-secondary"
+                >
+                  <td class="py-3 pr-4 font-medium text-primary">{{ stat.provider }}</td>
+                  <td class="py-3 pr-4 text-secondary">{{ stat.model }}</td>
+                  <td class="py-3 pr-4 text-right text-primary">{{ stat.total_requests.toLocaleString() }}</td>
+                  <td class="py-3 pr-4 text-right text-primary">{{ stat.total_tokens.toLocaleString() }}</td>
+                  <td class="py-3 pr-4 text-right text-primary">{{ Math.round(stat.avg_response_time_ms) }}ms</td>
+                  <td class="py-3 text-right text-primary">${{ stat.cost_usd.toFixed(4) }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Configuration Modal (placeholder) -->
+    <!-- Configuration Modal -->
     <div
       v-if="showConfigModal"
       class="fixed inset-0 bg-autobot-bg-secondary bg-opacity-75 flex items-center justify-center z-50"
       @click.self="closeConfigModal"
     >
-      <div class="bg-autobot-bg-card rounded shadow-xl max-w-md w-full mx-4 p-6">
+      <div class="bg-autobot-bg-card rounded shadow-xl max-w-lg w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-primary">Configure Provider</h3>
+          <h3 class="text-lg font-semibold text-primary">Configure {{ selectedProvider }}</h3>
           <button
             @click="closeConfigModal"
             class="text-autobot-text-muted hover:text-secondary"
+            aria-label="Close configuration modal"
           >
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
-        <p class="text-sm text-secondary mb-4">
-          Configuration interface for {{ selectedProvider }} coming soon.
-        </p>
-        <div class="flex justify-end">
+
+        <div class="space-y-4">
+          <!-- API Key -->
+          <div>
+            <label class="block text-sm font-medium text-secondary mb-1">API Key</label>
+            <input
+              v-model="configForm.api_key"
+              type="password"
+              placeholder="Leave blank to keep existing key"
+              class="w-full px-3 py-2 text-sm border border-default rounded bg-autobot-bg-secondary text-primary focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+              autocomplete="new-password"
+            />
+          </div>
+
+          <!-- Model -->
+          <div>
+            <label class="block text-sm font-medium text-secondary mb-1">Model</label>
+            <select
+              v-model="configForm.model"
+              class="w-full px-3 py-2 text-sm border border-default rounded bg-autobot-bg-secondary text-primary focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+            >
+              <option value="">Select a model</option>
+              <option v-for="m in models" :key="m.id" :value="m.id">{{ m.name || m.id }}</option>
+            </select>
+          </div>
+
+          <!-- Endpoint -->
+          <div>
+            <label class="block text-sm font-medium text-secondary mb-1">Endpoint URL</label>
+            <input
+              v-model="configForm.endpoint"
+              type="url"
+              placeholder="https://api.example.com/v1"
+              class="w-full px-3 py-2 text-sm border border-default rounded bg-autobot-bg-secondary text-primary focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+            />
+          </div>
+
+          <!-- Temperature -->
+          <div>
+            <label class="block text-sm font-medium text-secondary mb-1">
+              Temperature: {{ configForm.temperature }}
+            </label>
+            <input
+              v-model.number="configForm.temperature"
+              type="range"
+              min="0"
+              max="2"
+              step="0.1"
+              class="w-full accent-autobot-primary"
+            />
+          </div>
+
+          <!-- Max Tokens -->
+          <div>
+            <label class="block text-sm font-medium text-secondary mb-1">Max Tokens</label>
+            <input
+              v-model.number="configForm.max_tokens"
+              type="number"
+              min="1"
+              max="128000"
+              class="w-full px-3 py-2 text-sm border border-default rounded bg-autobot-bg-secondary text-primary focus:outline-none focus:ring-2 focus:ring-autobot-primary"
+            />
+          </div>
+        </div>
+
+        <!-- Test Result -->
+        <div
+          v-if="configTestResult"
+          class="mt-4 p-3 rounded text-sm"
+          :class="configTestResult.success ? 'bg-green-900/20 text-green-400' : 'bg-red-900/20 text-red-400'"
+        >
+          {{ configTestResult.message }}
+        </div>
+
+        <div class="flex justify-between mt-6">
           <button
-            @click="closeConfigModal"
-            class="px-4 py-2 text-sm font-medium text-primary bg-autobot-bg-card border border-default rounded hover:bg-autobot-bg-secondary"
+            @click="handleTestConfig"
+            :disabled="isSavingConfig"
+            class="px-4 py-2 text-sm font-medium text-secondary bg-autobot-bg-secondary border border-default rounded hover:bg-autobot-bg-tertiary disabled:opacity-50"
           >
-            Close
+            {{ isSavingConfig ? 'Working...' : 'Test Connection' }}
           </button>
+          <div class="flex gap-3">
+            <button
+              @click="closeConfigModal"
+              class="px-4 py-2 text-sm font-medium text-secondary bg-autobot-bg-card border border-default rounded hover:bg-autobot-bg-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              @click="handleSaveConfig"
+              :disabled="isSavingConfig"
+              class="px-4 py-2 text-sm font-medium text-white bg-autobot-primary rounded hover:bg-autobot-primary-hover disabled:opacity-50"
+            >
+              {{ isSavingConfig ? 'Saving...' : 'Save' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>

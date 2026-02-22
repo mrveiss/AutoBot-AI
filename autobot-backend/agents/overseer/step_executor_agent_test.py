@@ -11,6 +11,7 @@ from agents.overseer.step_executor_agent import (
     _build_blocked_command_result,
     _build_execution_error_result,
     _build_no_command_result,
+    _parse_pty_exit_code,
 )
 from agents.overseer.types import (
     AgentTask,
@@ -324,3 +325,74 @@ class TestGenerateExplanations:
         result = await executor._generate_output_explanation("ls", "out", 1)
         assert "1" in result.summary
         assert len(result.key_findings) >= 1
+
+
+class TestParsePtyExitCode:
+    """Tests for _parse_pty_exit_code (Issue #935)."""
+
+    def test_extracts_exit_code_zero(self):
+        raw = "file1\nfile2\n__AUTOBOT_EXIT__=0"
+        clean, code = _parse_pty_exit_code(raw)
+        assert code == 0
+        assert "__AUTOBOT_EXIT__" not in clean
+        assert "file1" in clean
+
+    def test_extracts_nonzero_exit_code(self):
+        raw = "error output\n__AUTOBOT_EXIT__=2"
+        clean, code = _parse_pty_exit_code(raw)
+        assert code == 2
+        assert "__AUTOBOT_EXIT__" not in clean
+
+    def test_no_marker_returns_zero(self):
+        raw = "some output without marker"
+        clean, code = _parse_pty_exit_code(raw)
+        assert code == 0
+        assert clean == raw
+
+    def test_marker_only(self):
+        raw = "__AUTOBOT_EXIT__=127"
+        clean, code = _parse_pty_exit_code(raw)
+        assert code == 127
+        assert clean == ""
+
+    def test_marker_with_surrounding_whitespace(self):
+        raw = "output\n\n__AUTOBOT_EXIT__=1\n"
+        clean, code = _parse_pty_exit_code(raw)
+        assert code == 1
+        assert "output" in clean
+        assert "__AUTOBOT_EXIT__" not in clean
+
+
+class TestExtractTerminalOutput:
+    """Tests for _extract_terminal_output aggregation (Issue #935)."""
+
+    def test_aggregates_multiple_terminal_messages(self, executor):
+        messages = [
+            {"sender": "terminal", "text": "line one"},
+            {"sender": "assistant", "text": "ignored"},
+            {"sender": "terminal", "text": "line two"},
+        ]
+        result = executor._extract_terminal_output(messages)
+        assert "line one" in result
+        assert "line two" in result
+
+    def test_skips_command_prompts(self, executor):
+        messages = [
+            {"sender": "terminal", "text": "$ ls"},
+            {"sender": "terminal", "text": "file.txt"},
+        ]
+        result = executor._extract_terminal_output(messages)
+        assert "$ ls" not in result
+        assert "file.txt" in result
+
+    def test_empty_messages_returns_empty(self, executor):
+        result = executor._extract_terminal_output([])
+        assert result == ""
+
+    def test_non_terminal_senders_ignored(self, executor):
+        messages = [
+            {"sender": "user", "text": "user message"},
+            {"sender": "assistant", "text": "assistant reply"},
+        ]
+        result = executor._extract_terminal_output(messages)
+        assert result == ""

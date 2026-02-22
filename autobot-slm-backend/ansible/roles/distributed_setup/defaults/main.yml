@@ -42,7 +42,7 @@ health_check_enabled: true
 health_check_interval: 60  # seconds
 health_check_endpoints:
   - name: "Backend API"
-    url: "http://{{ coordinator_host }}:8001/api/health"
+    url: "https://{{ coordinator_host }}:8443/api/health"  # Issue #956: HTTPS:8443 since #858/#861
     expected_status: 200
   - name: "Redis"
     host: "{{ hostvars[groups['redis'][0]]['ansible_host'] }}"
@@ -60,11 +60,11 @@ backup_destinations:
   - local_data
 
 # Service ports (from SSOT)
-backend_port: 8001
-frontend_port: 5173
+backend_port: 8443
+frontend_port: 443
 redis_port: 6379
 npu_worker_port: 8081
-ai_stack_port: 8080
+ai_stack_port: 11434
 browser_service_port: 3000
 ollama_port: 11434
 vnc_port: 6080

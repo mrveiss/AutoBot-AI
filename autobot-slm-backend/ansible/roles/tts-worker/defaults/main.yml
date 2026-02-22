@@ -1,0 +1,24 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# TTS Worker configuration defaults (#928 Phase 19: Voice & Audio)
+tts_service_account: autobot-tts
+tts_user: autobot-tts
+tts_group: autobot-tts
+tts_install_dir: /opt/autobot/autobot-tts-worker
+tts_log_dir: /var/log/autobot
+tts_models_dir: /var/lib/autobot/models/tts
+
+# Model settings
+tts_model_id: "nineninesix/kani-tts-2-en"
+tts_device: "cpu"
+
+# Server settings
+tts_host: "0.0.0.0"
+tts_port: 8082
+
+# Redis connection
+tts_redis_host: "{{ redis_host | default('127.0.0.1') }}"
+tts_redis_port: 6379
+tts_redis_password: ""

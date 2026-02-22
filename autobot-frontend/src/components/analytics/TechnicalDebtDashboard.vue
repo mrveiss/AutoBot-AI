@@ -434,6 +434,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
 
 // Create scoped logger for TechnicalDebtDashboard
@@ -693,7 +694,7 @@ async function loadSummary(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
     // Backend returns {status, summary: {...}, top_files: [...], ...}
-    const response = await fetch('/api/debt/summary');
+    const response = await fetchWithAuth('/api/debt/summary');
     if (response.ok) {
       const result = await response.json();
       // Issue #552: Extract summary from response structure
@@ -713,7 +714,7 @@ async function loadCategoryBreakdown(): Promise<void> {
   try {
     // Issue #552: Fixed - backend uses POST for calculate, GET for summary
     // Backend returns {status, summary: {by_category: {...}, ...}, ...}
-    const response = await fetch('/api/debt/summary');
+    const response = await fetchWithAuth('/api/debt/summary');
     if (response.ok) {
       const result = await response.json();
       // Issue #552: Extract by_category from nested summary structure
@@ -732,7 +733,7 @@ async function loadRoiPriorities(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
     // Backend returns {status, priorities: [...], total_available: N}
-    const response = await fetch('/api/debt/roi-priorities?limit=10');
+    const response = await fetchWithAuth('/api/debt/roi-priorities?limit=10');
     if (response.ok) {
       const result = await response.json();
       // Issue #552: Extract priorities from response structure
@@ -751,7 +752,7 @@ async function loadDebtItems(): Promise<void> {
   try {
     // Issue #552: Fixed - backend uses POST for /api/debt/calculate
     // Backend returns {status, data: {items, summary, ...}} structure
-    const response = await fetch('/api/debt/calculate', { method: 'POST' });
+    const response = await fetchWithAuth('/api/debt/calculate', { method: 'POST' });
     if (response.ok) {
       const result = await response.json();
       // Issue #552: Access items from nested data structure
@@ -770,7 +771,7 @@ async function loadTrends(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
     // Backend returns {status, trends: [...], data_points: N, change: {...}, direction: "..."}
-    const response = await fetch(`/api/debt/trends?period=${selectedPeriod.value}`);
+    const response = await fetchWithAuth(`/api/debt/trends?period=${selectedPeriod.value}`);
     if (response.ok) {
       const result = await response.json();
       // Issue #552: Extract trends from response structure
@@ -789,7 +790,7 @@ async function exportReport(): Promise<void> {
   try {
     // Issue #552: Fixed path - backend uses /api/debt/* not /api/analytics/debt/*
     // Backend returns {status, format, report: "markdown content"} for markdown format
-    const response = await fetch('/api/debt/report?format=markdown');
+    const response = await fetchWithAuth('/api/debt/report?format=markdown');
     if (response.ok) {
       const result = await response.json();
       // Issue #552: Extract markdown report from JSON response

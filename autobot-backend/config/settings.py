@@ -3,7 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Configuration settings for the unified config manager.
+Configuration settings for the config manager.
 """
 
 from pathlib import Path
@@ -12,8 +12,8 @@ from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
-class UnifiedConfigSettings(BaseSettings):
-    """Configuration settings for the unified config manager"""
+class ConfigSettings(BaseSettings):
+    """Configuration settings for the config manager"""
 
     # File paths
     config_dir: Path = Field(default=Path("config"), env="CONFIG_DIR")
@@ -32,3 +32,7 @@ class UnifiedConfigSettings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "allow"
+
+
+# Deprecated: use ConfigSettings instead
+UnifiedConfigSettings = ConfigSettings

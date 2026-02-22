@@ -857,7 +857,7 @@ async function refreshGraph(): Promise<void> {
 
   try {
     // Fetch from unified knowledge graph endpoint (includes categories + facts)
-    const unifiedResponse = await apiClient.get('/api/knowledge/unified/graph?max_facts=100&include_categories=true')
+    const unifiedResponse = await apiClient.get('/api/knowledge_base/unified/graph?max_facts=100&include_categories=true')
     const unifiedData = await parseApiResponse(unifiedResponse)
 
     // Also fetch memory entities for backward compatibility

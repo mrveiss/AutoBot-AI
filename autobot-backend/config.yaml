@@ -34,5 +34,12 @@ llm_config:
     context_length: 4096
     gpu_enabled: true
     gpu_layers: 999
-    host: ${AUTOBOT_OLLAMA_URL:-http://127.0.0.3:11434}
+    host: http://127.0.0.1:11434
     parallel_requests: 2
+
+# Ollama endpoint for chat workflow manager
+# Matches the key read by _get_ollama_endpoint() in chat_workflow/llm_handler.py
+backend:
+  llm:
+    ollama:
+      endpoint: http://127.0.0.1:11434

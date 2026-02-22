@@ -1,0 +1,152 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Remove a role from a node with optional data backup (Issue #1041)
+#
+# Stops and removes the role's systemd service and optionally backs up
+# data directories before removal. Integrates with the existing backup
+# infrastructure at /opt/autobot/backups.
+#
+# Required vars:
+#   role_name        - Role to remove (e.g. redis, postgresql, llm)
+#   systemd_service  - Service unit name (e.g. redis-stack-server, ollama)
+#
+# Optional vars:
+#   backup_before_removal - Create data backup first (default: false)
+#
+# Usage:
+#   ansible-playbook playbooks/remove-role.yml \
+#     -i inventory/production.yml -i inventory/slm-nodes.yml \
+#     --limit <node_id> \
+#     -e "role_name=redis systemd_service=redis-stack-server backup_before_removal=true"
+
+- name: "Remove role {{ role_name }} from node"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    backup_dir: /opt/autobot/backups
+    backup_timestamp: "{{ ansible_date_time.epoch }}"
+    backup_path: "{{ backup_dir }}/{{ role_name }}-{{ backup_timestamp }}"
+
+    # Map role names to their data directories
+    role_data_dirs:
+      redis:
+        - /var/lib/redis
+      postgresql:
+        - /var/lib/postgresql
+      ai-stack:
+        - /var/lib/chromadb
+        - /var/lib/autobot/ai-stack
+      llm:
+        - /usr/share/ollama/.ollama
+        - /var/lib/ollama
+      backend:
+        - /opt/autobot/autobot-backend/data
+      monitoring:
+        - /var/lib/prometheus
+        - /var/lib/grafana
+
+  tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - role_name is defined and role_name | length > 0
+          - systemd_service is defined and systemd_service | length > 0
+        fail_msg: "role_name and systemd_service are required"
+
+    # =======================================================================
+    # OPTIONAL BACKUP
+    # =======================================================================
+    - name: "Backup {{ role_name }} data before removal"
+      when: backup_before_removal | default(false) | bool
+      block:
+        - name: Get data directories for this role
+          ansible.builtin.set_fact:
+            _data_dirs: "{{ role_data_dirs[role_name] | default([]) }}"
+
+        - name: Check which data directories exist
+          ansible.builtin.stat:
+            path: "{{ item }}"
+          loop: "{{ _data_dirs }}"
+          register: _dir_checks
+
+        - name: Filter to existing directories
+          ansible.builtin.set_fact:
+            _existing_dirs: >-
+              {{ _dir_checks.results
+                 | selectattr('stat.exists', 'true')
+                 | map(attribute='item')
+                 | list }}
+
+        - name: Create backup directory
+          ansible.builtin.file:
+            path: "{{ backup_path }}"
+            state: directory
+            mode: '0750'
+          when: _existing_dirs | length > 0
+
+        - name: Archive each data directory
+          ansible.builtin.archive:
+            path: "{{ item }}"
+            dest: "{{ backup_path }}/{{ item | basename }}.tar.gz"
+            format: gz
+          loop: "{{ _existing_dirs }}"
+          when: _existing_dirs | length > 0
+
+        - name: Write backup manifest
+          ansible.builtin.copy:
+            dest: "{{ backup_path }}/manifest.yml"
+            content: |
+              role: {{ role_name }}
+              hostname: {{ ansible_hostname }}
+              ip_address: {{ ansible_default_ipv4.address }}
+              timestamp: {{ ansible_date_time.iso8601 }}
+              directories: {{ _existing_dirs | to_json }}
+            mode: '0640'
+          when: _existing_dirs | length > 0
+
+        - name: Set backup result fact
+          ansible.builtin.set_fact:
+            _backup_performed: "{{ _existing_dirs | length > 0 }}"
+            _backup_path: "{{ backup_path }}"
+
+    # =======================================================================
+    # STOP AND REMOVE SERVICE
+    # =======================================================================
+    - name: "Check if {{ systemd_service }} service exists"
+      ansible.builtin.stat:
+        path: "/etc/systemd/system/{{ systemd_service }}.service"
+      register: _service_file
+
+    - name: "Stop and disable {{ systemd_service }}"
+      ansible.builtin.systemd:
+        name: "{{ systemd_service }}"
+        state: stopped
+        enabled: false
+      when: _service_file.stat.exists
+      ignore_errors: true
+
+    - name: "Remove {{ systemd_service }} service file"
+      ansible.builtin.file:
+        path: "/etc/systemd/system/{{ systemd_service }}.service"
+        state: absent
+      notify: reload systemd
+
+    # =======================================================================
+    # SUMMARY
+    # =======================================================================
+    - name: Display removal summary
+      ansible.builtin.debug:
+        msg: |
+          Role removal complete: {{ role_name }}
+          - Host: {{ ansible_hostname }} ({{ ansible_default_ipv4.address }})
+          - Service: {{ 'stopped and removed' if _service_file.stat.exists else 'not present' }}
+          - Backup: {{ _backup_path | default('none') if (_backup_performed | default(false)) else 'skipped' }}
+
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true

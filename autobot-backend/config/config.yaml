@@ -1,0 +1,25 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+# Runtime configuration for ConfigManager (config/manager.py)
+# This file is read by ConfigManager via config/loader.py
+
+# Backend LLM configuration
+# Primary path for _get_ollama_endpoint() in chat_workflow/llm_handler.py
+backend:
+  llm:
+    ollama:
+      endpoint: http://127.0.0.1:11434
+      # GPU endpoint for model-to-endpoint routing (#1070)
+      # When set, models in gpu_models are routed here instead of the default endpoint.
+      # gpu_endpoint: http://172.16.168.20:11434
+      # gpu_models:
+      #   - "mistral:7b-instruct"
+      #   - "deepseek-r1:14b"
+      #   - "codellama:13b"
+
+# Infrastructure host overrides
+# Fallback path for _get_ollama_endpoint_fallback() via get_host("ollama")
+infrastructure:
+  hosts:
+    ollama: 127.0.0.1

@@ -783,6 +783,7 @@ import { createLogger } from '@/utils/debugUtils';
 import { formatDateTime } from '@/utils/formatHelpers';
 import { useDebounce } from '@/composables/useDebounce';
 import { getBackendUrl } from '@/config/ssot-config';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
@@ -1231,7 +1232,7 @@ const deleteSecret = async () => {
     // Handle legacy infrastructure hosts differently (they use old API)
     if (deletingSecret.value._isLegacyHost) {
       const backendUrl = getBackendUrl();
-      const response = await fetch(`${backendUrl}/api/infrastructure/hosts/${deletingSecret.value.id}`, {
+      const response = await fetchWithAuth(`${backendUrl}/api/infrastructure/hosts/${deletingSecret.value.id}`, {
         method: 'DELETE'
       });
       if (!response.ok) {

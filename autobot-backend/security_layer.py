@@ -199,6 +199,8 @@ class SecurityLayer:
                 "allow_kb_read",
                 "allow_kb_write",
                 "allow_shell_execute",
+                "allow_voice_speak",
+                "allow_voice_listen",
                 # NOTE: Dangerous operations still require approval even for admin
             ],
             "user": [
@@ -206,6 +208,8 @@ class SecurityLayer:
                 "files.download",
                 "allow_goal_submission",
                 "allow_kb_read",
+                "allow_voice_speak",
+                "allow_voice_listen",
             ],
             "readonly": ["files.view", "files.download"],
             "editor": [
@@ -216,6 +220,8 @@ class SecurityLayer:
                 "allow_goal_submission",
                 "allow_kb_read",
                 "allow_kb_write",
+                "allow_voice_speak",
+                "allow_voice_listen",
             ],
             # Issue #744: Guest role REMOVED - security vulnerability
             # Unauthenticated requests must be rejected, not assigned permissions

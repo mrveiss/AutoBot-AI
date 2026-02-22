@@ -299,13 +299,19 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
           total_count: data.total_count ?? 0,
           critical_count: data.critical_count ?? 0,
           warning_count: data.warning_count ?? 0,
-          alerts: (data.alerts ?? []).map((a: Record<string, unknown>) => ({
-            category: String(a.category ?? ''),
-            severity: String(a.severity ?? 'info'),
-            message: String(a.message ?? ''),
-            recommendation: '',
-            timestamp: new Date(String(a.timestamp ?? '')).getTime(),
-          })),
+          alerts: (data.alerts ?? []).map((a: Record<string, unknown>) => {
+            // Normalize backend 'error' severity → 'high' so it matches
+            // the frontend severity breakdown (critical/high/warning/info). (#995)
+            const rawSeverity = String(a.severity ?? 'info')
+            const severity = rawSeverity === 'error' ? 'high' : rawSeverity
+            return {
+              category: String(a.category ?? ''),
+              severity,
+              message: String(a.message ?? ''),
+              recommendation: '',
+              timestamp: new Date(String(a.timestamp ?? '')).getTime(),
+            }
+          }),
         }
         error.value = null
       }

@@ -17,9 +17,12 @@
           v-model="form.document_id"
           type="text"
           placeholder="Enter document ID to process"
-          class="form-input"
-          required
+          :class="['form-input', { 'input-error': documentIdError }]"
+          @input="documentIdError = ''"
         />
+        <p v-if="documentIdError" class="field-error">
+          {{ documentIdError }}
+        </p>
       </div>
 
       <div class="form-group">
@@ -37,27 +40,43 @@
       </div>
 
       <div class="form-group">
-        <label for="config-json">
-          Configuration (JSON)
-          <span class="label-hint">Optional</span>
-        </label>
-        <textarea
-          id="config-json"
-          v-model="configJson"
-          class="form-input config-editor"
-          rows="6"
-          placeholder='{"batch_size": 10, "confidence_threshold": 0.7}'
-          spellcheck="false"
+        <div class="config-label-row">
+          <label for="config-json">
+            Configuration (JSON)
+            <span class="label-hint">Optional</span>
+          </label>
+          <button
+            type="button"
+            class="config-toggle-btn"
+            @click="showConfigEditor = !showConfigEditor"
+          >
+            <i :class="showConfigEditor ? 'fas fa-code' : 'fas fa-sliders-h'"></i>
+            {{ showConfigEditor ? 'JSON Editor' : 'Visual Config' }}
+          </button>
+        </div>
+        <PipelineConfig
+          v-if="!showConfigEditor"
+          @config-change="applyVisualConfig"
         />
-        <p v-if="configError" class="field-error">
-          {{ configError }}
-        </p>
+        <template v-else>
+          <textarea
+            id="config-json"
+            v-model="configJson"
+            class="form-input config-editor"
+            rows="6"
+            placeholder='{"batch_size": 10, "confidence_threshold": 0.7}'
+            spellcheck="false"
+          />
+          <p v-if="configError" class="field-error">
+            {{ configError }}
+          </p>
+        </template>
       </div>
 
       <button
         type="submit"
         class="submit-btn"
-        :disabled="loading || !form.document_id"
+        :disabled="loading"
       >
         <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
         {{ loading ? 'Running...' : 'Run Pipeline' }}
@@ -68,7 +87,7 @@
     <div v-if="error" class="error-banner">
       <i class="fas fa-exclamation-triangle"></i>
       <span>{{ error }}</span>
-      <button class="dismiss-btn" @click="clearError">
+      <button class="dismiss-btn" aria-label="Dismiss error" @click="clearError">
         <i class="fas fa-times"></i>
       </button>
     </div>
@@ -137,6 +156,7 @@ import {
   type PipelineResult,
 } from '@/composables/useKnowledgeGraph'
 import { createLogger } from '@/utils/debugUtils'
+import PipelineConfig from './PipelineConfig.vue'
 
 const logger = createLogger('PipelineRunner')
 const { runPipeline, loading, error, clearError } = useKnowledgeGraph()
@@ -146,22 +166,34 @@ const form = reactive({
   pipeline_name: 'default',
 })
 
+const showConfigEditor = ref(true)
 const configJson = ref('')
 const configError = ref('')
+const documentIdError = ref('')
 const result = ref<PipelineResult | null>(null)
+
+function applyVisualConfig(config: Record<string, unknown>): void {
+  configJson.value = JSON.stringify(config, null, 2)
+  configError.value = ''
+}
 
 function parseConfig(): Record<string, unknown> | null {
   if (!configJson.value.trim()) return {}
   try {
     configError.value = ''
     return JSON.parse(configJson.value)
-  } catch (err) {
+  } catch {
     configError.value = 'Invalid JSON configuration'
     return null
   }
 }
 
 async function handleSubmit(): Promise<void> {
+  if (!form.document_id.trim()) {
+    documentIdError.value = 'Document ID is required'
+    return
+  }
+
   const config = parseConfig()
   if (config === null) return
 
@@ -251,11 +283,39 @@ async function handleSubmit(): Promise<void> {
   border-color: var(--color-primary);
 }
 
+.config-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.config-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.config-toggle-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
 .config-editor {
   font-family: 'Fira Code', 'Cascadia Code', monospace;
   font-size: var(--text-xs);
   resize: vertical;
   min-height: 100px;
+}
+
+.input-error {
+  border-color: var(--color-error) !important;
 }
 
 .field-error {

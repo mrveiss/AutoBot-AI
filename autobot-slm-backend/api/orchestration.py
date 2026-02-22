@@ -139,6 +139,66 @@ class ServiceCategoryUpdate(BaseModel):
 
 
 # =============================================================================
+# Per-node systemd fallback helper (#1025)
+# =============================================================================
+
+
+async def _per_node_systemd_action(
+    db: AsyncSession,
+    service_name: str,
+    action: str,
+    node_id: Optional[str],
+) -> ServiceActionResponse:
+    """Run a systemctl action on a specific node for a raw systemd service.
+
+    Used when the service name is not in the abstract registry (#1025).
+    Requires node_id so we know which host to target.
+    """
+    if not node_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"node_id required for discovered service: {service_name}",
+        )
+
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Node not found: {node_id}",
+        )
+
+    success, message = await _run_ssh_service_action(node, service_name, action)
+
+    # Update DB record if action succeeded
+    if success:
+        svc_result = await db.execute(
+            select(Service).where(
+                Service.node_id == node_id,
+                Service.service_name == service_name,
+            )
+        )
+        svc = svc_result.scalar_one_or_none()
+        if svc:
+            new_status = (
+                ServiceStatus.STOPPED.value
+                if action == "stop"
+                else ServiceStatus.RUNNING.value
+            )
+            svc.status = new_status
+            await db.commit()
+
+    return ServiceActionResponse(
+        service_name=service_name,
+        action=action,
+        success=success,
+        message=message,
+        node_id=node_id,
+        host=node.ip_address,
+    )
+
+
+# =============================================================================
 # Service Registry Endpoints
 # =============================================================================
 
@@ -229,8 +289,15 @@ async def start_service(
 
     If node_id is not specified, starts on the default host from SSOT configuration.
     Services can be started on any enrolled node for portability.
+    Falls back to direct systemctl for discovered services (#1025).
     """
     request = request or ServiceActionRequest()
+
+    # Fall back to SSH systemctl for raw systemd names not in registry
+    if not service_orchestrator.registry.get_service(service_name):
+        return await _per_node_systemd_action(
+            db, service_name, "start", request.node_id
+        )
 
     success, message = await service_orchestrator.start_service(
         db=db,
@@ -260,8 +327,12 @@ async def stop_service(
     Stop an AutoBot service.
 
     If node_id is not specified, stops on the default host from SSOT configuration.
+    Falls back to direct systemctl for discovered services (#1025).
     """
     request = request or ServiceActionRequest()
+
+    if not service_orchestrator.registry.get_service(service_name):
+        return await _per_node_systemd_action(db, service_name, "stop", request.node_id)
 
     success, message = await service_orchestrator.stop_service(
         db=db,
@@ -290,8 +361,14 @@ async def restart_service(
     Restart an AutoBot service.
 
     If node_id is not specified, restarts on the default host from SSOT configuration.
+    Falls back to direct systemctl for discovered services (#1025).
     """
     request = request or ServiceActionRequest()
+
+    if not service_orchestrator.registry.get_service(service_name):
+        return await _per_node_systemd_action(
+            db, service_name, "restart", request.node_id
+        )
 
     success, message = await service_orchestrator.restart_service(
         db=db,
@@ -518,7 +595,7 @@ async def _run_ssh_service_action(
         executor = get_playbook_executor()
         result = await executor.execute_playbook(
             playbook_name="manage-service.yml",
-            limit=[node.hostname],
+            limit=[node.node_id],
             extra_vars={
                 "service_name": service_name,
                 "service_action": action_to_state[action],

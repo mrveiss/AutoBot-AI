@@ -15,7 +15,7 @@ from typing import Dict, Optional, Tuple
 
 import bcrypt
 import jwt
-from config import UnifiedConfigManager
+from config import ConfigManager
 from fastapi import Request
 from security_layer import SecurityLayer
 
@@ -24,7 +24,7 @@ from backend.utils.catalog_http_exceptions import raise_auth_error
 logger = logging.getLogger(__name__)
 
 # Create singleton config instance
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 
 class AuthenticationMiddleware:
@@ -488,10 +488,20 @@ class AuthenticationMiddleware:
         Extract and validate user from request using multiple authentication methods.
 
         Priority: JWT token -> Session ID -> Development mode header.
-        Issue #620.
+        Issue #620, #960.
         """
         if not self.enable_auth:
             return self._get_auth_disabled_user()
+
+        # Single-user mode: bypass auth (mirrors check_admin_permission behavior)
+        try:
+            from user_management.config import DeploymentMode, get_deployment_config
+
+            deployment_config = get_deployment_config()
+            if deployment_config.mode == DeploymentMode.SINGLE_USER:
+                return self._get_auth_disabled_user()
+        except Exception:
+            pass  # Gracefully continue if config unavailable
 
         # Try authentication methods in priority order
         user = self._extract_user_from_jwt(request)

@@ -45,6 +45,8 @@ const statusText = computed(() => {
 })
 
 const lastSeen = computed(() => {
+  // Issue #989: online nodes are actively connected — last_heartbeat can be stale
+  if (props.node.status === 'online') return 'Just now'
   if (!props.node.health?.last_heartbeat) return 'Never'
   const date = new Date(props.node.health.last_heartbeat)
   const now = new Date()
@@ -101,6 +103,9 @@ function handleMenuKeydown(event: KeyboardEvent): void {
   }
 }
 
+// A2A skill count badge (Issue #962)
+const a2aSkillCount = computed(() => props.node.a2a_card?.skills?.length ?? null)
+
 // Update indicators (#682)
 const updateSummary = computed(() => {
   return fleetStore.getNodeUpdateSummary(props.node.node_id)
@@ -109,6 +114,10 @@ const updateSummary = computed(() => {
 const hasUpdates = computed(() => {
   return (updateSummary.value?.total_updates ?? 0) > 0
 })
+
+// Issue #1019: Per-service health counts from backend
+const serviceSummary = computed(() => props.node.service_summary ?? null)
+const hasFailedServices = computed(() => (serviceSummary.value?.failed ?? 0) > 0)
 </script>
 
 <template>
@@ -247,6 +256,19 @@ const hasUpdates = computed(() => {
       </span>
     </div>
 
+    <!-- A2A Agent Card badge (Issue #962) -->
+    <div v-if="a2aSkillCount !== null" class="flex items-center gap-1.5 mb-2">
+      <span
+        class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded bg-indigo-50 text-indigo-700 border border-indigo-200"
+        :title="`A2A Agent Card: ${a2aSkillCount} skill${a2aSkillCount !== 1 ? 's' : ''}`"
+      >
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        A2A · {{ a2aSkillCount }} skill{{ a2aSkillCount !== 1 ? 's' : '' }}
+      </span>
+    </div>
+
     <!-- Update Status Badge (#682) -->
     <div v-if="hasUpdates" class="flex items-center gap-2 mb-3">
       <button
@@ -307,6 +329,24 @@ const hasUpdates = computed(() => {
     <!-- No Health Data -->
     <div v-else class="text-xs text-gray-400 italic mb-3 py-4 text-center">
       No health data available
+    </div>
+
+    <!-- Service Health Summary (Issue #1019) -->
+    <div
+      v-if="serviceSummary && serviceSummary.total > 0"
+      class="flex items-center gap-2 mb-3 text-xs"
+      aria-label="Service health summary"
+    >
+      <span class="text-gray-500">Services:</span>
+      <span v-if="serviceSummary.running > 0" class="inline-flex items-center gap-1 text-green-600">
+        <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>{{ serviceSummary.running }}
+      </span>
+      <span v-if="serviceSummary.stopped > 0" class="inline-flex items-center gap-1 text-gray-500">
+        <span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>{{ serviceSummary.stopped }}
+      </span>
+      <span v-if="hasFailedServices" class="inline-flex items-center gap-1 text-red-600 font-medium">
+        <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>{{ serviceSummary.failed }}
+      </span>
     </div>
 
     <!-- Footer -->

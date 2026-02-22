@@ -108,6 +108,16 @@ repos:
         stages: [pre-commit]
         description: "Blocks commits with functions >65 lines, warns for 51-65 lines"
 
+  # No print()/console.* in production code (Issue #1082)
+  - repo: local
+    hooks:
+      - id: no-print-console
+        name: No print()/console.* in Production Code (Issue #1082)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-no-print-console
+        language: script
+        pass_filenames: false
+        stages: [pre-commit]
+        description: Blocks commits with print() in Python or console.* in TypeScript/Vue production code
 # Configuration for specific file types
 default_language_version:
   python: python3

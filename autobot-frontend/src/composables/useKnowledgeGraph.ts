@@ -123,26 +123,29 @@ export interface PipelineConfig {
 }
 
 // ============================================================================
+// Shared singleton state (all composable consumers share one instance)
+// ============================================================================
+
+const entities = ref<Entity[]>([])
+const relationships = ref<Relationship[]>([])
+const events = ref<TemporalEvent[]>([])
+const summaries = ref<Summary[]>([])
+const loading = ref(false)
+const error = ref<string | null>(null)
+
+const stats = reactive({
+  entityCount: 0,
+  eventCount: 0,
+  summaryCount: 0,
+})
+
+const API_BASE = '/api/knowledge-graph'
+
+// ============================================================================
 // Composable
 // ============================================================================
 
 export function useKnowledgeGraph() {
-  // Reactive state
-  const entities = ref<Entity[]>([])
-  const relationships = ref<Relationship[]>([])
-  const events = ref<TemporalEvent[]>([])
-  const summaries = ref<Summary[]>([])
-  const loading = ref(false)
-  const error = ref<string | null>(null)
-
-  // Quick stats
-  const stats = reactive({
-    entityCount: 0,
-    eventCount: 0,
-    summaryCount: 0,
-  })
-
-  const API_BASE = '/api/knowledge-graph'
 
   // --------------------------------------------------------------------
   // Helpers
@@ -255,6 +258,7 @@ export function useKnowledgeGraph() {
         start_date: params.start_date,
         end_date: params.end_date,
         event_types: params.event_types,
+        entity_name: params.entity_name,
       })
       const data = await apiClient.get(`${API_BASE}/events${qs}`)
       events.value = (

@@ -8,7 +8,7 @@
  */
 
 import { ref } from 'vue'
-import { useSlmApi } from './useSlmApi'
+import axios, { type AxiosInstance } from 'axios'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useVncControls')
@@ -38,7 +38,7 @@ export interface VncActionResponse {
 }
 
 export function useVncControls() {
-  const api = useSlmApi()
+  const client: AxiosInstance = axios.create({ baseURL: '/api' })
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -50,14 +50,14 @@ export function useVncControls() {
     error.value = null
 
     try {
-      const response = await api.post<VncActionResponse>('/vnc/click', params)
-      return response
+      const response = await client.post<VncActionResponse>('/vnc/click', params)
+      return response.data
     } catch (err: any) {
       logger.error('Mouse click failed:', err)
       error.value = err.message || 'Mouse click failed'
       return {
         status: 'error',
-        message: error.value
+        message: error.value ?? ''
       }
     } finally {
       loading.value = false
@@ -72,14 +72,14 @@ export function useVncControls() {
     error.value = null
 
     try {
-      const response = await api.post<VncActionResponse>('/vnc/type', { text })
-      return response
+      const response = await client.post<VncActionResponse>('/vnc/type', { text })
+      return response.data
     } catch (err: any) {
       logger.error('Keyboard type failed:', err)
       error.value = err.message || 'Keyboard type failed'
       return {
         status: 'error',
-        message: error.value
+        message: error.value ?? ''
       }
     } finally {
       loading.value = false
@@ -94,14 +94,14 @@ export function useVncControls() {
     error.value = null
 
     try {
-      const response = await api.post<VncActionResponse>('/vnc/key', { key })
-      return response
+      const response = await client.post<VncActionResponse>('/vnc/key', { key })
+      return response.data
     } catch (err: any) {
       logger.error('Special key failed:', err)
       error.value = err.message || 'Special key failed'
       return {
         status: 'error',
-        message: error.value
+        message: error.value ?? ''
       }
     } finally {
       loading.value = false
@@ -116,14 +116,14 @@ export function useVncControls() {
     error.value = null
 
     try {
-      const response = await api.post<VncActionResponse>('/vnc/scroll', params)
-      return response
+      const response = await client.post<VncActionResponse>('/vnc/scroll', params)
+      return response.data
     } catch (err: any) {
       logger.error('Mouse scroll failed:', err)
       error.value = err.message || 'Mouse scroll failed'
       return {
         status: 'error',
-        message: error.value
+        message: error.value ?? ''
       }
     } finally {
       loading.value = false
@@ -138,14 +138,14 @@ export function useVncControls() {
     error.value = null
 
     try {
-      const response = await api.post<VncActionResponse>('/vnc/drag', params)
-      return response
+      const response = await client.post<VncActionResponse>('/vnc/drag', params)
+      return response.data
     } catch (err: any) {
       logger.error('Mouse drag failed:', err)
       error.value = err.message || 'Mouse drag failed'
       return {
         status: 'error',
-        message: error.value
+        message: error.value ?? ''
       }
     } finally {
       loading.value = false
@@ -160,14 +160,14 @@ export function useVncControls() {
     error.value = null
 
     try {
-      const response = await api.get<VncActionResponse>('/vnc/screenshot')
-      return response
+      const response = await client.get<VncActionResponse>('/vnc/screenshot')
+      return response.data
     } catch (err: any) {
       logger.error('Screenshot capture failed:', err)
       error.value = err.message || 'Screenshot capture failed'
       return {
         status: 'error',
-        message: error.value,
+        message: error.value ?? '',
         image_data: ''
       }
     } finally {
@@ -183,14 +183,14 @@ export function useVncControls() {
     error.value = null
 
     try {
-      const response = await api.post<VncActionResponse>('/vnc/clipboard', { content })
-      return response
+      const response = await client.post<VncActionResponse>('/vnc/clipboard', { content })
+      return response.data
     } catch (err: any) {
       logger.error('Clipboard sync failed:', err)
       error.value = err.message || 'Clipboard sync failed'
       return {
         status: 'error',
-        message: error.value
+        message: error.value ?? ''
       }
     } finally {
       loading.value = false

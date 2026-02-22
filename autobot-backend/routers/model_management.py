@@ -13,30 +13,48 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import torch
-from backend.models.ml_model import MLModel
-from backend.training.completion_trainer import CompletionTrainer
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.ssot_config import config
+from backend.models.ml_model import MLModel
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/code-completion/model", tags=["ml-models"])
+router = APIRouter(tags=["ml-models"])
 
-# Database setup
-DATABASE_URL = (
-    f"postgresql://{config.database.user}:{config.database.password}"
-    f"@{config.database.host}:{config.database.port}/{config.database.name}"
-)
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine)
+# Database setup — deferred to avoid crash when config.database is unavailable
+_engine = None
+_SessionLocal = None
+
+
+def _get_session():
+    """Return a new SQLAlchemy session, creating the engine on first call.
+
+    Deferred from module level to avoid DB connection at import time (Issue #940).
+    """
+    global _engine, _SessionLocal
+    if _SessionLocal is None:
+        db_url = (
+            f"postgresql://{config.database.user}:{config.database.password}"
+            f"@{config.database.host}:{config.database.port}/{config.database.name}"
+        )
+        _engine = create_engine(db_url)
+        _SessionLocal = sessionmaker(bind=_engine)
+    return _SessionLocal()
+
+
+def _get_trainer_class():
+    """Lazy import CompletionTrainer to avoid torchmetrics at module load."""
+    from backend.training.completion_trainer import CompletionTrainer
+
+    return CompletionTrainer
+
 
 # Active model cache
-_active_model: Optional[CompletionTrainer] = None
+_active_model = None
 _active_version: Optional[str] = None
 
 
@@ -125,7 +143,7 @@ async def train_model(request: TrainRequest, background_tasks: BackgroundTasks):
             start_time = time.time()
 
             # Initialize trainer
-            trainer = CompletionTrainer(
+            trainer = _get_trainer_class()(
                 language=request.language, pattern_type=request.pattern_type
             )
 
@@ -144,7 +162,7 @@ async def train_model(request: TrainRequest, background_tasks: BackgroundTasks):
             final_metrics = history["metrics"][-1] if history["metrics"] else {}
 
             # Register in database
-            db = SessionLocal()
+            db = _get_session()
             try:
                 # Get model version from checkpoint
                 model_files = list(
@@ -207,7 +225,7 @@ async def list_models(
     - **language**: Filter by training language
     - **is_active**: Filter by active status
     """
-    db = SessionLocal()
+    db = _get_session()
     try:
         query = db.query(MLModel)
 
@@ -248,7 +266,7 @@ async def list_models(
 @router.get("/models/{version}", response_model=Dict)
 async def get_model(version: str):
     """Get detailed model metadata by version."""
-    db = SessionLocal()
+    db = _get_session()
     try:
         model = db.query(MLModel).filter(MLModel.version == version).first()
 
@@ -269,7 +287,7 @@ async def activate_model(version: str):
     """
     global _active_model, _active_version
 
-    db = SessionLocal()
+    db = _get_session()
     try:
         # Find model
         model = db.query(MLModel).filter(MLModel.version == version).first()
@@ -286,7 +304,7 @@ async def activate_model(version: str):
         db.commit()
 
         # Load model into memory
-        trainer = CompletionTrainer()
+        trainer = _get_trainer_class()()
         trainer.load_checkpoint(version)
         _active_model = trainer
         _active_version = version
@@ -312,7 +330,7 @@ async def get_evaluation_metrics():
     if _active_model is None:
         raise HTTPException(status_code=400, detail="No active model")
 
-    db = SessionLocal()
+    db = _get_session()
     try:
         model = db.query(MLModel).filter(MLModel.version == _active_version).first()
 
@@ -357,6 +375,8 @@ async def predict_completion(request: PredictRequest):
         # Tokenize context
         tokenizer = _active_model.train_loader.dataset.tokenizer
         context_ids = tokenizer.encode(request.context, max_length=128)
+        import torch
+
         input_tensor = torch.tensor([context_ids], dtype=torch.long).to(
             _active_model.device
         )

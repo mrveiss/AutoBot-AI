@@ -228,18 +228,60 @@ class AgentExecutor:
 
         # Execute based on routing decision
         if routing_decision["strategy"] == "single_agent":
-            return await self._execute_single_agent(
+            result = await self._execute_single_agent(
                 routing_decision["primary_agent"], request, context, chat_history
             )
         elif routing_decision["strategy"] == "multi_agent":
-            return await self._execute_multi_agent(
+            result = await self._execute_multi_agent(
                 routing_decision, request, context, chat_history
             )
         else:
             # Fallback to direct orchestrator handling
-            return await self._execute_orchestrator_fallback(
+            result = await self._execute_orchestrator_fallback(
                 request, context, chat_history
             )
+
+        # Issue #951: post-response gap detection (fire-and-forget)
+        response_text = result.get("response", "")
+        if isinstance(response_text, str) and response_text:
+            await self._maybe_trigger_gap_development(response_text, context or {})
+
+        return result
+
+    async def _maybe_trigger_gap_development(
+        self, response_text: str, context: Dict[str, Any]
+    ) -> None:
+        """Detect gap signals in agent output and trigger autonomous development.
+
+        Called after every agent response (Issue #951).  Non-fatal on error.
+        """
+        try:
+            from skills.gap_detector import SkillGapDetector
+            from skills.registry import get_skill_registry
+
+            registry = get_skill_registry()
+            skill = registry.get("autonomous-skill-development")
+            if skill is None or not skill.enabled:
+                return
+
+            existing_tools = list(registry._skills.keys())
+            gap = SkillGapDetector(existing_tools).analyze_agent_output(response_text)
+            if gap is None:
+                return
+
+            logger.info(
+                "Capability gap detected: %s — triggering skill development",
+                gap.capability,
+            )
+            await skill.execute(
+                {
+                    "capability": gap.capability,
+                    "requested_by": "autobot-self",
+                    "context": {**gap.context, "agent_response": response_text[:200]},
+                }
+            )
+        except Exception as exc:
+            logger.debug("Gap development hook failed (non-critical): %s", exc)
 
     def _register_specialized_handlers(
         self, handlers: Dict, request: str, context: Optional[Dict]

@@ -11,12 +11,12 @@ import logging
 import os
 from typing import Dict, List, Optional
 
-_BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-_SLM_AGENT_DIR = os.environ.get("SLM_AGENT_DIR", "/opt/slm-agent")
-
 from models.database import Role, SyncType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+_BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+_SLM_AGENT_DIR = os.environ.get("SLM_AGENT_DIR", "/opt/slm-agent")
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ DEFAULT_ROLES = [
         "source_paths": ["autobot-backend/"],
         "target_path": _BASE_DIR,
         "systemd_service": "autobot-backend",
-        "auto_restart": False,
+        "auto_restart": True,
         "health_check_port": 8443,
         "health_check_path": "/api/health",
     },
@@ -49,7 +49,7 @@ DEFAULT_ROLES = [
         "systemd_service": "autobot-frontend",
         "auto_restart": True,
         "health_check_port": 443,
-        "post_sync_cmd": f"cd {_BASE_DIR}/autobot-frontend && npm install",
+        "post_sync_cmd": f"cd {_BASE_DIR}/autobot-frontend && npm install && npm run build",
     },
     {
         "name": "slm-server",
@@ -58,9 +58,10 @@ DEFAULT_ROLES = [
         "source_paths": ["autobot-slm-backend/", "autobot-slm-frontend/"],
         "target_path": _BASE_DIR,
         "systemd_service": "autobot-slm-backend",
-        "auto_restart": False,
+        "auto_restart": True,
         "health_check_port": 8000,
         "health_check_path": "/api/health",
+        "post_sync_cmd": f"cd {_BASE_DIR}/autobot-slm-frontend && npm install && npm run build",
     },
     {
         "name": "slm-agent",

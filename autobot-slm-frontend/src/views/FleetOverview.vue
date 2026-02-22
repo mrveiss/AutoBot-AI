@@ -15,13 +15,8 @@ import { useFleetStore } from '@/stores/fleet'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useNodeConnectionTest } from '@/composables/useNodeConnectionTest'
-import {
-  DEFAULT_ROLES,
-  getRoleDisplayName,
-  getRoleDescription as getSharedRoleDescription,
-  getRoleTools as getSharedRoleTools,
-} from '@/constants/node-roles'
-import type { SLMNode, NodeRole, NodeHealth } from '@/types/slm'
+
+import type { SLMNode, NodeHealth } from '@/types/slm'
 import { createLogger } from '@/utils/debugUtils'
 import NodeCard from '@/components/fleet/NodeCard.vue'
 import FleetSummary from '@/components/fleet/FleetSummary.vue'
@@ -67,19 +62,9 @@ const selectedNodeForRoles = ref<{ id: string; hostname: string } | null>(null)
 // Action states
 const isDeleting = ref(false)
 const isEnrolling = ref(false)
-const isUpdatingRoles = ref(false)
 
 // Connection test state from composable (Issue #737)
-const isTesting = computed(() => connectionTest.isLoading.value)
 const connectionTestResult = computed(() => connectionTest.result.value)
-
-// Role management - use fleet store with fallback to constants (Issue #737 Phase 3)
-const selectedRoles = ref<NodeRole[]>([])
-const availableRoles = computed(() =>
-  fleetStore.availableRoles.length > 0
-    ? fleetStore.availableRoles.map(r => r.name as NodeRole)
-    : DEFAULT_ROLES
-)
 
 // Lifecycle
 onMounted(async () => {
@@ -87,7 +72,7 @@ onMounted(async () => {
   fleetStore.fetchFleetUpdateSummary()
   ws.connect()
 
-  const unwatch = watch(() => ws.connected.value, (connected) => {
+  watch(() => ws.connected.value, (connected) => {
     if (connected) {
       ws.subscribeAll()
       logger.info('WebSocket connected, subscribed to all nodes')
@@ -489,7 +474,7 @@ async function handleRestart(nodeId: string): Promise<void> {
     <AddNodeModal
       :visible="showAddNodeModal"
       :mode="editingNode ? 'edit' : 'add'"
-      :existing-node="editingNode"
+      :existing-node="(editingNode as any)"
       @close="closeAddNodeModal"
       @added="handleNodeSaved"
       @updated="handleNodeSaved"

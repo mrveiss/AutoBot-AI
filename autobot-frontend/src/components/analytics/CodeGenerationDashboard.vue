@@ -326,6 +326,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CodeGenerationDashboard')
@@ -490,7 +491,7 @@ const generateCode = async () => {
   result.value = null
 
   try {
-    const response = await fetch('/api/code-generation/generate', {
+    const response = await fetchWithAuth('/api/code-generation/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(generateRequest.value)
@@ -518,7 +519,7 @@ const refactorCode = async () => {
   result.value = null
 
   try {
-    const response = await fetch('/api/code-generation/refactor', {
+    const response = await fetchWithAuth('/api/code-generation/refactor', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(refactorRequest.value)
@@ -543,7 +544,7 @@ const refactorCode = async () => {
 
 const validateCodeSubmit = async () => {
   try {
-    const response = await fetch('/api/code-generation/validate', {
+    const response = await fetchWithAuth('/api/code-generation/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -562,7 +563,7 @@ const validateCodeSubmit = async () => {
 
 const fetchStats = async () => {
   try {
-    const response = await fetch('/api/code-generation/stats')
+    const response = await fetchWithAuth('/api/code-generation/stats')
     if (response.ok) {
       const data = await response.json()
       stats.value = data
@@ -574,7 +575,7 @@ const fetchStats = async () => {
 
 const fetchRefactoringTypes = async () => {
   try {
-    const response = await fetch('/api/code-generation/refactoring-types')
+    const response = await fetchWithAuth('/api/code-generation/refactoring-types')
     if (response.ok) {
       const data = await response.json()
       refactoringTypes.value = data.types

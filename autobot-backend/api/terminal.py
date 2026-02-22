@@ -108,6 +108,7 @@ See Also:
 - docs/architecture/TERMINAL_ARCHITECTURE_DIAGRAM.md - Architecture details
 """
 
+import asyncio
 import json
 import logging
 import signal
@@ -116,11 +117,15 @@ import uuid
 from datetime import datetime
 
 from auth_middleware import get_current_user
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import models from dedicated module (Issue #185 - split oversized files)
 from backend.api.terminal_models import (
     MODERATE_RISK_PATTERNS,
     RISKY_COMMAND_PATTERNS,
+    AdminExecuteRequest,
     CommandRequest,
     CommandRiskLevel,
     SecurityLevel,
@@ -133,9 +138,6 @@ from backend.services.simple_pty import simple_pty_manager
 
 # Import terminal secrets service for SSH key integration (Issue #211)
 from backend.services.terminal_secrets_service import get_terminal_secrets_service
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -717,7 +719,10 @@ async def consolidated_terminal_websocket(websocket: WebSocket, session_id: str)
                 data = await websocket.receive_text()
                 message = json.loads(data)
                 logger.info(
-                    f"[WS RECV] Session {session_id}, Type: {message.get('type')}, Data: {str(message)[:100]}"
+                    "[WS RECV] Session %s, Type: %s, Data: %s",
+                    session_id,
+                    message.get("type"),
+                    str(message)[:100],
                 )
                 await terminal.handle_message(message)
 
@@ -1261,3 +1266,50 @@ async def get_terminal_statistics(
     Issue #744: Requires authenticated user.
     """
     return session_manager.get_terminal_stats(session_id)
+
+
+# SLM Admin Terminal (Issue #983) ================================================
+
+
+@router.post("/execute", summary="Execute command (SLM admin terminal)")
+async def admin_execute_command(body: AdminExecuteRequest) -> dict:
+    """Execute a single shell command and return stdout/stderr/exit_code.
+
+    Runs on the local backend machine. No auth required — accessible via
+    the /autobot-api/ nginx proxy (Issue #983).
+
+    Blocks commands matching RISKY_COMMAND_PATTERNS.
+    """
+    command_lower = body.command.lower().strip()
+    for pattern in RISKY_COMMAND_PATTERNS:
+        if pattern in command_lower:
+            return {
+                "stdout": "",
+                "stderr": f"Command blocked: contains restricted pattern '{pattern}'",
+                "exit_code": 1,
+            }
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            body.command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=30.0)
+        return {
+            "stdout": stdout_b.decode("utf-8", errors="replace"),
+            "stderr": stderr_b.decode("utf-8", errors="replace"),
+            "exit_code": proc.returncode or 0,
+        }
+    except asyncio.TimeoutError:
+        return {
+            "stdout": "",
+            "stderr": "Command timed out after 30 seconds",
+            "exit_code": 124,
+        }
+    except Exception:
+        logger.exception("Admin terminal execute failed: %s", body.command)
+        return {
+            "stdout": "",
+            "stderr": "Internal error executing command",
+            "exit_code": 1,
+        }

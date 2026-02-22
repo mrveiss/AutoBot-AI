@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 import re
+import uuid
 from typing import Any, Dict, FrozenSet, List, Optional
 
 from async_chat_workflow import WorkflowMessage
@@ -2500,15 +2501,13 @@ before summarizing.
                     session_id,
                 )
 
-            # Persist final assistant response
-            await chat_mgr.add_message(
-                sender="assistant",
-                text=llm_response,
-                message_type="llm_response",
-                session_id=session_id,
-            )
+            # NOTE: Removed duplicate llm_response persistence (#1064).
+            # The per-message loop above already persists the final
+            # response; a second add_message with type="llm_response"
+            # created a duplicate that survived content-based dedup.
             logger.info(
-                "✅ Persisted complete conversation to chat history: session=%s, workflow_messages=%d",
+                "Persisted conversation to chat history: "
+                "session=%s, workflow_messages=%d",
                 session_id,
                 len(workflow_messages),
             )
@@ -2767,9 +2766,111 @@ before summarizing.
     async def process_message_stream(
         self, session_id: str, message: str, context: Optional[Dict[str, Any]] = None
     ):
-        """Process a message through the workflow system as an async generator.
+        """Process a message via LangGraph StateGraph.
 
-        Issue #620.
+        Issue #1043: Replaced hand-rolled async generator with LangGraph graph
+        invocation. The graph handles state management, checkpointing, and
+        interrupt-based command approval natively.
+
+        Falls back to legacy flow if LangGraph is unavailable.
+        """
+        try:
+            async for msg in self._process_via_graph(session_id, message, context):
+                yield msg
+        except Exception as graph_err:
+            logger.warning(
+                "LangGraph flow failed, falling back to legacy: %s",
+                graph_err,
+            )
+            async for msg in self._process_message_stream_legacy(
+                session_id, message, context
+            ):
+                yield msg
+
+    async def _process_via_graph(
+        self,
+        session_id: str,
+        message: str,
+        context: Optional[Dict[str, Any]] = None,
+    ):
+        """Run the LangGraph StateGraph for chat processing.
+
+        Issue #1043: Graph nodes delegate to existing manager methods.
+        A stream_callback + asyncio.Queue bridges graph execution to the
+        SSE async generator expected by the API layer.
+        """
+        from .graph import get_compiled_graph
+
+        graph = await get_compiled_graph(self)
+        queue = asyncio.Queue()
+
+        def stream_callback(data):
+            """Callback invoked by graph nodes for real-time streaming."""
+            queue.put_nowait(data)
+
+        config = {
+            "configurable": {
+                "thread_id": session_id,
+                "manager": self,
+                "stream_callback": stream_callback,
+            }
+        }
+
+        initial_state = {
+            "session_id": session_id,
+            "user_message": message,
+            "context": context or {},
+        }
+
+        graph_task = asyncio.create_task(
+            self._run_graph_task(graph, initial_state, config, queue)
+        )
+
+        while True:
+            data = await queue.get()
+            if data is None:
+                break
+            if hasattr(data, "to_dict"):
+                yield data
+            else:
+                # Preserve original ID to prevent poll-cycle churn (#1064)
+                msg_id = data.get("id") or str(uuid.uuid4())
+                yield WorkflowMessage(
+                    type=data.get("type", "response"),
+                    content=data.get("content", ""),
+                    metadata=data.get("metadata", {}),
+                    id=msg_id,
+                )
+
+        await graph_task
+
+    async def _run_graph_task(self, graph, initial_state, config, queue):
+        """Execute the graph and signal completion via queue sentinel."""
+        try:
+            result = await graph.ainvoke(initial_state, config=config)
+
+            # Check for interrupt (command approval needed)
+            interrupt_data = result.get("__interrupt__")
+            if interrupt_data:
+                for intr in interrupt_data:
+                    queue.put_nowait(intr.value)
+        except Exception as exc:
+            logger.error("Graph execution error: %s", exc, exc_info=True)
+            queue.put_nowait(
+                {
+                    "type": "error",
+                    "content": f"Error: {exc}",
+                }
+            )
+        finally:
+            queue.put_nowait(None)
+
+    async def _process_message_stream_legacy(
+        self, session_id: str, message: str, context: Optional[Dict[str, Any]] = None
+    ):
+        """Legacy message processing (pre-LangGraph fallback).
+
+        Issue #620: Original implementation preserved as fallback.
         """
         workflow_messages = []
 
@@ -2804,6 +2905,56 @@ before summarizing.
             yield self._create_processing_error_message(
                 session_id, e, workflow_messages
             )
+
+    async def resume_graph(
+        self,
+        session_id: str,
+        decision: Dict[str, Any],
+    ):
+        """Resume a paused graph after command approval interrupt.
+
+        Issue #1043: Called when the user approves or denies a command.
+        The graph resumes from its checkpointed state with the decision.
+        """
+        from langgraph.types import Command
+
+        from .graph import get_compiled_graph
+
+        graph = await get_compiled_graph(self)
+        queue = asyncio.Queue()
+
+        def stream_callback(data):
+            queue.put_nowait(data)
+
+        config = {
+            "configurable": {
+                "thread_id": session_id,
+                "manager": self,
+                "stream_callback": stream_callback,
+            }
+        }
+
+        graph_task = asyncio.create_task(
+            self._run_graph_task(graph, Command(resume=decision), config, queue)
+        )
+
+        while True:
+            data = await queue.get()
+            if data is None:
+                break
+            if hasattr(data, "to_dict"):
+                yield data
+            else:
+                # Preserve original ID to prevent poll-cycle churn (#1064)
+                msg_id = data.get("id") or str(uuid.uuid4())
+                yield WorkflowMessage(
+                    type=data.get("type", "response"),
+                    content=data.get("content", ""),
+                    metadata=data.get("metadata", {}),
+                    id=msg_id,
+                )
+
+        await graph_task
 
     async def shutdown(self):
         """Shutdown the workflow manager and clean up resources."""

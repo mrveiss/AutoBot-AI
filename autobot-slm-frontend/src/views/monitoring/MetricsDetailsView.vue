@@ -8,7 +8,7 @@
  * Issue #896 - SLM Metrics Dashboard
  */
 
-import { onMounted, onUnmounted, ref, computed } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
 import FleetMetricsCard from '@/components/monitoring/FleetMetricsCard.vue'
 import NodeMetricsGrid from '@/components/monitoring/NodeMetricsGrid.vue'
@@ -25,18 +25,11 @@ const {
   error,
   lastUpdate,
   refreshMetrics,
-  fetchFleetMetrics,
-  fetchPerformanceOverview,
-  fetchNPUFleetMetrics,
   fetchPrometheusExport,
 } = usePrometheusMetrics({ autoFetch: false })
 
 const showNPUMetrics = ref(false)
 let refreshInterval: ReturnType<typeof setInterval> | null = null
-
-const hasNPUNodes = computed(() => {
-  return npuFleetMetrics.value && npuFleetMetrics.value.total_npu_nodes > 0
-})
 
 async function loadMetrics() {
   await refreshMetrics()

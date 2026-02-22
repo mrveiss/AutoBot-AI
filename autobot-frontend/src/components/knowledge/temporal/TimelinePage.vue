@@ -49,6 +49,7 @@ async function handleFilterChange(filters: FilterParams): Promise<void> {
     start_date: filters.start_date,
     end_date: filters.end_date,
     event_types: filters.event_types,
+    entity_name: filters.entity_name,
   })
 }
 

@@ -20,7 +20,10 @@ all:
           slm_node_id: "00-SLM-Manager"
           slm_node_role: "slm-manager"
           slm_services_to_monitor:
-            - slm-server
+            - autobot-slm-backend
+            - slm-admin-ui
+            - nginx
+            - postgresql@16-main
 
         # Backend server
         01-Backend:
@@ -30,7 +33,7 @@ all:
           slm_services_to_monitor:
             - autobot-backend
             - ollama
-            - slm-agent
+            - nginx
 
         # Frontend server
         02-Frontend:
@@ -44,13 +47,18 @@ all:
           ansible_host: 172.16.168.22
           slm_node_id: "npu-worker"
           slm_services_to_monitor:
-            - npu-worker
+            - autobot-npu-worker
+            - autobot-tts-worker
+            - nginx
 
         # AI Stack
         03-AI-Stack:
           ansible_host: 172.16.168.24
           slm_node_id: "03-AI-Stack"
-          slm_services_to_monitor: []
+          slm_services_to_monitor:
+            - autobot-ai-stack
+            - autobot-chromadb
+            - nginx
 
         # Databases
         04-Databases:
@@ -58,20 +66,26 @@ all:
           slm_node_id: "04-Databases"
           slm_services_to_monitor:
             - redis-stack-server
+            - redis_exporter
+            - nginx
 
         # Browser automation
         browser-automation:
           ansible_host: 172.16.168.25
           slm_node_id: "browser-automation"
-          slm_services_to_monitor: []
+          slm_services_to_monitor:
+            - autobot-playwright
+            - nginx
 
-        # New node - pending role assignment
-        05-Node-26:
+        # LLM CPU node (#1040)
+        05-LLM-CPU:
           ansible_host: 172.16.168.26
-          slm_node_id: "05-Node-26"
-          slm_services_to_monitor: []
+          slm_node_id: "05-LLM-CPU"
+          slm_node_role: "llm"
+          slm_services_to_monitor:
+            - ollama
 
-        # New node - pending role assignment
+        # Reserved node - pending role assignment
         06-Node-27:
           ansible_host: 172.16.168.27
           slm_node_id: "06-Node-27"
@@ -106,6 +120,11 @@ all:
       hosts:
         00-SLM-Manager:
 
+    # LLM inference nodes (CPU or GPU) — #1040
+    llm_nodes:
+      hosts:
+        05-LLM-CPU:
+
     # Aggregate for all infrastructure nodes
     infrastructure:
       children:
@@ -116,3 +135,4 @@ all:
         redis:
         ai_stack:
         slm_server:
+        llm_nodes:

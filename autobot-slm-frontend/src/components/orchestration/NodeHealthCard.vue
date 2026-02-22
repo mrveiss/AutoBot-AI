@@ -10,7 +10,6 @@
  * Used across orchestration views for consistent node status display.
  */
 
-import { computed } from 'vue'
 
 interface Props {
   nodeId: string
@@ -28,7 +27,7 @@ interface Props {
   restartProgress?: { total: number; completed: number } | null
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   ipAddress: '',
   isExpanded: false,
   showExpandIcon: true,
@@ -42,14 +41,6 @@ const emit = defineEmits<{
   restartAll: [nodeId: string, hostname: string]
 }>()
 
-const statusClasses = computed(() => {
-  const classes = {
-    online: { dot: 'bg-green-500', text: 'text-green-600' },
-    offline: { dot: 'bg-red-500', text: 'text-red-600' },
-    unknown: { dot: 'bg-yellow-500', text: 'text-yellow-600' },
-  }
-  return classes[props.status]
-})
 </script>
 
 <template>

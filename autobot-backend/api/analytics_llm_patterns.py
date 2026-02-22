@@ -32,8 +32,8 @@ from redis.exceptions import RedisError
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
-# Issue #552: Added prefix to match frontend calls at /api/llm-patterns/*
-router = APIRouter(prefix="/llm-patterns", tags=["llm-patterns", "analytics"])
+# Prefix provided by analytics_routers.py registry (#1032)
+router = APIRouter(tags=["llm-patterns", "analytics"])
 logger = logging.getLogger(__name__)
 
 

@@ -114,327 +114,558 @@ const templateCategories = computed(() => {
 </script>
 
 <template>
-  <div class="p-6 space-y-6">
-    <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="text-2xl font-bold text-primary">Developer Speedup</h2>
-        <p class="text-sm text-secondary mt-1">Code search, generation, and productivity tools</p>
+  <div class="dev-speedup-view">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="page-header-content">
+        <h2 class="page-title">Developer Speedup</h2>
+        <p class="page-subtitle">Code search, generation, and productivity tools</p>
       </div>
-      <div v-if="actionHistory.length > 0" class="text-right">
-        <div class="text-sm text-secondary">Actions Today</div>
-        <div class="text-2xl font-bold text-autobot-info">
-          {{ actionHistory.length }}
-        </div>
+      <div v-if="actionHistory.length > 0" class="actions-summary">
+        <div class="actions-label">Actions Today</div>
+        <div class="actions-count">{{ actionHistory.length }}</div>
       </div>
     </div>
 
     <!-- Error Alert -->
-    <div v-if="error" class="bg-autobot-error-bg border border-autobot-error rounded p-4">
-      <div class="flex items-start gap-3">
-        <svg class="w-5 h-5 text-autobot-error mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-        </svg>
-        <div class="flex-1">
-          <h3 class="text-sm font-medium text-autobot-error">Error</h3>
-          <p class="text-sm text-autobot-error mt-1">{{ error }}</p>
-        </div>
+    <div v-if="error" class="alert alert-error">
+      <i class="fas fa-exclamation-circle"></i>
+      <div class="alert-content">
+        <strong>Error</strong>
+        <p>{{ error }}</p>
       </div>
     </div>
 
     <!-- Tabs -->
-    <div class="border-b border-default">
-      <nav class="-mb-px flex space-x-8">
-        <button
-          @click="activeTab = 'search'"
-          :class="[
-            'py-4 px-1 border-b-2 font-medium text-sm',
-            activeTab === 'search'
-              ? 'border-autobot-info text-autobot-info'
-              : 'border-transparent text-secondary hover:text-primary hover:border-default'
-          ]"
-        >
-          Quick Search
-        </button>
-        <button
-          @click="activeTab = 'snippets'"
-          :class="[
-            'py-4 px-1 border-b-2 font-medium text-sm',
-            activeTab === 'snippets'
-              ? 'border-autobot-info text-autobot-info'
-              : 'border-transparent text-secondary hover:text-primary hover:border-default'
-          ]"
-        >
-          Snippets ({{ snippets.length }})
-        </button>
-        <button
-          @click="activeTab = 'templates'"
-          :class="[
-            'py-4 px-1 border-b-2 font-medium text-sm',
-            activeTab === 'templates'
-              ? 'border-autobot-info text-autobot-info'
-              : 'border-transparent text-secondary hover:text-primary hover:border-default'
-          ]"
-        >
-          Templates ({{ templates.length }})
-        </button>
-        <button
-          @click="activeTab = 'actions'"
-          :class="[
-            'py-4 px-1 border-b-2 font-medium text-sm',
-            activeTab === 'actions'
-              ? 'border-autobot-info text-autobot-info'
-              : 'border-transparent text-secondary hover:text-primary hover:border-default'
-          ]"
-        >
-          Quick Actions
-        </button>
-      </nav>
-    </div>
+    <nav class="tab-nav">
+      <button @click="activeTab = 'search'" :class="['tab-btn', { active: activeTab === 'search' }]">
+        <i class="fas fa-search"></i> Quick Search
+      </button>
+      <button @click="activeTab = 'snippets'" :class="['tab-btn', { active: activeTab === 'snippets' }]">
+        <i class="fas fa-puzzle-piece"></i> Snippets ({{ snippets.length }})
+      </button>
+      <button @click="activeTab = 'templates'" :class="['tab-btn', { active: activeTab === 'templates' }]">
+        <i class="fas fa-file-code"></i> Templates ({{ templates.length }})
+      </button>
+      <button @click="activeTab = 'actions'" :class="['tab-btn', { active: activeTab === 'actions' }]">
+        <i class="fas fa-bolt"></i> Quick Actions
+      </button>
+    </nav>
 
-    <!-- Search Tab -->
-    <div v-show="activeTab === 'search'" class="space-y-4">
-      <div class="bg-autobot-bg-card rounded shadow-sm border border-default p-6">
-        <h3 class="text-lg font-semibold text-primary mb-4">Quick Code Search</h3>
-        <div class="space-y-4">
-          <div class="flex gap-3">
-            <input v-model="searchQuery" type="text" placeholder="Search for files, code, or symbols..." class="flex-1 px-3 py-2 border border-default rounded">
-            <select v-model="searchType" class="px-3 py-2 border border-default rounded">
-              <option :value="undefined">All Types</option>
-              <option value="file">Files</option>
-              <option value="code">Code</option>
-              <option value="symbol">Symbols</option>
-            </select>
-            <button @click="handleSearch" :disabled="isLoading || !searchQuery.trim()" class="px-4 py-2 text-sm font-medium text-white bg-autobot-primary rounded hover:bg-autobot-primary-hover disabled:opacity-50">
-              Search
-            </button>
+    <!-- Tab Content -->
+    <div class="tab-content">
+      <!-- Search Tab -->
+      <div v-show="activeTab === 'search'" class="tab-panel">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Quick Code Search</span></div>
+          <div class="card-body">
+            <div class="search-row">
+              <input v-model="searchQuery" type="text" placeholder="Search for files, code, or symbols..." class="field-input search-input">
+              <select v-model="searchType" class="field-select">
+                <option :value="undefined">All Types</option>
+                <option value="file">Files</option>
+                <option value="code">Code</option>
+                <option value="symbol">Symbols</option>
+              </select>
+              <button @click="handleSearch" :disabled="isLoading || !searchQuery.trim()" class="btn-action-primary">
+                Search
+              </button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div v-if="searchResults.length > 0" class="bg-autobot-bg-card rounded shadow-sm border border-default p-6">
-        <h3 class="text-lg font-semibold text-primary mb-4">Results ({{ searchResults.length }})</h3>
-        <div class="space-y-3">
-          <div v-for="(result, idx) in searchResults" :key="idx" class="border border-default rounded p-4 hover:bg-autobot-bg-secondary">
-            <div class="flex items-start gap-3">
-              <span :class="[
-                'px-2 py-1 text-xs font-medium rounded-sm',
-                result.type === 'file' ? 'bg-autobot-info-bg text-blue-800' :
-                result.type === 'code' ? 'bg-green-100 text-green-800' :
-                'bg-purple-100 text-purple-800'
-              ]">
-                {{ result.type }}
-              </span>
-              <div class="flex-1">
-                <p class="text-sm font-medium text-primary font-mono">{{ result.path }}</p>
-                <p v-if="result.line" class="text-xs text-secondary">Line {{ result.line }}</p>
-                <p class="text-sm text-secondary mt-2">{{ result.content }}</p>
-                <p v-if="result.context" class="text-xs text-secondary mt-1">{{ result.context }}</p>
-              </div>
-              <div class="text-sm text-secondary">
-                Score: {{ result.score.toFixed(2) }}
+        <div v-if="searchResults.length > 0" class="card">
+          <div class="card-header"><span class="card-title">Results ({{ searchResults.length }})</span></div>
+          <div class="card-body">
+            <div class="results-list">
+              <div v-for="(result, idx) in searchResults" :key="idx" class="result-item">
+                <span :class="['badge', 'badge-' + result.type]">{{ result.type }}</span>
+                <div class="result-content">
+                  <p class="result-path">{{ result.path }}</p>
+                  <p v-if="result.line" class="result-line">Line {{ result.line }}</p>
+                  <p class="result-text">{{ result.content }}</p>
+                  <p v-if="result.context" class="result-context">{{ result.context }}</p>
+                </div>
+                <div class="result-score">Score: {{ result.score.toFixed(2) }}</div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div v-else-if="searchQuery && !isLoading" class="text-center py-12 text-secondary">
-        No results found
-      </div>
-    </div>
-
-    <!-- Snippets Tab -->
-    <div v-show="activeTab === 'snippets'" class="space-y-4">
-      <div class="bg-autobot-bg-card rounded shadow-sm border border-default p-6">
-        <h3 class="text-lg font-semibold text-primary mb-4">Generate Code Snippet</h3>
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-primary mb-2">Language</label>
-            <select v-model="snippetLanguage" class="w-full px-3 py-2 border border-default rounded">
-              <option v-for="lang in supportedLanguages" :key="lang" :value="lang">
-                {{ lang.charAt(0).toUpperCase() + lang.slice(1) }}
-              </option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-primary mb-2">Description</label>
-            <textarea v-model="snippetDescription" rows="3" placeholder="Describe what you want the code to do..." class="w-full px-3 py-2 border border-default rounded"></textarea>
-          </div>
-          <button @click="handleGenerateSnippet" :disabled="isLoading || !snippetDescription.trim()" class="w-full px-4 py-2 text-sm font-medium text-white bg-autobot-primary rounded hover:bg-autobot-primary-hover disabled:opacity-50">
-            Generate Snippet
-          </button>
+        <div v-else-if="searchQuery && !isLoading" class="empty-state">
+          <i class="fas fa-search"></i>
+          <p>No results found</p>
         </div>
       </div>
 
-      <div v-if="snippets.length > 0" class="space-y-4">
-        <div v-for="snippet in snippets" :key="snippet.id" class="bg-autobot-bg-card rounded shadow-sm border border-default p-6">
-          <div class="flex items-start justify-between mb-3">
-            <div>
-              <div class="flex items-center gap-2">
-                <span class="px-2 py-1 text-xs font-medium bg-autobot-info-bg text-blue-800 rounded-sm">
-                  {{ snippet.language }}
-                </span>
-                <span v-for="tag in snippet.tags" :key="tag" class="px-2 py-1 text-xs font-medium bg-autobot-bg-secondary text-secondary rounded-sm">
-                  {{ tag }}
-                </span>
-              </div>
-            </div>
-            <button @click="copyToClipboard(snippet.code)" class="text-sm text-autobot-info hover:text-primary-800">
-              Copy
-            </button>
-          </div>
-          <p class="text-sm text-secondary mb-3">{{ snippet.description }}</p>
-          <pre class="bg-gray-900 text-gray-100 p-4 rounded overflow-x-auto"><code>{{ snippet.code }}</code></pre>
-          <p class="text-xs text-secondary mt-2">Created: {{ new Date(snippet.created_at).toLocaleString() }}</p>
-        </div>
-      </div>
-
-      <div v-else class="text-center py-12 text-secondary">
-        No snippets yet. Generate your first one above!
-      </div>
-    </div>
-
-    <!-- Templates Tab -->
-    <div v-show="activeTab === 'templates'">
-      <div class="bg-autobot-bg-card rounded shadow-sm border border-default p-6 mb-4">
-        <div class="flex items-center gap-4">
-          <select v-model="selectedCategory" class="flex-1 px-3 py-2 border border-default rounded">
-            <option :value="undefined">All Categories</option>
-            <option v-for="cat in templateCategories" :key="cat" :value="cat">
-              {{ cat }}
-            </option>
-          </select>
-          <button @click="handleFetchTemplates" :disabled="isLoading" class="px-4 py-2 text-sm font-medium text-white bg-autobot-primary rounded hover:bg-autobot-primary-hover disabled:opacity-50">
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      <div v-if="templates.length > 0" class="space-y-4">
-        <div v-for="template in templates" :key="template.id" class="bg-autobot-bg-card rounded shadow-sm border border-default p-6">
-          <div class="flex items-start justify-between mb-3">
-            <div>
-              <h3 class="text-lg font-semibold text-primary">{{ template.name }}</h3>
-              <div class="flex items-center gap-2 mt-1">
-                <span class="px-2 py-1 text-xs font-medium bg-autobot-info-bg text-blue-800 rounded-sm">
-                  {{ template.language }}
-                </span>
-                <span class="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-sm">
-                  {{ template.category }}
-                </span>
-              </div>
-            </div>
-            <button @click="copyToClipboard(template.template)" class="text-sm text-autobot-info hover:text-primary-800">
-              Copy
-            </button>
-          </div>
-          <p class="text-sm text-secondary mb-3">{{ template.description }}</p>
-          <div v-if="template.variables.length > 0" class="mb-3">
-            <p class="text-xs text-secondary">Variables: {{ template.variables.join(', ') }}</p>
-          </div>
-          <pre class="bg-gray-900 text-gray-100 p-4 rounded overflow-x-auto"><code>{{ template.template }}</code></pre>
-        </div>
-      </div>
-
-      <div v-else class="text-center py-12 text-secondary">
-        No templates available
-      </div>
-    </div>
-
-    <!-- Actions Tab -->
-    <div v-show="activeTab === 'actions'" class="space-y-4">
-      <div class="bg-autobot-bg-card rounded shadow-sm border border-default p-6">
-        <h3 class="text-lg font-semibold text-primary mb-4">Quick Code Actions</h3>
-        <div class="space-y-4">
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-primary mb-2">Language</label>
-              <select v-model="actionLanguage" class="w-full px-3 py-2 border border-default rounded">
+      <!-- Snippets Tab -->
+      <div v-show="activeTab === 'snippets'" class="tab-panel">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Generate Code Snippet</span></div>
+          <div class="card-body">
+            <div class="field-group">
+              <label class="field-label">Language</label>
+              <select v-model="snippetLanguage" class="field-select">
                 <option v-for="lang in supportedLanguages" :key="lang" :value="lang">
                   {{ lang.charAt(0).toUpperCase() + lang.slice(1) }}
                 </option>
               </select>
             </div>
-            <div>
-              <label class="block text-sm font-medium text-primary mb-2">Action</label>
-              <select v-model="actionType" class="w-full px-3 py-2 border border-default rounded">
-                <option value="refactor">Suggest Refactorings</option>
-                <option value="optimize">Optimize Code</option>
-                <option value="format">Format Code</option>
-                <option value="lint">Fix Linting Issues</option>
-                <option value="test">Generate Tests</option>
-              </select>
+            <div class="field-group">
+              <label class="field-label">Description</label>
+              <textarea v-model="snippetDescription" rows="3" placeholder="Describe what you want the code to do..." class="field-input"></textarea>
+            </div>
+            <button @click="handleGenerateSnippet" :disabled="isLoading || !snippetDescription.trim()" class="btn-action-primary btn-full">
+              Generate Snippet
+            </button>
+          </div>
+        </div>
+
+        <div v-if="snippets.length > 0" class="snippets-list">
+          <div v-for="snippet in snippets" :key="snippet.id" class="card">
+            <div class="card-body">
+              <div class="snippet-header">
+                <div class="snippet-tags">
+                  <span class="badge badge-info">{{ snippet.language }}</span>
+                  <span v-for="tag in snippet.tags" :key="tag" class="badge badge-neutral">{{ tag }}</span>
+                </div>
+                <button @click="copyToClipboard(snippet.code)" class="btn-copy">Copy</button>
+              </div>
+              <p class="snippet-desc">{{ snippet.description }}</p>
+              <pre class="code-block"><code>{{ snippet.code }}</code></pre>
+              <p class="snippet-date">Created: {{ new Date(snippet.created_at).toLocaleString() }}</p>
             </div>
           </div>
+        </div>
 
-          <div>
-            <label class="block text-sm font-medium text-primary mb-2">Code</label>
-            <textarea v-model="codeInput" rows="12" placeholder="Paste your code here..." class="w-full px-3 py-2 border border-default rounded font-mono text-sm"></textarea>
-          </div>
-
-          <button @click="handleCodeAction" :disabled="isLoading || !codeInput.trim()" class="w-full px-4 py-2 text-sm font-medium text-white bg-autobot-primary rounded hover:bg-autobot-primary-hover disabled:opacity-50">
-            {{ isLoading ? 'Processing...' : 'Run Action' }}
-          </button>
+        <div v-else class="empty-state">
+          <i class="fas fa-puzzle-piece"></i>
+          <p>No snippets yet. Generate your first one above!</p>
         </div>
       </div>
 
-      <!-- Refactor Suggestions -->
-      <div v-if="actionType === 'refactor' && refactorSuggestions.length > 0" class="bg-autobot-bg-card rounded shadow-sm border border-default p-6">
-        <h3 class="text-lg font-semibold text-primary mb-4">Refactor Suggestions ({{ refactorSuggestions.length }})</h3>
-        <div class="space-y-4">
-          <div v-for="(suggestion, idx) in refactorSuggestions" :key="idx" class="border border-default rounded p-4">
-            <div class="flex items-start justify-between mb-2">
-              <div class="flex items-center gap-2">
-                <span class="px-2 py-1 text-xs font-medium bg-autobot-info-bg text-blue-800 rounded-sm">
-                  {{ suggestion.type }}
-                </span>
+      <!-- Templates Tab -->
+      <div v-show="activeTab === 'templates'" class="tab-panel">
+        <div class="card template-filter">
+          <div class="card-body filter-row">
+            <select v-model="selectedCategory" class="field-select filter-select">
+              <option :value="undefined">All Categories</option>
+              <option v-for="cat in templateCategories" :key="cat" :value="cat">{{ cat }}</option>
+            </select>
+            <button @click="handleFetchTemplates" :disabled="isLoading" class="btn-action-primary">Refresh</button>
+          </div>
+        </div>
+
+        <div v-if="templates.length > 0" class="templates-list">
+          <div v-for="template in templates" :key="template.id" class="card">
+            <div class="card-body">
+              <div class="template-header">
+                <div>
+                  <h3 class="template-name">{{ template.name }}</h3>
+                  <div class="template-tags">
+                    <span class="badge badge-info">{{ template.language }}</span>
+                    <span class="badge badge-purple">{{ template.category }}</span>
+                  </div>
+                </div>
+                <button @click="copyToClipboard(template.template)" class="btn-copy">Copy</button>
+              </div>
+              <p class="template-desc">{{ template.description }}</p>
+              <p v-if="template.variables.length > 0" class="template-vars">
+                Variables: {{ template.variables.join(', ') }}
+              </p>
+              <pre class="code-block"><code>{{ template.template }}</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="empty-state">
+          <i class="fas fa-file-code"></i>
+          <p>No templates available</p>
+        </div>
+      </div>
+
+      <!-- Actions Tab -->
+      <div v-show="activeTab === 'actions'" class="tab-panel">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Quick Code Actions</span></div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="field-group">
+                <label class="field-label">Language</label>
+                <select v-model="actionLanguage" class="field-select">
+                  <option v-for="lang in supportedLanguages" :key="lang" :value="lang">
+                    {{ lang.charAt(0).toUpperCase() + lang.slice(1) }}
+                  </option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Action</label>
+                <select v-model="actionType" class="field-select">
+                  <option value="refactor">Suggest Refactorings</option>
+                  <option value="optimize">Optimize Code</option>
+                  <option value="format">Format Code</option>
+                  <option value="lint">Fix Linting Issues</option>
+                  <option value="test">Generate Tests</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-group">
+              <label class="field-label">Code</label>
+              <textarea v-model="codeInput" rows="12" placeholder="Paste your code here..." class="field-input code-textarea"></textarea>
+            </div>
+            <button @click="handleCodeAction" :disabled="isLoading || !codeInput.trim()" class="btn-action-primary btn-full">
+              {{ isLoading ? 'Processing...' : 'Run Action' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Refactor Suggestions -->
+        <div v-if="actionType === 'refactor' && refactorSuggestions.length > 0" class="card">
+          <div class="card-header">
+            <span class="card-title">Refactor Suggestions ({{ refactorSuggestions.length }})</span>
+          </div>
+          <div class="card-body suggestions-list">
+            <div v-for="(suggestion, idx) in refactorSuggestions" :key="idx" class="suggestion-item">
+              <div class="suggestion-meta">
+                <span class="badge badge-info">{{ suggestion.type }}</span>
                 <span :class="[
-                  'px-2 py-1 text-xs font-medium rounded-sm',
-                  suggestion.impact === 'high' ? 'bg-autobot-error-bg text-autobot-error' :
-                  suggestion.impact === 'medium' ? 'bg-autobot-warning-bg text-autobot-warning' :
-                  'bg-autobot-bg-secondary text-secondary'
+                  'badge',
+                  suggestion.impact === 'high' ? 'badge-error' :
+                  suggestion.impact === 'medium' ? 'badge-warning' : 'badge-neutral'
                 ]">
                   {{ suggestion.impact }} impact
                 </span>
               </div>
-            </div>
-            <p class="text-sm text-primary mb-3">{{ suggestion.description }}</p>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <p class="text-xs text-secondary mb-1">Before:</p>
-                <pre class="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto"><code>{{ suggestion.before }}</code></pre>
-              </div>
-              <div>
-                <p class="text-xs text-secondary mb-1">After:</p>
-                <pre class="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto"><code>{{ suggestion.after }}</code></pre>
+              <p class="suggestion-desc">{{ suggestion.description }}</p>
+              <div class="diff-grid">
+                <div>
+                  <p class="diff-label">Before:</p>
+                  <pre class="code-block code-sm"><code>{{ suggestion.before }}</code></pre>
+                </div>
+                <div>
+                  <p class="diff-label">After:</p>
+                  <pre class="code-block code-sm"><code>{{ suggestion.after }}</code></pre>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Generated Tests -->
-      <div v-if="actionType === 'test' && generatedTests.length > 0" class="bg-autobot-bg-card rounded shadow-sm border border-default p-6">
-        <h3 class="text-lg font-semibold text-primary mb-4">Generated Tests ({{ generatedTests.length }})</h3>
-        <div class="space-y-4">
-          <div v-for="(test, idx) in generatedTests" :key="idx" class="border border-default rounded p-4">
-            <div class="flex items-start justify-between mb-2">
-              <div>
-                <h4 class="text-sm font-semibold text-primary">{{ test.name }}</h4>
-                <span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-sm">
-                  {{ test.framework }}
-                </span>
+        <!-- Generated Tests -->
+        <div v-if="actionType === 'test' && generatedTests.length > 0" class="card">
+          <div class="card-header">
+            <span class="card-title">Generated Tests ({{ generatedTests.length }})</span>
+          </div>
+          <div class="card-body tests-list">
+            <div v-for="(test, idx) in generatedTests" :key="idx" class="test-item">
+              <div class="test-header">
+                <div>
+                  <h4 class="test-name">{{ test.name }}</h4>
+                  <span class="badge badge-success">{{ test.framework }}</span>
+                </div>
+                <button @click="copyToClipboard(test.code)" class="btn-copy">Copy</button>
               </div>
-              <button @click="copyToClipboard(test.code)" class="text-sm text-autobot-info hover:text-primary-800">
-                Copy
-              </button>
+              <p class="test-desc">{{ test.description }}</p>
+              <pre class="code-block"><code>{{ test.code }}</code></pre>
             </div>
-            <p class="text-sm text-secondary mb-3">{{ test.description }}</p>
-            <pre class="bg-gray-900 text-gray-100 p-4 rounded overflow-x-auto"><code>{{ test.code }}</code></pre>
           </div>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.dev-speedup-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+.actions-summary {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.actions-label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.actions-count {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--color-primary);
+}
+
+/* Alert */
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  margin: 0 var(--spacing-5);
+  border-radius: var(--radius-md);
+}
+
+.alert-error {
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error);
+}
+
+.alert-content p {
+  margin: var(--spacing-1) 0 0;
+  font-size: var(--text-sm);
+}
+
+/* Tab content */
+.tab-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-5);
+}
+
+.tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-5);
+}
+
+/* Search */
+.search-row {
+  display: flex;
+  gap: var(--spacing-3);
+}
+
+.search-input { flex: 1; }
+
+/* Results */
+.results-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.result-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: background var(--duration-150) var(--ease-in-out);
+}
+
+.result-item:hover { background: var(--bg-secondary); }
+
+.result-content { flex: 1; }
+
+.result-path {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.result-line {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin: var(--spacing-1) 0 0;
+}
+
+.result-text {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: var(--spacing-2) 0 0;
+}
+
+.result-context {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin: var(--spacing-1) 0 0;
+}
+
+.result-score {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* Badge types */
+.badge-file { background: var(--color-info-bg); color: var(--color-info); }
+.badge-code { background: var(--color-success-bg); color: var(--color-success); }
+.badge-symbol { background: rgba(147, 51, 234, 0.1); color: var(--color-purple); }
+.badge-purple { background: rgba(147, 51, 234, 0.1); color: var(--color-purple); }
+
+/* Snippets / Templates lists */
+.snippets-list,
+.templates-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.snippet-header,
+.template-header,
+.test-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-3);
+}
+
+.snippet-tags,
+.template-tags {
+  display: flex;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
+}
+
+.template-tags { margin-top: var(--spacing-1); }
+
+.template-name {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.snippet-desc,
+.template-desc,
+.test-desc {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin: 0 0 var(--spacing-3);
+}
+
+.template-vars {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin: 0 0 var(--spacing-3);
+}
+
+.snippet-date {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin: var(--spacing-2) 0 0;
+}
+
+.btn-copy {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  padding: var(--spacing-1) var(--spacing-2);
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-150) var(--ease-in-out);
+}
+
+.btn-copy:hover { background: var(--color-primary-bg); }
+
+/* Code blocks */
+.code-block {
+  background: var(--code-bg);
+  color: var(--code-text);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.code-sm { padding: var(--spacing-3); font-size: var(--text-xs); }
+.code-textarea { font-family: var(--font-mono); font-size: var(--text-sm); resize: vertical; }
+
+/* Form grid */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
+}
+
+.btn-full { width: 100%; }
+
+/* Filter row */
+.filter-row {
+  display: flex;
+  gap: var(--spacing-4);
+  align-items: center;
+}
+
+.filter-select { flex: 1; }
+
+/* Suggestions */
+.suggestions-list,
+.tests-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.suggestion-item,
+.test-item {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-4);
+}
+
+.suggestion-meta {
+  display: flex;
+  gap: var(--spacing-2);
+  margin-bottom: var(--spacing-2);
+}
+
+.suggestion-desc {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-3);
+}
+
+.diff-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-4);
+}
+
+.diff-label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin: 0 0 var(--spacing-1);
+}
+
+.test-name {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-12) var(--spacing-4);
+  color: var(--text-secondary);
+}
+
+.empty-state i {
+  font-size: var(--text-3xl);
+  margin-bottom: var(--spacing-3);
+  display: block;
+  color: var(--text-muted);
+}
+
+.empty-state p { margin: 0; font-size: var(--text-sm); }
+
+@media (max-width: 768px) {
+  .search-row { flex-direction: column; }
+  .form-grid { grid-template-columns: 1fr; }
+  .diff-grid { grid-template-columns: 1fr; }
+  .filter-row { flex-direction: column; }
+}
+</style>

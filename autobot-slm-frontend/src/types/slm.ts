@@ -60,6 +60,25 @@ export interface ServiceHealth {
   details: Record<string, unknown>
 }
 
+export interface A2ASkill {
+  id: string
+  name: string
+  description: string
+  tags?: string[]
+  examples?: string[]
+}
+
+export interface A2AAgentCard {
+  name: string
+  description: string
+  url: string
+  version: string
+  skills: A2ASkill[]
+  capabilities?: Record<string, unknown>
+  provider?: Record<string, unknown> | string
+  documentationUrl?: string
+}
+
 export interface SLMNode {
   node_id: string
   hostname: string
@@ -75,6 +94,9 @@ export interface SLMNode {
   updated_at: string
   code_status?: 'up_to_date' | 'outdated' | 'unknown'
   code_version?: string
+  a2a_card?: A2AAgentCard | null
+  // Issue #1019: Per-service health summary counts
+  service_summary?: { running: number; stopped: number; failed: number; total: number } | null
 }
 
 /**
@@ -360,6 +382,8 @@ export interface NodeService {
   sub_state: string | null
   main_pid: number | null
   memory_bytes: number | null
+  // Issue #1019: extra_data may include error_message for failed services
+  extra_data: Record<string, unknown>
   last_checked: string | null
   created_at: string
   updated_at: string
@@ -565,4 +589,55 @@ export interface NPUWorkerConfig {
   failure_action: 'retry' | 'failover' | 'skip' | 'alert'
   max_retries: number
   assigned_models: string[]
+}
+
+// =============================================================================
+// External Agent Registry Types (Issue #963)
+// =============================================================================
+
+/**
+ * External A2A-compliant agent registered in the SLM registry.
+ */
+export interface ExternalAgent {
+  id: number
+  name: string
+  base_url: string
+  description: string | null
+  tags: string[]
+  enabled: boolean
+  has_api_key: boolean
+  verified: boolean
+  card_data: Record<string, unknown> | null
+  card_fetched_at: string | null
+  card_error: string | null
+  skill_count: number
+  created_by: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface ExternalAgentCreate {
+  name: string
+  base_url: string
+  description?: string
+  tags?: string[]
+  enabled?: boolean
+  ssl_verify?: boolean
+  api_key?: string
+}
+
+export interface ExternalAgentUpdate {
+  name?: string
+  description?: string
+  tags?: string[]
+  enabled?: boolean
+  ssl_verify?: boolean
+  api_key?: string
+}
+
+export interface ExternalAgentCard {
+  id: number
+  name: string
+  base_url: string
+  card: Record<string, unknown>
 }

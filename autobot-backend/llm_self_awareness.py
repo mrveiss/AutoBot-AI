@@ -412,7 +412,7 @@ class LLMSelfAwareness:
             },
             "workflow_management": {
                 "description": "Multi-agent workflow orchestration",
-                "endpoints": ["/api/workflow", "/api/orchestration"],
+                "endpoints": ["/api/workflow", "/api/orchestrator"],
                 "features": ["task_planning", "agent_coordination", "approval_flows"],
             },
             "monitoring": {

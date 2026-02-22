@@ -13,14 +13,15 @@ Configures all middleware for FastAPI application:
 import logging
 from typing import List, Optional
 
-from backend.constants.network_constants import (  # noqa: F401 - used in docstring example
-    NetworkConstants,
-)
-from config import UnifiedConfigManager
+from config import ConfigManager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from backend.constants.network_constants import (  # noqa: F401 - used in docstring example
+    NetworkConstants,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ def configure_cors(app: FastAPI, allow_origins: Optional[List[str]] = None):
     """
     # Generate from centralized configuration if not provided
     if allow_origins is None:
-        config = UnifiedConfigManager()
+        config = ConfigManager()
         allow_origins = config.get_cors_origins()
 
     app.add_middleware(

@@ -384,6 +384,7 @@
  * Issue #704: Migrated to design tokens for centralized theming
  */
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
 import { formatTimeAgo } from '@/utils/formatHelpers';
 
@@ -517,7 +518,7 @@ async function refreshData(): Promise<void> {
 async function analyzeCodbase(): Promise<void> {
   loading.value = true;
   try {
-    const response = await fetch('/api/analytics/bug-prediction/analyze?limit=100');
+    const response = await fetchWithAuth('/api/analytics/bug-prediction/analyze?limit=100');
     if (response.ok) {
       const data = await response.json();
       // Refresh all data after analysis
@@ -532,7 +533,7 @@ async function analyzeCodbase(): Promise<void> {
 
 async function loadSummary(): Promise<void> {
   try {
-    const response = await fetch('/api/analytics/bug-prediction/summary');
+    const response = await fetchWithAuth('/api/analytics/bug-prediction/summary');
     if (response.ok) {
       summary.value = await response.json();
     } else {
@@ -546,7 +547,7 @@ async function loadSummary(): Promise<void> {
 
 async function loadHighRiskFiles(): Promise<void> {
   try {
-    const response = await fetch('/api/analytics/bug-prediction/high-risk?threshold=60&limit=10');
+    const response = await fetchWithAuth('/api/analytics/bug-prediction/high-risk?threshold=60&limit=10');
     if (response.ok) {
       highRiskFiles.value = await response.json();
     } else {
@@ -561,7 +562,7 @@ async function loadHighRiskFiles(): Promise<void> {
 
 async function loadHeatmap(): Promise<void> {
   try {
-    const response = await fetch(`/api/analytics/bug-prediction/heatmap?grouping=${heatmapGrouping.value}`);
+    const response = await fetchWithAuth(`/api/analytics/bug-prediction/heatmap?grouping=${heatmapGrouping.value}`);
     if (response.ok) {
       const data = await response.json();
       heatmapData.value = data.data || [];
@@ -577,7 +578,7 @@ async function loadHeatmap(): Promise<void> {
 
 async function loadTrends(): Promise<void> {
   try {
-    const response = await fetch(`/api/analytics/bug-prediction/trends?period=${selectedPeriod.value}`);
+    const response = await fetchWithAuth(`/api/analytics/bug-prediction/trends?period=${selectedPeriod.value}`);
     if (response.ok) {
       const data = await response.json();
       const newDataPoints = data.data_points || [];
@@ -633,7 +634,7 @@ function handleVisibilityChange(): void {
 
 async function loadFactors(): Promise<void> {
   try {
-    const response = await fetch('/api/analytics/bug-prediction/factors');
+    const response = await fetchWithAuth('/api/analytics/bug-prediction/factors');
     if (response.ok) {
       const data = await response.json();
       riskFactors.value = Object.fromEntries(
@@ -662,7 +663,7 @@ function selectHeatmapItem(item: HeatmapItem): void {
 
 async function recordBug(file: RiskFile): Promise<void> {
   try {
-    await fetch('/api/analytics/bug-prediction/record-bug', {
+    await fetchWithAuth('/api/analytics/bug-prediction/record-bug', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

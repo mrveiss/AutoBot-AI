@@ -5,6 +5,9 @@
 import type { App } from 'vue'
 import type { Router } from 'vue-router'
 import rumAgent from '../utils/RumAgent'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('RumPlugin')
 
 interface RumPluginOptions {
   router?: Router
@@ -23,8 +26,8 @@ export default {
         component: (instance as any)?.$options?.name || 'unknown'
       })
 
-      // Also log to console for development
-      console.error('Vue Error:', error, info)
+      // Also log for development
+      logger.error('Vue Error', { error, info })
     }
 
     // Add RUM agent to global properties

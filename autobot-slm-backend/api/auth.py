@@ -7,13 +7,13 @@ SLM Authentication API Routes
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
+from api.security import create_audit_log
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from models.schemas import TokenRequest, TokenResponse, UserCreate, UserResponse
 from services.auth import auth_service, get_current_user, require_admin
 from services.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -21,13 +21,27 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
-    request: TokenRequest,
+    http_request: Request,
+    body: TokenRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
-    """Authenticate and get access token."""
-    user = await auth_service.authenticate_user(db, request.username, request.password)
+    """Authenticate and get access token. Records audit log entry (Issue #998)."""
+    client_ip = http_request.client.host if http_request.client else None
+    user = await auth_service.authenticate_user(db, body.username, body.password)
 
     if not user:
+        await create_audit_log(
+            db,
+            category="auth",
+            action="login",
+            username=body.username,
+            ip_address=client_ip,
+            request_method="POST",
+            request_path="/api/auth/login",
+            response_status=401,
+            success=False,
+            error_message="Invalid username or password",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
@@ -35,6 +49,18 @@ async def login(
         )
 
     logger.info("User logged in: %s", user.username)
+    await create_audit_log(
+        db,
+        category="auth",
+        action="login",
+        user_id=str(user.id),
+        username=user.username,
+        ip_address=client_ip,
+        request_method="POST",
+        request_path="/api/auth/login",
+        response_status=200,
+        success=True,
+    )
     return await auth_service.create_token_response(user)
 
 

@@ -15,16 +15,16 @@ import aiohttp_jinja2
 import jinja2
 from aiohttp import WSMsgType, web
 from performance_monitor import PerformanceMonitor
-
-from autobot_shared.network_constants import NetworkConstants
-
-logger = logging.getLogger(__name__)
 from utils.html_dashboard_utils import (
     create_dashboard_header,
     create_metric_card,
     get_dark_theme_css,
 )
 from utils.template_loader import load_css, template_exists
+
+from autobot_shared.network_constants import NetworkConstants
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # Dashboard Template Helper Functions (Issue #398: extracted)

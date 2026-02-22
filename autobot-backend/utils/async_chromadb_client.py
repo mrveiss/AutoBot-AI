@@ -30,11 +30,16 @@ Usage:
 
 import asyncio
 import logging
+import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
+
+# Remote ChromaDB config — set AUTOBOT_CHROMADB_HOST to enable HTTP client
+_CHROMADB_HOST = os.getenv("AUTOBOT_CHROMADB_HOST", "")
+_CHROMADB_PORT = int(os.getenv("AUTOBOT_CHROMADB_PORT", "8000"))
 
 logger = logging.getLogger(__name__)
 
@@ -255,12 +260,12 @@ class AsyncChromaCollection:
 
 class AsyncChromaClient:
     """
-    Async wrapper for ChromaDB PersistentClient.
+    Async wrapper for ChromaDB client (HttpClient or PersistentClient).
 
     Provides async methods for collection management operations.
     """
 
-    def __init__(self, client: chromadb.PersistentClient):
+    def __init__(self, client: Union[chromadb.HttpClient, chromadb.PersistentClient]):
         """Initialize async wrapper around a ChromaDB client."""
         self._client = client
         self._collection_cache: Dict[str, AsyncChromaCollection] = {}
@@ -375,34 +380,53 @@ _async_client_cache: Dict[str, AsyncChromaClient] = {}
 
 
 async def get_async_chromadb_client(
-    db_path: str,
+    db_path: str = "",
     allow_reset: bool = False,
     anonymized_telemetry: bool = False,
 ) -> AsyncChromaClient:
     """
-    Get or create an async ChromaDB client (singleton per path).
+    Get or create an async ChromaDB client (singleton per key).
 
-    This is the recommended entry point for async ChromaDB access.
+    Uses remote HttpClient when AUTOBOT_CHROMADB_HOST is set, otherwise
+    falls back to local PersistentClient.
 
     Args:
-        db_path: Path to the ChromaDB database directory
+        db_path: Path for local PersistentClient (ignored when remote)
         allow_reset: Whether to allow database resets (default: False)
         anonymized_telemetry: Whether to enable telemetry (default: False)
 
     Returns:
         AsyncChromaClient wrapper for async operations
     """
-    # Return cached client if exists
-    if db_path in _async_client_cache:
-        return _async_client_cache[db_path]
+    cache_key = (
+        f"http://{_CHROMADB_HOST}:{_CHROMADB_PORT}" if _CHROMADB_HOST else db_path
+    )
+
+    if cache_key in _async_client_cache:
+        return _async_client_cache[cache_key]
 
     try:
-        # Ensure directory exists
-        # Issue #358 - avoid blocking
-        chroma_path = Path(db_path)
+        if _CHROMADB_HOST:
+            sync_client = chromadb.HttpClient(
+                host=_CHROMADB_HOST,
+                port=_CHROMADB_PORT,
+                settings=ChromaSettings(
+                    anonymized_telemetry=anonymized_telemetry,
+                ),
+            )
+            async_client = AsyncChromaClient(sync_client)
+            _async_client_cache[cache_key] = async_client
+            logger.info(
+                "Async ChromaDB HTTP client connected to %s:%s",
+                _CHROMADB_HOST,
+                _CHROMADB_PORT,
+            )
+            return async_client
+
+        # Fallback: local PersistentClient
+        chroma_path = Path(db_path or "data/chromadb")
         await asyncio.to_thread(chroma_path.mkdir, parents=True, exist_ok=True)
 
-        # Create sync client (this is fast, doesn't need to_thread)
         sync_client = chromadb.PersistentClient(
             path=str(chroma_path),
             settings=ChromaSettings(
@@ -410,12 +434,9 @@ async def get_async_chromadb_client(
                 anonymized_telemetry=anonymized_telemetry,
             ),
         )
-
-        # Wrap in async client
         async_client = AsyncChromaClient(sync_client)
-        _async_client_cache[db_path] = async_client
-
-        logger.info("Async ChromaDB client initialized at: %s", chroma_path)
+        _async_client_cache[cache_key] = async_client
+        logger.info("Async ChromaDB persistent client at: %s", chroma_path)
         return async_client
 
     except Exception as e:

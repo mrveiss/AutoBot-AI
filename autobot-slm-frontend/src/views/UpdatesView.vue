@@ -11,13 +11,11 @@
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('UpdatesView')
-const api = useSlmApi()
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
 

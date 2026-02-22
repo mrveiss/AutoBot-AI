@@ -10,17 +10,33 @@ Endpoints for completion feedback tracking and model improvement.
 import logging
 from typing import Dict, List, Optional
 
-from backend.services.feedback_tracker import FeedbackTracker
-from backend.services.incremental_trainer import IncrementalTrainer
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/code-completion/feedback", tags=["feedback"])
+router = APIRouter(tags=["feedback"])
 
-# Initialize services
-feedback_tracker = FeedbackTracker()
+# Lazy service initialization — FeedbackTracker accesses config.database,
+# IncrementalTrainer chains to torchmetrics. Both deferred to avoid import crash.
+_feedback_tracker = None
+
+
+def _get_feedback_tracker():
+    """Get or create FeedbackTracker instance on first use."""
+    global _feedback_tracker
+    if _feedback_tracker is None:
+        from backend.services.feedback_tracker import FeedbackTracker
+
+        _feedback_tracker = FeedbackTracker()
+    return _feedback_tracker
+
+
+def _get_incremental_trainer():
+    """Lazy import IncrementalTrainer to avoid torchmetrics at module load."""
+    from backend.services.incremental_trainer import IncrementalTrainer
+
+    return IncrementalTrainer()
 
 
 # =============================================================================
@@ -113,7 +129,7 @@ async def record_feedback(request: FeedbackRequest):
         )
 
     try:
-        feedback = feedback_tracker.record_feedback(
+        feedback = _get_feedback_tracker().record_feedback(
             context=request.context,
             suggestion=request.suggestion,
             action=request.action,
@@ -154,7 +170,7 @@ async def get_acceptance_metrics(
     - **time_window_days**: Time window for metrics (1-90 days)
     """
     try:
-        metrics = feedback_tracker.get_acceptance_metrics(
+        metrics = _get_feedback_tracker().get_acceptance_metrics(
             language=language,
             pattern_type=pattern_type,
             time_window_days=time_window_days,
@@ -188,7 +204,7 @@ async def get_recent_feedback(
         )
 
     try:
-        events = feedback_tracker.get_recent_feedback(limit=limit, action=action)
+        events = _get_feedback_tracker().get_recent_feedback(limit=limit, action=action)
 
         return {
             "events": events,
@@ -227,13 +243,13 @@ async def trigger_retraining(
         try:
             if request.mode == "incremental":
                 logger.info("Starting incremental training...")
-                trainer = IncrementalTrainer()
+                trainer = _get_incremental_trainer()
                 result = trainer.update_from_feedback(time_window_hours=24)
                 logger.info(f"Incremental training result: {result}")
 
             else:  # full retrain
                 logger.info("Starting full retraining...")
-                trainer = IncrementalTrainer()
+                trainer = _get_incremental_trainer()
                 result = trainer.trigger_full_retrain(
                     language=request.language, num_epochs=request.num_epochs
                 )
@@ -241,7 +257,7 @@ async def trigger_retraining(
 
                 # Mark retrain as completed
                 if result["status"] == "success":
-                    feedback_tracker.mark_retrain_completed()
+                    _get_feedback_tracker().mark_retrain_completed()
 
         except Exception as e:
             logger.error(f"Training failed: {e}", exc_info=True)
@@ -270,8 +286,10 @@ async def get_feedback_statistics():
     """
     try:
         # Get 7-day and 30-day metrics
-        metrics_7d = feedback_tracker.get_acceptance_metrics(time_window_days=7)
-        metrics_30d = feedback_tracker.get_acceptance_metrics(time_window_days=30)
+        metrics_7d = _get_feedback_tracker().get_acceptance_metrics(time_window_days=7)
+        metrics_30d = _get_feedback_tracker().get_acceptance_metrics(
+            time_window_days=30
+        )
 
         return {
             "last_7_days": {

@@ -33,13 +33,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "batch_jobs",
     ),
     (
-        "backend.services.advanced_workflow",
+        "backend.api.orchestration",
         "/orchestrator",
         ["orchestrator"],
         "orchestrator",
     ),
     (
-        "backend.services.workflow_automation",
+        "backend.api.workflow_automation",
         "/workflow-automation",
         ["workflow-automation"],
         "workflow_automation",
@@ -111,6 +111,15 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     # Permission system v2 (Claude Code-style)
     ("backend.api.permissions", "", ["permissions"], "permissions"),
+    # Personality profiles (Issue #964)
+    ("backend.api.personality", "/personality", ["personality"], "personality"),
+    # Self-improving tasks — adaptive task refinement and outcome learning (Issue #930)
+    (
+        "backend.api.agents_self_improvement",
+        "/agents",
+        ["self-improvement", "agents"],
+        "agents_self_improvement",
+    ),
     # Code analysis and search
     ("backend.api.code_search", "/code-search", ["code-search"], "code_search"),
     (
@@ -144,25 +153,24 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "ide_integration",
     ),
     (
-        "routers.code_completion",
+        "backend.routers.code_completion",
         "/code-completion",
         ["code-completion", "patterns", "ml"],
         "code_completion",
     ),
     (
-        "routers.model_management",
+        "backend.routers.model_management",
         "/code-completion/model",
         ["ml-models", "training", "serving"],
         "model_management",
     ),
     (
-        "routers.feedback",
+        "backend.routers.feedback",
         "/code-completion/feedback",
         ["feedback", "learning-loop"],
         "feedback",
     ),
-    # Orchestration and caching
-    ("backend.api.orchestration", "/orchestration", ["orchestration"], "orchestration"),
+    # Caching
     (
         "backend.api.cache_management",
         "/cache-management",
@@ -244,6 +252,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ("backend.api.npu_workers", "", ["npu-workers"], "npu_workers"),
     ("backend.api.redis_service", "/redis-service", ["redis-service"], "redis_service"),
     # Issue #729: infrastructure_nodes removed - now served by slm-server
+    # Fleet host list for HostSelector (SSH/VNC terminal in chat)
+    (
+        "backend.api.infrastructure",
+        "/infrastructure",
+        ["infrastructure"],
+        "infrastructure",
+    ),
     # Graph and entity features
     (
         "backend.api.entity_extraction",
@@ -326,6 +341,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     ),
     # Skills system base (Issue #731) - registered AFTER sub-routers (see above)
     ("backend.api.skills", "/skills", ["skills"], "skills"),
+    # A2A (Agent2Agent) protocol (Issue #961)
+    ("backend.api.a2a", "/a2a", ["a2a"], "a2a"),
     # Knowledge graph pipeline (Issue #759)
     (
         "backend.api.knowledge_graph_routes",

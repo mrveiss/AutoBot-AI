@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Callable, Dict, Optional, Type, TypeVar
 
 import redis.asyncio as async_redis
-from config import UnifiedConfigManager, unified_config_manager
+from config import ConfigManager, unified_config_manager
 from llm_interface import LLMInterface, get_llm_interface
 
 from autobot_shared.redis_client import get_redis_client
@@ -68,7 +68,7 @@ class AsyncServiceContainer:
 
         # Config Manager
         self._services["config"] = ServiceDescriptor(
-            service_type=UnifiedConfigManager,
+            service_type=ConfigManager,
             factory=self._create_config_manager,
             singleton=True,
         )
@@ -85,7 +85,7 @@ class AsyncServiceContainer:
         """Factory for Redis manager"""
         return await get_redis_client(async_client=True, database="main")
 
-    async def _create_config_manager(self) -> UnifiedConfigManager:
+    async def _create_config_manager(self) -> ConfigManager:
         """Factory for config manager"""
         return unified_config_manager
 
@@ -369,7 +369,7 @@ async def get_redis() -> async_redis.Redis:
     return await container.get_service("redis")
 
 
-async def get_config() -> UnifiedConfigManager:
+async def get_config() -> ConfigManager:
     """Get config manager"""
     return await container.get_service("config")
 

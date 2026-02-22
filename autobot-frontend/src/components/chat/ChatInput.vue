@@ -543,18 +543,67 @@ const toggleVoiceInput = () => {
   }
 }
 
+// Module-level recognition instance (not reactive — just internal state)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _recognition: any = null
+
 const startVoiceRecording = async () => {
-  try {
-    // Web Speech API implementation would go here
-    isVoiceRecording.value = true
-    logger.debug('Voice recording started')
-  } catch (error) {
-    logger.error('Failed to start voice recording:', error)
-    alert('Voice recording is not supported in your browser')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any
+  const SpeechRecognitionCtor = w.SpeechRecognition ?? w.webkitSpeechRecognition
+
+  if (!SpeechRecognitionCtor) {
+    // Browser doesn't support Web Speech API — still trigger mic permission prompt
+    // so the user sees the browser dialog rather than a silent failure.
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      stream.getTracks().forEach((t: MediaStreamTrack) => t.stop())
+    } catch (err) {
+      logger.error('Microphone access denied:', err)
+    }
+    alert('Voice input requires Chrome, Edge, or Safari 15+. Transcription is not available in this browser.')
+    return
   }
+
+  _recognition = new SpeechRecognitionCtor()
+  _recognition.continuous = false
+  _recognition.interimResults = true
+  _recognition.lang = 'en-US'
+
+  _recognition.onstart = () => {
+    isVoiceRecording.value = true
+    logger.debug('Voice recognition started')
+  }
+
+  _recognition.onresult = (event: any) => {
+    const transcript = Array.from(event.results as any[])
+      .map((r: any) => r[0].transcript as string)
+      .join('')
+    messageText.value = transcript
+  }
+
+  _recognition.onend = () => {
+    isVoiceRecording.value = false
+    _recognition = null
+    logger.debug('Voice recognition ended')
+  }
+
+  _recognition.onerror = (event: any) => {
+    logger.error('Voice recognition error:', event.error)
+    isVoiceRecording.value = false
+    _recognition = null
+    if (event.error === 'not-allowed') {
+      alert('Microphone access was denied. Please allow microphone access in your browser settings.')
+    }
+  }
+
+  _recognition.start()
 }
 
 const stopVoiceRecording = () => {
+  if (_recognition) {
+    _recognition.stop()
+  }
   isVoiceRecording.value = false
   logger.debug('Voice recording stopped')
 }

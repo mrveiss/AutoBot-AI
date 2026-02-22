@@ -297,7 +297,7 @@ async function fetchBgDeployments(): Promise<void> {
   isLoadingBg.value = true
   try {
     const response = await api.getBlueGreenDeployments()
-    bgDeployments.value = response.deployments
+    bgDeployments.value = response.deployments as BlueGreenDeployment[]
   } catch (err) {
     logger.error('Failed to fetch blue-green deployments:', err)
   } finally {
@@ -796,7 +796,6 @@ function getNodeHostname(nodeId: string): string {
                         'text-yellow-600': deployment.status === 'pending',
                         'text-red-600': deployment.status === 'failed',
                         'text-orange-600': deployment.status === 'rolled_back',
-                        'text-gray-600': deployment.status === 'cancelled',
                       }"
                       fill="none"
                       stroke="currentColor"
@@ -1165,7 +1164,7 @@ function getNodeHostname(nodeId: string): string {
               Loading available roles...
             </p>
             <div v-else class="space-y-3">
-              <template v-for="(category, catKey) in roleCategories" :key="catKey">
+              <template v-for="(category, _catKey) in roleCategories" :key="_catKey">
                 <div v-if="category.roles.length > 0" class="border border-gray-200 rounded-lg overflow-hidden">
                   <!-- Category Header -->
                   <div class="bg-gray-50 px-3 py-2 border-b border-gray-200">

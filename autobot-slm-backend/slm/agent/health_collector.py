@@ -140,6 +140,14 @@ class HealthCollector:
                         service_info.update(
                             self._get_service_details(service_info["name"])
                         )
+                    elif service_info["status"] == "failed":
+                        # Issue #1019: Capture error context for failed services
+                        service_info.update(
+                            self._get_service_details(service_info["name"])
+                        )
+                        error_ctx = self._get_error_context(service_info["name"])
+                        if error_ctx:
+                            service_info["error_message"] = error_ctx
                     services.append(service_info)
 
         except subprocess.TimeoutExpired:
@@ -245,6 +253,33 @@ class HealthCollector:
             logger.debug("Could not get details for %s: %s", service_name, e)
 
         return details
+
+    def _get_error_context(self, service_name: str, lines: int = 5) -> str:
+        """Get last N lines of journalctl for a failed service.
+
+        Issue #1019: Capture error context so the SLM dashboard
+        can display why a service failed without requiring SSH.
+        """
+        try:
+            result = subprocess.run(  # nosec B607 - journalctl is trusted
+                [
+                    "journalctl",
+                    "-u",
+                    service_name,
+                    "-n",
+                    str(lines),
+                    "--no-pager",
+                    "-q",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except Exception as e:
+            logger.debug("Could not get error context for %s: %s", service_name, e)
+        return ""
 
     def is_healthy(self, thresholds: Optional[Dict] = None) -> bool:
         """Quick health check against thresholds."""

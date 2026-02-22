@@ -12,14 +12,29 @@ import asyncio
 import os
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
-# Ensure autobot-user-backend is importable
+# Ensure autobot-user-backend and autobot-shared are importable
 project_root = Path(__file__).parent.parent
 backend_root = Path(__file__).parent
+shared_root = project_root / "autobot-shared"
 sys.path.insert(0, str(project_root))
 sys.path.insert(0, str(backend_root))
+sys.path.insert(0, str(shared_root))
+
+# Stub optional heavy dependencies that may not be installed in the dev venv.
+# These are only needed at runtime on the target VM; tests use mocks.
+_OPTIONAL_STUBS = ["prometheus_client"]
+for _mod in _OPTIONAL_STUBS:
+    if _mod not in sys.modules:
+        try:
+            import importlib
+
+            importlib.import_module(_mod)
+        except ImportError:
+            sys.modules[_mod] = MagicMock()
 
 
 @pytest.fixture(scope="session")

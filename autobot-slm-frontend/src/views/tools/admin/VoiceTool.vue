@@ -10,7 +10,7 @@
  * Migrated from main AutoBot frontend - Issue #729.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
 
 const api = useAutobotApi()
@@ -42,8 +42,9 @@ const settings = ref<VoiceSettings>({
 const availableVoices = ref<string[]>(['default'])
 const conversationHistory = ref<{ role: 'user' | 'assistant'; text: string; timestamp: Date }[]>([])
 
-// Speech Recognition
-let recognition: SpeechRecognition | null = null
+// Speech Recognition (using any to avoid missing lib types for SpeechRecognition)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let recognition: any = null
 
 function initSpeechRecognition(): void {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -64,7 +65,8 @@ function initSpeechRecognition(): void {
     error.value = null
   }
 
-  recognition.onresult = (event: SpeechRecognitionEvent) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  recognition.onresult = (event: any) => {
     let interimTranscript = ''
     let finalTranscript = ''
 
@@ -87,7 +89,8 @@ function initSpeechRecognition(): void {
     }
   }
 
-  recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  recognition.onerror = (event: any) => {
     isListening.value = false
     error.value = `Speech recognition error: ${event.error}`
   }

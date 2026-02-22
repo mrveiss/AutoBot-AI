@@ -67,7 +67,7 @@ logger.debug('Settings view initialized')
   width: 100%;
   max-width: var(--content-max-width);
   margin: 0 auto;
-  padding: var(--content-padding-y) var(--content-padding-x);
+  padding: var(--spacing-6) var(--spacing-5);
 }
 
 /* ============================================
@@ -77,7 +77,7 @@ logger.debug('Settings view initialized')
 .page-header {
   margin-bottom: var(--spacing-2xl);
   padding-bottom: var(--spacing-xl);
-  border-bottom: 2px solid var(--border-color);
+  border-bottom: 2px solid var(--border-default);
 }
 
 .header-content {
@@ -90,22 +90,22 @@ logger.debug('Settings view initialized')
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
-  font-size: var(--font-size-3xl);
+  font-size: var(--text-3xl);
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
 }
 
 .page-title i {
-  font-size: var(--font-size-2xl);
+  font-size: var(--text-2xl);
   color: var(--color-primary);
 }
 
 .page-description {
-  font-size: var(--font-size-base);
+  font-size: var(--text-base);
   color: var(--text-secondary);
   margin: 0;
-  line-height: var(--line-height-relaxed);
+  line-height: var(--leading-relaxed);
 }
 
 /* ============================================
@@ -121,7 +121,7 @@ logger.debug('Settings view initialized')
 .settings-section {
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-default);
   overflow: hidden;
 }
 
@@ -132,29 +132,29 @@ logger.debug('Settings view initialized')
 .section-header {
   padding: var(--spacing-lg) var(--spacing-xl);
   background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .section-title {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-xl);
+  font-size: var(--text-xl);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 var(--spacing-xs) 0;
 }
 
 .section-title i {
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   color: var(--color-primary);
 }
 
 .section-description {
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin: 0;
-  line-height: var(--line-height-normal);
+  line-height: var(--leading-normal);
 }
 
 /* ============================================
@@ -180,11 +180,11 @@ logger.debug('Settings view initialized')
   }
 
   .page-title {
-    font-size: var(--font-size-2xl);
+    font-size: var(--text-2xl);
   }
 
   .page-title i {
-    font-size: var(--font-size-xl);
+    font-size: var(--text-xl);
   }
 
   .section-header {

@@ -13,12 +13,14 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useSsoApi, type ActiveProvider } from '@/composables/useSsoApi'
+import type { ActiveProvider } from '@/composables/useSsoApi'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
-const ssoApi = useSsoApi()
+// Issue #1016: SSO module lazy-loaded only when providers exist
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let ssoApi: Record<string, any> | null = null
 
 const username = ref('')
 const password = ref('')
@@ -48,6 +50,7 @@ function cancelMFA(): void {
 }
 
 async function handleSSOLogin(provider: ActiveProvider): Promise<void> {
+  if (!ssoApi) return
   ssoLoading.value = true
   ssoError.value = null
   try {
@@ -67,17 +70,21 @@ async function handleSSOLogin(provider: ActiveProvider): Promise<void> {
   }
 }
 
+// Issue #1016: Lazy-load SSO module only when needed
 onMounted(async () => {
   try {
+    const { useSsoApi } = await import('@/composables/useSsoApi')
+    ssoApi = useSsoApi()
     ssoProviders.value = await ssoApi.getActiveProviders()
   } catch {
-    // SSO providers not available
+    // SSO module or providers not available
   }
 })
 </script>
 
 <template>
   <main
+    id="main-content"
     class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4"
     aria-label="Login page"
   >
@@ -123,7 +130,7 @@ onMounted(async () => {
                 required
                 autocomplete="username"
                 aria-required="true"
-                class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 transition-colors"
                 placeholder="Enter your username"
               />
             </div>
@@ -147,7 +154,7 @@ onMounted(async () => {
                 required
                 autocomplete="current-password"
                 aria-required="true"
-                class="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+                class="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 transition-colors"
                 placeholder="Enter your password"
               />
               <button
@@ -212,7 +219,7 @@ onMounted(async () => {
               maxlength="8"
               autocomplete="one-time-code"
               aria-label="6-digit authentication code"
-              class="block w-full text-center text-2xl tracking-widest py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              class="block w-full text-center text-2xl tracking-widest py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500"
               placeholder="000000"
               @keyup.enter="handleMFAVerify"
             />
@@ -270,18 +277,27 @@ onMounted(async () => {
           <p v-if="ssoError" class="mt-3 text-sm text-red-500 text-center" role="alert">{{ ssoError }}</p>
         </div>
 
-        <!-- Footer -->
-        <div class="mt-6 pt-6 border-t border-gray-200">
+        <!-- Footer (Issue #1017: admin recovery guidance) -->
+        <div class="mt-6 pt-6 border-t border-gray-200 space-y-2">
           <p class="text-center text-sm text-gray-500">
             AutoBot Service Lifecycle Manager
+          </p>
+          <p class="text-center text-xs text-gray-400">
+            Locked out? Run <code class="bg-gray-100 px-1 py-0.5 rounded text-gray-500">autobot-admin reset-password</code> on the server or contact your system administrator.
           </p>
         </div>
       </div>
 
-      <!-- Version Info -->
-      <p class="text-center text-slate-500 text-sm mt-6">
-        SLM Admin v1.0.0
-      </p>
     </div>
   </main>
 </template>
+
+<!-- Issue #1012: Explicit focus styles — Tailwind ring vars may not initialize
+     correctly on all builds; scoped CSS guarantees WCAG 2.4.7 compliance. -->
+<style scoped>
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--a11y-focus-ring, #0284c7);
+  outline-offset: 2px;
+}
+</style>

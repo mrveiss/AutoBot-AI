@@ -32,15 +32,15 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.constants.path_constants import PATH
-from config import UnifiedConfigManager
+from config import ConfigManager
 
 from autobot_shared.http_client import get_http_client
+from backend.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
 # Create singleton config instance
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 
 @dataclass

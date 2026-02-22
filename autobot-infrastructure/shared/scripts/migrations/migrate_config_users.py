@@ -33,7 +33,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from config import UnifiedConfigManager
+from config import ConfigManager
 from user_management.config import DeploymentMode, get_deployment_config
 from user_management.database import db_session_context, init_database
 from user_management.models import Organization, Permission, Role, User, UserRole
@@ -58,7 +58,7 @@ class ConfigUserMigrator:
         self.dry_run = dry_run
         self.org_name = org_name
         self.org_slug = org_slug
-        self.config = UnifiedConfigManager()
+        self.config = ConfigManager()
         self.stats = {
             "organizations_created": 0,
             "users_migrated": 0,

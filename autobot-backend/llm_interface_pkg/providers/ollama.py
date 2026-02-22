@@ -17,7 +17,7 @@ from typing import AsyncGenerator, Optional
 
 import aiohttp
 from circuit_breaker import circuit_breaker_async
-from config import UnifiedConfigManager
+from config import ConfigManager
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
@@ -28,7 +28,7 @@ from ..models import LLMRequest, LLMResponse, LLMSettings
 from ..streaming import StreamingManager
 
 logger = logging.getLogger(__name__)
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 # Issue #697: Get tracer for LLM operations
 _tracer = trace.get_tracer("autobot.llm.ollama", "2.0.0")

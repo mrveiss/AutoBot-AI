@@ -15,6 +15,7 @@
 import { ref, computed, reactive, onUnmounted, onMounted } from 'vue';
 import { getBackendUrl, getBackendWsUrl } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
+import { getAuthToken } from '@/utils/fetchWithAuth';
 import type { ApiResponse } from '@/types/api';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import type { WorkflowTemplateDetail } from '@/types/workflowTemplates';
@@ -234,11 +235,13 @@ class WorkflowBuilderApiClient {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
+      const token = getAuthToken();
       const response = await fetch(url, {
         ...options,
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...options.headers,
         },
       });
@@ -679,15 +682,14 @@ export function useWorkflowBuilder() {
   /** Load orchestration system status */
   async function loadOrchestrationStatus(): Promise<void> {
     loading.value = true;
-    error.value = null;
 
     const response = await apiClient.getOrchestrationStatus();
     if (response.success && response.data) {
       orchestrationStatus.value = response.data;
       logger.debug('Orchestration status loaded:', response.data);
     } else {
-      error.value = response.error || 'Failed to load orchestration status';
-      logger.error('Failed to load orchestration status:', response.error);
+      // Non-blocking: status badge shows "Services Offline" when null
+      logger.warn('Orchestration status unavailable:', response.error);
     }
 
     loading.value = false;
@@ -800,15 +802,14 @@ export function useWorkflowBuilder() {
   /** Load active workflows */
   async function loadActiveWorkflows(): Promise<void> {
     loading.value = true;
-    error.value = null;
 
     const response = await apiClient.getActiveWorkflows();
     if (response.success && response.data) {
       activeWorkflows.value = response.data.workflows;
       logger.debug('Active workflows loaded:', response.data);
     } else {
-      error.value = response.error || 'Failed to load active workflows';
-      logger.error('Failed to load active workflows:', response.error);
+      // Non-blocking: empty list is a valid state; log but don't block the UI
+      logger.warn('Active workflows unavailable:', response.error);
     }
 
     loading.value = false;

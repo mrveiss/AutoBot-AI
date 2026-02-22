@@ -9,9 +9,9 @@ Request and response models for the SLM API.
 
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .database import NodeStatus
 
@@ -164,6 +164,10 @@ class NodeResponse(BaseModel):
     code_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    a2a_card: Optional[Dict[str, Any]] = None
+    # Issue #1019: Per-service health summary counts
+    service_summary: Optional[Dict[str, int]] = None
+    extra_data: Optional[Dict[str, Any]] = Field(None, exclude=True)
 
     model_config = {"from_attributes": True}
 
@@ -172,6 +176,13 @@ class NodeResponse(BaseModel):
     def convert_none_roles(cls, v):
         """Convert None to empty list for roles."""
         return v if v is not None else []
+
+    @model_validator(mode="after")
+    def _populate_a2a_card(self):
+        """Populate a2a_card from extra_data when not set directly."""
+        if self.a2a_card is None and self.extra_data:
+            self.a2a_card = self.extra_data.get("a2a_card")
+        return self
 
 
 class NodeListResponse(BaseModel):
@@ -653,6 +664,8 @@ class ServiceResponse(BaseModel):
     protocol: str = "http"
     endpoint_path: Optional[str] = None
     is_discoverable: bool = True
+    # Issue #1019: extra_data includes error_message for failed services
+    extra_data: Dict = Field(default_factory=dict)
     last_checked: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime

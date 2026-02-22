@@ -268,8 +268,10 @@ export const useUserStore = defineStore('user', () => {
         const auth = JSON.parse(storedAuth)
         const user = JSON.parse(storedUser)
 
+        // Only restore if there's a real JWT token (not fake single_user_mode token) (#972)
+        const hasRealToken = auth.token && auth.token !== 'single_user_mode'
         // Check if token is not expired
-        if (!auth.expiresAt || new Date(auth.expiresAt) > new Date()) {
+        if (hasRealToken && (!auth.expiresAt || new Date(auth.expiresAt) > new Date())) {
           authState.value = {
             ...auth,
             expiresAt: auth.expiresAt ? new Date(auth.expiresAt) : undefined
@@ -282,6 +284,11 @@ export const useUserStore = defineStore('user', () => {
 
           applyTheme()
           applyAccessibilitySettings()
+        } else if (hasRealToken && auth.expiresAt && new Date(auth.expiresAt) <= new Date()) {
+          // Clear stale expired token so ApiClient doesn't keep sending it (#979)
+          logger.warn('Expired token found in storage, clearing');
+          localStorage.removeItem('autobot_auth');
+          localStorage.removeItem('autobot_user');
         }
       }
     } catch (error) {
@@ -338,7 +345,12 @@ export const useUserStore = defineStore('user', () => {
             isAuthenticated: true,
             token: data.deployment_mode === 'single_user' ? 'single_user_mode' : undefined
           }
-          persistToStorage()
+          // Only persist when we have a real token marker (single_user mode).
+          // For JWT deployments the token comes from the login flow; persisting
+          // token:undefined here would overwrite a valid JWT in storage (#979).
+          if (data.deployment_mode === 'single_user') {
+            persistToStorage()
+          }
           logger.info('Auto-authenticated from backend:', data.deployment_mode)
           return true
         }

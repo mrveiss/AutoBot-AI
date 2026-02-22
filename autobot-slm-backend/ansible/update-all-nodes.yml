@@ -2,30 +2,152 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 ---
-# Fast Code Update for All Fleet Nodes (Issue #880)
+# Fast Code Update for All Fleet Nodes (Issue #880, #1056)
 #
-# This playbook performs code-only updates without full provisioning:
-# - Syncs latest code from control machine
-# - Restarts services gracefully
-# - Validates services are running
-# - NO system package updates
-# - NO configuration changes
+# Deploys committed code from a specific git ref to fleet VMs.
+# Uses git archive to ensure only committed code is deployed.
+#
+# Previously used rsync from the working tree, which could deploy
+# uncommitted or feature-branch code to production (caused #1047).
 #
 # Two-Play Structure (Issue #880):
-# 1. Play 1: Update SLM server FIRST (if in scope)
-# 2. Play 2: Update all other nodes (after SLM is ready)
-#
-# This prevents GUI sync from triggering SLM backend restart when syncing
-# other nodes. The SLM server always updates itself first when included.
+# 1. Play 0: Pre-flight git checks + create deploy archives
+# 2. Play 1: Update SLM server FIRST (if in scope)
+# 3. Play 2: Update all other nodes (after SLM is ready)
 #
 # Usage:
-#   ansible-playbook update-all-nodes.yml                    # All nodes (SLM first, then others)
-#   ansible-playbook update-all-nodes.yml --limit frontend   # Only frontend (Play 1 skips)
-#   ansible-playbook update-all-nodes.yml --limit 00-SLM-Manager  # Only SLM (Play 2 skips)
-#   ansible-playbook update-all-nodes.yml --tags backend     # Specific service
-#   ansible-playbook update-all-nodes.yml --skip-tags restart  # No restart
+#   ansible-playbook update-all-nodes.yml                        # Deploy HEAD
+#   ansible-playbook update-all-nodes.yml -e deploy_ref=Dev_new_gui
+#   ansible-playbook update-all-nodes.yml -e deploy_ref=abc1234
+#   ansible-playbook update-all-nodes.yml -e skip_branch_check=true
+#   ansible-playbook update-all-nodes.yml --limit frontend       # Only frontend
+#   ansible-playbook update-all-nodes.yml --tags backend         # Specific service
+#   ansible-playbook update-all-nodes.yml --skip-tags restart    # No restart
 #
 # Speed: ~30 seconds per node (vs. 5+ minutes for full provision)
+
+# =============================================================================
+# PLAY 0: Pre-flight Git Safety Check & Create Deploy Archives
+# =============================================================================
+- name: "Play 0 - Pre-flight & Build Archives"
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    git_repo_root: "/home/kali/Desktop/AutoBot"
+    deploy_ref: "HEAD"
+    allowed_branches:
+      - Dev_new_gui
+      - main
+    skip_branch_check: false
+    deploy_tmp: "/tmp/autobot-deploy"
+
+  tasks:
+    - name: "[PRE-FLIGHT] Verify git repo exists"
+      stat:
+        path: "{{ git_repo_root }}/.git"
+      register: git_repo
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Abort if git repo missing"
+      fail:
+        msg: >-
+          Git repo not found at {{ git_repo_root }}.
+          This playbook must run from the dev machine (.20).
+      when: not git_repo.stat.exists
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Get current git branch"
+      command: git -C {{ git_repo_root }} branch --show-current
+      register: git_branch
+      changed_when: false
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Resolve deploy ref to commit"
+      command: >-
+        git -C {{ git_repo_root }}
+        log -1 --format='%h %s' {{ deploy_ref }}
+      register: deploy_info
+      changed_when: false
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Get deploy commit SHA"
+      command: >-
+        git -C {{ git_repo_root }}
+        rev-parse --short {{ deploy_ref }}
+      register: deploy_commit
+      changed_when: false
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Check for uncommitted changes"
+      command: git -C {{ git_repo_root }} status --porcelain
+      register: git_dirty
+      changed_when: false
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Display deployment summary"
+      debug:
+        msg: |
+          =======================================================
+            AutoBot Fleet Code Update (Git-Based Deploy)
+          =======================================================
+
+            Branch:  {{ git_branch.stdout }}
+            Ref:     {{ deploy_ref }}
+            Commit:  {{ deploy_info.stdout }}
+            Dirty:   {{ 'YES (ignored - only committed code deployed)' if git_dirty.stdout else 'Clean' }}
+            Method:  git archive
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] ABORT - Not on allowed branch"
+      fail:
+        msg: >-
+          Branch '{{ git_branch.stdout }}' not in allowed list
+          ({{ allowed_branches | join(', ') }}).
+          Override: -e skip_branch_check=true
+          Or deploy specific ref: -e deploy_ref=Dev_new_gui
+      when:
+        - not skip_branch_check | bool
+        - deploy_ref == 'HEAD'
+        - git_branch.stdout not in allowed_branches
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Create deploy archive directory"
+      file:
+        path: "{{ deploy_tmp }}"
+        state: directory
+        mode: '0755'
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Create component archives"
+      shell: >-
+        git -C {{ git_repo_root }} archive {{ deploy_ref }}
+        -- {{ item.path }} | gzip > {{ deploy_tmp }}/{{ item.name }}.tar.gz
+      loop:
+        - { name: slm-backend, path: autobot-slm-backend/ }
+        - { name: slm-frontend, path: autobot-slm-frontend/ }
+        - { name: shared, path: autobot-shared/ }
+        - { name: backend, path: autobot-backend/ }
+        - { name: frontend, path: autobot-frontend/ }
+        - { name: npu-worker, path: autobot-npu-worker/ }
+        - { name: browser-worker, path: autobot-browser-worker/ }
+      loop_control:
+        label: "{{ item.name }}"
+      changed_when: true
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Create AI Stack archive"
+      shell: >-
+        git -C {{ git_repo_root }} archive {{ deploy_ref }}
+        -- autobot-infrastructure/shared/docker/ai-stack/
+        | gzip > {{ deploy_tmp }}/ai-stack.tar.gz
+      changed_when: true
+      tags: [always, ai-stack, aiml]
+
+    - name: "[PRE-FLIGHT] Set deploy_commit fact for later plays"
+      set_fact:
+        deploy_commit_sha: "{{ deploy_commit.stdout }}"
+      tags: [always]
 
 # =============================================================================
 # PLAY 1: Update SLM Server First (Self-Update Pattern)
@@ -39,35 +161,27 @@
     code_base_dir: /opt/autobot
     restart_services: true
     verify_health: true
+    deploy_tmp: "/tmp/autobot-deploy"
 
   pre_tasks:
-    - name: "[PLAY 1] Starting SLM Server Self-Update"
+    - name: "[PLAY 1] Starting SLM Server Update"
       debug:
         msg: |
-          ╔═══════════════════════════════════════════════════════════════╗
-          ║  PLAY 1: SLM Server Self-Update (Issue #880)                 ║
-          ╚═══════════════════════════════════════════════════════════════╝
+          =======================================================
+            PLAY 1: SLM Server Update (git archive deploy)
+          =======================================================
           Target: {{ inventory_hostname }} ({{ ansible_host }})
-          Action: Sync code + restart backend
-          Note: Backend will restart - expect brief WebSocket disconnect
-          ═══════════════════════════════════════════════════════════════
+          Action: Deploy from git archive + restart backend
       run_once: false
 
   tasks:
     # =========================================================================
-    # SLM BACKEND - Self-Update First
+    # SLM BACKEND
     # =========================================================================
-    - name: "[PLAY 1] SLM | Sync autobot-slm-backend code"
-      synchronize:
-        src: "{{ playbook_dir }}/../"
-        dest: "{{ code_base_dir }}/autobot-slm-backend/"
-        delete: false
-        rsync_opts:
-          - "--exclude=venv"
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
-          - "--exclude=data/"
+    - name: "[PLAY 1] SLM | Deploy autobot-slm-backend"
+      unarchive:
+        src: "{{ deploy_tmp }}/slm-backend.tar.gz"
+        dest: "{{ code_base_dir }}/"
       tags: [slm, slm-backend]
 
     - name: "[PLAY 1] SLM | Restart autobot-slm-backend service"
@@ -82,14 +196,10 @@
     # =========================================================================
     # SLM FRONTEND
     # =========================================================================
-    - name: "[PLAY 1] SLM Frontend | Sync autobot-slm-frontend code"
-      synchronize:
-        src: "{{ playbook_dir }}/../../autobot-slm-frontend/"
-        dest: "{{ code_base_dir }}/autobot-slm-frontend/"
-        delete: false
-        rsync_opts:
-          - "--exclude=node_modules"
-          - "--exclude=.git"
+    - name: "[PLAY 1] SLM Frontend | Deploy autobot-slm-frontend"
+      unarchive:
+        src: "{{ deploy_tmp }}/slm-frontend.tar.gz"
+        dest: "{{ code_base_dir }}/"
       tags: [slm, slm-frontend]
 
     - name: "[PLAY 1] SLM Frontend | Rebuild production dist"
@@ -101,15 +211,10 @@
     # =========================================================================
     # SHARED LIBRARY
     # =========================================================================
-    - name: "[PLAY 1] Shared | Sync autobot-shared library"
-      synchronize:
-        src: "{{ playbook_dir }}/../../autobot-shared/"
-        dest: "{{ code_base_dir }}/autobot-shared/"
-        delete: false
-        rsync_opts:
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
+    - name: "[PLAY 1] Shared | Deploy autobot-shared"
+      unarchive:
+        src: "{{ deploy_tmp }}/shared.tar.gz"
+        dest: "{{ code_base_dir }}/"
       tags: [shared, library]
 
   post_tasks:
@@ -138,36 +243,24 @@
     # =========================================================================
     # DATABASE VERSION UPDATE (Issue #885)
     # =========================================================================
-    - name: "[PLAY 1] Database | Get current commit hash"
-      command: git log --oneline -1 --format='%h'
-      register: git_commit
-      delegate_to: localhost
-      become: false
-      changed_when: false
-      failed_when: false
-      tags: [verify, database]
-
     - name: "[PLAY 1] Database | Update SLM node version"
       shell: |
         source /etc/autobot/db-credentials.env
         PGPASSWORD=$SLM_DB_PASSWORD psql -h 127.0.0.1 -U slm_app -d slm \
-          -c "UPDATE nodes SET code_version = '{{ git_commit.stdout }}', \
+          -c "UPDATE nodes SET code_version = '{{ hostvars['localhost']['deploy_commit_sha'] | default('unknown') }}', \
               code_status = 'UP_TO_DATE', updated_at = NOW() \
               WHERE node_id = '00-SLM-Manager';"
-      when: git_commit.rc == 0
       failed_when: false
       tags: [verify, database]
 
     - name: "[PLAY 1] SLM Server Update Complete"
       debug:
         msg: |
-          ╔═══════════════════════════════════════════════════════════════╗
-          ║  PLAY 1: SLM Server Update Complete ✓                        ║
-          ╚═══════════════════════════════════════════════════════════════╝
-          Version: {{ git_commit.stdout | default('unknown') }}
+          =======================================================
+            PLAY 1: SLM Server Update Complete
+          =======================================================
+          Version: {{ hostvars['localhost']['deploy_commit_sha'] | default('unknown') }}
           Status: {{ 'Backend restarted and healthy' if restart_services else 'Code updated (no restart)' }}
-          Ready to update other nodes
-          ═══════════════════════════════════════════════════════════════
       tags: [verify]
 
 # =============================================================================
@@ -177,42 +270,33 @@
   hosts: infrastructure:!slm_server
   become: true
   gather_facts: false
-  serial: 3  # Update 3 nodes at a time (rolling updates)
+  serial: 3
 
   vars:
     code_base_dir: /opt/autobot
     restart_services: true
     verify_health: true
+    deploy_tmp: "/tmp/autobot-deploy"
 
   pre_tasks:
     - name: "[PLAY 2] Starting Node Update"
       debug:
         msg: |
-          ╔═══════════════════════════════════════════════════════════════╗
-          ║  PLAY 2: Infrastructure Node Update (Issue #880)             ║
-          ╚═══════════════════════════════════════════════════════════════╝
+          =======================================================
+            PLAY 2: Infrastructure Node Update (git archive)
+          =======================================================
           Target: {{ inventory_hostname }} ({{ ansible_host }})
-          Action: Code sync + service restart
           Batch: Processing up to 3 nodes at a time
-          ═══════════════════════════════════════════════════════════════
       run_once: false
 
   tasks:
     # =========================================================================
     # USER BACKEND - Main AutoBot Backend
     # =========================================================================
-    - name: "[PLAY 2] Backend | Sync autobot-backend code"
-      synchronize:
-        src: "{{ playbook_dir }}/../../autobot-backend/"
-        dest: "{{ code_base_dir }}/autobot-backend/"
-        delete: false
-        rsync_opts:
-          - "--exclude=venv"
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
-          - "--exclude=data/"
-          - "--exclude=logs/"
+    - name: "[PLAY 2] Backend | Deploy autobot-backend"
+      unarchive:
+        src: "{{ deploy_tmp }}/backend.tar.gz"
+        dest: "{{ code_base_dir }}/"
       when: "'main' in group_names"
       tags: [backend, user-backend]
 
@@ -228,14 +312,27 @@
     # =========================================================================
     # USER FRONTEND - Vue Application
     # =========================================================================
-    - name: "[PLAY 2] Frontend | Sync autobot-frontend code"
-      synchronize:
-        src: "{{ playbook_dir }}/../../autobot-frontend/"
-        dest: "{{ code_base_dir }}/autobot-frontend/"
-        delete: false
-        rsync_opts:
-          - "--exclude=node_modules"
-          - "--exclude=.git"
+    - name: "[PLAY 2] Frontend | Deploy autobot-frontend"
+      unarchive:
+        src: "{{ deploy_tmp }}/frontend.tar.gz"
+        dest: "{{ code_base_dir }}/"
+      when: "'frontend' in group_names"
+      tags: [frontend, user-frontend]
+
+    - name: "[PLAY 2] Frontend | Fix ownership before build"
+      file:
+        path: "{{ code_base_dir }}/autobot-frontend"
+        owner: autobot
+        group: autobot
+        recurse: true
+      when: "'frontend' in group_names"
+      tags: [frontend, user-frontend]
+
+    - name: "[PLAY 2] Frontend | Install npm dependencies"
+      command:
+        cmd: npm install
+        chdir: "{{ code_base_dir }}/autobot-frontend"
+      become_user: autobot
       when: "'frontend' in group_names"
       tags: [frontend, user-frontend]
 
@@ -243,6 +340,7 @@
       command:
         cmd: npx vite build
         chdir: "{{ code_base_dir }}/autobot-frontend"
+      become_user: autobot
       when: "'frontend' in group_names"
       tags: [frontend, user-frontend]
 
@@ -258,16 +356,10 @@
     # =========================================================================
     # NPU WORKER
     # =========================================================================
-    - name: "[PLAY 2] NPU | Sync autobot-npu-worker code"
-      synchronize:
-        src: "{{ playbook_dir }}/../../autobot-npu-worker/"
-        dest: "{{ code_base_dir }}/autobot-npu-worker/"
-        delete: false
-        rsync_opts:
-          - "--exclude=venv"
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
+    - name: "[PLAY 2] NPU | Deploy autobot-npu-worker"
+      unarchive:
+        src: "{{ deploy_tmp }}/npu-worker.tar.gz"
+        dest: "{{ code_base_dir }}/"
       when: "'npu_worker' in group_names"
       tags: [npu, npu-worker]
 
@@ -282,17 +374,10 @@
     # =========================================================================
     # BROWSER WORKER
     # =========================================================================
-    - name: "[PLAY 2] Browser | Sync autobot-browser-worker code"
-      synchronize:
-        src: "{{ playbook_dir }}/../../autobot-browser-worker/"
-        dest: "{{ code_base_dir }}/autobot-browser-worker/"
-        delete: false
-        rsync_opts:
-          - "--exclude=venv"
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
-          - "--exclude=screenshots/"
+    - name: "[PLAY 2] Browser | Deploy autobot-browser-worker"
+      unarchive:
+        src: "{{ deploy_tmp }}/browser-worker.tar.gz"
+        dest: "{{ code_base_dir }}/"
       when: "'browser_worker' in group_names"
       tags: [browser, browser-worker]
 
@@ -306,18 +391,46 @@
       tags: [browser, browser-worker, restart]
 
     # =========================================================================
+    # AI STACK - LangChain/LlamaIndex Agent Router + ChromaDB
+    # =========================================================================
+    - name: "[PLAY 2] AI Stack | Deploy ai_api_server and requirements"
+      unarchive:
+        src: "{{ deploy_tmp }}/ai-stack.tar.gz"
+        dest: "{{ code_base_dir }}/autobot-ai-stack/"
+        extra_opts: ['--strip-components=4']
+      when: "'aiml' in group_names"
+      tags: [ai-stack, aiml]
+
+    - name: "[PLAY 2] AI Stack | Restart autobot-ai-stack service"
+      systemd:
+        name: autobot-ai-stack
+        state: restarted
+      when:
+        - "'aiml' in group_names"
+        - restart_services | bool
+      tags: [ai-stack, aiml, restart]
+
+    - name: "[PLAY 2] AI Stack | Restart autobot-chromadb service"
+      systemd:
+        name: autobot-chromadb
+        state: restarted
+      when:
+        - "'aiml' in group_names"
+        - restart_services | bool
+      tags: [ai-stack, aiml, chromadb, restart]
+
+    # =========================================================================
     # SHARED LIBRARY - All nodes with Python services
     # =========================================================================
-    - name: "[PLAY 2] Shared | Sync autobot-shared library"
-      synchronize:
-        src: "{{ playbook_dir }}/../../autobot-shared/"
-        dest: "{{ code_base_dir }}/autobot-shared/"
-        delete: false
-        rsync_opts:
-          - "--exclude=__pycache__"
-          - "--exclude=*.pyc"
-          - "--exclude=.git"
-      when: "'main' in group_names or 'npu_worker' in group_names or 'browser_worker' in group_names"
+    - name: "[PLAY 2] Shared | Deploy autobot-shared"
+      unarchive:
+        src: "{{ deploy_tmp }}/shared.tar.gz"
+        dest: "{{ code_base_dir }}/"
+      when: >-
+        'main' in group_names or
+        'npu_worker' in group_names or
+        'browser_worker' in group_names or
+        'aiml' in group_names
       tags: [shared, library]
 
   post_tasks:
@@ -339,6 +452,8 @@
         - autobot-backend
         - autobot-npu-worker
         - autobot-playwright
+        - autobot-ai-stack
+        - autobot-chromadb
         - nginx
       when:
         - verify_health | bool
@@ -347,37 +462,27 @@
     # =========================================================================
     # DATABASE VERSION UPDATE (Issue #885)
     # =========================================================================
-    - name: "[PLAY 2] Database | Get current commit hash"
-      command: git log --oneline -1 --format='%h'
-      register: git_commit
-      delegate_to: localhost
-      become: false
-      changed_when: false
-      failed_when: false
-      tags: [verify, database]
-
     - name: "[PLAY 2] Database | Update node version"
       shell: |
         source /etc/autobot/db-credentials.env
         PGPASSWORD=$SLM_DB_PASSWORD psql -h 127.0.0.1 -U slm_app -d slm \
-          -c "UPDATE nodes SET code_version = '{{ git_commit.stdout }}', \
+          -c "UPDATE nodes SET code_version = '{{ hostvars['localhost']['deploy_commit_sha'] | default('unknown') }}', \
               code_status = 'UP_TO_DATE', updated_at = NOW() \
               WHERE node_id = '{{ slm_node_id }}';"
       delegate_to: "{{ groups['slm_server'][0] }}"
-      when: git_commit.rc == 0
+      when: slm_node_id is defined
       failed_when: false
       tags: [verify, database]
 
     - name: "[PLAY 2] Node Update Complete"
       debug:
         msg: |
-          ╔═══════════════════════════════════════════════════════════════╗
-          ║  PLAY 2: Node Update Complete ✓                              ║
-          ╚═══════════════════════════════════════════════════════════════╝
+          =======================================================
+            PLAY 2: Node Update Complete
+          =======================================================
           Node: {{ inventory_hostname }}
-          Version: {{ git_commit.stdout | default('unknown') }}
+          Version: {{ hostvars['localhost']['deploy_commit_sha'] | default('unknown') }}
           Status: {{ 'Services restarted' if restart_services else 'Code updated (no restart)' }}
-          ═══════════════════════════════════════════════════════════════
       tags: [verify]
 
 # =============================================================================
@@ -389,23 +494,29 @@
   run_once: true
 
   tasks:
+    - name: Clean up deploy archives
+      file:
+        path: /tmp/autobot-deploy
+        state: absent
+
     - name: Display fleet update summary
       debug:
         msg: |
-          ╔═══════════════════════════════════════════════════════════════╗
-          ║             Fleet Update Complete (Issue #880)                ║
-          ╚═══════════════════════════════════════════════════════════════╝
+          =======================================================
+            Fleet Update Complete (Git-Based Deploy)
+          =======================================================
+
+          Deploy ref:    {{ deploy_ref | default('HEAD') }}
+          Commit:        {{ deploy_commit_sha | default('unknown') }}
+          Method:        git archive (only committed code)
 
           Two-Play Structure Executed:
           - Play 1: SLM Server updated first (if in scope)
           - Play 2: Other infrastructure nodes updated
-
-          All targeted nodes have been updated with the latest code.
-          Services have been restarted gracefully.
 
           Next steps:
           - Verify services via monitoring dashboards
           - Check logs for any startup errors
           - Test critical workflows
 
-          ═══════════════════════════════════════════════════════════════
+          =======================================================

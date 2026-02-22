@@ -8,10 +8,12 @@ API endpoints for fleet-wide monitoring, metrics aggregation, and alerts.
 Related to Issue #729.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from models.database import (
     Deployment,
@@ -30,6 +32,8 @@ from services.database import get_db
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
@@ -140,6 +144,91 @@ class LogsResponse(BaseModel):
 # Helper Functions (Issue #729 - Refactored for function length compliance)
 # =============================================================================
 
+# =============================================================================
+# Prometheus Fallback Helpers (Issue #997)
+# =============================================================================
+
+_PROM_TIMEOUT = 3.0
+
+
+async def _query_prometheus_instant(query: str) -> list:
+    """Query Prometheus instant API. Returns result list or [] on failure."""
+    try:
+        async with httpx.AsyncClient(timeout=_PROM_TIMEOUT) as client:
+            resp = await client.get(
+                f"{settings.prometheus_url}/api/v1/query",
+                params={"query": query},
+            )
+            if resp.status_code == 200:
+                return resp.json().get("data", {}).get("result", [])
+    except Exception:
+        logger.debug("Prometheus unreachable: %s", query[:60])
+    return []
+
+
+def _extract_prom_by_ip(results: list) -> Dict[str, float]:
+    """Extract {ip_address: float_value} from Prometheus instant query results."""
+    out: Dict[str, float] = {}
+    for r in results:
+        instance = r.get("metric", {}).get("instance", "")
+        ip = instance.split(":")[0]
+        try:
+            out[ip] = float(r["value"][1])
+        except (KeyError, IndexError, ValueError):
+            pass
+    return out
+
+
+async def _fetch_prometheus_node_metrics(
+    node_ips: List[str],
+) -> Dict[str, Dict[str, Optional[float]]]:
+    """Fetch CPU/memory/disk from Prometheus for nodes missing heartbeat data.
+
+    Returns ip_address -> {cpu, memory, disk}. Values may be None if
+    Prometheus is unreachable or the node is not scraped (Issue #997).
+    """
+    if not node_ips:
+        return {}
+    re_filter = "|".join(f"{ip}:9100" for ip in node_ips)
+    cpu_q = (
+        f'100 - (avg by (instance) (rate(node_cpu_seconds_total{{mode="idle",'
+        f'instance=~"{re_filter}"}}[2m])) * 100)'
+    )
+    mem_q = (
+        f'100 * (1 - node_memory_MemAvailable_bytes{{instance=~"{re_filter}"}}'
+        f' / node_memory_MemTotal_bytes{{instance=~"{re_filter}"}})'
+    )
+    disk_q = (
+        f'100 * (1 - node_filesystem_avail_bytes{{instance=~"{re_filter}",'
+        f'mountpoint="/"}} / node_filesystem_size_bytes{{instance=~"{re_filter}",'
+        f'mountpoint="/"}})'
+    )
+    cpu_r, mem_r, disk_r = await asyncio.gather(
+        _query_prometheus_instant(cpu_q),
+        _query_prometheus_instant(mem_q),
+        _query_prometheus_instant(disk_q),
+    )
+    cpu_by_ip = _extract_prom_by_ip(cpu_r)
+    mem_by_ip = _extract_prom_by_ip(mem_r)
+    disk_by_ip = _extract_prom_by_ip(disk_r)
+    return {
+        ip: {
+            "cpu": cpu_by_ip.get(ip),
+            "memory": mem_by_ip.get(ip),
+            "disk": disk_by_ip.get(ip),
+        }
+        for ip in node_ips
+    }
+
+
+def _get_node_effective_metrics(node: Node, prom_data: Dict[str, Any]) -> tuple:
+    """Return (cpu, memory, disk) preferring heartbeat data, falling back to Prometheus."""
+    pm = prom_data.get(node.ip_address, {})
+    cpu = node.cpu_percent if node.cpu_percent is not None else pm.get("cpu")
+    mem = node.memory_percent if node.memory_percent is not None else pm.get("memory")
+    disk = node.disk_percent if node.disk_percent is not None else pm.get("disk")
+    return cpu, mem, disk
+
 
 def _empty_fleet_metrics() -> FleetMetricsResponse:
     """Return empty fleet metrics response. Related to Issue #729."""
@@ -188,11 +277,23 @@ def _calculate_node_status_counts(nodes: List[Node]) -> tuple:
     return online, degraded, offline
 
 
-def _calculate_resource_averages(nodes: List[Node]) -> tuple:
-    """Calculate average CPU, memory, disk percentages. Related to Issue #729."""
-    cpu_vals = [n.cpu_percent for n in nodes if n.cpu_percent is not None]
-    mem_vals = [n.memory_percent for n in nodes if n.memory_percent is not None]
-    disk_vals = [n.disk_percent for n in nodes if n.disk_percent is not None]
+def _calculate_resource_averages(
+    nodes: List[Node], prom_data: Optional[Dict[str, Any]] = None
+) -> tuple:
+    """Calculate average CPU, memory, disk percentages. Related to Issue #729.
+
+    Falls back to Prometheus data for nodes missing heartbeat metrics (Issue #997).
+    """
+    prom = prom_data or {}
+    cpu_vals, mem_vals, disk_vals = [], [], []
+    for n in nodes:
+        cpu, mem, disk = _get_node_effective_metrics(n, prom)
+        if cpu is not None:
+            cpu_vals.append(cpu)
+        if mem is not None:
+            mem_vals.append(mem)
+        if disk is not None:
+            disk_vals.append(disk)
     return (
         sum(cpu_vals) / len(cpu_vals) if cpu_vals else 0.0,
         sum(mem_vals) / len(mem_vals) if mem_vals else 0.0,
@@ -201,24 +302,33 @@ def _calculate_resource_averages(nodes: List[Node]) -> tuple:
 
 
 def _build_node_metrics(
-    nodes: List[Node], services_by_node: Dict[str, Dict[str, int]]
+    nodes: List[Node],
+    services_by_node: Dict[str, Dict[str, int]],
+    prom_data: Optional[Dict[str, Any]] = None,
 ) -> List[NodeMetrics]:
-    """Build NodeMetrics list from nodes and service data. Related to Issue #729."""
-    return [
-        NodeMetrics(
-            node_id=n.node_id,
-            hostname=n.hostname,
-            ip_address=n.ip_address,
-            status=n.status,
-            cpu_percent=n.cpu_percent or 0.0,
-            memory_percent=n.memory_percent or 0.0,
-            disk_percent=n.disk_percent or 0.0,
-            last_heartbeat=n.last_heartbeat,
-            services_running=services_by_node.get(n.node_id, {}).get("running", 0),
-            services_failed=services_by_node.get(n.node_id, {}).get("failed", 0),
+    """Build NodeMetrics list from nodes and service data. Related to Issue #729.
+
+    Falls back to Prometheus data for nodes missing heartbeat metrics (Issue #997).
+    """
+    prom = prom_data or {}
+    result = []
+    for n in nodes:
+        cpu, mem, disk = _get_node_effective_metrics(n, prom)
+        result.append(
+            NodeMetrics(
+                node_id=n.node_id,
+                hostname=n.hostname,
+                ip_address=n.ip_address,
+                status=n.status,
+                cpu_percent=cpu or 0.0,
+                memory_percent=mem or 0.0,
+                disk_percent=disk or 0.0,
+                last_heartbeat=n.last_heartbeat,
+                services_running=services_by_node.get(n.node_id, {}).get("running", 0),
+                services_failed=services_by_node.get(n.node_id, {}).get("failed", 0),
+            )
         )
-        for n in nodes
-    ]
+    return result
 
 
 # =============================================================================
@@ -240,7 +350,12 @@ async def get_fleet_metrics(
 
     services_by_node = await _get_services_by_node(db)
     online, degraded, offline = _calculate_node_status_counts(nodes)
-    avg_cpu, avg_mem, avg_disk = _calculate_resource_averages(nodes)
+
+    # Fetch Prometheus data for nodes that have no heartbeat metrics (Issue #997)
+    prom_ips = [n.ip_address for n in nodes if n.cpu_percent is None]
+    prom_data = await _fetch_prometheus_node_metrics(prom_ips)
+
+    avg_cpu, avg_mem, avg_disk = _calculate_resource_averages(nodes, prom_data)
 
     # Calculate service totals
     total_svc = sum(
@@ -266,7 +381,7 @@ async def get_fleet_metrics(
         total_services=total_svc,
         running_services=running_svc,
         failed_services=failed_svc,
-        nodes=_build_node_metrics(nodes, services_by_node),
+        nodes=_build_node_metrics(nodes, services_by_node, prom_data),
     )
 
 

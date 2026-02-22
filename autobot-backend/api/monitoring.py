@@ -15,6 +15,20 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 from auth_middleware import check_admin_permission
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Query,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
+
+# Import AutoBot monitoring system
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import monitoring utility functions
 from backend.api.monitoring_utils import (
@@ -38,24 +52,12 @@ from backend.utils.performance_monitor import (
     start_monitoring,
     stop_monitoring,
 )
-from fastapi import (
-    APIRouter,
-    BackgroundTasks,
-    Depends,
-    Query,
-    Response,
-    WebSocket,
-    WebSocketDisconnect,
-)
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
-
-# Import AutoBot monitoring system
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from config import ConfigManager
 
 # Hardware monitor moved to monitoring_hardware.py (Issue #213)
 
 logger = logging.getLogger(__name__)
+config = ConfigManager()
 
 # Issue #474: AlertManager API timeout and cache
 _ALERTMANAGER_TIMEOUT = 5.0  # seconds
@@ -280,6 +282,89 @@ class MonitoringWebSocketManager:
 
 # Global WebSocket manager
 ws_manager = MonitoringWebSocketManager()
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_services_health",
+    error_code_prefix="MONITORING",
+)
+@router.get("/services/health")
+async def get_services_health():
+    """Return service health in ServicesSummary format for frontend.
+
+    Issue #1006: Frontend composables (usePrometheusMetrics, SystemArchitectureDiagram,
+    ApiClient, api.ts) all call /api/monitoring/services/health expecting a
+    ServicesSummary-shaped response.  Delegates to service_monitor helpers.
+    """
+    from backend.api.service_monitor import _check_http_health, _check_redis_health
+
+    try:
+        npu_url = config.get_service_url("npu_worker", "health")
+        browser_url = config.get_service_url("browser", "health")
+        ollama_url = f"{config.get_ollama_url()}/api/version"
+    except Exception:
+        npu_url = "http://172.16.168.22:8081/health"
+        browser_url = "http://172.16.168.25:3000/health"
+        ollama_url = "http://172.16.168.24:11434/api/version"
+
+    results = await asyncio.gather(
+        _check_redis_health(),
+        _check_http_health(npu_url),
+        _check_http_health(ollama_url),
+        _check_http_health(browser_url),
+        return_exceptions=True,
+    )
+
+    def _safe(res, default=("offline", "Error")):
+        return res if isinstance(res, tuple) else default
+
+    redis_s, redis_m = _safe(results[0])
+    npu_s, npu_m = _safe(results[1])
+    ollama_s, ollama_m = _safe(results[2])
+    browser_s, browser_m = _safe(results[3])
+
+    def _to_service(name, host, port, status, msg):
+        is_healthy = status == "online"
+        return {
+            "name": name,
+            "host": host,
+            "port": port,
+            "status": "healthy" if is_healthy else "offline",
+            "response_time_ms": 0,
+            "health_score": 100 if is_healthy else 0,
+            "uptime_hours": 0,
+        }
+
+    svc_list = [
+        _to_service("Backend API", "172.16.168.20", 8443, "online", "Running"),
+        _to_service("Redis", "172.16.168.23", 6379, redis_s, redis_m),
+        _to_service("NPU Worker", "172.16.168.22", 8081, npu_s, npu_m),
+        _to_service("Ollama", "172.16.168.24", 11434, ollama_s, ollama_m),
+        _to_service("Browser", "172.16.168.25", 3000, browser_s, browser_m),
+    ]
+
+    healthy = sum(1 for s in svc_list if s["status"] == "healthy")
+    total = len(svc_list)
+    degraded = 0
+    critical = total - healthy
+
+    if critical == 0:
+        overall = "healthy"
+    elif healthy > critical:
+        overall = "degraded"
+    else:
+        overall = "critical"
+
+    return {
+        "total_services": total,
+        "healthy_services": healthy,
+        "degraded_services": degraded,
+        "critical_services": critical,
+        "overall_status": overall,
+        "health_percentage": round((healthy / total) * 100) if total else 0,
+        "services": svc_list,
+    }
 
 
 @with_error_handling(

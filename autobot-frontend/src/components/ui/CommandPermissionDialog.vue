@@ -135,6 +135,7 @@ import BaseButton from '@/components/base/BaseButton.vue';
 import { useModal } from '@/composables/useModal';
 import { useAsyncOperation } from '@/composables/useAsyncOperation';
 import { createLogger } from '@/utils/debugUtils';
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 const logger = createLogger('CommandPermissionDialog');
 
@@ -203,7 +204,7 @@ export default {
       );
 
       // Send approval using direct fetch
-      const fetchResponse = await fetch(
+      const fetchResponse = await fetchWithAuth(
         approvalUrl,
         {
           method: 'POST',

@@ -81,10 +81,36 @@ backend_host: "172.16.168.20"  # eth2 only, instead of 0.0.0.0
 This makes local-loopback tests impossible but has no production impact since all
 legitimate clients connect via 172.16.168.x.
 
-### Option 2: nginx reverse proxy on .20
+### Option 2: nginx reverse proxy on .20 ✅ IMPLEMENTED (Issue #957)
 
-Add an nginx role for .20 that accepts connections on eth2 and proxies to uvicorn.
-This requires a new Ansible role and increases operational complexity.
+nginx holds port 8443 permanently. uvicorn binds plain HTTP on `127.0.0.1:8001`.
+Windows Defender Firewall evaluates the rule once for nginx; uvicorn restarts are
+invisible to WDF and to LAN clients.
+
+```
+LAN → WDF → nginx:8443 (TLS, stable PID) → http://127.0.0.1:8001 (uvicorn)
+```
+
+**Architecture:**
+- `backend_nginx_port: 8443` — nginx external TLS port
+- `backend_host: "127.0.0.1"` — uvicorn bind (localhost only)
+- `backend_port: 8001` — uvicorn plain HTTP port
+- TLS certs: same `/etc/autobot/certs/` path, now terminated by nginx
+- RestartSec reduced back to 5s (30s workaround no longer needed)
+
+**Deploy:**
+```bash
+cd autobot-slm-backend/ansible
+ansible-playbook playbooks/deploy-full.yml --tags backend,nginx --limit main_backend
+```
+
+**Verify:**
+```bash
+# From another VM:
+ssh autobot@172.16.168.19 'curl -sk https://172.16.168.20:8443/api/health'
+# nginx status on .20:
+ssh autobot@172.16.168.20 'sudo systemctl status nginx'
+```
 
 ### Option 3: Disable WSL2 mirrored networking
 
@@ -97,12 +123,6 @@ networkingMode=nat
 
 Requires WSL2 restart (`wsl --shutdown`). Changes the entire WSL2 network stack
 and may affect other services.
-
-### Recommended: No change needed
-
-The backend is only accessed by other VMs in the fleet. WSL2 loopback is a developer
-ergonomic issue, not a production problem. Use the workaround above when local testing
-is needed.
 
 ## Background
 

@@ -10,6 +10,11 @@ from typing import List, Optional
 # Add the project root to Python path for absolute imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+
+# Issue #697: OpenTelemetry distributed tracing
+from autobot_shared.tracing import init_tracing, instrument_fastapi
 from backend.constants.network_constants import (  # noqa: F401 - used in docstring example
     NetworkConstants,
 )
@@ -22,11 +27,6 @@ from backend.initialization import (
     load_optional_routers,
     register_root_endpoints,
 )
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-
-# Issue #697: OpenTelemetry distributed tracing
-from autobot_shared.tracing import init_tracing, instrument_fastapi
 
 # Store logger for app usage
 logger = logging.getLogger(__name__)
@@ -151,9 +151,6 @@ def create_app(**kwargs) -> FastAPI:
     factory = AppFactory()
     return factory.create_fastapi_app(**kwargs)
 
-
-# Create app instance for uvicorn
-app = create_app()
 
 # For direct usage in main.py or testing
 if __name__ == "__main__":

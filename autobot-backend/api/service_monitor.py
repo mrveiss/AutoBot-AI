@@ -15,11 +15,11 @@ import logging
 from typing import Any, Dict, List, Tuple
 
 import aiohttp
-from config import UnifiedConfigManager
+from config import ConfigManager
 from fastapi import APIRouter
 
 logger = logging.getLogger(__name__)
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 router = APIRouter(tags=["Service Monitor"])
 

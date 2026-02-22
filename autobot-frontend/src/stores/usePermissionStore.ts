@@ -16,6 +16,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 const logger = createLogger('usePermissionStore')
 
@@ -148,7 +149,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
     try {
       const url = await appConfig.getApiUrl('/api/permissions/status')
-      const response = await fetch(url, { signal: getSignal() })
+      const response = await fetchWithAuth(url, { signal: getSignal() })
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`)
@@ -181,7 +182,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
     try {
       const url = await appConfig.getApiUrl(`/api/permissions/mode?is_admin=${isAdmin}`)
-      const response = await fetch(url, { signal: getSignal() })
+      const response = await fetchWithAuth(url, { signal: getSignal() })
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`)
@@ -213,7 +214,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
     try {
       const url = await appConfig.getApiUrl(`/api/permissions/mode?is_admin=${isAdmin}`)
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode })
@@ -250,7 +251,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
     try {
       const url = await appConfig.getApiUrl('/api/permissions/rules')
-      const response = await fetch(url, { signal: getSignal() })
+      const response = await fetchWithAuth(url, { signal: getSignal() })
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`)
@@ -291,7 +292,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
     try {
       const url = await appConfig.getApiUrl(`/api/permissions/rules?is_admin=${isAdmin}`)
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tool, pattern, action, description })
@@ -326,7 +327,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
     try {
       const url = await appConfig.getApiUrl('/api/permissions/rules')
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tool, pattern })
@@ -362,7 +363,7 @@ export const usePermissionStore = defineStore('permission', () => {
   ): Promise<{ result: string; pattern?: string; description?: string } | null> {
     try {
       const url = await appConfig.getApiUrl(`/api/permissions/check?is_admin=${isAdmin}`)
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command, tool })
@@ -394,7 +395,7 @@ export const usePermissionStore = defineStore('permission', () => {
       const url = await appConfig.getApiUrl(
         `/api/permissions/memory/${encodedPath}?user_id=${userId}`
       )
-      const response = await fetch(url)
+      const response = await fetchWithAuth(url)
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`)
@@ -443,7 +444,7 @@ export const usePermissionStore = defineStore('permission', () => {
       }
 
       const url = await appConfig.getApiUrl(`/api/permissions/memory?${params.toString()}`)
-      const response = await fetch(url, { method: 'POST' })
+      const response = await fetchWithAuth(url, { method: 'POST' })
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`)
@@ -474,7 +475,7 @@ export const usePermissionStore = defineStore('permission', () => {
         url += `?user_id=${userId}`
       }
 
-      const response = await fetch(url, { method: 'DELETE' })
+      const response = await fetchWithAuth(url, { method: 'DELETE' })
 
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`)

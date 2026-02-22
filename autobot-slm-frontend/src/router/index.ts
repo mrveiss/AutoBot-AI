@@ -167,6 +167,13 @@ const router = createRouter({
           meta: { title: 'Prompts', parent: 'settings', admin: true }
         },
         {
+          // Issue #964: Personality profile management
+          path: 'admin/personality',
+          name: 'settings-admin-personality',
+          component: () => import('@/views/settings/admin/PersonalitySettings.vue'),
+          meta: { title: 'Personality', parent: 'settings', admin: true }
+        },
+        {
           path: 'admin/log-forwarding',
           name: 'settings-admin-log-forwarding',
           component: () => import('@/views/settings/admin/LogForwardingSettings.vue'),
@@ -308,6 +315,13 @@ const router = createRouter({
       name: 'skills',
       component: () => import('@/views/SkillsView.vue'),
       meta: { title: 'Skills' }
+    },
+    {
+      // Issue #963: External A2A Agent Registry
+      path: '/external-agents',
+      name: 'external-agents',
+      component: () => import('@/views/ExternalAgentsView.vue'),
+      meta: { title: 'External Agents' }
     },
     {
       path: '/security',

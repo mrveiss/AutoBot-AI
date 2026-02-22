@@ -15,12 +15,12 @@ from typing import Any, Dict, List
 
 import aiohttp
 import psutil
-from config import UnifiedConfigManager
+from config import ConfigManager
 
 from autobot_shared.http_client import get_http_client
 
 # Create singleton config instance
-config = UnifiedConfigManager()
+config = ConfigManager()
 from backend.constants.network_constants import NetworkConstants
 
 # Issue #380: Module-level tuple for expected system metrics

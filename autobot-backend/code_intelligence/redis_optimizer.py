@@ -463,13 +463,15 @@ class RedisOptimizer:
         self,
         directory: Optional[str] = None,
         exclude_patterns: Optional[List[str]] = None,
+        max_files: int = 500,
     ) -> List[OptimizationResult]:
         """
-        Analyze all Python files in a directory.
+        Analyze Python files in a directory for Redis optimizations.
 
         Args:
             directory: Directory to analyze (defaults to project root)
             exclude_patterns: Glob patterns to exclude
+            max_files: Stop after scanning this many files (#1034)
 
         Returns:
             List of all optimization results
@@ -481,9 +483,12 @@ class RedisOptimizer:
         python_files = list(target_dir.rglob("*.py"))
 
         for file_path in python_files:
+            if self.total_files_scanned >= max_files:
+                logger.warning("Hit max_files limit (%d), stopping scan", max_files)
+                break
             rel_path = str(file_path.relative_to(target_dir))
             if not self._is_path_excluded(rel_path, exclude_patterns):
-                self.total_files_scanned += 1  # Issue #686: Count all files scanned
+                self.total_files_scanned += 1
                 self.results.extend(self.analyze_file(str(file_path)))
 
         logger.info(

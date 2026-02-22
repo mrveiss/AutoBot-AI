@@ -29,8 +29,9 @@ import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
+from config import ConfigManager
+
 from backend.constants.threshold_constants import TimingConstants
-from config import UnifiedConfigManager
 
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase
@@ -38,7 +39,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Create singleton config instance
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 
 class KnowledgeBaseInitializer:

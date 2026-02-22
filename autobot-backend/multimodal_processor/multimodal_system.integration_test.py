@@ -7,7 +7,6 @@ import time
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from backend.utils.config_manager import ConfigManager
 from computer_vision_system import ComputerVisionSystem
 from multimodal_processor import (
     ContextProcessor,
@@ -18,6 +17,8 @@ from multimodal_processor import (
     VisionProcessor,
     VoiceProcessor,
 )
+
+from backend.config.manager import ConfigManager as ConfigManager
 
 
 class TestUnifiedMultiModalSystem:

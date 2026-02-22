@@ -17,6 +17,7 @@
 
 import { ref } from 'vue'
 import appConfig from '@/config/AppConfig.js'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
 import { useChatStore } from '@/stores/useChatStore'
@@ -119,7 +120,7 @@ export function useCommandApproval() {
         const backendUrl = await appConfig.getApiUrl(
           `/api/agent-terminal/commands/${command_id}`
         )
-        const response = await fetch(backendUrl, { signal })
+        const response = await fetchWithAuth(backendUrl, { signal })
 
         if (!response.ok) {
           logger.error('Failed to get command state:', response.status)
@@ -221,7 +222,7 @@ export function useCommandApproval() {
         `/api/agent-terminal/sessions/${terminal_session_id}/approve`
       )
 
-      const response = await fetch(backendUrl, {
+      const response = await fetchWithAuth(backendUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

@@ -1,0 +1,145 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Deploy nginx reverse proxy for the backend on .20 (WSL2)
+# Issue #957: nginx holds port 8443 permanently; uvicorn binds plain HTTP on localhost:8001
+#
+# Usage:
+#   cd autobot-slm-backend/ansible
+#   ansible-playbook playbooks/deploy-nginx-proxy.yml \
+#     -i inventory/production.yml -i inventory/slm-nodes.yml \
+#     --extra-vars "ansible_become=yes" --ask-become-pass
+---
+- name: Deploy nginx reverse proxy for AutoBot backend (.20)
+  hosts: backend
+  become: true
+  gather_facts: true
+
+  vars:
+    backend_user: autobot
+    backend_group: autobot
+    backend_install_dir: /opt/autobot/autobot-backend
+    backend_code_dir: /opt/autobot/autobot-backend
+    backend_log_dir: /var/log/autobot
+    backend_workers: 4
+    service_auth_service_id: "main-backend"
+    service_auth_keys_dir: "/etc/autobot/service-keys"
+
+  tasks:
+
+    # -------------------------------------------------------
+    # 1. Install nginx
+    # -------------------------------------------------------
+    - name: "nginx | Install nginx"
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+        update_cache: true
+
+    # -------------------------------------------------------
+    # 2. Deploy vhost config (but don't start nginx yet)
+    # -------------------------------------------------------
+    - name: "nginx | Deploy backend vhost config"
+      ansible.builtin.template:
+        src: ../roles/backend/templates/nginx-backend.conf.j2
+        dest: /etc/nginx/sites-available/autobot-backend.conf
+        mode: "0644"
+        owner: root
+        group: root
+
+    - name: "nginx | Enable vhost"
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/autobot-backend.conf
+        dest: /etc/nginx/sites-enabled/autobot-backend.conf
+        state: link
+
+    - name: "nginx | Disable default vhost"
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: "nginx | Validate config"
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    # -------------------------------------------------------
+    # 3. Update backend systemd service FIRST (frees port 8443)
+    #    uvicorn moves from :8443 (SSL) → :8001 (plain HTTP)
+    # -------------------------------------------------------
+    - name: "backend | Deploy updated systemd service (no SSL)"
+      ansible.builtin.template:
+        src: ../roles/backend/templates/autobot-backend.service.j2
+        dest: /etc/systemd/system/autobot-backend.service
+        mode: "0644"
+
+    - name: "backend | Reload systemd and restart backend (frees port 8443)"
+      ansible.builtin.systemd:
+        name: autobot-backend
+        state: restarted
+        daemon_reload: true
+
+    - name: "backend | Wait for uvicorn on :{{ backend_port }}"
+      ansible.builtin.wait_for:
+        port: "{{ backend_port }}"
+        host: 127.0.0.1
+        delay: 3
+        timeout: 60
+
+    # -------------------------------------------------------
+    # 4. Now port 8443 is free — start nginx
+    # -------------------------------------------------------
+    - name: "nginx | Enable and start"
+      ansible.builtin.systemd:
+        name: nginx
+        state: started
+        enabled: true
+        daemon_reload: true
+
+    # -------------------------------------------------------
+    # 5. Verify
+    # -------------------------------------------------------
+    - name: "verify | nginx is running"
+      ansible.builtin.systemd:
+        name: nginx
+      register: nginx_status
+
+    - name: "verify | backend is running"
+      ansible.builtin.systemd:
+        name: autobot-backend
+      register: backend_status
+
+    - name: "verify | Show service states"
+      ansible.builtin.debug:
+        msg:
+          - "nginx:   {{ nginx_status.status.ActiveState }}"
+          - "backend: {{ backend_status.status.ActiveState }}"
+
+    - name: "verify | Check nginx port is listening"
+      ansible.builtin.wait_for:
+        port: "{{ backend_nginx_port }}"
+        host: 0.0.0.0
+        timeout: 15
+      ignore_errors: true
+
+    - name: "verify | Check uvicorn is on localhost:{{ backend_port }}"
+      ansible.builtin.wait_for:
+        port: "{{ backend_port }}"
+        host: 127.0.0.1
+        timeout: 30
+      ignore_errors: true
+
+  handlers:
+    - name: reload nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: restart backend
+      ansible.builtin.systemd:
+        name: autobot-backend
+        state: restarted

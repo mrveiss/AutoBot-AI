@@ -140,7 +140,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import {
   useKnowledgeGraph,
   type DocumentOverview,
@@ -156,19 +156,19 @@ defineEmits<{
 
 const { getOverview, loading, error } = useKnowledgeGraph()
 const overview = ref<DocumentOverview | null>(null)
-const expandedSections = ref(new Set<string>())
+const expandedSections = reactive(new Set<string>())
 
 function toggleSection(sectionId: string): void {
-  if (expandedSections.value.has(sectionId)) {
-    expandedSections.value.delete(sectionId)
+  if (expandedSections.has(sectionId)) {
+    expandedSections.delete(sectionId)
   } else {
-    expandedSections.value.add(sectionId)
+    expandedSections.add(sectionId)
   }
 }
 
 async function loadOverview(): Promise<void> {
   if (!props.documentId) return
-  expandedSections.value.clear()
+  expandedSections.clear()
   overview.value = await getOverview(props.documentId)
 }
 

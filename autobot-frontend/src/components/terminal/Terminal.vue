@@ -82,6 +82,7 @@ import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger
 import { useTabCompletion } from '@/composables/useTabCompletion'
 import CompletionSuggestions from './CompletionSuggestions.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 const logger = createLogger('Terminal')
 
@@ -205,7 +206,7 @@ const initializeSession = async (): Promise<string> => {
       const sessionsUrl = await appConfig.getApiUrl(
         `/api/agent-terminal/sessions?conversation_id=${props.chatSessionId}`
       )
-      const response = await fetch(sessionsUrl)
+      const response = await fetchWithAuth(sessionsUrl)
       if (!response.ok) {
         throw new Error(`Failed to fetch sessions: ${response.status} ${response.statusText}`)
       }
@@ -220,7 +221,7 @@ const initializeSession = async (): Promise<string> => {
         // Create new session via AgentTerminalService
 
         const createUrl = await appConfig.getApiUrl('/api/agent-terminal/sessions')
-        const createResponse = await fetch(createUrl, {
+        const createResponse = await fetchWithAuth(createUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

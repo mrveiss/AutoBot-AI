@@ -2,8 +2,9 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 [Unit]
-Description=AutoBot AI Processing Stack
-After=network.target
+Description=AutoBot AI Processing Stack (LangChain/LlamaIndex Agent Router)
+After=network.target autobot-chromadb.service
+Wants=autobot-chromadb.service
 
 [Service]
 Type=simple
@@ -11,8 +12,9 @@ User={{ ai_user }}
 Group={{ ai_group }}
 WorkingDirectory={{ ai_install_dir }}
 Environment="PATH={{ ai_install_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH={{ ai_install_dir }}:{{ ai_install_dir }}/src"
 EnvironmentFile={{ ai_install_dir }}/.env
-ExecStart={{ ai_install_dir }}/venv/bin/python -m chromadb.server --host {{ chromadb_host }} --port {{ chromadb_port }} --persist-path {{ chromadb_persist_dir }}
+ExecStart={{ ai_install_dir }}/venv/bin/uvicorn ai_api_server:app --host {{ ai_host }} --port {{ ai_port }} --workers 2
 Restart=always
 RestartSec=10
 StandardOutput=append:{{ ai_log_dir }}/ai-stack.log

@@ -18,7 +18,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@shared/*": ["../autobot-shared/*"]
+      "@shared/*": ["../autobot-shared/*"],
+      "vue": ["./node_modules/vue/dist/vue.d.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"],

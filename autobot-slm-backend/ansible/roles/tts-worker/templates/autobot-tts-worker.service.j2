@@ -1,0 +1,22 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+[Unit]
+Description=AutoBot TTS Worker (Kani-TTS-2)
+After=network.target
+
+[Service]
+Type=simple
+User={{ tts_user }}
+Group={{ tts_group }}
+WorkingDirectory={{ tts_install_dir }}
+Environment="PATH={{ tts_install_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile={{ tts_install_dir }}/.env
+ExecStart={{ tts_install_dir }}/venv/bin/python {{ tts_install_dir }}/tts-worker.py
+Restart=always
+RestartSec=10
+StandardOutput=append:{{ tts_log_dir }}/tts-worker.log
+StandardError=append:{{ tts_log_dir }}/tts-worker-error.log
+
+[Install]
+WantedBy=multi-user.target

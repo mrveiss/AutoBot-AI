@@ -30,6 +30,10 @@ export function useSlmWebSocket() {
 
   const messageHandlers = new Map<string, (data: SLMWebSocketMessage) => void>()
 
+  // Issue #988: Track subscription intent so it can be sent once socket opens
+  let subscribeAllPending = false
+  const pendingNodeSubscriptions = new Set<string>()
+
   function connect(): void {
     if (socket.value?.readyState === WebSocket.OPEN) {
       return
@@ -48,6 +52,16 @@ export function useSlmWebSocket() {
       connected.value = true
       reconnecting.value = false
       reconnectAttempts = 0 // Reset on successful connection
+
+      // Issue #988: Resend pending subscriptions after (re)connect
+      if (subscribeAllPending) {
+        socket.value?.send(JSON.stringify({ type: 'subscribe_all' }))
+      }
+      if (pendingNodeSubscriptions.size > 0) {
+        socket.value?.send(
+          JSON.stringify({ type: 'subscribe', node_ids: Array.from(pendingNodeSubscriptions) })
+        )
+      }
 
       // Start ping interval to keep connection alive
       pingInterval = setInterval(() => {
@@ -128,23 +142,18 @@ export function useSlmWebSocket() {
   }
 
   function subscribe(nodeId: string): void {
+    // Issue #988: Track pending subscriptions to resend when socket opens/reconnects
+    pendingNodeSubscriptions.add(nodeId)
     if (socket.value?.readyState === WebSocket.OPEN) {
-      socket.value.send(
-        JSON.stringify({
-          type: 'subscribe',
-          node_ids: [nodeId],
-        })
-      )
+      socket.value.send(JSON.stringify({ type: 'subscribe', node_ids: [nodeId] }))
     }
   }
 
   function subscribeAll(): void {
+    // Issue #988: Track subscription intent; send now if open, or defer to onopen
+    subscribeAllPending = true
     if (socket.value?.readyState === WebSocket.OPEN) {
-      socket.value.send(
-        JSON.stringify({
-          type: 'subscribe_all',
-        })
-      )
+      socket.value.send(JSON.stringify({ type: 'subscribe_all' }))
     }
   }
 

@@ -161,6 +161,13 @@ export class ApiClient {
       if (!stored) return null;
       const auth = JSON.parse(stored);
       if (auth.token && auth.token !== 'single_user_mode') {
+        // Check expiry before returning — expired tokens cause widespread 401s (#979)
+        if (auth.expiresAt && new Date(auth.expiresAt) <= new Date()) {
+          logger.warn('Auth token expired, clearing stale localStorage');
+          localStorage.removeItem('autobot_auth');
+          localStorage.removeItem('autobot_user');
+          return null;
+        }
         return auth.token;
       }
       return null;
@@ -174,6 +181,10 @@ export class ApiClient {
     logger.warn('401 Unauthorized, clearing auth:', endpoint);
     localStorage.removeItem('autobot_auth');
     localStorage.removeItem('autobot_user');
+    // Also clear Pinia store to prevent stale isAuthenticated blocking login redirect (#972)
+    import('@/stores/useUserStore').then(({ useUserStore }) => {
+      try { useUserStore().logout(); } catch { /* ignore if store unavailable */ }
+    });
     if (
       typeof window !== 'undefined' &&
       !window.location.pathname.includes('/login')

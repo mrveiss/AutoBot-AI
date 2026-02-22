@@ -1,6 +1,5 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosResponse } from 'axios'
-import { NetworkConstants } from '@/constants/network'
 import { getBackendUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -121,14 +120,49 @@ export class ChatRepository {
       }
     })
 
-    // Add response interceptor for error handling
+    // Inject auth token on every request
+    this.axios.interceptors.request.use(config => {
+      const token = this._getAuthToken()
+      if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`
+      }
+      return config
+    })
+
+    // Add response interceptor — redirect to login on 401 (#967)
     this.axios.interceptors.response.use(
       response => response,
       error => {
         logger.error('Request failed:', error)
+        if (
+          error?.response?.status === 401 &&
+          typeof window !== 'undefined' &&
+          !window.location.pathname.includes('/login')
+        ) {
+          logger.warn('401 Unauthorized — clearing auth and redirecting to login')
+          localStorage.removeItem('autobot_auth')
+          localStorage.removeItem('autobot_user')
+          const redirect = encodeURIComponent(window.location.pathname)
+          window.location.href = `/login?redirect=${redirect}`
+        }
         return Promise.reject(error)
       }
     )
+  }
+
+  private _getAuthToken(): string | null {
+    try {
+      const stored = localStorage.getItem('autobot_auth')
+      if (stored) {
+        const auth = JSON.parse(stored)
+        if (auth.token && auth.token !== 'single_user_mode') {
+          return auth.token
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+    return null
   }
 
   /**
@@ -174,11 +208,12 @@ export class ChatRepository {
 
       // Use native fetch API for proper SSE streaming support
       const url = `${this.baseURL}/api/chats/${chatId}/message`
+      const fetchHeaders: Record<string, string> = { 'Content-Type': 'application/json' }
+      const authToken = this._getAuthToken()
+      if (authToken) fetchHeaders['Authorization'] = `Bearer ${authToken}`
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: fetchHeaders,
         body: JSON.stringify({
           message: message,
           context: metadata
@@ -336,7 +371,7 @@ export class ChatRepository {
         const normalizedType = this.normalizeMessageType(rawType)
 
         const transformed = {
-          id: msg.id || `${Date.now()}-${Math.random()}`,
+          id: msg.id || msg.metadata?.message_id || msg.rawData?.message_id || `${Date.now()}-${index}`,
           sender: this.normalizeSender(msg.sender),
           content: msg.text || msg.content || '',
           timestamp: new Date(msg.timestamp || new Date().toISOString()),

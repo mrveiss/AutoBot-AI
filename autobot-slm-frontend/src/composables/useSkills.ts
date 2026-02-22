@@ -9,12 +9,12 @@
  * via the AutoBot user backend API.
  */
 
-import { ref, computed, readonly } from 'vue'
+import { ref, computed, readonly, onUnmounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 
 // Skills API is on the main AutoBot backend, proxied via nginx
-const API_BASE = '/autobot-api/skills'
+const API_BASE = '/autobot-api/skills/'
 
 // =============================================================================
 // Type Definitions
@@ -36,10 +36,10 @@ export interface SkillInfo {
   category: string
   status: string
   enabled: boolean
-  tools: string[]
-  triggers: string[]
-  dependencies: string[]
-  tags: string[]
+  tools: readonly string[]
+  triggers: readonly string[]
+  dependencies: readonly string[]
+  tags: readonly string[]
 }
 
 export interface SkillDetail extends SkillInfo {
@@ -297,6 +297,8 @@ export function useSkillGovernance() {
   const governanceConfig = ref<GovernanceConfig | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const newDraftNotification = ref<string | null>(null)
+  let _pollTimer: ReturnType<typeof setInterval> | null = null
 
   const api = axios.create({ timeout: 15000 })
   api.interceptors.request.use((config) => {
@@ -373,7 +375,7 @@ export function useSkillGovernance() {
   async function fetchDrafts(): Promise<void> {
     try {
       const { data } = await api.get<Record<string, unknown>[]>(`${SKILLS_GOV_BASE}/drafts`)
-      drafts.value = data
+      drafts.value = Array.isArray(data) ? data : []
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch drafts'
     }
@@ -418,6 +420,34 @@ export function useSkillGovernance() {
     }
   }
 
+  /** Issue #951: Poll for new autonomous-generated approvals every 30s. */
+  function startApprovalPolling(): void {
+    if (_pollTimer !== null) return
+    _pollTimer = setInterval(async () => {
+      const prev = approvals.value.length
+      await fetchApprovals()
+      const curr = approvals.value.length
+      if (curr > prev) {
+        const newest = approvals.value[approvals.value.length - 1]
+        newDraftNotification.value =
+          `AutoBot generated a new skill: "${newest?.skill_id ?? 'unknown'}" — pending approval`
+      }
+    }, 30_000)
+  }
+
+  function stopApprovalPolling(): void {
+    if (_pollTimer !== null) {
+      clearInterval(_pollTimer)
+      _pollTimer = null
+    }
+  }
+
+  function dismissDraftNotification(): void {
+    newDraftNotification.value = null
+  }
+
+  onUnmounted(stopApprovalPolling)
+
   return {
     repos: readonly(repos),
     approvals: readonly(approvals),
@@ -425,6 +455,7 @@ export function useSkillGovernance() {
     governanceConfig: readonly(governanceConfig),
     loading: readonly(loading),
     error: readonly(error),
+    newDraftNotification: readonly(newDraftNotification),
     fetchRepos,
     addRepo,
     syncRepo,
@@ -435,5 +466,8 @@ export function useSkillGovernance() {
     promoteDraft,
     fetchGovernance,
     setGovernanceMode,
+    startApprovalPolling,
+    stopApprovalPolling,
+    dismissDraftNotification,
   }
 }

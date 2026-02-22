@@ -103,6 +103,13 @@ class SSHKeyAgentRequest(BaseModel):
     passphrase: Optional[str] = None  # For encrypted keys
 
 
+class AdminExecuteRequest(BaseModel):
+    """Request body for SLM admin terminal command execution (Issue #983)."""
+
+    command: str
+    host: str = ""
+
+
 # Security patterns for command risk assessment
 RISKY_COMMAND_PATTERNS = [
     # File system destructive operations

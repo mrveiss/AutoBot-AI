@@ -8,17 +8,17 @@ import sys
 from datetime import datetime
 
 from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.constants.model_constants import ModelConstants as ModelConsts
 
 # Add caching support from unified cache manager (P4 Cache Consolidation)
 from backend.utils.advanced_cache_manager import cache_manager, cache_response
-from config import UnifiedConfigManager
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from config import ConfigManager
 
 # Create singleton config instance
-config = UnifiedConfigManager()
+config = ConfigManager()
 
 router = APIRouter()
 
@@ -417,6 +417,7 @@ async def get_detailed_health(
         health_status["components"].update(detailed_components)
         health_status["detailed"] = True
 
+        _add_resource_metrics(detailed_components, health_status)
         _determine_overall_health_status(health_status)
 
         return health_status
@@ -475,6 +476,41 @@ def _check_system_resources(components: dict) -> None:
         components["system_monitoring"] = "psutil_unavailable"
     except Exception as e:
         components["system_monitoring"] = f"error: {str(e)}"
+
+
+def _add_resource_metrics(components: dict, health_status: dict) -> None:
+    """Add top-level numeric resource metrics to health_status (Issue #997).
+
+    Parses string values from _check_system_resources() and exposes them
+    as top-level numeric fields expected by AdminMonitoringView.vue.
+    """
+
+    def _parse_pct(value: str) -> float:
+        try:
+            return float(str(value).rstrip("%"))
+        except (ValueError, AttributeError):
+            return 0.0
+
+    health_status["cpu_percent"] = _parse_pct(components.get("cpu_usage", "0"))
+    health_status["memory_percent"] = _parse_pct(components.get("memory_usage", "0"))
+    health_status["disk_percent"] = _parse_pct(components.get("disk_usage", "0"))
+
+    try:
+        import time
+
+        import psutil
+
+        health_status["uptime_seconds"] = int(time.time() - psutil.boot_time())
+    except Exception:
+        health_status["uptime_seconds"] = 0
+
+    # Build services list from component statuses
+    service_keys = {"redis", "llm", "knowledge_base", "conversation_db"}
+    health_status["services"] = [
+        {"name": key, "status": "healthy" if str(val) == "healthy" else "unhealthy"}
+        for key, val in components.items()
+        if key in service_keys
+    ]
 
 
 def _determine_overall_health_status(health_status: dict) -> None:

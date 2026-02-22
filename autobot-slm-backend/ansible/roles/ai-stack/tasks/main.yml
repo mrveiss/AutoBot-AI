@@ -99,15 +99,21 @@
     state: latest
   become_user: "{{ ai_user }}"
 
-- name: Check if AI packages are already installed
-  ansible.builtin.command:
-    cmd: "{{ ai_install_dir }}/venv/bin/pip show chromadb"
-  register: _ai_packages_check
-  changed_when: false
-  failed_when: false
-  become_user: "{{ ai_user }}"
+- name: Check if requirements-ai.txt exists
+  ansible.builtin.stat:
+    path: "{{ ai_install_dir }}/requirements-ai.txt"
+  register: _ai_requirements_file
 
-- name: Install AI Python packages
+- name: Install AI Python packages from requirements-ai.txt
+  ansible.builtin.pip:
+    requirements: "{{ ai_install_dir }}/requirements-ai.txt"
+    virtualenv: "{{ ai_install_dir }}/venv"
+    state: present
+    extra_args: "--timeout 300"
+  become_user: "{{ ai_user }}"
+  when: _ai_requirements_file.stat.exists
+
+- name: Install AI Python packages (fallback list)
   ansible.builtin.pip:
     name:
       - chromadb>=0.4.0
@@ -117,14 +123,23 @@
       - sentence-transformers
       - torch>=2.0.0
       - numpy
+      - pandas
       - pillow
       - openai
       - anthropic
+      - fastapi>=0.115.0
+      - "uvicorn[standard]>=0.35.0"
+      - httpx
+      - pydantic>=2.0.0
+      - python-dotenv
+      - redis>=5.0.0
+      - sqlalchemy>=2.0.0
+      - aiosqlite
     virtualenv: "{{ ai_install_dir }}/venv"
     state: present
-    extra_args: "--timeout 120"
+    extra_args: "--timeout 300"
   become_user: "{{ ai_user }}"
-  when: _ai_packages_check.rc != 0
+  when: not _ai_requirements_file.stat.exists
 
 - name: Deploy AI stack environment file
   ansible.builtin.template:
@@ -135,7 +150,16 @@
     group: "{{ ai_group }}"
   notify: restart ai-stack
 
-- name: Deploy AI stack systemd service
+- name: Deploy ChromaDB systemd service
+  ansible.builtin.template:
+    src: autobot-chromadb.service.j2
+    dest: /etc/systemd/system/autobot-chromadb.service
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart chromadb
+
+- name: Deploy AI Stack API systemd service
   ansible.builtin.template:
     src: autobot-ai-stack.service.j2
     dest: /etc/systemd/system/autobot-ai-stack.service
@@ -144,7 +168,14 @@
     - reload systemd
     - restart ai-stack
 
-- name: Enable and start AI stack service
+- name: Enable and start ChromaDB service
+  ansible.builtin.systemd:
+    name: autobot-chromadb
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Enable and start AI Stack API service
   ansible.builtin.systemd:
     name: autobot-ai-stack
     state: started

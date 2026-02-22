@@ -91,7 +91,9 @@ class VMConfig(BaseSettings):
     npu: str = Field(default="172.16.168.22", alias="AUTOBOT_NPU_WORKER_HOST")
     redis: str = Field(default="172.16.168.23", alias="AUTOBOT_REDIS_HOST")
     aistack: str = Field(default="172.16.168.24", alias="AUTOBOT_AI_STACK_HOST")
+    chromadb: str = Field(default="172.16.168.24", alias="AUTOBOT_CHROMADB_HOST")
     browser: str = Field(default="172.16.168.25", alias="AUTOBOT_BROWSER_SERVICE_HOST")
+    tts: str = Field(default="172.16.168.22", alias="AUTOBOT_TTS_WORKER_HOST")
     slm: str = Field(default="172.16.168.19", alias="AUTOBOT_SLM_HOST")  # Issue #768
     ollama: str = Field(default="127.0.0.1", alias="AUTOBOT_OLLAMA_HOST")
 
@@ -112,7 +114,9 @@ class PortConfig(BaseSettings):
     vnc: int = Field(default=6080, alias="AUTOBOT_VNC_PORT")
     browser: int = Field(default=3000, alias="AUTOBOT_BROWSER_SERVICE_PORT")
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
+    chromadb: int = Field(default=8000, alias="AUTOBOT_CHROMADB_PORT")
     npu: int = Field(default=8081, alias="AUTOBOT_NPU_WORKER_PORT")
+    tts: int = Field(default=8082, alias="AUTOBOT_TTS_WORKER_PORT")  # Issue #928
     slm: int = Field(default=8000, alias="AUTOBOT_SLM_PORT")  # Issue #768
     prometheus: int = Field(default=9090, alias="AUTOBOT_PROMETHEUS_PORT")
     grafana: int = Field(default=3000, alias="AUTOBOT_GRAFANA_PORT")
@@ -187,6 +191,10 @@ class LLMConfig(BaseSettings):
     )
     custom_endpoint: str = Field(default="", alias="AUTOBOT_CUSTOM_LLM_ENDPOINT")
 
+    # GPU Ollama endpoint for model-to-endpoint routing (#1070)
+    ollama_gpu_endpoint: str = Field(default="", alias="AUTOBOT_OLLAMA_GPU_ENDPOINT")
+    ollama_gpu_models: str = Field(default="", alias="AUTOBOT_OLLAMA_GPU_MODELS")
+
     # API keys (optional - can also come from provider-specific env vars)
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
@@ -208,6 +216,25 @@ class LLMConfig(BaseSettings):
     llamaindex_embedding_endpoint: str = Field(
         default="http://127.0.0.1:11434", alias="AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT"
     )
+
+    def get_ollama_endpoint_for_model(self, model_name: str) -> str:
+        """Route Ollama requests to GPU or CPU endpoint by model (#1070).
+
+        Args:
+            model_name: Ollama model name (e.g. 'mistral:7b-instruct')
+
+        Returns:
+            Ollama base URL (no /api suffix)
+        """
+        if self.ollama_gpu_endpoint and self.ollama_gpu_models:
+            gpu_set = {
+                m.strip().lower()
+                for m in self.ollama_gpu_models.split(",")
+                if m.strip()
+            }
+            if model_name.strip().lower() in gpu_set:
+                return self.ollama_gpu_endpoint
+        return self.ollama_endpoint
 
     def get_provider_for_agent(self, agent_id: str) -> str:
         """
@@ -932,6 +959,10 @@ class AutoBotConfig(BaseSettings):
         # Otherwise construct from VM config (allows using different Ollama host)
         return f"http://{self.vm.ollama}:{self.port.ollama}"
 
+    def get_ollama_url_for_model(self, model_name: str) -> str:
+        """Get Ollama base URL routed by model name (#1070)."""
+        return self.llm.get_ollama_endpoint_for_model(model_name)
+
     def get_llm_endpoint(self, model_type: str = "default") -> str:
         """
         Get the LLM API endpoint for a specific model type.
@@ -966,6 +997,11 @@ class AutoBotConfig(BaseSettings):
     def npu_worker_url(self) -> str:
         """Get the NPU Worker service URL."""
         return f"http://{self.vm.npu}:{self.port.npu}"
+
+    @property
+    def tts_worker_url(self) -> str:
+        """Get the TTS Worker (Pocket TTS) service URL. (#1054)"""
+        return f"http://{self.vm.tts}:{self.port.tts}"
 
     @property
     def browser_service_url(self) -> str:
@@ -1035,6 +1071,8 @@ class AutoBotConfig(BaseSettings):
             "ai_stack": self.vm.aistack,
             "browser": self.vm.browser,
             "ollama": self.vm.ollama,
+            "tts": self.vm.tts,
+            "tts_worker": self.vm.tts,
         }
         return vm_map.get(vm_name.lower())
 
@@ -1052,6 +1090,7 @@ class AutoBotConfig(BaseSettings):
             "main-host": self.vm.main,
             "frontend": self.vm.frontend,
             "npu-worker": self.vm.npu,
+            "tts-worker": self.vm.tts,
             "redis": self.vm.redis,
             "ai-stack": self.vm.aistack,
             "browser": self.vm.browser,
@@ -1114,6 +1153,11 @@ def get_redis_url() -> str:
 def get_ollama_url() -> str:
     """Get Ollama URL (backward compatibility)."""
     return get_config().ollama_url
+
+
+def get_ollama_url_for_model(model_name: str) -> str:
+    """Get Ollama URL routed by model name (#1070)."""
+    return get_config().get_ollama_url_for_model(model_name)
 
 
 def get_default_llm_model() -> str:
@@ -1364,6 +1408,7 @@ __all__ = [
     "get_backend_url",
     "get_redis_url",
     "get_ollama_url",
+    "get_ollama_url_for_model",
     "get_default_llm_model",
     "PROJECT_ROOT",
     # Agent-specific configuration (EXPLICIT - NO FALLBACKS)

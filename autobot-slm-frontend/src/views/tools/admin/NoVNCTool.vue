@@ -54,10 +54,19 @@ const selectedHost = ref<string>(staticHosts[0]?.id || '')
 const currentHost = computed(() => hosts.value.find(h => h.id === selectedHost.value))
 
 // VNC URL
+// Issue #1002: nginx proxies /tools/novnc/ → http://backend:6080/ for the main host.
+// Using the proxy path avoids mixed-content blocking (HTTP iframe in HTTPS page).
+// Dynamic/non-main hosts fall back to a new-tab link since no proxy exists for them.
 const vncUrl = computed(() => {
   if (!currentHost.value) return ''
+  if (currentHost.value.id === 'main') {
+    return `/tools/novnc/vnc.html?autoconnect=true&resize=scale`
+  }
   return `http://${currentHost.value.host}:${currentHost.value.port}/vnc.html?autoconnect=true&resize=scale`
 })
+
+// Whether the current host can be embedded (proxied) vs needs a new tab
+const canEmbedHost = computed(() => currentHost.value?.id === 'main')
 
 async function fetchDynamicEndpoints(): Promise<void> {
   loadingEndpoints.value = true
@@ -317,13 +326,30 @@ onUnmounted(() => {
           </div>
         </div>
 
+        <!-- Issue #1002: Embedded iframe for proxied main host; new-tab link for others -->
         <iframe
-          v-else
+          v-else-if="canEmbedHost"
           id="vnc-frame"
           :src="vncUrl"
           class="w-full h-full border-0"
           allow="fullscreen"
         ></iframe>
+        <div v-else class="h-full flex items-center justify-center">
+          <div class="text-center p-8">
+            <svg class="w-12 h-12 mx-auto text-gray-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            <p class="text-gray-300 mb-4">This host requires a direct connection</p>
+            <a
+              :href="vncUrl"
+              target="_blank"
+              rel="noopener"
+              class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Open noVNC in New Tab
+            </a>
+          </div>
+        </div>
       </div>
     </div>
 

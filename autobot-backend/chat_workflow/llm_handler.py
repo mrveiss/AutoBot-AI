@@ -14,11 +14,11 @@ import logging
 from typing import Any, Dict, List
 
 from async_chat_workflow import WorkflowMessage
-from backend.constants.model_constants import ModelConstants
-from backend.dependencies import global_config_manager
 from prompt_manager import get_prompt
 
 from autobot_shared.http_client import get_http_client
+from backend.constants.model_constants import ModelConstants
+from backend.dependencies import global_config_manager
 
 from .models import WorkflowSession
 
@@ -62,10 +62,10 @@ class LLMHandlerMixin:
         return converted
 
     def _get_ollama_endpoint_fallback(self) -> str:
-        """Get Ollama endpoint from UnifiedConfigManager as fallback."""
-        from config import UnifiedConfigManager
+        """Get Ollama endpoint from ConfigManager as fallback."""
+        from config import ConfigManager
 
-        config = UnifiedConfigManager()
+        config = ConfigManager()
         ollama_host = config.get_host("ollama")
         ollama_port = config.get_port("ollama")
         return f"http://{ollama_host}:{ollama_port}/api/generate"
@@ -93,18 +93,57 @@ class LLMHandlerMixin:
             logger.error("Failed to load Ollama endpoint from config: %s", e)
             return self._get_ollama_endpoint_fallback()
 
+    def _get_ollama_endpoint_for_model(self, model_name: str) -> str:
+        """Get Ollama endpoint routed by model name (#1070).
+
+        GPU models are sent to gpu_endpoint; others to the default.
+        Returns URL with /api/generate suffix.
+        """
+        try:
+            base_url = global_config_manager.get_ollama_endpoint_for_model(model_name)
+            if base_url and base_url.startswith(_VALID_URL_SCHEMES):
+                if not base_url.endswith("/api/generate"):
+                    base_url = base_url.rstrip("/") + "/api/generate"
+                return base_url
+        except Exception as e:
+            logger.warning("Model endpoint routing failed: %s", e)
+        return self._get_ollama_endpoint()
+
+    def _get_personality_preamble(self) -> str:
+        """Return personality block if enabled, else empty string.
+
+        Issue #964: Personality profile injection.
+        """
+        try:
+            from backend.services.personality_service import get_personality_manager
+
+            profile = get_personality_manager().get_active_profile()
+            if profile is None:
+                return ""
+            return profile.to_prompt_block() + "\n\n---\n\n"
+        except Exception as exc:
+            logger.warning("Personality profile load failed: %s", exc)
+            return ""
+
     def _get_system_prompt(self) -> str:
-        """Get system prompt with fallback."""
+        """Get system prompt with optional personality preamble.
+
+        Issue #964: Personality preamble prepended when a profile is active.
+        """
+        preamble = self._get_personality_preamble()
         try:
             prompt = get_prompt("chat.system_prompt_simple")
             logger.debug("[ChatWorkflowManager] Loaded simplified system prompt")
-            return prompt
+            return preamble + prompt
         except Exception as e:
             logger.error("Failed to load system prompt from file: %s", e)
-            return """You are AutoBot. Execute commands using:
+            return (
+                preamble
+                + """You are AutoBot. Execute commands using:
 <TOOL_CALL name="execute_command" params='{"command":"cmd"}'>desc</TOOL_CALL>
 
 NEVER teach commands - ALWAYS execute them."""
+            )
 
     def _build_conversation_context(self, session: WorkflowSession) -> str:
         """Build conversation context from recent history.
@@ -223,7 +262,9 @@ NEVER teach commands - ALWAYS execute them."""
         self, session: WorkflowSession, message: str, use_knowledge: bool = True
     ) -> Dict[str, Any]:
         """Prepare LLM request parameters including endpoint, model, and prompt."""
-        ollama_endpoint = self._get_ollama_endpoint()
+        selected_model = self._get_selected_model()
+        # Issue #1070: resolve endpoint AFTER model so GPU models route correctly
+        ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
         system_prompt = self._get_system_prompt()
         conversation_context = self._build_conversation_context(session)
 
@@ -239,7 +280,6 @@ NEVER teach commands - ALWAYS execute them."""
         full_prompt = self._build_full_prompt(
             system_prompt, knowledge_context, conversation_context, message
         )
-        selected_model = self._get_selected_model()
 
         logger.info(
             "[ChatWorkflowManager] Making Ollama request to: %s", ollama_endpoint
@@ -514,8 +554,9 @@ Do NOT conclude the task or provide a final summary - just explain this specific
         self, command: str, stdout: str, stderr: str, return_code: int
     ) -> str:
         """Get LLM interpretation for command results (non-streaming)."""
-        ollama_endpoint = global_config_manager.get_ollama_url()
         selected_model = global_config_manager.get_selected_model()
+        # Issue #1070: route to correct endpoint based on model
+        ollama_endpoint = global_config_manager.get_ollama_url_for_model(selected_model)
 
         logger.info(
             f"[interpret_terminal_command] Starting interpretation "

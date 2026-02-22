@@ -18,8 +18,11 @@ const testingConnection = ref(false)
 const connectionStatus = ref<'unknown' | 'connected' | 'failed'>('unknown')
 const connectionMessage = ref('')
 
-const apiUrl = computed(() => authStore.getApiUrl())
-const wsUrl = computed(() => apiUrl.value.replace('http', 'ws') + '/ws')
+// Issue #1000: Use full display URLs — authStore.getApiUrl() returns '' (relative path for
+// nginx proxy). For display we need to resolve against window.location.origin.
+const origin = typeof window !== 'undefined' ? window.location.origin : ''
+const apiUrl = computed(() => origin || authStore.getApiUrl() || '(unavailable)')
+const wsUrl = computed(() => `${config.wsBaseUrl}/api/ws/events`)
 
 async function testConnection(): Promise<void> {
   testingConnection.value = true
@@ -139,10 +142,10 @@ function copyToClipboard(text: string): void {
         <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
           <div>
             <p class="font-medium text-gray-900">Grafana (Proxied)</p>
-            <p class="text-sm text-gray-500 font-mono">{{ getGrafanaUrl() }}</p>
+            <p class="text-sm text-gray-500 font-mono">{{ origin + getGrafanaUrl() }}</p>
           </div>
           <button
-            @click="copyToClipboard(getGrafanaUrl())"
+            @click="copyToClipboard(origin + getGrafanaUrl())"
             class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
             title="Copy to clipboard"
           >
@@ -156,10 +159,10 @@ function copyToClipboard(text: string): void {
         <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
           <div>
             <p class="font-medium text-gray-900">Prometheus (Proxied)</p>
-            <p class="text-sm text-gray-500 font-mono">{{ getPrometheusUrl() }}</p>
+            <p class="text-sm text-gray-500 font-mono">{{ origin + getPrometheusUrl() }}</p>
           </div>
           <button
-            @click="copyToClipboard(getPrometheusUrl())"
+            @click="copyToClipboard(origin + getPrometheusUrl())"
             class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
             title="Copy to clipboard"
           >
@@ -173,10 +176,10 @@ function copyToClipboard(text: string): void {
         <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
           <div>
             <p class="font-medium text-gray-900">AutoBot Backend (Proxied)</p>
-            <p class="text-sm text-gray-500 font-mono">{{ getBackendUrl() }}</p>
+            <p class="text-sm text-gray-500 font-mono">{{ origin + getBackendUrl() }}</p>
           </div>
           <button
-            @click="copyToClipboard(getBackendUrl())"
+            @click="copyToClipboard(origin + getBackendUrl())"
             class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
             title="Copy to clipboard"
           >

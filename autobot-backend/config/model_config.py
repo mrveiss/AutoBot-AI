@@ -92,6 +92,38 @@ class ModelConfigMixin:
             },
         }
 
+    def get_ollama_endpoint_for_model(self, model_name: str) -> str:
+        """Get Ollama endpoint routed by model name (#1070).
+
+        Checks backend.llm.ollama.gpu_endpoint and gpu_models in
+        config.yaml. Falls back to the default endpoint when GPU
+        routing is not configured or the model is not in gpu_models.
+
+        Args:
+            model_name: Ollama model name (e.g. 'mistral:7b-instruct')
+
+        Returns:
+            Ollama base URL (no /api/generate suffix)
+        """
+        ollama_cfg = self.get_nested("backend.llm.ollama", {})
+        gpu_endpoint = ollama_cfg.get("gpu_endpoint", "")
+        gpu_models = ollama_cfg.get("gpu_models", [])
+        if gpu_endpoint and gpu_models:
+            gpu_set = {m.strip().lower() for m in gpu_models}
+            if model_name.strip().lower() in gpu_set:
+                return gpu_endpoint
+        # Fall back to default endpoint
+        return self._resolve_default_ollama_endpoint()
+
+    def _resolve_default_ollama_endpoint(self) -> str:
+        """Get the default (CPU) Ollama endpoint URL."""
+        endpoint = self.get_nested("backend.llm.ollama.endpoint")
+        if endpoint:
+            return endpoint
+        ollama_host = self.get_host("ollama")
+        ollama_port = self.get_port("ollama")
+        return f"http://{ollama_host}:{ollama_port}"
+
     def _resolve_ollama_endpoint(self, backend_llm: Dict[str, Any]) -> str:
         """
         Resolve Ollama endpoint from config or infrastructure settings.

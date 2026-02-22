@@ -21,6 +21,7 @@
         />
         <button
           class="search-btn"
+          aria-label="Search entities"
           :disabled="loading || !searchQuery.trim()"
           @click="handleSearch"
         >
@@ -115,7 +116,6 @@
       v-if="selectedEntity"
       :entity="selectedEntity"
       @close="selectedEntity = null"
-      @view-relationships="handleViewRelationships"
       @view-timeline="handleViewTimeline"
     />
   </div>
@@ -133,6 +133,7 @@ import {
   type Entity,
 } from '@/composables/useKnowledgeGraph'
 import EntityDetail from './EntityDetail.vue'
+import { getEntityTypeColor as getTypeColor } from '../constants'
 
 const router = useRouter()
 const {
@@ -151,21 +152,6 @@ const entityTypes = [
   'person', 'organization', 'location', 'concept',
   'technology', 'event', 'document', 'other',
 ]
-
-const typeColorMap: Record<string, string> = {
-  person: 'rgba(59, 130, 246, 0.8)',
-  organization: 'rgba(168, 85, 247, 0.8)',
-  location: 'rgba(34, 197, 94, 0.8)',
-  concept: 'rgba(249, 115, 22, 0.8)',
-  technology: 'rgba(14, 165, 233, 0.8)',
-  event: 'rgba(244, 63, 94, 0.8)',
-  document: 'rgba(107, 114, 128, 0.8)',
-  other: 'rgba(156, 163, 175, 0.8)',
-}
-
-function getTypeColor(type: string): string {
-  return typeColorMap[type.toLowerCase()] ?? typeColorMap.other
-}
 
 function truncateText(text: string, maxLen: number): string {
   if (!text) return ''
@@ -188,11 +174,6 @@ async function handleSearch(): Promise<void> {
 
 function selectEntity(entity: Entity): void {
   selectedEntity.value = entity
-}
-
-function handleViewRelationships(entityId: string): void {
-  // EntityDetail will display relationships inline
-  // This is here for future routing if needed
 }
 
 function handleViewTimeline(entityName: string): void {

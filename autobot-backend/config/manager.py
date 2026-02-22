@@ -3,7 +3,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Core UnifiedConfigManager using composition of specialized modules.
+Core ConfigManager using composition of specialized modules.
 
 SSOT Migration (Issue #763):
     Infrastructure values (VMs, ports, LLM models) are now accessed via
@@ -28,7 +28,7 @@ from backend.config.file_watcher import FileWatcherMixin
 from backend.config.loader import load_configuration
 from backend.config.model_config import ModelConfigMixin
 from backend.config.service_config import ServiceConfigMixin
-from backend.config.settings import UnifiedConfigSettings
+from backend.config.settings import ConfigSettings
 from backend.config.sync_ops import SyncOperationsMixin
 from backend.config.timeout_config import TimeoutConfigMixin
 from backend.config.validation import ValidationMixin
@@ -37,7 +37,7 @@ from backend.constants.path_constants import PATH
 logger = logging.getLogger(__name__)
 
 
-class UnifiedConfigManager(
+class ConfigManager(
     SyncOperationsMixin,
     AsyncOperationsMixin,
     ModelConfigMixin,
@@ -47,7 +47,7 @@ class UnifiedConfigManager(
     ValidationMixin,
 ):
     """
-    Unified configuration manager combining sync/async operations,
+    Configuration manager combining sync/async operations,
     file management, caching, and model management.
 
     SSOT Migration (Issue #763):
@@ -61,9 +61,9 @@ class UnifiedConfigManager(
     def __init__(
         self,
         config_dir: str = "config",
-        settings: Optional[UnifiedConfigSettings] = None,
+        settings: Optional[ConfigSettings] = None,
     ):
-        """Initialize unified config manager with directory paths and settings."""
+        """Initialize config manager with directory paths and settings."""
         # Use centralized PathConstants (Issue #380)
         self.project_root = PATH.PROJECT_ROOT
         self.config_dir = self.project_root / config_dir
@@ -71,7 +71,7 @@ class UnifiedConfigManager(
         self.settings_file = self.config_dir / "settings.json"
 
         # Async settings
-        self.settings = settings or UnifiedConfigSettings()
+        self.settings = settings or ConfigSettings()
 
         # Configuration cache
         self._config: Dict[str, Any] = {}
@@ -100,20 +100,25 @@ class UnifiedConfigManager(
 
 
 # Create singleton instance with thread-safe locking (Issue #613)
-_unified_config_manager_instance: Optional[UnifiedConfigManager] = None
-_unified_config_manager_lock = threading.Lock()
+_config_manager_instance: Optional[ConfigManager] = None
+_config_manager_lock = threading.Lock()
 
 
-def get_unified_config_manager() -> UnifiedConfigManager:
-    """Get or create the singleton UnifiedConfigManager instance (thread-safe).
+def get_config_manager() -> ConfigManager:
+    """Get or create the singleton ConfigManager instance (thread-safe).
 
     Uses double-check locking pattern to ensure thread safety while
     minimizing lock contention after initialization (Issue #613).
     """
-    global _unified_config_manager_instance
-    if _unified_config_manager_instance is None:
-        with _unified_config_manager_lock:
+    global _config_manager_instance
+    if _config_manager_instance is None:
+        with _config_manager_lock:
             # Double-check after acquiring lock
-            if _unified_config_manager_instance is None:
-                _unified_config_manager_instance = UnifiedConfigManager()
-    return _unified_config_manager_instance
+            if _config_manager_instance is None:
+                _config_manager_instance = ConfigManager()
+    return _config_manager_instance
+
+
+# Deprecated: use ConfigManager and get_config_manager instead
+UnifiedConfigManager = ConfigManager
+get_unified_config_manager = get_config_manager

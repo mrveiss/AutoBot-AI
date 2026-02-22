@@ -69,6 +69,9 @@ const isLoadingLogs = ref(false)
 const currentPage = ref(1)
 const pageSize = 50
 
+// Issue #1019: Track expanded error contexts
+const expandedErrors = ref<Set<string>>(new Set())
+
 // Refresh interval
 let refreshInterval: ReturnType<typeof setInterval> | null = null
 
@@ -144,6 +147,16 @@ function formatBytes(bytes: number | null): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+}
+
+function toggleErrorDetail(serviceName: string): void {
+  const next = new Set(expandedErrors.value)
+  if (next.has(serviceName)) {
+    next.delete(serviceName)
+  } else {
+    next.add(serviceName)
+  }
+  expandedErrors.value = next
 }
 
 function formatRelativeTime(timestamp: string | null): string {
@@ -466,11 +479,26 @@ onUnmounted(() => {
               </div>
             </td>
 
-            <!-- Service Name & Description -->
+            <!-- Service Name, Description & Error Context (#1019) -->
             <td class="px-4 py-3">
               <div class="font-medium text-gray-900">{{ service.service_name }}</div>
               <div v-if="service.description" class="text-xs text-gray-500 truncate max-w-xs" :title="service.description">
                 {{ service.description }}
+              </div>
+              <div
+                v-if="service.status === 'failed' && service.extra_data?.error_message"
+                class="mt-1.5 text-xs"
+              >
+                <button
+                  @click="toggleErrorDetail(service.service_name)"
+                  class="text-red-600 hover:text-red-800 underline"
+                >
+                  {{ expandedErrors.has(service.service_name) ? 'Hide' : 'Show' }} error context
+                </button>
+                <pre
+                  v-if="expandedErrors.has(service.service_name)"
+                  class="mt-1 p-2 bg-red-50 border border-red-200 rounded text-red-700 font-mono whitespace-pre-wrap max-h-32 overflow-y-auto"
+                >{{ service.extra_data.error_message }}</pre>
               </div>
             </td>
 

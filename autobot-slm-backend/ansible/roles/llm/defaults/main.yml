@@ -11,14 +11,43 @@ llm_models_dir: /var/lib/ollama
 llm_install_ollama: true
 llm_pull_models: false
 
-# Default models to pull
-llm_default_models:
-  - llama3.2:1b
-  - nomic-embed-text
+# GPU detection: "auto" runs nvidia-smi at deploy time.
+# Override with true/false to skip detection.
+llm_has_gpu: "auto"
+
+# Models requiring GPU for reasonable performance (>= 7B parameters)
+llm_gpu_models:
+  - mistral:7b-instruct      # Default LLM for all agents
+  - deepseek-r1:14b           # Multi-provider fallback
+  - codellama:13b             # Code generation
+
+# Lightweight models that run well on CPU (<= 3B parameters)
+llm_cpu_models:
+  - nomic-embed-text          # Embeddings (vectorization, RAG, memory graph)
+  - llama3.2:1b               # Tier 1 fast ops (env analyzer, codebase analytics)
+  - llama3.2:3b               # Tier 2 processing
+  - llama3.2:latest           # Agent think tool reasoning
+  - gemma2:2b                 # Tiered routing simple tier
 
 # Server settings
 llm_host: "0.0.0.0"
 llm_port: 11434
 
+# Concurrency settings (GPU node defaults — overridden for CPU-only)
+llm_max_loaded_models: 5     # Models kept hot in RAM
+llm_num_parallel: 4          # Concurrent requests per loaded model
+llm_keep_alive: "10m"        # Idle time before unloading a model
+
+# CPU-only concurrency overrides (applied when no GPU detected)
+llm_cpu_max_loaded_models: 2
+llm_cpu_num_parallel: 2
+llm_cpu_keep_alive: "5m"
+
+# Performance tuning
+llm_flash_attention: true    # Faster attention computation
+llm_kv_cache_type: "q8_0"   # Quantized KV cache (less memory, faster)
+llm_num_threads: 0           # 0 = auto-detect available cores
+
 # GPU settings
-llm_num_gpu: 0  # 0 = auto, -1 = CPU only
+# 0 = auto (offloads all layers that fit VRAM), -1 = CPU only
+llm_num_gpu: 0

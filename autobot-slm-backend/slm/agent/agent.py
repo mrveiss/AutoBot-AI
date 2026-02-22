@@ -26,6 +26,11 @@ from typing import Optional
 import aiohttp
 from aiohttp import web
 
+from .health_collector import HealthCollector
+from .port_scanner import get_listening_ports
+from .role_detector import RoleDetector
+from .version import get_agent_version
+
 
 def sd_notify(state: str) -> bool:
     """
@@ -60,11 +65,6 @@ def sd_notify(state: str) -> bool:
         return False
 
 
-from .health_collector import HealthCollector
-from .port_scanner import get_listening_ports
-from .role_detector import RoleDetector
-from .version import get_agent_version
-
 logger = logging.getLogger(__name__)
 
 # Local notification server port (for git hooks)
@@ -87,7 +87,8 @@ def _get_default_admin_url() -> str:
         return get_config().slm_url
     except Exception:
         # Fallback for standalone deployments without full AutoBot
-        return "http://172.16.168.19:8000"
+        slm_host = os.getenv("SLM_HOST", "172.16.168.19")
+        return f"http://{slm_host}:8000"
 
 
 DEFAULT_ADMIN_URL = _get_default_admin_url()
@@ -319,44 +320,83 @@ class SLMAgent:
         return await self._send_heartbeat_request(payload)
 
     async def sync_buffered_events(self):
-        """Sync buffered events to admin."""
+        """Sync buffered events to admin (#1106)."""
+        self._prune_old_events()
         conn = sqlite3.connect(self.buffer_db)
-        cursor = conn.execute(
-            "SELECT id, event_type, data FROM event_buffer WHERE synced = 0 ORDER BY id LIMIT 100"
-        )
-        events = cursor.fetchall()
-
-        if not events:
-            return
-
-        logger.info("Syncing %d buffered events", len(events))
-
         try:
+            cursor = conn.execute(
+                "SELECT id, event_type, data FROM event_buffer "
+                "WHERE synced = 0 ORDER BY id LIMIT 100"
+            )
+            events = cursor.fetchall()
+
+            if not events:
+                return
+
+            logger.info("Syncing %d buffered events", len(events))
+
             async with aiohttp.ClientSession() as session:
-                url = f"{self.admin_url}/api/v1/slm/events/sync"
+                url = f"{self.admin_url}/api/events/sync"
                 payload = [
-                    {"id": e[0], "type": e[1], "data": json.loads(e[2])} for e in events
+                    {
+                        "id": e[0],
+                        "type": e[1],
+                        "data": json.loads(e[2]),
+                        "node_id": self.node_id,
+                    }
+                    for e in events
                 ]
                 async with session.post(
                     url,
                     json=payload,
                     timeout=aiohttp.ClientTimeout(total=30),
-                    ssl=False,  # mTLS pending PKI setup (Issue #725)
+                    ssl=False,
                 ) as response:
                     if response.status == 200:
-                        # Mark as synced
                         ids = [e[0] for e in events]
                         placeholders = ",".join("?" * len(ids))
-                        # Safe: placeholders constructed from "?" chars
                         query = (
-                            f"UPDATE event_buffer SET synced = 1 "  # nosec B608
+                            "UPDATE event_buffer SET synced = 1 "
                             f"WHERE id IN ({placeholders})"
                         )
                         conn.execute(query, ids)
                         conn.commit()
                         logger.info("Synced %d events", len(events))
+                    else:
+                        body = await response.text()
+                        logger.warning(
+                            "Event sync rejected: %s %s",
+                            response.status,
+                            body[:200],
+                        )
         except aiohttp.ClientError as e:
             logger.warning("Failed to sync events: %s", e)
+        finally:
+            conn.close()
+
+    @staticmethod
+    def _prune_old_events(
+        db_path: str = DEFAULT_BUFFER_DB,
+        max_events: int = 500,
+    ):
+        """Cap the event buffer to prevent unbounded growth (#1106)."""
+        conn = sqlite3.connect(db_path)
+        try:
+            count = conn.execute("SELECT COUNT(*) FROM event_buffer").fetchone()[0]
+            if count > max_events:
+                conn.execute(
+                    "DELETE FROM event_buffer WHERE id IN ("
+                    "  SELECT id FROM event_buffer"
+                    "  ORDER BY id ASC LIMIT ?"
+                    ")",
+                    (count - max_events,),
+                )
+                conn.commit()
+                logger.info(
+                    "Pruned %d old events (cap=%d)",
+                    count - max_events,
+                    max_events,
+                )
         finally:
             conn.close()
 

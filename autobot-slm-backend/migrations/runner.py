@@ -43,6 +43,8 @@ MIGRATIONS = [
     "add_agents",
     "seed_agents",
     "add_error_resolution_fields",
+    "add_external_agents",
+    "fix_services_memory_bytes_bigint",
 ]
 
 

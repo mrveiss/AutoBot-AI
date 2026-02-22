@@ -126,14 +126,25 @@ export function useRoles() {
     }
   }
 
-  async function removeRole(nodeId: string, roleName: string): Promise<boolean> {
+  async function removeRole(
+    nodeId: string,
+    roleName: string,
+    backup = false,
+  ): Promise<{ success: boolean; message?: string; backup_path?: string }> {
     try {
-      await client.delete(`/api/nodes/${nodeId}/detected-roles/${roleName}`)
-      return true
+      const response = await client.delete<{
+        success: boolean
+        message: string
+        backup_path?: string
+      }>(`/api/nodes/${nodeId}/detected-roles/${roleName}`, {
+        params: { backup },
+      })
+      return response.data
     } catch (e: unknown) {
       const err = e as { response?: { data?: { detail?: string } }; message?: string }
-      error.value = err.response?.data?.detail || err.message || 'Failed to remove role'
-      return false
+      const msg = err.response?.data?.detail || err.message || 'Failed to remove role'
+      error.value = msg
+      return { success: false, message: msg }
     }
   }
 

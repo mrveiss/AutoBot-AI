@@ -17,12 +17,12 @@ import threading
 from typing import Optional
 
 from autobot_memory_graph import AutoBotMemoryGraph
-from backend.constants.network_constants import NetworkConstants
 from config import config as global_config_manager
 from context_window_manager import ContextWindowManager
 from encryption_service import get_encryption_service, is_encryption_enabled
 
 from autobot_shared.redis_client import get_redis_client
+from backend.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +58,11 @@ class ChatHistoryBase:
             redis_host: Optional override for Redis host
             redis_port: Optional override for Redis port
         """
-        from config import UnifiedConfigManager
+        from config import ConfigManager
 
         data_config = global_config_manager.get("data", {})
         redis_config = global_config_manager.get_redis_config()
-        unified_config = UnifiedConfigManager()
+        unified_config = ConfigManager()
 
         self.history_file = history_file or data_config.get(
             "chat_history_file",

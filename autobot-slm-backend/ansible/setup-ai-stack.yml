@@ -55,6 +55,13 @@
   post_tasks:
     - name: Verify ChromaDB service
       systemd:
+        name: autobot-chromadb
+        state: started
+        enabled: true
+      tags: [verify]
+
+    - name: Verify AI Stack API service
+      systemd:
         name: autobot-ai-stack
         state: started
         enabled: true
@@ -69,16 +76,26 @@
       failed_when: false
       tags: [verify]
 
+    - name: Check AI Stack API health
+      uri:
+        url: "http://{{ ansible_host }}:{{ ai_stack_port | default(8080) }}/health"
+        status_code: [200, 404]
+        timeout: 5
+      register: ai_stack_check
+      failed_when: false
+      tags: [verify]
+
     - name: Display setup summary
       debug:
         msg: |
           ═══════════════════════════════════════════════════════════════
           AI Stack Setup Complete
           ═══════════════════════════════════════════════════════════════
-          Service: autobot-ai-stack
-          ChromaDB: {{ 'Running' if chromadb_check.status == 200 else 'Starting' }}
-          URL: http://{{ ansible_host }}:{{ chromadb_port }}
+          ChromaDB: {{ 'Running' if chromadb_check.status | default(0) == 200 else 'Starting' }}
+          ChromaDB URL: http://{{ ansible_host }}:{{ chromadb_port }}
+          AI Stack API: {{ 'Running' if ai_stack_check.status | default(0) == 200 else 'Starting' }}
+          AI Stack URL: http://{{ ansible_host }}:{{ ai_stack_port | default(8080) }}
+          Ollama: Remote on {{ ollama_host }}:{{ ollama_port }}
           Data: {{ chromadb_data_dir }}
-          Ollama: {{ 'Enabled' if enable_ollama else 'Disabled' }}
           ═══════════════════════════════════════════════════════════════
       tags: [verify]

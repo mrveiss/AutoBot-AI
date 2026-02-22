@@ -1,4 +1,5 @@
 import type { ApiResponse, RequestOptions } from '@/types/models'
+import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 // Note: Window.rum type is defined in @/utils/RumAgent.ts
 
@@ -139,7 +140,7 @@ export class ApiRepository {
     const timeoutId = setTimeout(() => controller.abort(), this.timeout)
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         ...config,
         signal: controller.signal
       })

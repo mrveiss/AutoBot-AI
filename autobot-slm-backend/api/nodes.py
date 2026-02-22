@@ -8,12 +8,14 @@ SLM Nodes API Routes
 import asyncio
 import hashlib
 import logging
+import os
 import time
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from models.database import (
     Certificate,
     CodeStatus,
@@ -23,6 +25,8 @@ from models.database import (
     NodeEvent,
     NodeRole,
     NodeStatus,
+    Role,
+    Service,
     Setting,
 )
 from models.schemas import (
@@ -54,7 +58,7 @@ from services.auth import get_current_user
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
@@ -324,6 +328,39 @@ async def _create_registration_event(
     )
 
 
+async def _get_service_counts(
+    db: AsyncSession, node_ids: list[str]
+) -> dict[str, dict[str, int]]:
+    """Fetch per-node service status counts.
+
+    Issue #1019: Returns {node_id: {running: N, stopped: N, failed: N, total: N}}.
+    """
+    if not node_ids:
+        return {}
+
+    rows = await db.execute(
+        select(
+            Service.node_id,
+            Service.status,
+            func.count().label("cnt"),
+        )
+        .where(Service.node_id.in_(node_ids))
+        .group_by(Service.node_id, Service.status)
+    )
+
+    counts: dict[str, dict[str, int]] = {}
+    for node_id, status_val, cnt in rows:
+        if node_id not in counts:
+            counts[node_id] = {"running": 0, "stopped": 0, "failed": 0, "total": 0}
+        key = (
+            status_val if status_val in ("running", "stopped", "failed") else "stopped"
+        )
+        counts[node_id][key] += cnt
+        counts[node_id]["total"] += cnt
+
+    return counts
+
+
 @router.get("", response_model=NodeListResponse)
 async def list_nodes(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -347,8 +384,18 @@ async def list_nodes(
     result = await db.execute(query)
     nodes = result.scalars().all()
 
+    # Issue #1019: Fetch per-node service counts
+    node_ids = [n.node_id for n in nodes]
+    svc_counts = await _get_service_counts(db, node_ids)
+
+    node_responses = []
+    for n in nodes:
+        resp = NodeResponse.model_validate(n)
+        resp.service_summary = svc_counts.get(n.node_id)
+        node_responses.append(resp)
+
     return NodeListResponse(
-        nodes=[NodeResponse.model_validate(n) for n in nodes],
+        nodes=node_responses,
         total=total,
         page=page,
         per_page=per_page,
@@ -767,11 +814,13 @@ async def remove_role_from_node(
     role_name: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
+    backup: bool = Query(False, description="Backup data before removal"),
 ) -> dict:
     """
-    Remove a role assignment from a node (Issue #779).
+    Remove a role from a node (Issue #1041).
 
-    Only removes the assignment, not the actual role installation.
+    Stops the service via Ansible, optionally backs up data,
+    then removes the DB assignment.
     """
     result = await db.execute(
         select(NodeRole).where(
@@ -779,18 +828,84 @@ async def remove_role_from_node(
         )
     )
     node_role = result.scalar_one_or_none()
-
     if not node_role:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Role assignment not found: {role_name}",
         )
 
+    # Look up the systemd service name from Role table
+    service_name = await _get_role_service_name(db, role_name)
+
+    # If there's a service, run Ansible to stop and clean up
+    if service_name:
+        ansible_result = await _run_role_removal(
+            node_id, role_name, service_name, backup
+        )
+        if not ansible_result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Role removal failed: {ansible_result['output'][:300]}",
+            )
+
+    # Remove DB assignment only after successful cleanup
     await db.delete(node_role)
     await db.commit()
 
-    logger.info("Removed role from node: %s -> %s", node_id, role_name)
-    return {"success": True, "message": f"Role '{role_name}' removed from node"}
+    logger.info(
+        "Removed role from node: %s -> %s (backup=%s)", node_id, role_name, backup
+    )
+    response: dict = {
+        "success": True,
+        "message": f"Role '{role_name}' removed from node",
+    }
+    if backup and service_name:
+        response["backup_path"] = ansible_result.get("backup_path")
+    return response
+
+
+async def _get_role_service_name(db: AsyncSession, role_name: str) -> str | None:
+    """Look up the systemd service name for a role."""
+    result = await db.execute(
+        select(Role.systemd_service).where(Role.name == role_name)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _run_role_removal(
+    node_id: str,
+    role_name: str,
+    service_name: str,
+    backup: bool,
+) -> dict:
+    """Execute the remove-role Ansible playbook."""
+    from services.playbook_executor import get_playbook_executor
+
+    executor = get_playbook_executor()
+    result = await executor.execute_playbook(
+        playbook_name="playbooks/remove-role.yml",
+        limit=[node_id],
+        extra_vars={
+            "role_name": role_name,
+            "systemd_service": service_name,
+            "backup_before_removal": str(backup).lower(),
+        },
+    )
+    # Extract backup path from output if backup was requested
+    if backup and result["success"]:
+        result["backup_path"] = _parse_backup_path(result.get("output", ""))
+    return result
+
+
+def _parse_backup_path(output: str) -> str | None:
+    """Extract backup path from Ansible output."""
+    for line in output.splitlines():
+        if "/opt/autobot/backups/" in line and "Backup:" in line:
+            parts = line.split("/opt/autobot/backups/")
+            if len(parts) > 1:
+                path = "/opt/autobot/backups/" + parts[1].strip().rstrip('"')
+                return path
+    return None
 
 
 @router.delete("/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1022,6 +1137,50 @@ async def node_heartbeat(
         update_available=update_available,
         latest_version=latest_version if update_available else None,
         update_url=f"/api/nodes/{node_id}/code-package" if update_available else None,
+    )
+
+
+class NodeHealthResponse(BaseModel):
+    """Health check response for a single node (#1062)."""
+
+    status: str
+    cpu_percent: float
+    memory_percent: float
+    disk_percent: float
+    last_heartbeat: Optional[str] = None
+    services: List[dict] = []
+
+
+@router.get("/{node_id}/health", response_model=NodeHealthResponse)
+async def get_node_health(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeHealthResponse:
+    """Get health metrics for a single node (#1062)."""
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+
+    svc_result = await db.execute(select(Service).where(Service.node_id == node_id))
+    services = svc_result.scalars().all()
+
+    heartbeat_str = None
+    if node.last_heartbeat:
+        heartbeat_str = node.last_heartbeat.isoformat()
+
+    return NodeHealthResponse(
+        status=node.status or "unknown",
+        cpu_percent=node.cpu_percent or 0.0,
+        memory_percent=node.memory_percent or 0.0,
+        disk_percent=node.disk_percent or 0.0,
+        last_heartbeat=heartbeat_str,
+        services=[
+            {"name": s.service_name, "status": s.status or "unknown"} for s in services
+        ],
     )
 
 
@@ -1835,3 +1994,197 @@ async def get_node_service_order(
 
     entries.sort(key=lambda e: e.start_order)
     return NodeServiceOrderResponse(node_id=node_id, services=entries)
+
+
+# =============================================================================
+# Node SSH Exec endpoint (Issue #933)
+# =============================================================================
+
+_DEFAULT_SSH_KEY = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
+_DEFAULT_SSH_USER = os.environ.get("SLM_SSH_USER", "autobot")
+
+
+class NodeExecRequest(BaseModel):
+    """Request body for executing a command on a node."""
+
+    command: str
+    timeout: int = 30
+
+
+class NodeExecResponse(BaseModel):
+    """Result of a remote command execution."""
+
+    node_id: str
+    command: str
+    stdout: str
+    stderr: str
+    exit_code: int
+    success: bool
+
+
+def _build_node_ssh_cmd(ip_address: str, ssh_user: str, ssh_port: int) -> list:
+    """Build base SSH command args for a node.
+
+    Helper for exec_node_command (Issue #933).
+    """
+    cmd = [
+        "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=10",
+        "-p",
+        str(ssh_port),
+    ]
+    key_path = Path(_DEFAULT_SSH_KEY)
+    if key_path.exists():
+        cmd.extend(["-i", str(key_path)])
+    cmd.append(f"{ssh_user}@{ip_address}")
+    return cmd
+
+
+@router.post("/{node_id}/exec", response_model=NodeExecResponse)
+async def exec_node_command(
+    node_id: str,
+    body: NodeExecRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeExecResponse:
+    """Execute a command on a node via SSH.
+
+    Used by backend services to run read-only discovery commands on fleet nodes
+    (Issue #933). Requires authenticated user.
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+
+    ssh_user = node.ssh_user or _DEFAULT_SSH_USER
+    ssh_port = node.ssh_port or 22
+    cmd = _build_node_ssh_cmd(node.ip_address, ssh_user, ssh_port)
+    cmd.append(body.command)
+
+    try:
+        proc = await asyncio.wait_for(
+            asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            ),
+            timeout=body.timeout + 5,
+        )
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            proc.communicate(), timeout=body.timeout
+        )
+        exit_code = proc.returncode or 0
+    except asyncio.TimeoutError:
+        logger.warning("SSH exec timed out on node %s: %s", node_id, body.command)
+        return NodeExecResponse(
+            node_id=node_id,
+            command=body.command,
+            stdout="",
+            stderr="Command timed out",
+            exit_code=-1,
+            success=False,
+        )
+    except Exception as exc:
+        logger.error("SSH exec failed on node %s: %s", node_id, exc)
+        return NodeExecResponse(
+            node_id=node_id,
+            command=body.command,
+            stdout="",
+            stderr=str(exc),
+            exit_code=-1,
+            success=False,
+        )
+
+    return NodeExecResponse(
+        node_id=node_id,
+        command=body.command,
+        stdout=stdout_bytes.decode("utf-8", errors="replace"),
+        stderr=stderr_bytes.decode("utf-8", errors="replace"),
+        exit_code=exit_code,
+        success=exit_code == 0,
+    )
+
+
+# ---------------------------------------------------------------------------
+# A2A Agent Card endpoints (Issue #962)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/a2a-cards", tags=["a2a"])
+async def list_a2a_cards(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> list:
+    """
+    Return cached A2A Agent Cards for all backend nodes.
+
+    Each entry includes node_id, hostname, ip_address, and the card dict
+    (or null if no card has been fetched yet).
+    """
+    result = await db.execute(select(Node))
+    nodes = result.scalars().all()
+    return [
+        {
+            "node_id": n.node_id,
+            "hostname": n.hostname,
+            "ip_address": n.ip_address,
+            "a2a_card": (n.extra_data or {}).get("a2a_card"),
+            "fetched_at": (n.extra_data or {}).get("a2a_card_fetched_at"),
+        }
+        for n in nodes
+        if "backend" in (n.roles or [])
+    ]
+
+
+@router.get("/{node_id}/a2a-card", tags=["a2a"])
+async def get_node_a2a_card(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """Return the cached A2A Agent Card for a specific node."""
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+    extra = node.extra_data or {}
+    return {
+        "node_id": node_id,
+        "hostname": node.hostname,
+        "a2a_card": extra.get("a2a_card"),
+        "fetched_at": extra.get("a2a_card_fetched_at"),
+    }
+
+
+@router.post("/{node_id}/a2a-card/refresh", tags=["a2a"], status_code=202)
+async def refresh_node_a2a_card(
+    node_id: str,
+    background_tasks: BackgroundTasks,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """
+    Trigger a fresh A2A Agent Card fetch for a specific node.
+
+    Returns immediately (202). Poll GET /{node_id}/a2a-card for the result.
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Node not found"
+        )
+
+    from services.a2a_card_fetcher import fetch_card_for_node
+
+    background_tasks.add_task(fetch_card_for_node, node_id)
+    logger.info("A2A card refresh queued for node %s", node_id)
+    return {"node_id": node_id, "status": "refresh_queued"}

@@ -21,15 +21,17 @@ Key Features:
 """
 
 import logging
+import os
 import re
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-# TODO (#729): SSH proxied through SLM API
-# Infrastructure services removed - now managed by SLM server (#729)
-# from backend.services.ssh_connection_service import get_ssh_connection_service
+import aiohttp
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_SLM_URL = os.environ.get("SLM_URL", "")
+_DEFAULT_SLM_TOKEN = os.environ.get("SLM_AUTH_TOKEN", "")
 
 
 @dataclass
@@ -235,89 +237,144 @@ def _parse_man_whatis(output: str) -> Dict[str, str]:
     return descriptions
 
 
-async def _extract_command_list(
-    ssh_service,
-    host_id: str,
-) -> Set[str]:
-    """Extract list of available commands from a host."""
+async def _slm_exec(
+    node_id: str,
+    command: str,
+    timeout: int = 30,
+    slm_url: str = "",
+    auth_token: str = "",
+) -> Tuple[bool, str, str]:
+    """
+    Execute a command on a fleet node via the SLM API.
+
+    Issue #933: Replaces direct SSH calls.
+
+    Args:
+        node_id: SLM node identifier
+        command: Shell command to run
+        timeout: Command timeout in seconds
+        slm_url: SLM base URL (falls back to SLM_URL env var)
+        auth_token: Bearer token (falls back to SLM_AUTH_TOKEN env var)
+
+    Returns:
+        Tuple of (success, stdout, stderr)
+    """
+    base = (slm_url or _DEFAULT_SLM_URL).rstrip("/")
+    token = auth_token or _DEFAULT_SLM_TOKEN
+    if not base:
+        logger.error("SLM_URL not configured — cannot exec on node %s", node_id)
+        return False, "", "SLM_URL not configured"
+
+    url = f"{base}/api/nodes/{node_id}/exec"
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    payload = {"command": command, "timeout": timeout}
     try:
-        result = await ssh_service.execute_command(
-            host_id,
-            "compgen -c | sort -u",
-            timeout=30.0,
-            accessed_by="command_extraction",
-        )
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                url, json=payload, headers=headers, ssl=False
+            ) as resp:
+                data: Dict[str, Any] = await resp.json()
+                return (
+                    data.get("success", False),
+                    data.get("stdout", ""),
+                    data.get("stderr", ""),
+                )
+    except Exception as exc:
+        logger.error("SLM exec failed for node %s: %s", node_id, exc)
+        return False, "", str(exc)
 
-        if result["exit_code"] == 0:
-            commands = set(result["stdout"].strip().split("\n"))
-            # Filter out empty strings and very short names
-            commands = {cmd for cmd in commands if len(cmd) > 1}
-            logger.info("Extracted %d commands from host %s", len(commands), host_id)
-            return commands
 
-    except Exception as e:
-        logger.error("Failed to extract command list from host %s: %s", host_id, e)
+async def _extract_command_list(
+    node_id: str, slm_url: str, auth_token: str
+) -> Set[str]:
+    """Extract list of available commands from a host via SLM API.
 
-    return set()
+    Issue #933: Replaces ssh_service.execute_command.
+    """
+    success, stdout, _stderr = await _slm_exec(
+        node_id,
+        "compgen -c | sort -u",
+        timeout=30,
+        slm_url=slm_url,
+        auth_token=auth_token,
+    )
+    if not success or not stdout.strip():
+        logger.error("Failed to extract command list from node %s", node_id)
+        return set()
+    commands = {cmd for cmd in stdout.strip().split("\n") if len(cmd) > 1}
+    logger.info("Extracted %d commands from node %s", len(commands), node_id)
+    return commands
 
 
 async def _extract_command_descriptions(
-    ssh_service,
-    host_id: str,
+    node_id: str,
     commands: Set[str],
+    slm_url: str,
+    auth_token: str,
     batch_size: int = 50,
 ) -> Dict[str, str]:
-    """Extract descriptions for commands using whatis."""
-    descriptions = {}
+    """Extract descriptions for commands using whatis via SLM API.
 
-    # Process in batches to avoid command line length limits
+    Issue #933: Replaces ssh_service.execute_command.
+    """
+    descriptions: Dict[str, str] = {}
     command_list = list(commands)
     for i in range(0, len(command_list), batch_size):
         batch = command_list[i : i + batch_size]
-
+        cmd_str = " ".join(batch)
         try:
-            # Use whatis for batch description lookup
-            cmd_str = " ".join(batch)
-            result = await ssh_service.execute_command(
-                host_id,
+            success, stdout, _stderr = await _slm_exec(
+                node_id,
                 f"whatis {cmd_str} 2>/dev/null || true",
-                timeout=30.0,
-                accessed_by="command_extraction",
+                timeout=30,
+                slm_url=slm_url,
+                auth_token=auth_token,
             )
-
-            if result["exit_code"] == 0 and result["stdout"].strip():
-                batch_descriptions = _parse_man_whatis(result["stdout"])
-                descriptions.update(batch_descriptions)
-
-        except Exception as e:
-            logger.warning("Failed to get descriptions for batch: %s", e)
-            continue
-
+            if success and stdout.strip():
+                descriptions.update(_parse_man_whatis(stdout))
+        except Exception as exc:
+            logger.warning("Failed to get descriptions for batch: %s", exc)
     logger.info(
-        "Extracted descriptions for %d commands from host %s",
+        "Extracted descriptions for %d commands from node %s",
         len(descriptions),
-        host_id,
+        node_id,
     )
     return descriptions
 
 
 async def extract_host_commands(host_id: str) -> Dict[str, ExtractedCommand]:
     """
-    Extract all available commands from an infrastructure host.
+    Extract all available commands from an infrastructure host via SLM API.
+
+    Issue #933: Implements SLM API proxying (was NotImplementedError).
 
     Args:
-        host_id: Infrastructure host ID
+        host_id: SLM node_id of the target host
 
     Returns:
         Dict mapping command names to ExtractedCommand objects
-
-    Raises:
-        NotImplementedError: SSH now proxied through SLM API (#729)
     """
-    # TODO (#729): SSH proxied through SLM API - Update in Task 5.2
-    raise NotImplementedError(
-        "Command extraction temporarily disabled - SSH proxied through SLM API (#729)"
+    slm_url = _DEFAULT_SLM_URL
+    auth_token = _DEFAULT_SLM_TOKEN
+
+    command_names = await _extract_command_list(host_id, slm_url, auth_token)
+    if not command_names:
+        return {}
+
+    descriptions = await _extract_command_descriptions(
+        host_id, command_names, slm_url, auth_token
     )
+
+    result: Dict[str, ExtractedCommand] = {}
+    for name in command_names:
+        result[name] = ExtractedCommand(
+            name=name,
+            description=descriptions.get(name),
+            category=_categorize_command(name),
+            source_hosts=[host_id],
+        )
+    logger.info("Extracted %d commands from host %s", len(result), host_id)
+    return result
 
 
 async def store_commands_in_knowledge_base(

@@ -11,13 +11,24 @@ import logging
 from typing import Optional
 
 from auth_middleware import check_admin_permission, get_current_user
-from enhanced_multi_agent_orchestrator import (
-    create_and_execute_workflow,
-    enhanced_orchestrator,
-)
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+
+try:
+    from enhanced_multi_agent_orchestrator import (
+        create_and_execute_workflow,
+        enhanced_orchestrator,
+    )
+
+    _ORCHESTRATOR_AVAILABLE = True
+except ImportError:
+    _ORCHESTRATOR_AVAILABLE = False
+    create_and_execute_workflow = None
+    enhanced_orchestrator = None
+    logging.getLogger(__name__).warning(
+        "enhanced_multi_agent_orchestrator not available"
+    )
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -107,6 +118,11 @@ async def execute_workflow(
     Issue #744: Requires authenticated user.
     Issue #620: Refactored to extract _build_multi_task_response and _build_single_task_response.
     """
+    if not _ORCHESTRATOR_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Orchestrator module not available",
+        )
     try:
         logger.info("Executing workflow for goal: %s", request.goal)
 
@@ -149,6 +165,8 @@ async def create_workflow_plan(
 
     Issue #744: Requires authenticated user.
     """
+    if not _ORCHESTRATOR_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Orchestrator module not available")
     try:
         logger.info("Creating workflow plan for: %s", request.goal)
 
@@ -211,6 +229,11 @@ async def get_agent_performance(
 
     Issue #744: Requires authenticated user.
     """
+    if not _ORCHESTRATOR_AVAILABLE:
+        return JSONResponse(
+            status_code=200,
+            content={"status": "success", "performance_data": {}},
+        )
     try:
         report = enhanced_orchestrator.get_performance_report()
 
@@ -242,6 +265,8 @@ async def recommend_agents(
 
     Issue #744: Requires authenticated user.
     """
+    if not _ORCHESTRATOR_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Orchestrator module not available")
     try:
         from enhanced_multi_agent_orchestrator import AgentCapability
 
@@ -295,6 +320,15 @@ async def get_active_workflows(
 
     Issue #744: Requires authenticated user.
     """
+    if not _ORCHESTRATOR_AVAILABLE:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "active_count": 0,
+                "workflows": [],
+            },
+        )
     try:
         active_workflows = []
 
@@ -386,6 +420,15 @@ async def get_agent_capabilities(
 
     Issue #744: Requires authenticated user.
     """
+    if not _ORCHESTRATOR_AVAILABLE:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "capability_coverage": {},
+                "agents": {},
+                "total_agents": 0,
+            },
+        )
     try:
         # Get capability coverage
         coverage = enhanced_orchestrator._calculate_capability_coverage()
@@ -435,6 +478,16 @@ async def get_orchestration_status(
 
     Issue #744: Requires admin authentication.
     """
+    if not _ORCHESTRATOR_AVAILABLE:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "unavailable",
+                "active_workflows": 0,
+                "max_parallel_tasks": 0,
+                "total_agents": 0,
+            },
+        )
     try:
         performance_report = enhanced_orchestrator.get_performance_report()
 

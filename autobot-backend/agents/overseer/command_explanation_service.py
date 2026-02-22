@@ -16,9 +16,8 @@ import json
 import logging
 from typing import Dict, Optional
 
-from backend.dependencies import global_config_manager
-
 from autobot_shared.http_client import get_http_client
+from backend.dependencies import global_config_manager
 
 from .types import CommandBreakdownPart, CommandExplanation, OutputExplanation
 
@@ -58,9 +57,9 @@ class CommandExplanationService:
             return endpoint
         except Exception as e:
             logger.error("Failed to get Ollama endpoint: %s", e)
-            from config import UnifiedConfigManager
+            from config import ConfigManager
 
-            config = UnifiedConfigManager()
+            config = ConfigManager()
             return f"http://{config.get_host('ollama')}:{config.get_port('ollama')}/api/generate"
 
     def _get_model(self) -> str:
