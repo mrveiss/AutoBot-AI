@@ -170,6 +170,17 @@
   notify: Restart SLM agent
   tags: ['slm_agent', 'config']
 
+# Issue #1129: Role metadata for SLM role registry / portability
+- name: "SLM Agent | Deploy role.json metadata"
+  template:
+    src: role.json.j2
+    dest: "{{ slm_agent_dir }}/role.json"
+    owner: "{{ slm_agent_user }}"
+    group: "{{ slm_agent_group }}"
+    mode: '0644'
+  become: yes
+  tags: ['slm_agent', 'deploy', 'role-meta']
+
 - name: "SLM Agent | Deploy systemd service unit"
   template:
     src: slm-agent.service.j2
