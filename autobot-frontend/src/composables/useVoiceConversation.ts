@@ -44,6 +44,13 @@ const isActive = ref(false)
 const errorMessage = ref('')
 const wsConnected = ref(false)
 
+// Secure context check — getUserMedia requires HTTPS with a trusted cert (#1059)
+const micAccessAvailable = ref(
+  typeof window !== 'undefined' &&
+  !!window.isSecureContext &&
+  !!navigator.mediaDevices?.getUserMedia,
+)
+
 // Hands-free mode state (#1030)
 const silenceThreshold = ref(1500)
 const audioLevel = ref(0)
@@ -65,6 +72,21 @@ const _MAX_SPEECH_CHARS = 2000
 
 function _generateId(): string {
   return `vb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+}
+
+/** Return a helpful error when mic access is blocked by an untrusted cert (#1059). */
+function _getMicContextError(modeLabel: string): string {
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    const origin = window.location.origin
+    return (
+      `Mic access unavailable for ${modeLabel} mode. ` +
+      `Your browser requires a trusted HTTPS certificate. ` +
+      `Fix: install the AutoBot CA cert as a trusted root, ` +
+      `or in Chrome/Edge open chrome://flags/#unsafely-treat-insecure-origin-as-secure ` +
+      `and add ${origin}.`
+    )
+  }
+  return `Mic access required for ${modeLabel} mode.`
 }
 
 /** Strip tool-call markup and truncate to a TTS-safe length. */
@@ -180,6 +202,11 @@ function _onSpeakingDone(): void {
 async function _initVad(): Promise<void> {
   if (_vadAudioCtx) return
 
+  if (!micAccessAvailable.value) {
+    errorMessage.value = _getMicContextError('full-duplex')
+    return
+  }
+
   try {
     _micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
     _vadAudioCtx = new AudioContext()
@@ -199,7 +226,7 @@ async function _initVad(): Promise<void> {
     logger.debug('VAD AudioWorklet initialized')
   } catch (e) {
     logger.error('VAD init failed:', e)
-    errorMessage.value = 'Mic access required for full-duplex mode.'
+    errorMessage.value = _getMicContextError('full-duplex')
   }
 }
 
@@ -458,6 +485,13 @@ async function _transcribeAudio(blob: Blob): Promise<string> {
 /** Start Silero VAD for hands-free speech detection (#1030). */
 async function _startHandsFree(): Promise<void> {
   if (_sileroVad) return
+
+  if (!micAccessAvailable.value) {
+    errorMessage.value = _getMicContextError('hands-free')
+    state.value = 'idle'
+    return
+  }
+
   state.value = 'listening'
   try {
     const { MicVAD } = await import('@ricky0123/vad-web')
@@ -476,7 +510,7 @@ async function _startHandsFree(): Promise<void> {
     logger.debug('Silero VAD started (hands-free)')
   } catch (e) {
     logger.error('Silero VAD init failed:', e)
-    errorMessage.value = 'Mic access required for hands-free mode.'
+    errorMessage.value = _getMicContextError('hands-free')
     state.value = 'idle'
   }
 }
@@ -642,6 +676,7 @@ export function useVoiceConversation() {
     wsConnected,
     audioLevel,
     silenceThreshold,
+    micAccessAvailable,
     isListening,
     isProcessing,
     stateLabel,
