@@ -7,7 +7,7 @@
  * Manages TTS voice selection (built-in + custom voice profiles).
  */
 
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -29,6 +29,11 @@ const selectedVoiceId = ref<string>(
 )
 const loading = ref(false)
 const error = ref<string | null>(null)
+// Personality-assigned voice — overrides user selection when set (#1135)
+const personalityVoiceId = ref<string>('')
+const effectiveVoiceId = computed<string>(() =>
+  personalityVoiceId.value || selectedVoiceId.value
+)
 
 export function useVoiceProfiles() {
   async function fetchVoices(): Promise<void> {
@@ -112,14 +117,37 @@ export function useVoiceProfiles() {
     }
   }
 
+  function setPersonalityVoice(voiceId: string): void {
+    personalityVoiceId.value = voiceId
+    logger.debug('Personality voice set:', voiceId || '(none)')
+  }
+
+  async function fetchPersonalityVoice(): Promise<void> {
+    try {
+      const res = await fetchWithAuth('/api/personality/active')
+      if (res.ok) {
+        const profile = await res.json()
+        personalityVoiceId.value = profile?.voice_id ?? ''
+      } else {
+        personalityVoiceId.value = ''
+      }
+    } catch {
+      personalityVoiceId.value = ''
+    }
+  }
+
   return {
     voices,
     selectedVoiceId,
+    personalityVoiceId,
+    effectiveVoiceId,
     loading,
     error,
     fetchVoices,
     selectVoice,
     createVoice,
     deleteVoice,
+    setPersonalityVoice,
+    fetchPersonalityVoice,
   }
 }
