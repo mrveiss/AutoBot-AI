@@ -63,7 +63,11 @@ async function _playAudioBuffer(arrayBuffer: ArrayBuffer): Promise<void> {
   const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0))
   const source = ctx.createBufferSource()
   source.buffer = audioBuffer
-  source.connect(ctx.destination)
+  // Issue #1146: Amplify TTS output — Pocket TTS generates lower-amplitude audio
+  const gainNode = ctx.createGain()
+  gainNode.gain.value = 3.5
+  source.connect(gainNode)
+  gainNode.connect(ctx.destination)
   _currentSource = source
   isSpeaking.value = true
 
@@ -132,6 +136,8 @@ export function useVoiceOutput() {
       const blob = await response.blob()
       const arrayBuffer = await blob.arrayBuffer()
       await _playAudioBuffer(arrayBuffer)
+      // Issue #1146: clear isSpeaking so watch(isSpeaking) in useVoiceConversation fires
+      isSpeaking.value = false
     } catch (e) {
       logger.error('speak() error:', e)
       isSpeaking.value = false
