@@ -328,6 +328,20 @@ function toggleNode(nodeId: string): void {
     expandedNodes.value.delete(nodeId)
   } else {
     expandedNodes.value.add(nodeId)
+    loadRolesForNode(nodeId)
+  }
+}
+
+async function loadRolesForNode(nodeId: string): Promise<void> {
+  if (loadingRolesForNode[nodeId] || nodeRolesCache[nodeId]) return
+  loadingRolesForNode[nodeId] = true
+  try {
+    const data = await roles.getNodeRoles(nodeId)
+    if (data) {
+      nodeRolesCache[nodeId] = data
+    }
+  } finally {
+    delete loadingRolesForNode[nodeId]
   }
 }
 
@@ -438,6 +452,8 @@ function openEditRoleForm(role: any): void {
     health_check_path: role.health_check_path || '',
     pre_sync_cmd: role.pre_sync_cmd || '',
     post_sync_cmd: role.post_sync_cmd || '',
+    required: role.required ?? false,
+    degraded_without: (role.degraded_without || []).join(', '),
   }
   showRoleForm.value = true
 }
@@ -459,6 +475,10 @@ async function saveRole(): Promise<void> {
     health_check_path: roleFormData.value.health_check_path || null,
     pre_sync_cmd: roleFormData.value.pre_sync_cmd || null,
     post_sync_cmd: roleFormData.value.post_sync_cmd || null,
+    required: roleFormData.value.required,
+    degraded_without: roleFormData.value.degraded_without
+      ? roleFormData.value.degraded_without.split(',').map((s) => s.trim()).filter(Boolean)
+      : [],
   }
 
   if (editingRole.value) {
