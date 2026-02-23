@@ -21,11 +21,6 @@ from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 from auth_middleware import check_admin_permission
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.code_intelligence.anti_pattern_detector import (
     AntiPatternDetector,
     AntiPatternSeverity,
@@ -44,6 +39,11 @@ from backend.code_intelligence.security_analyzer import (
     SecuritySeverity,
     get_vulnerability_types,
 )
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -217,7 +217,7 @@ REDIS_OPTIMIZATION_TYPES = {
     "connection_per_request": {
         "name": "Connection Per Request",
         "category": "connection",
-        "description": "Direct redis.Redis() instantiation - should use pool",
+        "description": "Direct redis.Redis() instantiation - should use pool",  # noqa: redis
         "recommendation": "Use get_redis_client() from autobot_shared.redis_client",
     },
     "blocking_in_async": {
@@ -2077,6 +2077,24 @@ async def get_evolution_timeline(
         )
 
 
+async def _run_evolution_analysis(miner, start, end) -> tuple:
+    """Helper for get_full_evolution_report. Ref: #1088."""
+    evolution_report = await asyncio.to_thread(miner.analyze_evolution, start, end)
+    pattern_metrics = await asyncio.to_thread(miner.get_pattern_metrics)
+    timeline_data = await asyncio.to_thread(miner.generate_timeline_data)
+    return evolution_report, pattern_metrics, timeline_data
+
+
+def _build_evolution_summary(evolution_report: dict) -> dict:
+    """Helper for get_full_evolution_report. Ref: #1088."""
+    return {
+        "emerging_patterns_count": len(evolution_report["emerging_patterns"]),
+        "declining_patterns_count": len(evolution_report["declining_patterns"]),
+        "refactorings_count": len(evolution_report["refactorings"]),
+        "commits_analyzed": evolution_report["commits_analyzed"],
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_evolution_report",
@@ -2113,11 +2131,12 @@ async def get_full_evolution_report(
         start = datetime.fromisoformat(start_date) if start_date else None
         end = datetime.fromisoformat(end_date) if end_date else None
 
-        # Analyze evolution
         miner = CodeEvolutionMiner(path)
-        evolution_report = await asyncio.to_thread(miner.analyze_evolution, start, end)
-        pattern_metrics = await asyncio.to_thread(miner.get_pattern_metrics)
-        timeline_data = await asyncio.to_thread(miner.generate_timeline_data)
+        (
+            evolution_report,
+            pattern_metrics,
+            timeline_data,
+        ) = await _run_evolution_analysis(miner, start, end)
 
         return JSONResponse(
             status_code=200,
@@ -2128,16 +2147,7 @@ async def get_full_evolution_report(
                 "evolution": evolution_report,
                 "pattern_metrics": pattern_metrics,
                 "timeline": timeline_data["timeline"],
-                "summary": {
-                    "emerging_patterns_count": len(
-                        evolution_report["emerging_patterns"]
-                    ),
-                    "declining_patterns_count": len(
-                        evolution_report["declining_patterns"]
-                    ),
-                    "refactorings_count": len(evolution_report["refactorings"]),
-                    "commits_analyzed": evolution_report["commits_analyzed"],
-                },
+                "summary": _build_evolution_summary(evolution_report),
             },
         )
 

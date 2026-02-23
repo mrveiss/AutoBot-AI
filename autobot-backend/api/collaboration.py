@@ -151,6 +151,49 @@ async def _get_or_create_collab(
     return collab
 
 
+async def _fetch_and_validate_secret(
+    secret_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
+):
+    """Helper for share_secret_with_session. Ref: #1088."""
+    from backend.models.secret import Secret
+    from sqlalchemy import select
+
+    stmt = select(Secret).where(Secret.id == secret_id)
+    result = await db.execute(stmt)
+    secret = result.scalar_one_or_none()
+
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Secret not found",
+        )
+
+    if secret.owner_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only share secrets you own",
+        )
+
+    return secret
+
+
+def _resolve_share_recipients(
+    share: ShareSecretRequest, user_id: uuid.UUID, collab: SessionCollaboration
+) -> list:
+    """Helper for share_secret_with_session. Ref: #1088."""
+    if share.participant_ids:
+        return [uuid.UUID(pid) for pid in share.participant_ids]
+
+    recipient_ids = [collab.owner_id]
+    for uid_str, perm in collab.list_collaborators().items():
+        if perm in [
+            PermissionLevel.EDITOR.value,
+            PermissionLevel.OWNER.value,
+        ]:
+            recipient_ids.append(uuid.UUID(uid_str))
+    return recipient_ids
+
+
 # ====================================================================
 # API Endpoints
 # ====================================================================
@@ -352,47 +395,13 @@ async def share_secret_with_session(
         user_id = uuid.UUID(current_user.get("user_id"))
         secret_id = uuid.UUID(share.secret_id)
 
-        # Ensure caller has editor permission
         collab = await _ensure_permission(
             session_id, user_id, PermissionLevel.EDITOR, db
         )
 
-        # Get secret
-        from backend.models.secret import Secret
-        from sqlalchemy import select
+        secret = await _fetch_and_validate_secret(secret_id, user_id, db)
+        recipient_ids = _resolve_share_recipients(share, user_id, collab)
 
-        stmt = select(Secret).where(Secret.id == secret_id)
-        result = await db.execute(stmt)
-        secret = result.scalar_one_or_none()
-
-        if not secret:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Secret not found",
-            )
-
-        # Ensure caller owns the secret
-        if secret.owner_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only share secrets you own",
-            )
-
-        # Determine recipients
-        if share.participant_ids:
-            # Share with specific participants
-            recipient_ids = [uuid.UUID(pid) for pid in share.participant_ids]
-        else:
-            # Share with all editors and owner
-            recipient_ids = [collab.owner_id]
-            for uid_str, perm in collab.list_collaborators().items():
-                if perm in [
-                    PermissionLevel.EDITOR.value,
-                    PermissionLevel.OWNER.value,
-                ]:
-                    recipient_ids.append(uuid.UUID(uid_str))
-
-        # Share secret with each recipient
         for recipient_id in recipient_ids:
             if recipient_id != user_id:  # Don't share with self
                 secret.share_with(recipient_id)

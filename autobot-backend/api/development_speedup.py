@@ -462,6 +462,39 @@ async def analyze_quality_endpoint(
         )
 
 
+def _build_recommendation_metrics(result: dict) -> dict:
+    """Helper for get_recommendations_endpoint. Ref: #1088."""
+    return {
+        "duplicate_savings": (
+            result.get("duplicate_code", {})
+            .get("potential_savings", {})
+            .get("lines_of_code", 0)
+        ),
+        "technical_debt_items": (
+            result.get("code_patterns", {}).get("high_priority_issues", 0)
+        ),
+        "unused_imports": len(
+            result.get("import_analysis", {}).get("potential_unused_imports", [])
+        ),
+        "refactoring_opportunities": (
+            result.get("refactoring_opportunities", {}).get("total_opportunities", 0)
+        ),
+        "quality_issues": result.get("quality_issues", {}).get("total_issues", 0),
+    }
+
+
+def _calculate_health_score(result: dict, metrics: dict) -> int:
+    """Helper for get_recommendations_endpoint. Ref: #1088."""
+    total_issues = (
+        result.get("duplicate_code", {}).get("total_duplicates", 0)
+        + metrics["technical_debt_items"]
+        + metrics["unused_imports"]
+        + metrics["refactoring_opportunities"]
+        + metrics["quality_issues"]
+    )
+    return max(0, 100 - (total_issues * 2))  # Simple scoring
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_recommendations_endpoint",
@@ -482,41 +515,9 @@ async def get_recommendations_endpoint(
 
         # Perform comprehensive analysis
         result = await analyze_codebase(path)
-
-        # Extract recommendations and add priority scoring
         recommendations = result.get("recommendations", [])
-
-        # Add some quick metrics for dashboard
-        metrics = {
-            "duplicate_savings": (
-                result.get("duplicate_code", {})
-                .get("potential_savings", {})
-                .get("lines_of_code", 0)
-            ),
-            "technical_debt_items": (
-                result.get("code_patterns", {}).get("high_priority_issues", 0)
-            ),
-            "unused_imports": len(
-                result.get("import_analysis", {}).get("potential_unused_imports", [])
-            ),
-            "refactoring_opportunities": (
-                result.get("refactoring_opportunities", {}).get(
-                    "total_opportunities", 0
-                )
-            ),
-            "quality_issues": result.get("quality_issues", {}).get("total_issues", 0),
-        }
-
-        # Calculate overall health score
-        total_issues = (
-            result.get("duplicate_code", {}).get("total_duplicates", 0)
-            + metrics["technical_debt_items"]
-            + metrics["unused_imports"]
-            + metrics["refactoring_opportunities"]
-            + metrics["quality_issues"]
-        )
-
-        health_score = max(0, 100 - (total_issues * 2))  # Simple scoring
+        metrics = _build_recommendation_metrics(result)
+        health_score = _calculate_health_score(result, metrics)
 
         return JSONResponse(
             status_code=200,

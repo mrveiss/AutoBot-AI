@@ -267,6 +267,15 @@
       become: true
       when: "'01-Backend' in inventory_hostname"
 
+    - name: "[PLAY 2] Backend | Fix ownership"
+      file:
+        path: /opt/autobot/autobot-backend
+        owner: autobot
+        group: autobot
+        recurse: true
+      become: true
+      when: "'01-Backend' in inventory_hostname"
+
     - name: "[PLAY 2] Backend | Restart service"
       systemd:
         name: autobot-backend
