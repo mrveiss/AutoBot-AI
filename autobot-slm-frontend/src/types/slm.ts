@@ -97,6 +97,8 @@ export interface SLMNode {
   a2a_card?: A2AAgentCard | null
   // Issue #1019: Per-service health summary counts
   service_summary?: { running: number; stopped: number; failed: number; total: number } | null
+  // Issue #1129: Role-centric architecture — roles detected by slm-agent heartbeat
+  detected_roles?: string[]
 }
 
 /**

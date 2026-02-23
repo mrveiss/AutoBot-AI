@@ -14,7 +14,7 @@
  * 5. Infrastructure Overview (from InfrastructureSettings)
  */
 
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useOrchestrationManagement } from '@/composables/useOrchestrationManagement'
 import { useRoles, type Role } from '@/composables/useRoles'
