@@ -20,7 +20,6 @@ import { useOrchestrationManagement } from '@/composables/useOrchestrationManage
 import {
   useRoles,
   type Role,
-  type FleetHealth,
   type PlaybookMigrateResult,
   type NodeRolesInfo,
 } from '@/composables/useRoles'
@@ -1611,6 +1610,7 @@ onUnmounted(() => {
                 <th class="px-4 py-2 text-left">IP Address</th>
                 <th class="px-4 py-2 text-left">Status</th>
                 <th class="px-4 py-2 text-left">Services</th>
+                <th class="px-4 py-2 text-left">Roles</th>
               </tr>
             </thead>
             <tbody>
@@ -1636,6 +1636,16 @@ onUnmounted(() => {
                       : 0
                   }}
                   services
+                </td>
+                <td class="px-4 py-2">
+                  <div class="flex flex-wrap gap-1">
+                    <span
+                      v-for="role in (node.roles as string[])"
+                      :key="role"
+                      class="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700 rounded"
+                    >{{ role }}</span>
+                    <span v-if="!node.roles || node.roles.length === 0" class="text-xs text-gray-400">—</span>
+                  </div>
                 </td>
               </tr>
             </tbody>
