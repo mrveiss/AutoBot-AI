@@ -11,6 +11,7 @@
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useSkills, useSkillGovernance, type SkillInfo } from '@/composables/useSkills'
 import GovernanceModeSelector from '@/components/skills/GovernanceModeSelector.vue'
 import ApprovalsTab from '@/components/skills/ApprovalsTab.vue'
@@ -54,7 +55,19 @@ const {
   dismissDraftNotification,
 } = useSkillGovernance()
 
-const activeTab = ref<'active' | 'approvals' | 'repos' | 'drafts'>('active')
+const route = useRoute()
+const router = useRouter()
+
+// Active tab — route-based
+type SkillTab = 'active' | 'approvals' | 'repos' | 'drafts'
+const validSkillTabs: SkillTab[] = ['active', 'approvals', 'repos', 'drafts']
+function resolveSkillTab(param: unknown): SkillTab {
+  return validSkillTabs.includes(param as SkillTab) ? (param as SkillTab) : 'active'
+}
+const activeTab = computed(() => resolveSkillTab(route.params.tab))
+function navigateToTab(tab: SkillTab): void {
+  router.push({ name: 'skills', params: { tab } })
+}
 
 const activeCategory = ref<string | null>(null)
 const searchQuery = ref('')
@@ -209,7 +222,7 @@ function categoryIcon(category: string): string {
       <div class="flex items-center gap-3">
         <button
           class="underline hover:no-underline text-amber-200"
-          @click="activeTab = 'approvals'"
+          @click="navigateToTab('approvals')"
         >
           Review
         </button>
@@ -230,7 +243,7 @@ function categoryIcon(category: string): string {
                 ? 'bg-blue-600 border-blue-500 text-white'
                 : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600',
             ]"
-            @click="activeTab = 'active'"
+            @click="navigateToTab('active')"
           >
             Active Skills
           </button>
@@ -241,7 +254,7 @@ function categoryIcon(category: string): string {
                 ? 'bg-blue-600 border-blue-500 text-white'
                 : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600',
             ]"
-            @click="activeTab = 'approvals'"
+            @click="navigateToTab('approvals')"
           >
             Pending
             <span
@@ -258,7 +271,7 @@ function categoryIcon(category: string): string {
                 ? 'bg-blue-600 border-blue-500 text-white'
                 : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600',
             ]"
-            @click="activeTab = 'repos'"
+            @click="navigateToTab('repos')"
           >
             Repos
           </button>
@@ -269,7 +282,7 @@ function categoryIcon(category: string): string {
                 ? 'bg-blue-600 border-blue-500 text-white'
                 : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-600',
             ]"
-            @click="activeTab = 'drafts'"
+            @click="navigateToTab('drafts')"
           >
             Drafts
           </button>
