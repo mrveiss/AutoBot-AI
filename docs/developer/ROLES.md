@@ -1,5 +1,5 @@
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
+# Copyright (c) 2026 mrveiss
 # Author: mrveiss
 
 # AutoBot Fleet Role Registry
@@ -27,6 +27,38 @@ A single SLM role may be deployed by one or more Ansible roles. A node may run m
 **Python dependencies** (LlamaIndex, LangChain, etc.) that are installed via pip into a service's venv are **not** separate SLM roles. They are tracked as dependencies of the role that uses them.
 
 **nginx** runs on most nodes as a reverse proxy. It is infrastructure-level and not a separate SLM role.
+
+---
+
+## Role Conflicts
+
+The following pairs of roles **cannot run on the same node** due to port collisions or hardware exclusivity.
+
+### Port Conflicts
+
+| Role A | Role B | Conflicting port | Reason |
+|--------|--------|-----------------|--------|
+| `slm-backend` | `chromadb` | 8000 | Both bind :8000 (uvicorn / ChromaDB HTTP) |
+| `slm-monitoring` | `browser-service` | 3000 | Both bind :3000 (Grafana / Node.js Express) |
+| `autobot-llm-cpu` | `autobot-llm-gpu` | 11434 | Both are Ollama — only one instance per node |
+| `slm-database` | `redis` | 5432 | Both run PostgreSQL — only one pg cluster per node |
+
+### Hardware Exclusivity
+
+| Role | Constraint |
+|------|-----------|
+| `autobot-llm-gpu` | Requires NVIDIA GPU. Cannot share GPU VRAM with `npu-worker` on the same node without careful resource partitioning — avoid co-locating. |
+| `npu-worker` | Requires Intel NPU or NVIDIA GPU. Do not co-locate with `autobot-llm-gpu` unless hardware has sufficient separate VRAM/NPU units. |
+
+### Implied Node Assignments
+
+These conflicts drive the default fleet layout:
+
+- `.19` — SLM stack only (`slm-backend`, `slm-frontend`, `slm-database`, `slm-monitoring`) — no user-facing services
+- `.20` — Backend only (`backend`, `celery`, `autobot-llm-gpu`) — no SLM components
+- `.23` — Databases only (`redis`, postgresql) — no application services
+- `.24` — AI stack only (`ai-stack`, `chromadb`) — no SLM monitoring (Grafana port conflict)
+- `.25` — Browser only (`browser-service`) — no SLM monitoring (Grafana port conflict)
 
 ---
 
