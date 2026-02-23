@@ -73,8 +73,8 @@ class RoleDetector:
         """Load role definitions from SLM server response."""
         self.roles = {}
         for defn in definitions:
-            if not defn.get("target_path"):
-                continue  # Skip roles without target path (e.g., code-source)
+            if not defn.get("target_path") and not defn.get("systemd_service"):
+                continue  # Skip roles with neither path nor service
 
             self.roles[defn["name"]] = RoleDefinition(
                 name=defn["name"],
@@ -99,10 +99,13 @@ class RoleDetector:
         """Detect a single role."""
         status = RoleStatus()
 
-        # Check path
-        target_path = Path(role.target_path)
-        status.path_exists = target_path.exists()
-        status.path = str(target_path) if status.path_exists else None
+        # Check path (service-only roles have no target_path — always pass)
+        if role.target_path:
+            target_path = Path(role.target_path)
+            status.path_exists = target_path.exists()
+            status.path = str(target_path) if status.path_exists else None
+        else:
+            status.path_exists = True  # no path requirement
 
         # Check service
         if role.systemd_service:
@@ -114,9 +117,9 @@ class RoleDetector:
             if role.health_check_port in listening_ports:
                 status.ports.append(role.health_check_port)
 
-        # Read version if path exists
-        if status.path_exists:
-            status.version = self._read_version(target_path)
+        # Read version if path exists and path was specified
+        if status.path_exists and role.target_path:
+            status.version = self._read_version(Path(role.target_path))
 
         return status
 

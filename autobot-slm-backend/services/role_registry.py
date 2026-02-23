@@ -364,15 +364,19 @@ async def list_roles(db: AsyncSession) -> List[Role]:
 
 
 async def get_role_definitions() -> List[Dict]:
-    """Get lightweight role definitions for agents."""
+    """Get lightweight role definitions for agents.
+
+    Includes roles with either a target_path or a systemd_service so
+    service-only roles (redis, chromadb, postgresql) are also detected.
+    """
     return [
         {
             "name": r["name"],
-            "target_path": r["target_path"],
+            "target_path": r.get("target_path", ""),
             "systemd_service": r.get("systemd_service"),
             "health_check_port": r.get("health_check_port"),
             "required": r.get("required", False),
         }
         for r in DEFAULT_ROLES
-        if r.get("target_path")
+        if r.get("target_path") or r.get("systemd_service")
     ]
