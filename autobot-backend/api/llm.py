@@ -318,12 +318,6 @@ async def get_available_embedding_models(
         )
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="update_embedding_model",
-    error_code_prefix="LLM",
-)
-@router.post("/embedding")
 async def _apply_embedding_config(
     provider: str, model: str, embedding_data: dict
 ) -> None:
@@ -344,6 +338,12 @@ async def _apply_embedding_config(
     await asyncio.to_thread(config.save_config_to_yaml)
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="update_embedding_model",
+    error_code_prefix="LLM",
+)
+@router.post("/embedding")
 async def update_embedding_model(
     embedding_data: dict,
     admin_check: bool = Depends(check_admin_permission),
