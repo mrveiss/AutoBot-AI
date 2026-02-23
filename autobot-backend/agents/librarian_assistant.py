@@ -1,11 +1,14 @@
 # AutoBot - AI-Powered Automation Platform
-# Copyright (c) 2025 mrveiss
+# Copyright (c) 2026 mrveiss
 # Author: mrveiss
-"""Containerized Librarian Assistant Agent for Web Research.
+"""Librarian Assistant Agent for Web Research.
 
-This agent performs web research using a Playwright service running in Docker container,
-presents results with proper source attribution, and can store quality information
-in the knowledge base for future reference.
+This agent performs web research using the Playwright service running on the
+browser VM (.25), presents results with proper source attribution, and stores
+quality information in the knowledge base for future reference.
+
+Architecture: called by the orchestrator when local KB results are insufficient
+or the query requires current/external data.
 """
 
 import json
@@ -24,11 +27,11 @@ from ..utils.service_registry import get_service_url
 logger = logging.getLogger(__name__)
 
 
-class ContainerizedLibrarianAssistant:
-    """An agent that researches information using containerized Playwright service."""
+class LibrarianAssistant:
+    """An agent that researches information using the browser VM Playwright service."""
 
     def __init__(self):
-        """Initialize the Containerized Librarian Assistant Agent."""
+        """Initialize the Librarian Assistant Agent."""
         self.config = config
         self.knowledge_base = KnowledgeBase()
         self.llm = LLMInterface()
@@ -72,7 +75,7 @@ class ContainerizedLibrarianAssistant:
         self.http_client = get_http_client()
 
     async def _check_playwright_service(self) -> bool:
-        """Check if Playwright service is available."""
+        """Check if browser VM Playwright service is available."""
         try:
             async with await self.http_client.get(
                 f"{self.playwright_service_url}/health"
@@ -82,7 +85,7 @@ class ContainerizedLibrarianAssistant:
                     return True
                 else:
                     logger.error(
-                        f"Playwright service unhealthy: status {response.status}"
+                        "Playwright service unhealthy: status %s", response.status
                     )
                     return False
         except Exception as e:
@@ -92,7 +95,7 @@ class ContainerizedLibrarianAssistant:
     async def search_web(
         self, query: str, search_engine: str = "duckduckgo"
     ) -> List[Dict[str, Any]]:
-        """Search the web for information using containerized Playwright service.
+        """Search the web for information using the browser VM Playwright service.
 
         Args:
             query: Search query
@@ -112,7 +115,7 @@ class ContainerizedLibrarianAssistant:
             payload = {"query": query, "search_engine": search_engine}
 
             logger.info(
-                f"Searching with {search_engine} via Playwright service: {query}"
+                "Searching with %s via Playwright service: %s", search_engine, query
             )
 
             async with await self.http_client.post(
@@ -130,7 +133,7 @@ class ContainerizedLibrarianAssistant:
                     return results[: self.max_search_results]
                 else:
                     logger.error(
-                        f"Search failed: {result.get('error', 'Unknown error')}"
+                        "Search failed: %s", result.get("error", "Unknown error")
                     )
                     return []
 
@@ -159,7 +162,7 @@ class ContainerizedLibrarianAssistant:
         }
 
     async def extract_content(self, url: str) -> Optional[Dict[str, Any]]:
-        """Extract content from a web page using containerized Playwright.
+        """Extract content from a web page using the browser VM Playwright service.
 
         Args:
             url: URL to extract content from
@@ -188,14 +191,15 @@ class ContainerizedLibrarianAssistant:
                 if result.get("success"):
                     content_data = self._build_content_data(result)
                     logger.info(
-                        f"Extracted {result['content_length']} characters from "
-                        f"{result['domain']}"
+                        "Extracted %s characters from %s",
+                        result["content_length"],
+                        result["domain"],
                     )
                     return content_data
                 else:
                     logger.error(
-                        "Content extraction failed: "
-                        f"{result.get('error', 'Unknown error')}"
+                        "Content extraction failed: %s",
+                        result.get("error", "Unknown error"),
                     )
                     return None
 
@@ -232,8 +236,7 @@ class ContainerizedLibrarianAssistant:
         }
 
     def _build_assessment_prompt(self, content_data: Dict[str, Any]) -> str:
-        """
-        Build the LLM prompt for content quality assessment.
+        """Build the LLM prompt for content quality assessment.
 
         Args:
             content_data: Content data with text and metadata
@@ -247,41 +250,38 @@ class ContainerizedLibrarianAssistant:
         content_length = content_data.get("content_length", 0)
         content_sample = content_data.get("content", "")[:500]
 
-        return f"""Please assess the quality and reliability of this web content for inclusion in a knowledge base:
-
-Title: {title}
-Domain: {domain}
-Is Trusted Domain: {is_trusted}
-Content Length: {content_length} characters
-
-Content Sample (first 500 chars):
-{content_sample}...
-
-Please evaluate on a scale of 0.0 to 1.0 based on:
-1. Factual accuracy and reliability
-2. Information completeness
-3. Source credibility
-4. Content structure and clarity
-5. Relevance and usefulness
-
-Respond in JSON format:
-{{
-    "score": 0.0-1.0,
-    "reasoning": "Brief explanation of the assessment",
-    "recommendation": "store|review|reject",
-    "key_topics": ["list", "of", "main", "topics"],
-    "reliability_factors": {{
-        "trusted_domain": true/false,
-        "content_quality": "high/medium/low",
-        "information_density": "high/medium/low"
-    }}
-}}"""
+        return (
+            f"Please assess the quality and reliability of this web content for "
+            f"inclusion in a knowledge base:\n\n"
+            f"Title: {title}\n"
+            f"Domain: {domain}\n"
+            f"Is Trusted Domain: {is_trusted}\n"
+            f"Content Length: {content_length} characters\n\n"
+            f"Content Sample (first 500 chars):\n{content_sample}...\n\n"
+            "Please evaluate on a scale of 0.0 to 1.0 based on:\n"
+            "1. Factual accuracy and reliability\n"
+            "2. Information completeness\n"
+            "3. Source credibility\n"
+            "4. Content structure and clarity\n"
+            "5. Relevance and usefulness\n\n"
+            "Respond in JSON format:\n"
+            "{\n"
+            '    "score": 0.0-1.0,\n'
+            '    "reasoning": "Brief explanation of the assessment",\n'
+            '    "recommendation": "store|review|reject",\n'
+            '    "key_topics": ["list", "of", "main", "topics"],\n'
+            '    "reliability_factors": {\n'
+            '        "trusted_domain": true/false,\n'
+            '        "content_quality": "high/medium/low",\n'
+            '        "information_density": "high/medium/low"\n'
+            "    }\n"
+            "}"
+        )
 
     def _parse_assessment_response(
         self, response: str, content_data: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """
-        Parse LLM response into assessment dictionary.
+        """Parse LLM response into assessment dictionary.
 
         Args:
             response: Raw LLM response string
@@ -302,8 +302,7 @@ Respond in JSON format:
     async def assess_content_quality(
         self, content_data: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """
-        Assess the quality of extracted content using LLM. Issue #620.
+        """Assess the quality of extracted content using LLM. Issue #620.
 
         Args:
             content_data: Content data with text and metadata
@@ -332,15 +331,13 @@ Respond in JSON format:
             True if stored successfully
         """
         try:
-            # Prepare document for storage
-            document_content = """
-Title: {content_data.get('title', 'Untitled')}
-Source: {content_data.get('url', 'Unknown')}
-Domain: {content_data.get('domain', 'Unknown')}
-Retrieved: {content_data.get('timestamp', 'Unknown')}
-
-{content_data.get('content', '')}
-"""
+            document_content = (
+                f"Title: {content_data.get('title', 'Untitled')}\n"
+                f"Source: {content_data.get('url', 'Unknown')}\n"
+                f"Domain: {content_data.get('domain', 'Unknown')}\n"
+                f"Retrieved: {content_data.get('timestamp', 'Unknown')}\n\n"
+                f"{content_data.get('content', '')}"
+            )
 
             metadata = {
                 "source": content_data.get("url", "web_research"),
@@ -350,17 +347,16 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
                 "recommendation": assessment.get("recommendation", "review"),
                 "key_topics": assessment.get("key_topics", []),
                 "is_trusted": content_data.get("is_trusted", False),
-                "stored_by": "containerized_librarian_assistant",
+                "stored_by": "librarian_assistant",
                 "timestamp": content_data.get("timestamp", datetime.now().isoformat()),
             }
 
-            # Store in knowledge base
             success = self.knowledge_base.add_document(document_content, metadata)
 
             if success:
                 logger.info(
-                    f"Stored content from {content_data.get('domain')} in "
-                    "knowledge base"
+                    "Stored content from %s in knowledge base",
+                    content_data.get("domain"),
                 )
                 return True
             else:
@@ -417,8 +413,7 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
         }
 
     def _create_empty_research_results(self, query: str) -> Dict[str, Any]:
-        """
-        Create empty research results structure. Issue #620.
+        """Create empty research results structure. Issue #620.
 
         Args:
             query: The research query
@@ -442,8 +437,7 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
         store_quality_content: bool,
         stored_list: List[Dict[str, Any]],
     ) -> List[Dict[str, Any]]:
-        """
-        Extract and process top search results. Issue #620.
+        """Extract and process top search results. Issue #620.
 
         Args:
             search_results: List of search results
@@ -465,8 +459,7 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
     async def research_query(
         self, query: str, store_quality_content: bool = None
     ) -> Dict[str, Any]:
-        """
-        Research a query by searching the web and extracting content. Issue #620.
+        """Research a query by searching the web and extracting content. Issue #620.
 
         Args:
             query: Research query
@@ -478,7 +471,7 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
         if not self.enabled:
             return {
                 "enabled": False,
-                "message": "Containerized Librarian Assistant is disabled",
+                "message": "Librarian Assistant is disabled",
             }
 
         if store_quality_content is None:
@@ -519,8 +512,7 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
         extracted_content: List[Dict[str, Any]],
         research_results: Dict[str, Any],
     ) -> None:
-        """
-        Finalize research results with summary and sources. Issue #620.
+        """Finalize research results with summary and sources. Issue #620.
 
         Args:
             query: The original research query
@@ -546,7 +538,6 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
     ) -> str:
         """Create a summary of research findings."""
         try:
-            # Prepare content for summarization
             source_contents = []
             for i, content in enumerate(content_list, 1):
                 quality_info = content.get("quality_assessment", {})
@@ -558,25 +549,21 @@ Retrieved: {content_data.get('timestamp', 'Unknown')}
 
             combined_content = "\n---\n".join(source_contents)
 
-            prompt = f"""
-Based on the following web research results for the query "{query}", please provide a comprehensive summary that:
-
-1. Synthesizes the key information found
-2. Clearly attributes information to sources
-3. Notes any contradictions or uncertainties
-4. Highlights the most reliable information
-
-Research Results:
-{combined_content}
-
-Please format your response to include:
-- Main findings with source attribution
-- Key facts and concepts discovered
-- Source reliability assessment
-- Any limitations or gaps in the information
-
-Format sources as: [Source: Domain Name]
-"""
+            prompt = (
+                f'Based on the following web research results for the query "{query}", '
+                "please provide a comprehensive summary that:\n\n"
+                "1. Synthesizes the key information found\n"
+                "2. Clearly attributes information to sources\n"
+                "3. Notes any contradictions or uncertainties\n"
+                "4. Highlights the most reliable information\n\n"
+                f"Research Results:\n{combined_content}\n\n"
+                "Please format your response to include:\n"
+                "- Main findings with source attribution\n"
+                "- Key facts and concepts discovered\n"
+                "- Source reliability assessment\n"
+                "- Any limitations or gaps in the information\n\n"
+                "Format sources as: [Source: Domain Name]"
+            )
 
             summary = await self.llm.chat([{"role": "user", "content": prompt}])
             return summary
@@ -589,20 +576,19 @@ Format sources as: [Source: Domain Name]
 # Singleton instance (thread-safe)
 import threading
 
-_containerized_librarian_assistant = None
-_containerized_librarian_assistant_lock = threading.Lock()
+_librarian_assistant = None
+_librarian_assistant_lock = threading.Lock()
 
 
-def get_containerized_librarian_assistant() -> ContainerizedLibrarianAssistant:
-    """Get the singleton Containerized Librarian Assistant Agent instance (thread-safe).
+def get_librarian_assistant() -> LibrarianAssistant:
+    """Get the singleton Librarian Assistant Agent instance (thread-safe).
 
     Returns:
-        The Containerized Librarian Assistant Agent instance
+        The Librarian Assistant Agent instance
     """
-    global _containerized_librarian_assistant
-    if _containerized_librarian_assistant is None:
-        with _containerized_librarian_assistant_lock:
-            # Double-check after acquiring lock
-            if _containerized_librarian_assistant is None:
-                _containerized_librarian_assistant = ContainerizedLibrarianAssistant()
-    return _containerized_librarian_assistant
+    global _librarian_assistant
+    if _librarian_assistant is None:
+        with _librarian_assistant_lock:
+            if _librarian_assistant is None:
+                _librarian_assistant = LibrarianAssistant()
+    return _librarian_assistant
