@@ -376,35 +376,24 @@ DEFAULT_AGENT_CONFIGS = {
     },
     "librarian_assistant": {
         "name": "Librarian Assistant Agent",
-        "description": "Performs web research using Playwright and manages knowledge. Finds relevant information, presents with source attribution, and stores quality content (above threshold) in knowledge base for future reference.",
+        "description": (
+            "Performs web research via the browser VM Playwright service (.25). "
+            "Searches the web, extracts page content, assesses quality, and stores "
+            "high-quality results in the knowledge base. Called by the orchestrator "
+            "when local KB results are insufficient or the query requires current data."
+        ),
         "default_model": TIER_4_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 4,
-        "tasks": ["document_organization", "metadata_management", "library_curation"],
-        "mcp_tools": ["knowledge_mcp", "filesystem_mcp", "database_mcp"],
-        "invoked_by": "ResearchAgent, knowledge_mcp tools for web research",
-        "source_file": "src/agents/librarian_assistant_agent.py",
-    },
-    "containerized_librarian": {
-        "name": "Containerized Librarian Agent",
-        "description": "Performs web research using containerized Playwright service (Docker). Provides isolated execution environment for secure document processing. Connects to playwright-vnc service for browser automation.",
-        "default_model": TIER_4_MODEL,
-        "provider": "ollama",
-        "enabled": True,
-        "priority": 4,
-        "tasks": [
-            "isolated_processing",
-            "secure_document_handling",
-            "container_orchestration",
-        ],
-        "mcp_tools": ["filesystem_mcp", "knowledge_mcp"],
-        "invoked_by": "LibrarianAssistant when containerized mode configured",
-        "source_file": "src/agents/containerized_librarian_assistant.py",
+        "tasks": ["web_research", "content_extraction", "knowledge_storage"],
+        "mcp_tools": ["knowledge_mcp", "filesystem_mcp"],
+        "invoked_by": "AgentOrchestrator when external research is needed",
+        "source_file": "src/agents/librarian_assistant.py",
     },
     "system_knowledge_manager": {
         "name": "System Knowledge Manager",
-        "description": "Manages immutable system knowledge templates and runtime copies. Handles intelligent change detection, backup creation, and knowledge base integration. Uses EnhancedKBLibrarian for document processing.",
+        "description": "Manages immutable system knowledge templates and runtime copies. Handles intelligent change detection, backup creation, and knowledge base integration. Uses the kb_librarian package for document processing.",
         "default_model": TIER_4_MODEL,
         "provider": "ollama",
         "enabled": True,
