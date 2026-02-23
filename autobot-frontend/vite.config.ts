@@ -3,9 +3,40 @@
  */
 
 import { fileURLToPath, URL } from 'node:url'
+import { copyFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
+import type { Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
+
+/**
+ * Copy VAD static assets (ONNX runtime WASM + Silero model + worklet bundle)
+ * from node_modules into dist/ at build time (#1150).
+ *
+ * MicVAD (@ricky0123/vad-web) fetches these files at runtime via fetch()
+ * from a configurable baseAssetPath. They must be served as static files.
+ */
+function vadAssetsPlugin(): Plugin {
+  const assets: [string, string][] = [
+    ['node_modules/@ricky0123/vad-web/dist/vad.worklet.bundle.min.js', 'vad.worklet.bundle.min.js'],
+    ['node_modules/@ricky0123/vad-web/dist/silero_vad_legacy.onnx', 'silero_vad_legacy.onnx'],
+    ['node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm', 'ort-wasm-simd-threaded.wasm'],
+  ]
+  return {
+    name: 'vad-assets',
+    writeBundle(options) {
+      const outDir = options.dir || 'dist'
+      for (const [src, dest] of assets) {
+        try {
+          copyFileSync(src, join(outDir, dest))
+        } catch (e) {
+          process.stderr.write(`[vad-assets] WARNING: Failed to copy ${src}: ${e}\n`)
+        }
+      }
+    },
+  }
+}
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -17,7 +48,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-    plugins: [vue(), vueDevTools()],
+    plugins: [vue(), vueDevTools(), vadAssetsPlugin()],
     optimizeDeps: {
       include: ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-web-links', '@heroicons/vue/24/outline', '@heroicons/vue/24/solid'],
       esbuildOptions: { target: 'es2022' }

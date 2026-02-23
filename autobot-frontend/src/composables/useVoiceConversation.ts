@@ -495,7 +495,13 @@ async function _startHandsFree(): Promise<void> {
   state.value = 'listening'
   try {
     const { MicVAD } = await import('@ricky0123/vad-web')
+    // Issue #1150: provide explicit asset paths so MicVAD can fetch its
+    // ONNX model (silero_vad_legacy.onnx), worklet bundle, and WASM runtime
+    // from the root of the frontend — these are copied to dist/ by the
+    // vadAssetsPlugin in vite.config.ts.
     _sileroVad = await MicVAD.new({
+      baseAssetPath: '/',
+      onnxWASMBasePath: '/',
       positiveSpeechThreshold: 0.8,
       minSpeechMs: 150,
       redemptionMs: 250,
