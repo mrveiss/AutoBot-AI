@@ -634,6 +634,9 @@ export function useVoiceConversation() {
     if (mode.value === newMode) return
     const wasActive = isActive.value
 
+    // Issue #1149: clear stale errors from the previous mode
+    errorMessage.value = ''
+
     if (wasActive) {
       _stopRecognition()
       _stopHandsFree()
