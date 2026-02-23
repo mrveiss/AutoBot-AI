@@ -100,7 +100,12 @@ export function useVoiceOutput() {
     voiceOutputEnabled.value = !voiceOutputEnabled.value
     localStorage.setItem(STORAGE_KEY, String(voiceOutputEnabled.value))
     logger.debug('Voice output toggled:', voiceOutputEnabled.value)
-    if (!voiceOutputEnabled.value) {
+    if (voiceOutputEnabled.value) {
+      // Issue #1146: unlock AudioContext from the user-gesture click event so
+      // future speak() calls (triggered by reactive watchers, not gestures) can
+      // play audio without hitting the browser autoplay policy.
+      unlockAudio()
+    } else {
       _stopCurrentAudio()
     }
   }
