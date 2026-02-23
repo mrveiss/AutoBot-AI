@@ -418,6 +418,8 @@ function openCreateRoleForm(): void {
     health_check_path: '',
     pre_sync_cmd: '',
     post_sync_cmd: '',
+    required: false,
+    degraded_without: '',
   }
   showRoleForm.value = true
 }
