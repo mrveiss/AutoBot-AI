@@ -149,6 +149,43 @@ class DestinationResponse(BaseModel):
     failed_count: int
 
 
+def _build_updated_destination_config(
+    name: str,
+    existing: DestinationConfig,
+    update_dict: dict,
+) -> DestinationConfig:
+    """Helper for update_destination. Ref: #1088.
+
+    Merges update_dict fields over the existing DestinationConfig and returns
+    the new DestinationConfig.  The destination type is always preserved.
+    """
+    return DestinationConfig(
+        name=name,
+        type=existing.type,
+        enabled=update_dict.get("enabled", existing.enabled),
+        url=update_dict.get("url", existing.url),
+        api_key=update_dict.get("api_key", existing.api_key),
+        username=update_dict.get("username", existing.username),
+        password=update_dict.get("password", existing.password),
+        index=update_dict.get("index", existing.index),
+        file_path=update_dict.get("file_path", existing.file_path),
+        min_level=update_dict.get("min_level", existing.min_level),
+        batch_size=update_dict.get("batch_size", existing.batch_size),
+        batch_timeout=update_dict.get("batch_timeout", existing.batch_timeout),
+        retry_count=update_dict.get("retry_count", existing.retry_count),
+        retry_delay=update_dict.get("retry_delay", existing.retry_delay),
+        scope=DestinationScope(update_dict.get("scope", existing.scope.value)),
+        target_hosts=update_dict.get("target_hosts", existing.target_hosts),
+        syslog_protocol=SyslogProtocol(
+            update_dict.get("syslog_protocol", existing.syslog_protocol.value)
+        ),
+        ssl_verify=update_dict.get("ssl_verify", existing.ssl_verify),
+        ssl_ca_cert=update_dict.get("ssl_ca_cert", existing.ssl_ca_cert),
+        ssl_client_cert=update_dict.get("ssl_client_cert", existing.ssl_client_cert),
+        ssl_client_key=update_dict.get("ssl_client_key", existing.ssl_client_key),
+    )
+
+
 def _config_to_destination_config(data: DestinationCreate) -> DestinationConfig:
     """Convert API model to DestinationConfig."""
     try:
@@ -354,38 +391,11 @@ async def update_destination(
                 status_code=404, detail=f"Destination not found: {name}"
             )
 
-        # Get existing config and update fields
         existing = forwarder.destinations[name].config
         update_dict = data.model_dump(exclude_unset=True)
 
-        # Create new config with updated fields
-        new_config = DestinationConfig(
-            name=name,
-            type=existing.type,
-            enabled=update_dict.get("enabled", existing.enabled),
-            url=update_dict.get("url", existing.url),
-            api_key=update_dict.get("api_key", existing.api_key),
-            username=update_dict.get("username", existing.username),
-            password=update_dict.get("password", existing.password),
-            index=update_dict.get("index", existing.index),
-            file_path=update_dict.get("file_path", existing.file_path),
-            min_level=update_dict.get("min_level", existing.min_level),
-            batch_size=update_dict.get("batch_size", existing.batch_size),
-            batch_timeout=update_dict.get("batch_timeout", existing.batch_timeout),
-            retry_count=update_dict.get("retry_count", existing.retry_count),
-            retry_delay=update_dict.get("retry_delay", existing.retry_delay),
-            scope=DestinationScope(update_dict.get("scope", existing.scope.value)),
-            target_hosts=update_dict.get("target_hosts", existing.target_hosts),
-            syslog_protocol=SyslogProtocol(
-                update_dict.get("syslog_protocol", existing.syslog_protocol.value)
-            ),
-            ssl_verify=update_dict.get("ssl_verify", existing.ssl_verify),
-            ssl_ca_cert=update_dict.get("ssl_ca_cert", existing.ssl_ca_cert),
-            ssl_client_cert=update_dict.get(
-                "ssl_client_cert", existing.ssl_client_cert
-            ),
-            ssl_client_key=update_dict.get("ssl_client_key", existing.ssl_client_key),
-        )
+        # Build updated config using extracted helper (Issue #1088)
+        new_config = _build_updated_destination_config(name, existing, update_dict)
 
         success = forwarder.update_destination(name, new_config)
         if not success:
@@ -632,6 +642,80 @@ async def stop_forwarding(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _get_destination_type_list() -> list:
+    """Helper for get_destination_types. Ref: #1088.
+
+    Returns the static list of supported destination type descriptors.
+    """
+    return [
+        {
+            "value": "seq",
+            "label": "Seq",
+            "description": "Datalust Seq structured logging server",
+            "requires": ["url"],
+            "optional": ["api_key"],
+        },
+        {
+            "value": "elasticsearch",
+            "label": "Elasticsearch",
+            "description": "Elasticsearch cluster for log indexing",
+            "requires": ["url"],
+            "optional": ["username", "password", "index"],
+        },
+        {
+            "value": "loki",
+            "label": "Grafana Loki",
+            "description": "Grafana Loki for log aggregation",
+            "requires": ["url"],
+            "optional": ["username", "password"],
+        },
+        {
+            "value": "syslog",
+            "label": "Syslog",
+            "description": "Standard syslog server (UDP/TCP/TLS)",
+            "requires": ["url"],
+            "optional": [
+                "syslog_protocol",
+                "ssl_verify",
+                "ssl_ca_cert",
+                "ssl_client_cert",
+                "ssl_client_key",
+            ],
+            "protocols": ["udp", "tcp", "tcp_tls"],
+        },
+        {
+            "value": "webhook",
+            "label": "Webhook",
+            "description": "Custom HTTP webhook endpoint",
+            "requires": ["url"],
+            "optional": ["api_key"],
+        },
+        {
+            "value": "file",
+            "label": "File",
+            "description": "Local file logging",
+            "requires": ["file_path"],
+            "optional": [],
+        },
+    ]
+
+
+def _get_syslog_protocol_list() -> list:
+    """Helper for get_destination_types. Ref: #1088.
+
+    Returns the static list of supported syslog protocol descriptors.
+    """
+    return [
+        {"value": "udp", "label": "UDP", "description": "UDP (unreliable, fast)"},
+        {"value": "tcp", "label": "TCP", "description": "TCP (reliable)"},
+        {
+            "value": "tcp_tls",
+            "label": "TCP + TLS",
+            "description": "TCP with SSL/TLS encryption",
+        },
+    ]
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_destination_types",
@@ -644,59 +728,11 @@ async def get_destination_types(
     """Get available destination types and their configuration options.
 
     Issue #744: Requires admin authentication.
+    Issue #1088: Static data extracted to _get_destination_type_list and
+    _get_syslog_protocol_list helpers.
     """
     return {
-        "types": [
-            {
-                "value": "seq",
-                "label": "Seq",
-                "description": "Datalust Seq structured logging server",
-                "requires": ["url"],
-                "optional": ["api_key"],
-            },
-            {
-                "value": "elasticsearch",
-                "label": "Elasticsearch",
-                "description": "Elasticsearch cluster for log indexing",
-                "requires": ["url"],
-                "optional": ["username", "password", "index"],
-            },
-            {
-                "value": "loki",
-                "label": "Grafana Loki",
-                "description": "Grafana Loki for log aggregation",
-                "requires": ["url"],
-                "optional": ["username", "password"],
-            },
-            {
-                "value": "syslog",
-                "label": "Syslog",
-                "description": "Standard syslog server (UDP/TCP/TLS)",
-                "requires": ["url"],
-                "optional": [
-                    "syslog_protocol",
-                    "ssl_verify",
-                    "ssl_ca_cert",
-                    "ssl_client_cert",
-                    "ssl_client_key",
-                ],
-                "protocols": ["udp", "tcp", "tcp_tls"],
-            },
-            {
-                "value": "webhook",
-                "label": "Webhook",
-                "description": "Custom HTTP webhook endpoint",
-                "requires": ["url"],
-                "optional": ["api_key"],
-            },
-            {
-                "value": "file",
-                "label": "File",
-                "description": "Local file logging",
-                "requires": ["file_path"],
-                "optional": [],
-            },
-        ],
+        "types": _get_destination_type_list(),
         "scopes": [
             {"value": "global", "label": "Global", "description": "Apply to all hosts"},
             {
@@ -706,15 +742,7 @@ async def get_destination_types(
             },
         ],
         "log_levels": ["Debug", "Information", "Warning", "Error", "Fatal"],
-        "syslog_protocols": [
-            {"value": "udp", "label": "UDP", "description": "UDP (unreliable, fast)"},
-            {"value": "tcp", "label": "TCP", "description": "TCP (reliable)"},
-            {
-                "value": "tcp_tls",
-                "label": "TCP + TLS",
-                "description": "TCP with SSL/TLS encryption",
-            },
-        ],
+        "syslog_protocols": _get_syslog_protocol_list(),
     }
 
 

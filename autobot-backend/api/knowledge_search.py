@@ -358,6 +358,26 @@ def _convert_results_to_documents(
     return documents
 
 
+def _parse_rag_search_params(request: dict) -> tuple:
+    """Helper for rag_enhanced_search. Ref: #1088.
+
+    Extract and resolve query, search_limit, and reformulate_query from the
+    raw request dict, applying the same precedence rules as the original handler.
+
+    Args:
+        request: Raw request dict from the endpoint
+
+    Returns:
+        Tuple of (query, search_limit, reformulate_query)
+    """
+    query = request.get("query", "")
+    top_k = request.get("top_k", 10)
+    limit = request.get("limit", 10)
+    reformulate_query = request.get("reformulate_query", True)
+    search_limit = limit if request.get("limit") is not None else top_k
+    return query, search_limit, reformulate_query
+
+
 async def _process_with_rag_agent(
     original_query: str,
     all_results: List[Metadata],
@@ -541,21 +561,10 @@ async def consolidated_search(request: ConsolidatedSearchRequest, req: Request):
     - **include_documentation**: Also search project documentation
     - **include_relations**: Include related facts
 
-    **Returns:**
-    - **results**: List of search results
-    - **total_results**: Number of results
-    - **query**: Original query
-    - **mode**: Search mode used
-    - **rag_enhanced**: Whether RAG was applied
-    - **reranking_applied**: Whether reranking was applied
-    - **synthesized_response**: RAG-generated response (if enable_rag=true)
-
-    **Migration from deprecated endpoints:**
-    - `/enhanced_search` → Use with tags, enable_reranking parameters
-    - `/rag_search` → Use with enable_rag=true, reformulate_query=true
-    - `/similarity_search` → Use with mode=semantic, min_score parameter
-
-    Issue #665: Refactored from 96 lines to use extracted helper methods.
+    **Returns:** results, total_results, query, mode, rag_enhanced,
+    reranking_applied, synthesized_response (if enable_rag=true).
+    Migration: /enhanced_search→tags/reranking, /rag_search→enable_rag=true,
+    /similarity_search→mode=semantic. Issue #665: extracted helpers. #1088.
     """
     # Check KB initialization (Issue #665: uses helper)
     kb_to_use, error_response = await _check_kb_initialization(req)
@@ -671,6 +680,58 @@ async def _consolidated_rag_search(
         }
 
 
+async def _get_kb_for_enhanced_search(req: Request):
+    """Helper for enhanced_search. Ref: #1088.
+
+    Retrieve and return the knowledge base instance, or None if unavailable.
+
+    Args:
+        req: FastAPI request object
+
+    Returns:
+        Knowledge base instance, or None if not initialized.
+    """
+    return await get_or_create_knowledge_base(req.app, force_refresh=False)
+
+
+async def _enhanced_search_fallback(kb_to_use, request: EnhancedSearchRequest) -> dict:
+    """Helper for enhanced_search. Ref: #1088.
+
+    Perform basic search when the KB does not support enhanced_search.
+    Uses the request model's safe-mode and fallback-response helpers.
+
+    Args:
+        kb_to_use: Knowledge base instance
+        request: EnhancedSearchRequest from the caller
+
+    Returns:
+        Fallback response dict built by the request model.
+    """
+    logger.warning("KB implementation does not support enhanced_search, using fallback")
+    results = await kb_to_use.search(
+        query=request.query,
+        top_k=request.limit,
+        mode=request.get_safe_mode(VALID_SEARCH_MODES),
+    )
+    return request.get_fallback_response(results)
+
+
+def _enhanced_search_not_initialized_response() -> dict:
+    """Helper for enhanced_search. Ref: #1088.
+
+    Return the standard error response when the knowledge base is not initialized.
+
+    Returns:
+        Error response dict with success=False and an explanatory message.
+    """
+    return {
+        "success": False,
+        "results": [],
+        "total_count": 0,
+        "message": "Knowledge base not initialized - please check logs for errors",
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_search",
@@ -727,36 +788,18 @@ async def enhanced_search(request: EnhancedSearchRequest, req: Request):
     logger.warning(
         "DEPRECATED: /enhanced_search called. Use /search with tags/mode/enable_reranking params instead."
     )
-    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+    kb_to_use = await _get_kb_for_enhanced_search(req)
 
     if kb_to_use is None:
-        return {
-            "success": False,
-            "results": [],
-            "total_count": 0,
-            "message": "Knowledge base not initialized - please check logs for errors",
-        }
+        return _enhanced_search_not_initialized_response()
 
-    # Check if knowledge base supports enhanced_search
+    # Issue #372: Fallback when KB does not support enhanced_search
     if not hasattr(kb_to_use, "enhanced_search"):
-        # Issue #372: Fallback using model method
-        logger.warning(
-            "KB implementation does not support enhanced_search, using fallback"
-        )
-        results = await kb_to_use.search(
-            query=request.query,
-            top_k=request.limit,
-            mode=request.get_safe_mode(VALID_SEARCH_MODES),
-        )
-        return request.get_fallback_response(results)
+        return await _enhanced_search_fallback(kb_to_use, request)
 
-    # Issue #372: Use model method for log summary
+    # Issue #372: Use model method for log summary and search params
     logger.info("Enhanced search: %s", request.get_log_summary())
-
-    # Issue #372: Use model method for search params
-    result = await kb_to_use.enhanced_search(**request.to_search_params())
-
-    return result
+    return await kb_to_use.enhanced_search(**request.to_search_params())
 
 
 @with_error_handling(
@@ -769,22 +812,9 @@ async def rag_enhanced_search(request: dict, req: Request):
     """
     **[DEPRECATED]** Use POST /search with `enable_rag=true` instead.
 
-    Migration: Use `/search` with these parameters:
-    - `enable_rag`: true
-    - `reformulate_query`: true (for query reformulation)
-    - Other search params work the same
-
-    ---
-
-    RAG-enhanced knowledge search for comprehensive document synthesis.
-
-    Issue #281: Refactored from 200 lines to use extracted helper methods.
-
-    Features:
-    - Query reformulation for better search coverage
-    - Multi-query search with deduplication
-    - RAG agent synthesis of results
-    - Graceful degradation on errors
+    Migration: use `enable_rag=true`, `reformulate_query=true` in /search.
+    RAG-enhanced search with query reformulation, multi-query dedup, and synthesis.
+    Issue #281: Refactored to use extracted helpers. #1088: param extraction.
     """
     # Issue #555: Log deprecation warning
     logger.warning(
@@ -801,15 +831,11 @@ async def rag_enhanced_search(request: dict, req: Request):
     if kb_to_use is None:
         return _build_kb_not_initialized_response()
 
-    query = request.get("query", "")
-    top_k = request.get("top_k", 10)
-    limit = request.get("limit", 10)
-    reformulate_query = request.get("reformulate_query", True)
+    # Issue #1088: parse params via helper
+    query, search_limit, reformulate_query = _parse_rag_search_params(request)
 
     if not query:
         raise HTTPException(status_code=400, detail="Query is required")
-
-    search_limit = limit if request.get("limit") is not None else top_k
 
     logger.info(
         f"RAG-enhanced search request: '{query}' "
@@ -822,7 +848,6 @@ async def rag_enhanced_search(request: dict, req: Request):
         return empty_response
 
     # Step 1: Query reformulation (Issue #281: uses helper)
-    original_query = query
     reformulated_queries = await _reformulate_query_if_requested(
         query, reformulate_query
     )
@@ -835,9 +860,9 @@ async def rag_enhanced_search(request: dict, req: Request):
     # Step 3: RAG processing or empty response (Issue #665: uses helpers)
     if all_results:
         return await _process_with_rag_agent(
-            original_query, all_results, reformulated_queries, kb_to_use
+            query, all_results, reformulated_queries, kb_to_use
         )
-    return _build_no_results_response(original_query, reformulated_queries)
+    return _build_no_results_response(query, reformulated_queries)
 
 
 @with_error_handling(

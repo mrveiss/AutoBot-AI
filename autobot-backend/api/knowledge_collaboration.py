@@ -12,16 +12,16 @@ Issue #679: Hierarchical knowledge access control system supporting:
 - Shared knowledge (explicit sharing)
 """
 
+import json
 import logging
 from typing import Dict, List, Optional
 
 from auth_middleware import get_current_user
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
-
 from backend.knowledge.ownership import VisibilityLevel
 from backend.knowledge.search_filters import extract_user_context_from_request
 from backend.knowledge_factory import get_or_create_knowledge_base
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +85,165 @@ class KnowledgeAccessResponse(BaseModel):
 
 
 # =============================================================================
+# Private Helpers
+# =============================================================================
+
+
+async def _filter_fact_ids_by_scope(
+    fact_ids: List[str], scope: VisibilityLevel, aioredis_client
+) -> List[str]:
+    """Helper for get_knowledge_by_scope. Ref: #1088."""
+    filtered = []
+    for fact_id in fact_ids:
+        fact_data = await aioredis_client.hget(f"fact:{fact_id}", "metadata")
+        if fact_data:
+            metadata = json.loads(fact_data)
+            if metadata.get("visibility") == scope:
+                filtered.append(fact_id)
+    return filtered
+
+
+async def _fetch_facts_from_redis(
+    fact_ids: List[str], aioredis_client, include_title_only: bool = False
+) -> List[Dict]:
+    """Helper for get_knowledge_by_scope. Ref: #1088."""
+    facts = []
+    for fact_id in fact_ids:
+        fact_data = await aioredis_client.hgetall(f"fact:{fact_id}")
+        if fact_data:
+            content = fact_data.get(b"content") or fact_data.get("content")
+            metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata")
+
+            if isinstance(content, bytes):
+                content = content.decode("utf-8")
+            if isinstance(metadata_raw, bytes):
+                metadata_raw = metadata_raw.decode("utf-8")
+
+            metadata = json.loads(metadata_raw) if metadata_raw else {}
+
+            entry: Dict = {
+                "id": fact_id,
+                "content": content,
+                "metadata": metadata,
+                "title": metadata.get("title", "Untitled"),
+            }
+            if not include_title_only:
+                entry["visibility"] = metadata.get(
+                    "visibility", VisibilityLevel.PRIVATE
+                )
+            facts.append(entry)
+    return facts
+
+
+async def _fetch_and_verify_owner(fact_id: str, user_id: str, aioredis_client) -> Dict:
+    """Helper for update_knowledge_permissions. Ref: #1088."""
+    fact_data = await aioredis_client.hget(f"fact:{fact_id}", "metadata")
+    if not fact_data:
+        raise HTTPException(status_code=404, detail="Fact not found")
+    if isinstance(fact_data, bytes):
+        fact_data = fact_data.decode("utf-8")
+    metadata = json.loads(fact_data)
+    if metadata.get("owner_id") != user_id:
+        raise HTTPException(
+            status_code=403, detail="Only the owner can update permissions"
+        )
+    return metadata
+
+
+def _apply_visibility_to_metadata(
+    metadata: Dict,
+    permissions_request: "UpdatePermissionsRequest",
+    user_org_id: Optional[str],
+) -> Dict:
+    """Helper for update_knowledge_permissions. Ref: #1088."""
+    if permissions_request.visibility == VisibilityLevel.ORGANIZATION:
+        if not user_org_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Cannot create organization knowledge without organization membership",
+            )
+        permissions_request.organization_id = user_org_id
+
+    metadata["visibility"] = permissions_request.visibility
+    metadata["organization_id"] = permissions_request.organization_id
+    metadata["group_ids"] = permissions_request.group_ids or []
+    return metadata
+
+
+async def _persist_permissions_update(
+    fact_id: str,
+    user_id: str,
+    metadata: Dict,
+    permissions_request: "UpdatePermissionsRequest",
+    old_visibility: str,
+    ownership_manager,
+    aioredis_client,
+) -> None:
+    """Helper for update_knowledge_permissions. Ref: #1088."""
+    await ownership_manager.set_owner(
+        fact_id=fact_id,
+        owner_id=user_id,
+        visibility=permissions_request.visibility,
+        source_type=metadata.get("source_type", "manual"),
+        shared_with=metadata.get("shared_with", []),
+        organization_id=permissions_request.organization_id,
+        group_ids=permissions_request.group_ids or [],
+    )
+    await aioredis_client.hset(f"fact:{fact_id}", "metadata", json.dumps(metadata))
+    logger.info(
+        "Updated fact %s permissions: %s -> %s",
+        fact_id,
+        old_visibility,
+        permissions_request.visibility,
+    )
+
+
+async def _fetch_fact_metadata(fact_id: str, aioredis_client) -> Dict:
+    """Fetch and decode a fact's metadata hash from Redis. Ref: #1088."""
+    fact_data = await aioredis_client.hget(f"fact:{fact_id}", "metadata")
+    if not fact_data:
+        raise HTTPException(status_code=404, detail="Fact not found")
+    if isinstance(fact_data, bytes):
+        fact_data = fact_data.decode("utf-8")
+    return json.loads(fact_data)
+
+
+async def _check_fact_access(
+    fact_id: str,
+    metadata: Dict,
+    user_id: str,
+    user_org_id: Optional[str],
+    user_group_ids: List[str],
+    ownership_manager,
+) -> bool:
+    """Check whether a user has access to a fact. Ref: #1088."""
+    return await ownership_manager.check_access(
+        fact_id=fact_id,
+        user_id=user_id,
+        fact_metadata=metadata,
+        user_org_id=user_org_id,
+        user_group_ids=user_group_ids,
+    )
+
+
+def _build_access_response(fact_id: str, metadata: Dict, user_id: str) -> Dict:
+    """Build the access-info response dict for a fact. Ref: #1088."""
+    is_owner = metadata.get("owner_id") == user_id
+    return {
+        "fact_id": fact_id,
+        "owner_id": metadata.get("owner_id"),
+        "visibility": metadata.get("visibility", VisibilityLevel.PRIVATE),
+        "organization_id": metadata.get("organization_id"),
+        "group_ids": metadata.get("group_ids", []),
+        "shared_with": metadata.get("shared_with", []),
+        "can_edit": is_owner,
+        "can_share": is_owner,
+        "can_delete": is_owner,
+        "has_access": True,
+    }
+
+
+# =============================================================================
 # Endpoints - Scope-Based Retrieval
 # =============================================================================
 
@@ -132,45 +291,14 @@ async def get_knowledge_by_scope(
 
         # If scope filter provided, filter results
         if scope:
-            filtered_fact_ids = []
-            for fact_id in fact_ids:
-                fact_data = await kb.aioredis_client.hget(f"fact:{fact_id}", "metadata")
-                if fact_data:
-                    import json
-
-                    metadata = json.loads(fact_data)
-                    if metadata.get("visibility") == scope:
-                        filtered_fact_ids.append(fact_id)
-            fact_ids = filtered_fact_ids
+            fact_ids = await _filter_fact_ids_by_scope(
+                fact_ids, scope, kb.aioredis_client
+            )
 
         # Fetch full fact data
-        facts = []
-        for fact_id in fact_ids:
-            fact_data = await kb.aioredis_client.hgetall(f"fact:{fact_id}")
-            if fact_data:
-                import json
-
-                content = fact_data.get(b"content") or fact_data.get("content")
-                metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata")
-
-                if isinstance(content, bytes):
-                    content = content.decode("utf-8")
-                if isinstance(metadata_raw, bytes):
-                    metadata_raw = metadata_raw.decode("utf-8")
-
-                metadata = json.loads(metadata_raw) if metadata_raw else {}
-
-                facts.append(
-                    {
-                        "id": fact_id,
-                        "content": content,
-                        "metadata": metadata,
-                        "title": metadata.get("title", "Untitled"),
-                        "visibility": metadata.get(
-                            "visibility", VisibilityLevel.PRIVATE
-                        ),
-                    }
-                )
+        facts = await _fetch_facts_from_redis(
+            fact_ids, kb.aioredis_client, include_title_only=False
+        )
 
         return {"facts": facts, "count": len(facts), "total": len(fact_ids)}
 
@@ -220,33 +348,9 @@ async def get_organization_knowledge(
         fact_ids = await kb.ownership_manager.get_organization_facts(
             organization_id=organization_id, limit=limit, offset=offset
         )
-
-        # Fetch full fact data
-        facts = []
-        for fact_id in fact_ids:
-            fact_data = await kb.aioredis_client.hgetall(f"fact:{fact_id}")
-            if fact_data:
-                import json
-
-                content = fact_data.get(b"content") or fact_data.get("content")
-                metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata")
-
-                if isinstance(content, bytes):
-                    content = content.decode("utf-8")
-                if isinstance(metadata_raw, bytes):
-                    metadata_raw = metadata_raw.decode("utf-8")
-
-                metadata = json.loads(metadata_raw) if metadata_raw else {}
-
-                facts.append(
-                    {
-                        "id": fact_id,
-                        "content": content,
-                        "metadata": metadata,
-                        "title": metadata.get("title", "Untitled"),
-                    }
-                )
-
+        facts = await _fetch_facts_from_redis(
+            fact_ids, kb.aioredis_client, include_title_only=True
+        )
         return {"facts": facts, "count": len(facts)}
 
     except Exception as e:
@@ -294,33 +398,9 @@ async def get_group_knowledge(
         fact_ids = await kb.ownership_manager.get_group_facts(
             group_id=group_id, limit=limit, offset=offset
         )
-
-        # Fetch full fact data
-        facts = []
-        for fact_id in fact_ids:
-            fact_data = await kb.aioredis_client.hgetall(f"fact:{fact_id}")
-            if fact_data:
-                import json
-
-                content = fact_data.get(b"content") or fact_data.get("content")
-                metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata")
-
-                if isinstance(content, bytes):
-                    content = content.decode("utf-8")
-                if isinstance(metadata_raw, bytes):
-                    metadata_raw = metadata_raw.decode("utf-8")
-
-                metadata = json.loads(metadata_raw) if metadata_raw else {}
-
-                facts.append(
-                    {
-                        "id": fact_id,
-                        "content": content,
-                        "metadata": metadata,
-                        "title": metadata.get("title", "Untitled"),
-                    }
-                )
-
+        facts = await _fetch_facts_from_redis(
+            fact_ids, kb.aioredis_client, include_title_only=True
+        )
         return {"facts": facts, "count": len(facts)}
 
     except Exception as e:
@@ -362,16 +442,7 @@ async def share_knowledge(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        # Fetch fact metadata
-        fact_data = await kb.aioredis_client.hget(f"fact:{fact_id}", "metadata")
-        if not fact_data:
-            raise HTTPException(status_code=404, detail="Fact not found")
-
-        import json
-
-        if isinstance(fact_data, bytes):
-            fact_data = fact_data.decode("utf-8")
-        metadata = json.loads(fact_data)
+        metadata = await _fetch_fact_metadata(fact_id, kb.aioredis_client)
 
         # Verify ownership
         user_id, _, _ = extract_user_context_from_request(current_user)
@@ -444,16 +515,7 @@ async def unshare_knowledge(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        # Fetch fact metadata
-        fact_data = await kb.aioredis_client.hget(f"fact:{fact_id}", "metadata")
-        if not fact_data:
-            raise HTTPException(status_code=404, detail="Fact not found")
-
-        import json
-
-        if isinstance(fact_data, bytes):
-            fact_data = fact_data.decode("utf-8")
-        metadata = json.loads(fact_data)
+        metadata = await _fetch_fact_metadata(fact_id, kb.aioredis_client)
 
         # Verify ownership
         user_id, _, _ = extract_user_context_from_request(current_user)
@@ -521,60 +583,25 @@ async def update_knowledge_permissions(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        # Fetch fact metadata
-        fact_data = await kb.aioredis_client.hget(f"fact:{fact_id}", "metadata")
-        if not fact_data:
-            raise HTTPException(status_code=404, detail="Fact not found")
-
-        import json
-
-        if isinstance(fact_data, bytes):
-            fact_data = fact_data.decode("utf-8")
-        metadata = json.loads(fact_data)
-
-        # Verify ownership
+        # Fetch metadata and verify the caller is the owner
         user_id, user_org_id, _ = extract_user_context_from_request(current_user)
-        if metadata.get("owner_id") != user_id:
-            raise HTTPException(
-                status_code=403, detail="Only the owner can update permissions"
-            )
+        metadata = await _fetch_and_verify_owner(fact_id, user_id, kb.aioredis_client)
 
-        # Verify organization-level permission
-        if permissions_request.visibility == VisibilityLevel.ORGANIZATION:
-            if not user_org_id:
-                raise HTTPException(
-                    status_code=403,
-                    detail="Cannot create organization knowledge without organization membership",
-                )
-            permissions_request.organization_id = user_org_id
-
-        # Update visibility
+        # Apply visibility changes and org-level guard to metadata dict
         old_visibility = metadata.get("visibility")
-        metadata["visibility"] = permissions_request.visibility
-        metadata["organization_id"] = permissions_request.organization_id
-        metadata["group_ids"] = permissions_request.group_ids or []
+        metadata = _apply_visibility_to_metadata(
+            metadata, permissions_request, user_org_id
+        )
 
-        # Update Redis indexes
-        await kb.ownership_manager.set_owner(
+        # Persist Redis index updates, metadata key, and log
+        await _persist_permissions_update(
             fact_id=fact_id,
-            owner_id=user_id,
-            visibility=permissions_request.visibility,
-            source_type=metadata.get("source_type", "manual"),
-            shared_with=metadata.get("shared_with", []),
-            organization_id=permissions_request.organization_id,
-            group_ids=permissions_request.group_ids or [],
-        )
-
-        # Update metadata in Redis
-        await kb.aioredis_client.hset(
-            f"fact:{fact_id}", "metadata", json.dumps(metadata)
-        )
-
-        logger.info(
-            "Updated fact %s permissions: %s -> %s",
-            fact_id,
-            old_visibility,
-            permissions_request.visibility,
+            user_id=user_id,
+            metadata=metadata,
+            permissions_request=permissions_request,
+            old_visibility=old_visibility,
+            ownership_manager=kb.ownership_manager,
+            aioredis_client=kb.aioredis_client,
         )
 
         return {
@@ -616,49 +643,23 @@ async def get_knowledge_access_info(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        # Fetch fact metadata
-        fact_data = await kb.aioredis_client.hget(f"fact:{fact_id}", "metadata")
-        if not fact_data:
-            raise HTTPException(status_code=404, detail="Fact not found")
-
-        import json
-
-        if isinstance(fact_data, bytes):
-            fact_data = fact_data.decode("utf-8")
-        metadata = json.loads(fact_data)
-
-        # Get user's organization and group memberships
+        metadata = await _fetch_fact_metadata(fact_id, kb.aioredis_client)
         user_id, user_org_id, user_group_ids = extract_user_context_from_request(
             current_user
         )
 
-        # Check if user has access
-        has_access = await kb.ownership_manager.check_access(
+        has_access = await _check_fact_access(
             fact_id=fact_id,
+            metadata=metadata,
             user_id=user_id,
-            fact_metadata=metadata,
             user_org_id=user_org_id,
             user_group_ids=user_group_ids,
+            ownership_manager=kb.ownership_manager,
         )
-
         if not has_access:
             raise HTTPException(status_code=403, detail="Access denied")
 
-        # Determine user permissions
-        is_owner = metadata.get("owner_id") == user_id
-
-        return {
-            "fact_id": fact_id,
-            "owner_id": metadata.get("owner_id"),
-            "visibility": metadata.get("visibility", VisibilityLevel.PRIVATE),
-            "organization_id": metadata.get("organization_id"),
-            "group_ids": metadata.get("group_ids", []),
-            "shared_with": metadata.get("shared_with", []),
-            "can_edit": is_owner,
-            "can_share": is_owner,
-            "can_delete": is_owner,
-            "has_access": True,
-        }
+        return _build_access_response(fact_id, metadata, user_id)
 
     except HTTPException:
         raise

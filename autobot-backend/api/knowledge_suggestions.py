@@ -158,74 +158,82 @@ async def suggest_categories(request: SuggestCategoriesRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def _call_kb_suggest_all(request: "SuggestAllRequest") -> dict:
+    """Helper for suggest_all. Ref: #1088."""
+    kb = await get_knowledge_base()
+    result = await kb.suggest_all(
+        content=request.content,
+        tag_limit=request.tag_limit,
+        category_limit=request.category_limit,
+        min_confidence=request.min_confidence,
+        similarity_limit=request.similarity_limit,
+    )
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=500,
+            detail=result.get("error", "Failed to generate suggestions"),
+        )
+    logger.info(
+        "Generated %d tag + %d category suggestions for content (len=%d)",
+        len(result.get("tag_suggestions", [])),
+        len(result.get("category_suggestions", [])),
+        len(request.content),
+    )
+    return result
+
+
 @router.post("/suggestions/all")
 async def suggest_all(request: SuggestAllRequest):
-    """
-    Suggest both tags and categories in a single call.
+    """Suggest both tags and categories in a single call.
 
     More efficient than calling /suggestions/tags and /suggestions/categories
     separately as it only performs one similarity search.
-
-    Args:
-        request: SuggestAllRequest with content and limits
-
-    Returns:
-        Dict with:
-        - success: bool
-        - tag_suggestions: List of {tag, confidence, source_count}
-        - category_suggestions: List of {category_path, confidence, source_count}
-        - similar_docs_analyzed: int
-
-    Example:
-        POST /api/knowledge_base/suggestions/all
-        {
-            "content": "Docker container orchestration with Kubernetes...",
-            "tag_limit": 5,
-            "category_limit": 3
-        }
-
-        Response:
-        {
-            "success": true,
-            "tag_suggestions": [
-                {"tag": "docker", "confidence": 0.95, "source_count": 12},
-                {"tag": "kubernetes", "confidence": 0.91, "source_count": 10}
-            ],
-            "category_suggestions": [
-                {"category_path": "tech/devops", "confidence": 0.89, "source_count": 8}
-            ],
-            "similar_docs_analyzed": 20
-        }
+    POST /api/knowledge_base/suggestions/all
+    Returns: {success, tag_suggestions, category_suggestions, similar_docs_analyzed}
     """
     try:
-        kb = await get_knowledge_base()
-        result = await kb.suggest_all(
-            content=request.content,
-            tag_limit=request.tag_limit,
-            category_limit=request.category_limit,
-            min_confidence=request.min_confidence,
-            similarity_limit=request.similarity_limit,
-        )
-
-        if not result.get("success"):
-            raise HTTPException(
-                status_code=500,
-                detail=result.get("error", "Failed to generate suggestions"),
-            )
-
-        logger.info(
-            "Generated %d tag + %d category suggestions for content (len=%d)",
-            len(result.get("tag_suggestions", [])),
-            len(result.get("category_suggestions", [])),
-            len(request.content),
-        )
-        return result
-
+        return await _call_kb_suggest_all(request)
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Combined suggestion failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _validate_fact_id(fact_id: str) -> None:
+    """Helper for auto_apply_suggestions. Ref: #1088."""
+    if not fact_id or len(fact_id) > 255:
+        raise HTTPException(status_code=400, detail="Invalid fact_id")
+
+
+async def _call_auto_apply_kb(
+    fact_id: str, request: AutoApplySuggestionsRequest
+) -> dict:
+    """Helper for auto_apply_suggestions. Ref: #1088."""
+    kb = await get_knowledge_base()
+    result = await kb.auto_apply_suggestions(
+        fact_id=fact_id,
+        content=request.content,
+        apply_tags=request.apply_tags,
+        apply_category=request.apply_category,
+        min_confidence=request.min_confidence,
+    )
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=500,
+            detail=result.get("error", "Failed to auto-apply suggestions"),
+        )
+    return result
+
+
+def _log_auto_apply_result(fact_id: str, result: dict) -> None:
+    """Helper for auto_apply_suggestions. Ref: #1088."""
+    logger.info(
+        "Auto-applied %d tags and category=%s to fact %s",
+        len(result.get("applied_tags", [])),
+        result.get("applied_category"),
+        fact_id,
+    )
 
 
 @router.post("/facts/{fact_id}/auto-apply")
@@ -271,33 +279,10 @@ async def auto_apply_suggestions(fact_id: str, request: AutoApplySuggestionsRequ
         }
     """
     try:
-        # Basic fact_id validation
-        if not fact_id or len(fact_id) > 255:
-            raise HTTPException(status_code=400, detail="Invalid fact_id")
-
-        kb = await get_knowledge_base()
-        result = await kb.auto_apply_suggestions(
-            fact_id=fact_id,
-            content=request.content,
-            apply_tags=request.apply_tags,
-            apply_category=request.apply_category,
-            min_confidence=request.min_confidence,
-        )
-
-        if not result.get("success"):
-            raise HTTPException(
-                status_code=500,
-                detail=result.get("error", "Failed to auto-apply suggestions"),
-            )
-
-        logger.info(
-            "Auto-applied %d tags and category=%s to fact %s",
-            len(result.get("applied_tags", [])),
-            result.get("applied_category"),
-            fact_id,
-        )
+        _validate_fact_id(fact_id)
+        result = await _call_auto_apply_kb(fact_id, request)
+        _log_auto_apply_result(fact_id, result)
         return result
-
     except HTTPException:
         raise
     except Exception as e:

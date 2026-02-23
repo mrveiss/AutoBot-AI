@@ -8,14 +8,14 @@ import sys
 from datetime import datetime
 
 from auth_middleware import check_admin_permission
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.constants.model_constants import ModelConstants as ModelConsts
 
 # Add caching support from unified cache manager (P4 Cache Consolidation)
 from backend.utils.advanced_cache_manager import cache_manager, cache_response
 from config import ConfigManager
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Create singleton config instance
 config = ConfigManager()
@@ -78,59 +78,43 @@ async def _check_detailed_conversation_db(
         detailed_components["conversation_files_error"] = str(db_e)
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_frontend_config",
-    error_code_prefix="SYSTEM",
-)
-@router.get("/frontend-config")
-@cache_response(cache_key="frontend_config", ttl=60)  # Cache for 1 minute
-async def get_frontend_config(admin_check: bool = Depends(check_admin_permission)):
-    """Get configuration values needed by the frontend.
-
-    This endpoint provides all service URLs and configuration that the frontend needs,
-    eliminating the need for hardcoded values in the frontend code.
-
-    Issue #744: Requires admin authentication.
-    """
-    # Get configuration from the config manager
-    ollama_url = config.get_service_url("ollama")
-    redis_config = config.get_redis_config()
-
-    # Build frontend configuration
-    frontend_config = {
-        "services": {
-            "ollama": {
-                "url": ollama_url,
-                "endpoint": config.get(
-                    "backend.llm.local.providers.ollama.endpoint",
-                    f"{ollama_url}/api/generate",
-                ),
-                "embedding_endpoint": config.get(
-                    "backend.llm.embedding.providers.ollama.endpoint",
-                    f"{ollama_url}/api/embeddings",
-                ),
-            },
-            "playwright": {
-                "vnc_url": config.get_service_url("playwright-vnc"),
-                "api_url": config.get_service_url("playwright"),
-            },
-            "redis": {
-                "host": redis_config.get("host", config.get_host("redis")),
-                "port": redis_config.get("port", config.get_port("redis")),
-                "enabled": redis_config.get("enabled", True),
-            },
-            "lmstudio": {
-                "url": config.get(
-                    "backend.llm.local.providers.lmstudio.endpoint",
-                    config.get_service_url("lmstudio"),
-                ),
-            },
+def _build_frontend_services_config(ollama_url: str, redis_config: dict) -> dict:
+    """Helper for get_frontend_config. Build the services section. Ref: #1088."""
+    return {
+        "ollama": {
+            "url": ollama_url,
+            "endpoint": config.get(
+                "backend.llm.local.providers.ollama.endpoint",
+                f"{ollama_url}/api/generate",
+            ),
+            "embedding_endpoint": config.get(
+                "backend.llm.embedding.providers.ollama.endpoint",
+                f"{ollama_url}/api/embeddings",
+            ),
         },
+        "playwright": {
+            "vnc_url": config.get_service_url("playwright-vnc"),
+            "api_url": config.get_service_url("playwright"),
+        },
+        "redis": {
+            "host": redis_config.get("host", config.get_host("redis")),
+            "port": redis_config.get("port", config.get_port("redis")),
+            "enabled": redis_config.get("enabled", True),
+        },
+        "lmstudio": {
+            "url": config.get(
+                "backend.llm.local.providers.lmstudio.endpoint",
+                config.get_service_url("lmstudio"),
+            ),
+        },
+    }
+
+
+def _build_frontend_meta_config() -> dict:
+    """Helper for get_frontend_config. Build api/features/ui/defaults sections. Ref: #1088."""
+    return {
         "api": {
-            "timeout": (
-                config.get("backend.timeout", 60) * 1000
-            ),  # Convert to milliseconds
+            "timeout": config.get("backend.timeout", 60) * 1000,  # milliseconds
             "retry_attempts": config.get("backend.max_retries", 3),
             "streaming": config.get("backend.streaming", False),
         },
@@ -156,6 +140,30 @@ async def get_frontend_config(admin_check: bool = Depends(check_admin_permission
         },
     }
 
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_frontend_config",
+    error_code_prefix="SYSTEM",
+)
+@router.get("/frontend-config")
+@cache_response(cache_key="frontend_config", ttl=60)  # Cache for 1 minute
+async def get_frontend_config(admin_check: bool = Depends(check_admin_permission)):
+    """Get configuration values needed by the frontend.
+
+    This endpoint provides all service URLs and configuration that the frontend needs,
+    eliminating the need for hardcoded values in the frontend code.
+
+    Issue #744: Requires admin authentication.
+    Issue #1088: Refactored config building into _build_frontend_services_config
+    and _build_frontend_meta_config helpers.
+    """
+    ollama_url = config.get_service_url("ollama")
+    redis_config = config.get_redis_config()
+    frontend_config = {
+        "services": _build_frontend_services_config(ollama_url, redis_config),
+        **_build_frontend_meta_config(),
+    }
     return {
         "status": "success",
         "config": frontend_config,

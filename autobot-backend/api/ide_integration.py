@@ -22,7 +22,6 @@ import hashlib
 import json
 import logging
 import re
-import time
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -609,9 +608,56 @@ class IDEIntegrationEngine:
             },
         )
 
+    def _get_cached_analysis(self, cache_key: str, content_hash: str, file_path: str):
+        """Helper for analyze. Return cached AnalysisResponse if valid, else None. Ref: #1088."""
+        if cache_key not in self.analysis_cache:
+            return None
+        cached_hash, cached_diagnostics = self.analysis_cache[cache_key]
+        if cached_hash != content_hash:
+            return None
+        return AnalysisResponse(
+            file_path=file_path,
+            diagnostics=cached_diagnostics,
+            analysis_time_ms=0.0,
+            patterns_checked=len(self.rules),
+            issues_found=len(cached_diagnostics),
+        )
+
+    def _store_and_evict_cache(
+        self, cache_key: str, content_hash: str, diagnostics
+    ) -> None:
+        """Helper for analyze. Store result and evict old entries if over limit. Ref: #1088."""
+        self.analysis_cache[cache_key] = (content_hash, diagnostics)
+        if len(self.analysis_cache) > 1000:
+            keys = list(self.analysis_cache.keys())
+            for key in keys[:500]:
+                del self.analysis_cache[key]
+
+    def _run_pattern_rules(self, request: AnalysisRequest, lines) -> tuple:
+        """Helper for analyze. Apply all enabled pattern rules. Ref: #1088.
+
+        Returns (diagnostics_list, patterns_checked_count).
+        """
+        diagnostics = []
+        patterns_checked = 0
+        for rule in self.rules:
+            if rule["id"] in self.disabled_rules:
+                continue
+            if request.categories and rule["category"] not in request.categories:
+                continue
+            severity = self.severity_overrides.get(rule["id"], rule["severity"])
+            if not request.include_hints and severity == DiagnosticSeverity.HINT:
+                continue
+            patterns_checked += 1
+            diagnostics.extend(self._check_rule_on_lines(rule, lines, severity))
+        return diagnostics, patterns_checked
+
     async def analyze(self, request: AnalysisRequest) -> AnalysisResponse:
         """
         Analyze code and return diagnostics.
+
+        Issue #1088: Refactored with _get_cached_analysis, _run_pattern_rules,
+        and _store_and_evict_cache helpers.
 
         Args:
             request: Analysis request with file content
@@ -619,64 +665,25 @@ class IDEIntegrationEngine:
         Returns:
             Analysis response with diagnostics
         """
-        start_time = time.time()
-        diagnostics = []
+        import time as _time
 
-        # Check cache
+        start_time = _time.time()
         content_hash = hashlib.sha256(request.content.encode()).hexdigest()[:16]
         cache_key = f"{request.file_path}:{content_hash}"
 
-        if cache_key in self.analysis_cache:
-            cached_hash, cached_diagnostics = self.analysis_cache[cache_key]
-            if cached_hash == content_hash:
-                return AnalysisResponse(
-                    file_path=request.file_path,
-                    diagnostics=cached_diagnostics,
-                    analysis_time_ms=0.0,
-                    patterns_checked=len(self.rules),
-                    issues_found=len(cached_diagnostics),
-                )
+        cached = self._get_cached_analysis(cache_key, content_hash, request.file_path)
+        if cached:
+            return cached
 
         lines = request.content.split("\n")
-        patterns_checked = 0
+        diagnostics, patterns_checked = self._run_pattern_rules(request, lines)
 
-        for rule in self.rules:
-            # Skip disabled rules
-            if rule["id"] in self.disabled_rules:
-                continue
-
-            # Filter by category if specified
-            if request.categories and rule["category"] not in request.categories:
-                continue
-
-            # Skip hints if not requested
-            severity = self.severity_overrides.get(rule["id"], rule["severity"])
-            if not request.include_hints and severity == DiagnosticSeverity.HINT:
-                continue
-
-            patterns_checked += 1
-
-            # Issue #281: Use extracted helper for line checking
-            rule_diagnostics = self._check_rule_on_lines(rule, lines, severity)
-            diagnostics.extend(rule_diagnostics)
-
-        # Also check for AST-based patterns
         if request.language == "python":
             ast_diagnostics = await self._analyze_ast(request.content, lines)
             diagnostics.extend(ast_diagnostics)
 
-        # Cache results
-        self.analysis_cache[cache_key] = (content_hash, diagnostics)
-
-        # Clean old cache entries
-        if len(self.analysis_cache) > 1000:
-            # Remove oldest entries
-            keys = list(self.analysis_cache.keys())
-            for key in keys[:500]:
-                del self.analysis_cache[key]
-
-        analysis_time = (time.time() - start_time) * 1000
-
+        self._store_and_evict_cache(cache_key, content_hash, diagnostics)
+        analysis_time = (_time.time() - start_time) * 1000
         return AnalysisResponse(
             file_path=request.file_path,
             diagnostics=diagnostics,
@@ -861,11 +868,50 @@ class IDEIntegrationEngine:
             for rule in self.rules
         ]
 
+    def _get_cached_completions(self, cache_key: str, start_time: float):
+        """Helper for complete. Return cached CompletionResponse or None. Ref: #1088."""
+        import time as _time
+
+        cached_result = redis_client.get(cache_key)
+        if not cached_result:
+            return None
+        completions_data = json.loads(cached_result.decode())
+        elapsed_ms = (_time.time() - start_time) * 1000
+        return CompletionResponse(
+            completions=[CompletionItem(**c) for c in completions_data],
+            completion_time_ms=elapsed_ms,
+            source="hybrid",
+            cached=True,
+        )
+
+    async def _gather_completions(self, context, request: "CompletionRequest") -> tuple:
+        """Helper for complete. Run ML + pattern completions. Ref: #1088.
+
+        Returns (completions_list, source_string).
+        """
+        import time as _time
+
+        completions: List[CompletionItem] = []
+        source = "patterns"
+        try:
+            model_start = _time.time()
+            ml_completions = await self._get_ml_completions(context, request)
+            ml_elapsed = (_time.time() - model_start) * 1000
+            if ml_elapsed < 50 and ml_completions:
+                completions.extend(ml_completions)
+                source = "ml"
+        except Exception as e:
+            logger.warning(f"ML completion failed: {e}")
+        pattern_completions = await self._get_pattern_completions(context, request)
+        completions.extend(pattern_completions)
+        return completions, source
+
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
         """
         Generate intelligent code completions.
 
         Issue #906: ML-based completions with pattern fallback.
+        Issue #1088: Refactored with _get_cached_completions and _gather_completions.
 
         Args:
             request: Completion request with file context
@@ -873,24 +919,15 @@ class IDEIntegrationEngine:
         Returns:
             Ranked list of completion items
         """
-        import time
+        import time as _time
 
-        start_time = time.time()
-
-        # Check cache first
+        start_time = _time.time()
         cache_key = f"completion:{request.file_path}:{request.cursor_line}:{request.cursor_position}"
-        cached_result = redis_client.get(cache_key)
-        if cached_result:
-            completions_data = json.loads(cached_result.decode())
-            elapsed_ms = (time.time() - start_time) * 1000
-            return CompletionResponse(
-                completions=[CompletionItem(**c) for c in completions_data],
-                completion_time_ms=elapsed_ms,
-                source="hybrid",
-                cached=True,
-            )
 
-        # Analyze context
+        cached = self._get_cached_completions(cache_key, start_time)
+        if cached:
+            return cached
+
         context = context_analyzer.analyze(
             file_content=request.content,
             cursor_line=request.cursor_line,
@@ -898,39 +935,14 @@ class IDEIntegrationEngine:
             file_path=request.file_path,
         )
 
-        completions: List[CompletionItem] = []
-        source = "patterns"
-
-        # Try ML-based completions first (50ms timeout)
-        try:
-            model_start = time.time()
-            ml_completions = await self._get_ml_completions(context, request)
-            ml_elapsed = (time.time() - model_start) * 1000
-
-            if ml_elapsed < 50 and ml_completions:
-                completions.extend(ml_completions)
-                source = "ml"
-        except Exception as e:
-            logger.warning(f"ML completion failed: {e}")
-
-        # Add pattern-based completions
-        pattern_completions = await self._get_pattern_completions(context, request)
-        completions.extend(pattern_completions)
-
-        # Merge and rank
+        completions, source = await self._gather_completions(context, request)
         completions = self._rank_completions(completions, context)
-
-        # Limit results
         completions = completions[: request.max_completions]
 
-        # Cache results (10s TTL)
         redis_client.setex(
-            cache_key,
-            10,
-            json.dumps([c.model_dump() for c in completions]),
+            cache_key, 10, json.dumps([c.model_dump() for c in completions])
         )
-
-        elapsed_ms = (time.time() - start_time) * 1000
+        elapsed_ms = (_time.time() - start_time) * 1000
         return CompletionResponse(
             completions=completions,
             completion_time_ms=elapsed_ms,
