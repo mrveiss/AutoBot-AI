@@ -271,8 +271,12 @@ import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
 import type { UseOverseerAgentOptions } from '@/composables/useOverseerAgent'
+import { useVoiceOutput } from '@/composables/useVoiceOutput'
 
 const logger = createLogger('ChatInput')
+// Issue #1146: unlock AudioContext on first user gesture so TTS can play even
+// when voice output was re-enabled from a previous session via localStorage.
+const { unlockAudio } = useVoiceOutput()
 
 // Issue #690: Inject overseer state from ChatInterface
 const overseerEnabled = inject<Ref<boolean>>('overseerEnabled', ref(false))
