@@ -29,6 +29,25 @@ class ReplicationService:
         self.ansible_dir = Path(settings.ansible_dir)
         self._running_jobs: Dict[str, asyncio.Task] = {}
 
+    async def _log_and_load_replication(
+        self,
+        db: AsyncSession,
+        replication_id: str,
+        source_node: Node,
+        target_node: Node,
+    ) -> Optional["Replication"]:
+        """Log the replication attempt and load the DB record.
+
+        Helper for setup_replication. Ref: #1088.
+        """
+        logger.info(
+            "Setting up replication %s: %s -> %s",
+            replication_id,
+            source_node.ip_address,
+            target_node.ip_address,
+        )
+        return await self._get_replication_record(db, replication_id)
+
     async def setup_replication(
         self,
         db: AsyncSession,
@@ -52,14 +71,9 @@ class ReplicationService:
         if service_type != "redis":
             return False, f"Unsupported service type: {service_type}"
 
-        logger.info(
-            "Setting up replication %s: %s -> %s",
-            replication_id,
-            source_node.ip_address,
-            target_node.ip_address,
+        replication = await self._log_and_load_replication(
+            db, replication_id, source_node, target_node
         )
-
-        replication = await self._get_replication_record(db, replication_id)
         if not replication:
             return False, "Replication record not found"
 
@@ -775,19 +789,27 @@ class ReplicationService:
             logger.error("Failed to get replication info: %s", e)
             return {}
 
-    async def _get_keyspace_info(
+    def _build_keyspace_ssh_cmd(
         self,
         host: str,
         ssh_user: str,
         ssh_port: int,
-        redis_password: str,
-    ) -> Dict:
-        """Get keyspace info from Redis."""
-        auth_prefix = ""
-        if redis_password:
-            auth_prefix = f"REDISCLI_AUTH='{redis_password}'"
+        auth_prefix: str,
+    ) -> list:
+        """Build SSH command list for keyspace/dbsize/memory queries.
 
-        cmd = [
+        Helper for _get_keyspace_info. Ref: #1088.
+
+        Args:
+            host: Redis host IP
+            ssh_user: SSH username
+            ssh_port: SSH port number
+            auth_prefix: REDISCLI_AUTH env var prefix (may be empty)
+
+        Returns:
+            List of command arguments for asyncio.create_subprocess_exec
+        """
+        return [
             "/usr/bin/ssh",
             "-o",
             "StrictHostKeyChecking=no",
@@ -805,6 +827,63 @@ class ReplicationService:
             ),
         ]
 
+    def _parse_keyspace_output(self, output: str) -> Dict:
+        """Parse combined keyspace/dbsize/memory output into an info dict.
+
+        Helper for _get_keyspace_info. Ref: #1088.
+
+        Args:
+            output: Raw decoded stdout from the SSH command
+
+        Returns:
+            Dict with 'databases', 'total_keys', and optional memory keys
+        """
+        info: Dict = {"databases": {}, "total_keys": 0}
+
+        for line in output.split("\n"):
+            line = line.strip()
+            # Parse db info (e.g., db0:keys=123,expires=10,avg_ttl=1000)
+            if line.startswith("db") and ":" in line:
+                db_name, db_info = line.split(":", 1)
+                db_stats = {}
+                for part in db_info.split(","):
+                    if "=" in part:
+                        k, v = part.split("=", 1)
+                        db_stats[k] = int(v) if v.isdigit() else v
+                info["databases"][db_name] = db_stats
+                info["total_keys"] += db_stats.get("keys", 0)
+
+            # Parse DBSIZE output
+            if "keys" in line.lower() and line and line[0].isdigit():
+                try:
+                    info["total_keys"] = int(line.split()[0])
+                except (ValueError, IndexError):
+                    pass
+
+            # Parse memory info
+            if ":" in line:
+                key, value = line.split(":", 1)
+                if key == "used_memory":
+                    info["used_memory"] = value
+                elif key == "used_memory_human":
+                    info["used_memory_human"] = value
+
+        return info
+
+    async def _get_keyspace_info(
+        self,
+        host: str,
+        ssh_user: str,
+        ssh_port: int,
+        redis_password: str,
+    ) -> Dict:
+        """Get keyspace info from Redis."""
+        auth_prefix = ""
+        if redis_password:
+            auth_prefix = f"REDISCLI_AUTH='{redis_password}'"
+
+        cmd = self._build_keyspace_ssh_cmd(host, ssh_user, ssh_port, auth_prefix)
+
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -816,38 +895,7 @@ class ReplicationService:
             if process.returncode != 0:
                 return {}
 
-            output = stdout.decode()
-            info = {"databases": {}, "total_keys": 0}
-
-            for line in output.split("\n"):
-                line = line.strip()
-                # Parse db info (e.g., db0:keys=123,expires=10,avg_ttl=1000)
-                if line.startswith("db") and ":" in line:
-                    db_name, db_info = line.split(":", 1)
-                    db_stats = {}
-                    for part in db_info.split(","):
-                        if "=" in part:
-                            k, v = part.split("=", 1)
-                            db_stats[k] = int(v) if v.isdigit() else v
-                    info["databases"][db_name] = db_stats
-                    info["total_keys"] += db_stats.get("keys", 0)
-
-                # Parse DBSIZE output
-                if "keys" in line.lower() and line[0].isdigit():
-                    try:
-                        info["total_keys"] = int(line.split()[0])
-                    except (ValueError, IndexError):
-                        pass
-
-                # Parse memory info
-                if ":" in line:
-                    key, value = line.split(":", 1)
-                    if key == "used_memory":
-                        info["used_memory"] = value
-                    elif key == "used_memory_human":
-                        info["used_memory_human"] = value
-
-            return info
+            return self._parse_keyspace_output(stdout.decode())
 
         except Exception as e:
             logger.error("Failed to get keyspace info: %s", e)

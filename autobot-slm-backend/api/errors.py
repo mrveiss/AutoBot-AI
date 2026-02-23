@@ -15,14 +15,13 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from models.database import EventSeverity, Node, NodeEvent, Setting
 from pydantic import BaseModel, Field
+from services.auth import get_current_user
+from services.database import get_db
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
-
-from models.database import EventSeverity, Node, NodeEvent, Setting
-from services.auth import get_current_user
-from services.database import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/errors", tags=["errors"])
@@ -356,56 +355,30 @@ async def get_error_statistics(
     )
 
 
-@router.get("/recent", response_model=RecentErrorsResponse)
-async def get_recent_errors(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
-    page: int = Query(1, ge=1),
-    per_page: int = Query(20, ge=1, le=100),
-    severity: Optional[str] = Query(None),
-    resolved: Optional[bool] = Query(None),
-) -> RecentErrorsResponse:
-    """Get recent error list with pagination."""
-    # Build query
+def _build_recent_error_queries(severity: Optional[str], resolved: Optional[bool]):
+    """Helper for get_recent_errors. Ref: #1088."""
     query = select(NodeEvent).where(
         NodeEvent.severity.in_(
             [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
         )
     )
-
-    if severity:
-        query = query.where(NodeEvent.severity == severity)
-    if resolved is not None:
-        query = query.where(NodeEvent.resolved == resolved)
-
-    # Count total
     count_query = select(func.count(NodeEvent.id)).where(
         NodeEvent.severity.in_(
             [EventSeverity.ERROR.value, EventSeverity.CRITICAL.value]
         )
     )
     if severity:
+        query = query.where(NodeEvent.severity == severity)
         count_query = count_query.where(NodeEvent.severity == severity)
     if resolved is not None:
+        query = query.where(NodeEvent.resolved == resolved)
         count_query = count_query.where(NodeEvent.resolved == resolved)
+    return query, count_query
 
-    count_result = await db.execute(count_query)
-    total = count_result.scalar() or 0
 
-    # Fetch paginated results
-    query = (
-        query.order_by(NodeEvent.created_at.desc())
-        .offset((page - 1) * per_page)
-        .limit(per_page)
-    )
-    result = await db.execute(query)
-    events = result.scalars().all()
-
-    # Get hostnames
-    node_ids = list(set(e.node_id for e in events))
-    hostnames = await _get_node_hostname_map(db, node_ids)
-
-    errors = [
+def _build_recent_error_list(events, hostnames: Dict[str, str]) -> List[RecentError]:
+    """Helper for get_recent_errors. Ref: #1088."""
+    return [
         RecentError(
             event_id=e.event_id,
             node_id=e.node_id,
@@ -420,6 +393,34 @@ async def get_recent_errors(
         )
         for e in events
     ]
+
+
+@router.get("/recent", response_model=RecentErrorsResponse)
+async def get_recent_errors(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    severity: Optional[str] = Query(None),
+    resolved: Optional[bool] = Query(None),
+) -> RecentErrorsResponse:
+    """Get recent error list with pagination."""
+    query, count_query = _build_recent_error_queries(severity, resolved)
+
+    count_result = await db.execute(count_query)
+    total = count_result.scalar() or 0
+
+    query = (
+        query.order_by(NodeEvent.created_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+    )
+    result = await db.execute(query)
+    events = result.scalars().all()
+
+    node_ids = list(set(e.node_id for e in events))
+    hostnames = await _get_node_hostname_map(db, node_ids)
+    errors = _build_recent_error_list(events, hostnames)
 
     return RecentErrorsResponse(
         errors=errors, total=total, page=page, per_page=per_page
@@ -616,13 +617,8 @@ async def create_test_error(
     )
 
 
-@router.get("/metrics/summary", response_model=MetricsSummary)
-async def get_metrics_summary(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
-) -> MetricsSummary:
-    """Get aggregated error metrics summary."""
-    # Total and unresolved
+async def _get_metrics_total_and_unresolved(db: AsyncSession):
+    """Helper for get_metrics_summary. Ref: #1088."""
     total_result = await db.execute(
         select(func.count(NodeEvent.id)).where(
             NodeEvent.severity.in_(
@@ -641,22 +637,11 @@ async def get_metrics_summary(
         )
     )
     unresolved = unresolved_result.scalar() or 0
+    return total, unresolved
 
-    # Critical count (last 24h)
-    cutoff = datetime.utcnow() - timedelta(hours=24)
-    critical_result = await db.execute(
-        select(func.count(NodeEvent.id)).where(
-            NodeEvent.created_at >= cutoff,
-            NodeEvent.severity == EventSeverity.CRITICAL.value,
-        )
-    )
-    critical = critical_result.scalar() or 0
 
-    # Error rate
-    counts = await _get_error_counts_by_period(db)
-    error_rate = counts["24h"] / 24.0 if counts["24h"] > 0 else 0.0
-
-    # Top error type
+async def _get_metrics_top_type_and_node(db: AsyncSession):
+    """Helper for get_metrics_summary. Ref: #1088."""
     top_type_result = await db.execute(
         select(NodeEvent.event_type)
         .where(
@@ -670,7 +655,6 @@ async def get_metrics_summary(
     )
     top_type = top_type_result.scalar_one_or_none()
 
-    # Most affected node
     top_node_result = await db.execute(
         select(NodeEvent.node_id)
         .where(
@@ -683,6 +667,31 @@ async def get_metrics_summary(
         .limit(1)
     )
     top_node = top_node_result.scalar_one_or_none()
+    return top_type, top_node
+
+
+@router.get("/metrics/summary", response_model=MetricsSummary)
+async def get_metrics_summary(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> MetricsSummary:
+    """Get aggregated error metrics summary."""
+    total, unresolved = await _get_metrics_total_and_unresolved(db)
+
+    # Critical count (last 24h)
+    cutoff = datetime.utcnow() - timedelta(hours=24)
+    critical_result = await db.execute(
+        select(func.count(NodeEvent.id)).where(
+            NodeEvent.created_at >= cutoff,
+            NodeEvent.severity == EventSeverity.CRITICAL.value,
+        )
+    )
+    critical = critical_result.scalar() or 0
+
+    counts = await _get_error_counts_by_period(db)
+    error_rate = counts["24h"] / 24.0 if counts["24h"] > 0 else 0.0
+
+    top_type, top_node = await _get_metrics_top_type_and_node(db)
 
     return MetricsSummary(
         total_errors=total,
@@ -692,6 +701,37 @@ async def get_metrics_summary(
         top_error_type=top_type,
         most_affected_node=top_node,
     )
+
+
+def _make_timeline_point(bucket_start, bucket_end, events) -> TimelinePoint:
+    """Helper for get_error_timeline. Ref: #1088."""
+    bucket_events = [e for e in events if bucket_start <= e.created_at < bucket_end]
+    return TimelinePoint(
+        timestamp=bucket_start,
+        count=len(bucket_events),
+        critical=sum(
+            1 for e in bucket_events if e.severity == EventSeverity.CRITICAL.value
+        ),
+        error=sum(1 for e in bucket_events if e.severity == EventSeverity.ERROR.value),
+    )
+
+
+def _build_timeline_points(
+    events, start, hours: int, interval: str
+) -> List[TimelinePoint]:
+    """Helper for get_error_timeline. Ref: #1088."""
+    timeline = []
+    if interval == "hour":
+        for h in range(hours):
+            bucket_start = start + timedelta(hours=h)
+            bucket_end = bucket_start + timedelta(hours=1)
+            timeline.append(_make_timeline_point(bucket_start, bucket_end, events))
+    else:
+        for d in range(hours // 24):
+            bucket_start = start + timedelta(days=d)
+            bucket_end = bucket_start + timedelta(days=1)
+            timeline.append(_make_timeline_point(bucket_start, bucket_end, events))
+    return timeline
 
 
 @router.get("/metrics/timeline", response_model=TimelineResponse)
@@ -705,7 +745,6 @@ async def get_error_timeline(
     now = datetime.utcnow()
     start = now - timedelta(hours=hours)
 
-    # Fetch all errors in time range
     result = await db.execute(
         select(NodeEvent)
         .where(
@@ -718,55 +757,7 @@ async def get_error_timeline(
     )
     events = result.scalars().all()
 
-    # Build timeline points
-    timeline = []
-    if interval == "hour":
-        for h in range(hours):
-            bucket_start = start + timedelta(hours=h)
-            bucket_end = bucket_start + timedelta(hours=1)
-            bucket_events = [
-                e for e in events if bucket_start <= e.created_at < bucket_end
-            ]
-            timeline.append(
-                TimelinePoint(
-                    timestamp=bucket_start,
-                    count=len(bucket_events),
-                    critical=sum(
-                        1
-                        for e in bucket_events
-                        if e.severity == EventSeverity.CRITICAL.value
-                    ),
-                    error=sum(
-                        1
-                        for e in bucket_events
-                        if e.severity == EventSeverity.ERROR.value
-                    ),
-                )
-            )
-    else:
-        days = hours // 24
-        for d in range(days):
-            bucket_start = start + timedelta(days=d)
-            bucket_end = bucket_start + timedelta(days=1)
-            bucket_events = [
-                e for e in events if bucket_start <= e.created_at < bucket_end
-            ]
-            timeline.append(
-                TimelinePoint(
-                    timestamp=bucket_start,
-                    count=len(bucket_events),
-                    critical=sum(
-                        1
-                        for e in bucket_events
-                        if e.severity == EventSeverity.CRITICAL.value
-                    ),
-                    error=sum(
-                        1
-                        for e in bucket_events
-                        if e.severity == EventSeverity.ERROR.value
-                    ),
-                )
-            )
+    timeline = _build_timeline_points(events, start, hours, interval)
 
     return TimelineResponse(timeline=timeline, interval=interval, start=start, end=now)
 

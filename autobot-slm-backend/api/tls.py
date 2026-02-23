@@ -355,6 +355,40 @@ async def list_expiring_certificates(
 # =============================================================================
 
 
+async def _fetch_credential_and_node_for_renew(service, db, credential_id: str):
+    """Helper for renew_tls_certificate. Ref: #1088."""
+    credential = await service.get_credential(db, credential_id)
+    if not credential:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="TLS credential not found",
+        )
+    result = await db.execute(select(Node).where(Node.node_id == credential.node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+    return credential, node
+
+
+async def _renew_and_deploy_certificate(
+    service, db, credential_id: str, node, deploy: bool
+):
+    """Helper for renew_tls_certificate. Ref: #1088."""
+    new_credential = await service.renew_certificate(db, credential_id)
+    if not new_credential:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to renew certificate",
+        )
+    deployment_result = None
+    if deploy:
+        deployment_result = await _deploy_certificate_to_node(node, new_credential, db)
+    return new_credential, deployment_result
+
+
 @tls_router.post(
     "/credentials/{credential_id}/renew",
 )
@@ -373,39 +407,14 @@ async def renew_tls_certificate(
     If deploy=true, the new certificate will be deployed to the node via Ansible.
     """
     service = get_tls_credential_service()
-    credential = await service.get_credential(db, credential_id)
-
-    if not credential:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="TLS credential not found",
-        )
-
-    # Get the node for deployment
-    result = await db.execute(select(Node).where(Node.node_id == credential.node_id))
-    node = result.scalar_one_or_none()
-    if not node:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Node not found",
-        )
+    credential, node = await _fetch_credential_and_node_for_renew(
+        service, db, credential_id
+    )
 
     try:
-        # Renew the certificate (generates new cert with same CN)
-        new_credential = await service.renew_certificate(db, credential_id)
-
-        if not new_credential:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to renew certificate",
-            )
-
-        # If deployment requested, deploy via Ansible
-        deployment_result = None
-        if deploy:
-            deployment_result = await _deploy_certificate_to_node(
-                node, new_credential, db
-            )
+        new_credential, deployment_result = await _renew_and_deploy_certificate(
+            service, db, credential_id, node, deploy
+        )
 
         logger.info(
             "TLS certificate renewed: %s -> %s (node: %s)",
@@ -419,15 +428,17 @@ async def renew_tls_certificate(
             "message": "Certificate renewed successfully",
             "old_credential_id": credential_id,
             "new_credential_id": new_credential.credential_id,
-            "expires_at": new_credential.tls_expires_at.isoformat()
-            if new_credential.tls_expires_at
-            else None,
-            "deployed": deployment_result.get("success", False)
-            if deployment_result
-            else False,
-            "deployment_message": deployment_result.get("message")
-            if deployment_result
-            else None,
+            "expires_at": (
+                new_credential.tls_expires_at.isoformat()
+                if new_credential.tls_expires_at
+                else None
+            ),
+            "deployed": (
+                deployment_result.get("success", False) if deployment_result else False
+            ),
+            "deployment_message": (
+                deployment_result.get("message") if deployment_result else None
+            ),
         }
 
     except Exception as e:
@@ -496,19 +507,23 @@ def _build_rotation_response(
         "success": True,
         "message": "Certificate rotated successfully",
         "old_credential_id": credential_id,
-        "old_deactivated": deactivate_old and deployment_result.get("success", False)
-        if deployment_result
-        else False,
+        "old_deactivated": (
+            deactivate_old and deployment_result.get("success", False)
+            if deployment_result
+            else False
+        ),
         "new_credential_id": new_credential.credential_id,
-        "expires_at": new_credential.tls_expires_at.isoformat()
-        if new_credential.tls_expires_at
-        else None,
-        "deployed": deployment_result.get("success", False)
-        if deployment_result
-        else False,
-        "deployment_message": deployment_result.get("message")
-        if deployment_result
-        else None,
+        "expires_at": (
+            new_credential.tls_expires_at.isoformat()
+            if new_credential.tls_expires_at
+            else None
+        ),
+        "deployed": (
+            deployment_result.get("success", False) if deployment_result else False
+        ),
+        "deployment_message": (
+            deployment_result.get("message") if deployment_result else None
+        ),
     }
 
 
@@ -602,9 +617,11 @@ async def _renew_single_certificate(db, service, cred, deploy: bool):
                 "new_credential_id": new_cred.credential_id,
                 "node_id": cred.node_id,
                 "success": True,
-                "deployed": deployment_result.get("success", False)
-                if deployment_result
-                else False,
+                "deployed": (
+                    deployment_result.get("success", False)
+                    if deployment_result
+                    else False
+                ),
             }
         else:
             return {
@@ -956,75 +973,77 @@ async def enable_tls_on_services(
         )
 
 
+def _write_cert_files(tmpdir: str, certs: dict) -> tuple:
+    """Write certificate PEM files into tmpdir and return (cert_path, key_path, chain_path).
+
+    Helper for _deploy_certificate_to_node. Ref: #1088.
+    """
+    import os
+
+    cert_path = os.path.join(tmpdir, "cert.pem")
+    key_path = os.path.join(tmpdir, "key.pem")
+    chain_path = os.path.join(tmpdir, "chain.pem") if certs.get("chain") else None
+
+    with open(cert_path, "w", encoding="utf-8") as f:
+        f.write(certs["certificate"])
+
+    with open(key_path, "w", encoding="utf-8") as f:
+        f.write(certs["private_key"])
+
+    if chain_path:
+        with open(chain_path, "w", encoding="utf-8") as f:
+            f.write(certs["chain"])
+
+    return cert_path, key_path, chain_path
+
+
+async def _execute_cert_deployment(
+    node, cert_path: str, key_path: str, chain_path
+) -> dict:
+    """Execute the Ansible playbook to deploy cert files to a node.
+
+    Helper for _deploy_certificate_to_node. Ref: #1088.
+    """
+    from services.playbook_executor import get_playbook_executor
+
+    executor = get_playbook_executor()
+
+    extra_vars = {
+        "cert_file": cert_path,
+        "key_file": key_path,
+        "reload_service": "nginx",
+    }
+
+    if chain_path:
+        extra_vars["chain_file"] = chain_path
+
+    result = await executor.execute_playbook(
+        playbook_name="deploy-certificate.yml",
+        limit=[node.hostname],
+        extra_vars=extra_vars,
+    )
+
+    if result.get("success"):
+        return {"success": True, "message": "Certificate deployed successfully"}
+
+    error_msg = result.get("error", "Unknown error")
+    return {"success": False, "message": f"Deployment failed: {error_msg}"}
+
+
 async def _deploy_certificate_to_node(node, credential, db) -> dict:
     """Deploy a TLS certificate to a node via Ansible playbook."""
-    import os
     import tempfile
 
     try:
-        # Get certificates for deployment
         service = get_tls_credential_service()
         certs = await service.get_certificates(db, credential.credential_id)
 
         if not certs:
-            return {
-                "success": False,
-                "message": "Failed to get certificate data",
-            }
+            return {"success": False, "message": "Failed to get certificate data"}
 
-        # Create temporary directory for certificate files
         with tempfile.TemporaryDirectory() as tmpdir:
-            cert_path = os.path.join(tmpdir, "cert.pem")
-            key_path = os.path.join(tmpdir, "key.pem")
-            chain_path = (
-                os.path.join(tmpdir, "chain.pem") if certs.get("chain") else None
-            )
-
-            # Write certificate files to temp directory
-            with open(cert_path, "w", encoding="utf-8") as f:
-                f.write(certs["certificate"])
-
-            with open(key_path, "w", encoding="utf-8") as f:
-                f.write(certs["private_key"])
-
-            if chain_path:
-                with open(chain_path, "w", encoding="utf-8") as f:
-                    f.write(certs["chain"])
-
-            # Deploy via Ansible playbook
-            from services.playbook_executor import get_playbook_executor
-
-            executor = get_playbook_executor()
-
-            extra_vars = {
-                "cert_file": cert_path,
-                "key_file": key_path,
-                "reload_service": "nginx",
-            }
-
-            if chain_path:
-                extra_vars["chain_file"] = chain_path
-
-            result = await executor.execute_playbook(
-                playbook_name="deploy-certificate.yml",
-                limit=[node.hostname],
-                extra_vars=extra_vars,
-            )
-
-            if result.get("success"):
-                return {
-                    "success": True,
-                    "message": "Certificate deployed successfully",
-                }
-            else:
-                error_msg = result.get("error", "Unknown error")
-                return {
-                    "success": False,
-                    "message": f"Deployment failed: {error_msg}",
-                }
+            cert_path, key_path, chain_path = _write_cert_files(tmpdir, certs)
+            return await _execute_cert_deployment(node, cert_path, key_path, chain_path)
 
     except Exception as e:
-        return {
-            "success": False,
-            "message": f"Deployment error: {str(e)}",
-        }
+        return {"success": False, "message": f"Deployment error: {str(e)}"}

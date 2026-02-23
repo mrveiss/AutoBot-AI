@@ -443,9 +443,11 @@ class MonitorControl:
                     "optimization_enabled": self.config.auto_optimization_enabled,
                     "optimization_interval": self.config.optimization_interval,
                     "dashboard_enabled": self.config.dashboard_enabled,
-                    "dashboard_port": self.config.dashboard_port
-                    if self.config.dashboard_enabled
-                    else None,
+                    "dashboard_port": (
+                        self.config.dashboard_port
+                        if self.config.dashboard_enabled
+                        else None
+                    ),
                 },
                 "system_health": {
                     "overall_score": self._calculate_health_score(metrics),
@@ -599,18 +601,13 @@ class MonitorControl:
         logger.info("\n💾 Logs: %s/logs/", _base)
         logger.info("📊 Results: %s/logs/benchmarks/", _base)
 
-    async def _print_startup_summary(self):
-        """Print startup summary information."""
-        logger.info("\n" + "=" * 80)
-        logger.info("🤖 AutoBot Performance Monitoring System - ACTIVE")
-        logger.info("=" * 80)
-
+    def _log_startup_config(self) -> None:
+        """Helper for _print_startup_summary. Ref: #1088."""
         logger.info(
             f"📊 Dashboard: {'Enabled' if self.config.dashboard_enabled else 'Disabled'}"
         )
         if self.config.dashboard_enabled:
             logger.info(f"   URL: http://localhost:{self.config.dashboard_port}")
-
         logger.info(f"🔍 Monitoring: Every {self.config.monitoring_interval}s")
         logger.info(
             f"🔧 Optimization: {'Enabled' if self.config.auto_optimization_enabled else 'Disabled'}"
@@ -619,13 +616,11 @@ class MonitorControl:
             logger.info(
                 f"   Cycle: Every {self.config.optimization_interval//60} minutes"
             )
-
         logger.info(f"📈 Benchmarks: {self.config.benchmark_schedule}")
 
-        # Get and display current system status
-        status = await self.get_current_status()
+    def _log_startup_health(self, status: Dict[str, Any]) -> None:
+        """Helper for _print_startup_summary. Ref: #1088."""
         health_score = status["system_health"]["overall_score"]
-
         logger.info(f"\n📋 Current System Health: {health_score}/100")
 
         perf = status["performance_metrics"]
@@ -639,7 +634,6 @@ class MonitorControl:
         logger.info(
             f"   Services: {services['healthy_services']}/{services['total_services']} healthy"
         )
-
         if status["system_health"]["active_alerts"] > 0:
             logger.info(
                 f"   🚨 Active Alerts: {status['system_health']['active_alerts']}"
@@ -647,15 +641,23 @@ class MonitorControl:
 
         recs = status["recommendations"]
         if recs["total_count"] > 0:
-            total = recs["total_count"]
-            crit = recs["critical"]
-            high = recs["high"]
             logger.info(
-                "   📋 Optimization Opportunities: %s " "(Critical: %s, High: %s)",
-                total,
-                crit,
-                high,
+                "   📋 Optimization Opportunities: %s (Critical: %s, High: %s)",
+                recs["total_count"],
+                recs["critical"],
+                recs["high"],
             )
+
+    async def _print_startup_summary(self):
+        """Print startup summary information."""
+        logger.info("\n" + "=" * 80)
+        logger.info("🤖 AutoBot Performance Monitoring System - ACTIVE")
+        logger.info("=" * 80)
+
+        self._log_startup_config()
+
+        status = await self.get_current_status()
+        self._log_startup_health(status)
 
         self._log_monitored_vms()
 

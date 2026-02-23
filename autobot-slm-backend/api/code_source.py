@@ -441,9 +441,9 @@ async def _upsert_node_code_version(
                 commit_hash=commit,
                 status=status.value,
                 cache_path=cache_path,
-                deployed_at=datetime.utcnow()
-                if status == CodeStatus.UP_TO_DATE
-                else None,
+                deployed_at=(
+                    datetime.utcnow() if status == CodeStatus.UP_TO_DATE else None
+                ),
             )
         )
 
@@ -624,30 +624,12 @@ def _extract_tarball_to_cache(data: bytes, role_name: str, commit_hash: str) -> 
     return cache_path
 
 
-@router.post("/upload-package", response_model=PackageUploadResponse)
-async def upload_package(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
-    role_name: str = Form(...),
-    commit_hash: str = Form(...),
-    package: UploadFile = File(...),
-) -> PackageUploadResponse:
-    """Upload a role code package for air-gapped deployments.
-
-    Accepts a .tar.gz of the role directory. Extracts to
-    /opt/autobot/cache/<role_name>/ and marks all nodes that have
-    this role assigned as OUTDATED.
-    """
-    if not package.filename or not package.filename.endswith((".tar.gz", ".tgz")):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Package must be a .tar.gz or .tgz file",
-        )
-
-    data = await package.read()
-
+async def _extract_package_to_cache(
+    data: bytes, role_name: str, commit_hash: str
+) -> str:
+    """Helper for upload_package. Run tarball extraction in executor. Ref: #1088."""
     try:
-        cache_path = await asyncio.get_event_loop().run_in_executor(
+        return await asyncio.get_event_loop().run_in_executor(
             None, _extract_tarball_to_cache, data, role_name, commit_hash
         )
     except ValueError as exc:
@@ -661,7 +643,11 @@ async def upload_package(
             detail=f"Failed to extract package: {exc}",
         ) from exc
 
-    # Mark all nodes with this role as OUTDATED
+
+async def _mark_role_nodes_outdated(
+    db: AsyncSession, role_name: str, commit_hash: str, cache_path: str
+) -> int:
+    """Helper for upload_package. Mark all nodes with the role as OUTDATED. Ref: #1088."""
     role_result = await db.execute(
         select(NodeRole).where(NodeRole.role_name == role_name)
     )
@@ -682,7 +668,37 @@ async def upload_package(
         if node:
             node.code_status = CodeStatus.OUTDATED.value
             outdated_count += 1
+    return outdated_count
 
+
+@router.post("/upload-package", response_model=PackageUploadResponse)
+async def upload_package(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    role_name: str = Form(...),
+    commit_hash: str = Form(...),
+    package: UploadFile = File(...),
+) -> PackageUploadResponse:
+    """Upload a role code package for air-gapped deployments.
+
+    Accepts a .tar.gz of the role directory. Extracts to
+    /opt/autobot/cache/<role_name>/ and marks all nodes that have
+    this role assigned as OUTDATED.
+
+    Issue #1088: Refactored with _extract_package_to_cache and
+    _mark_role_nodes_outdated helpers.
+    """
+    if not package.filename or not package.filename.endswith((".tar.gz", ".tgz")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Package must be a .tar.gz or .tgz file",
+        )
+
+    data = await package.read()
+    cache_path = await _extract_package_to_cache(data, role_name, commit_hash)
+    outdated_count = await _mark_role_nodes_outdated(
+        db, role_name, commit_hash, cache_path
+    )
     await db.commit()
 
     logger.info(
@@ -692,7 +708,6 @@ async def upload_package(
         cache_path,
         outdated_count,
     )
-
     return PackageUploadResponse(
         success=True,
         role_name=role_name,

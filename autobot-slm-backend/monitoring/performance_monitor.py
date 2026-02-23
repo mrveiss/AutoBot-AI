@@ -316,79 +316,82 @@ class PerformanceMonitor:
                 error_message=str(e),
             )
 
+    def _test_single_redis_db(
+        self, db_num: int, db_name: str, start_time: float
+    ) -> DatabaseMetrics:
+        """Probe one Redis database and return its DatabaseMetrics.
+
+        Helper for test_database_performance. Ref: #1088.
+
+        Args:
+            db_num: Numeric Redis database index (used only in the label)
+            db_name: Canonical database name for get_redis_client
+            start_time: time.time() value captured before this call
+
+        Returns:
+            DatabaseMetrics for the given database, with error_count=1 on failure
+        """
+        try:
+            test_client = get_redis_client(async_client=False, database=db_name)
+
+            test_client.ping()
+            connection_time = time.time() - start_time
+
+            info = test_client.info()
+            memory_usage = info.get("used_memory", 0) / (1024**2)  # MB
+
+            query_start = time.time()
+            test_client.dbsize()
+            query_time = time.time() - query_start
+
+            ops_per_second = 1.0 / query_time if query_time > 0 else 0
+
+            return DatabaseMetrics(
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                database_type=f"Redis_DB_{db_num}",
+                connection_time=connection_time,
+                query_count=1,
+                memory_usage_mb=memory_usage,
+                operations_per_second=ops_per_second,
+                database_size_mb=info.get("used_memory_dataset", 0) / (1024**2),
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error testing Redis DB {db_num}: {e}")
+            return DatabaseMetrics(
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                database_type=f"Redis_DB_{db_num}",
+                connection_time=0.0,
+                query_count=0,
+                memory_usage_mb=0.0,
+                operations_per_second=0.0,
+                error_count=1,
+            )
+
     async def test_database_performance(self) -> List[DatabaseMetrics]:
         """Test database performance across all Redis databases."""
         db_metrics = []
 
+        # Main, Knowledge, Prompts, Metrics, Workflows, Vectors
+        redis_dbs = [0, 1, 2, 4, 7, 8]
+
+        # Map database numbers to names for canonical Redis client
+        db_map = {
+            0: "main",
+            1: "knowledge",
+            2: "prompts",
+            4: "metrics",
+            7: "workflows",
+            8: "vectors",
+        }
+
         try:
-            # Test Redis performance across different databases
-            redis_dbs = [
-                0,
-                1,
-                2,
-                4,
-                7,
-                8,
-            ]  # Main, Knowledge, Prompts, Metrics, Workflows, Vectors
-
-            # Map database numbers to names for canonical Redis client
-            db_map = {
-                0: "main",
-                1: "knowledge",
-                2: "prompts",
-                4: "metrics",
-                7: "workflows",
-                8: "vectors",
-            }
-
             for db_num in redis_dbs:
                 start_time = time.time()
-                try:
-                    # Use canonical Redis client pattern
-                    db_name = db_map.get(db_num, "main")
-                    test_client = get_redis_client(async_client=False, database=db_name)
-
-                    # Test connection and basic operations
-                    test_client.ping()
-                    connection_time = time.time() - start_time
-
-                    # Get database info
-                    info = test_client.info()
-                    memory_usage = info.get("used_memory", 0) / (1024**2)  # MB
-
-                    # Test query performance
-                    query_start = time.time()
-                    test_client.dbsize()
-                    query_time = time.time() - query_start
-
-                    ops_per_second = 1.0 / query_time if query_time > 0 else 0
-
-                    db_metrics.append(
-                        DatabaseMetrics(
-                            timestamp=datetime.now(timezone.utc).isoformat(),
-                            database_type=f"Redis_DB_{db_num}",
-                            connection_time=connection_time,
-                            query_count=1,
-                            memory_usage_mb=memory_usage,
-                            operations_per_second=ops_per_second,
-                            database_size_mb=info.get("used_memory_dataset", 0)
-                            / (1024**2),
-                        )
-                    )
-
-                except Exception as e:
-                    self.logger.error(f"Error testing Redis DB {db_num}: {e}")
-                    db_metrics.append(
-                        DatabaseMetrics(
-                            timestamp=datetime.now(timezone.utc).isoformat(),
-                            database_type=f"Redis_DB_{db_num}",
-                            connection_time=0.0,
-                            query_count=0,
-                            memory_usage_mb=0.0,
-                            operations_per_second=0.0,
-                            error_count=1,
-                        )
-                    )
+                db_name = db_map.get(db_num, "main")
+                db_metrics.append(
+                    self._test_single_redis_db(db_num, db_name, start_time)
+                )
         except Exception as e:
             self.logger.error(f"Error in database performance testing: {e}")
 
@@ -706,34 +709,32 @@ class PerformanceMonitor:
         self.logger.info("🛑 Stopping performance monitoring")
 
 
-def _print_performance_report(metrics: dict) -> None:
-    """Print a formatted performance report to stdout.
+def _print_system_metrics(sys_metrics) -> None:
+    """Print system metrics section of the performance report.
 
-    Helper for main (#832).
+    Helper for _print_performance_report. Ref: #1088.
     """
-    logger.info("%s", "\n" + "=" * 80)
-    logger.info("AutoBot Performance Report")
-    logger.info("%s", "=" * 80)
+    logger.info("\n🖥️  System Metrics:")
+    logger.info(f"   CPU Usage: {sys_metrics.cpu_percent:.1f}%")
+    mem_pct = sys_metrics.memory_percent
+    mem_avail = sys_metrics.memory_available_gb
+    logger.info(f"   Memory Usage: {mem_pct:.1f}% ({mem_avail:.1f}GB available)")
+    disk_pct = sys_metrics.disk_percent
+    disk_free = sys_metrics.disk_free_gb
+    logger.info(f"   Disk Usage: {disk_pct:.1f}% ({disk_free:.1f}GB free)")
+    logger.info(f"   Load Average: {sys_metrics.load_average}")
+    logger.info(f"   Process Count: {sys_metrics.process_count}")
+    if sys_metrics.gpu_utilization is not None:
+        logger.info(f"   GPU Utilization: {sys_metrics.gpu_utilization:.1f}%")
+    if sys_metrics.npu_utilization is not None:
+        logger.info(f"   NPU Utilization: {sys_metrics.npu_utilization:.1f}%")
 
-    # System metrics
-    sys_metrics = metrics.get("system")
-    if sys_metrics:
-        logger.info("\n🖥️  System Metrics:")
-        logger.info(f"   CPU Usage: {sys_metrics.cpu_percent:.1f}%")
-        mem_pct = sys_metrics.memory_percent
-        mem_avail = sys_metrics.memory_available_gb
-        logger.info(f"   Memory Usage: {mem_pct:.1f}% ({mem_avail:.1f}GB available)")
-        disk_pct = sys_metrics.disk_percent
-        disk_free = sys_metrics.disk_free_gb
-        logger.info(f"   Disk Usage: {disk_pct:.1f}% ({disk_free:.1f}GB free)")
-        logger.info(f"   Load Average: {sys_metrics.load_average}")
-        logger.info(f"   Process Count: {sys_metrics.process_count}")
-        if sys_metrics.gpu_utilization is not None:
-            logger.info(f"   GPU Utilization: {sys_metrics.gpu_utilization:.1f}%")
-        if sys_metrics.npu_utilization is not None:
-            logger.info(f"   NPU Utilization: {sys_metrics.npu_utilization:.1f}%")
 
-    # Service status
+def _print_report_sections(metrics: dict) -> None:
+    """Print services, databases, inter-VM, and alerts sections.
+
+    Helper for _print_performance_report. Ref: #1088.
+    """
     services = metrics.get("services", [])
     if services:
         logger.info("\n🔧 Service Status:")
@@ -743,7 +744,6 @@ def _print_performance_report(metrics: dict) -> None:
                 f"   {service.service_name}: {status} ({service.response_time:.3f}s)"
             )
 
-    # Database performance
     databases = metrics.get("databases", [])
     if databases:
         logger.info("\n🗄️  Database Performance:")
@@ -754,7 +754,6 @@ def _print_performance_report(metrics: dict) -> None:
                 f"   {db.database_type}: {conn:.3f}s connection, {ops:.1f} ops/s"
             )
 
-    # Inter-VM performance
     inter_vm = metrics.get("inter_vm", [])
     if inter_vm:
         logger.info("\n🔗 Inter-VM Communication:")
@@ -765,7 +764,6 @@ def _print_performance_report(metrics: dict) -> None:
                 f"   {vm.source_vm} → {vm.target_vm}: {lat:.1f}ms latency, {loss:.1f}% loss"
             )
 
-    # Alerts
     alerts = metrics.get("alerts", [])
     if alerts:
         logger.info("\n🚨 Alerts:")
@@ -773,6 +771,22 @@ def _print_performance_report(metrics: dict) -> None:
             logger.info(f"   {alert}")
     else:
         logger.info("\n✅ No performance alerts")
+
+
+def _print_performance_report(metrics: dict) -> None:
+    """Print a formatted performance report to stdout.
+
+    Helper for main (#832).
+    """
+    logger.info("%s", "\n" + "=" * 80)
+    logger.info("AutoBot Performance Report")
+    logger.info("%s", "=" * 80)
+
+    sys_metrics = metrics.get("system")
+    if sys_metrics:
+        _print_system_metrics(sys_metrics)
+
+    _print_report_sections(metrics)
 
     logger.info("%s", "\n" + "=" * 80)
 

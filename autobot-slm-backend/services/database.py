@@ -12,10 +12,9 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
 from config import settings
 from models.database import Base, Setting
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 logger = logging.getLogger(__name__)
 
@@ -59,56 +58,59 @@ class DatabaseService:
         self._initialized = True
         logger.info("Database initialized successfully")
 
+    def _build_required_settings(self) -> dict:
+        """Helper for _initialize_defaults. Ref: #1088."""
+        return {
+            "initialized": ("true", "bool", "Database initialization flag"),
+            "monitoring_location": (
+                "local",
+                "string",
+                "Monitoring services location (local/external)",
+            ),
+            "prometheus_url": (
+                "http://localhost:9090",
+                "string",
+                "Prometheus server URL",
+            ),
+            "grafana_url": (
+                "http://localhost:3000",
+                "string",
+                "Grafana server URL",
+            ),
+            "heartbeat_timeout": ("60", "int", "Node heartbeat timeout in seconds"),
+            "auto_reconcile": (
+                "false",
+                "bool",
+                "Enable automatic role reconciliation",
+            ),
+            "auto_remediate": (
+                "true",
+                "bool",
+                "Enable auto-restart of SLM agent on degraded nodes",
+            ),
+            "auto_restart_services": (
+                "true",
+                "bool",
+                "Enable auto-restart of failed AutoBot services",
+            ),
+            "auto_rollback": (
+                "false",
+                "bool",
+                "Enable automatic deployment rollback on failure",
+            ),
+            "rollback_window_seconds": (
+                "600",
+                "int",
+                "Time window (seconds) for auto-rollback eligibility",
+            ),
+        }
+
     async def _initialize_defaults(self) -> None:
         """Initialize default settings and ensure all required settings exist."""
         async with self.session_factory() as session:
             from sqlalchemy import select
 
-            # All required settings with defaults
-            required_settings = {
-                "initialized": ("true", "bool", "Database initialization flag"),
-                "monitoring_location": (
-                    "local",
-                    "string",
-                    "Monitoring services location (local/external)",
-                ),
-                "prometheus_url": (
-                    "http://localhost:9090",
-                    "string",
-                    "Prometheus server URL",
-                ),
-                "grafana_url": (
-                    "http://localhost:3000",
-                    "string",
-                    "Grafana server URL",
-                ),
-                "heartbeat_timeout": ("60", "int", "Node heartbeat timeout in seconds"),
-                "auto_reconcile": (
-                    "false",
-                    "bool",
-                    "Enable automatic role reconciliation",
-                ),
-                "auto_remediate": (
-                    "true",
-                    "bool",
-                    "Enable auto-restart of SLM agent on degraded nodes",
-                ),
-                "auto_restart_services": (
-                    "true",
-                    "bool",
-                    "Enable auto-restart of failed AutoBot services",
-                ),
-                "auto_rollback": (
-                    "false",
-                    "bool",
-                    "Enable automatic deployment rollback on failure",
-                ),
-                "rollback_window_seconds": (
-                    "600",
-                    "int",
-                    "Time window (seconds) for auto-rollback eligibility",
-                ),
-            }
+            required_settings = self._build_required_settings()
 
             # Check which settings exist
             result = await session.execute(select(Setting))

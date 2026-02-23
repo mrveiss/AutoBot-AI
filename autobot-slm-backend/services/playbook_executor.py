@@ -219,6 +219,43 @@ class PlaybookExecutor:
 
         return output_lines
 
+    def _build_ansible_env(self) -> Dict[str, str]:
+        """
+        Build the environment dict for ansible-playbook subprocess. Ref: #1088.
+
+        Helper for execute_playbook.
+        """
+        return {
+            **os.environ,
+            "ANSIBLE_FORCE_COLOR": "0",
+            "ANSIBLE_NOCOLOR": "1",
+            "ANSIBLE_HOST_KEY_CHECKING": "False",
+            "ANSIBLE_SSH_RETRIES": "3",
+            "ANSIBLE_LOCAL_TEMP": "/tmp/ansible_local_tmp",  # nosec B108
+        }
+
+    async def _run_subprocess(
+        self,
+        cmd: List[str],
+        env: Dict[str, str],
+        progress_callback: Optional[callable],
+    ) -> Dict[str, any]:
+        """
+        Launch ansible-playbook subprocess and collect output. Ref: #1088.
+
+        Helper for execute_playbook.
+        """
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=str(self.ansible_dir),
+            env=env,
+        )
+        output_lines = await self._stream_playbook_output(process, progress_callback)
+        await process.wait()
+        return {"output": "\n".join(output_lines), "returncode": process.returncode}
+
     async def execute_playbook(
         self,
         playbook_name: str,
@@ -254,42 +291,21 @@ class PlaybookExecutor:
         )
         logger.info(f"Executing Ansible playbook: {' '.join(cmd[:5])}...")
 
-        env = {
-            **os.environ,
-            "ANSIBLE_FORCE_COLOR": "0",
-            "ANSIBLE_NOCOLOR": "1",
-            "ANSIBLE_HOST_KEY_CHECKING": "False",
-            "ANSIBLE_SSH_RETRIES": "3",
-            "ANSIBLE_LOCAL_TEMP": "/tmp/ansible_local_tmp",  # nosec B108
-        }
-
         try:
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                cwd=str(self.ansible_dir),
-                env=env,
+            proc_result = await self._run_subprocess(
+                cmd, self._build_ansible_env(), progress_callback
             )
-
-            output_lines = await self._stream_playbook_output(
-                process, progress_callback
-            )
-            await process.wait()
-            output = "\n".join(output_lines)
-
-            success = process.returncode == 0
+            success = proc_result["returncode"] == 0
             if success:
                 logger.info(f"Playbook {playbook_name} completed successfully")
             else:
                 logger.error(
-                    f"Playbook {playbook_name} failed with code {process.returncode}"
+                    f"Playbook {playbook_name} failed with code {proc_result['returncode']}"
                 )
-
             return {
                 "success": success,
-                "output": output,
-                "returncode": process.returncode,
+                "output": proc_result["output"],
+                "returncode": proc_result["returncode"],
             }
 
         except Exception as e:

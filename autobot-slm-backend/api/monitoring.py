@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import httpx
+from config import settings
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from models.database import (
     Deployment,
@@ -32,8 +33,6 @@ from services.database import get_db
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
-
-from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/monitoring", tags=["monitoring"])
@@ -610,6 +609,51 @@ def _calculate_overall_health(components: Dict[str, str]) -> tuple:
     return "critical", health_score
 
 
+async def _check_deployment_health(
+    db: AsyncSession,
+    components: Dict[str, str],
+    issues: List[str],
+) -> None:
+    """Helper for get_system_health. Ref: #1088.
+
+    Queries recent failed deployments and updates components/issues in place.
+    """
+    recent_cutoff = datetime.utcnow() - timedelta(hours=1)
+    deploy_result = await db.execute(
+        select(Deployment).where(
+            Deployment.created_at >= recent_cutoff,
+            Deployment.status == DeploymentStatus.FAILED.value,
+        )
+    )
+    failed_deploys = len(deploy_result.scalars().all())
+    components["deployments"] = "degraded" if failed_deploys > 0 else "healthy"
+    if failed_deploys > 0:
+        issues.append(f"{failed_deploys} deployment(s) failed in last hour")
+
+
+async def _check_maintenance_health(
+    db: AsyncSession,
+    components: Dict[str, str],
+    issues: List[str],
+) -> None:
+    """Helper for get_system_health. Ref: #1088.
+
+    Queries active maintenance windows and updates components/issues in place.
+    """
+    now = datetime.utcnow()
+    maint_result = await db.execute(
+        select(MaintenanceWindow).where(
+            MaintenanceWindow.start_time <= now,
+            MaintenanceWindow.end_time >= now,
+            MaintenanceWindow.status == "active",
+        )
+    )
+    active_maint = len(maint_result.scalars().all())
+    components["maintenance"] = "active" if active_maint > 0 else "none"
+    if active_maint > 0:
+        issues.append(f"{active_maint} active maintenance window(s)")
+
+
 @router.get("/health", response_model=SystemHealthResponse)
 async def get_system_health(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -636,8 +680,8 @@ async def get_system_health(
         if n.status in [NodeStatus.OFFLINE.value, NodeStatus.ERROR.value]
     ]
 
-    issues = []
-    components = {}
+    issues: List[str] = []
+    components: Dict[str, str] = {}
 
     # Assess fleet health
     components["fleet"], fleet_issues = _assess_fleet_health(
@@ -655,32 +699,8 @@ async def get_system_health(
     components["services"], svc_issues = _assess_services_health(service_stats)
     issues.extend(svc_issues)
 
-    # Check recent failed deployments
-    recent_cutoff = datetime.utcnow() - timedelta(hours=1)
-    deploy_result = await db.execute(
-        select(Deployment).where(
-            Deployment.created_at >= recent_cutoff,
-            Deployment.status == DeploymentStatus.FAILED.value,
-        )
-    )
-    failed_deploys = len(deploy_result.scalars().all())
-    components["deployments"] = "degraded" if failed_deploys > 0 else "healthy"
-    if failed_deploys > 0:
-        issues.append(f"{failed_deploys} deployment(s) failed in last hour")
-
-    # Check active maintenance windows
-    now = datetime.utcnow()
-    maint_result = await db.execute(
-        select(MaintenanceWindow).where(
-            MaintenanceWindow.start_time <= now,
-            MaintenanceWindow.end_time >= now,
-            MaintenanceWindow.status == "active",
-        )
-    )
-    active_maint = len(maint_result.scalars().all())
-    components["maintenance"] = "active" if active_maint > 0 else "none"
-    if active_maint > 0:
-        issues.append(f"{active_maint} active maintenance window(s)")
+    await _check_deployment_health(db, components, issues)
+    await _check_maintenance_health(db, components, issues)
 
     overall_status, health_score = _calculate_overall_health(components)
 

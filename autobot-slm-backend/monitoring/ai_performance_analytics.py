@@ -234,6 +234,64 @@ else:
         except Exception:
             return 0.0
 
+    async def _run_pipeline_stages(self, start_time: float) -> tuple:
+        """Simulate and time the three pipeline stages: load, inference, post-process.
+
+        Helper for monitor_multimodal_pipeline. Ref: #1088.
+
+        Returns:
+            Tuple of (model_load_time_ms, inference_time_ms, post_processing_time_ms,
+                      total_time_ms, memory_peak_mb).
+        """
+        process = psutil.Process()
+        memory_before = process.memory_info().rss / (1024 * 1024)
+
+        model_load_start = time.time()
+        await asyncio.sleep(0.1)
+        model_load_time = (time.time() - model_load_start) * 1000
+
+        inference_start = time.time()
+        await asyncio.sleep(0.2)
+        inference_time = (time.time() - inference_start) * 1000
+
+        post_proc_start = time.time()
+        await asyncio.sleep(0.05)
+        post_processing_time = (time.time() - post_proc_start) * 1000
+
+        total_time = (time.time() - start_time) * 1000
+
+        memory_after = process.memory_info().rss / (1024 * 1024)
+        memory_peak = max(memory_before, memory_after)
+
+        return (
+            model_load_time,
+            inference_time,
+            post_processing_time,
+            total_time,
+            memory_peak,
+        )
+
+    def _build_zero_multimodal_metrics(self, pipeline_type: str) -> MultiModalMetrics:
+        """Build a zeroed-out MultiModalMetrics for error cases.
+
+        Helper for monitor_multimodal_pipeline. Ref: #1088.
+        """
+        return MultiModalMetrics(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            pipeline_type=pipeline_type,
+            input_size_mb=0.0,
+            processing_time_ms=0.0,
+            model_load_time_ms=0.0,
+            inference_time_ms=0.0,
+            post_processing_time_ms=0.0,
+            memory_peak_mb=0.0,
+            cpu_utilization_percent=0.0,
+            gpu_utilization_percent=None,
+            npu_utilization_percent=None,
+            throughput_items_per_second=0.0,
+            accuracy_score=None,
+        )
+
     async def monitor_multimodal_pipeline(
         self, pipeline_type: str, input_data: Dict
     ) -> MultiModalMetrics:
@@ -241,37 +299,20 @@ else:
         start_time = time.time()
 
         try:
-            # Track memory before processing
-            process = psutil.Process()
-            memory_before = process.memory_info().rss / (1024 * 1024)  # MB
+            (
+                model_load_time,
+                inference_time,
+                post_processing_time,
+                total_time,
+                memory_peak,
+            ) = await self._run_pipeline_stages(start_time)
 
-            # Simulate pipeline stages
-            model_load_start = time.time()
-            await asyncio.sleep(0.1)  # Model loading simulation
-            model_load_time = (time.time() - model_load_start) * 1000
-
-            inference_start = time.time()
-            await asyncio.sleep(0.2)  # Inference simulation
-            inference_time = (time.time() - inference_start) * 1000
-
-            post_proc_start = time.time()
-            await asyncio.sleep(0.05)  # Post-processing simulation
-            post_processing_time = (time.time() - post_proc_start) * 1000
-
-            total_time = (time.time() - start_time) * 1000
-
-            # Track memory after processing
-            memory_after = process.memory_info().rss / (1024 * 1024)  # MB
-            memory_peak = max(memory_before, memory_after)
-
-            # Get current resource utilization
             cpu_util = psutil.cpu_percent(interval=0.1)
             gpu_util = await self._get_gpu_utilization()
             npu_util = await self._get_npu_utilization()
 
-            # Calculate throughput
             input_size = input_data.get("size_mb", 1.0)
-            throughput = 1000.0 / total_time if total_time > 0 else 0  # items/second
+            throughput = 1000.0 / total_time if total_time > 0 else 0
 
             return MultiModalMetrics(
                 timestamp=datetime.now(timezone.utc).isoformat(),
@@ -291,21 +332,7 @@ else:
 
         except Exception as e:
             self.logger.error(f"Error monitoring multimodal pipeline: {e}")
-            return MultiModalMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
-                pipeline_type=pipeline_type,
-                input_size_mb=0.0,
-                processing_time_ms=0.0,
-                model_load_time_ms=0.0,
-                inference_time_ms=0.0,
-                post_processing_time_ms=0.0,
-                memory_peak_mb=0.0,
-                cpu_utilization_percent=0.0,
-                gpu_utilization_percent=None,
-                npu_utilization_percent=None,
-                throughput_items_per_second=0.0,
-                accuracy_score=None,
-            )
+            return self._build_zero_multimodal_metrics(pipeline_type)
 
     async def _get_gpu_utilization(self) -> Optional[float]:
         """Get GPU utilization percentage."""
@@ -328,6 +355,76 @@ else:
             self.logger.debug("Suppressed exception in try block", exc_info=True)
         return None
 
+    async def _run_knowledge_search_stages(
+        self, query: str, start_time: float
+    ) -> tuple:
+        """Time embedding, retrieval, and ranking stages for a knowledge search.
+
+        Helper for monitor_knowledge_base_search. Ref: #1088.
+
+        Returns:
+            Tuple of (embedding_time_ms, retrieval_time_ms, ranking_time_ms,
+                      total_time_ms, memory_usage_mb, results_count,
+                      relevance_score, cache_hit).
+        """
+        process = psutil.Process()
+        memory_before = process.memory_info().rss / (1024 * 1024)
+
+        embedding_start = time.time()
+        await asyncio.sleep(0.05)
+        embedding_time = (time.time() - embedding_start) * 1000
+
+        retrieval_start = time.time()
+        await asyncio.sleep(0.1)
+        retrieval_time = (time.time() - retrieval_start) * 1000
+
+        ranking_start = time.time()
+        await asyncio.sleep(0.02)
+        ranking_time = (time.time() - ranking_start) * 1000
+
+        total_time = (time.time() - start_time) * 1000
+
+        memory_after = process.memory_info().rss / (1024 * 1024)
+        memory_usage = max(memory_after - memory_before, 0)
+
+        results_count = min(len(query.split()) * 3, 20)
+        relevance_score = min(0.85 + len(query) * 0.01, 1.0)
+        cache_hit = len(query) > 20
+
+        return (
+            embedding_time,
+            retrieval_time,
+            ranking_time,
+            total_time,
+            memory_usage,
+            results_count,
+            relevance_score,
+            cache_hit,
+        )
+
+    def _build_zero_knowledge_metrics(
+        self, query: str, search_type: str
+    ) -> KnowledgeBaseMetrics:
+        """Build a zeroed-out KnowledgeBaseMetrics for error cases.
+
+        Helper for monitor_knowledge_base_search. Ref: #1088.
+        """
+        return KnowledgeBaseMetrics(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            query_type=search_type,
+            query_length=len(query),
+            search_time_ms=0.0,
+            embedding_time_ms=0.0,
+            retrieval_time_ms=0.0,
+            ranking_time_ms=0.0,
+            results_count=0,
+            relevance_score=0.0,
+            memory_usage_mb=0.0,
+            cache_hit=False,
+            vector_dimensions=0,
+            total_vectors_searched=0,
+        )
+
     async def monitor_knowledge_base_search(
         self, query: str, search_type: str = "semantic"
     ) -> KnowledgeBaseMetrics:
@@ -335,38 +432,16 @@ else:
         start_time = time.time()
 
         try:
-            # Track memory before search
-            process = psutil.Process()
-            memory_before = process.memory_info().rss / (1024 * 1024)  # MB
-
-            # Simulate knowledge base search stages
-            embedding_start = time.time()
-            await asyncio.sleep(0.05)  # Embedding generation
-            embedding_time = (time.time() - embedding_start) * 1000
-
-            retrieval_start = time.time()
-            await asyncio.sleep(0.1)  # Vector search
-            retrieval_time = (time.time() - retrieval_start) * 1000
-
-            ranking_start = time.time()
-            await asyncio.sleep(0.02)  # Result ranking
-            ranking_time = (time.time() - ranking_start) * 1000
-
-            total_time = (time.time() - start_time) * 1000
-
-            # Track memory after search
-            memory_after = process.memory_info().rss / (1024 * 1024)  # MB
-            memory_usage = memory_after - memory_before
-
-            # Simulate search results
-            results_count = min(len(query.split()) * 3, 20)  # Simulate result count
-            relevance_score = 0.85 + (
-                len(query) * 0.01
-            )  # Higher score for longer queries
-            relevance_score = min(relevance_score, 1.0)
-
-            # Check cache hit (simulate)
-            cache_hit = len(query) > 20  # Longer queries more likely to be cached
+            (
+                embedding_time,
+                retrieval_time,
+                ranking_time,
+                total_time,
+                memory_usage,
+                results_count,
+                relevance_score,
+                cache_hit,
+            ) = await self._run_knowledge_search_stages(query, start_time)
 
             return KnowledgeBaseMetrics(
                 timestamp=datetime.now(timezone.utc).isoformat(),
@@ -378,7 +453,7 @@ else:
                 ranking_time_ms=ranking_time,
                 results_count=results_count,
                 relevance_score=relevance_score,
-                memory_usage_mb=max(memory_usage, 0),
+                memory_usage_mb=memory_usage,
                 cache_hit=cache_hit,
                 vector_dimensions=384,  # Typical embedding dimension
                 total_vectors_searched=13383,  # From AutoBot knowledge base
@@ -386,21 +461,71 @@ else:
 
         except Exception as e:
             self.logger.error(f"Error monitoring knowledge base search: {e}")
-            return KnowledgeBaseMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
-                query_type=search_type,
-                query_length=len(query),
-                search_time_ms=0.0,
-                embedding_time_ms=0.0,
-                retrieval_time_ms=0.0,
-                ranking_time_ms=0.0,
-                results_count=0,
-                relevance_score=0.0,
-                memory_usage_mb=0.0,
-                cache_hit=False,
-                vector_dimensions=0,
-                total_vectors_searched=0,
-            )
+            return self._build_zero_knowledge_metrics(query, search_type)
+
+    async def _simulate_llm_processing(
+        self, request_data: Dict, start_time: float
+    ) -> tuple:
+        """Simulate LLM processing and collect timing and resource metrics.
+
+        Helper for monitor_llm_performance. Ref: #1088.
+
+        Returns:
+            Tuple of (input_tokens, max_tokens, output_tokens, total_time_ms,
+                      memory_usage_mb, tokens_per_second, gpu_util, npu_util).
+        """
+        process = psutil.Process()
+        memory_before = process.memory_info().rss / (1024 * 1024)
+
+        input_tokens = request_data.get("input_tokens", 100)
+        max_tokens = request_data.get("max_tokens", 500)
+
+        processing_time_sim = (input_tokens * 0.5 + max_tokens * 1.0) / 1000
+        await asyncio.sleep(min(processing_time_sim, 2.0))
+
+        total_time = (time.time() - start_time) * 1000
+        memory_after = process.memory_info().rss / (1024 * 1024)
+        memory_usage = max(memory_after - memory_before, 0)
+
+        output_tokens = request_data.get("output_tokens", max_tokens // 2)
+        tokens_per_second = output_tokens / (total_time / 1000) if total_time > 0 else 0
+
+        gpu_util = await self._get_gpu_utilization()
+        npu_util = await self._get_npu_utilization()
+
+        return (
+            input_tokens,
+            max_tokens,
+            output_tokens,
+            total_time,
+            memory_usage,
+            tokens_per_second,
+            gpu_util,
+            npu_util,
+        )
+
+    def _build_zero_llm_metrics(self, request_data: Dict) -> LLMPerformanceMetrics:
+        """Build a zeroed-out LLMPerformanceMetrics for error cases.
+
+        Helper for monitor_llm_performance. Ref: #1088.
+        """
+        return LLMPerformanceMetrics(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            model_name=request_data.get("model", "unknown"),
+            request_type=request_data.get("type", "unknown"),
+            input_tokens=0,
+            output_tokens=0,
+            processing_time_ms=0.0,
+            tokens_per_second=0.0,
+            memory_usage_mb=0.0,
+            gpu_utilization=None,
+            npu_utilization=None,
+            temperature=0.0,
+            max_tokens=0,
+            context_length=0,
+            cache_hit=False,
+            stream_mode=False,
+        )
 
     async def monitor_llm_performance(
         self, request_data: Dict
@@ -409,37 +534,16 @@ else:
         start_time = time.time()
 
         try:
-            # Track memory before LLM request
-            process = psutil.Process()
-            memory_before = process.memory_info().rss / (1024 * 1024)  # MB
-
-            # Simulate LLM processing time based on input
-            input_tokens = request_data.get("input_tokens", 100)
-            max_tokens = request_data.get("max_tokens", 500)
-
-            # Simulate processing (would be actual LLM call)
-            processing_time_sim = (
-                input_tokens * 0.5 + max_tokens * 1.0
-            ) / 1000  # seconds
-            await asyncio.sleep(
-                min(processing_time_sim, 2.0)
-            )  # Cap at 2 seconds for simulation
-
-            total_time = (time.time() - start_time) * 1000  # ms
-
-            # Track memory after processing
-            memory_after = process.memory_info().rss / (1024 * 1024)  # MB
-            memory_usage = memory_after - memory_before
-
-            # Calculate tokens per second
-            output_tokens = request_data.get("output_tokens", max_tokens // 2)
-            tokens_per_second = (
-                output_tokens / (total_time / 1000) if total_time > 0 else 0
-            )
-
-            # Get resource utilization
-            gpu_util = await self._get_gpu_utilization()
-            npu_util = await self._get_npu_utilization()
+            (
+                input_tokens,
+                max_tokens,
+                output_tokens,
+                total_time,
+                memory_usage,
+                tokens_per_second,
+                gpu_util,
+                npu_util,
+            ) = await self._simulate_llm_processing(request_data, start_time)
 
             return LLMPerformanceMetrics(
                 timestamp=datetime.now(timezone.utc).isoformat(),
@@ -449,7 +553,7 @@ else:
                 output_tokens=output_tokens,
                 processing_time_ms=total_time,
                 tokens_per_second=tokens_per_second,
-                memory_usage_mb=max(memory_usage, 0),
+                memory_usage_mb=memory_usage,
                 gpu_utilization=gpu_util,
                 npu_utilization=npu_util,
                 temperature=request_data.get("temperature", 0.7),
@@ -461,87 +565,108 @@ else:
 
         except Exception as e:
             self.logger.error(f"Error monitoring LLM performance: {e}")
-            return LLMPerformanceMetrics(
-                timestamp=datetime.now(timezone.utc).isoformat(),
-                model_name=request_data.get("model", "unknown"),
-                request_type=request_data.get("type", "unknown"),
-                input_tokens=0,
-                output_tokens=0,
-                processing_time_ms=0.0,
-                tokens_per_second=0.0,
-                memory_usage_mb=0.0,
-                gpu_utilization=None,
-                npu_utilization=None,
-                temperature=0.0,
-                max_tokens=0,
-                context_length=0,
-                cache_hit=False,
-                stream_mode=False,
-            )
+            return self._build_zero_llm_metrics(request_data)
+
+    def _compute_npu_trend(self) -> Optional[Dict[str, Any]]:
+        """Compute NPU utilization trend from history.
+
+        Helper for analyze_performance_trends. Ref: #1088.
+        """
+        if not self.performance_history["npu"]:
+            return None
+        npu_utils = [
+            m.utilization_percent for m in self.performance_history["npu"][-50:]
+        ]
+        return {
+            "average_utilization": statistics.mean(npu_utils),
+            "peak_utilization": max(npu_utils),
+            "efficiency_score": min(
+                statistics.mean(npu_utils)
+                / self.performance_targets["npu_utilization"]["optimal"],
+                1.0,
+            ),
+        }
+
+    def _compute_multimodal_trend(self) -> Optional[Dict[str, Any]]:
+        """Compute multi-modal pipeline trend from history.
+
+        Helper for analyze_performance_trends. Ref: #1088.
+        """
+        if not self.performance_history["multimodal"]:
+            return None
+        mm_metrics = self.performance_history["multimodal"][-50:]
+        return {
+            "average_processing_time": statistics.mean(
+                [m.processing_time_ms for m in mm_metrics]
+            ),
+            "throughput_trend": [
+                m.throughput_items_per_second for m in mm_metrics[-10:]
+            ],
+            "memory_efficiency": statistics.mean(
+                [m.memory_peak_mb for m in mm_metrics]
+            ),
+        }
+
+    def _compute_knowledge_trend(self) -> Optional[Dict[str, Any]]:
+        """Compute knowledge base search trend from history.
+
+        Helper for analyze_performance_trends. Ref: #1088.
+        """
+        if not self.performance_history["knowledge"]:
+            return None
+        kb_metrics = self.performance_history["knowledge"][-50:]
+        return {
+            "average_search_time": statistics.mean(
+                [m.search_time_ms for m in kb_metrics]
+            ),
+            "cache_hit_rate": statistics.mean(
+                [1 if m.cache_hit else 0 for m in kb_metrics]
+            ),
+            "relevance_trend": statistics.mean([m.relevance_score for m in kb_metrics]),
+        }
+
+    def _compute_llm_trend(self) -> Optional[Dict[str, Any]]:
+        """Compute LLM performance trend from history.
+
+        Helper for analyze_performance_trends. Ref: #1088.
+        """
+        if not self.performance_history["llm"]:
+            return None
+        llm_metrics = self.performance_history["llm"][-50:]
+        return {
+            "average_tokens_per_second": statistics.mean(
+                [m.tokens_per_second for m in llm_metrics]
+            ),
+            "model_distribution": self._analyze_model_usage(llm_metrics),
+            "cache_effectiveness": statistics.mean(
+                [1 if m.cache_hit else 0 for m in llm_metrics]
+            ),
+        }
 
     async def analyze_performance_trends(self) -> Dict[str, Any]:
         """Analyze AI performance trends and generate insights."""
         try:
             trends = {}
 
-            # NPU utilization trends
-            if self.performance_history["npu"]:
-                npu_utils = [
-                    m.utilization_percent for m in self.performance_history["npu"][-50:]
-                ]
-                trends["npu"] = {
-                    "average_utilization": statistics.mean(npu_utils),
-                    "peak_utilization": max(npu_utils),
-                    "efficiency_score": min(
-                        statistics.mean(npu_utils)
-                        / self.performance_targets["npu_utilization"]["optimal"],
-                        1.0,
-                    ),
-                }
+            npu_trend = self._compute_npu_trend()
+            if npu_trend is not None:
+                trends["npu"] = npu_trend
 
-            # Multi-modal pipeline trends
-            if self.performance_history["multimodal"]:
-                mm_metrics = self.performance_history["multimodal"][-50:]
-                processing_times = [m.processing_time_ms for m in mm_metrics]
-                trends["multimodal"] = {
-                    "average_processing_time": statistics.mean(processing_times),
-                    "throughput_trend": [
-                        m.throughput_items_per_second for m in mm_metrics[-10:]
-                    ],
-                    "memory_efficiency": statistics.mean(
-                        [m.memory_peak_mb for m in mm_metrics]
-                    ),
-                }
+            multimodal_trend = self._compute_multimodal_trend()
+            if multimodal_trend is not None:
+                trends["multimodal"] = multimodal_trend
 
-            # Knowledge base search trends
-            if self.performance_history["knowledge"]:
-                kb_metrics = self.performance_history["knowledge"][-50:]
-                search_times = [m.search_time_ms for m in kb_metrics]
-                trends["knowledge_base"] = {
-                    "average_search_time": statistics.mean(search_times),
-                    "cache_hit_rate": statistics.mean(
-                        [1 if m.cache_hit else 0 for m in kb_metrics]
-                    ),
-                    "relevance_trend": statistics.mean(
-                        [m.relevance_score for m in kb_metrics]
-                    ),
-                }
+            knowledge_trend = self._compute_knowledge_trend()
+            if knowledge_trend is not None:
+                trends["knowledge_base"] = knowledge_trend
 
-            # LLM performance trends
-            if self.performance_history["llm"]:
-                llm_metrics = self.performance_history["llm"][-50:]
-                tokens_per_sec = [m.tokens_per_second for m in llm_metrics]
-                trends["llm"] = {
-                    "average_tokens_per_second": statistics.mean(tokens_per_sec),
-                    "model_distribution": self._analyze_model_usage(llm_metrics),
-                    "cache_effectiveness": statistics.mean(
-                        [1 if m.cache_hit else 0 for m in llm_metrics]
-                    ),
-                }
+            llm_trend = self._compute_llm_trend()
+            if llm_trend is not None:
+                trends["llm"] = llm_trend
 
-            # Generate performance recommendations
-            recommendations = await self._generate_performance_recommendations(trends)
-            trends["recommendations"] = recommendations
+            trends[
+                "recommendations"
+            ] = await self._generate_performance_recommendations(trends)
 
             return trends
 

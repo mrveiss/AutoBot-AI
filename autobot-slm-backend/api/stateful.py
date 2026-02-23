@@ -14,10 +14,6 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
 from models.database import Backup, BackupStatus, Node, Replication, ReplicationStatus
 from models.schemas import (
     ActionResponse,
@@ -34,6 +30,9 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.replication import replication_service
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stateful", tags=["stateful"])
@@ -235,18 +234,8 @@ async def get_replication(
     return ReplicationResponse.model_validate(replication)
 
 
-@router.post(
-    "/replications",
-    response_model=ReplicationResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def start_replication(
-    request: ReplicationCreate,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
-) -> ReplicationResponse:
-    """Start a new replication between nodes."""
-    # Verify both nodes exist
+async def _fetch_replication_nodes(db, request: ReplicationCreate):
+    """Helper for start_replication. Ref: #1088."""
     source_result = await db.execute(
         select(Node).where(Node.node_id == request.source_node_id)
     )
@@ -256,7 +245,6 @@ async def start_replication(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Source node not found",
         )
-
     target_result = await db.execute(
         select(Node).where(Node.node_id == request.target_node_id)
     )
@@ -266,8 +254,11 @@ async def start_replication(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Target node not found",
         )
+    return source_node, target_node
 
-    # Check for existing active replication
+
+async def _check_existing_replication(db, request: ReplicationCreate):
+    """Helper for start_replication. Ref: #1088."""
     existing = await db.execute(
         select(Replication)
         .where(Replication.source_node_id == request.source_node_id)
@@ -287,6 +278,21 @@ async def start_replication(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Active replication already exists between these nodes",
         )
+
+
+@router.post(
+    "/replications",
+    response_model=ReplicationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def start_replication(
+    request: ReplicationCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> ReplicationResponse:
+    """Start a new replication between nodes."""
+    source_node, target_node = await _fetch_replication_nodes(db, request)
+    await _check_existing_replication(db, request)
 
     replication_id = str(uuid.uuid4())[:16]
     replication = Replication(
@@ -371,6 +377,44 @@ async def stop_replication(
     )
 
 
+async def _fetch_replication_nodes_for_sync(db: AsyncSession, replication):
+    """Helper for verify_replication_sync. Ref: #1088."""
+    source_result = await db.execute(
+        select(Node).where(Node.node_id == replication.source_node_id)
+    )
+    source_node = source_result.scalar_one_or_none()
+
+    target_result = await db.execute(
+        select(Node).where(Node.node_id == replication.target_node_id)
+    )
+    target_node = target_result.scalar_one_or_none()
+
+    if not source_node or not target_node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Source or target node not found",
+        )
+    return source_node, target_node
+
+
+async def _run_replication_verify(source_node, target_node) -> dict:
+    """Helper for verify_replication_sync. Ref: #1088."""
+    from services.replication import replication_service
+
+    redis_password = await replication_service._get_redis_password(
+        source_node.ip_address,
+        source_node.ssh_user or "autobot",
+        source_node.ssh_port or 22,
+    )
+    return await replication_service.verify_sync(
+        source_node.ip_address,
+        target_node.ip_address,
+        source_node.ssh_user or "autobot",
+        source_node.ssh_port or 22,
+        redis_password,
+    )
+
+
 @router.post(
     "/replications/{replication_id}/verify-sync", response_model=DataVerifyResponse
 )
@@ -397,40 +441,8 @@ async def verify_replication_sync(
             detail="Replication not found",
         )
 
-    # Get source and target nodes
-    source_result = await db.execute(
-        select(Node).where(Node.node_id == replication.source_node_id)
-    )
-    source_node = source_result.scalar_one_or_none()
-
-    target_result = await db.execute(
-        select(Node).where(Node.node_id == replication.target_node_id)
-    )
-    target_node = target_result.scalar_one_or_none()
-
-    if not source_node or not target_node:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Source or target node not found",
-        )
-
-    # Get Redis password from source
-    from services.replication import replication_service
-
-    redis_password = await replication_service._get_redis_password(
-        source_node.ip_address,
-        source_node.ssh_user or "autobot",
-        source_node.ssh_port or 22,
-    )
-
-    # Verify sync
-    sync_result = await replication_service.verify_sync(
-        source_node.ip_address,
-        target_node.ip_address,
-        source_node.ssh_user or "autobot",
-        source_node.ssh_port or 22,
-        redis_password,
-    )
+    source_node, target_node = await _fetch_replication_nodes_for_sync(db, replication)
+    sync_result = await _run_replication_verify(source_node, target_node)
 
     return DataVerifyResponse(
         is_healthy=sync_result.get("synced", False),
@@ -574,6 +586,61 @@ async def _run_restore(job_id: str, backup_id: str, node_id: str) -> None:
 # Issue #726 Phase 4
 
 
+async def _run_redis_ssh_check(host: str):
+    """Helper for _verify_redis. Ref: #1088."""
+    cmd = [
+        "ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=10",
+        f"autobot@{host}",
+        "redis-cli PING && redis-cli INFO keyspace && redis-cli DBSIZE",
+    ]
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15)
+    return process.returncode, stdout, stderr
+
+
+def _build_redis_checks_from_result(returncode: int, stdout: bytes, stderr: bytes):
+    """Helper for _verify_redis. Ref: #1088."""
+    checks = []
+    details = {}
+    is_healthy = True
+    if returncode == 0:
+        output = stdout.decode()
+        checks.append(
+            {
+                "name": "connectivity",
+                "status": "passed",
+                "message": "Redis is responding",
+            }
+        )
+        if "PONG" in output:
+            details["ping"] = "OK"
+        checks.append(
+            {
+                "name": "data_integrity",
+                "status": "passed",
+                "message": "Data appears consistent",
+            }
+        )
+    else:
+        is_healthy = False
+        checks.append(
+            {
+                "name": "connectivity",
+                "status": "failed",
+                "message": stderr.decode()[:200] or "Redis not responding",
+            }
+        )
+    return is_healthy, checks, details
+
+
 async def _verify_redis(host: str) -> dict:
     """Verify Redis data integrity."""
     checks = []
@@ -581,54 +648,10 @@ async def _verify_redis(host: str) -> dict:
     is_healthy = True
 
     try:
-        # Check Redis connectivity
-        cmd = [
-            "ssh",
-            "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "ConnectTimeout=10",
-            f"autobot@{host}",
-            "redis-cli PING && redis-cli INFO keyspace && redis-cli DBSIZE",
-        ]
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        returncode, stdout, stderr = await _run_redis_ssh_check(host)
+        is_healthy, checks, details = _build_redis_checks_from_result(
+            returncode, stdout, stderr
         )
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15)
-
-        if process.returncode == 0:
-            output = stdout.decode()
-            checks.append(
-                {
-                    "name": "connectivity",
-                    "status": "passed",
-                    "message": "Redis is responding",
-                }
-            )
-
-            # Parse output for details
-            if "PONG" in output:
-                details["ping"] = "OK"
-
-            checks.append(
-                {
-                    "name": "data_integrity",
-                    "status": "passed",
-                    "message": "Data appears consistent",
-                }
-            )
-        else:
-            is_healthy = False
-            checks.append(
-                {
-                    "name": "connectivity",
-                    "status": "failed",
-                    "message": stderr.decode()[:200] or "Redis not responding",
-                }
-            )
-
     except asyncio.TimeoutError:
         is_healthy = False
         checks.append(

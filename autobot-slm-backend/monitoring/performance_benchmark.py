@@ -236,15 +236,15 @@ class PerformanceBenchmark:
             category="api",
             duration_seconds=actual_duration,
             operations_count=total_operations,
-            operations_per_second=total_operations / actual_duration
-            if actual_duration > 0
-            else 0,
+            operations_per_second=(
+                total_operations / actual_duration if actual_duration > 0 else 0
+            ),
             average_latency_ms=avg_latency,
             p95_latency_ms=p95_latency,
             p99_latency_ms=p99_latency,
-            success_rate=(success_count / total_operations) * 100
-            if total_operations > 0
-            else 0,
+            success_rate=(
+                (success_count / total_operations) * 100 if total_operations > 0 else 0
+            ),
             error_count=error_count,
             timestamp=datetime.now().isoformat(),
             metadata={"endpoint": url, "method": method},
@@ -282,6 +282,41 @@ class PerformanceBenchmark:
 
         return results
 
+    async def _run_redis_connection_loop(
+        self, db_num: int, db_name_map: dict, duration_seconds: int
+    ) -> tuple:
+        """Helper for _benchmark_redis_connections. Ref: #1088.
+
+        Runs the timed connection loop and returns (latencies, success_count, error_count).
+        """
+        from autobot_shared.redis_client import get_redis_client
+
+        latencies = []
+        success_count = 0
+        error_count = 0
+        start_time = time.time()
+
+        while time.time() - start_time < duration_seconds:
+            conn_start = time.time()
+            try:
+                db_name = db_name_map.get(db_num, "main")
+                client = get_redis_client(database=db_name)
+                if client is None:
+                    raise Exception(
+                        f"Redis client initialization returned None for DB {db_num}"
+                    )
+                client.ping()
+                client.close()
+                conn_time = (time.time() - conn_start) * 1000  # Convert to ms
+                latencies.append(conn_time)
+                success_count += 1
+            except Exception as e:
+                error_count += 1
+                self.logger.debug(f"Redis connection error DB {db_num}: {e}")
+            await asyncio.sleep(0.05)  # Brief pause
+
+        return latencies, success_count, error_count
+
     async def _benchmark_redis_connections(
         self, db_num: int, duration_seconds: int
     ) -> BenchmarkResult:
@@ -290,8 +325,6 @@ class PerformanceBenchmark:
         This follows CLAUDE.md "🔴 REDIS CLIENT USAGE" policy.
         Maps DB numbers to named databases for benchmarking.
         """
-        from autobot_shared.redis_client import get_redis_client
-
         # Map DB numbers to database names for canonical utility
         db_name_map = {
             0: "main",
@@ -301,65 +334,28 @@ class PerformanceBenchmark:
             8: "vectors",
         }
 
-        latencies = []
-        success_count = 0
-        error_count = 0
-        start_time = time.time()
-
-        while time.time() - start_time < duration_seconds:
-            conn_start = time.time()
-
-            try:
-                # Get client using canonical utility with named database
-                db_name = db_name_map.get(db_num, "main")
-                client = get_redis_client(database=db_name)
-                if client is None:
-                    raise Exception(
-                        f"Redis client initialization returned None for DB {db_num}"
-                    )
-
-                # Test connection with ping
-                client.ping()
-                client.close()
-
-                conn_time = (time.time() - conn_start) * 1000  # Convert to ms
-                latencies.append(conn_time)
-                success_count += 1
-
-            except Exception as e:
-                error_count += 1
-                self.logger.debug(f"Redis connection error DB {db_num}: {e}")
-
-            await asyncio.sleep(0.05)  # Brief pause
+        latencies, success_count, error_count = await self._run_redis_connection_loop(
+            db_num, db_name_map, duration_seconds
+        )
 
         total_operations = success_count + error_count
-        actual_duration = time.time() - start_time
-
-        if latencies:
-            avg_latency = statistics.mean(latencies)
-            p95_latency = (
-                np.percentile(latencies, 95) if len(latencies) > 1 else avg_latency
-            )
-            p99_latency = (
-                np.percentile(latencies, 99) if len(latencies) > 1 else avg_latency
-            )
-        else:
-            avg_latency = p95_latency = p99_latency = 0.0
+        actual_duration = duration_seconds  # loop ran for duration_seconds
+        avg_latency, p95_latency, p99_latency = self._calculate_latency_stats(latencies)
 
         return BenchmarkResult(
             test_name=f"Redis_DB{db_num}_Connections",
             category="database",
             duration_seconds=actual_duration,
             operations_count=total_operations,
-            operations_per_second=total_operations / actual_duration
-            if actual_duration > 0
-            else 0,
+            operations_per_second=(
+                total_operations / actual_duration if actual_duration > 0 else 0
+            ),
             average_latency_ms=avg_latency,
             p95_latency_ms=p95_latency,
             p99_latency_ms=p99_latency,
-            success_rate=(success_count / total_operations) * 100
-            if total_operations > 0
-            else 0,
+            success_rate=(
+                (success_count / total_operations) * 100 if total_operations > 0 else 0
+            ),
             error_count=error_count,
             timestamp=datetime.now().isoformat(),
             metadata={"database": f"Redis_DB_{db_num}", "operation": "connection"},
@@ -494,15 +490,15 @@ class PerformanceBenchmark:
             category="database",
             duration_seconds=actual_duration,
             operations_count=total_operations,
-            operations_per_second=total_operations / actual_duration
-            if actual_duration > 0
-            else 0,
+            operations_per_second=(
+                total_operations / actual_duration if actual_duration > 0 else 0
+            ),
             average_latency_ms=avg_latency,
             p95_latency_ms=p95_latency,
             p99_latency_ms=p99_latency,
-            success_rate=(success_count / total_operations) * 100
-            if total_operations > 0
-            else 0,
+            success_rate=(
+                (success_count / total_operations) * 100 if total_operations > 0 else 0
+            ),
             error_count=error_count,
             timestamp=datetime.now().isoformat(),
             metadata={"database": f"Redis_DB_{db_num}", "operation": "read_write"},
@@ -533,6 +529,33 @@ class PerformanceBenchmark:
 
         return results
 
+    async def _execute_single_ping(self, vm_name: str, vm_ip: str) -> Optional[float]:
+        """Helper for _benchmark_network_latency. Ref: #1088.
+
+        Runs a single non-blocking ping to vm_ip and returns latency in ms,
+        or None if the ping failed or the target was unreachable.
+        """
+        # Issue #382: Removed unused ping_start variable
+        process = await asyncio.create_subprocess_exec(
+            "ping",
+            "-c",
+            "1",
+            "-W",
+            "1",
+            vm_ip,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await process.communicate()
+        if process.returncode != 0:
+            return None
+        output = stdout.decode()
+        for line in output.split("\n"):
+            if "time=" in line:
+                time_part = line.split("time=")[1].split()[0]
+                return float(time_part)
+        return None
+
     async def _benchmark_network_latency(
         self, vm_name: str, vm_ip: str, duration_seconds: int
     ) -> BenchmarkResult:
@@ -543,69 +566,36 @@ class PerformanceBenchmark:
         start_time = time.time()
 
         while time.time() - start_time < duration_seconds:
-            # Issue #382: Removed unused ping_start variable
             try:
-                # Use asyncio subprocess for non-blocking ping
-                process = await asyncio.create_subprocess_exec(
-                    "ping",
-                    "-c",
-                    "1",
-                    "-W",
-                    "1",
-                    vm_ip,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-
-                stdout, stderr = await process.communicate()
-
-                if process.returncode == 0:
-                    # Parse ping output for latency
-                    output = stdout.decode()
-                    for line in output.split("\n"):
-                        if "time=" in line:
-                            time_part = line.split("time=")[1].split()[0]
-                            latency_ms = float(time_part)
-                            latencies.append(latency_ms)
-                            success_count += 1
-                            break
+                latency_ms = await self._execute_single_ping(vm_name, vm_ip)
+                if latency_ms is not None:
+                    latencies.append(latency_ms)
+                    success_count += 1
                 else:
                     error_count += 1
-
             except Exception as e:
                 error_count += 1
                 self.logger.debug(f"Ping error to {vm_name}: {e}")
-
             await asyncio.sleep(0.5)  # Half-second intervals
 
         total_operations = success_count + error_count
         actual_duration = time.time() - start_time
-
-        if latencies:
-            avg_latency = statistics.mean(latencies)
-            p95_latency = (
-                np.percentile(latencies, 95) if len(latencies) > 1 else avg_latency
-            )
-            p99_latency = (
-                np.percentile(latencies, 99) if len(latencies) > 1 else avg_latency
-            )
-        else:
-            avg_latency = p95_latency = p99_latency = 0.0
+        avg_latency, p95_latency, p99_latency = self._calculate_latency_stats(latencies)
 
         return BenchmarkResult(
             test_name=f"Network_Latency_{vm_name}",
             category="network",
             duration_seconds=actual_duration,
             operations_count=total_operations,
-            operations_per_second=total_operations / actual_duration
-            if actual_duration > 0
-            else 0,
+            operations_per_second=(
+                total_operations / actual_duration if actual_duration > 0 else 0
+            ),
             average_latency_ms=avg_latency,
             p95_latency_ms=p95_latency,
             p99_latency_ms=p99_latency,
-            success_rate=(success_count / total_operations) * 100
-            if total_operations > 0
-            else 0,
+            success_rate=(
+                (success_count / total_operations) * 100 if total_operations > 0 else 0
+            ),
             error_count=error_count,
             timestamp=datetime.now().isoformat(),
             metadata={"target_vm": vm_name, "target_ip": vm_ip},
@@ -1008,6 +998,54 @@ class PerformanceBenchmark:
         # Generate and save performance charts
         await self._generate_performance_charts(results, timestamp)
 
+    def _plot_throughput_chart(self, ax, results: List[BenchmarkResult]) -> None:
+        """Helper for _generate_performance_charts. Ref: #1088."""
+        test_names = [r.test_name for r in results]
+        ops_per_sec = [r.operations_per_second for r in results]
+        ax.barh(test_names, ops_per_sec, color="skyblue")
+        ax.set_xlabel("Operations per Second")
+        ax.set_title("Throughput Performance")
+        ax.tick_params(axis="y", labelsize=8)
+
+    def _plot_latency_distribution_chart(
+        self, ax, results: List[BenchmarkResult]
+    ) -> None:
+        """Helper for _generate_performance_charts. Ref: #1088."""
+        latencies = [r.average_latency_ms for r in results if r.average_latency_ms > 0]
+        if latencies:
+            ax.hist(latencies, bins=20, color="lightgreen", alpha=0.7)
+            ax.set_xlabel("Average Latency (ms)")
+            ax.set_ylabel("Frequency")
+            ax.set_title("Latency Distribution")
+
+    def _plot_success_rate_chart(self, ax, results: List[BenchmarkResult]) -> None:
+        """Helper for _generate_performance_charts. Ref: #1088."""
+        categories = list(set([r.category for r in results]))
+        success_rates = []
+        for category in categories:
+            cat_results = [r for r in results if r.category == category]
+            avg_success = statistics.mean([r.success_rate for r in cat_results])
+            success_rates.append(avg_success)
+        ax.bar(categories, success_rates, color="orange")
+        ax.set_ylabel("Success Rate (%)")
+        ax.set_title("Success Rate by Category")
+        ax.set_ylim(0, 100)
+
+    def _plot_percentile_latency_chart(
+        self, ax, results: List[BenchmarkResult]
+    ) -> None:
+        """Helper for _generate_performance_charts. Ref: #1088."""
+        p95_latencies = [r.p95_latency_ms for r in results if r.p95_latency_ms > 0]
+        p99_latencies = [r.p99_latency_ms for r in results if r.p99_latency_ms > 0]
+        if p95_latencies and p99_latencies:
+            x = range(len(p95_latencies))
+            ax.plot(x, p95_latencies, "o-", label="P95", color="yellow")
+            ax.plot(x, p99_latencies, "s-", label="P99", color="red")
+            ax.set_xlabel("Test Number")
+            ax.set_ylabel("Latency (ms)")
+            ax.set_title("P95 vs P99 Latency")
+            ax.legend()
+
     async def _generate_performance_charts(
         self, results: List[BenchmarkResult], timestamp: str
     ):
@@ -1019,54 +1057,13 @@ class PerformanceBenchmark:
                 "AutoBot Performance Benchmark Results", fontsize=16, color="white"
             )
 
-            # Chart 1: Operations per Second by Test
-            test_names = [r.test_name for r in results]
-            ops_per_sec = [r.operations_per_second for r in results]
-
-            ax1.barh(test_names, ops_per_sec, color="skyblue")
-            ax1.set_xlabel("Operations per Second")
-            ax1.set_title("Throughput Performance")
-            ax1.tick_params(axis="y", labelsize=8)
-
-            # Chart 2: Latency Distribution
-            latencies = [
-                r.average_latency_ms for r in results if r.average_latency_ms > 0
-            ]
-            if latencies:
-                ax2.hist(latencies, bins=20, color="lightgreen", alpha=0.7)
-                ax2.set_xlabel("Average Latency (ms)")
-                ax2.set_ylabel("Frequency")
-                ax2.set_title("Latency Distribution")
-
-            # Chart 3: Success Rate by Category
-            categories = list(set([r.category for r in results]))
-            success_rates = []
-            for category in categories:
-                cat_results = [r for r in results if r.category == category]
-                avg_success = statistics.mean([r.success_rate for r in cat_results])
-                success_rates.append(avg_success)
-
-            ax3.bar(categories, success_rates, color="orange")
-            ax3.set_ylabel("Success Rate (%)")
-            ax3.set_title("Success Rate by Category")
-            ax3.set_ylim(0, 100)
-
-            # Chart 4: P95 vs P99 Latency
-            p95_latencies = [r.p95_latency_ms for r in results if r.p95_latency_ms > 0]
-            p99_latencies = [r.p99_latency_ms for r in results if r.p99_latency_ms > 0]
-
-            if p95_latencies and p99_latencies:
-                x = range(len(p95_latencies))
-                ax4.plot(x, p95_latencies, "o-", label="P95", color="yellow")
-                ax4.plot(x, p99_latencies, "s-", label="P99", color="red")
-                ax4.set_xlabel("Test Number")
-                ax4.set_ylabel("Latency (ms)")
-                ax4.set_title("P95 vs P99 Latency")
-                ax4.legend()
+            self._plot_throughput_chart(ax1, results)
+            self._plot_latency_distribution_chart(ax2, results)
+            self._plot_success_rate_chart(ax3, results)
+            self._plot_percentile_latency_chart(ax4, results)
 
             plt.tight_layout()
 
-            # Save chart
             chart_file = self.output_dir / f"benchmark_charts_{timestamp}.png"
             plt.savefig(chart_file, dpi=150, bbox_inches="tight", facecolor="black")
             plt.close()

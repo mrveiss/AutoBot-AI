@@ -15,11 +15,10 @@ from datetime import datetime
 from typing import Optional, Tuple
 
 from croniter import croniter
-from sqlalchemy import select
-
 from models.database import CodeStatus, Node, UpdateSchedule
 from services.code_distributor import get_code_distributor
 from services.database import db_service
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +60,52 @@ def calculate_next_run(expression: str, base: datetime = None) -> datetime:
     return cron.get_next(datetime)
 
 
+_WEEKDAY_NAMES = {
+    "0": "Sunday",
+    "1": "Monday",
+    "2": "Tuesday",
+    "3": "Wednesday",
+    "4": "Thursday",
+    "5": "Friday",
+    "6": "Saturday",
+    "7": "Sunday",
+}
+
+_COMMON_CRON_PATTERNS = {
+    "0 * * * *": "Every hour",
+    "0 0 * * *": "Every day at midnight",
+    "0 2 * * *": "Every day at 2:00 AM",
+    "0 0 * * 0": "Every Sunday at midnight",
+    "0 0 1 * *": "First day of every month",
+}
+
+
+def _describe_cron_time_part(minute: str, hour: str) -> str:
+    """Helper for describe_cron_expression. Ref: #1088."""
+    if minute == "0" and hour != "*":
+        if hour.isdigit():
+            h = int(hour)
+            period = "AM" if h < 12 else "PM"
+            h = h if h <= 12 else h - 12
+            h = 12 if h == 0 else h
+            return f"at {h}:00 {period}"
+        return f"at hour {hour}"
+    if minute != "*":
+        return f"at minute {minute}"
+    return ""
+
+
+def _describe_cron_day_part(day: str, month: str, weekday: str) -> str:
+    """Helper for describe_cron_expression. Ref: #1088."""
+    if day == "*" and month == "*" and weekday == "*":
+        return "Daily"
+    if weekday != "*":
+        if weekday in _WEEKDAY_NAMES:
+            return f"Every {_WEEKDAY_NAMES[weekday]}"
+        return f"On weekday {weekday}"
+    return ""
+
+
 def describe_cron_expression(expression: str) -> str:
     """
     Generate a human-readable description of a cron expression.
@@ -72,56 +117,24 @@ def describe_cron_expression(expression: str) -> str:
         Human-readable description
     """
     try:
+        if expression in _COMMON_CRON_PATTERNS:
+            return _COMMON_CRON_PATTERNS[expression]
+
         parts = expression.split()
         if len(parts) != 5:
             return expression
 
         minute, hour, day, month, weekday = parts
 
-        # Common patterns
-        if expression == "0 * * * *":
-            return "Every hour"
-        elif expression == "0 0 * * *":
-            return "Every day at midnight"
-        elif expression == "0 2 * * *":
-            return "Every day at 2:00 AM"
-        elif expression == "0 0 * * 0":
-            return "Every Sunday at midnight"
-        elif expression == "0 0 1 * *":
-            return "First day of every month"
-
-        # Build description for other patterns
         desc_parts = []
 
-        if minute == "0" and hour != "*":
-            if hour.isdigit():
-                h = int(hour)
-                period = "AM" if h < 12 else "PM"
-                h = h if h <= 12 else h - 12
-                h = 12 if h == 0 else h
-                desc_parts.append(f"at {h}:00 {period}")
-            else:
-                desc_parts.append(f"at hour {hour}")
-        elif minute != "*":
-            desc_parts.append(f"at minute {minute}")
+        time_part = _describe_cron_time_part(minute, hour)
+        if time_part:
+            desc_parts.append(time_part)
 
-        if day == "*" and month == "*" and weekday == "*":
-            desc_parts.insert(0, "Daily")
-        elif weekday != "*":
-            days = {
-                "0": "Sunday",
-                "1": "Monday",
-                "2": "Tuesday",
-                "3": "Wednesday",
-                "4": "Thursday",
-                "5": "Friday",
-                "6": "Saturday",
-                "7": "Sunday",
-            }
-            if weekday in days:
-                desc_parts.insert(0, f"Every {days[weekday]}")
-            else:
-                desc_parts.insert(0, f"On weekday {weekday}")
+        day_part = _describe_cron_day_part(day, month, weekday)
+        if day_part:
+            desc_parts.insert(0, day_part)
 
         return " ".join(desc_parts) if desc_parts else expression
 

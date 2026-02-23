@@ -321,26 +321,18 @@ async def get_audit_log(
 # =============================================================================
 
 
-@router.get("/events", response_model=SecurityEventListResponse)
-async def list_security_events(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
-    event_type: Optional[str] = Query(None, description="Filter by event type"),
-    severity: Optional[str] = Query(None, description="Filter by severity"),
-    acknowledged: Optional[bool] = Query(
-        None, description="Filter by acknowledged status"
-    ),
-    resolved: Optional[bool] = Query(None, description="Filter by resolved status"),
-    source_ip: Optional[str] = Query(None, description="Filter by source IP"),
-    node_id: Optional[str] = Query(None, description="Filter by node ID"),
-    since: Optional[datetime] = Query(None),
-    until: Optional[datetime] = Query(None),
-    page: int = Query(1, ge=1),
-    per_page: int = Query(50, ge=1, le=200),
-) -> SecurityEventListResponse:
-    """List security events with filtering."""
-    query = select(SecurityEvent)
-
+def _apply_security_event_filters(
+    query,
+    event_type,
+    severity,
+    acknowledged,
+    resolved,
+    source_ip,
+    node_id,
+    since,
+    until,
+):
+    """Helper for list_security_events. Ref: #1088."""
     if event_type:
         query = query.where(SecurityEvent.event_type == event_type)
     if severity:
@@ -362,8 +354,11 @@ async def list_security_events(
         query = query.where(SecurityEvent.timestamp >= since)
     if until:
         query = query.where(SecurityEvent.timestamp <= until)
+    return query
 
-    # Count total and aggregates
+
+async def _get_security_event_aggregates(db: AsyncSession) -> dict:
+    """Helper for list_security_events. Ref: #1088."""
     count_result = await db.execute(select(func.count(SecurityEvent.id)))
     total = count_result.scalar() or 0
 
@@ -381,7 +376,46 @@ async def list_security_events(
     )
     critical_count = critical_result.scalar() or 0
 
-    # Paginate
+    return {
+        "total": total,
+        "unacknowledged": unacknowledged_count,
+        "critical": critical_count,
+    }
+
+
+@router.get("/events", response_model=SecurityEventListResponse)
+async def list_security_events(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+    event_type: Optional[str] = Query(None, description="Filter by event type"),
+    severity: Optional[str] = Query(None, description="Filter by severity"),
+    acknowledged: Optional[bool] = Query(
+        None, description="Filter by acknowledged status"
+    ),
+    resolved: Optional[bool] = Query(None, description="Filter by resolved status"),
+    source_ip: Optional[str] = Query(None, description="Filter by source IP"),
+    node_id: Optional[str] = Query(None, description="Filter by node ID"),
+    since: Optional[datetime] = Query(None),
+    until: Optional[datetime] = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+) -> SecurityEventListResponse:
+    """List security events with filtering."""
+    query = select(SecurityEvent)
+    query = _apply_security_event_filters(
+        query,
+        event_type,
+        severity,
+        acknowledged,
+        resolved,
+        source_ip,
+        node_id,
+        since,
+        until,
+    )
+
+    aggregates = await _get_security_event_aggregates(db)
+
     query = query.order_by(SecurityEvent.timestamp.desc())
     query = query.offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(query)
@@ -389,12 +423,46 @@ async def list_security_events(
 
     return SecurityEventListResponse(
         events=[SecurityEventResponse.model_validate(e) for e in events],
-        total=total,
+        total=aggregates["total"],
         page=page,
         per_page=per_page,
-        unacknowledged_count=unacknowledged_count,
-        critical_count=critical_count,
+        unacknowledged_count=aggregates["unacknowledged"],
+        critical_count=aggregates["critical"],
     )
+
+
+async def _get_threat_severity_counts(db: AsyncSession, since: datetime) -> dict:
+    """Helper for get_threat_summary. Ref: #1088."""
+    severity_counts = {}
+    for sev in SecurityEventSeverity:
+        result = await db.execute(
+            select(func.count(SecurityEvent.id))
+            .where(SecurityEvent.severity == sev.value)
+            .where(SecurityEvent.timestamp >= since)
+        )
+        severity_counts[sev.value] = result.scalar() or 0
+    return severity_counts
+
+
+async def _get_threat_distribution(db: AsyncSession, since: datetime) -> tuple:
+    """Helper for get_threat_summary. Ref: #1088."""
+    type_result = await db.execute(
+        select(SecurityEvent.event_type, func.count(SecurityEvent.id))
+        .where(SecurityEvent.timestamp >= since)
+        .group_by(SecurityEvent.event_type)
+    )
+    by_type = {row[0]: row[1] for row in type_result.all()}
+
+    ip_result = await db.execute(
+        select(SecurityEvent.source_ip, func.count(SecurityEvent.id))
+        .where(SecurityEvent.source_ip.isnot(None))
+        .where(SecurityEvent.timestamp >= since)
+        .group_by(SecurityEvent.source_ip)
+        .order_by(func.count(SecurityEvent.id).desc())
+        .limit(10)
+    )
+    by_source_ip = {row[0]: row[1] for row in ip_result.all() if row[0]}
+    return by_type, by_source_ip
 
 
 @router.get("/events/summary", response_model=ThreatSummary)
@@ -406,36 +474,9 @@ async def get_threat_summary(
     """Get threat detection summary statistics."""
     since = datetime.utcnow() - timedelta(hours=hours)
 
-    # Count by severity
-    severity_counts = {}
-    for sev in SecurityEventSeverity:
-        result = await db.execute(
-            select(func.count(SecurityEvent.id))
-            .where(SecurityEvent.severity == sev.value)
-            .where(SecurityEvent.timestamp >= since)
-        )
-        severity_counts[sev.value] = result.scalar() or 0
+    severity_counts = await _get_threat_severity_counts(db, since)
+    by_type, by_source_ip = await _get_threat_distribution(db, since)
 
-    # Count by type
-    type_result = await db.execute(
-        select(SecurityEvent.event_type, func.count(SecurityEvent.id))
-        .where(SecurityEvent.timestamp >= since)
-        .group_by(SecurityEvent.event_type)
-    )
-    by_type = {row[0]: row[1] for row in type_result.all()}
-
-    # Count by source IP (top 10)
-    ip_result = await db.execute(
-        select(SecurityEvent.source_ip, func.count(SecurityEvent.id))
-        .where(SecurityEvent.source_ip.isnot(None))
-        .where(SecurityEvent.timestamp >= since)
-        .group_by(SecurityEvent.source_ip)
-        .order_by(func.count(SecurityEvent.id).desc())
-        .limit(10)
-    )
-    by_source_ip = {row[0]: row[1] for row in ip_result.all() if row[0]}
-
-    # Acknowledged/resolved counts
     ack_result = await db.execute(
         select(func.count(SecurityEvent.id))
         .where(SecurityEvent.is_acknowledged.is_(True))
@@ -450,7 +491,6 @@ async def get_threat_summary(
     )
     resolved = resolved_result.scalar() or 0
 
-    # Total
     total_result = await db.execute(
         select(func.count(SecurityEvent.id)).where(SecurityEvent.timestamp >= since)
     )

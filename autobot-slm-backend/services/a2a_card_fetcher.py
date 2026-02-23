@@ -118,6 +118,54 @@ async def _refresh_all_backend_nodes() -> None:
     await asyncio.gather(*tasks, return_exceptions=True)
 
 
+def _build_external_agent_ssl_ctx(ssl_verify: bool):
+    """Helper for fetch_card_for_external. Ref: #1088."""
+    import ssl
+
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    if not ssl_verify:
+        ssl_ctx.verify_mode = ssl.CERT_NONE
+    return ssl_ctx
+
+
+def _build_external_agent_headers(
+    api_key: Optional[str], agent_id: int
+) -> Dict[str, str]:
+    """Helper for fetch_card_for_external. Ref: #1088."""
+    headers: Dict[str, str] = {}
+    if api_key:
+        try:
+            from services.encryption import decrypt_data
+
+            headers["Authorization"] = f"Bearer {decrypt_data(api_key)}"
+        except Exception as exc:
+            logger.warning("Could not decrypt api_key for agent %s: %s", agent_id, exc)
+    return headers
+
+
+async def _fetch_external_agent_card(
+    url: str, ssl_ctx, headers: Dict[str, str], agent_id: int
+):
+    """Helper for fetch_card_for_external. Ref: #1088."""
+    import aiohttp
+
+    card = None
+    error_msg = None
+    try:
+        timeout = aiohttp.ClientTimeout(total=_FETCH_TIMEOUT)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url, ssl=ssl_ctx, headers=headers) as resp:
+                if resp.status == 200:
+                    card = await resp.json(content_type=None)
+                else:
+                    error_msg = f"HTTP {resp.status}"
+    except Exception as exc:
+        error_msg = str(exc)
+        logger.debug("External agent %s card fetch failed: %s", agent_id, exc)
+    return card, error_msg
+
+
 async def fetch_card_for_external(agent_id: int) -> Optional[Dict[str, Any]]:
     """
     Fetch and store the A2A card for an ExternalAgent by its DB id.
@@ -125,9 +173,6 @@ async def fetch_card_for_external(agent_id: int) -> Optional[Dict[str, Any]]:
     Respects the agent's ssl_verify flag.  Decrypts api_key if present.
     Returns the card dict on success, None otherwise.
     """
-    import ssl
-
-    import aiohttp
     from models.database import ExternalAgent
     from services.database import db_service
     from sqlalchemy import select, update
@@ -142,35 +187,12 @@ async def fetch_card_for_external(agent_id: int) -> Optional[Dict[str, Any]]:
             return None
 
         url = agent.base_url.rstrip("/") + _WELL_KNOWN_PATH
-        headers: Dict[str, str] = {}
-        if agent.api_key:
-            try:
-                from services.encryption import decrypt_data
+        headers = _build_external_agent_headers(agent.api_key, agent_id)
+        ssl_ctx = _build_external_agent_ssl_ctx(agent.ssl_verify)
 
-                headers["Authorization"] = f"Bearer {decrypt_data(agent.api_key)}"
-            except Exception as exc:
-                logger.warning(
-                    "Could not decrypt api_key for agent %s: %s", agent_id, exc
-                )
-
-        ssl_ctx = ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        if not agent.ssl_verify:
-            ssl_ctx.verify_mode = ssl.CERT_NONE
-
-        card = None
-        error_msg = None
-        try:
-            timeout = aiohttp.ClientTimeout(total=_FETCH_TIMEOUT)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url, ssl=ssl_ctx, headers=headers) as resp:
-                    if resp.status == 200:
-                        card = await resp.json(content_type=None)
-                    else:
-                        error_msg = f"HTTP {resp.status}"
-        except Exception as exc:
-            error_msg = str(exc)
-            logger.debug("External agent %s card fetch failed: %s", agent_id, exc)
+        card, error_msg = await _fetch_external_agent_card(
+            url, ssl_ctx, headers, agent_id
+        )
 
         now = datetime.now(timezone.utc)
         await db.execute(
