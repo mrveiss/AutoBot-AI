@@ -206,9 +206,10 @@ const router = createRouter({
           meta: { title: 'Log Forwarding', parent: 'settings', admin: true }
         },
         {
+          // Consolidated to Fleet Overview /fleet/npu Worker Registry sub-tab
           path: 'admin/npu-workers',
           name: 'settings-admin-npu-workers',
-          component: () => import('@/views/settings/admin/NPUWorkersSettings.vue'),
+          redirect: '/fleet/npu',
           meta: { title: 'NPU Workers', parent: 'settings', admin: true }
         },
         {
