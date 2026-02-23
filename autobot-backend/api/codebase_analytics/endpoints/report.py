@@ -1964,6 +1964,56 @@ def _generate_markdown_report(
     return "\n".join(lines)
 
 
+async def _resolve_analyses(
+    quick: bool,
+    include_bug_prediction: bool,
+    include_api_analysis: bool,
+    include_duplicate_analysis: bool,
+    include_cross_language_analysis: bool,
+    include_pattern_analysis: bool,
+    use_semantic: bool,
+) -> dict:
+    """Helper for generate_analysis_report. Resolve analysis results or quick-mode blanks. Ref: #1088."""
+    if quick:
+        logger.info("Quick mode: Skipping expensive analyses")
+        return {
+            "bug_prediction": None,
+            "api_endpoint": None,
+            "duplicate": None,
+            "cross_language": None,
+            "pattern_analysis": None,
+        }
+    return await _run_parallel_analyses(
+        include_bug_prediction=include_bug_prediction,
+        include_api_analysis=include_api_analysis,
+        include_duplicate_analysis=include_duplicate_analysis,
+        include_cross_language_analysis=include_cross_language_analysis,
+        include_pattern_analysis=include_pattern_analysis,
+        use_semantic=use_semantic,
+    )
+
+
+def _render_report(problems: list, analyses: dict) -> str:
+    """Helper for generate_analysis_report. Render markdown from problems + analyses. Ref: #1088."""
+    if not problems:
+        return _generate_empty_report_with_analyses(
+            api_endpoint_analysis=analyses["api_endpoint"],
+            duplicate_analysis=analyses["duplicate"],
+            cross_language_analysis=analyses["cross_language"],
+            pattern_analysis=analyses["pattern_analysis"],
+            bug_prediction=analyses["bug_prediction"],
+        )
+    return _generate_markdown_report(
+        problems,
+        analyzed_path="Indexed Codebase",
+        bug_prediction=analyses["bug_prediction"],
+        api_endpoint_analysis=analyses["api_endpoint"],
+        duplicate_analysis=analyses["duplicate"],
+        cross_language_analysis=analyses["cross_language"],
+        pattern_analysis=analyses["pattern_analysis"],
+    )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_report",
@@ -1983,62 +2033,32 @@ async def generate_analysis_report(
     """
     Generate a code analysis report from the indexed data.
 
+    Issue #1088: Refactored with _resolve_analyses and _render_report helpers.
+
     Args:
         format: Output format (currently only 'markdown' supported)
         include_api_analysis: Whether to include API endpoint analysis (Issue #527)
         include_duplicate_analysis: Whether to include duplicate code analysis (Issue #528)
         include_bug_prediction: Whether to include bug prediction analysis (Issue #505)
-        include_cross_language_analysis: Whether to include cross-language pattern analysis (Issue #244)
+        include_cross_language_analysis: Cross-language pattern analysis (Issue #244)
         include_pattern_analysis: Whether to include code pattern analysis (Issue #208)
-        quick: If True, skip expensive analyses for faster export (just problems report)
+        quick: If True, skip expensive analyses for faster export
         use_semantic: Enable LLM-based semantic analysis for bug prediction (Issue #554)
 
     Returns:
         Markdown formatted report as plain text
     """
-    # Fetch problems from indexed data
     problems = _fetch_problems_from_chromadb()
-
-    # Get analysis results (or skip in quick mode)
-    if quick:
-        logger.info("Quick mode: Skipping expensive analyses")
-        analyses = {
-            "bug_prediction": None,
-            "api_endpoint": None,
-            "duplicate": None,
-            "cross_language": None,
-            "pattern_analysis": None,
-        }
-    else:
-        analyses = await _run_parallel_analyses(
-            include_bug_prediction=include_bug_prediction,
-            include_api_analysis=include_api_analysis,
-            include_duplicate_analysis=include_duplicate_analysis,
-            include_cross_language_analysis=include_cross_language_analysis,
-            include_pattern_analysis=include_pattern_analysis,
-            use_semantic=use_semantic,
-        )
-
-    # Generate the report
-    if not problems:
-        report = _generate_empty_report_with_analyses(
-            api_endpoint_analysis=analyses["api_endpoint"],
-            duplicate_analysis=analyses["duplicate"],
-            cross_language_analysis=analyses["cross_language"],
-            pattern_analysis=analyses["pattern_analysis"],
-            bug_prediction=analyses["bug_prediction"],
-        )
-    else:
-        report = _generate_markdown_report(
-            problems,
-            analyzed_path="Indexed Codebase",
-            bug_prediction=analyses["bug_prediction"],
-            api_endpoint_analysis=analyses["api_endpoint"],
-            duplicate_analysis=analyses["duplicate"],
-            cross_language_analysis=analyses["cross_language"],
-            pattern_analysis=analyses["pattern_analysis"],
-        )
-
+    analyses = await _resolve_analyses(
+        quick=quick,
+        include_bug_prediction=include_bug_prediction,
+        include_api_analysis=include_api_analysis,
+        include_duplicate_analysis=include_duplicate_analysis,
+        include_cross_language_analysis=include_cross_language_analysis,
+        include_pattern_analysis=include_pattern_analysis,
+        use_semantic=use_semantic,
+    )
+    report = _render_report(problems, analyses)
     return PlainTextResponse(
         content=report,
         media_type="text/markdown; charset=utf-8",

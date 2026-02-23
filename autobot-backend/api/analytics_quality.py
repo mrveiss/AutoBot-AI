@@ -1120,6 +1120,55 @@ async def get_complexity_metrics(
     }
 
 
+def _filter_trends_by_period(trends: list, cutoff: datetime) -> list:
+    """Helper for get_quality_trends. Ref: #1088.
+
+    Filters raw trend data points to only include those on or after cutoff.
+    Silently skips entries with unparseable date values.
+    """
+    filtered = []
+    for t in trends:
+        try:
+            date = datetime.fromisoformat(t.get("date", ""))
+            if date >= cutoff:
+                filtered.append(t)
+        except (ValueError, TypeError):
+            continue
+    return filtered
+
+
+def _calculate_trend_statistics(scores: list) -> dict:
+    """Helper for get_quality_trends. Ref: #1088.
+
+    Computes summary statistics (current, previous, change, direction,
+    average, min, max) from a list of quality scores.
+    Returns zeroed stats dict when the list is empty.
+    """
+    if not scores:
+        return {
+            "current": 0,
+            "previous": 0,
+            "change": 0,
+            "direction": "stable",
+            "average": 0,
+            "min": 0,
+            "max": 0,
+        }
+
+    current = scores[-1]
+    previous = scores[0]
+    change = ((current - previous) / previous * 100) if previous > 0 else 0
+    return {
+        "current": current,
+        "previous": previous,
+        "change": change,
+        "direction": "up" if change > 0 else "down" if change < 0 else "stable",
+        "average": sum(scores) / len(scores),
+        "min": min(scores),
+        "max": max(scores),
+    }
+
+
 @router.get("/trends")
 async def get_quality_trends(
     period: str = Query("30d", pattern="^(7d|14d|30d|90d)$"),
@@ -1135,58 +1184,18 @@ async def get_quality_trends(
     """
     data = await get_quality_data_from_storage()
 
-    # Issue #543: Handle no data case
     if data is None:
         return _no_data_response()
 
-    trends = data.get("trends", [])
-
-    # Filter by period
-    days = int(period[:-1])
-    cutoff = datetime.now() - timedelta(days=days)
-
-    filtered_trends = []
-    for t in trends:
-        try:
-            date = datetime.fromisoformat(t.get("date", ""))
-            if date >= cutoff:
-                filtered_trends.append(t)
-        except (ValueError, TypeError):
-            continue
-
-    # Calculate trend statistics
+    cutoff = datetime.now() - timedelta(days=int(period[:-1]))
+    filtered_trends = _filter_trends_by_period(data.get("trends", []), cutoff)
     scores = [t.get("score", 0) for t in filtered_trends]
-
-    if scores:
-        current = scores[-1] if scores else 0
-        previous = scores[0] if scores else 0
-        change = ((current - previous) / previous * 100) if previous > 0 else 0
-
-        stats = {
-            "current": current,
-            "previous": previous,
-            "change": change,
-            "direction": "up" if change > 0 else "down" if change < 0 else "stable",
-            "average": sum(scores) / len(scores),
-            "min": min(scores),
-            "max": max(scores),
-        }
-    else:
-        stats = {
-            "current": 0,
-            "previous": 0,
-            "change": 0,
-            "direction": "stable",
-            "average": 0,
-            "min": 0,
-            "max": 0,
-        }
 
     return {
         "status": "success",
         "period": period,
         "data_points": filtered_trends,
-        "statistics": stats,
+        "statistics": _calculate_trend_statistics(scores),
         "metric": metric or "overall",
     }
 

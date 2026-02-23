@@ -236,56 +236,32 @@ def _build_visualization_graph(
     }
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_dependencies",
-    error_code_prefix="CODEBASE",
-)
-@router.get("/analytics/dependencies")
-async def get_dependencies():
-    """
-    Get file dependency analysis showing imports and module relationships.
+async def _load_modules_from_chromadb(
+    code_collection,
+    modules: Dict[str, Dict],
+) -> None:
+    """Helper for get_dependencies. Load module map from ChromaDB. Ref: #1088."""
+    try:
+        results = code_collection.get(
+            where={"type": {"$in": ["function", "class"]}}, include=["metadatas"]
+        )
+        seen_files: set = set()
+        for metadata in results.get("metadatas", []):
+            _process_chromadb_metadata(metadata, modules, seen_files)
+        logger.info("Found %s modules in ChromaDB", len(modules))
+    except Exception as chroma_error:
+        logger.warning("ChromaDB query failed: %s", chroma_error)
 
-    Issue #281: Refactored from 146 lines to use extracted helper methods.
 
-    Returns:
-    - modules: List of all modules/files in the codebase
-    - imports: Import relationships (which file imports what)
-    - dependency_graph: Graph structure for visualization
-    - circular_dependencies: Detected circular import issues
-    - external_dependencies: Third-party package dependencies
-    """
-    code_collection = get_code_collection()
-
-    # Data structures
-    modules: Dict[str, Dict] = {}  # file_path -> module info
-    import_relationships: List[Dict] = []  # source -> target relationships
-    external_deps: Dict[str, int] = {}  # external package -> usage count
-
-    if code_collection:
-        try:
-            # Query all Python files from ChromaDB
-            results = code_collection.get(
-                where={"type": {"$in": ["function", "class"]}}, include=["metadatas"]
-            )
-
-            # Build module map from stored data (Issue #315: uses helper)
-            seen_files = set()
-            for metadata in results.get("metadatas", []):
-                _process_chromadb_metadata(metadata, modules, seen_files)
-
-            logger.info("Found %s modules in ChromaDB", len(modules))
-
-        except Exception as chroma_error:
-            logger.warning("ChromaDB query failed: %s", chroma_error)
-            code_collection = None
-
-    # Scan filesystem for detailed import analysis
-    project_root = get_project_root()
+async def _scan_filesystem_imports(
+    project_root,
+    modules: Dict[str, Dict],
+    import_relationships: List[Dict],
+    external_deps: Dict[str, int],
+) -> None:
+    """Helper for get_dependencies. Scan filesystem Python files for imports. Ref: #1088."""
     # Issue #358 - avoid blocking (use lambda to defer rglob to thread)
     python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
-
-    # Filter out unwanted directories
     excluded_dirs = {
         ".git",
         "__pycache__",
@@ -303,17 +279,47 @@ async def get_dependencies():
         for f in python_files
         if not any(excluded in f.parts for excluded in excluded_dirs)
     ]
-
-    # Analyze imports from each file (Issue #281: uses extracted helper)
     for py_file in python_files[:500]:  # Limit to 500 files for performance
         await _analyze_file_imports(
             py_file, project_root, modules, import_relationships, external_deps
         )
 
-    # Detect circular dependencies
-    circular_deps = _detect_circular_deps(import_relationships)
 
-    # Build and return visualization response (Issue #281: uses extracted helper)
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_dependencies",
+    error_code_prefix="CODEBASE",
+)
+@router.get("/analytics/dependencies")
+async def get_dependencies():
+    """
+    Get file dependency analysis showing imports and module relationships.
+
+    Issue #281: Refactored from 146 lines to use extracted helper methods.
+    Issue #1088: Further refactored with _load_modules_from_chromadb and
+    _scan_filesystem_imports helpers.
+
+    Returns:
+    - modules: List of all modules/files in the codebase
+    - imports: Import relationships (which file imports what)
+    - dependency_graph: Graph structure for visualization
+    - circular_dependencies: Detected circular import issues
+    - external_dependencies: Third-party package dependencies
+    """
+    code_collection = get_code_collection()
+    modules: Dict[str, Dict] = {}
+    import_relationships: List[Dict] = []
+    external_deps: Dict[str, int] = {}
+
+    if code_collection:
+        await _load_modules_from_chromadb(code_collection, modules)
+
+    project_root = get_project_root()
+    await _scan_filesystem_imports(
+        project_root, modules, import_relationships, external_deps
+    )
+
+    circular_deps = _detect_circular_deps(import_relationships)
     return JSONResponse(
         _build_visualization_graph(
             modules, import_relationships, external_deps, circular_deps

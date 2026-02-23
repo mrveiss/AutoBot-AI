@@ -339,6 +339,39 @@ def _add_llm_filtering_metadata(
         result["llm_filtering"] = analysis["llm_filtering"]
 
 
+async def _analyze_and_return_env_result(
+    analyzer,
+    path: str,
+    pattern_list: list,
+    use_llm_filter: bool,
+    llm_model: str,
+    filter_priority: str,
+) -> JSONResponse:
+    """Helper for get_environment_analysis. Ref: #1088."""
+    analysis = await _execute_env_analysis(
+        analyzer, path, pattern_list, use_llm_filter, llm_model, filter_priority
+    )
+    if analysis is None:
+        return JSONResponse(
+            _build_error_response(
+                "Analysis timed out after 120s. Try with fewer patterns.",
+                status="partial",
+            )
+        )
+    result = _build_environment_result(analysis, path, for_display=True)
+    full_result = _build_environment_result(analysis, path, for_display=False)
+    _add_llm_filtering_metadata(result, analysis, use_llm_filter)
+    _add_llm_filtering_metadata(full_result, analysis, use_llm_filter)
+    await _cache_env_analysis_results(result, full_result, use_llm_filter)
+    logger.info(
+        "Environment analysis complete: %d hardcoded values, %d recommendations%s",
+        result["total_hardcoded_values"],
+        result["recommendations_count"],
+        " (LLM filtered)" if use_llm_filter else "",
+    )
+    return JSONResponse(result)
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_environment_analysis",
@@ -383,7 +416,6 @@ async def get_environment_analysis(
     pattern_list = [p.strip() for p in patterns.split(",")]
 
     try:
-        # Get analyzer instance
         analyzer = _get_environment_analyzer()
         if not analyzer:
             return JSONResponse(
@@ -391,39 +423,9 @@ async def get_environment_analysis(
                     "EnvironmentAnalyzer not available. Check tools installation."
                 )
             )
-
-        # Execute analysis
-        analysis = await _execute_env_analysis(
+        return await _analyze_and_return_env_result(
             analyzer, path, pattern_list, use_llm_filter, llm_model, filter_priority
         )
-
-        if analysis is None:
-            return JSONResponse(
-                _build_error_response(
-                    "Analysis timed out after 120s. Try with fewer patterns.",
-                    status="partial",
-                )
-            )
-
-        # Build results
-        result = _build_environment_result(analysis, path, for_display=True)
-        full_result = _build_environment_result(analysis, path, for_display=False)
-
-        _add_llm_filtering_metadata(result, analysis, use_llm_filter)
-        _add_llm_filtering_metadata(full_result, analysis, use_llm_filter)
-
-        # Cache results (Issue #559, #633)
-        await _cache_env_analysis_results(result, full_result, use_llm_filter)
-
-        logger.info(
-            "Environment analysis complete: %d hardcoded values, %d recommendations%s",
-            result["total_hardcoded_values"],
-            result["recommendations_count"],
-            " (LLM filtered)" if use_llm_filter else "",
-        )
-
-        return JSONResponse(result)
-
     except Exception as e:
         logger.error("Environment analysis failed: %s", e, exc_info=True)
         return JSONResponse(
@@ -469,7 +471,11 @@ async def get_env_recommendations(
     # Run fresh analysis if no cache
     if not path:
         path = str(Path(__file__).resolve().parents[4])
+    return await _fetch_live_env_recommendations(path)
 
+
+async def _fetch_live_env_recommendations(path: str) -> JSONResponse:
+    """Helper for get_env_recommendations. Ref: #1088."""
     try:
         analyzer = _get_environment_analyzer()
         if not analyzer:
@@ -481,10 +487,8 @@ async def get_env_recommendations(
                     "total": 0,
                 }
             )
-
         analysis = await analyzer.analyze_codebase(path)
         recommendations = analysis.get("configuration_recommendations", [])
-
         return JSONResponse(
             {
                 "status": "success",
@@ -493,7 +497,6 @@ async def get_env_recommendations(
                 "source": "live_analysis",
             }
         )
-
     except Exception as e:
         logger.error("Failed to get env recommendations: %s", e, exc_info=True)
         return JSONResponse(
@@ -557,6 +560,46 @@ def _calculate_category_breakdown(values: list) -> dict:
     return counts
 
 
+def _build_export_response_json(
+    full_data: dict,
+    hardcoded_values: list,
+    recommendations: list,
+    include_recommendations: bool,
+    category: Optional[str],
+    severity: Optional[str],
+    limit: Optional[int],
+) -> JSONResponse:
+    """Helper for export_env_analysis. Ref: #1088."""
+    category_counts = _calculate_category_breakdown(hardcoded_values)
+    logger.info(
+        "Environment analysis export: %d/%d items (category=%s, severity=%s)",
+        len(hardcoded_values),
+        full_data.get("total_hardcoded_values", 0),
+        category or "all",
+        severity or "all",
+    )
+    return JSONResponse(
+        {
+            "status": "success",
+            "path": full_data.get("path", ""),
+            "export_timestamp": full_data.get("analysis_time_seconds", 0),
+            "total_in_export": len(hardcoded_values),
+            "total_in_analysis": full_data.get("total_hardcoded_values", 0),
+            "categories": category_counts,
+            "filters_applied": {
+                "category": category,
+                "severity": severity,
+                "limit": limit,
+            },
+            "hardcoded_values": hardcoded_values,
+            "recommendations": recommendations if include_recommendations else [],
+            "recommendations_count": (
+                len(recommendations) if include_recommendations else 0
+            ),
+        }
+    )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_env_analysis",
@@ -617,33 +660,12 @@ async def export_env_analysis(
         hardcoded_values = hardcoded_values[:limit]
 
     recommendations = full_data.get("recommendations", [])
-    category_counts = _calculate_category_breakdown(hardcoded_values)
-
-    logger.info(
-        "Environment analysis export: %d/%d items (category=%s, severity=%s)",
-        len(hardcoded_values),
-        full_data.get("total_hardcoded_values", 0),
-        category or "all",
-        severity or "all",
-    )
-
-    return JSONResponse(
-        {
-            "status": "success",
-            "path": full_data.get("path", ""),
-            "export_timestamp": full_data.get("analysis_time_seconds", 0),
-            "total_in_export": len(hardcoded_values),
-            "total_in_analysis": full_data.get("total_hardcoded_values", 0),
-            "categories": category_counts,
-            "filters_applied": {
-                "category": category,
-                "severity": severity,
-                "limit": limit,
-            },
-            "hardcoded_values": hardcoded_values,
-            "recommendations": recommendations if include_recommendations else [],
-            "recommendations_count": (
-                len(recommendations) if include_recommendations else 0
-            ),
-        }
+    return _build_export_response_json(
+        full_data,
+        hardcoded_values,
+        recommendations,
+        include_recommendations,
+        category,
+        severity,
+        limit,
     )

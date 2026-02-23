@@ -433,80 +433,93 @@ def _get_browser_interaction_tools() -> List[MCPTool]:
     ]
 
 
+def _create_screenshot_tool() -> MCPTool:
+    """Helper for _get_browser_extraction_tools. Build screenshot MCPTool. Ref: #1088."""
+    return MCPTool(
+        name="screenshot",
+        description="Capture screenshot of page or specific element",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "selector": {
+                    "type": "string",
+                    "description": "CSS selector for element (full page if omitted)",
+                },
+                "full_page": {
+                    "type": "boolean",
+                    "description": "Capture full scrollable page",
+                    "default": False,
+                },
+            },
+        },
+    )
+
+
+def _create_evaluate_tool() -> MCPTool:
+    """Helper for _get_browser_extraction_tools. Build evaluate MCPTool. Ref: #1088."""
+    return MCPTool(
+        name="evaluate",
+        description="Execute JavaScript code in browser context (with security restrictions)",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "script": {
+                    "type": "string",
+                    "description": "JavaScript code to execute",
+                }
+            },
+            "required": ["script"],
+        },
+    )
+
+
+def _create_get_text_tool() -> MCPTool:
+    """Helper for _get_browser_extraction_tools. Build get_text MCPTool. Ref: #1088."""
+    return MCPTool(
+        name="get_text",
+        description="Extract text content from element",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "selector": {
+                    "type": "string",
+                    "description": "CSS selector for element",
+                }
+            },
+            "required": ["selector"],
+        },
+    )
+
+
+def _create_get_attribute_tool() -> MCPTool:
+    """Helper for _get_browser_extraction_tools. Build get_attribute MCPTool. Ref: #1088."""
+    return MCPTool(
+        name="get_attribute",
+        description="Get attribute value from element",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "selector": {
+                    "type": "string",
+                    "description": "CSS selector for element",
+                },
+                "attribute": {"type": "string", "description": "Attribute name"},
+            },
+            "required": ["selector", "attribute"],
+        },
+    )
+
+
 def _get_browser_extraction_tools() -> List[MCPTool]:
-    """
-    Get MCP tools for browser extraction operations (screenshot, get_text, evaluate).
+    """Get MCP tools for browser extraction operations. Ref: #1088.
 
-    Issue #281: Extracted from get_browser_mcp_tools to reduce function length
-    and improve maintainability of tool definitions by category.
-
-    Returns:
-        List of extraction-related browser MCP tools
+    Issue #281: Extracted from get_browser_mcp_tools to reduce function length.
     """
     return [
-        MCPTool(
-            name="screenshot",
-            description="Capture screenshot of page or specific element",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "selector": {
-                        "type": "string",
-                        "description": (
-                            "CSS selector for element (full page if omitted)"
-                        ),
-                    },
-                    "full_page": {
-                        "type": "boolean",
-                        "description": "Capture full scrollable page",
-                        "default": False,
-                    },
-                },
-            },
-        ),
-        MCPTool(
-            name="evaluate",
-            description="Execute JavaScript code in browser context (with security restrictions)",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "script": {
-                        "type": "string",
-                        "description": "JavaScript code to execute",
-                    }
-                },
-                "required": ["script"],
-            },
-        ),
-        MCPTool(
-            name="get_text",
-            description="Extract text content from element",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "selector": {
-                        "type": "string",
-                        "description": "CSS selector for element",
-                    }
-                },
-                "required": ["selector"],
-            },
-        ),
-        MCPTool(
-            name="get_attribute",
-            description="Get attribute value from element",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "selector": {
-                        "type": "string",
-                        "description": "CSS selector for element",
-                    },
-                    "attribute": {"type": "string", "description": "Attribute name"},
-                },
-                "required": ["selector", "attribute"],
-            },
-        ),
+        _create_screenshot_tool(),
+        _create_evaluate_tool(),
+        _create_get_text_tool(),
+        _create_get_attribute_tool(),
     ]
 
 

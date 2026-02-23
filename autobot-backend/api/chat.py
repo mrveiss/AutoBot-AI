@@ -19,11 +19,6 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from auth_middleware import get_current_user
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.constants.threshold_constants import CategoryDefaults, TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
@@ -48,6 +43,11 @@ from backend.utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import models - DISABLED: Models don't exist yet
 # from backend.models.conversation import ConversationModel
@@ -1488,6 +1488,21 @@ async def _enhance_with_knowledge_base(
     return enhanced_context, knowledge_sources
 
 
+def _get_ai_stack_message_limit(chat_history_manager, model_name: Optional[str]) -> int:
+    """Helper for _generate_ai_stack_chat_response. Ref: #1088."""
+    context_manager = getattr(chat_history_manager, "context_manager", None)
+    if context_manager:
+        limit = context_manager.get_message_limit(model_name)
+        logger.info(
+            "Using %s messages for LLM context (model: %s)",
+            limit,
+            model_name or "default",
+        )
+        return limit
+    logger.warning("Context manager not available, using default limit")
+    return 20
+
+
 async def _generate_ai_stack_chat_response(
     message: EnhancedChatMessage,
     chat_context: list,
@@ -1498,29 +1513,13 @@ async def _generate_ai_stack_chat_response(
     """Generate response using AI Stack."""
     try:
         ai_client = await get_ai_stack_client()
-
         model_name = message.metadata.get("model") if message.metadata else None
-        context_manager = getattr(chat_history_manager, "context_manager", None)
+        message_limit = _get_ai_stack_message_limit(chat_history_manager, model_name)
 
-        if context_manager:
-            message_limit = context_manager.get_message_limit(model_name)
-            logger.info(
-                "Using %s messages for LLM context (model: %s)",
-                message_limit,
-                model_name or "default",
-            )
-        else:
-            message_limit = 20
-            logger.warning("Context manager not available, using default limit")
-
-        formatted_history = []
-        for msg in chat_context[-message_limit:]:
-            formatted_history.append(
-                {
-                    "role": msg.get("role", "user"),
-                    "content": msg.get("content", ""),
-                }
-            )
+        formatted_history = [
+            {"role": msg.get("role", "user"), "content": msg.get("content", "")}
+            for msg in chat_context[-message_limit:]
+        ]
 
         ai_stack_response = await ai_client.chat_message(
             message=message.content,
@@ -1622,6 +1621,62 @@ async def _store_enhanced_ai_response(
     return ai_message_id
 
 
+async def _execute_enhanced_chat_pipeline(
+    message: EnhancedChatMessage,
+    session_id: str,
+    chat_history_manager,
+    knowledge_base,
+    request_id: str,
+    preferences: Optional[ChatPreferences],
+) -> Metadata:
+    """Helper for process_enhanced_chat_message. Ref: #1088.
+
+    Runs the full enhanced chat pipeline: store user message, retrieve context,
+    enrich with knowledge base, generate AI response, attach sources, store response,
+    and return the final result dict.
+    """
+    await _store_enhanced_user_message(message, session_id, chat_history_manager)
+
+    chat_context = await _get_enhanced_chat_context(
+        message, session_id, chat_history_manager
+    )
+
+    enhanced_context, knowledge_sources = await _enhance_with_knowledge_base(
+        message, knowledge_base
+    )
+
+    if message.use_ai_stack:
+        ai_response = await _generate_ai_stack_chat_response(
+            message,
+            chat_context,
+            enhanced_context,
+            chat_history_manager,
+            preferences,
+        )
+        if ai_response.get("metadata", {}).get("source") == "ai_stack":
+            logger.info("AI Stack response generated successfully")
+    else:
+        ai_response = _create_basic_chat_response()
+
+    _enhance_response_with_sources(
+        ai_response, knowledge_sources, message.include_sources
+    )
+
+    ai_message_id = await _store_enhanced_ai_response(
+        ai_response, session_id, request_id, chat_history_manager
+    )
+
+    return {
+        "content": ai_response.get("content", ""),
+        "role": "assistant",
+        "session_id": session_id,
+        "message_id": ai_message_id,
+        "timestamp": datetime.utcnow().isoformat(),
+        "metadata": ai_response.get("metadata", {}),
+        "knowledge_sources": knowledge_sources if message.include_sources else None,
+    }
+
+
 async def process_enhanced_chat_message(
     message: EnhancedChatMessage,
     chat_history_manager,
@@ -1637,59 +1692,19 @@ async def process_enhanced_chat_message(
     intelligent chat agents for superior conversational experience.
     """
     try:
-        # Validate session ID
         if message.session_id and not validate_chat_session_id(message.session_id):
             raise HTTPException(status_code=400, detail="Invalid session ID format")
 
-        # Get or create session
         session_id = message.session_id or generate_chat_session_id()
 
-        # Store user message
-        await _store_enhanced_user_message(message, session_id, chat_history_manager)
-
-        # Get chat context
-        chat_context = await _get_enhanced_chat_context(
-            message, session_id, chat_history_manager
+        return await _execute_enhanced_chat_pipeline(
+            message,
+            session_id,
+            chat_history_manager,
+            knowledge_base,
+            request_id,
+            preferences,
         )
-
-        # Enhance with knowledge base
-        enhanced_context, knowledge_sources = await _enhance_with_knowledge_base(
-            message, knowledge_base
-        )
-
-        # Generate AI response
-        if message.use_ai_stack:
-            ai_response = await _generate_ai_stack_chat_response(
-                message,
-                chat_context,
-                enhanced_context,
-                chat_history_manager,
-                preferences,
-            )
-            if ai_response.get("metadata", {}).get("source") == "ai_stack":
-                logger.info("AI Stack response generated successfully")
-        else:
-            ai_response = _create_basic_chat_response()
-
-        # Enhance response with sources
-        _enhance_response_with_sources(
-            ai_response, knowledge_sources, message.include_sources
-        )
-
-        # Store AI response
-        ai_message_id = await _store_enhanced_ai_response(
-            ai_response, session_id, request_id, chat_history_manager
-        )
-
-        return {
-            "content": ai_response.get("content", ""),
-            "role": "assistant",
-            "session_id": session_id,
-            "message_id": ai_message_id,
-            "timestamp": datetime.utcnow().isoformat(),
-            "metadata": ai_response.get("metadata", {}),
-            "knowledge_sources": knowledge_sources if message.include_sources else None,
-        }
 
     except Exception as e:
         logger.error("Error processing enhanced chat message: %s", e)
