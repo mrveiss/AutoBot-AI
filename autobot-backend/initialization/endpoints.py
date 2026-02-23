@@ -80,6 +80,23 @@ async def _ai_stack_health_response(state: Any) -> Dict[str, Any]:
     }
 
 
+async def _build_agent_card_response(request: Request) -> dict:
+    """Helper for register_root_endpoints. Ref: #1088.
+
+    Build A2A agent card dict from the request base URL, or return an
+    error fallback when the a2a package is unavailable.
+    """
+    try:
+        from a2a.agent_card import build_agent_card
+
+        base_url = str(request.base_url).rstrip("/")
+        card = build_agent_card(base_url)
+        return card.to_dict()
+    except Exception as exc:
+        logger.warning("A2A agent card unavailable: %s", exc)
+        return {"error": "agent card unavailable"}
+
+
 def register_root_endpoints(app: FastAPI) -> None:
     """
     Register root-level API endpoints.
@@ -133,15 +150,7 @@ def register_root_endpoints(app: FastAPI) -> None:
     @app.get("/.well-known/agent.json", include_in_schema=False)
     async def well_known_agent_card(request: Request):
         """A2A canonical Agent Card discovery endpoint."""
-        try:
-            from a2a.agent_card import build_agent_card
-
-            base_url = str(request.base_url).rstrip("/")
-            card = build_agent_card(base_url)
-            return card.to_dict()
-        except Exception as exc:
-            logger.warning("A2A agent card unavailable: %s", exc)
-            return {"error": "agent card unavailable"}
+        return await _build_agent_card_response(request)
 
     logger.info(
         "✅ Root endpoints registered: /api/health, /api/health/ai-stack, "

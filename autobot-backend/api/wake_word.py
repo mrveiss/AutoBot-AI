@@ -9,12 +9,12 @@ Issue #54 - Advanced Wake Word Detection Optimization
 import logging
 from typing import List
 
+from backend.services.wake_word_service import WakeWordDetector, get_wake_word_detector
+from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from backend.services.wake_word_service import WakeWordDetector, get_wake_word_detector
-from backend.type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["wake_word", "voice"])

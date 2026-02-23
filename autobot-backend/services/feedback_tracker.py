@@ -60,23 +60,7 @@ class FeedbackTracker:
         confidence_score: Optional[float] = None,
         completion_rank: Optional[int] = None,
     ) -> CompletionFeedback:
-        """
-        Record completion feedback event.
-
-        Args:
-            context: Code context before completion
-            suggestion: Suggested completion text
-            action: 'accepted' or 'rejected'
-            user_id: Optional user identifier
-            language: Programming language
-            file_path: File where completion occurred
-            pattern_id: Link to CodePattern if applicable
-            confidence_score: Model confidence
-            completion_rank: Position in top-k (1-indexed)
-
-        Returns:
-            CompletionFeedback record
-        """
+        """Record completion feedback event. Ref: #1088."""
         db = self.SessionLocal()
         try:
             # Create feedback record

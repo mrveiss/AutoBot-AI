@@ -639,6 +639,45 @@ def _process_critical_issues(
         metrics_manager.record_frontend_critical_issue(issue.issue_type)
 
 
+def _dispatch_and_tally_rum_metrics(metrics_manager, metrics: RumMetrics) -> int:
+    """Helper for receive_rum_metrics. Ref: #1088."""
+    recorded_count = 0
+
+    if metrics.page_metrics:
+        _process_page_metrics(metrics_manager, metrics.page_metrics)
+        recorded_count += 1
+
+    if metrics.api_calls:
+        _process_api_calls(metrics_manager, metrics.api_calls)
+        recorded_count += len(metrics.api_calls)
+
+    if metrics.js_errors:
+        _process_js_errors(metrics_manager, metrics.js_errors)
+        recorded_count += len(metrics.js_errors)
+
+    if metrics.user_actions:
+        _process_user_actions(metrics_manager, metrics.user_actions)
+        recorded_count += len(metrics.user_actions)
+
+    if metrics.session:
+        _process_session_metric(metrics_manager, metrics.session)
+        recorded_count += 1
+
+    if metrics.websocket_events:
+        _process_websocket_events(metrics_manager, metrics.websocket_events)
+        recorded_count += len(metrics.websocket_events)
+
+    if metrics.resources:
+        _process_resources(metrics_manager, metrics.resources)
+        recorded_count += len(metrics.resources)
+
+    if metrics.critical_issues:
+        _process_critical_issues(metrics_manager, metrics.critical_issues)
+        recorded_count += len(metrics.critical_issues)
+
+    return recorded_count
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="receive_rum_metrics",
@@ -654,47 +693,7 @@ async def receive_rum_metrics(metrics: RumMetrics):
     """
     try:
         metrics_manager = get_metrics_manager()
-        recorded_count = 0
-
-        # Process page performance metrics
-        if metrics.page_metrics:
-            _process_page_metrics(metrics_manager, metrics.page_metrics)
-            recorded_count += 1
-
-        # Process API call metrics
-        if metrics.api_calls:
-            _process_api_calls(metrics_manager, metrics.api_calls)
-            recorded_count += len(metrics.api_calls)
-
-        # Process JavaScript error metrics
-        if metrics.js_errors:
-            _process_js_errors(metrics_manager, metrics.js_errors)
-            recorded_count += len(metrics.js_errors)
-
-        # Process user action metrics
-        if metrics.user_actions:
-            _process_user_actions(metrics_manager, metrics.user_actions)
-            recorded_count += len(metrics.user_actions)
-
-        # Process session metrics
-        if metrics.session:
-            _process_session_metric(metrics_manager, metrics.session)
-            recorded_count += 1
-
-        # Process WebSocket events
-        if metrics.websocket_events:
-            _process_websocket_events(metrics_manager, metrics.websocket_events)
-            recorded_count += len(metrics.websocket_events)
-
-        # Process resource load metrics
-        if metrics.resources:
-            _process_resources(metrics_manager, metrics.resources)
-            recorded_count += len(metrics.resources)
-
-        # Process critical issues
-        if metrics.critical_issues:
-            _process_critical_issues(metrics_manager, metrics.critical_issues)
-            recorded_count += len(metrics.critical_issues)
+        recorded_count = _dispatch_and_tally_rum_metrics(metrics_manager, metrics)
 
         logger.debug(
             f"Recorded {recorded_count} RUM metrics from session {metrics.session_id}"

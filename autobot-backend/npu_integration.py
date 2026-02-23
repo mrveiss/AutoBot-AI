@@ -22,10 +22,10 @@ import yaml
 if TYPE_CHECKING:
     from backend.utils.service_client import ServiceHTTPClient
 
+from backend.constants.threshold_constants import LLMDefaults, TimingConstants
 from utils.service_registry import get_service_url
 
 from autobot_shared.http_client import HTTPClientManager, get_http_client
-from backend.constants.threshold_constants import LLMDefaults, TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -600,6 +600,49 @@ class NPUWorkerPool:
     # Retry constants
     MAX_RETRY_ATTEMPTS = 3
 
+    async def _execute_on_worker(
+        self,
+        worker: WorkerState,
+        task_type: str,
+        data: Dict[str, Any],
+        attempt: int,
+        excluded_workers: Set[str],
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Run a single task attempt on one worker, updating circuit state. Ref: #1088.
+
+        Helper for execute_task.
+        Returns the result dict on success, or None if the attempt should be retried.
+        """
+        worker.active_tasks += 1
+        worker.total_requests += 1
+        logger.debug(
+            "Executing task on worker %s (attempt %d/%d)",
+            worker.worker_id,
+            attempt + 1,
+            self.MAX_RETRY_ATTEMPTS,
+        )
+        try:
+            result = await worker.client.offload_heavy_processing(task_type, data)
+            worker.active_tasks -= 1
+            if result.get("success") or not result.get("error"):
+                self._record_success(worker)
+                return result
+            self._record_failure(worker)
+            excluded_workers.add(worker.worker_id)
+            logger.info(
+                "Task failed on worker %s: %s",
+                worker.worker_id,
+                result.get("error", "Unknown error"),
+            )
+            return None
+        except Exception as e:
+            worker.active_tasks -= 1
+            self._record_failure(worker)
+            excluded_workers.add(worker.worker_id)
+            logger.info("Task exception on worker %s: %s", worker.worker_id, e)
+            return None
+
     async def execute_task(
         self, task_type: str, data: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -617,7 +660,6 @@ class NPUWorkerPool:
         last_error = None
 
         for attempt in range(self.MAX_RETRY_ATTEMPTS):
-            # Select a worker
             worker = await self._select_worker(excluded_workers)
 
             if worker is None:
@@ -628,48 +670,15 @@ class NPUWorkerPool:
                 )
                 break
 
-            try:
-                # Increment active tasks
-                worker.active_tasks += 1
-                worker.total_requests += 1
+            result = await self._execute_on_worker(
+                worker, task_type, data, attempt, excluded_workers
+            )
+            if result is not None:
+                return result
 
-                logger.debug(
-                    "Executing task on worker %s (attempt %d/%d)",
-                    worker.worker_id,
-                    attempt + 1,
-                    self.MAX_RETRY_ATTEMPTS,
-                )
+            # Capture last error from updated excluded set for final message
+            last_error = f"Worker {worker.worker_id} failed"
 
-                # Execute the task
-                result = await worker.client.offload_heavy_processing(task_type, data)
-
-                # Decrement active tasks
-                worker.active_tasks -= 1
-
-                # Check if result indicates success
-                if result.get("success") or not result.get("error"):
-                    self._record_success(worker)
-                    return result
-                else:
-                    # Task returned error result
-                    self._record_failure(worker)
-                    excluded_workers.add(worker.worker_id)
-                    last_error = result.get("error", "Unknown error")
-                    logger.info(
-                        "Task failed on worker %s: %s",
-                        worker.worker_id,
-                        last_error,
-                    )
-
-            except Exception as e:
-                # Decrement active tasks on exception
-                worker.active_tasks -= 1
-                self._record_failure(worker)
-                excluded_workers.add(worker.worker_id)
-                last_error = str(e)
-                logger.info("Task exception on worker %s: %s", worker.worker_id, e)
-
-        # All attempts failed
         logger.error(
             "Task failed after %d attempts: %s",
             self.MAX_RETRY_ATTEMPTS,

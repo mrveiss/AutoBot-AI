@@ -392,18 +392,7 @@ class TerminalSecretsService:
         key_name: str,
         passphrase: Optional[str] = None,
     ) -> bool:
-        """Add an SSH key to ssh-agent for a session.
-
-        Issue #665: Refactored from 96 lines to use extracted helper methods.
-
-        Args:
-            session_id: Terminal session ID
-            key_name: Name of the key to add
-            passphrase: Optional passphrase for encrypted keys
-
-        Returns:
-            True if key was added successfully
-        """
+        """Add an SSH key to ssh-agent for a session. Ref: #1088."""
         with self._sessions_lock:
             session_state = self._sessions.get(session_id)
 

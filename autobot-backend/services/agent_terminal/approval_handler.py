@@ -151,20 +151,9 @@ class ApprovalHandler:
         pre_approved: bool = False,
     ):
         """
-        Broadcast approval status update to WebSocket clients.
+        Broadcast approval status update to WebSocket clients. Ref: #1088.
 
-        This updates the chat message metadata to show approval/denial status
-        in the UI with color-coded visual indicators:
-        - pre_approved (blue): Auto-approved by security policy
-        - approved (green): User manually approved
-        - denied (red): User manually denied
-
-        Args:
-            session: Agent terminal session
-            command: Command that was approved/denied
-            approved: Whether command was approved
-            comment: Optional comment from user
-            pre_approved: Whether this was auto-approved by security policy
+        Status values: pre_approved (blue), approved (green), denied (red).
         """
         try:
             # Only broadcast if there's a linked conversation
@@ -213,6 +202,59 @@ class ApprovalHandler:
             logger.error("Error in approval status update: %s", e, exc_info=True)
             # Don't fail the approval process if broadcast fails
 
+    async def _persist_chat_approval_update(
+        self,
+        session: AgentTerminalSession,
+        command: str,
+        approved: bool,
+        user_id: Optional[str],
+        comment: Optional[str],
+    ) -> None:
+        """Helper for update_chat_approval_status. Ref: #1088."""
+        updated = await self.chat_history_manager.update_message_metadata(
+            session_id=session.conversation_id,
+            metadata_filter={
+                "terminal_session_id": session.session_id,
+                "requires_approval": True,
+            },
+            metadata_updates={
+                "approval_status": "approved" if approved else "denied",
+                "approval_comment": comment,
+                f"{'approved' if approved else 'denied'}_by": user_id,
+                f"{'approved' if approved else 'denied'}_at": time.time(),
+            },
+        )
+        if updated:
+            logger.info(
+                f"✅ Updated chat message with {'approval' if approved else 'denial'} status: "
+                f"session={session.conversation_id}, terminal_session={session.session_id}"
+            )
+        else:
+            logger.warning(
+                f"⚠️ Could not find chat message to update {'approval' if approved else 'denial'} status: "
+                f"session={session.conversation_id}, terminal_session={session.session_id}"
+            )
+        status_text = (
+            "✅ Command approved and executed" if approved else "❌ Command denied"
+        )
+        await self.chat_history_manager.add_message(
+            session_id=session.conversation_id,
+            role="system",
+            text=f"{status_text}: `{command}`" + (f" - {comment}" if comment else ""),
+            message_type="command_approval_response",
+            metadata={
+                "command": command,
+                "terminal_session_id": session.session_id,
+                "approval_status": "approved" if approved else "denied",
+                f"{'approved' if approved else 'denied'}_by": user_id,
+                f"{'approved' if approved else 'denied'}_at": time.time(),
+            },
+        )
+        logger.info(
+            f"✅ [CHAT MESSAGE] Added command_approval_response to chat history: "
+            f"command={command}, status={'approved' if approved else 'denied'}"
+        )
+
     async def update_chat_approval_status(
         self,
         session: AgentTerminalSession,
@@ -221,69 +263,13 @@ class ApprovalHandler:
         user_id: Optional[str] = None,
         comment: Optional[str] = None,
     ):
-        """
-        Update chat message metadata to persist approval status.
-
-        Args:
-            session: Agent terminal session
-            command: Command that was approved/denied
-            approved: Whether command was approved
-            user_id: User who made the decision
-            comment: Optional comment
-        """
+        """Update chat message metadata to persist approval status. Ref: #1088."""
         if not session.conversation_id or not self.chat_history_manager:
             return
-
         try:
-            # Update existing approval request message
-            updated = await self.chat_history_manager.update_message_metadata(
-                session_id=session.conversation_id,
-                metadata_filter={
-                    "terminal_session_id": session.session_id,
-                    "requires_approval": True,
-                },
-                metadata_updates={
-                    "approval_status": "approved" if approved else "denied",
-                    "approval_comment": comment,
-                    f"{'approved' if approved else 'denied'}_by": user_id,
-                    f"{'approved' if approved else 'denied'}_at": time.time(),
-                },
+            await self._persist_chat_approval_update(
+                session, command, approved, user_id, comment
             )
-
-            if updated:
-                logger.info(
-                    f"✅ Updated chat message with {'approval' if approved else 'denial'} status: "
-                    f"session={session.conversation_id}, terminal_session={session.session_id}"
-                )
-            else:
-                logger.warning(
-                    f"⚠️ Could not find chat message to update {'approval' if approved else 'denial'} status: "
-                    f"session={session.conversation_id}, terminal_session={session.session_id}"
-                )
-
-            # Add response message
-            status_text = (
-                "✅ Command approved and executed" if approved else "❌ Command denied"
-            )
-            await self.chat_history_manager.add_message(
-                session_id=session.conversation_id,
-                role="system",
-                text=f"{status_text}: `{command}`"
-                + (f" - {comment}" if comment else ""),
-                message_type="command_approval_response",
-                metadata={
-                    "command": command,
-                    "terminal_session_id": session.session_id,
-                    "approval_status": "approved" if approved else "denied",
-                    f"{'approved' if approved else 'denied'}_by": user_id,
-                    f"{'approved' if approved else 'denied'}_at": time.time(),
-                },
-            )
-            logger.info(
-                f"✅ [CHAT MESSAGE] Added command_approval_response to chat history: "
-                f"command={command}, status={'approved' if approved else 'denied'}"
-            )
-
         except Exception as e:
             logger.error(
                 f"Failed to update chat approval status (non-fatal): {e}", exc_info=True
@@ -299,18 +285,7 @@ class ApprovalHandler:
         stderr: str = "",
         return_code: int = 0,
     ):
-        """
-        Update command status in queue.
-
-        Args:
-            command_id: Command ID in queue
-            approved: Whether command was approved
-            user_id: User who made the decision
-            comment: Optional comment
-            output: Command output (for completion)
-            stderr: Standard error output
-            return_code: Command return code
-        """
+        """Update command queue status after approval or denial. Ref: #1088."""
         if not command_id or not self.command_queue:
             return
 

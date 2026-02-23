@@ -211,19 +211,7 @@ async def _generate_fallback_embeddings(
     documents: List[str],
     batch_size: int = 100,
 ) -> List[List[float]]:
-    """
-    Generate embeddings using local semantic chunker (fallback).
-
-    Issue #681: Used when NPU worker is unavailable. Uses the same
-    all-MiniLM-L6-v2 model as the original codebase indexing.
-
-    Args:
-        documents: List of document strings to embed
-        batch_size: Number of documents per batch
-
-    Returns:
-        List of embedding vectors (384 dimensions for MiniLM-L6-v2)
-    """
+    """Generate embeddings using local semantic chunker fallback. Ref: #1088."""
     if not documents:
         return []
 
@@ -286,19 +274,7 @@ async def _generate_npu_embeddings(
     documents: List[str],
     batch_size: int = NPU_BATCH_SIZE,
 ) -> Optional[List[List[float]]]:
-    """
-    Generate embeddings using NPU worker with GPU/NPU acceleration.
-
-    Issue #681: Offloads embedding computation to NPU worker (VM2/Windows)
-    for hardware-accelerated inference.
-
-    Args:
-        documents: List of document strings to embed
-        batch_size: Number of documents per batch (default: 100)
-
-    Returns:
-        List of embedding vectors if successful, None if failed
-    """
+    """Generate embeddings using NPU worker with GPU/NPU acceleration. Ref: #1088."""
     if not documents:
         return []
 
@@ -412,15 +388,7 @@ async def generate_single_embedding(document: str) -> List[float]:
 
 
 async def warmup_npu_for_codebase() -> Dict[str, Any]:
-    """
-    Warm up NPU connection for codebase indexing.
-
-    Issue #681: Called during backend startup to eliminate first-request
-    latency and verify NPU worker availability.
-
-    Returns:
-        Dict with warmup status and timing information
-    """
+    """Warm up NPU connection during startup to eliminate first-request latency. Ref: #1088."""
     start_time = time.time()
 
     result = {
@@ -449,9 +417,9 @@ async def warmup_npu_for_codebase() -> Dict[str, Any]:
             result["npu_available"] = True
             result["warmup_time_ms"] = warmup_time
             result["embedding_dimensions"] = len(embeddings[0])
-            result["message"] = (
-                f"NPU connection warmed up for codebase indexing in {warmup_time:.1f}ms"
-            )
+            result[
+                "message"
+            ] = f"NPU connection warmed up for codebase indexing in {warmup_time:.1f}ms"
 
             # Get device info
             if client:

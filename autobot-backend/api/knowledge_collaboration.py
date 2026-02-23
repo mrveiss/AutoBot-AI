@@ -243,6 +243,31 @@ def _build_access_response(fact_id: str, metadata: Dict, user_id: str) -> Dict:
     }
 
 
+async def _verify_fact_ownership(
+    fact_id: str, user_id: str, aioredis_client, action_label: str
+) -> Dict:
+    """Fetch metadata and assert the caller is the owner. Ref: #1088."""
+    metadata = await _fetch_fact_metadata(fact_id, aioredis_client)
+    if metadata.get("owner_id") != user_id:
+        raise HTTPException(
+            status_code=403, detail=f"Only the owner can {action_label} knowledge"
+        )
+    return metadata
+
+
+async def _unshare_fact_by_entity(
+    fact_id: str, entity_id: str, entity_type: str, metadata: Dict, ownership_manager
+) -> Dict:
+    """Dispatch unshare_fact for user or group entity. Helper for unshare_knowledge. Ref: #1088."""
+    if entity_type == "user":
+        return await ownership_manager.unshare_fact(
+            fact_id=fact_id, user_ids=[entity_id], fact_metadata=metadata
+        )
+    return await ownership_manager.unshare_fact(
+        fact_id=fact_id, group_ids=[entity_id], fact_metadata=metadata
+    )
+
+
 # =============================================================================
 # Endpoints - Scope-Based Retrieval
 # =============================================================================
@@ -442,16 +467,11 @@ async def share_knowledge(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        metadata = await _fetch_fact_metadata(fact_id, kb.aioredis_client)
-
-        # Verify ownership
         user_id, _, _ = extract_user_context_from_request(current_user)
-        if metadata.get("owner_id") != user_id:
-            raise HTTPException(
-                status_code=403, detail="Only the owner can share knowledge"
-            )
+        metadata = await _verify_fact_ownership(
+            fact_id, user_id, kb.aioredis_client, "share"
+        )
 
-        # Share with specified users/groups
         updated_metadata = await kb.ownership_manager.share_fact(
             fact_id=fact_id,
             user_ids=share_request.user_ids,
@@ -459,7 +479,6 @@ async def share_knowledge(
             fact_metadata=metadata,
         )
 
-        # Update metadata in Redis
         await kb.aioredis_client.hset(
             f"fact:{fact_id}", "metadata", json.dumps(updated_metadata)
         )
@@ -515,26 +534,15 @@ async def unshare_knowledge(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        metadata = await _fetch_fact_metadata(fact_id, kb.aioredis_client)
-
-        # Verify ownership
         user_id, _, _ = extract_user_context_from_request(current_user)
-        if metadata.get("owner_id") != user_id:
-            raise HTTPException(
-                status_code=403, detail="Only the owner can unshare knowledge"
-            )
+        metadata = await _verify_fact_ownership(
+            fact_id, user_id, kb.aioredis_client, "unshare"
+        )
 
-        # Unshare from specified entity
-        if entity_type == "user":
-            updated_metadata = await kb.ownership_manager.unshare_fact(
-                fact_id=fact_id, user_ids=[entity_id], fact_metadata=metadata
-            )
-        else:  # group
-            updated_metadata = await kb.ownership_manager.unshare_fact(
-                fact_id=fact_id, group_ids=[entity_id], fact_metadata=metadata
-            )
+        updated_metadata = await _unshare_fact_by_entity(
+            fact_id, entity_id, entity_type, metadata, kb.ownership_manager
+        )
 
-        # Update metadata in Redis
         await kb.aioredis_client.hset(
             f"fact:{fact_id}", "metadata", json.dumps(updated_metadata)
         )

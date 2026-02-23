@@ -394,6 +394,29 @@ async def get_category_details(
         raise_server_error("STORAGE_0003", f"Error getting category details: {str(e)}")
 
 
+def _scan_and_remove_files(
+    dir_path: Path, cutoff_time: Optional[float], dry_run: bool
+) -> tuple:
+    """Helper for cleanup_category. Ref: #1088. Returns (files_removed, bytes_freed, errors)."""
+    files_removed = 0
+    bytes_freed = 0
+    errors = []
+    for item in dir_path.rglob("*"):
+        if item.is_file():
+            try:
+                stat = item.stat()
+                if cutoff_time and stat.st_mtime > cutoff_time:
+                    continue
+                file_size = stat.st_size
+                if not dry_run:
+                    item.unlink()
+                files_removed += 1
+                bytes_freed += file_size
+            except (OSError, PermissionError) as e:
+                errors.append(f"Error removing {item.name}: {str(e)}")
+    return files_removed, bytes_freed, errors
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cleanup_category",
@@ -422,32 +445,15 @@ async def cleanup_category(
                 detail=f"Category '{request.category}' is protected and cannot be cleaned up",
             )
 
-        files_removed = 0
-        bytes_freed = 0
-        errors = []
-
         cutoff_time = None
         if request.older_than_days > 0:
             cutoff_time = datetime.now().timestamp() - (
                 request.older_than_days * 24 * 60 * 60
             )
 
-        for item in dir_path.rglob("*"):
-            if item.is_file():
-                try:
-                    stat = item.stat()
-                    if cutoff_time and stat.st_mtime > cutoff_time:
-                        continue
-
-                    file_size = stat.st_size
-                    if not request.dry_run:
-                        item.unlink()
-
-                    files_removed += 1
-                    bytes_freed += file_size
-
-                except (OSError, PermissionError) as e:
-                    errors.append(f"Error removing {item.name}: {str(e)}")
+        files_removed, bytes_freed, errors = _scan_and_remove_files(
+            dir_path, cutoff_time, request.dry_run
+        )
 
         logger.info(
             "Cleanup %s: removed %d files, freed %s (dry_run=%s)",

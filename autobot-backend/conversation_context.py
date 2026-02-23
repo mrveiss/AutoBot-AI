@@ -126,7 +126,14 @@ class ConversationContextAnalyzer:
                 conversation_topic=None,
             )
 
-        # Count messages
+        return self._analyze_with_history(conversation_history, current_message)
+
+    def _analyze_with_history(
+        self,
+        conversation_history: List[Dict[str, str]],
+        current_message: str,
+    ) -> ConversationContext:
+        """Helper for analyze. Ref: #1088."""
         message_count = len(conversation_history)
 
         # Get last assistant message
@@ -136,23 +143,14 @@ class ConversationContextAnalyzer:
                 last_assistant_msg = msg.get("content", "")
                 break
 
-        # Check for recent question from assistant
         has_recent_question = (
             self._has_question(last_assistant_msg) if last_assistant_msg else False
         )
-
-        # Check for active task
         has_active_task = self._has_active_task(conversation_history)
-
-        # Check for confusion signals
         has_confusion_signals = self._has_confusion_signals(current_message)
-
-        # Assess engagement level
         engagement_level = self._assess_engagement(
             conversation_history, current_message
         )
-
-        # Determine conversation topic
         topic = self._determine_topic(conversation_history)
 
         return ConversationContext(

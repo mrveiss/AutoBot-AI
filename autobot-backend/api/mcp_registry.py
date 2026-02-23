@@ -741,17 +741,7 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
 )
 @router.get("/health")
 async def get_mcp_registry_health() -> Metadata:
-    """
-    Get overall health status of MCP registry system
-
-    Note: This endpoint always fetches fresh data (no caching)
-    to provide accurate health status.
-
-    Checks:
-    - All MCP bridges reachable
-    - Tool counts
-    - Response times
-    """
+    """Get overall health status of all MCP bridges (always fresh, no cache). Ref: #1088."""
     backend_url = (
         f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
     )

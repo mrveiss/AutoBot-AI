@@ -255,6 +255,44 @@ async def update_fact_visibility(
     }
 
 
+async def _fetch_fact_details(
+    kb,
+    all_fact_ids: list,
+    owned_fact_ids: list,
+    shared_fact_ids: list,
+    limit: int,
+) -> list:
+    """Helper for get_my_facts. Ref: #1088.
+
+    Fetches fact content for each ID and annotates ownership/shared flags.
+
+    Args:
+        kb: Knowledge base instance
+        all_fact_ids: Deduplicated list of fact IDs to fetch
+        owned_fact_ids: IDs owned by the requesting user
+        shared_fact_ids: IDs shared with the requesting user
+        limit: Maximum number of facts to return
+
+    Returns:
+        List of fact detail dicts
+    """
+    facts = []
+    for fact_id in all_fact_ids[:limit]:
+        fact = await kb.get_fact(fact_id)
+        if fact:
+            facts.append(
+                {
+                    "fact_id": fact_id,
+                    "content": fact.get("content", ""),
+                    "metadata": fact.get("metadata", {}),
+                    "timestamp": fact.get("timestamp", ""),
+                    "is_owned": fact_id in owned_fact_ids,
+                    "is_shared": fact_id in shared_fact_ids,
+                }
+            )
+    return facts
+
+
 @router.get("/api/knowledge/facts/mine")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -292,36 +330,20 @@ async def get_my_facts(
             detail="Ownership management not available",
         )
 
-    # Get owned facts
     owned_fact_ids = await kb.ownership_manager.get_user_facts(
         user_id, limit=limit, offset=offset
     )
 
-    # Get shared facts if requested
     shared_fact_ids = []
     if include_shared:
         shared_fact_ids = await kb.ownership_manager.get_shared_facts(
             user_id, limit=limit, offset=0
         )
 
-    # Combine and deduplicate
     all_fact_ids = list(set(owned_fact_ids + shared_fact_ids))
-
-    # Fetch fact details
-    facts = []
-    for fact_id in all_fact_ids[:limit]:
-        fact = await kb.get_fact(fact_id)
-        if fact:
-            facts.append(
-                {
-                    "fact_id": fact_id,
-                    "content": fact.get("content", ""),
-                    "metadata": fact.get("metadata", {}),
-                    "timestamp": fact.get("timestamp", ""),
-                    "is_owned": fact_id in owned_fact_ids,
-                    "is_shared": fact_id in shared_fact_ids,
-                }
-            )
+    facts = await _fetch_fact_details(
+        kb, all_fact_ids, owned_fact_ids, shared_fact_ids, limit
+    )
 
     return {
         "success": True,

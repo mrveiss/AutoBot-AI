@@ -198,6 +198,49 @@ class DocumentChangeTracker:
         self.DOC_HOSTS_KEY_PREFIX = "doc:hosts:"
         self.CHANGES_STREAM = "knowledge:changes"
 
+    def _build_document_version(
+        self,
+        document_id: str,
+        content: str,
+        machine_id: str,
+        os_type: str,
+        change_type: ChangeType,
+        new_version: int,
+        previous_hash: Optional[str],
+        metadata: Optional[Metadata],
+        os_version: Optional[str],
+    ) -> "DocumentVersion":
+        """Helper for record_version. Ref: #1088."""
+        return DocumentVersion(
+            document_id=document_id,
+            version=new_version,
+            content_hash=DocumentVersion.compute_content_hash(content),
+            machine_id=machine_id,
+            os_type=os_type,
+            os_version=os_version,
+            created_at=datetime.utcnow(),
+            change_type=change_type,
+            previous_hash=previous_hash,
+            metadata=metadata or {},
+            content_size=len(content),
+        )
+
+    def _store_version_in_redis(
+        self,
+        version_key: str,
+        host_key: str,
+        doc_hosts_key: str,
+        document_id: str,
+        machine_id: str,
+        new_version: int,
+        version_data: dict,
+    ) -> None:
+        """Helper for record_version. Ref: #1088."""
+        self.redis.hset(version_key, mapping=version_data)
+        self.redis.sadd(host_key, document_id)
+        self.redis.sadd(doc_hosts_key, machine_id)
+        self.redis.set(f"doc:latest_version:{document_id}", new_version)
+
     async def record_version(
         self,
         document_id: str,
@@ -235,18 +278,16 @@ class DocumentChangeTracker:
                 previous_hash = prev_version.content_hash
 
         # Create new version
-        version = DocumentVersion(
-            document_id=document_id,
-            version=new_version,
-            content_hash=DocumentVersion.compute_content_hash(content),
-            machine_id=machine_id,
-            os_type=os_type,
-            os_version=os_version,
-            created_at=datetime.utcnow(),
-            change_type=change_type,
-            previous_hash=previous_hash,
-            metadata=metadata or {},
-            content_size=len(content),
+        version = self._build_document_version(
+            document_id,
+            content,
+            machine_id,
+            os_type,
+            change_type,
+            new_version,
+            previous_hash,
+            metadata,
+            os_version,
         )
 
         # Store version in Redis (Issue #361 - avoid blocking)
@@ -255,13 +296,16 @@ class DocumentChangeTracker:
         doc_hosts_key = f"{self.DOC_HOSTS_KEY_PREFIX}{document_id}"
         version_data = version.to_dict()
 
-        def _store_version():
-            self.redis.hset(version_key, mapping=version_data)
-            self.redis.sadd(host_key, document_id)
-            self.redis.sadd(doc_hosts_key, machine_id)
-            self.redis.set(f"doc:latest_version:{document_id}", new_version)
-
-        await asyncio.to_thread(_store_version)
+        await asyncio.to_thread(
+            self._store_version_in_redis,
+            version_key,
+            host_key,
+            doc_hosts_key,
+            document_id,
+            machine_id,
+            new_version,
+            version_data,
+        )
 
         return version
 

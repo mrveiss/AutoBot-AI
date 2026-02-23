@@ -187,6 +187,35 @@ def _parse_resolution_strategy(
         )
 
 
+async def _validate_conflict_file(file_path: str) -> None:
+    """Helper for analyze_conflicts. Ref: #1088."""
+    file_exists = await asyncio.to_thread(os.path.exists, file_path)
+    if not file_exists:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File does not exist: {file_path}",
+        )
+    if not file_path.endswith((".py", ".js", ".ts", ".java", ".cpp", ".c")):
+        raise HTTPException(
+            status_code=400,
+            detail="Only source code files are supported",
+        )
+
+
+def _build_no_conflicts_response(file_path: str) -> JSONResponse:
+    """Helper for analyze_conflicts. Ref: #1088."""
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "message": "No conflicts found in file",
+            "file_path": file_path,
+            "conflict_count": 0,
+            "timestamp": datetime.now().isoformat(),
+        },
+    )
+
+
 # =============================================================================
 # API Endpoints
 # =============================================================================
@@ -214,39 +243,15 @@ async def analyze_conflicts(
     Issue #246: Intelligent Merge Conflict Resolution
     Issue #744: Requires admin authentication
     """
-    # Validate file exists
-    file_exists = await asyncio.to_thread(os.path.exists, request.file_path)
-    if not file_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File does not exist: {request.file_path}",
-        )
-
-    # Validate it's a text file
-    if not request.file_path.endswith((".py", ".js", ".ts", ".java", ".cpp", ".c")):
-        raise HTTPException(
-            status_code=400,
-            detail="Only source code files are supported",
-        )
+    await _validate_conflict_file(request.file_path)
 
     try:
-        # Parse conflicts
         parser = ConflictParser()
         conflicts = await asyncio.to_thread(parser.parse_file, request.file_path)
 
         if not conflicts:
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "status": "success",
-                    "message": "No conflicts found in file",
-                    "file_path": request.file_path,
-                    "conflict_count": 0,
-                    "timestamp": datetime.now().isoformat(),
-                },
-            )
+            return _build_no_conflicts_response(request.file_path)
 
-        # Build analysis response
         conflicts_data = [_build_conflict_data(c) for c in conflicts]
         severity_counts = _calculate_severity_distribution(conflicts)
 

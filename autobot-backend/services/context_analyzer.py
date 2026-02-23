@@ -38,6 +38,28 @@ class ContextAnalyzer:
         self.dependency_tracker = DependencyTracker()
         self.redis_client = get_redis_client(async_client=False, database="main")
 
+    def _build_full_context(
+        self,
+        tree: ast.AST,
+        context_id: str,
+        file_content: str,
+        cursor_line: int,
+        cursor_position: int,
+        file_path: str,
+    ) -> CompletionContext:
+        """Helper for analyze. Ref: #1088."""
+        context = CompletionContext(
+            context_id=context_id, file_path=file_path, language="python"
+        )
+        self._analyze_file_level(tree, file_content, context)
+        self._analyze_function_level(tree, cursor_line, context)
+        self._analyze_block_level(tree, cursor_line, context)
+        self._analyze_line_level(file_content, cursor_line, cursor_position, context)
+        self._analyze_semantic_context(tree, file_content, context)
+        self._analyze_dependencies(tree, context)
+        self._cache_context(context)
+        return context
+
     def analyze(
         self,
         file_content: str,
@@ -57,18 +79,15 @@ class ContextAnalyzer:
         Returns:
             CompletionContext with all levels analyzed
         """
-        # Generate context ID
         context_id = self._generate_context_id(
             file_content, cursor_line, cursor_position
         )
 
-        # Check cache
         cached = self._get_cached_context(context_id)
         if cached:
             logger.debug(f"Using cached context: {context_id}")
             return cached
 
-        # Parse AST
         try:
             tree = ast.parse(file_content)
         except SyntaxError as e:
@@ -77,33 +96,9 @@ class ContextAnalyzer:
                 context_id, file_content, cursor_line, cursor_position, file_path
             )
 
-        # Initialize context
-        context = CompletionContext(
-            context_id=context_id, file_path=file_path, language="python"
+        return self._build_full_context(
+            tree, context_id, file_content, cursor_line, cursor_position, file_path
         )
-
-        # Analyze file level
-        self._analyze_file_level(tree, file_content, context)
-
-        # Analyze function level
-        self._analyze_function_level(tree, cursor_line, context)
-
-        # Analyze block level
-        self._analyze_block_level(tree, cursor_line, context)
-
-        # Analyze line level
-        self._analyze_line_level(file_content, cursor_line, cursor_position, context)
-
-        # Analyze semantic context
-        self._analyze_semantic_context(tree, file_content, context)
-
-        # Analyze dependencies
-        self._analyze_dependencies(tree, context)
-
-        # Cache context
-        self._cache_context(context)
-
-        return context
 
     def _analyze_file_level(
         self, tree: ast.AST, file_content: str, context: CompletionContext

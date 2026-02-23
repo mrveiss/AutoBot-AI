@@ -388,12 +388,10 @@ async def _add_explanation_to_result(
 class NaturalLanguageQueryParser:
     """Parses natural language queries into structured search parameters."""
 
-    def __init__(self):
-        """Initialize parser with stopwords and pattern matchers."""
-        self.stopwords = {
-            "the",
-            "a",
-            "an",
+    @staticmethod
+    def _build_stopwords_verbs() -> set:
+        """Helper for _build_stopwords. Ref: #1088."""
+        return {
             "is",
             "are",
             "was",
@@ -415,6 +413,15 @@ class NaturalLanguageQueryParser:
             "might",
             "must",
             "can",
+        }
+
+    @staticmethod
+    def _build_stopwords_particles() -> set:
+        """Helper for _build_stopwords. Ref: #1088."""
+        return {
+            "the",
+            "a",
+            "an",
             "to",
             "of",
             "in",
@@ -458,6 +465,18 @@ class NaturalLanguageQueryParser:
             "just",
             "also",
         }
+
+    @staticmethod
+    def _build_stopwords() -> set:
+        """Helper for __init__. Ref: #1088."""
+        return (
+            NaturalLanguageQueryParser._build_stopwords_verbs()
+            | NaturalLanguageQueryParser._build_stopwords_particles()
+        )
+
+    def __init__(self):
+        """Initialize parser with stopwords and pattern matchers."""
+        self.stopwords = self._build_stopwords()
 
     def parse(self, query: str) -> ParsedQuery:
         """Parse a natural language query into structured components."""

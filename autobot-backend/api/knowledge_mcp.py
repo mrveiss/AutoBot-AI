@@ -17,6 +17,9 @@ import threading
 from typing import List, Optional
 
 from auth_middleware import get_current_user
+from backend.constants.model_constants import ModelConstants
+from backend.type_defs.common import Metadata
+from backend.utils.service_registry import get_service_url
 from config import config as global_config_manager
 from fastapi import APIRouter, Depends
 from knowledge_base import KnowledgeBase
@@ -24,9 +27,6 @@ from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from backend.constants.model_constants import ModelConstants
-from backend.type_defs.common import Metadata
-from backend.utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])

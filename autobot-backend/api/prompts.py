@@ -292,6 +292,29 @@ async def clear_prompts_cache(admin_check: bool = Depends(check_admin_permission
     return {"status": "success", "message": "Prompts cache cleared"}
 
 
+def _build_prompt_save_response(
+    prompt_id: str, file_path: str, content: str, prompts_dir: str
+) -> dict:
+    """Helper for save_prompt. Ref: #1088."""
+    prompt_name = os.path.basename(file_path).rsplit(".", 1)[0]
+    prompt_type = (
+        os.path.dirname(file_path).replace(prompts_dir + "/", "")
+        if prompts_dir in file_path
+        else os.path.dirname(file_path)
+    )
+    return {
+        "id": prompt_id,
+        "name": prompt_name,
+        "type": prompt_type if prompt_type else "custom",
+        "path": (
+            file_path.replace(prompts_dir + "/", "")
+            if prompts_dir in file_path
+            else file_path
+        ),
+        "content": content,
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="save_prompt",
@@ -344,24 +367,7 @@ async def save_prompt(
             async with aiofiles.open(resolved_path, "w", encoding="utf-8") as f:
                 await f.write(content)
         logger.info("Saved prompt %s to %s", prompt_id, file_path)
-        # Return the updated prompt data
-        prompt_name = os.path.basename(file_path).rsplit(".", 1)[0]
-        prompt_type = (
-            os.path.dirname(file_path).replace(prompts_dir + "/", "")
-            if prompts_dir in file_path
-            else os.path.dirname(file_path)
-        )
-        return {
-            "id": prompt_id,
-            "name": prompt_name,
-            "type": prompt_type if prompt_type else "custom",
-            "path": (
-                file_path.replace(prompts_dir + "/", "")
-                if prompts_dir in file_path
-                else file_path
-            ),
-            "content": content,
-        }
+        return _build_prompt_save_response(prompt_id, file_path, content, prompts_dir)
     except OSError as e:
         logger.error("Failed to write prompt file %s: %s", prompt_id, e)
         raise HTTPException(

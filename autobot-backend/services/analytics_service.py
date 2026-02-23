@@ -373,76 +373,89 @@ class AnalyticsService:
 
         return recommendations
 
+    def _make_agent_timeout_rec(
+        self, agent: Any
+    ) -> Optional[MaintenanceRecommendation]:
+        """Helper for _check_agent_maintenance_issues. Ref: #1088."""
+        if agent.timeout_tasks <= 5 or agent.total_tasks <= 0:
+            return None
+        timeout_rate = (agent.timeout_tasks / agent.total_tasks) * 100
+        if timeout_rate <= 5:
+            return None
+        return MaintenanceRecommendation(
+            id=f"agent-timeout-{agent.agent_id}",
+            title=f"Frequent Timeouts: {agent.agent_id}",
+            description=f"Agent {agent.agent_id} has {timeout_rate:.1f}% timeout rate",
+            priority=MaintenancePriority.HIGH,
+            category="reliability",
+            affected_component=f"agent:{agent.agent_id}",
+            predicted_issue="Tasks timing out may indicate resource constraints",
+            confidence=0.85,
+            recommended_action="Increase timeout limits, optimize task complexity, check resources",
+            estimated_impact=f"{agent.timeout_tasks} tasks affected",
+            metadata={
+                "timeout_tasks": agent.timeout_tasks,
+                "timeout_rate": timeout_rate,
+            },
+        )
+
+    def _check_agent_maintenance_issues(
+        self, agent: Any
+    ) -> List[MaintenanceRecommendation]:
+        """Helper for _analyze_agent_maintenance. Ref: #1088."""
+        issues: List[MaintenanceRecommendation] = []
+        if agent.error_rate > 20:
+            issues.append(
+                MaintenanceRecommendation(
+                    id=f"agent-error-{agent.agent_id}",
+                    title=f"High Error Rate: {agent.agent_id}",
+                    description=f"Agent {agent.agent_id} has an error rate of {agent.error_rate:.1f}%",
+                    priority=(
+                        MaintenancePriority.HIGH
+                        if agent.error_rate > 30
+                        else MaintenancePriority.MEDIUM
+                    ),
+                    category="agent_performance",
+                    affected_component=f"agent:{agent.agent_id}",
+                    predicted_issue="Continued degradation may lead to task failures",
+                    confidence=min(0.9, agent.error_rate / 100 + 0.3),
+                    recommended_action="Review agent logs, check for pattern issues, consider retraining",
+                    estimated_impact=f"Affects {agent.total_tasks} tasks",
+                    metadata={
+                        "error_rate": agent.error_rate,
+                        "agent_type": agent.agent_type,
+                    },
+                )
+            )
+        if agent.avg_duration_ms > 10000:  # > 10 seconds
+            issues.append(
+                MaintenanceRecommendation(
+                    id=f"agent-slow-{agent.agent_id}",
+                    title=f"Slow Performance: {agent.agent_id}",
+                    description=(
+                        f"Agent {agent.agent_id} average duration is {agent.avg_duration_ms/1000:.1f}s"
+                    ),
+                    priority=MaintenancePriority.MEDIUM,
+                    category="agent_performance",
+                    affected_component=f"agent:{agent.agent_id}",
+                    predicted_issue="Performance degradation affecting user experience",
+                    confidence=0.7,
+                    recommended_action="Profile agent execution, optimize prompts, consider caching",
+                    estimated_impact="Increased latency for end users",
+                    metadata={"avg_duration_ms": agent.avg_duration_ms},
+                )
+            )
+        timeout_rec = self._make_agent_timeout_rec(agent)
+        if timeout_rec:
+            issues.append(timeout_rec)
+        return issues
+
     async def _analyze_agent_maintenance(self) -> List[MaintenanceRecommendation]:
         """Analyze agent performance for maintenance recommendations."""
         recommendations = []
         agent_metrics = await self.agents.get_all_agents_metrics()
-
         for agent in agent_metrics:
-            # High error rate detection
-            if agent.error_rate > 20:
-                recommendations.append(
-                    MaintenanceRecommendation(
-                        id=f"agent-error-{agent.agent_id}",
-                        title=f"High Error Rate: {agent.agent_id}",
-                        description=f"Agent {agent.agent_id} has an error rate of {agent.error_rate:.1f}%",
-                        priority=MaintenancePriority.HIGH
-                        if agent.error_rate > 30
-                        else MaintenancePriority.MEDIUM,
-                        category="agent_performance",
-                        affected_component=f"agent:{agent.agent_id}",
-                        predicted_issue="Continued degradation may lead to task failures",
-                        confidence=min(0.9, agent.error_rate / 100 + 0.3),
-                        recommended_action="Review agent logs, check for pattern issues, consider retraining",
-                        estimated_impact=f"Affects {agent.total_tasks} tasks",
-                        metadata={
-                            "error_rate": agent.error_rate,
-                            "agent_type": agent.agent_type,
-                        },
-                    )
-                )
-
-            # Slow performance detection
-            if agent.avg_duration_ms > 10000:  # > 10 seconds
-                recommendations.append(
-                    MaintenanceRecommendation(
-                        id=f"agent-slow-{agent.agent_id}",
-                        title=f"Slow Performance: {agent.agent_id}",
-                        description=f"Agent {agent.agent_id} average duration is {agent.avg_duration_ms/1000:.1f}s",
-                        priority=MaintenancePriority.MEDIUM,
-                        category="agent_performance",
-                        affected_component=f"agent:{agent.agent_id}",
-                        predicted_issue="Performance degradation affecting user experience",
-                        confidence=0.7,
-                        recommended_action="Profile agent execution, optimize prompts, consider caching",
-                        estimated_impact="Increased latency for end users",
-                        metadata={"avg_duration_ms": agent.avg_duration_ms},
-                    )
-                )
-
-            # Timeout issues
-            if agent.timeout_tasks > 5 and agent.total_tasks > 0:
-                timeout_rate = (agent.timeout_tasks / agent.total_tasks) * 100
-                if timeout_rate > 5:
-                    recommendations.append(
-                        MaintenanceRecommendation(
-                            id=f"agent-timeout-{agent.agent_id}",
-                            title=f"Frequent Timeouts: {agent.agent_id}",
-                            description=f"Agent {agent.agent_id} has {timeout_rate:.1f}% timeout rate",
-                            priority=MaintenancePriority.HIGH,
-                            category="reliability",
-                            affected_component=f"agent:{agent.agent_id}",
-                            predicted_issue="Tasks timing out may indicate resource constraints",
-                            confidence=0.85,
-                            recommended_action="Increase timeout limits, optimize task complexity, check resources",
-                            estimated_impact=f"{agent.timeout_tasks} tasks affected",
-                            metadata={
-                                "timeout_tasks": agent.timeout_tasks,
-                                "timeout_rate": timeout_rate,
-                            },
-                        )
-                    )
-
+            recommendations.extend(self._check_agent_maintenance_issues(agent))
         return recommendations
 
     async def _analyze_cost_maintenance(self) -> List[MaintenanceRecommendation]:
@@ -458,9 +471,11 @@ class AnalyticsService:
                     id="cost-growth-alert",
                     title="Rapid Cost Increase Detected",
                     description=f"LLM costs are increasing at {growth_rate:.1f}% rate",
-                    priority=MaintenancePriority.HIGH
-                    if growth_rate > 50
-                    else MaintenancePriority.MEDIUM,
+                    priority=(
+                        MaintenancePriority.HIGH
+                        if growth_rate > 50
+                        else MaintenancePriority.MEDIUM
+                    ),
                     category="cost_management",
                     affected_component="llm_provider",
                     predicted_issue="Budget may be exceeded if trend continues",
@@ -496,9 +511,11 @@ class AnalyticsService:
                             id="redis-memory-high",
                             title="High Redis Memory Usage",
                             description=f"Redis is using {memory_pct:.1f}% of allocated memory",
-                            priority=MaintenancePriority.HIGH
-                            if memory_pct > 90
-                            else MaintenancePriority.MEDIUM,
+                            priority=(
+                                MaintenancePriority.HIGH
+                                if memory_pct > 90
+                                else MaintenancePriority.MEDIUM
+                            ),
                             category="infrastructure",
                             affected_component="redis",
                             predicted_issue="Memory exhaustion may cause cache evictions or failures",
@@ -557,72 +574,75 @@ class AnalyticsService:
 
         return recommendations
 
+    def _check_model_token_optimizations(
+        self, model: str, data: Dict[str, Any]
+    ) -> List[ResourceOptimization]:
+        """Helper for _analyze_token_optimization. Ref: #1088.
+
+        Returns model-substitution and prompt-caching recommendations for a
+        single model entry from the cost summary.
+        """
+        opts: List[ResourceOptimization] = []
+        cost = data.get("cost_usd", 0)
+        input_tokens = data.get("input_tokens", 0)
+        output_tokens = data.get("output_tokens", 0)
+        call_count = data.get("call_count", 0)
+        if cost > 10:
+            model_lower = model.lower()
+            if "opus" in model_lower or "gpt-4" in model_lower:
+                opts.append(
+                    ResourceOptimization(
+                        id=f"model-substitute-{model[:20]}",
+                        resource_type=ResourceType.LLM_TOKENS,
+                        title=f"Consider cheaper model for {model}",
+                        current_usage={
+                            "model": model,
+                            "cost_usd": cost,
+                            "calls": call_count,
+                            "input_tokens": input_tokens,
+                            "output_tokens": output_tokens,
+                        },
+                        recommended_change="Use Claude Sonnet or GPT-4o for simpler tasks",
+                        expected_savings={
+                            "cost_usd": cost * 0.4,  # Estimate 40% savings
+                            "performance_percent": -5,  # Slight quality tradeoff
+                        },
+                        implementation_effort="medium",
+                        priority=MaintenancePriority.MEDIUM,
+                        details="Analyze task complexity and route simpler tasks to cheaper models",
+                    )
+                )
+        if input_tokens > 1000000 and call_count > 100:
+            avg_input = input_tokens / call_count
+            if avg_input > 5000:  # Large prompts
+                opts.append(
+                    ResourceOptimization(
+                        id=f"prompt-caching-{model[:20]}",
+                        resource_type=ResourceType.LLM_TOKENS,
+                        title=f"Enable prompt caching for {model}",
+                        current_usage={
+                            "model": model,
+                            "avg_input_tokens": avg_input,
+                            "total_input_tokens": input_tokens,
+                        },
+                        recommended_change="Implement prompt caching for repeated system prompts",
+                        expected_savings={
+                            "cost_usd": cost * 0.25,
+                            "performance_percent": 15,
+                        },
+                        implementation_effort="low",
+                        priority=MaintenancePriority.HIGH,
+                        details="Anthropic and OpenAI support prompt caching for repeated content",
+                    )
+                )
+        return opts
+
     async def _analyze_token_optimization(self) -> List[ResourceOptimization]:
         """Analyze token usage for optimization opportunities."""
         recommendations = []
         summary = await self.cost.get_cost_summary()
-
-        by_model = summary.get("by_model", {})
-
-        # Find expensive models that could be replaced
-        for model, data in by_model.items():
-            cost = data.get("cost_usd", 0)
-            input_tokens = data.get("input_tokens", 0)
-            output_tokens = data.get("output_tokens", 0)
-            call_count = data.get("call_count", 0)
-
-            if cost > 10:  # Models costing more than $10
-                # Check for potential model substitution
-                model_lower = model.lower()
-                if "opus" in model_lower or "gpt-4" in model_lower:
-                    recommendations.append(
-                        ResourceOptimization(
-                            id=f"model-substitute-{model[:20]}",
-                            resource_type=ResourceType.LLM_TOKENS,
-                            title=f"Consider cheaper model for {model}",
-                            current_usage={
-                                "model": model,
-                                "cost_usd": cost,
-                                "calls": call_count,
-                                "input_tokens": input_tokens,
-                                "output_tokens": output_tokens,
-                            },
-                            recommended_change="Use Claude Sonnet or GPT-4o for simpler tasks",
-                            expected_savings={
-                                "cost_usd": cost * 0.4,  # Estimate 40% savings
-                                "performance_percent": -5,  # Slight quality tradeoff
-                            },
-                            implementation_effort="medium",
-                            priority=MaintenancePriority.MEDIUM,
-                            details="Analyze task complexity and route simpler tasks to cheaper models",
-                        )
-                    )
-
-            # High token usage without caching
-            if input_tokens > 1000000 and call_count > 100:
-                avg_input = input_tokens / call_count
-                if avg_input > 5000:  # Large prompts
-                    recommendations.append(
-                        ResourceOptimization(
-                            id=f"prompt-caching-{model[:20]}",
-                            resource_type=ResourceType.LLM_TOKENS,
-                            title=f"Enable prompt caching for {model}",
-                            current_usage={
-                                "model": model,
-                                "avg_input_tokens": avg_input,
-                                "total_input_tokens": input_tokens,
-                            },
-                            recommended_change="Implement prompt caching for repeated system prompts",
-                            expected_savings={
-                                "cost_usd": cost * 0.25,
-                                "performance_percent": 15,
-                            },
-                            implementation_effort="low",
-                            priority=MaintenancePriority.HIGH,
-                            details="Anthropic and OpenAI support prompt caching for repeated content",
-                        )
-                    )
-
+        for model, data in summary.get("by_model", {}).items():
+            recommendations.extend(self._check_model_token_optimizations(model, data))
         return recommendations
 
     async def _analyze_agent_optimization(self) -> List[ResourceOptimization]:
@@ -733,6 +753,49 @@ class AnalyticsService:
     # CUSTOM REPORTS
     # =========================================================================
 
+    def _build_report_section_tasks(
+        self,
+        sections: List[str],
+        start_date: datetime,
+        end_date: datetime,
+    ) -> Dict[str, Any]:
+        """Helper for generate_custom_report. Ref: #1088.
+
+        Builds a dict mapping section name to its unawaited coroutine so they
+        can be gathered concurrently.
+        """
+        tasks: Dict[str, Any] = {}
+        if "cost" in sections:
+            tasks["cost"] = self.cost.get_cost_summary(start_date, end_date)
+        if "agents" in sections:
+            tasks["agents"] = self.agents.compare_agents()
+        if "behavior" in sections:
+            tasks["behavior"] = self.behavior.get_engagement_metrics()
+        if "maintenance" in sections:
+            tasks["maintenance"] = self.get_predictive_maintenance()
+        if "optimization" in sections:
+            tasks["optimization"] = self.get_resource_optimizations()
+        return tasks
+
+    @staticmethod
+    def _populate_report_sections(
+        report: Dict[str, Any],
+        tasks: Dict[str, Any],
+        results: List[Any],
+    ) -> None:
+        """Helper for generate_custom_report. Ref: #1088.
+
+        Merges gathered results into report["sections"], serialising
+        maintenance and optimization entries via to_dict().
+        """
+        for (section, _), result in zip(tasks.items(), results):
+            if isinstance(result, Exception):
+                report["sections"][section] = {"error": str(result)}
+            elif section in ("maintenance", "optimization"):
+                report["sections"][section] = [r.to_dict() for r in result]
+            else:
+                report["sections"][section] = result
+
     async def generate_custom_report(
         self,
         report_type: str,
@@ -755,7 +818,6 @@ class AnalyticsService:
         end_date = end_date or datetime.utcnow()
         start_date = start_date or (end_date - timedelta(days=30))
         days = (end_date - start_date).days
-
         report = {
             "report_type": report_type,
             "generated_at": datetime.utcnow().isoformat(),
@@ -766,40 +828,14 @@ class AnalyticsService:
             },
             "sections": {},
         }
-
         sections = include_sections or ["cost", "agents", "behavior", "maintenance"]
-
-        # Fetch data for requested sections concurrently
-        tasks = {}
-        if "cost" in sections:
-            tasks["cost"] = self.cost.get_cost_summary(start_date, end_date)
-        if "agents" in sections:
-            tasks["agents"] = self.agents.compare_agents()
-        if "behavior" in sections:
-            tasks["behavior"] = self.behavior.get_engagement_metrics()
-        if "maintenance" in sections:
-            tasks["maintenance"] = self.get_predictive_maintenance()
-        if "optimization" in sections:
-            tasks["optimization"] = self.get_resource_optimizations()
-
+        tasks = self._build_report_section_tasks(sections, start_date, end_date)
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
-
-        for (section, _), result in zip(tasks.items(), results):
-            if isinstance(result, Exception):
-                report["sections"][section] = {"error": str(result)}
-            elif section == "maintenance":
-                report["sections"][section] = [r.to_dict() for r in result]
-            elif section == "optimization":
-                report["sections"][section] = [r.to_dict() for r in result]
-            else:
-                report["sections"][section] = result
-
-        # Add executive summary for executive reports
+        self._populate_report_sections(report, tasks, list(results))
         if report_type == "executive":
             report["executive_summary"] = await self._generate_executive_summary(
                 report["sections"]
             )
-
         return report
 
     async def _generate_executive_summary(

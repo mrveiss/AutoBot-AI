@@ -161,39 +161,7 @@ class PermissionMatcher:
                 return
 
             default_rules = data.get("default_rules", {})
-
-            # Load allow rules
-            for rule_data in default_rules.get("allow", []):
-                self.allow_rules.append(
-                    PermissionRule(
-                        tool=rule_data.get("tool", "Bash"),
-                        pattern=rule_data.get("pattern", ""),
-                        action=PermissionAction.ALLOW,
-                        description=rule_data.get("description", ""),
-                    )
-                )
-
-            # Load ask rules
-            for rule_data in default_rules.get("ask", []):
-                self.ask_rules.append(
-                    PermissionRule(
-                        tool=rule_data.get("tool", "Bash"),
-                        pattern=rule_data.get("pattern", ""),
-                        action=PermissionAction.ASK,
-                        description=rule_data.get("description", ""),
-                    )
-                )
-
-            # Load deny rules
-            for rule_data in default_rules.get("deny", []):
-                self.deny_rules.append(
-                    PermissionRule(
-                        tool=rule_data.get("tool", "Bash"),
-                        pattern=rule_data.get("pattern", ""),
-                        action=PermissionAction.DENY,
-                        description=rule_data.get("description", ""),
-                    )
-                )
+            self._populate_rule_lists(default_rules)
 
             logger.debug(
                 f"Loaded {len(self.allow_rules)} allow, "
@@ -202,6 +170,38 @@ class PermissionMatcher:
 
         except Exception as e:
             logger.error(f"Failed to load permission rules: {e}")
+
+    def _populate_rule_lists(self, default_rules: dict) -> None:
+        """Helper for _load_rules. Ref: #1088."""
+        for rule_data in default_rules.get("allow", []):
+            self.allow_rules.append(
+                PermissionRule(
+                    tool=rule_data.get("tool", "Bash"),
+                    pattern=rule_data.get("pattern", ""),
+                    action=PermissionAction.ALLOW,
+                    description=rule_data.get("description", ""),
+                )
+            )
+
+        for rule_data in default_rules.get("ask", []):
+            self.ask_rules.append(
+                PermissionRule(
+                    tool=rule_data.get("tool", "Bash"),
+                    pattern=rule_data.get("pattern", ""),
+                    action=PermissionAction.ASK,
+                    description=rule_data.get("description", ""),
+                )
+            )
+
+        for rule_data in default_rules.get("deny", []):
+            self.deny_rules.append(
+                PermissionRule(
+                    tool=rule_data.get("tool", "Bash"),
+                    pattern=rule_data.get("pattern", ""),
+                    action=PermissionAction.DENY,
+                    description=rule_data.get("description", ""),
+                )
+            )
 
     def match(
         self, tool: str, command: str

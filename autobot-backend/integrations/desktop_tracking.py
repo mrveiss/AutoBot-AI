@@ -48,16 +48,6 @@ async def track_desktop_action(
 
     Returns:
         Activity ID
-
-    Example:
-        >>> async with get_db_session() as db:
-        ...     activity_id = await track_desktop_action(
-        ...         db=db,
-        ...         user_id=uuid.UUID(...),
-        ...         action="click",
-        ...         coordinates=(500, 300),
-        ...         window_title="Visual Studio Code",
-        ...     )
     """
     metadata = {}
     if app_name:

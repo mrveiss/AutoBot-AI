@@ -217,17 +217,7 @@ class FastDocumentScanner:
         changes: Dict[str, List],
         limit: Optional[int],
     ) -> None:
-        """
-        Check files for new/updated changes and update changes dict.
-
-        Issue #665: Extracted from _detect_changes to reduce function length.
-
-        Args:
-            commands_to_check: Commands to process
-            current_files: Dict of command -> file paths
-            changes: Dict to populate with changes
-            limit: Max files to check
-        """
+        """Check files for new/updated changes. Helper extracted for #665. Ref: #1088."""
         checked_count = 0
 
         for command in commands_to_check:
@@ -332,18 +322,7 @@ class FastDocumentScanner:
         limit: Optional[int] = None,
         force: bool = False,
     ) -> Dict:
-        """
-        Fast scan for document changes.
-
-        Args:
-            machine_id: Host identifier
-            scan_type: Type of scan ('manpages')
-            limit: Max documents to check (None = all)
-            force: Force full scan (ignore cache)
-
-        Returns:
-            Dict with scan results and changes
-        """
+        """Fast scan for document changes. Ref: #1088."""
         start_time = time.time()
 
         logger.info(

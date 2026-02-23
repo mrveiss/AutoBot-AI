@@ -107,6 +107,38 @@ class PlaywrightService:
             await self._health_check()
         return self._healthy
 
+    async def _post_and_parse(self, endpoint: str, payload: dict) -> dict:
+        """
+        POST to a Playwright container endpoint and return parsed JSON. Ref: #1088.
+
+        Helper for search_web, test_frontend, and send_test_message.
+        Raises RuntimeError on non-200 status; caller handles connection errors.
+        """
+        timeout = aiohttp.ClientTimeout(total=self.timeout)
+        async with await self.http_client.post(
+            f"{self.base_url}/{endpoint}", json=payload, timeout=timeout
+        ) as response:
+            if response.status == 200:
+                return await response.json()
+            error_text = await response.text()
+            raise RuntimeError(f"{endpoint} failed: {response.status} - {error_text}")
+
+    def _format_test_frontend_exception(self, e: Exception) -> str:
+        """
+        Build detailed error string for unexpected test_frontend exceptions. Ref: #1088.
+
+        Helper for test_frontend.
+        """
+        import traceback
+
+        error_details = f"Exception: {type(e).__name__}: {str(e)}"
+        if hasattr(e, "__cause__") and e.__cause__:
+            error_details += f" | Caused by: {e.__cause__}"
+        error_details += (
+            f" | Traceback: {traceback.format_exc()[-500:]}"  # Last 500 chars
+        )
+        return error_details
+
     async def search_web(
         self, query: str, search_engine: str = "duckduckgo", max_results: int = 5
     ) -> Metadata:
@@ -134,21 +166,11 @@ class PlaywrightService:
                 "search_engine": search_engine,
                 "max_results": max_results,
             }
-
-            timeout = aiohttp.ClientTimeout(total=self.timeout)
-            async with await self.http_client.post(
-                f"{self.base_url}/search", json=payload, timeout=timeout
-            ) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    logger.info(
-                        f"Web search completed: '{query}' -> {len(result.get('results', []))} results"
-                    )
-                    return result
-                else:
-                    error_text = await response.text()
-                    logger.error("Search failed: %s - %s", response.status, error_text)
-                    raise RuntimeError(f"Search failed: {response.status}")
+            result = await self._post_and_parse("search", payload)
+            logger.info(
+                f"Web search completed: '{query}' -> {len(result.get('results', []))} results"
+            )
+            return result
 
         except asyncio.TimeoutError:
             logger.error("Web search timed out after %ss: '%s'", self.timeout, query)
@@ -198,24 +220,11 @@ class PlaywrightService:
                     url=self.base_url,
                 )
 
-            payload = {"frontend_url": frontend_url}
-
-            timeout = aiohttp.ClientTimeout(total=self.timeout)
-            async with await self.http_client.post(
-                f"{self.base_url}/test-frontend", json=payload, timeout=timeout
-            ) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    logger.info(
-                        "Frontend test completed: %s", result.get("summary", {})
-                    )
-                    return result
-                else:
-                    error_text = await response.text()
-                    logger.error(
-                        f"Frontend test failed: {response.status} - {error_text}"
-                    )
-                    raise RuntimeError(f"Frontend test failed: {response.status}")
+            result = await self._post_and_parse(
+                "test-frontend", {"frontend_url": frontend_url}
+            )
+            logger.info("Frontend test completed: %s", result.get("summary", {}))
+            return result
 
         except asyncio.TimeoutError:
             logger.error(
@@ -243,14 +252,7 @@ class PlaywrightService:
                 "tests": [],
             }
         except Exception as e:
-            import traceback
-
-            error_details = f"Exception: {type(e).__name__}: {str(e)}"
-            if hasattr(e, "__cause__") and e.__cause__:
-                error_details += f" | Caused by: {e.__cause__}"
-            error_details += (
-                f" | Traceback: {traceback.format_exc()[-500:]}"  # Last 500 chars
-            )
+            error_details = self._format_test_frontend_exception(e)
             logger.error("Frontend test error: %s", error_details)
             return {
                 "success": False,
@@ -282,24 +284,13 @@ class PlaywrightService:
                     url=self.base_url,
                 )
 
-            payload = {"message": message, "frontend_url": frontend_url}
-
-            timeout = aiohttp.ClientTimeout(total=self.timeout)
-            async with await self.http_client.post(
-                f"{self.base_url}/send-test-message", json=payload, timeout=timeout
-            ) as response:
-                if response.status == 200:
-                    result = await response.json()
-                    logger.info(
-                        f"Test message sent: '{message}' -> {len(result.get('steps', []))} steps completed"
-                    )
-                    return result
-                else:
-                    error_text = await response.text()
-                    logger.error(
-                        f"Test message failed: {response.status} - {error_text}"
-                    )
-                    raise RuntimeError(f"Test message failed: {response.status}")
+            result = await self._post_and_parse(
+                "send-test-message", {"message": message, "frontend_url": frontend_url}
+            )
+            logger.info(
+                f"Test message sent: '{message}' -> {len(result.get('steps', []))} steps completed"
+            )
+            return result
 
         except asyncio.TimeoutError:
             logger.error("Test message timed out after %ss", self.timeout)

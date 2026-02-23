@@ -36,10 +36,6 @@ import logging
 from typing import List, Optional
 
 from auth_middleware import check_admin_permission
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import JSONResponse
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from backend.models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,
@@ -49,6 +45,10 @@ from backend.models.npu_models import (
     WorkerTestResult,
 )
 from backend.services.npu_worker_manager import get_worker_manager
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
@@ -446,6 +446,25 @@ async def get_worker_log_level(
         )
 
 
+async def _send_log_level_to_worker(
+    worker_url: str, level: str, worker_id: str
+) -> dict:
+    """Helper for set_worker_log_level. Ref: #1088."""
+    import httpx
+
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        response = await client.put(
+            f"{worker_url}/config/logging", params={"level": level}
+        )
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Worker returned error: {response.status_code}",
+            )
+        logger.info("Set log level to %s for worker %s", level, worker_id)
+        return response.json()
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="set_worker_log_level",
@@ -474,8 +493,6 @@ async def set_worker_log_level(
         404: If worker not found
         500: If request fails
     """
-    import httpx
-
     level = level.upper()
     valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
@@ -496,19 +513,7 @@ async def set_worker_log_level(
             )
 
         worker_url = f"http://{worker.config.ip_address}:{worker.config.port}"
-
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.put(
-                f"{worker_url}/config/logging", params={"level": level}
-            )
-            if response.status_code != 200:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Worker returned error: {response.status_code}",
-                )
-
-            logger.info("Set log level to %s for worker %s", level, worker_id)
-            return response.json()
+        return await _send_log_level_to_worker(worker_url, level, worker_id)
 
     except HTTPException:
         raise
@@ -824,6 +829,28 @@ async def _handle_existing_worker_removal(
     return worker_url, platform
 
 
+async def _resolve_repair_worker_info(
+    manager, worker_id: str, request: dict
+) -> tuple[str, str, str]:
+    """Helper for repair_worker. Ref: #1088."""
+    import uuid
+
+    worker = await manager.get_worker(worker_id)
+    force = request.get("force", False)
+
+    if worker:
+        worker_url, platform = await _handle_existing_worker_removal(
+            manager, worker, worker_id, force
+        )
+        worker_url = request.get("url", "") or worker_url
+    else:
+        worker_url = request.get("url", "")
+        platform = request.get("platform", "unknown")
+
+    new_worker_id = f"{platform}_npu_worker_{uuid.uuid4().hex[:8]}"
+    return worker_url, platform, new_worker_id
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="repair_worker",
@@ -860,26 +887,14 @@ async def repair_worker(
         400: If re-pair is not possible
         500: If re-pair fails
     """
-    import uuid
     from datetime import datetime
 
     try:
         manager = await get_worker_manager()
-        worker = await manager.get_worker(worker_id)
-
         request = request or {}
-        force = request.get("force", False)
-
-        if worker:
-            worker_url, platform = await _handle_existing_worker_removal(
-                manager, worker, worker_id, force
-            )
-            worker_url = request.get("url", "") or worker_url
-        else:
-            worker_url = request.get("url", "")
-            platform = request.get("platform", "unknown")
-
-        new_worker_id = f"{platform}_npu_worker_{uuid.uuid4().hex[:8]}"
+        worker_url, platform, new_worker_id = await _resolve_repair_worker_info(
+            manager, worker_id, request
+        )
 
         logger.info(
             "Re-pair initiated for worker %s -> new ID: %s", worker_id, new_worker_id
@@ -1100,6 +1115,33 @@ async def _register_worker_in_backend(
         logger.info("Registered new worker: %s", worker_id)
 
 
+async def _execute_worker_pairing(
+    worker_url: str, worker_name: str, enabled: bool
+) -> dict:
+    """Helper for pair_worker. Ref: #1088."""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        health_info = await _check_worker_health(client, worker_url)
+        worker_id = _generate_worker_id(health_info)
+        worker_config, main_host = _build_pairing_config()
+        device_info = await _send_pairing_request(
+            client, worker_url, worker_id, worker_config, main_host
+        )
+
+    await _register_worker_in_backend(
+        worker_id, worker_url, health_info.platform, worker_name, enabled
+    )
+
+    return {
+        "success": True,
+        "worker_id": worker_id,
+        "url": worker_url,
+        "platform": health_info.platform,
+        "device_info": device_info,
+        "paired_at": datetime.utcnow().isoformat() + "Z",
+        "message": f"Successfully paired with worker at {worker_url}",
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="pair_worker",
@@ -1148,36 +1190,7 @@ async def pair_worker(
             )
 
         logger.info("Attempting to pair with worker at %s", worker_url)
-
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            # Step 1: Check worker health
-            health_info = await _check_worker_health(client, worker_url)
-
-            # Step 2: Generate or reuse worker ID
-            worker_id = _generate_worker_id(health_info)
-
-            # Step 3: Build pairing configuration
-            worker_config, main_host = _build_pairing_config()
-
-            # Step 4: Send pairing request to worker
-            device_info = await _send_pairing_request(
-                client, worker_url, worker_id, worker_config, main_host
-            )
-
-        # Step 5: Register worker in backend
-        await _register_worker_in_backend(
-            worker_id, worker_url, health_info.platform, worker_name, enabled
-        )
-
-        return {
-            "success": True,
-            "worker_id": worker_id,
-            "url": worker_url,
-            "platform": health_info.platform,
-            "device_info": device_info,
-            "paired_at": datetime.utcnow().isoformat() + "Z",
-            "message": f"Successfully paired with worker at {worker_url}",
-        }
+        return await _execute_worker_pairing(worker_url, worker_name, enabled)
 
     except HTTPException:
         raise
@@ -1224,6 +1237,21 @@ def _update_prometheus_heartbeat_metrics(heartbeat: WorkerHeartbeat) -> None:
         logger.warning("Failed to update Prometheus metrics: %s", metrics_error)
 
 
+def _reject_unpaired_heartbeat(heartbeat: WorkerHeartbeat) -> None:
+    """Helper for worker_heartbeat. Ref: #1088."""
+    logger.warning(
+        "Heartbeat from unpaired worker %s at %s - ignoring. "
+        "Worker must be paired via /npu/workers/pair endpoint.",
+        heartbeat.worker_id,
+        heartbeat.url,
+    )
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Worker '{heartbeat.worker_id}' is not paired. "
+        f"Add worker via GUI or POST /api/npu/workers/pair",
+    )
+
+
 @router.post("/npu/workers/heartbeat")
 async def worker_heartbeat(heartbeat: WorkerHeartbeat):
     """
@@ -1248,29 +1276,13 @@ async def worker_heartbeat(heartbeat: WorkerHeartbeat):
 
     try:
         manager = await get_worker_manager()
-
-        # Check if worker exists
         worker = await manager.get_worker(heartbeat.worker_id)
 
+        # Issue #641: Do NOT auto-register workers from heartbeat
         if not worker:
-            # Issue #641: Do NOT auto-register workers from heartbeat
-            # Workers must be explicitly paired via GUI/API
-            logger.warning(
-                "Heartbeat from unpaired worker %s at %s - ignoring. "
-                "Worker must be paired via /npu/workers/pair endpoint.",
-                heartbeat.worker_id,
-                heartbeat.url,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Worker '{heartbeat.worker_id}' is not paired. "
-                f"Add worker via GUI or POST /api/npu/workers/pair",
-            )
+            _reject_unpaired_heartbeat(heartbeat)
 
-        # Update worker status from heartbeat
         await manager.update_worker_status_from_heartbeat(heartbeat)
-
-        # Update Prometheus metrics (Issue #620: uses helper)
         _update_prometheus_heartbeat_metrics(heartbeat)
 
         logger.debug(
@@ -1369,6 +1381,50 @@ def _build_worker_logging_config() -> dict:
     }
 
 
+def _resolve_bootstrap_worker_id(request: dict) -> tuple[str, str, str]:
+    """Helper for worker_bootstrap. Ref: #1088."""
+    import uuid
+
+    worker_id = request.get("worker_id", "auto")
+    platform = request.get("platform", "unknown")
+    worker_url = request.get("url", "")
+
+    # Issue #640: Only generate new ID if "auto" - reuse existing IDs
+    if worker_id == "auto" or not worker_id:
+        worker_id = f"{platform}_npu_worker_{uuid.uuid4().hex[:8]}"
+        logger.info("Generated new worker ID: %s", worker_id)
+    else:
+        logger.info("Reusing existing worker ID: %s", worker_id)
+
+    return worker_id, platform, worker_url
+
+
+def _build_bootstrap_response(
+    worker_id: str, platform: str, worker_url: str, ssot_config
+) -> dict:
+    """Helper for worker_bootstrap. Ref: #1088."""
+    from datetime import datetime
+
+    logger.info(
+        "Bootstrap config sent to worker %s (%s) at %s",
+        worker_id,
+        platform,
+        worker_url,
+    )
+    return {
+        "success": True,
+        "worker_id": worker_id,
+        "config": {
+            "redis": _build_worker_redis_config(ssot_config),
+            "backend": _build_worker_backend_config(ssot_config),
+            "models": _build_worker_models_config(),
+            "logging": _build_worker_logging_config(),
+        },
+        "server_timestamp": datetime.utcnow().isoformat() + "Z",
+        "message": "Bootstrap configuration provided",
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="worker_bootstrap",
@@ -1402,44 +1458,11 @@ async def worker_bootstrap(request: dict):
             - logging: Logging configuration
             - worker_id: Assigned worker ID (reused if provided, generated if "auto")
     """
-    from datetime import datetime
-
     try:
-        worker_id = request.get("worker_id", "auto")
-        platform = request.get("platform", "unknown")
-        worker_url = request.get("url", "")
-
-        # Issue #640: Only generate new ID if "auto" - reuse existing IDs
-        if worker_id == "auto" or not worker_id:
-            import uuid
-
-            worker_id = f"{platform}_npu_worker_{uuid.uuid4().hex[:8]}"
-            logger.info("Generated new worker ID: %s", worker_id)
-        else:
-            logger.info("Reusing existing worker ID: %s", worker_id)
-
-        # Get configuration from SSOT (Issue #665: uses extracted helpers)
         from autobot_shared.ssot_config import config as ssot_config
 
-        logger.info(
-            "Bootstrap config sent to worker %s (%s) at %s",
-            worker_id,
-            platform,
-            worker_url,
-        )
-
-        return {
-            "success": True,
-            "worker_id": worker_id,
-            "config": {
-                "redis": _build_worker_redis_config(ssot_config),
-                "backend": _build_worker_backend_config(ssot_config),
-                "models": _build_worker_models_config(),
-                "logging": _build_worker_logging_config(),
-            },
-            "server_timestamp": datetime.utcnow().isoformat() + "Z",
-            "message": "Bootstrap configuration provided",
-        }
+        worker_id, platform, worker_url = _resolve_bootstrap_worker_id(request)
+        return _build_bootstrap_response(worker_id, platform, worker_url, ssot_config)
 
     except Exception as e:
         logger.error("Failed to bootstrap worker: %s", e)

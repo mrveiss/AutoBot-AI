@@ -112,6 +112,23 @@ def _get_modality_type(modality_str: str) -> ModalityType:
     return modality_mapping.get(modality_str.lower(), ModalityType.TEXT)
 
 
+def _build_image_modal_input(
+    image_data, file, intent: str, question
+) -> MultiModalInput:
+    """Helper for process_image. Ref: #1088."""
+    input_id = f"image_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
+    metadata = {"filename": file.filename, "content_type": file.content_type}
+    if question:
+        metadata["question"] = question
+    return MultiModalInput(
+        input_id=input_id,
+        modality_type=ModalityType.IMAGE,
+        intent=_get_processing_intent(intent),
+        data=image_data,
+        metadata=metadata,
+    )
+
+
 # API Endpoints
 
 
@@ -144,19 +161,7 @@ async def process_image(
         if len(image_data) == 0:
             raise HTTPException(status_code=400, detail="Empty image file")
 
-        # Create multi-modal input
-        input_id = f"image_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
-        metadata = {"filename": file.filename, "content_type": file.content_type}
-        if question:
-            metadata["question"] = question
-
-        modal_input = MultiModalInput(
-            input_id=input_id,
-            modality_type=ModalityType.IMAGE,
-            intent=_get_processing_intent(intent),
-            data=image_data,
-            metadata=metadata,
-        )
+        modal_input = _build_image_modal_input(image_data, file, intent, question)
 
         # Process with unified processor
         result = await unified_processor.process(modal_input)
@@ -464,20 +469,7 @@ async def get_multimodal_stats(
         # Get unified processor stats
         processor_stats = unified_processor.get_stats()
 
-        # Get GPU status
-        gpu_available = torch.cuda.is_available()
-        gpu_stats = {}
-        if gpu_available:
-            gpu_stats = {
-                "gpu_memory_allocated_mb": torch.cuda.memory_allocated() / 1024 / 1024,
-                "gpu_memory_reserved_mb": torch.cuda.memory_reserved() / 1024 / 1024,
-                "gpu_device_count": torch.cuda.device_count(),
-                "gpu_device_name": (
-                    torch.cuda.get_device_name(0)
-                    if torch.cuda.device_count() > 0
-                    else None
-                ),
-            }
+        gpu_available, gpu_stats = _get_gpu_stats()
 
         # Get search engine status
         search_engine_status = {}
@@ -489,11 +481,8 @@ async def get_multimodal_stats(
 
         # Issue #675: Extract model availability for top-level access
         model_availability = processor_stats.get("model_availability", {})
-        vision_available = model_availability.get("vision", {}).get(
-            "clip_available", False
-        ) or model_availability.get("vision", {}).get("blip_available", False)
-        voice_available = model_availability.get("voice", {}).get(
-            "whisper_available", False
+        vision_available, voice_available = _extract_model_availability_flags(
+            model_availability
         )
 
         return {
@@ -521,6 +510,33 @@ async def get_multimodal_stats(
             "audio_models_available": False,
             "system_status": "error",
         }
+
+
+def _get_gpu_stats() -> tuple:
+    """Helper for get_multimodal_stats. Ref: #1088."""
+    gpu_available = torch.cuda.is_available()
+    gpu_stats = {}
+    if gpu_available:
+        gpu_stats = {
+            "gpu_memory_allocated_mb": torch.cuda.memory_allocated() / 1024 / 1024,
+            "gpu_memory_reserved_mb": torch.cuda.memory_reserved() / 1024 / 1024,
+            "gpu_device_count": torch.cuda.device_count(),
+            "gpu_device_name": (
+                torch.cuda.get_device_name(0) if torch.cuda.device_count() > 0 else None
+            ),
+        }
+    return gpu_available, gpu_stats
+
+
+def _extract_model_availability_flags(model_availability: dict) -> tuple:
+    """Helper for get_multimodal_stats. Ref: #1088."""
+    vision_available = model_availability.get("vision", {}).get(
+        "clip_available", False
+    ) or model_availability.get("vision", {}).get("blip_available", False)
+    voice_available = model_availability.get("voice", {}).get(
+        "whisper_available", False
+    )
+    return vision_available, voice_available
 
 
 def _create_text_input(text: str, intent: str) -> MultiModalInput:

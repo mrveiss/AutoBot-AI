@@ -21,10 +21,9 @@ logger = logging.getLogger(__name__)
 
 # Issue #1009: Graceful fallback when orchestrator deps unavailable
 try:
+    from backend.api.simple_terminal_websocket import SimpleTerminalWebSocket
     from enhanced_orchestrator import EnhancedOrchestrator
     from orchestrator import Orchestrator
-
-    from backend.api.simple_terminal_websocket import SimpleTerminalWebSocket
 
     _WORKFLOW_DEPS_AVAILABLE = True
 except ImportError:

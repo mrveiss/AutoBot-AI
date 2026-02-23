@@ -14,11 +14,57 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
+from backend.utils.activity_tracker import track_file_activity
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.utils.activity_tracker import track_file_activity
-
 logger = logging.getLogger(__name__)
+
+
+def _resolve_file_type(path: str) -> Optional[str]:
+    """Helper for track_file_operation. Ref: #1088."""
+    file_type = None
+    try:
+        path_obj = Path(path)
+        if path_obj.suffix:
+            file_type = path_obj.suffix.lstrip(".")
+    except Exception:  # nosec B110 - silently handle invalid paths
+        logger.debug("Suppressed exception in try block", exc_info=True)
+    return file_type
+
+
+async def _call_track_file_activity(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    operation: str,
+    path: str,
+    session_id: Optional[str],
+    new_path: Optional[str],
+    file_type: Optional[str],
+    size_bytes: Optional[int],
+) -> uuid.UUID:
+    """Helper for track_file_operation. Ref: #1088."""
+    try:
+        activity_id = await track_file_activity(
+            db=db,
+            user_id=user_id,
+            operation=operation,
+            path=path,
+            session_id=session_id,
+            new_path=new_path,
+            file_type=file_type,
+            size_bytes=size_bytes,
+        )
+        logger.info(
+            f"File activity tracked: user={user_id}, "
+            f"operation={operation}, path={path[:50]}"
+        )
+        return activity_id
+    except Exception as e:
+        logger.error(
+            f"Failed to track file activity: {e}",
+            exc_info=True,
+        )
+        raise
 
 
 async def track_file_operation(
@@ -57,40 +103,17 @@ async def track_file_operation(
         ...         size_bytes=1024,
         ...     )
     """
-    # Determine file type from extension
-    file_type = None
-    try:
-        path_obj = Path(path)
-        if path_obj.suffix:
-            file_type = path_obj.suffix.lstrip(".")
-    except Exception:  # nosec B110 - silently handle invalid paths
-        logger.debug("Suppressed exception in try block", exc_info=True)
-
-    try:
-        activity_id = await track_file_activity(
-            db=db,
-            user_id=user_id,
-            operation=operation,
-            path=path,
-            session_id=session_id,
-            new_path=new_path,
-            file_type=file_type,
-            size_bytes=size_bytes,
-        )
-
-        logger.info(
-            f"File activity tracked: user={user_id}, "
-            f"operation={operation}, path={path[:50]}"
-        )
-
-        return activity_id
-
-    except Exception as e:
-        logger.error(
-            f"Failed to track file activity: {e}",
-            exc_info=True,
-        )
-        raise
+    file_type = _resolve_file_type(path)
+    return await _call_track_file_activity(
+        db=db,
+        user_id=user_id,
+        operation=operation,
+        path=path,
+        session_id=session_id,
+        new_path=new_path,
+        file_type=file_type,
+        size_bytes=size_bytes,
+    )
 
 
 async def track_file_upload(

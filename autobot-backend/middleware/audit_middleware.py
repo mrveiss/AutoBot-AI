@@ -133,6 +133,31 @@ class AuditMiddleware(BaseHTTPMiddleware):
         # Specific sensitive read operations (Issue #380: use module-level tuple)
         return any(path.startswith(pattern) for pattern in _SENSITIVE_PATH_PREFIXES)
 
+    def _determine_audit_result(self, response) -> AuditResult:
+        """Helper for dispatch. Ref: #1088.
+
+        Map HTTP response status code to an AuditResult literal.
+        """
+        if response.status_code < 300:
+            return "success"
+        if response.status_code in (401, 403):
+            return "denied"
+        return "failed"
+
+    def _build_audit_details(
+        self, method: str, response, error_details, request: Request
+    ) -> dict:
+        """Helper for dispatch. Ref: #1088.
+
+        Build the details dict passed to _log_audit.
+        """
+        return {
+            "method": method,
+            "status_code": response.status_code if response else None,
+            "error": error_details,
+            "user_agent": request.headers.get("user-agent"),
+        }
+
     async def dispatch(self, request: Request, call_next):
         """Process request with audit logging"""
         start_time = time.time()
@@ -162,15 +187,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
         try:
             response = await call_next(request)
-
-            # Determine result from response status
-            if response.status_code < 300:
-                result = "success"
-            elif response.status_code == 401 or response.status_code == 403:
-                result = "denied"
-            elif response.status_code >= 400:
-                result = "failed"
-
+            result = self._determine_audit_result(response)
             return response
 
         except Exception as e:
@@ -179,10 +196,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
             raise
 
         finally:
-            # Calculate performance
             performance_ms = (time.time() - start_time) * 1000
-
-            # Log audit entry (async, non-blocking)
             asyncio.create_task(
                 self._log_audit(
                     operation=operation,
@@ -192,12 +206,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     ip_address=ip_address,
                     resource=path,
                     performance_ms=performance_ms,
-                    details={
-                        "method": method,
-                        "status_code": response.status_code if response else None,
-                        "error": error_details,
-                        "user_agent": request.headers.get("user-agent"),
-                    },
+                    details=self._build_audit_details(
+                        method, response, error_details, request
+                    ),
                 )
             )
 
