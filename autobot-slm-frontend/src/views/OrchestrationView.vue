@@ -1445,14 +1445,24 @@ onUnmounted(() => {
               </label>
             </div>
 
-            <!-- Actions -->
+            <!-- Actions: Code Sync -->
             <div class="flex gap-2 pt-2">
               <button
                 @click="executeMigration"
                 :disabled="!migrationTargetNode || migrationInProgress"
                 class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Sync role code via git archive + restart service"
               >
-                {{ migrationInProgress ? 'Migrating...' : 'Execute Migration' }}
+                {{ migrationInProgress ? 'Migrating...' : 'Sync &amp; Deploy' }}
+              </button>
+              <button
+                v-if="migrationRole && migrationRole.ansible_playbook"
+                @click="executePlaybookMigration"
+                :disabled="!migrationTargetNode || migrationInProgress"
+                class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Run Ansible playbook for full role installation"
+              >
+                Run Ansible Playbook
               </button>
               <button
                 @click="resetMigration()"
@@ -1462,7 +1472,36 @@ onUnmounted(() => {
                 Cancel
               </button>
             </div>
+
+            <!-- Ansible playbook info -->
+            <div
+              v-if="migrationRole && migrationRole.ansible_playbook"
+              class="mt-2 text-xs text-gray-500"
+            >
+              Ansible: <span class="font-mono">{{ migrationRole.ansible_playbook }}</span>
+            </div>
           </div>
+        </div>
+
+        <!-- Playbook Migration Result -->
+        <div
+          v-if="playbookMigrateResult"
+          class="card p-4"
+          :class="playbookMigrateResult.success ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'"
+        >
+          <p
+            class="font-medium text-sm mb-2"
+            :class="playbookMigrateResult.success ? 'text-green-700' : 'text-red-700'"
+          >
+            {{ playbookMigrateResult.success ? '✓' : '✗' }} Ansible migration of
+            <strong>{{ playbookMigrateResult.role }}</strong> to
+            <strong>{{ playbookMigrateResult.target_node_id }}</strong>
+            (exit {{ playbookMigrateResult.returncode }})
+          </p>
+          <pre
+            v-if="playbookMigrateResult.output"
+            class="text-xs bg-gray-900 text-gray-100 rounded p-3 overflow-auto max-h-48 whitespace-pre-wrap"
+          >{{ playbookMigrateResult.output }}</pre>
         </div>
 
         <!-- Result -->
@@ -1499,6 +1538,42 @@ onUnmounted(() => {
 
       <!-- Tab 5: Infrastructure Overview -->
       <div v-if="activeTab === 'infrastructure'" class="space-y-4">
+        <!-- Fleet Role Health Card (Issue #1129) -->
+        <div v-if="roles.fleetHealth" class="grid grid-cols-3 gap-4">
+          <div
+            class="card p-4 col-span-1"
+            :class="{
+              'border-green-300': roles.fleetHealth.health === 'healthy',
+              'border-yellow-300': roles.fleetHealth.health === 'degraded',
+              'border-red-300': roles.fleetHealth.health === 'critical',
+            }"
+          >
+            <p class="text-sm text-gray-500">Role Fleet Health</p>
+            <p
+              class="text-lg font-bold mt-1 capitalize"
+              :class="{
+                'text-green-600': roles.fleetHealth.health === 'healthy',
+                'text-yellow-600': roles.fleetHealth.health === 'degraded',
+                'text-red-600': roles.fleetHealth.health === 'critical',
+              }"
+            >
+              {{ roles.fleetHealth.health }}
+            </p>
+            <p class="text-xs text-gray-500 mt-1">
+              {{ roles.roles.length - roles.fleetHealth.required_down.length - roles.fleetHealth.optional_down.length }}
+              / {{ roles.roles.length }} roles active
+            </p>
+          </div>
+          <div class="card p-4 col-span-1">
+            <p class="text-sm text-gray-500">Required Roles Down</p>
+            <p class="text-2xl font-bold text-red-600 mt-1">{{ roles.fleetHealth.required_down.length }}</p>
+          </div>
+          <div class="card p-4 col-span-1">
+            <p class="text-sm text-gray-500">Optional Roles Down</p>
+            <p class="text-2xl font-bold text-yellow-600 mt-1">{{ roles.fleetHealth.optional_down.length }}</p>
+          </div>
+        </div>
+
         <!-- Stats Grid -->
         <div class="grid grid-cols-4 gap-4">
           <div class="card p-4">
