@@ -143,6 +143,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue'
+import { useBackoffPoller } from '@/composables/useBackoffPoller'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 import { useChatStore } from '@/stores/useChatStore'
@@ -576,7 +577,6 @@ const checkConnection = async () => {
 // Interval refs for proper cleanup
 const heartbeatInterval = ref<number | null>(null)
 const autoSaveInterval = ref<number | null>(null)
-const messagePollingInterval = ref<number | null>(null)
 
 const startHeartbeat = () => {
   // Clear any existing interval first
@@ -602,40 +602,29 @@ const enableAutoSave = () => {
   }, 2 * 60 * 1000) as unknown as number
 }
 
-// Message polling functionality - fetches new messages periodically
-// OPTIMIZED: Slower polling to reduce UI flicker and server load
-const startMessagePolling = () => {
-  // Clear any existing interval first
-  if (messagePollingInterval.value) {
-    clearInterval(messagePollingInterval.value)
-  }
-
-  logger.debug('Starting message polling (10s interval - optimized)')
-
-  // Poll for new messages every 10 seconds (reduced from 3s to prevent flicker)
-  // This still picks up LLM interpretations and new messages, just less aggressively
-  messagePollingInterval.value = setInterval(async () => {
-    // CRITICAL FIX: Skip polling while AI is typing to prevent message flickering
-    // The streaming/real-time updates handle messages during active conversation
+// Message polling with exponential backoff + circuit breaker (#1100)
+// Prevents 499 cascade: skips in-flight polls, backs off on failure, opens circuit
+// after 3 consecutive errors and retries slowly.
+const messagePoller = useBackoffPoller({
+  baseInterval: 10_000,          // 10 s when healthy (unchanged from before)
+  maxInterval: 60_000,           // cap at 60 s during backoff
+  backoffMultiplier: 2,
+  circuitBreakerThreshold: 3,
+  circuitBreakerResetMs: 60_000, // 60 s open-circuit probe interval
+  fn: async () => {
+    // Skip while AI is streaming to prevent message flickering
     if (store.isTyping) {
       logger.debug('Skipping message poll - AI is typing')
       return
     }
+    if (!store.currentSessionId) return
+    await controller.loadChatMessages(store.currentSessionId)
+  },
+})
 
-    if (store.currentSessionId) {
-      try {
-        // Silently reload messages for current session
-        // This will pick up any new interpretations or messages saved by backend
-        await controller.loadChatMessages(store.currentSessionId)
-      } catch (error) {
-        // Fail silently - don't spam console with polling errors
-        // Only log if it's not a simple 404 (session not found)
-        if (error && typeof error === 'object' && 'status' in error && error.status !== 404) {
-          logger.warn('[ChatInterface] Message polling failed:', error)
-        }
-      }
-    }
-  }, 10000) as unknown as number  // Poll every 10 seconds (optimized from 3s)
+const startMessagePolling = () => {
+  logger.debug('Starting message polling (backoff poller, base 10 s)')
+  messagePoller.start()
 }
 
 // Keyboard shortcuts
@@ -765,11 +754,7 @@ onUnmounted(() => {
     autoSaveInterval.value = null
   }
 
-  if (messagePollingInterval.value) {
-    logger.debug('[ChatInterface] Stopping message polling')
-    clearInterval(messagePollingInterval.value)
-    messagePollingInterval.value = null
-  }
+  messagePoller.stop()
 })
 
 // Watch for session changes to update NoVNC URL
