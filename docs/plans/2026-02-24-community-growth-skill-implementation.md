@@ -52,7 +52,7 @@ Expected: `Successfully installed praw-7.x.x` (or already satisfied)
 
 ```bash
 git add autobot-backend/requirements.txt
-git commit -m "feat(community-growth): add praw dependency for Reddit API (#ISSUE)"
+git commit -m "feat(community-growth): add praw dependency for Reddit API (#1161)"
 ```
 
 ---
@@ -127,7 +127,7 @@ Expected: `PASS`
 ```bash
 git add autobot-backend/workflow_templates/types.py \
         autobot-backend/workflow_templates/workflow_templates.e2e_test.py
-git commit -m "feat(community-growth): add COMMUNITY TemplateCategory (#ISSUE)"
+git commit -m "feat(community-growth): add COMMUNITY TemplateCategory (#1161)"
 ```
 
 ---
@@ -189,7 +189,7 @@ Community Growth Workflow Templates
 
 Provides workflow templates for autonomous community outreach on Reddit,
 Twitter, Discord, and GitHub. Each template includes a human approval gate
-before any content is published. Issue #ISSUE.
+before any content is published. Issue #1161.
 """
 
 from typing import List
@@ -204,7 +204,7 @@ def _build_reddit_monitor_reply_steps() -> List[WorkflowStep]:
     Build steps for Reddit Monitor & Reply template.
 
     Searches target subreddits for keyword matches, drafts contextual
-    replies via LLM, awaits human approval, then posts. Issue #ISSUE.
+    replies via LLM, awaits human approval, then posts. Issue #1161.
     """
     return [
         WorkflowStep(
@@ -270,7 +270,7 @@ def _build_release_announcement_blast_steps() -> List[WorkflowStep]:
 
     Fetches latest GitHub release, drafts platform-specific content,
     awaits human approval, then posts to Reddit + Twitter + Discord.
-    Issue #ISSUE.
+    Issue #1161.
     """
     return [
         WorkflowStep(
@@ -353,7 +353,7 @@ def _build_community_digest_post_steps() -> List[WorkflowStep]:
     Build steps for Community Digest Post template.
 
     Gathers recent releases and community mentions, drafts a digest post,
-    awaits human approval, then posts to target subreddits. Issue #ISSUE.
+    awaits human approval, then posts to target subreddits. Issue #1161.
     """
     return [
         WorkflowStep(
@@ -455,7 +455,7 @@ Expected: `PASS — 3 templates, all have approval gates`
 ```bash
 git add autobot-backend/workflow_templates/community.py \
         autobot-backend/workflow_templates/workflow_templates.e2e_test.py
-git commit -m "feat(community-growth): add 3 community workflow templates (#ISSUE)"
+git commit -m "feat(community-growth): add 3 community workflow templates (#1161)"
 ```
 
 ---
@@ -592,7 +592,7 @@ git add autobot-backend/workflow_templates/manager.py \
         autobot-backend/workflow_templates/__init__.py \
         autobot-backend/workflow_templates.py \
         autobot-backend/workflow_templates/workflow_templates.e2e_test.py
-git commit -m "feat(community-growth): wire community templates into WorkflowTemplateManager (#ISSUE)"
+git commit -m "feat(community-growth): wire community templates into WorkflowTemplateManager (#1161)"
 ```
 
 ---
@@ -611,7 +611,7 @@ Create `autobot-backend/skills/builtin/community_growth_test.py`:
 # AutoBot - AI-Powered Automation Platform
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
-"""Tests for CommunityGrowthSkill — Issue #ISSUE."""
+"""Tests for CommunityGrowthSkill — Issue #1161."""
 
 import sys
 sys.path.insert(0, "/home/kali/Desktop/AutoBot/autobot-backend")
@@ -665,7 +665,7 @@ Create `autobot-backend/skills/builtin/community_growth.py`:
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Community Growth Skill (Issue #ISSUE)
+Community Growth Skill (Issue #1161)
 
 Provides autonomous community outreach tools for Reddit, Twitter, Discord,
 and GitHub. Designed for use within the /automation Workflow Builder.
@@ -795,7 +795,7 @@ Expected: `PASS — community-growth discovered by registry`
 ```bash
 git add autobot-backend/skills/builtin/community_growth.py \
         autobot-backend/skills/builtin/community_growth_test.py
-git commit -m "feat(community-growth): add CommunityGrowthSkill manifest and dispatcher (#ISSUE)"
+git commit -m "feat(community-growth): add CommunityGrowthSkill manifest and dispatcher (#1161)"
 ```
 
 ---
@@ -895,7 +895,7 @@ Replace the stub methods in `community_growth.py` with:
 def _get_secret(self, key: str) -> str:
     """Fetch a secret value from the AutoBot secrets manager.
 
-    Raises ValueError if the secret is not found. Issue #ISSUE.
+    Raises ValueError if the secret is not found. Issue #1161.
     """
     try:
         from backend.api.secrets import get_secret_value
@@ -913,7 +913,7 @@ def _get_secret(self, key: str) -> str:
 def _get_reddit_client(self):
     """Build and return an authenticated PRAW Reddit client.
 
-    Helper for reddit_* tools. Issue #ISSUE.
+    Helper for reddit_* tools. Issue #1161.
     """
     import praw
     return praw.Reddit(
@@ -928,7 +928,7 @@ async def _reddit_search(self, params: Dict[str, Any]) -> Dict[str, Any]:
     """Search subreddits for keyword matches.
 
     Helper for execute(). Required params: subreddits (list), keywords (list).
-    Issue #ISSUE.
+    Issue #1161.
     """
     subreddits = params.get("subreddits")
     keywords = params.get("keywords", [])
@@ -967,7 +967,7 @@ async def _reddit_search(self, params: Dict[str, Any]) -> Dict[str, Any]:
 async def _reddit_reply(self, params: Dict[str, Any]) -> Dict[str, Any]:
     """Reply to a Reddit post or comment.
 
-    Helper for execute(). Required params: post_id, content. Issue #ISSUE.
+    Helper for execute(). Required params: post_id, content. Issue #1161.
     """
     post_id = params.get("post_id")
     content = params.get("content")
@@ -998,7 +998,7 @@ async def _reddit_reply(self, params: Dict[str, Any]) -> Dict[str, Any]:
 async def _reddit_post(self, params: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new Reddit post.
 
-    Helper for execute(). Required params: subreddit, title, content. Issue #ISSUE.
+    Helper for execute(). Required params: subreddit, title, content. Issue #1161.
     """
     subreddit = params.get("subreddit")
     title = params.get("title")
@@ -1048,7 +1048,7 @@ Expected: All Reddit tests PASS
 ```bash
 git add autobot-backend/skills/builtin/community_growth.py \
         autobot-backend/skills/builtin/community_growth_test.py
-git commit -m "feat(community-growth): implement Reddit tools (search/reply/post) (#ISSUE)"
+git commit -m "feat(community-growth): implement Reddit tools (search/reply/post) (#1161)"
 ```
 
 ---
@@ -1151,7 +1151,7 @@ async def _twitter_post(self, params: Dict[str, Any]) -> Dict[str, Any]:
     """Post a tweet via Twitter API v2.
 
     Helper for execute(). Content is truncated to 280 chars if needed.
-    Issue #ISSUE.
+    Issue #1161.
     """
     import aiohttp
 
@@ -1201,7 +1201,7 @@ async def _discord_notify(self, params: Dict[str, Any]) -> Dict[str, Any]:
     """Send a message to a Discord webhook.
 
     Helper for execute(). Supports optional embed_title and embed_url.
-    Issue #ISSUE.
+    Issue #1161.
     """
     import aiohttp
 
@@ -1241,7 +1241,7 @@ async def _discord_notify(self, params: Dict[str, Any]) -> Dict[str, Any]:
 async def _github_get_releases(self, params: Dict[str, Any]) -> Dict[str, Any]:
     """Fetch recent releases from a GitHub repository.
 
-    Helper for execute(). Required params: repo (owner/name). Issue #ISSUE.
+    Helper for execute(). Required params: repo (owner/name). Issue #1161.
     """
     import aiohttp
 
@@ -1298,7 +1298,7 @@ Expected: All 3 tests PASS
 ```bash
 git add autobot-backend/skills/builtin/community_growth.py \
         autobot-backend/skills/builtin/community_growth_test.py
-git commit -m "feat(community-growth): implement Twitter, Discord, GitHub tools (#ISSUE)"
+git commit -m "feat(community-growth): implement Twitter, Discord, GitHub tools (#1161)"
 ```
 
 ---
@@ -1390,7 +1390,7 @@ async def _llm_draft_content(self, params: Dict[str, Any]) -> Dict[str, Any]:
     """Call local Ollama LLM to generate platform-appropriate content.
 
     Supported formats: reddit_post, reddit_reply, tweet, discord, all_channels.
-    Helper for execute(). Issue #ISSUE.
+    Helper for execute(). Issue #1161.
     """
     import aiohttp
 
@@ -1447,7 +1447,7 @@ async def _llm_draft_content(self, params: Dict[str, Any]) -> Dict[str, Any]:
 async def _fill_template(self, params: Dict[str, Any]) -> Dict[str, Any]:
     """Substitute {variable} placeholders in a template string.
 
-    Helper for execute(). Required params: template, variables. Issue #ISSUE.
+    Helper for execute(). Required params: template, variables. Issue #1161.
     """
     template = params.get("template")
     variables = params.get("variables", {})
@@ -1479,7 +1479,7 @@ Expected: All tests PASS
 ```bash
 git add autobot-backend/skills/builtin/community_growth.py \
         autobot-backend/skills/builtin/community_growth_test.py
-git commit -m "feat(community-growth): implement llm_draft_content and fill_template tools (#ISSUE)"
+git commit -m "feat(community-growth): implement llm_draft_content and fill_template tools (#1161)"
 ```
 
 ---
@@ -1510,7 +1510,7 @@ See design doc: docs/plans/2026-02-23-community-growth-skill-design.md
 - [ ] praw installed and available"
 ```
 
-Note the issue number and replace `#ISSUE` in all commit messages.
+Note the issue number and replace `#1161` in all commit messages.
 
 **Step 2: Run the full e2e template test**
 
@@ -1534,7 +1534,7 @@ Expected: All tests PASS (2 existing + ~9 new = ~11 total)
 
 ```bash
 git add -A
-git commit -m "feat(community-growth): complete CommunityGrowthSkill implementation (#ISSUE)
+git commit -m "feat(community-growth): complete CommunityGrowthSkill implementation (#1161)
 
 - 8 tools: reddit_search/reply/post, twitter_post, discord_notify,
   github_get_releases, llm_draft_content, fill_template
