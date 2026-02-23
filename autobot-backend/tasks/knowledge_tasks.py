@@ -39,6 +39,39 @@ def _parse_indexing_output(output: str) -> tuple:
     return indexed_count, total_facts
 
 
+def _run_indexing_subprocess() -> dict:
+    """Helper for refresh_system_knowledge. Ref: #1088.
+
+    Runs the index_all_man_pages.py script as a subprocess and returns a result
+    dict.  On non-zero exit returns a 'failed' dict; on success returns a
+    'success' dict with commands_indexed and total_facts.
+    """
+    result = subprocess.run(
+        [sys.executable, "scripts/utilities/index_all_man_pages.py"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        error_msg = result.stderr[:500] if result.stderr else "Unknown error"
+        logger.error("System knowledge refresh failed: %s", error_msg)
+        return {
+            "status": "failed",
+            "error": error_msg,
+            "message": "Knowledge refresh failed",
+        }
+    indexed_count, total_facts = _parse_indexing_output(result.stdout)
+    logger.info(
+        f"System knowledge refresh complete: {indexed_count} commands indexed, "
+        f"{total_facts} total facts"
+    )
+    return {
+        "status": "success",
+        "commands_indexed": indexed_count,
+        "total_facts": total_facts,
+        "message": "System knowledge refreshed successfully",
+    }
+
+
 @celery_app.task(bind=True, name="tasks.refresh_system_knowledge")
 def refresh_system_knowledge(self) -> Metadata:
     """
@@ -46,6 +79,7 @@ def refresh_system_knowledge(self) -> Metadata:
 
     This is a long-running operation (can take up to 10 minutes) that indexes
     all system man pages and AutoBot documentation into the knowledge base.
+    Issue #1088: Subprocess execution extracted to _run_indexing_subprocess.
 
     Args:
         self: Celery task instance (bound for progress updates)
@@ -57,7 +91,6 @@ def refresh_system_knowledge(self) -> Metadata:
             - status: 'success' or 'failed'
     """
     try:
-        # Update state to show we've started
         self.update_state(
             state="PROGRESS",
             meta={
@@ -66,41 +99,10 @@ def refresh_system_knowledge(self) -> Metadata:
                 "status": "Starting system knowledge refresh...",
             },
         )
-
         logger.info(
             "Starting comprehensive system knowledge refresh (background task)..."
         )
-
-        # Run the comprehensive indexing script
-        result = subprocess.run(
-            [sys.executable, "scripts/utilities/index_all_man_pages.py"],
-            capture_output=True,
-            text=True,
-        )
-
-        if result.returncode != 0:
-            error_msg = result.stderr[:500] if result.stderr else "Unknown error"
-            logger.error("System knowledge refresh failed: %s", error_msg)
-            return {
-                "status": "failed",
-                "error": error_msg,
-                "message": "Knowledge refresh failed",
-            }
-
-        # Parse output using helper (Issue #315: reduced nesting)
-        indexed_count, total_facts = _parse_indexing_output(result.stdout)
-
-        logger.info(
-            f"System knowledge refresh complete: {indexed_count} commands indexed, "
-            f"{total_facts} total facts"
-        )
-
-        return {
-            "status": "success",
-            "commands_indexed": indexed_count,
-            "total_facts": total_facts,
-            "message": "System knowledge refreshed successfully",
-        }
+        return _run_indexing_subprocess()
 
     except Exception as e:
         logger.exception("System knowledge refresh task failed: %s", e)
@@ -228,6 +230,30 @@ async def _store_man_pages_to_kb(kb, man_pages: list, delay: float) -> tuple[int
     return items_added, items_failed
 
 
+async def _store_scan_results_to_kb(kb, scan_result: dict) -> tuple:
+    """Helper for _scan_man_page_changes_async. Ref: #1088.
+
+    Iterates over parsed_content in scan_result and stores each item to the
+    knowledge base.  Returns (items_added, items_failed).
+    """
+    items_added = 0
+    items_failed = 0
+    for parsed in scan_result.get("parsed_content", []):
+        try:
+            result = await kb.store_fact(
+                content=parsed.get("content", ""),
+                metadata=parsed.get("metadata", {}),
+            )
+            if result and result.get("status") == "success":
+                items_added += 1
+            else:
+                items_failed += 1
+        except Exception as e:
+            logger.error("Error storing parsed man page: %s", e)
+            items_failed += 1
+    return items_added, items_failed
+
+
 async def _scan_man_page_changes_async(
     machine_id: str, limit: int | None = None
 ) -> dict:
@@ -235,6 +261,7 @@ async def _scan_man_page_changes_async(
     Async implementation of man page change scanning.
 
     Issue #424: Core logic for incremental man page updates.
+    Issue #1088: Store loop extracted to _store_scan_results_to_kb.
 
     Args:
         machine_id: Host identifier for change tracking
@@ -249,7 +276,6 @@ async def _scan_man_page_changes_async(
     from autobot_shared.redis_client import get_redis_client
 
     try:
-        # Get system context
         try:
             from utils.system_context import get_system_context
 
@@ -257,37 +283,17 @@ async def _scan_man_page_changes_async(
         except ImportError:
             system_context = {"machine_id": machine_id}
 
-        # Get Redis client and scanner
         redis_client = get_redis_client(async_client=False, database="main")
         scanner = FastDocumentScanner(redis_client)
 
-        # Scan for changes with parsing
         scan_result = scanner.scan_and_parse_changes(
             machine_id=machine_id,
             limit=limit,
             system_context=system_context,
         )
 
-        # Get knowledge base
         kb = await get_knowledge_base()
-
-        # Store parsed content
-        items_added = 0
-        items_failed = 0
-
-        for parsed in scan_result.get("parsed_content", []):
-            try:
-                result = await kb.store_fact(
-                    content=parsed.get("content", ""),
-                    metadata=parsed.get("metadata", {}),
-                )
-                if result and result.get("status") == "success":
-                    items_added += 1
-                else:
-                    items_failed += 1
-            except Exception as e:
-                logger.error("Error storing parsed man page: %s", e)
-                items_failed += 1
+        items_added, items_failed = await _store_scan_results_to_kb(kb, scan_result)
 
         return {
             "status": "success",

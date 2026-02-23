@@ -23,6 +23,9 @@ export interface Role {
   health_check_path: string | null
   pre_sync_cmd: string | null
   post_sync_cmd: string | null
+  required: boolean
+  degraded_without: string[]
+  ansible_playbook: string | null
 }
 
 export interface NodeRoleItem {
@@ -61,10 +64,27 @@ export interface SyncResult {
   }>
 }
 
+export interface FleetHealth {
+  health: 'healthy' | 'degraded' | 'critical'
+  required_down: string[]
+  optional_down: string[]
+  detail: string
+}
+
+export interface PlaybookMigrateResult {
+  success: boolean
+  role: string
+  target_node_id: string
+  playbook: string
+  output: string
+  returncode: number
+}
+
 export function useRoles() {
   const roles = ref<Role[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  const fleetHealth = ref<FleetHealth | null>(null)
 
   // SLM backend endpoints are at /api/* (proxied by nginx)
   // NOT /autobot-api/* which goes to the Main AutoBot backend
@@ -223,10 +243,38 @@ export function useRoles() {
     }
   }
 
+  async function fetchFleetHealth(): Promise<void> {
+    try {
+      const response = await client.get<FleetHealth>('/api/roles/fleet-health')
+      fleetHealth.value = response.data
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } }; message?: string }
+      error.value = err.response?.data?.detail || err.message || 'Failed to fetch fleet health'
+    }
+  }
+
+  async function migrateRole(
+    roleName: string,
+    targetNodeId: string
+  ): Promise<PlaybookMigrateResult | null> {
+    try {
+      const response = await client.post<PlaybookMigrateResult>(
+        `/api/roles/${roleName}/migrate`,
+        { target_node_id: targetNodeId }
+      )
+      return response.data
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } }; message?: string }
+      error.value = err.response?.data?.detail || err.message || 'Migration failed'
+      return null
+    }
+  }
+
   return reactive({
     roles,
     isLoading,
     error,
+    fleetHealth,
     fetchRoles,
     getNodeRoles,
     assignRole,
@@ -236,5 +284,7 @@ export function useRoles() {
     deleteRole,
     syncRole,
     pullFromSource,
+    fetchFleetHealth,
+    migrateRole,
   })
 }

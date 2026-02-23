@@ -15,11 +15,10 @@ from typing import Dict, Optional, Tuple
 
 import bcrypt
 import jwt
+from backend.utils.catalog_http_exceptions import raise_auth_error
 from config import ConfigManager
 from fastapi import Request
 from security_layer import SecurityLayer
-
-from backend.utils.catalog_http_exceptions import raise_auth_error
 
 logger = logging.getLogger(__name__)
 
@@ -495,8 +494,7 @@ class AuthenticationMiddleware:
 
         # Single-user mode: bypass auth (mirrors check_admin_permission behavior)
         try:
-            from user_management.config import (DeploymentMode,
-                                                get_deployment_config)
+            from user_management.config import DeploymentMode, get_deployment_config
 
             deployment_config = get_deployment_config()
             if deployment_config.mode == DeploymentMode.SINGLE_USER:
@@ -694,6 +692,13 @@ def check_admin_permission(request: Request) -> bool:
     Raises:
         HTTPException: 401 if not authenticated, 403 if not admin
     """
+    # Issue #1145: Allow trusted internal services (e.g. SLM backend) via API key.
+    # The key is set via AUTOBOT_INTERNAL_API_KEY env var on both services.
+    _internal_key = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
+    if _internal_key and request.headers.get("X-Internal-API-Key") == _internal_key:
+        logger.debug("Internal API key auth: granting admin access")
+        return True
+
     # Check for single user mode - bypass auth and grant admin access
     from user_management.config import DeploymentMode, get_deployment_config
 

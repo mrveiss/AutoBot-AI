@@ -14,10 +14,15 @@
  * 5. Infrastructure Overview (from InfrastructureSettings)
  */
 
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useOrchestrationManagement } from '@/composables/useOrchestrationManagement'
-import { useRoles, type Role } from '@/composables/useRoles'
+import {
+  useRoles,
+  type Role,
+  type PlaybookMigrateResult,
+  type NodeRolesInfo,
+} from '@/composables/useRoles'
 import { createLogger } from '@/utils/debugUtils'
 import ServiceStatusBadge from '@/components/orchestration/ServiceStatusBadge.vue'
 import ServiceActionButtons from '@/components/orchestration/ServiceActionButtons.vue'
@@ -207,6 +212,8 @@ const roleFormData = ref({
   health_check_path: '',
   pre_sync_cmd: '',
   post_sync_cmd: '',
+  required: false,
+  degraded_without: '',
 })
 
 // =============================================================================
@@ -224,6 +231,15 @@ const migrationResult = ref<{
   message: string
   details: Array<{ node_id: string; success: boolean; message: string }>
 } | null>(null)
+
+// =============================================================================
+// Role data: per-node detected roles cache (Issue #1129)
+// =============================================================================
+
+// Use reactive Record so Vue tracks property additions
+const nodeRolesCache = reactive<Record<string, NodeRolesInfo>>({})
+const loadingRolesForNode = reactive<Record<string, boolean>>({})
+const playbookMigrateResult = ref<PlaybookMigrateResult | null>(null)
 
 // =============================================================================
 // Tab 5: Infrastructure Overview State
@@ -311,6 +327,20 @@ function toggleNode(nodeId: string): void {
     expandedNodes.value.delete(nodeId)
   } else {
     expandedNodes.value.add(nodeId)
+    loadRolesForNode(nodeId)
+  }
+}
+
+async function loadRolesForNode(nodeId: string): Promise<void> {
+  if (loadingRolesForNode[nodeId] || nodeRolesCache[nodeId]) return
+  loadingRolesForNode[nodeId] = true
+  try {
+    const data = await roles.getNodeRoles(nodeId)
+    if (data) {
+      nodeRolesCache[nodeId] = data
+    }
+  } finally {
+    delete loadingRolesForNode[nodeId]
   }
 }
 
@@ -401,6 +431,8 @@ function openCreateRoleForm(): void {
     health_check_path: '',
     pre_sync_cmd: '',
     post_sync_cmd: '',
+    required: false,
+    degraded_without: '',
   }
   showRoleForm.value = true
 }
@@ -419,6 +451,8 @@ function openEditRoleForm(role: any): void {
     health_check_path: role.health_check_path || '',
     pre_sync_cmd: role.pre_sync_cmd || '',
     post_sync_cmd: role.post_sync_cmd || '',
+    required: role.required ?? false,
+    degraded_without: (role.degraded_without || []).join(', '),
   }
   showRoleForm.value = true
 }
@@ -440,6 +474,10 @@ async function saveRole(): Promise<void> {
     health_check_path: roleFormData.value.health_check_path || null,
     pre_sync_cmd: roleFormData.value.pre_sync_cmd || null,
     post_sync_cmd: roleFormData.value.post_sync_cmd || null,
+    required: roleFormData.value.required,
+    degraded_without: roleFormData.value.degraded_without
+      ? roleFormData.value.degraded_without.split(',').map((s) => s.trim()).filter(Boolean)
+      : [],
   }
 
   if (editingRole.value) {
@@ -520,6 +558,18 @@ async function executeMigration(): Promise<void> {
   migrationInProgress.value = false
 }
 
+async function executePlaybookMigration(): Promise<void> {
+  if (!migrationRole.value || !migrationTargetNode.value) return
+  migrationInProgress.value = true
+  playbookMigrateResult.value = null
+  const result = await roles.migrateRole(migrationRole.value.name, migrationTargetNode.value)
+  playbookMigrateResult.value = result
+  migrationInProgress.value = false
+  if (result?.success) {
+    await Promise.allSettled([roles.fetchRoles(), orchestration.fetchFleetServices()])
+  }
+}
+
 // =============================================================================
 // Lifecycle
 // =============================================================================
@@ -533,12 +583,13 @@ async function refresh(): Promise<void> {
       orchestration.fetchServiceDefinitions(),
       orchestration.fleetStore.fetchNodes(),
       roles.fetchRoles(),
+      roles.fetchFleetHealth(),
     ])
 
     // Log any failures for debugging
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
-        const names = ['fleetServices', 'fleetStatus', 'serviceDefinitions', 'nodes', 'roles']
+        const names = ['fleetServices', 'fleetStatus', 'serviceDefinitions', 'nodes', 'roles', 'fleetHealth']
         logger.warn(`Failed to fetch ${names[index]}:`, result.reason)
       }
     })
@@ -787,8 +838,31 @@ onUnmounted(() => {
               @restartAll="handleRestartAllServices"
             />
 
-            <!-- Services List -->
+            <!-- Services + Detected Roles -->
             <div v-if="expandedNodes.has(node.nodeId)" class="border-t border-gray-100">
+              <!-- Detected roles banner (Issue #1129) -->
+              <div
+                v-if="nodeRolesCache[node.nodeId] || loadingRolesForNode[node.nodeId]"
+                class="px-4 py-2 bg-blue-50 border-b border-blue-100 flex flex-wrap items-center gap-1.5"
+              >
+                <span class="text-xs font-medium text-blue-700 mr-1">Roles:</span>
+                <span
+                  v-for="roleItem in nodeRolesCache[node.nodeId]?.roles"
+                  :key="roleItem.role_name"
+                  class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                  :class="{
+                    'bg-green-100 text-green-700': roleItem.status === 'active',
+                    'bg-gray-100 text-gray-500': roleItem.status === 'inactive',
+                    'bg-yellow-100 text-yellow-700': roleItem.status === 'not_installed',
+                  }"
+                  :title="roleItem.assignment_type"
+                >
+                  {{ roleItem.role_name }}
+                </span>
+                <span v-if="loadingRolesForNode[node.nodeId]" class="text-xs text-gray-400 italic">
+                  Loading…
+                </span>
+              </div>
               <table class="w-full">
                 <thead class="bg-gray-50">
                   <tr class="text-xs text-gray-500 uppercase">
@@ -863,6 +937,46 @@ onUnmounted(() => {
 
       <!-- Tab 2: Fleet Operations -->
       <div v-if="activeTab === 'fleet'" class="space-y-4">
+        <!-- Fleet Role Health (Issue #1129) -->
+        <div
+          v-if="roles.fleetHealth"
+          class="card p-4 flex items-start gap-4"
+          :class="{
+            'border-green-300 bg-green-50': roles.fleetHealth.health === 'healthy',
+            'border-yellow-300 bg-yellow-50': roles.fleetHealth.health === 'degraded',
+            'border-red-300 bg-red-50': roles.fleetHealth.health === 'critical',
+          }"
+        >
+          <div class="flex-1">
+            <p
+              class="font-semibold text-sm"
+              :class="{
+                'text-green-700': roles.fleetHealth.health === 'healthy',
+                'text-yellow-700': roles.fleetHealth.health === 'degraded',
+                'text-red-700': roles.fleetHealth.health === 'critical',
+              }"
+            >
+              Role Fleet Health:
+              {{ roles.fleetHealth.health === 'healthy' ? '✓ Healthy' : roles.fleetHealth.health === 'degraded' ? '⚠ Degraded' : '✗ Critical' }}
+            </p>
+            <p class="text-sm text-gray-600 mt-0.5">{{ roles.fleetHealth.detail }}</p>
+            <div v-if="roles.fleetHealth.required_down.length > 0" class="mt-2 flex flex-wrap gap-1">
+              <span
+                v-for="r in roles.fleetHealth.required_down"
+                :key="r"
+                class="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded font-medium"
+              >{{ r }} (required)</span>
+            </div>
+            <div v-if="roles.fleetHealth.optional_down.length > 0" class="mt-1 flex flex-wrap gap-1">
+              <span
+                v-for="r in roles.fleetHealth.optional_down"
+                :key="r"
+                class="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded"
+              >{{ r }}</span>
+            </div>
+          </div>
+        </div>
+
         <!-- Fleet Actions -->
         <div class="card p-4">
           <h3 class="font-medium text-gray-900 mb-3">Fleet-Wide Actions</h3>
@@ -971,6 +1085,29 @@ onUnmounted(() => {
 
       <!-- Tab 3: Roles & Deployment -->
       <div v-if="activeTab === 'roles'">
+        <!-- Fleet Health Banner (Issue #1129) -->
+        <div
+          v-if="roles.fleetHealth"
+          class="card p-3 mb-4 flex items-center gap-3"
+          :class="{
+            'border-green-300 bg-green-50': roles.fleetHealth.health === 'healthy',
+            'border-yellow-300 bg-yellow-50': roles.fleetHealth.health === 'degraded',
+            'border-red-300 bg-red-50': roles.fleetHealth.health === 'critical',
+          }"
+        >
+          <span
+            class="text-sm font-semibold"
+            :class="{
+              'text-green-700': roles.fleetHealth.health === 'healthy',
+              'text-yellow-700': roles.fleetHealth.health === 'degraded',
+              'text-red-700': roles.fleetHealth.health === 'critical',
+            }"
+          >
+            {{ roles.fleetHealth.health === 'healthy' ? '✓ Healthy' : roles.fleetHealth.health === 'degraded' ? '⚠ Degraded' : '✗ Critical' }}
+          </span>
+          <span class="text-sm text-gray-600">{{ roles.fleetHealth.detail }}</span>
+        </div>
+
         <div class="mb-4">
           <button
             @click="openCreateRoleForm"
@@ -1056,6 +1193,27 @@ onUnmounted(() => {
                   >Auto Restart on Deploy</label
                 >
               </div>
+              <div class="flex items-center gap-2 pt-6">
+                <input
+                  id="required-role"
+                  type="checkbox"
+                  v-model="roleFormData.required"
+                  class="rounded"
+                />
+                <label for="required-role" class="text-sm text-gray-700"
+                  >Required (critical if offline)</label
+                >
+              </div>
+              <div class="col-span-2">
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                  Degraded Without (comma-separated descriptions)
+                </label>
+                <input
+                  v-model="roleFormData.degraded_without"
+                  class="w-full px-3 py-2 border rounded-lg text-sm"
+                  placeholder="GPU inference offloading — backend falls back to local Ollama"
+                />
+              </div>
             </div>
             <div class="flex gap-2">
               <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
@@ -1081,6 +1239,7 @@ onUnmounted(() => {
             <thead class="bg-gray-50">
               <tr class="text-xs text-gray-500 uppercase">
                 <th class="px-4 py-2 text-left">Name</th>
+                <th class="px-4 py-2 text-left w-20">Priority</th>
                 <th class="px-4 py-2 text-left">Sync Type</th>
                 <th class="px-4 py-2 text-left">Target</th>
                 <th class="px-4 py-2 text-left">Service</th>
@@ -1096,6 +1255,21 @@ onUnmounted(() => {
                 <td class="px-4 py-2">
                   <p class="text-sm font-medium text-gray-900">{{ role.display_name || role.name }}</p>
                   <p v-if="role.display_name" class="text-xs text-gray-500">{{ role.name }}</p>
+                  <p
+                    v-if="role.degraded_without && role.degraded_without.length > 0"
+                    class="text-xs text-yellow-600 mt-0.5 truncate max-w-xs"
+                    :title="role.degraded_without.join('; ')"
+                  >
+                    ⚠ {{ role.degraded_without[0] }}
+                  </p>
+                </td>
+                <td class="px-4 py-2">
+                  <span
+                    class="px-1.5 py-0.5 text-xs font-medium rounded"
+                    :class="role.required ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'"
+                  >
+                    {{ role.required ? 'Required' : 'Optional' }}
+                  </span>
                 </td>
                 <td class="px-4 py-2">
                   <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700">
@@ -1144,8 +1318,14 @@ onUnmounted(() => {
               @click="selectMigrationRole(role)"
               class="text-left border rounded-lg p-3 hover:border-blue-400 hover:bg-blue-50 transition-colors"
             >
-              <div class="font-medium text-gray-900 text-sm">
-                {{ role.display_name || role.name }}
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-gray-900 text-sm">{{ role.display_name || role.name }}</span>
+                <span
+                  class="px-1.5 py-0.5 text-xs rounded font-medium"
+                  :class="role.required ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'"
+                >
+                  {{ role.required ? 'Required' : 'Optional' }}
+                </span>
               </div>
               <div class="text-xs text-gray-500 mt-1 truncate">
                 {{ role.systemd_service || 'No systemd service' }}
@@ -1157,6 +1337,13 @@ onUnmounted(() => {
                 <span class="text-xs text-gray-400">
                   {{ role.source_paths.length }} source path(s)
                 </span>
+              </div>
+              <div
+                v-if="role.degraded_without && role.degraded_without.length > 0"
+                class="mt-1 text-xs text-yellow-600 truncate"
+                :title="role.degraded_without.join('; ')"
+              >
+                ⚠ {{ role.degraded_without[0] }}
               </div>
             </button>
           </div>
@@ -1257,14 +1444,24 @@ onUnmounted(() => {
               </label>
             </div>
 
-            <!-- Actions -->
+            <!-- Actions: Code Sync -->
             <div class="flex gap-2 pt-2">
               <button
                 @click="executeMigration"
                 :disabled="!migrationTargetNode || migrationInProgress"
                 class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Sync role code via git archive + restart service"
               >
-                {{ migrationInProgress ? 'Migrating...' : 'Execute Migration' }}
+                {{ migrationInProgress ? 'Migrating...' : 'Sync &amp; Deploy' }}
+              </button>
+              <button
+                v-if="migrationRole && migrationRole.ansible_playbook"
+                @click="executePlaybookMigration"
+                :disabled="!migrationTargetNode || migrationInProgress"
+                class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Run Ansible playbook for full role installation"
+              >
+                Run Ansible Playbook
               </button>
               <button
                 @click="resetMigration()"
@@ -1274,7 +1471,36 @@ onUnmounted(() => {
                 Cancel
               </button>
             </div>
+
+            <!-- Ansible playbook info -->
+            <div
+              v-if="migrationRole && migrationRole.ansible_playbook"
+              class="mt-2 text-xs text-gray-500"
+            >
+              Ansible: <span class="font-mono">{{ migrationRole.ansible_playbook }}</span>
+            </div>
           </div>
+        </div>
+
+        <!-- Playbook Migration Result -->
+        <div
+          v-if="playbookMigrateResult"
+          class="card p-4"
+          :class="playbookMigrateResult.success ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'"
+        >
+          <p
+            class="font-medium text-sm mb-2"
+            :class="playbookMigrateResult.success ? 'text-green-700' : 'text-red-700'"
+          >
+            {{ playbookMigrateResult.success ? '✓' : '✗' }} Ansible migration of
+            <strong>{{ playbookMigrateResult.role }}</strong> to
+            <strong>{{ playbookMigrateResult.target_node_id }}</strong>
+            (exit {{ playbookMigrateResult.returncode }})
+          </p>
+          <pre
+            v-if="playbookMigrateResult.output"
+            class="text-xs bg-gray-900 text-gray-100 rounded p-3 overflow-auto max-h-48 whitespace-pre-wrap"
+          >{{ playbookMigrateResult.output }}</pre>
         </div>
 
         <!-- Result -->
@@ -1311,6 +1537,42 @@ onUnmounted(() => {
 
       <!-- Tab 5: Infrastructure Overview -->
       <div v-if="activeTab === 'infrastructure'" class="space-y-4">
+        <!-- Fleet Role Health Card (Issue #1129) -->
+        <div v-if="roles.fleetHealth" class="grid grid-cols-3 gap-4">
+          <div
+            class="card p-4 col-span-1"
+            :class="{
+              'border-green-300': roles.fleetHealth.health === 'healthy',
+              'border-yellow-300': roles.fleetHealth.health === 'degraded',
+              'border-red-300': roles.fleetHealth.health === 'critical',
+            }"
+          >
+            <p class="text-sm text-gray-500">Role Fleet Health</p>
+            <p
+              class="text-lg font-bold mt-1 capitalize"
+              :class="{
+                'text-green-600': roles.fleetHealth.health === 'healthy',
+                'text-yellow-600': roles.fleetHealth.health === 'degraded',
+                'text-red-600': roles.fleetHealth.health === 'critical',
+              }"
+            >
+              {{ roles.fleetHealth.health }}
+            </p>
+            <p class="text-xs text-gray-500 mt-1">
+              {{ roles.roles.length - roles.fleetHealth.required_down.length - roles.fleetHealth.optional_down.length }}
+              / {{ roles.roles.length }} roles active
+            </p>
+          </div>
+          <div class="card p-4 col-span-1">
+            <p class="text-sm text-gray-500">Required Roles Down</p>
+            <p class="text-2xl font-bold text-red-600 mt-1">{{ roles.fleetHealth.required_down.length }}</p>
+          </div>
+          <div class="card p-4 col-span-1">
+            <p class="text-sm text-gray-500">Optional Roles Down</p>
+            <p class="text-2xl font-bold text-yellow-600 mt-1">{{ roles.fleetHealth.optional_down.length }}</p>
+          </div>
+        </div>
+
         <!-- Stats Grid -->
         <div class="grid grid-cols-4 gap-4">
           <div class="card p-4">
@@ -1348,6 +1610,7 @@ onUnmounted(() => {
                 <th class="px-4 py-2 text-left">IP Address</th>
                 <th class="px-4 py-2 text-left">Status</th>
                 <th class="px-4 py-2 text-left">Services</th>
+                <th class="px-4 py-2 text-left">Roles</th>
               </tr>
             </thead>
             <tbody>
@@ -1373,6 +1636,16 @@ onUnmounted(() => {
                       : 0
                   }}
                   services
+                </td>
+                <td class="px-4 py-2">
+                  <div class="flex flex-wrap gap-1">
+                    <span
+                      v-for="role in (node.roles as string[])"
+                      :key="role"
+                      class="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700 rounded"
+                    >{{ role }}</span>
+                    <span v-if="!node.roles || node.roles.length === 0" class="text-xs text-gray-400">—</span>
+                  </div>
                 </td>
               </tr>
             </tbody>

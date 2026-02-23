@@ -258,8 +258,8 @@ class AsyncBaselineTest:
 
         # Create async Redis connection using canonical pattern
         redis_client = await get_redis_client(
-            async_client=True, database="metrics"  # METRICS_DB
-        )
+            async_client=True, database="metrics"
+        )  # METRICS_DB
 
         try:
             # Launch all operations concurrently
@@ -362,8 +362,8 @@ class AsyncBaselineTest:
 
         # Create async Redis connection using canonical pattern
         redis_client = await get_redis_client(
-            async_client=True, database="metrics"  # METRICS_DB
-        )
+            async_client=True, database="metrics"
+        )  # METRICS_DB
 
         try:
             # Launch all operations concurrently
@@ -550,9 +550,9 @@ class AsyncBaselineTest:
         report["summary"] = {
             "total_requests": total_requests,
             "total_successful": total_successful,
-            "overall_success_rate": (total_successful / total_requests * 100)
-            if total_requests > 0
-            else 0,
+            "overall_success_rate": (
+                (total_successful / total_requests * 100) if total_requests > 0 else 0
+            ),
         }
 
         # Performance analysis against targets
@@ -570,28 +570,30 @@ class AsyncBaselineTest:
             "chat_performance": {
                 "baseline_p95_ms": chat_test.p95_latency_ms if chat_test else 0,
                 "target_after_async_ms": 2000,  # 2s target
-                "meets_target": (chat_test.p95_latency_ms < 2000)
-                if chat_test
-                else False,
-                "improvement_needed": "10-50x faster"
-                if chat_test and chat_test.p95_latency_ms > 10000
-                else "Already fast",
+                "meets_target": (
+                    (chat_test.p95_latency_ms < 2000) if chat_test else False
+                ),
+                "improvement_needed": (
+                    "10-50x faster"
+                    if chat_test and chat_test.p95_latency_ms > 10000
+                    else "Already fast"
+                ),
             },
             "redis_performance": {
-                "baseline_ops_per_sec": redis_test.requests_per_second
-                if redis_test
-                else 0,
+                "baseline_ops_per_sec": (
+                    redis_test.requests_per_second if redis_test else 0
+                ),
                 "target_ops_per_sec": 1000,  # Target throughput
-                "meets_target": (redis_test.requests_per_second > 1000)
-                if redis_test
-                else False,
+                "meets_target": (
+                    (redis_test.requests_per_second > 1000) if redis_test else False
+                ),
             },
             "cross_vm_latency": {
                 "baseline_p95_ms": cross_vm_test.p95_latency_ms if cross_vm_test else 0,
                 "target_p95_ms": 100,  # <100ms target
-                "meets_target": (cross_vm_test.p95_latency_ms < 100)
-                if cross_vm_test
-                else False,
+                "meets_target": (
+                    (cross_vm_test.p95_latency_ms < 100) if cross_vm_test else False
+                ),
             },
         }
 

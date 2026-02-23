@@ -371,7 +371,7 @@ export class ChatRepository {
         const normalizedType = this.normalizeMessageType(rawType)
 
         const transformed = {
-          id: msg.id || msg.metadata?.message_id || msg.rawData?.message_id || `${Date.now()}-${index}`,
+          id: msg.id || msg.metadata?.message_id || msg.rawData?.message_id || `${msg.sender}-${msg.timestamp}-${index}`,
           sender: this.normalizeSender(msg.sender),
           content: msg.text || msg.content || '',
           timestamp: new Date(msg.timestamp || new Date().toISOString()),

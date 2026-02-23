@@ -413,14 +413,7 @@ async def unified_search(req: Request, body: UnifiedSearchRequest):
 )
 @router.get("/stats")
 async def unified_stats(req: Request):
-    """
-    Get statistics from all unified knowledge sources.
-
-    Returns counts and status for:
-    - Knowledge base facts
-    - Fact relations
-    - Indexed documentation
-    """
+    """Get statistics from all unified knowledge sources (KB facts, relations, docs). Ref: #1088."""
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     stats = {

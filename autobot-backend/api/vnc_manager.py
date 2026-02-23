@@ -26,12 +26,12 @@ from api.vnc_humanization import (
     simulate_mouse_curve,
 )
 from auth_middleware import check_admin_permission
+from backend.constants.network_constants import NetworkConstants
+from backend.constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import with_error_handling
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -1169,6 +1169,68 @@ class FindImageRequest(BaseModel):
     )
 
 
+def _decode_images_for_matching(screen_b64: str, template_b64: str) -> tuple:
+    """Helper for vnc_find_image. Ref: #1088.
+
+    Decode base64 image data and convert to cv2 arrays.
+
+    Args:
+        screen_b64: Base64-encoded screenshot PNG
+        template_b64: Base64-encoded template PNG
+
+    Returns:
+        Tuple of (screen_img, template_img). Either value is None on decode failure.
+    """
+    import cv2
+    import numpy as np
+
+    screen_data = base64.b64decode(screen_b64)
+    template_data = base64.b64decode(template_b64)
+
+    screen_array = np.frombuffer(screen_data, dtype=np.uint8)
+    template_array = np.frombuffer(template_data, dtype=np.uint8)
+
+    screen_img = cv2.imdecode(screen_array, cv2.IMREAD_COLOR)
+    template_img = cv2.imdecode(template_array, cv2.IMREAD_COLOR)
+    return screen_img, template_img
+
+
+def _build_match_result(
+    max_val: float, max_loc: tuple, template_img, threshold: float
+) -> Dict[str, object]:
+    """Helper for vnc_find_image. Ref: #1088.
+
+    Build found/not-found response dict from template matching values.
+
+    Args:
+        max_val: Best match confidence value from minMaxLoc
+        max_loc: Top-left corner of best match location
+        template_img: cv2 image used as the template
+        threshold: Minimum confidence required to report a match
+
+    Returns:
+        Response dict with found, x, y, confidence, and message keys.
+    """
+    if max_val >= threshold:
+        template_h, template_w = template_img.shape[:2]
+        center_x = max_loc[0] + template_w // 2
+        center_y = max_loc[1] + template_h // 2
+        return {
+            "status": "success",
+            "found": True,
+            "x": center_x,
+            "y": center_y,
+            "confidence": float(max_val),
+            "message": "Template found",
+        }
+    return {
+        "status": "success",
+        "found": False,
+        "confidence": float(max_val),
+        "message": f"Template not found (best match: {max_val:.2f} < {threshold})",
+    }
+
+
 @router.post("/find-image")
 @with_error_handling(error_code_prefix="VNC_FIND_IMAGE")
 async def vnc_find_image(
@@ -1192,9 +1254,7 @@ async def vnc_find_image(
         }
     """
     try:
-        # Check if opencv is available
-        import cv2
-        import numpy as np
+        import cv2  # noqa: F401
     except ImportError:
         return {
             "status": "error",
@@ -1203,50 +1263,22 @@ async def vnc_find_image(
         }
 
     try:
-        # Capture screenshot
         screenshot_result = await vnc_screenshot()
         if screenshot_result["status"] != "success":
             return {"status": "error", "found": False, "message": "Screenshot failed"}
 
-        # Decode images
-        screen_data = base64.b64decode(screenshot_result["image_data"])
-        template_data = base64.b64decode(request.template_data)
-
-        # Convert to cv2 images
-        screen_array = np.frombuffer(screen_data, dtype=np.uint8)
-        template_array = np.frombuffer(template_data, dtype=np.uint8)
-
-        screen_img = cv2.imdecode(screen_array, cv2.IMREAD_COLOR)
-        template_img = cv2.imdecode(template_array, cv2.IMREAD_COLOR)
+        screen_img, template_img = _decode_images_for_matching(
+            screenshot_result["image_data"], request.template_data
+        )
 
         if screen_img is None or template_img is None:
             return {"status": "error", "found": False, "message": "Invalid image data"}
 
-        # Template matching
+        import cv2  # noqa: F811
+
         result = cv2.matchTemplate(screen_img, template_img, cv2.TM_CCOEFF_NORMED)
-        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-
-        if max_val >= request.threshold:
-            # Calculate center coordinates
-            template_h, template_w = template_img.shape[:2]
-            center_x = max_loc[0] + template_w // 2
-            center_y = max_loc[1] + template_h // 2
-
-            return {
-                "status": "success",
-                "found": True,
-                "x": center_x,
-                "y": center_y,
-                "confidence": float(max_val),
-                "message": "Template found",
-            }
-        else:
-            return {
-                "status": "success",
-                "found": False,
-                "confidence": float(max_val),
-                "message": f"Template not found (best match: {max_val:.2f} < {request.threshold})",
-            }
+        _min_val, max_val, _min_loc, max_loc = cv2.minMaxLoc(result)
+        return _build_match_result(max_val, max_loc, template_img, request.threshold)
 
     except Exception as e:
         logger.error("Image template matching failed: %s", e)

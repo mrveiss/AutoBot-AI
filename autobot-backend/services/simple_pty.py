@@ -126,14 +126,33 @@ class SimplePTY:
             logger.warning("Failed to configure terminal echo: %s", e)
             return False
 
+    def _spawn_bash_process(self, slave_fd, env: dict, initial_cwd: str) -> None:
+        """Helper for start. Ref: #1088. Spawns the bash subprocess and sets fd state."""
+        bash_cmd = ["/bin/bash"]
+        if self.use_login_shell:
+            bash_cmd.append("--login")
+            logger.info(
+                f"Starting login shell for session {self.session_id} (loads profile files)"
+            )
+        self.process = subprocess.Popen(
+            bash_cmd,
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            env=env,
+            cwd=initial_cwd or str(PATH.PROJECT_ROOT),
+            preexec_fn=os.setsid,
+        )
+        os.close(slave_fd)
+        os.set_blocking(self.master_fd, False)
+        self.running = True
+
     def start(self, initial_cwd: str = None):
-        """Start the PTY"""
+        """Start the PTY. Ref: #1088."""
         try:
-            # Create PTY pair
             self.master_fd, slave_fd = pty.openpty()
 
-            # Configure terminal echo using reusable function
-            # This makes the PTY behave like a real interactive terminal
+            # Configure terminal echo
             if self.configure_terminal_echo(slave_fd, enable=True):
                 logger.info("Terminal echo enabled for PTY session %s", self.session_id)
             else:
@@ -141,47 +160,18 @@ class SimplePTY:
                     f"Terminal echo configuration failed for PTY session {self.session_id} (continuing anyway)"
                 )
 
-            # Start bash process
             env = os.environ.copy()
             env["TERM"] = "xterm-256color"
-
-            # Set custom PS1 prompt if provided
             if self.custom_ps1:
                 env["PS1"] = self.custom_ps1
                 logger.info(
                     f"Setting custom PS1 prompt for session {self.session_id}: {self.custom_ps1}"
                 )
 
-            # Build bash command with optional --login flag
-            bash_cmd = ["/bin/bash"]
-            if self.use_login_shell:
-                bash_cmd.append("--login")
-                logger.info(
-                    f"Starting login shell for session {self.session_id} (loads profile files)"
-                )
+            self._spawn_bash_process(slave_fd, env, initial_cwd)
 
-            self.process = subprocess.Popen(
-                bash_cmd,
-                stdin=slave_fd,
-                stdout=slave_fd,
-                stderr=slave_fd,
-                env=env,
-                cwd=initial_cwd or str(PATH.PROJECT_ROOT),
-                preexec_fn=os.setsid,
-            )
-
-            # Close slave fd in parent
-            os.close(slave_fd)
-
-            # Make master fd non-blocking
-            os.set_blocking(self.master_fd, False)
-
-            self.running = True
-
-            # Start I/O threads
             self.reader_thread = threading.Thread(target=self._read_loop, daemon=True)
             self.writer_thread = threading.Thread(target=self._write_loop, daemon=True)
-
             self.reader_thread.start()
             self.writer_thread.start()
 

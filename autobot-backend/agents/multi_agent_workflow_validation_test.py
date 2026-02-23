@@ -459,9 +459,9 @@ class MultiAgentWorkflowValidator:
                 "failed": failed,
                 "warnings": warnings,
                 "skipped": skipped,
-                "success_rate": f"{(passed/total_tests*100):.1f}%"
-                if total_tests > 0
-                else "0%",
+                "success_rate": (
+                    f"{(passed/total_tests*100):.1f}%" if total_tests > 0 else "0%"
+                ),
             },
             "agent_analysis": {
                 "agents_tested": list(all_agents),
@@ -470,12 +470,12 @@ class MultiAgentWorkflowValidator:
             },
             "performance_metrics": {
                 "average_response_time": f"{avg_response_time:.3f}s",
-                "fastest_response": f"{min(response_times):.3f}s"
-                if response_times
-                else "N/A",
-                "slowest_response": f"{max(response_times):.3f}s"
-                if response_times
-                else "N/A",
+                "fastest_response": (
+                    f"{min(response_times):.3f}s" if response_times else "N/A"
+                ),
+                "slowest_response": (
+                    f"{max(response_times):.3f}s" if response_times else "N/A"
+                ),
             },
             "production_readiness": {
                 "multi_agent_coordination": passed >= 5,

@@ -878,7 +878,7 @@ class UpdateSchedule(Base):
 
 
 class Role(Base):
-    """Role definition for code distribution (Issue #779)."""
+    """Role definition for code distribution (Issue #779, #1129)."""
 
     __tablename__ = "roles"
 
@@ -894,6 +894,10 @@ class Role(Base):
     health_check_path = Column(String(255), nullable=True)
     pre_sync_cmd = Column(Text, nullable=True)
     post_sync_cmd = Column(Text, nullable=True)
+    # Phase 2: Role metadata (Issue #1129)
+    required = Column(Boolean, default=False, nullable=False)
+    degraded_without = Column(JSON, default=list)
+    ansible_playbook = Column(String(200), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

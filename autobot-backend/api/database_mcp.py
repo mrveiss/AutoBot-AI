@@ -761,16 +761,7 @@ async def database_query_mcp(request: SQLQueryRequest) -> Metadata:
 )
 @router.post("/mcp/execute")
 async def database_execute_mcp(request: SQLExecuteRequest) -> Metadata:
-    """
-    Execute INSERT/UPDATE/DELETE on SQLite database
-
-    Security controls:
-    - Database whitelist validation
-    - Read-only database check
-    - SQL injection prevention (parameterized queries)
-    - Rate limiting
-    - Audit logging
-    """
+    """Execute INSERT/UPDATE/DELETE on SQLite with security controls. Ref: #1088."""
     # Security checks
     if not await check_rate_limit():
         raise HTTPException(

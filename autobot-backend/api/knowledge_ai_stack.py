@@ -262,6 +262,51 @@ def _combine_search_results(
 # ====================================================================
 
 
+async def _run_all_search_sources(
+    request_data: "EnhancedSearchRequest",
+    req: Request,
+    knowledge_base,
+) -> Dict[str, Any]:
+    """Helper for enhanced_search. Ref: #1088.
+
+    Executes local KB, RAG, and librarian searches and returns a combined
+    results dict keyed by source name.
+
+    Args:
+        request_data: Validated search request parameters
+        req: FastAPI request for app state access
+        knowledge_base: Injected knowledge base dependency
+
+    Returns:
+        Dict mapping source name to search result data
+    """
+    results: Dict[str, Any] = {}
+
+    if request_data.include_local and knowledge_base:
+        results["local_knowledge_base"] = await _search_local_knowledge_base(
+            req=req,
+            query=request_data.query,
+            max_results=request_data.max_results,
+            confidence_threshold=request_data.confidence_threshold,
+        )
+
+    if request_data.include_rag:
+        local_docs = results.get("local_knowledge_base", {}).get("results")
+        results["rag_enhanced"] = await _search_rag_enhanced(
+            query=request_data.query,
+            max_results=request_data.max_results,
+            local_docs=local_docs,
+        )
+
+    results["enhanced_librarian"] = await _search_enhanced_librarian(
+        query=request_data.query,
+        search_type=request_data.search_type,
+        max_results=request_data.max_results,
+    )
+
+    return results
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="enhanced_search",
@@ -286,34 +331,7 @@ async def enhanced_search(
     - Intelligent result ranking and synthesis
     """
     try:
-        results = {}
-
-        # Local knowledge base search (Issue #281: uses helper)
-        if request_data.include_local and knowledge_base:
-            results["local_knowledge_base"] = await _search_local_knowledge_base(
-                req=req,
-                query=request_data.query,
-                max_results=request_data.max_results,
-                confidence_threshold=request_data.confidence_threshold,
-            )
-
-        # AI Stack RAG search (Issue #281: uses helper)
-        if request_data.include_rag:
-            local_docs = results.get("local_knowledge_base", {}).get("results")
-            results["rag_enhanced"] = await _search_rag_enhanced(
-                query=request_data.query,
-                max_results=request_data.max_results,
-                local_docs=local_docs,
-            )
-
-        # Enhanced librarian search (Issue #281: uses helper)
-        results["enhanced_librarian"] = await _search_enhanced_librarian(
-            query=request_data.query,
-            search_type=request_data.search_type,
-            max_results=request_data.max_results,
-        )
-
-        # Combine and rank results (Issue #281: uses helper)
+        results = await _run_all_search_sources(request_data, req, knowledge_base)
         combined_results, source_count = _combine_search_results(results)
 
         return create_success_response(

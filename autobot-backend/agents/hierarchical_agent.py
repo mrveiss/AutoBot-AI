@@ -83,9 +83,11 @@ class HierarchicalAgent:
             "[Issue #657] HierarchicalAgent created: id=%s, level=%d, parent=%s",
             context.agent_id[:8] if len(context.agent_id) > 8 else context.agent_id,
             context.level,
-            context.parent_id[:8]
-            if context.parent_id and len(context.parent_id) > 8
-            else context.parent_id,
+            (
+                context.parent_id[:8]
+                if context.parent_id and len(context.parent_id) > 8
+                else context.parent_id
+            ),
         )
 
     def _validate_delegation_depth(self) -> None:

@@ -137,6 +137,18 @@ server {
         proxy_next_upstream_timeout 10s;
     }
 
+    # Issue #1105: WebSocket proxy for voice stream
+    location /api/voice/stream {
+        proxy_pass {{ backend_protocol | default('https') }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+        proxy_ssl_verify off;
+    }
+
     # WebSocket proxy for terminal/chat
     location /api/ws {
         proxy_pass {{ backend_protocol | default('https') }}://autobot_backend;

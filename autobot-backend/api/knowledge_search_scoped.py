@@ -11,9 +11,6 @@ import logging
 from typing import List, Optional
 
 from auth_middleware import get_current_user
-from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
-
 from backend.knowledge.search_filters import (
     augment_search_request_with_permissions,
     extract_user_context_from_request,
@@ -21,6 +18,8 @@ from backend.knowledge.search_filters import (
 )
 from backend.knowledge_factory import get_or_create_knowledge_base
 from backend.user_management.models.user import User
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +55,94 @@ class ScopedSearchRequest(BaseModel):
 # =============================================================================
 
 
+async def _resolve_search_context(request: Request, current_user: User, query: str):
+    """Helper for scoped_search. Ref: #1088.
+
+    Validates KB availability, extracts user context, and logs the search intent.
+    Returns (kb, user_id, user_org_id, user_group_ids).
+    Raises HTTPException(503) when the knowledge base is unavailable.
+    """
+    kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
+    if kb is None or not kb.ownership_manager:
+        raise HTTPException(status_code=503, detail="Knowledge base not available")
+
+    user_id, user_org_id, user_group_ids = extract_user_context_from_request(
+        current_user
+    )
+
+    logger.info(
+        "Scoped search for user %s (org: %s, groups: %d): %s",
+        user_id,
+        user_org_id,
+        len(user_group_ids),
+        query,
+    )
+    return kb, user_id, user_org_id, user_group_ids
+
+
+async def _execute_permission_filtered_search(
+    kb, search_request: ScopedSearchRequest, user_id, user_org_id, user_group_ids
+):
+    """Helper for scoped_search. Ref: #1088.
+
+    Builds the ChromaDB permission filter, runs the search, and returns raw results.
+    Raises HTTPException(500) when kb.search is unavailable.
+    """
+    permission_where = await augment_search_request_with_permissions(
+        query=search_request.query,
+        user_id=user_id,
+        user_org_id=user_org_id,
+        user_group_ids=user_group_ids,
+    )
+
+    if not hasattr(kb, "search"):
+        raise HTTPException(
+            status_code=500, detail="Knowledge base search not available"
+        )
+
+    return await kb.search(
+        query=search_request.query,
+        top_k=search_request.top_k,
+        filters=permission_where,
+    )
+
+
+async def _build_scoped_search_response(
+    results,
+    search_request: ScopedSearchRequest,
+    user_id,
+    user_org_id,
+    user_group_ids,
+    ownership_manager,
+) -> dict:
+    """Helper for scoped_search. Ref: #1088.
+
+    Post-filters raw results by permission, logs outcome, and builds the response dict.
+    """
+    filtered_results = await filter_search_results_by_permission(
+        results=results,
+        user_id=user_id,
+        user_org_id=user_org_id,
+        user_group_ids=user_group_ids,
+        ownership_manager=ownership_manager,
+    )
+
+    logger.info(
+        "Scoped search returned %d/%d accessible results",
+        len(filtered_results),
+        len(results),
+    )
+
+    return {
+        "results": filtered_results,
+        "total_results": len(filtered_results),
+        "query": search_request.query,
+        "mode": search_request.mode,
+        "user_id": user_id,
+        "filtered_by_permissions": True,
+    }
+
+
 @router.post("/scoped")
 async def scoped_search(
     search_request: ScopedSearchRequest,
@@ -76,71 +163,74 @@ async def scoped_search(
     Returns:
         Filtered search results respecting user's access permissions
     """
-    kb = await get_or_create_knowledge_base(request.app, force_refresh=False)
-    if kb is None or not kb.ownership_manager:
-        raise HTTPException(status_code=503, detail="Knowledge base not available")
-
     try:
-        # Extract user context
-        user_id, user_org_id, user_group_ids = extract_user_context_from_request(
-            current_user
+        kb, user_id, user_org_id, user_group_ids = await _resolve_search_context(
+            request, current_user, search_request.query
         )
-
-        logger.info(
-            "Scoped search for user %s (org: %s, groups: %d): %s",
+        results = await _execute_permission_filtered_search(
+            kb, search_request, user_id, user_org_id, user_group_ids
+        )
+        return await _build_scoped_search_response(
+            results,
+            search_request,
             user_id,
             user_org_id,
-            len(user_group_ids),
-            search_request.query,
+            user_group_ids,
+            kb.ownership_manager,
         )
-
-        # Build permission filter for ChromaDB metadata pre-filtering (Issue #934)
-        permission_where = await augment_search_request_with_permissions(
-            query=search_request.query,
-            user_id=user_id,
-            user_org_id=user_org_id,
-            user_group_ids=user_group_ids,
-        )
-
-        # Execute search with permission filter applied at ChromaDB level
-        if hasattr(kb, "search"):
-            results = await kb.search(
-                query=search_request.query,
-                top_k=search_request.top_k,
-                filters=permission_where,
-            )
-        else:
-            raise HTTPException(
-                status_code=500, detail="Knowledge base search not available"
-            )
-
-        # Post-process filter for group/shared facts (ChromaDB can't filter these directly)
-        filtered_results = await filter_search_results_by_permission(
-            results=results,
-            user_id=user_id,
-            user_org_id=user_org_id,
-            user_group_ids=user_group_ids,
-            ownership_manager=kb.ownership_manager,
-        )
-
-        logger.info(
-            "Scoped search returned %d/%d accessible results",
-            len(filtered_results),
-            len(results),
-        )
-
-        return {
-            "results": filtered_results,
-            "total_results": len(filtered_results),
-            "query": search_request.query,
-            "mode": search_request.mode,
-            "user_id": user_id,
-            "filtered_by_permissions": True,
-        }
 
     except Exception as e:
         logger.error("Error in scoped search: %s", e)
         raise HTTPException(status_code=500, detail=f"Search failed: {e}")
+
+
+async def _synthesize_rag_response(
+    query: str,
+    accessible_facts: list,
+    user_id: str,
+    scoped_results: dict,
+) -> dict:
+    """Helper for scoped_rag_search. Ref: #1088.
+
+    Attempts RAG synthesis over the top-5 accessible facts.
+    Falls back to returning the raw scoped results when the RAG agent
+    is unavailable (ImportError).
+
+    Args:
+        query: Original search query string
+        accessible_facts: Permission-filtered facts from scoped_search
+        user_id: Authenticated user ID for response metadata
+        scoped_results: Raw scoped_search response dict used as fallback
+
+    Returns:
+        RAG-synthesized response dict, or scoped_results with rag_enhanced=False
+    """
+    try:
+        from agents.rag_agent import get_rag_agent
+
+        rag_agent = get_rag_agent()
+        context_texts = [
+            f"{fact.get('title', 'Untitled')}: {fact.get('content', '')}"
+            for fact in accessible_facts[:5]
+        ]
+        context = "\n\n".join(context_texts)
+        rag_response = await rag_agent.generate_response(query=query, context=context)
+        return {
+            "query": query,
+            "synthesized_response": rag_response.get("response", ""),
+            "source_facts": accessible_facts[:5],
+            "total_facts_used": len(accessible_facts[:5]),
+            "user_id": user_id,
+            "filtered_by_permissions": True,
+            "rag_enhanced": True,
+        }
+    except ImportError:
+        logger.warning("RAG agent not available, returning scoped results only")
+        return {
+            **scoped_results,
+            "rag_enhanced": False,
+            "message": "RAG agent not available",
+        }
 
 
 @router.post("/rag/scoped")
@@ -165,7 +255,7 @@ async def scoped_rag_search(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        # Extract user context
+        # Extract user context (Issue #1088: context extracted here, synthesis delegated)
         user_id, user_org_id, user_group_ids = extract_user_context_from_request(
             current_user
         )
@@ -176,49 +266,19 @@ async def scoped_rag_search(
             search_request.query,
         )
 
-        # First, get accessible facts using scoped search
+        # Get accessible facts via permission-filtered search
         scoped_results = await scoped_search(
             search_request=search_request, request=request, current_user=current_user
         )
-
         accessible_facts = scoped_results["results"]
 
-        # If RAG agent is available, synthesize response
-        try:
-            from agents.rag_agent import get_rag_agent
-
-            rag_agent = get_rag_agent()
-
-            # Build context from accessible facts only
-            context_texts = [
-                f"{fact.get('title', 'Untitled')}: {fact.get('content', '')}"
-                for fact in accessible_facts[:5]  # Top 5 facts for context
-            ]
-
-            context = "\n\n".join(context_texts)
-
-            # Generate RAG response
-            rag_response = await rag_agent.generate_response(
-                query=search_request.query, context=context
-            )
-
-            return {
-                "query": search_request.query,
-                "synthesized_response": rag_response.get("response", ""),
-                "source_facts": accessible_facts[:5],
-                "total_facts_used": len(accessible_facts[:5]),
-                "user_id": user_id,
-                "filtered_by_permissions": True,
-                "rag_enhanced": True,
-            }
-
-        except ImportError:
-            logger.warning("RAG agent not available, returning scoped results only")
-            return {
-                **scoped_results,
-                "rag_enhanced": False,
-                "message": "RAG agent not available",
-            }
+        # Synthesize RAG response (Issue #1088: uses helper)
+        return await _synthesize_rag_response(
+            query=search_request.query,
+            accessible_facts=accessible_facts,
+            user_id=user_id,
+            scoped_results=scoped_results,
+        )
 
     except Exception as e:
         logger.error("Error in scoped RAG search: %s", e)

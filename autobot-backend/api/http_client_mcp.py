@@ -380,81 +380,78 @@ class HTTPHeadRequest(HTTPRequestBase):
 # MCP Tool Definitions
 
 
+def _get_http_get_tool() -> MCPTool:
+    """Helper for _get_http_read_tools. Build the http_get MCPTool. Ref: #1088."""
+    return MCPTool(
+        name="http_get",
+        description=(
+            "Perform HTTP GET request to retrieve data from a URL. Supports query parameters and"
+            "custom headers. Rate limited to 120 requests/minute."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Target URL (must be in allowed domains)",
+                },
+                "headers": {
+                    "type": "object",
+                    "description": "Optional HTTP headers (sensitive headers blocked)",
+                    "additionalProperties": {"type": "string"},
+                },
+                "params": {
+                    "type": "object",
+                    "description": "Optional query parameters",
+                    "additionalProperties": {"type": "string"},
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": (
+                        f"Request timeout in seconds (default: {DEFAULT_TIMEOUT}, max: {MAX_TIMEOUT})"
+                    ),
+                    "minimum": 1,
+                    "maximum": MAX_TIMEOUT,
+                },
+            },
+            "required": ["url"],
+        },
+    )
+
+
+def _get_http_head_tool() -> MCPTool:
+    """Helper for _get_http_read_tools. Build the http_head MCPTool. Ref: #1088."""
+    return MCPTool(
+        name="http_head",
+        description=(
+            "Perform HTTP HEAD request to retrieve headers only (no body). Useful for"
+            "checking resource existence or metadata."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "Target URL to check"},
+                "headers": {
+                    "type": "object",
+                    "description": "Optional HTTP headers",
+                    "additionalProperties": {"type": "string"},
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": f"Request timeout (default: {DEFAULT_TIMEOUT}s)",
+                },
+            },
+            "required": ["url"],
+        },
+    )
+
+
 def _get_http_read_tools() -> List[MCPTool]:
-    """
-    Get MCP tools for HTTP read operations (GET, HEAD).
+    """Get MCP tools for HTTP read operations (GET, HEAD). Ref: #1088.
 
-    Issue #281: Extracted from get_http_client_mcp_tools to reduce function length
-    and improve maintainability of tool definitions by category.
-
-    Returns:
-        List of MCPTool definitions for read operations
+    Issue #281: Extracted from get_http_client_mcp_tools to reduce function length.
     """
-    return [
-        MCPTool(
-            name="http_get",
-            description=(
-                "Perform HTTP GET request to retrieve data from a URL. Supports query parameters and"
-                "custom headers. Rate limited to 120 requests/minute."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "Target URL (must be in allowed domains)",
-                    },
-                    "headers": {
-                        "type": "object",
-                        "description": (
-                            "Optional HTTP headers (sensitive headers blocked)"
-                        ),
-                        "additionalProperties": {"type": "string"},
-                    },
-                    "params": {
-                        "type": "object",
-                        "description": "Optional query parameters",
-                        "additionalProperties": {"type": "string"},
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": (
-                            f"Request timeout in seconds (default: {DEFAULT_TIMEOUT}, max: {MAX_TIMEOUT})"
-                        ),
-                        "minimum": 1,
-                        "maximum": MAX_TIMEOUT,
-                    },
-                },
-                "required": ["url"],
-            },
-        ),
-        MCPTool(
-            name="http_head",
-            description=(
-                "Perform HTTP HEAD request to retrieve headers only (no body). Useful for"
-                "checking resource existence or metadata."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "Target URL to check",
-                    },
-                    "headers": {
-                        "type": "object",
-                        "description": "Optional HTTP headers",
-                        "additionalProperties": {"type": "string"},
-                    },
-                    "timeout": {
-                        "type": "integer",
-                        "description": f"Request timeout (default: {DEFAULT_TIMEOUT}s)",
-                    },
-                },
-                "required": ["url"],
-            },
-        ),
-    ]
+    return [_get_http_get_tool(), _get_http_head_tool()]
 
 
 def _build_url_property() -> dict:

@@ -1,0 +1,16 @@
+{
+  "role": "backend",
+  "version": "{{ backend_version | default(git_commit) | default('unknown') }}",
+  "deploy_path": "{{ backend_install_dir }}",
+  "pythonpath": "{{ backend_install_dir }}",
+  "service": "autobot-backend",
+  "ansible_playbook": "deploy-backend.yml",
+  "build_steps": [
+    "pip install -r requirements.txt",
+    "alembic upgrade head"
+  ],
+  "depends_on": ["autobot-shared"],
+  "required": true,
+  "degraded_without": [],
+  "deployed_at": "{{ ansible_date_time.iso8601 }}"
+}

@@ -426,74 +426,69 @@ class AgentAnalytics:
             logger.error("Failed to get agent metrics: %s", e)
             return None
 
+    @staticmethod
+    def _build_agent_metrics_from_data(
+        agent_id: str, data: Dict[str, Any]
+    ) -> AgentMetrics:
+        """Helper for get_all_agents_metrics. Ref: #1088.
+
+        Decodes a raw Redis hash, computes derived rates, and constructs an
+        AgentMetrics instance for the given agent_id.
+        """
+        metrics_data: Dict[str, str] = {}
+        for k, v in data.items():
+            dict_key = k if isinstance(k, str) else k.decode("utf-8")
+            val = v if isinstance(v, str) else v.decode("utf-8")
+            metrics_data[dict_key] = val
+        total_tasks = int(metrics_data.get("total_tasks", 0))
+        completed_tasks = int(metrics_data.get("completed_tasks", 0))
+        failed_tasks = int(metrics_data.get("failed_tasks", 0))
+        total_duration = float(metrics_data.get("total_duration_ms", 0))
+        if total_tasks > 0:
+            error_rate = (failed_tasks / total_tasks) * 100
+            success_rate = (completed_tasks / total_tasks) * 100
+            avg_duration = total_duration / total_tasks
+        else:
+            error_rate = 0
+            success_rate = 0
+            avg_duration = 0
+        return AgentMetrics(
+            agent_id=agent_id,
+            agent_type=metrics_data.get("agent_type", "unknown"),
+            total_tasks=total_tasks,
+            completed_tasks=completed_tasks,
+            failed_tasks=failed_tasks,
+            cancelled_tasks=int(metrics_data.get("cancelled_tasks", 0)),
+            timeout_tasks=int(metrics_data.get("timeout_tasks", 0)),
+            avg_duration_ms=avg_duration,
+            total_tokens_used=int(metrics_data.get("total_tokens_used", 0)),
+            error_rate=error_rate,
+            success_rate=success_rate,
+            last_activity=metrics_data.get("last_activity"),
+        )
+
     async def get_all_agents_metrics(self) -> List[AgentMetrics]:
         """Get metrics for all agents"""
         try:
             redis = await self.get_redis()
             pattern = f"{self.AGENT_METRICS_KEY}:*"
             keys = await redis.keys(pattern)
-
             if not keys:
                 return []
-
             # Batch fetch all metrics using pipeline (fix N+1 query)
             pipe = redis.pipeline()
             for key in keys:
                 pipe.hgetall(key)
             results = await pipe.execute()
-
-            # Process results
             metrics_list = []
             for key, data in zip(keys, results):
                 if not data:
                     continue
-
                 key_str = key if isinstance(key, str) else key.decode("utf-8")
                 agent_id = key_str.split(":")[-1]
-
-                # Convert bytes to string if needed
-                metrics_data = {}
-                for k, v in data.items():
-                    dict_key = k if isinstance(k, str) else k.decode("utf-8")
-                    val = v if isinstance(v, str) else v.decode("utf-8")
-                    metrics_data[dict_key] = val
-
-                total_tasks = int(metrics_data.get("total_tasks", 0))
-                completed_tasks = int(metrics_data.get("completed_tasks", 0))
-                failed_tasks = int(metrics_data.get("failed_tasks", 0))
-                total_duration = float(metrics_data.get("total_duration_ms", 0))
-
-                # Calculate rates
-                if total_tasks > 0:
-                    error_rate = (failed_tasks / total_tasks) * 100
-                    success_rate = (completed_tasks / total_tasks) * 100
-                    avg_duration = total_duration / total_tasks
-                else:
-                    error_rate = 0
-                    success_rate = 0
-                    avg_duration = 0
-
-                metrics = AgentMetrics(
-                    agent_id=agent_id,
-                    agent_type=metrics_data.get("agent_type", "unknown"),
-                    total_tasks=total_tasks,
-                    completed_tasks=completed_tasks,
-                    failed_tasks=failed_tasks,
-                    cancelled_tasks=int(metrics_data.get("cancelled_tasks", 0)),
-                    timeout_tasks=int(metrics_data.get("timeout_tasks", 0)),
-                    avg_duration_ms=avg_duration,
-                    total_tokens_used=int(metrics_data.get("total_tokens_used", 0)),
-                    error_rate=error_rate,
-                    success_rate=success_rate,
-                    last_activity=metrics_data.get("last_activity"),
-                )
-                metrics_list.append(metrics)
-
-            # Sort by total tasks descending
+                metrics_list.append(self._build_agent_metrics_from_data(agent_id, data))
             metrics_list.sort(key=lambda x: x.total_tasks, reverse=True)
-
             return metrics_list
-
         except Exception as e:
             logger.error("Failed to get all agents metrics: %s", e)
             return []
@@ -574,6 +569,51 @@ class AgentAnalytics:
             },
         }
 
+    @staticmethod
+    def _group_tasks_by_day(filtered_tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Helper for get_performance_trends. Ref: #1088.
+
+        Groups task records by calendar day (YYYY-MM-DD) and accumulates
+        totals, completed, failed, and duration counters.
+        """
+        daily_stats: Dict[str, Any] = {}
+        for task in filtered_tasks:
+            day = task["started_at"][:10]  # YYYY-MM-DD
+            if day not in daily_stats:
+                daily_stats[day] = {
+                    "total": 0,
+                    "completed": 0,
+                    "failed": 0,
+                    "total_duration_ms": 0,
+                }
+            daily_stats[day]["total"] += 1
+            if task["status"] == "completed":
+                daily_stats[day]["completed"] += 1
+            elif task["status"] == "failed":
+                daily_stats[day]["failed"] += 1
+            if task.get("duration_ms"):
+                daily_stats[day]["total_duration_ms"] += task["duration_ms"]
+        return daily_stats
+
+    @staticmethod
+    def _compute_daily_averages(daily_stats: Dict[str, Any]) -> None:
+        """Helper for get_performance_trends. Ref: #1088.
+
+        Mutates each day bucket in-place, adding success_rate and
+        avg_duration_ms derived from accumulated counters.
+        """
+        for stats in daily_stats.values():
+            if stats["total"] > 0:
+                stats["success_rate"] = round(
+                    (stats["completed"] / stats["total"]) * 100, 2
+                )
+                stats["avg_duration_ms"] = round(
+                    stats["total_duration_ms"] / stats["total"], 2
+                )
+            else:
+                stats["success_rate"] = 0
+                stats["avg_duration_ms"] = 0
+
     async def get_performance_trends(
         self, agent_id: Optional[str] = None, days: int = 7
     ) -> Dict[str, Any]:
@@ -592,53 +632,18 @@ class AgentAnalytics:
                 tasks = await self.get_agent_history(agent_id, limit=1000)
             else:
                 tasks = await self.get_recent_tasks(limit=5000)
-
-            # Filter to requested time range
             cutoff = datetime.utcnow() - timedelta(days=days)
             filtered_tasks = [
                 t for t in tasks if datetime.fromisoformat(t["started_at"]) > cutoff
             ]
-
-            # Group by day
-            daily_stats = {}
-            for task in filtered_tasks:
-                day = task["started_at"][:10]  # YYYY-MM-DD
-                if day not in daily_stats:
-                    daily_stats[day] = {
-                        "total": 0,
-                        "completed": 0,
-                        "failed": 0,
-                        "total_duration_ms": 0,
-                    }
-                daily_stats[day]["total"] += 1
-                if task["status"] == "completed":
-                    daily_stats[day]["completed"] += 1
-                elif task["status"] == "failed":
-                    daily_stats[day]["failed"] += 1
-                if task.get("duration_ms"):
-                    daily_stats[day]["total_duration_ms"] += task["duration_ms"]
-
-            # Calculate daily averages
-            for day in daily_stats:
-                stats = daily_stats[day]
-                if stats["total"] > 0:
-                    stats["success_rate"] = round(
-                        (stats["completed"] / stats["total"]) * 100, 2
-                    )
-                    stats["avg_duration_ms"] = round(
-                        stats["total_duration_ms"] / stats["total"], 2
-                    )
-                else:
-                    stats["success_rate"] = 0
-                    stats["avg_duration_ms"] = 0
-
+            daily_stats = self._group_tasks_by_day(filtered_tasks)
+            self._compute_daily_averages(daily_stats)
             return {
                 "period_days": days,
                 "agent_id": agent_id,
                 "daily_stats": daily_stats,
                 "total_tasks": len(filtered_tasks),
             }
-
         except Exception as e:
             logger.error("Failed to get performance trends: %s", e)
             return {"error": str(e)}

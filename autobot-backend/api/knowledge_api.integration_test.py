@@ -522,9 +522,9 @@ class TestFailedJobRetryFlow:
                 mock_response.status = 200
                 mock_response.json = AsyncMock(
                     return_value={
-                        "status": "retry_scheduled"
-                        if attempt < max_retries - 1
-                        else "failed",
+                        "status": (
+                            "retry_scheduled" if attempt < max_retries - 1 else "failed"
+                        ),
                         "attempt": attempt + 1,
                         "delay": expected_delay,
                         "can_retry": attempt < max_retries - 1,

@@ -1149,6 +1149,27 @@ async def _store_pattern_snapshots(analysis_result: Dict) -> int:
     return snapshots_stored
 
 
+def _validate_evolution_repo_path(repo_path_str: str):
+    """Helper for trigger_evolution_analysis. Ref: #1088.
+
+    Returns (repo_path, error_response) where error_response is None if valid.
+    """
+    from pathlib import Path
+
+    repo_path = Path(repo_path_str)
+    if not repo_path.exists():
+        return None, EvolutionAnalysisResponse(
+            status="error",
+            message=f"Repository path not found: {repo_path_str}",
+        )
+    if not (repo_path / ".git").exists():
+        return None, EvolutionAnalysisResponse(
+            status="error",
+            message=f"Not a git repository: {repo_path_str}",
+        )
+    return repo_path, None
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="trigger_evolution_analysis",
@@ -1168,26 +1189,15 @@ async def trigger_evolution_analysis(
     Requires admin authentication.
     """
     import time
-    from pathlib import Path
 
     from code_intelligence.code_evolution_miner import CodeEvolutionMiner
 
     start_time = time.time()
 
     try:
-        # Validate repo path
-        repo_path = Path(request.repo_path)
-        if not repo_path.exists():
-            return EvolutionAnalysisResponse(
-                status="error",
-                message=f"Repository path not found: {request.repo_path}",
-            )
-
-        if not (repo_path / ".git").exists():
-            return EvolutionAnalysisResponse(
-                status="error",
-                message=f"Not a git repository: {request.repo_path}",
-            )
+        repo_path, err = _validate_evolution_repo_path(request.repo_path)
+        if err:
+            return err
 
         # Parse dates
         start_date = (

@@ -34,19 +34,11 @@ class ServiceAuthLoggingMiddleware(BaseHTTPMiddleware):
     - Does NOT raise exceptions or return error responses
     """
 
-    async def dispatch(self, request: Request, call_next):
-        """
-        Process request with authentication logging only.
+    def _is_exempt_path(self, request: Request) -> bool:
+        """Helper for dispatch. Ref: #1088.
 
-        Args:
-            request: FastAPI request object
-            call_next: Next middleware in chain
-
-        Returns:
-            Response from next middleware (ALWAYS proceeds)
+        Return True if the request path matches a service-auth exemption.
         """
-        # Skip authentication for health check, documentation, and frontend endpoints
-        # Service auth is for service-to-service calls only, not browser-to-backend
         skip_paths = [
             "/health",  # Health check (no prefix)
             "/api/health",  # General health check
@@ -63,16 +55,15 @@ class ServiceAuthLoggingMiddleware(BaseHTTPMiddleware):
             "/api/cache/",  # Cache statistics and management
             "/api/npu/",  # NPU worker management and status
         ]
-        if any(request.url.path.startswith(path) for path in skip_paths):
-            logger.debug(
-                f"Skipping auth check for {request.url.path} (matched exemption)"
-            )
-            return await call_next(request)
+        return any(request.url.path.startswith(path) for path in skip_paths)
 
+    async def _log_auth_result(self, request: Request) -> None:
+        """Helper for dispatch. Ref: #1088.
+
+        Attempt service auth validation and log the outcome without raising.
+        """
         try:
-            # Attempt to validate service authentication
             service_info = await validate_service_auth(request)
-
             logger.info(
                 "✅ Service auth valid (logging mode)",
                 service_id=service_info["service_id"],
@@ -81,7 +72,6 @@ class ServiceAuthLoggingMiddleware(BaseHTTPMiddleware):
                 timestamp=service_info["timestamp"],
                 mode="logging_only",
             )
-
         except Exception as e:
             # Log authentication failure but DO NOT block request
             logger.warning(
@@ -102,6 +92,27 @@ class ServiceAuthLoggingMiddleware(BaseHTTPMiddleware):
                 },
                 mode="logging_only",
             )
+
+    async def dispatch(self, request: Request, call_next):
+        """
+        Process request with authentication logging only.
+
+        Args:
+            request: FastAPI request object
+            call_next: Next middleware in chain
+
+        Returns:
+            Response from next middleware (ALWAYS proceeds)
+        """
+        # Skip authentication for health check, documentation, and frontend endpoints
+        # Service auth is for service-to-service calls only, not browser-to-backend
+        if self._is_exempt_path(request):
+            logger.debug(
+                f"Skipping auth check for {request.url.path} (matched exemption)"
+            )
+            return await call_next(request)
+
+        await self._log_auth_result(request)
 
         # ALWAYS proceed with request (logging mode)
         return await call_next(request)

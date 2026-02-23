@@ -1910,53 +1910,49 @@ def _build_empty_analysis_result(
     )
 
 
-async def _analyze_single_file(
+def _build_base_file_metadata(
     file_path: Path,
     root_path_obj: Path,
-    redis_client=None,
-) -> FileAnalysisResult:
-    """
-    Analyze a single file and return immutable FileAnalysisResult.
+) -> Tuple[str, str, str, FileAnalysisResult]:
+    """Helper for _analyze_single_file. Ref: #1088.
 
-    Issue #711: This function does NOT mutate any shared state.
-    Issue #620: Refactored to use extracted helper methods.
+    Computes extension, relative_path, file_category, and a base FileAnalysisResult
+    suitable for returning when the file is invalid or should be skipped.
+
+    Returns:
+        Tuple of (extension, relative_path, file_category, base_result)
     """
     extension = file_path.suffix.lower()
     relative_path = str(file_path.relative_to(root_path_obj))
     file_category = _get_file_category(file_path)
-
-    # Base result for invalid/skipped files
     base_result = FileAnalysisResult(
         file_path=file_path,
         relative_path=relative_path,
         extension=extension,
         file_category=file_category,
     )
+    return extension, relative_path, file_category, base_result
 
-    # Check if file exists and is not in skip directories
-    try:
-        is_file = await _run_in_indexing_thread(file_path.is_file)
-    except Exception as e:
-        logger.debug("Error checking if path is file %s: %s", file_path, e)
-        return base_result
 
-    if not is_file or any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
-        return base_result
+async def _run_analysis_and_build_result(
+    file_path: Path,
+    relative_path: str,
+    extension: str,
+    file_category: str,
+    current_hash: str,
+    redis_client,
+) -> FileAnalysisResult:
+    """Helper for _analyze_single_file. Ref: #1088.
 
-    # Check if file needs reindexing (Issue #539)
-    needs_reindex, current_hash = await _file_needs_reindex(
-        file_path, relative_path, redis_client
-    )
-    if not needs_reindex:
-        return _build_unchanged_file_result(
-            file_path, relative_path, extension, file_category, current_hash
-        )
+    Determines the analyzer type, runs analysis, builds the FileAnalysisResult,
+    and stores the file hash for incremental indexing (Issue #539).
 
-    # Determine analyzer and run analysis
+    Returns:
+        FileAnalysisResult populated from analyzer output (or empty if no output)
+    """
     analyzer_type, stat_key = _determine_analyzer_type(extension)
     file_analysis = await _run_file_analyzer(file_path, analyzer_type)
 
-    # Build result
     if file_analysis:
         result = _build_file_analysis_result(
             file_path,
@@ -1979,11 +1975,49 @@ async def _analyze_single_file(
             stat_key,
         )
 
-    # Store file hash for incremental indexing (Issue #539)
     if current_hash and redis_client:
         await _store_file_hash(redis_client, relative_path, current_hash)
 
     return result
+
+
+async def _analyze_single_file(
+    file_path: Path,
+    root_path_obj: Path,
+    redis_client=None,
+) -> FileAnalysisResult:
+    """
+    Analyze a single file and return immutable FileAnalysisResult.
+
+    Issue #711: This function does NOT mutate any shared state.
+    Issue #620: Refactored to use extracted helper methods.
+    """
+    extension, relative_path, file_category, base_result = _build_base_file_metadata(
+        file_path, root_path_obj
+    )
+
+    # Check if file exists and is not in skip directories
+    try:
+        is_file = await _run_in_indexing_thread(file_path.is_file)
+    except Exception as e:
+        logger.debug("Error checking if path is file %s: %s", file_path, e)
+        return base_result
+
+    if not is_file or any(skip_dir in file_path.parts for skip_dir in SKIP_DIRS):
+        return base_result
+
+    # Check if file needs reindexing (Issue #539)
+    needs_reindex, current_hash = await _file_needs_reindex(
+        file_path, relative_path, redis_client
+    )
+    if not needs_reindex:
+        return _build_unchanged_file_result(
+            file_path, relative_path, extension, file_category, current_hash
+        )
+
+    return await _run_analysis_and_build_result(
+        file_path, relative_path, extension, file_category, current_hash, redis_client
+    )
 
 
 async def _analyze_with_semaphore(
@@ -2060,6 +2094,36 @@ async def _process_batch_results(
             results.append(result)
 
 
+async def _run_parallel_batch(
+    batch_files: List[Path],
+    root_path_obj: Path,
+    semaphore: asyncio.Semaphore,
+    redis_client,
+    results: List,
+    batch_idx: int,
+    files_completed: int,
+    progress_callback,
+    total_files: int,
+    total: int,
+) -> int:
+    """Helper for _process_files_parallel. Ref: #1088."""
+    tasks = [
+        _analyze_with_semaphore(f, root_path_obj, semaphore, redis_client)
+        for f in batch_files
+    ]
+    batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+    await _process_batch_results(batch_results, batch_files, root_path_obj, results)
+    files_completed += len(batch_files)
+    if progress_callback:
+        await progress_callback(
+            operation="Scanning files (parallel)",
+            current=files_completed,
+            total=total_files or total,
+            current_file=f"Batch {batch_idx + 1} complete",
+        )
+    return files_completed
+
+
 async def _process_files_parallel(
     all_files: List[Path],
     root_path_obj: Path,
@@ -2067,20 +2131,9 @@ async def _process_files_parallel(
     progress_callback=None,
     total_files: int = 0,
 ) -> List[FileAnalysisResult]:
-    """
-    Process files in parallel using asyncio.gather with semaphore rate limiting.
+    """Process files in parallel using asyncio.gather with semaphore rate limiting.
 
     Issue #665: Refactored to use extracted helper methods.
-
-    Args:
-        all_files: List of file paths to process
-        root_path_obj: Root path for relative path computation
-        redis_client: Optional Redis client for incremental indexing
-        progress_callback: Optional callback for progress updates
-        total_files: Total file count for progress calculation
-
-    Returns:
-        List of FileAnalysisResult objects (one per file)
     """
     if not all_files:
         return []
@@ -2089,7 +2142,6 @@ async def _process_files_parallel(
     results: List[FileAnalysisResult] = []
     batch_size = max(100, PARALLEL_FILE_CONCURRENCY * 2)
     total = len(all_files)
-
     logger.info(
         "[Parallel] Processing %d files with concurrency=%d, batch_size=%d",
         total,
@@ -2098,31 +2150,20 @@ async def _process_files_parallel(
     )
 
     files_completed = 0
-
-    for batch_start in range(0, total, batch_size):
-        batch_end = min(batch_start + batch_size, total)
-        batch_files = all_files[batch_start:batch_end]
-
-        tasks = [
-            _analyze_with_semaphore(f, root_path_obj, semaphore, redis_client)
-            for f in batch_files
-        ]
-
-        batch_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Issue #665: Use helper for result processing
-        await _process_batch_results(batch_results, batch_files, root_path_obj, results)
-
-        files_completed += len(batch_files)
-
-        if progress_callback:
-            await progress_callback(
-                operation="Scanning files (parallel)",
-                current=files_completed,
-                total=total_files or total,
-                current_file=f"Batch {batch_start // batch_size + 1} complete",
-            )
-
+    for batch_idx, batch_start in enumerate(range(0, total, batch_size)):
+        batch_files = all_files[batch_start : min(batch_start + batch_size, total)]
+        files_completed = await _run_parallel_batch(
+            batch_files,
+            root_path_obj,
+            semaphore,
+            redis_client,
+            results,
+            batch_idx,
+            files_completed,
+            progress_callback,
+            total_files,
+            total,
+        )
         await asyncio.sleep(0)
 
     logger.info("[Parallel] Completed processing %d files", len(results))

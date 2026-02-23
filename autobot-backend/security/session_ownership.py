@@ -428,6 +428,100 @@ class SessionOwnershipValidator:
                 detail="You do not have permission to access this conversation",
             )
 
+    async def _resolve_fast_paths(
+        self,
+        session_id: str,
+        user_data: Dict,
+    ) -> Optional[Dict]:
+        """Helper for validate_ownership. Ref: #1088.
+
+        Checks the two early-exit conditions that bypass ownership lookup:
+        1. Auth is disabled globally (development mode).
+        2. Enforcement mode is "disabled".
+
+        Returns the result dict when a fast path applies, or None to signal
+        that the caller should proceed to the full ownership check.
+        """
+        if user_data.get("auth_disabled") or not auth_middleware.enable_auth:
+            logger.debug(
+                f"Auth disabled - allowing access to session {session_id[:8]}..."
+            )
+            return {
+                "authorized": True,
+                "user_data": user_data,
+                "reason": "auth_disabled",
+            }
+
+        enforcement_mode = await self._get_enforcement_mode()
+
+        if enforcement_mode == "disabled":
+            logger.debug(
+                f"[DISABLED MODE] Skipping ownership validation for session {session_id[:8]}..."
+            )
+            return {
+                "authorized": True,
+                "user_data": user_data,
+                "reason": "enforcement_disabled",
+            }
+
+        return None
+
+    async def _resolve_ownership(
+        self,
+        session_id: str,
+        username: str,
+        user_data: Dict,
+        request: Request,
+        enforcement_mode: str,
+    ) -> Dict:
+        """Helper for validate_ownership. Ref: #1088.
+
+        Performs the Redis ownership lookup and resolves the result into one of:
+        - legacy_migration  (no stored owner — claim it now)
+        - mismatch path     (owner differs — delegate to _check_ownership_mismatch)
+        - owner_match       (user owns the session)
+
+        Args:
+            session_id: Chat session ID
+            username: Authenticated username
+            user_data: Authenticated user data dict
+            request: FastAPI request object
+            enforcement_mode: Current enforcement mode string
+
+        Returns:
+            Dict with authorization result and user data
+        """
+        stored_owner = await self.get_session_owner(session_id)
+
+        if not stored_owner:
+            logger.warning(
+                "Session %s... has no owner (legacy session)", session_id[:8]
+            )
+            await self.set_session_owner(
+                session_id,
+                username,
+                org_id=user_data.get("org_id"),
+                team_id=None,
+            )
+            return {
+                "authorized": True,
+                "user_data": user_data,
+                "reason": "legacy_migration",
+            }
+
+        if stored_owner != username:
+            return await self._check_ownership_mismatch(
+                username, session_id, stored_owner, user_data, request, enforcement_mode
+            )
+
+        logger.debug(
+            "Authorized access: user %s accessing own session %s...",
+            username,
+            session_id[:8],
+        )
+        self._audit_log_success(username, session_id, request, enforcement_mode)
+        return {"authorized": True, "user_data": user_data, "reason": "owner_match"}
+
     async def validate_ownership(self, session_id: str, request: Request) -> Dict:
         """
         Validate that requesting user owns the session with feature flag support.
@@ -449,76 +543,17 @@ class SessionOwnershipValidator:
         Raises:
             HTTPException: 401 if not authenticated, 403 if not authorized (ENFORCED mode only)
         """
-        # Get authenticated user (Issue #281: uses helper)
         user_data = self._get_authenticated_user(session_id, request)
         username = user_data["username"]
 
-        # Fast path: auth disabled globally (development mode)
-        if user_data.get("auth_disabled") or not auth_middleware.enable_auth:
-            logger.debug(
-                f"Auth disabled - allowing access to session {session_id[:8]}..."
-            )
-            return {
-                "authorized": True,
-                "user_data": user_data,
-                "reason": "auth_disabled",
-            }
+        fast_path_result = await self._resolve_fast_paths(session_id, user_data)
+        if fast_path_result is not None:
+            return fast_path_result
 
-        # Get enforcement mode (Issue #281: uses helper)
         enforcement_mode = await self._get_enforcement_mode()
-
-        # Fast path: enforcement disabled
-        if enforcement_mode == "disabled":
-            logger.debug(
-                f"[DISABLED MODE] Skipping ownership validation for session {session_id[:8]}..."
-            )
-            return {
-                "authorized": True,
-                "user_data": user_data,
-                "reason": "enforcement_disabled",
-            }
-
-        # Perform ownership check
-        stored_owner = await self.get_session_owner(session_id)
-
-        # Handle legacy session (no owner stored)
-        if not stored_owner:
-            logger.warning(
-                "Session %s... has no owner (legacy session)", session_id[:8]
-            )
-            # Issue #684: Include org context in legacy migration
-            await self.set_session_owner(
-                session_id,
-                username,
-                org_id=user_data.get("org_id"),
-                team_id=None,
-            )
-            return {
-                "authorized": True,
-                "user_data": user_data,
-                "reason": "legacy_migration",
-            }
-
-        # Check ownership mismatch (Issue #281, #684)
-        if stored_owner != username:
-            return await self._check_ownership_mismatch(
-                username,
-                session_id,
-                stored_owner,
-                user_data,
-                request,
-                enforcement_mode,
-            )
-
-        # Authorized access (user owns the session)
-        logger.debug(
-            "Authorized access: user %s accessing own session %s...",
-            username,
-            session_id[:8],
+        return await self._resolve_ownership(
+            session_id, username, user_data, request, enforcement_mode
         )
-        self._audit_log_success(username, session_id, request, enforcement_mode)
-
-        return {"authorized": True, "user_data": user_data, "reason": "owner_match"}
 
     async def get_user_sessions(self, username: str) -> list[str]:
         """

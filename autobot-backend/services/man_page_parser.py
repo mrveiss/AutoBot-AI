@@ -394,6 +394,39 @@ class ManPageParser:
 
         return result
 
+    def _run_man_subprocess(
+        self, command: str, section: str
+    ) -> subprocess.CompletedProcess:
+        """Helper for parse_man_page_with_subprocess. Ref: #1088."""
+        cmd = ["man", section, command]
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env={"MANWIDTH": "80", "TERM": "dumb"},
+        )
+
+    def _extract_sections_from_rendered(
+        self, result: ManPageContent, content: str
+    ) -> None:
+        """Helper for parse_man_page_with_subprocess. Ref: #1088."""
+        for section_name, pattern in self.RENDERED_SECTION_PATTERNS.items():
+            match = re.search(pattern, content, re.DOTALL | re.MULTILINE)
+            if match:
+                cleaned = match.group(1).strip()
+                # Remove backspace sequences from rendered output
+                cleaned = re.sub(r".\x08", "", cleaned)
+                setattr(result, section_name, cleaned)
+
+        if result.name:
+            name_parts = result.name.split(" - ", 1)
+            if len(name_parts) > 1:
+                result.title = name_parts[1].strip()
+            else:
+                result.title = result.name.strip()
+            result.name = ""
+
     def parse_man_page_with_subprocess(
         self, command: str, section: Optional[str] = None
     ) -> ManPageContent:
@@ -419,42 +452,15 @@ class ManPageParser:
         )
 
         try:
-            # Build man command
-            cmd = ["man", section, command]
-
-            proc = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=10,
-                env={"MANWIDTH": "80", "TERM": "dumb"},
-            )
+            proc = self._run_man_subprocess(command, section)
 
             if proc.returncode != 0:
                 result.parse_success = False
                 result.error_message = f"man command failed: {proc.stderr}"
                 return result
 
-            content = proc.stdout
-            result.raw_content = content
-
-            # Parse rendered output
-            for section_name, pattern in self.RENDERED_SECTION_PATTERNS.items():
-                match = re.search(pattern, content, re.DOTALL | re.MULTILINE)
-                if match:
-                    cleaned = match.group(1).strip()
-                    # Remove backspace sequences from rendered output
-                    cleaned = re.sub(r".\x08", "", cleaned)
-                    setattr(result, section_name, cleaned)
-
-            # Extract title from NAME section
-            if result.name:
-                name_parts = result.name.split(" - ", 1)
-                if len(name_parts) > 1:
-                    result.title = name_parts[1].strip()
-                else:
-                    result.title = result.name.strip()
-                result.name = ""
+            result.raw_content = proc.stdout
+            self._extract_sections_from_rendered(result, proc.stdout)
 
         except subprocess.TimeoutExpired:
             result.parse_success = False

@@ -364,6 +364,64 @@ class BackendEndpointScanner:
         except Exception as e:
             logger.debug("Error parsing router registry %s: %s", file_path, e)
 
+    def _compile_config_tuple_patterns(self):
+        """Helper for _parse_config_tuple_registry. Ref: #1088."""
+        five_element_pattern = re.compile(
+            r'\(\s*["\']([^"\']+)["\'],\s*["\']router["\'],\s*["\']([^"\']*)["\']',
+            re.MULTILINE,
+        )
+        four_element_pattern = re.compile(
+            r'\(\s*["\']([^"\']+)["\'],\s*["\']([^"\']*)["\'],\s*\[', re.MULTILINE
+        )
+        # Issue #552: Pattern for dynamic router loading in terminal_routers.py:
+        # (terminal_router, "/terminal", ["terminal"], "terminal")
+        dynamic_router_pattern = re.compile(
+            r'\(\s*(\w+_router)\s*,\s*["\']([^"\']*)["\'],\s*\[[^\]]*\]\s*,\s*["\'](\w+)["\']',
+            re.MULTILINE,
+        )
+        return five_element_pattern, four_element_pattern, dynamic_router_pattern
+
+    def _apply_static_tuple_patterns(
+        self,
+        content: str,
+        five_element_pattern,
+        four_element_pattern,
+    ) -> None:
+        """Helper for _parse_config_tuple_registry. Ref: #1088."""
+        # Try 5-element pattern first (more specific)
+        matched = False
+        for match in five_element_pattern.finditer(content):
+            matched = True
+            module_path = match.group(1)  # e.g., "backend.api.infrastructure"
+            prefix = match.group(2)  # e.g., "/iac"
+            self._register_module_prefix(module_path, prefix)
+
+        # If no 5-element matches, try 4-element pattern
+        if not matched:
+            for match in four_element_pattern.finditer(content):
+                module_path = match.group(1)  # e.g., "backend.api.analytics"
+                prefix = match.group(2)  # e.g., "/analytics"
+                self._register_module_prefix(module_path, prefix)
+
+    def _apply_dynamic_router_pattern(
+        self, content: str, dynamic_router_pattern
+    ) -> None:
+        """Helper for _parse_config_tuple_registry. Ref: #1088."""
+        # Issue #552: Also check for dynamic router patterns (terminal_routers.py)
+        # These have router variable names instead of module paths
+        for match in dynamic_router_pattern.finditer(content):
+            router_var = match.group(1)  # e.g., "terminal_router"
+            prefix = match.group(2)  # e.g., "/terminal"
+            # group(3) contains name (e.g., "terminal") - unused; module derived from var
+
+            # terminal_router -> terminal, agent_terminal_router -> agent_terminal
+            module_name = router_var.replace("_router", "")
+            module_path = f"backend.api.{module_name}"
+            self._register_module_prefix(module_path, prefix)
+            logger.debug(
+                "Dynamic router: %s -> %s%s", module_name, self.API_PREFIX, prefix
+            )
+
     def _parse_config_tuple_registry(self, file_path: Path) -> None:
         """
         Parse router registry files that use config tuple format.
@@ -378,59 +436,11 @@ class BackendEndpointScanner:
         try:
             content = file_path.read_text(encoding="utf-8")
 
-            # Pattern for 5-element config tuples (monitoring, feature, terminal, mcp):
-            # ("backend.api.infrastructure", "router", "/iac", ["Infrastructure as Code"], "infrastructure")
-            five_element_pattern = re.compile(
-                r'\(\s*["\']([^"\']+)["\'],\s*["\']router["\'],\s*["\']([^"\']*)["\']',
-                re.MULTILINE,
-            )
+            five_el, four_el, dynamic_el = self._compile_config_tuple_patterns()
 
-            # Pattern for 4-element config tuples (analytics):
-            # ("backend.api.analytics", "/analytics", ["analytics"], "analytics")
-            four_element_pattern = re.compile(
-                r'\(\s*["\']([^"\']+)["\'],\s*["\']([^"\']*)["\'],\s*\[', re.MULTILINE
-            )
+            self._apply_static_tuple_patterns(content, five_el, four_el)
 
-            # Issue #552: Pattern for dynamic router loading in terminal_routers.py:
-            # (terminal_router, "/terminal", ["terminal"], "terminal")
-            # Matches: (var_name, "/prefix", [...], "name")
-            dynamic_router_pattern = re.compile(
-                r'\(\s*(\w+_router)\s*,\s*["\']([^"\']*)["\'],\s*\[[^\]]*\]\s*,\s*["\'](\w+)["\']',
-                re.MULTILINE,
-            )
-
-            # Try 5-element pattern first (more specific)
-            matched = False
-            for match in five_element_pattern.finditer(content):
-                matched = True
-                module_path = match.group(1)  # e.g., "backend.api.infrastructure"
-                prefix = match.group(2)  # e.g., "/iac"
-
-                self._register_module_prefix(module_path, prefix)
-
-            # If no 5-element matches, try 4-element pattern
-            if not matched:
-                for match in four_element_pattern.finditer(content):
-                    module_path = match.group(1)  # e.g., "backend.api.analytics"
-                    prefix = match.group(2)  # e.g., "/analytics"
-
-                    self._register_module_prefix(module_path, prefix)
-
-            # Issue #552: Also check for dynamic router patterns (terminal_routers.py)
-            # These have router variable names instead of module paths
-            for match in dynamic_router_pattern.finditer(content):
-                router_var = match.group(1)  # e.g., "terminal_router"
-                prefix = match.group(2)  # e.g., "/terminal"
-                # group(3) contains name (e.g., "terminal") - unused as module derived from router_var
-
-                # Derive module name from router variable or name
-                # terminal_router -> terminal, agent_terminal_router -> agent_terminal
-                module_name = router_var.replace("_router", "")
-                module_path = f"backend.api.{module_name}"
-                self._register_module_prefix(module_path, prefix)
-                logger.debug(
-                    "Dynamic router: %s -> %s%s", module_name, self.API_PREFIX, prefix
-                )
+            self._apply_dynamic_router_pattern(content, dynamic_el)
 
         except Exception as e:
             logger.debug("Error parsing config tuple registry %s: %s", file_path, e)

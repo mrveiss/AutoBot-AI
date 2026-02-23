@@ -609,7 +609,7 @@ def _load_web_research_config() -> Dict[str, Any]:
 
 
 def _create_research_integration(
-    config: Optional[Dict[str, Any]]
+    config: Optional[Dict[str, Any]],
 ) -> WebResearchIntegration:
     """Create research integration instance (Issue #334 - extracted helper)."""
     if config is None:

@@ -59,6 +59,30 @@ class KnowledgeAuditLog:
         self.ttl_seconds = ttl_days * 24 * 60 * 60
         logger.info("KnowledgeAuditLog initialized with %d day retention", ttl_days)
 
+    async def _index_event_for_user(self, event_id: str, user_id: str) -> None:
+        """Helper for log_event. Ref: #1088."""
+        user_key = f"audit:user:{user_id}"
+        await asyncio.to_thread(
+            self.redis_client.zadd, user_key, {event_id: datetime.utcnow().timestamp()}
+        )
+        await asyncio.to_thread(self.redis_client.expire, user_key, self.ttl_seconds)
+
+    async def _index_event_for_fact(self, event_id: str, fact_id: str) -> None:
+        """Helper for log_event. Ref: #1088."""
+        fact_key = f"audit:fact:{fact_id}"
+        await asyncio.to_thread(
+            self.redis_client.zadd, fact_key, {event_id: datetime.utcnow().timestamp()}
+        )
+        await asyncio.to_thread(self.redis_client.expire, fact_key, self.ttl_seconds)
+
+    async def _index_event_for_org(self, event_id: str, organization_id: str) -> None:
+        """Helper for log_event. Ref: #1088."""
+        org_key = f"audit:org:{organization_id}"
+        await asyncio.to_thread(
+            self.redis_client.zadd, org_key, {event_id: datetime.utcnow().timestamp()}
+        )
+        await asyncio.to_thread(self.redis_client.expire, org_key, self.ttl_seconds)
+
     async def log_event(
         self,
         event_type: AuditEventType,
@@ -101,34 +125,13 @@ class KnowledgeAuditLog:
             json.dumps(event_data),
         )
 
-        # Add to user's activity index
-        user_key = f"audit:user:{user_id}"
-        await asyncio.to_thread(
-            self.redis_client.zadd, user_key, {event_id: datetime.utcnow().timestamp()}
-        )
-        await asyncio.to_thread(self.redis_client.expire, user_key, self.ttl_seconds)
+        await self._index_event_for_user(event_id, user_id)
 
-        # Add to fact's access log if fact_id provided
         if fact_id:
-            fact_key = f"audit:fact:{fact_id}"
-            await asyncio.to_thread(
-                self.redis_client.zadd,
-                fact_key,
-                {event_id: datetime.utcnow().timestamp()},
-            )
-            await asyncio.to_thread(
-                self.redis_client.expire, fact_key, self.ttl_seconds
-            )
+            await self._index_event_for_fact(event_id, fact_id)
 
-        # Add to organization's audit log if org_id provided
         if organization_id:
-            org_key = f"audit:org:{organization_id}"
-            await asyncio.to_thread(
-                self.redis_client.zadd,
-                org_key,
-                {event_id: datetime.utcnow().timestamp()},
-            )
-            await asyncio.to_thread(self.redis_client.expire, org_key, self.ttl_seconds)
+            await self._index_event_for_org(event_id, organization_id)
 
         logger.debug(
             "Logged audit event: type=%s, user=%s, fact=%s",
@@ -278,6 +281,47 @@ class KnowledgeAuditLog:
 
         return permission_events[:limit]
 
+    async def _fetch_events_in_range(
+        self, organization_id: str, start_ts: float, end_ts: float
+    ) -> List[Dict]:
+        """Helper for generate_compliance_report. Ref: #1088."""
+        org_key = f"audit:org:{organization_id}"
+        event_ids = await asyncio.to_thread(
+            self.redis_client.zrangebyscore, org_key, start_ts, end_ts
+        )
+        events = []
+        for event_id in event_ids:
+            if isinstance(event_id, bytes):
+                event_id = event_id.decode("utf-8")
+            event_data = await asyncio.to_thread(self.redis_client.get, event_id)
+            if event_data:
+                if isinstance(event_data, bytes):
+                    event_data = event_data.decode("utf-8")
+                events.append(json.loads(event_data))
+        return events
+
+    def _compute_compliance_stats(self, events: List[Dict]) -> tuple:
+        """Helper for generate_compliance_report. Ref: #1088."""
+        event_counts: Dict = {}
+        user_activity: Dict = {}
+        fact_modifications: Dict = {}
+        for event in events:
+            event_type = event.get("type")
+            event_counts[event_type] = event_counts.get(event_type, 0) + 1
+            user_id = event.get("user_id")
+            if user_id:
+                user_activity[user_id] = user_activity.get(user_id, 0) + 1
+            fact_id = event.get("fact_id")
+            if fact_id and event_type in {
+                AuditEventType.CREATE,
+                AuditEventType.UPDATE,
+                AuditEventType.DELETE,
+            }:
+                if fact_id not in fact_modifications:
+                    fact_modifications[fact_id] = []
+                fact_modifications[fact_id].append(event)
+        return event_counts, user_activity, fact_modifications
+
     async def generate_compliance_report(
         self, organization_id: str, start_date: datetime, end_date: datetime
     ) -> Dict:
@@ -291,53 +335,15 @@ class KnowledgeAuditLog:
         Returns:
             Compliance report dict with statistics
         """
-        # Get all org events in date range
-        org_key = f"audit:org:{organization_id}"
-
-        start_ts = start_date.timestamp()
-        end_ts = end_date.timestamp()
-
-        event_ids = await asyncio.to_thread(
-            self.redis_client.zrangebyscore, org_key, start_ts, end_ts
+        events = await self._fetch_events_in_range(
+            organization_id, start_date.timestamp(), end_date.timestamp()
         )
 
-        # Fetch and analyze events
-        events = []
-        for event_id in event_ids:
-            if isinstance(event_id, bytes):
-                event_id = event_id.decode("utf-8")
-
-            event_data = await asyncio.to_thread(self.redis_client.get, event_id)
-            if event_data:
-                if isinstance(event_data, bytes):
-                    event_data = event_data.decode("utf-8")
-                events.append(json.loads(event_data))
-
-        # Compute statistics
-        event_counts = {}
-        user_activity = {}
-        fact_modifications = {}
-
-        for event in events:
-            # Count by type
-            event_type = event.get("type")
-            event_counts[event_type] = event_counts.get(event_type, 0) + 1
-
-            # Count by user
-            user_id = event.get("user_id")
-            if user_id:
-                user_activity[user_id] = user_activity.get(user_id, 0) + 1
-
-            # Track fact modifications
-            fact_id = event.get("fact_id")
-            if fact_id and event_type in {
-                AuditEventType.CREATE,
-                AuditEventType.UPDATE,
-                AuditEventType.DELETE,
-            }:
-                if fact_id not in fact_modifications:
-                    fact_modifications[fact_id] = []
-                fact_modifications[fact_id].append(event)
+        (
+            event_counts,
+            user_activity,
+            fact_modifications,
+        ) = self._compute_compliance_stats(events)
 
         return {
             "organization_id": organization_id,

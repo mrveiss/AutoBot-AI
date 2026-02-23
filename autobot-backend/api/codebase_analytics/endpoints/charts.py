@@ -211,6 +211,46 @@ def _dict_to_chart_data(
     return [{key_name: key, "count": count} for key, count in sorted_items]
 
 
+async def _get_redis_fallback_chart_data(
+    problem_types: Dict[str, int],
+    severity_counts: Dict[str, int],
+    race_conditions: Dict[str, int],
+    file_problems: Dict[str, int],
+):
+    """Helper for get_chart_data. Ref: #1088.
+
+    Returns (total_problems, storage_type) or a JSONResponse on error/no-data.
+    """
+    redis_client = await get_redis_connection()
+    if not redis_client:
+        return JSONResponse(
+            {
+                "status": "no_data",
+                "message": "No codebase data found. Run indexing first.",
+                "chart_data": None,
+            }
+        )
+    try:
+        total_problems = await _aggregate_from_redis(
+            redis_client,
+            problem_types,
+            severity_counts,
+            race_conditions,
+            file_problems,
+        )
+        return total_problems, "redis"
+    except Exception as redis_error:
+        logger.error("Redis query failed: %s", redis_error)
+        return JSONResponse(
+            {
+                "status": "error",
+                "message": "Failed to retrieve chart data",
+                "error": str(redis_error),
+            },
+            status_code=500,
+        )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chart_data",
@@ -231,8 +271,6 @@ async def get_chart_data():
     - summary: Overall summary statistics
     """
     code_collection = get_code_collection()
-
-    # Initialize aggregation containers
     problem_types: Dict[str, int] = {}
     severity_counts: Dict[str, int] = {}
     race_conditions: Dict[str, int] = {}
@@ -246,36 +284,13 @@ async def get_chart_data():
     if success:
         storage_type = "chromadb"
     else:
-        # Fallback to Redis if ChromaDB fails
-        redis_client = await get_redis_connection()
-        if not redis_client:
-            return JSONResponse(
-                {
-                    "status": "no_data",
-                    "message": "No codebase data found. Run indexing first.",
-                    "chart_data": None,
-                }
-            )
-
-        try:
-            total_problems = await _aggregate_from_redis(
-                redis_client,
-                problem_types,
-                severity_counts,
-                race_conditions,
-                file_problems,
-            )
-            storage_type = "redis"
-        except Exception as redis_error:
-            logger.error("Redis query failed: %s", redis_error)
-            return JSONResponse(
-                {
-                    "status": "error",
-                    "message": "Failed to retrieve chart data",
-                    "error": str(redis_error),
-                },
-                status_code=500,
-            )
+        # Fallback to Redis if ChromaDB fails (Issue #1088: uses _get_redis_fallback_chart_data)
+        result = await _get_redis_fallback_chart_data(
+            problem_types, severity_counts, race_conditions, file_problems
+        )
+        if isinstance(result, JSONResponse):
+            return result
+        total_problems, storage_type = result
 
     # Build and return chart response (Issue #665: uses _build_chart_response helper)
     return JSONResponse(

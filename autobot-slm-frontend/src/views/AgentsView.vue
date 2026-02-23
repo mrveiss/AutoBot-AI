@@ -11,7 +11,9 @@
  */
 
 import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import ExternalAgentsView from '@/views/ExternalAgentsView.vue'
 
 interface Agent {
   agent_id: string
@@ -37,7 +39,19 @@ interface FleetNode {
 const OLLAMA_PORT = 11434
 const CUSTOM_VALUE = '__custom__'
 
+const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
+
+// Active tab — route-based
+type AgentTab = 'local-agents' | 'external-agents'
+function resolveAgentTab(param: unknown): AgentTab {
+  return param === 'external-agents' ? 'external-agents' : 'local-agents'
+}
+const activeTab = computed(() => resolveAgentTab(route.params.tab))
+function navigateToTab(tab: AgentTab): void {
+  router.push({ name: 'agents', params: { tab } })
+}
 const agents = ref<Agent[]>([])
 const nodes = ref<FleetNode[]>([])
 const loading = ref(true)
@@ -192,6 +206,33 @@ onMounted(() => {
       <h1>Agent Management</h1>
       <p class="subtitle">Configure LLM settings for each agent</p>
     </header>
+
+    <!-- Tab navigation -->
+    <div class="border-b border-gray-200 mb-6">
+      <nav class="flex gap-4">
+        <button
+          @click="navigateToTab('local-agents')"
+          :class="[
+            'py-4 px-1 border-b-2 font-medium text-sm',
+            activeTab === 'local-agents'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+          ]"
+        >Local Agents</button>
+        <button
+          @click="navigateToTab('external-agents')"
+          :class="[
+            'py-4 px-1 border-b-2 font-medium text-sm',
+            activeTab === 'external-agents'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+          ]"
+        >External Agents</button>
+      </nav>
+    </div>
+
+    <!-- Local Agents -->
+    <div v-if="activeTab === 'local-agents'">
 
     <div v-if="error" class="error-banner">
       {{ error }}
@@ -355,6 +396,14 @@ onMounted(() => {
         <p>Select an agent to view and edit its configuration</p>
       </div>
     </div>
+
+    </div><!-- /local-agents -->
+
+    <!-- External Agents -->
+    <div v-else-if="activeTab === 'external-agents'">
+      <ExternalAgentsView />
+    </div>
+
   </div>
 </template>
 

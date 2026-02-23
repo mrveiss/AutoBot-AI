@@ -54,34 +54,12 @@ async def _get_node_or_404(db: AsyncSession, node_id: str) -> Node:
     return node
 
 
-async def _run_ansible_service_action(
-    node: Node,
-    service_name: str,
-    action: str,
-) -> Tuple[bool, str]:
-    """
-    Run SSH command to control a service via systemctl.
-
-    Returns (success, message).
-    """
-    # Map action to systemctl command
-    systemctl_action = action
-    if action == "start":
-        systemctl_action = "start"
-    elif action == "stop":
-        systemctl_action = "stop"
-    elif action == "restart":
-        systemctl_action = "restart"
-
-    # Build SSH command
+def _build_service_ssh_cmd(node: Node, remote_cmd: str) -> list:
+    """Build SSH command list for service action. Ref: #1088."""
     ssh_user = node.ssh_user or "autobot"
     ssh_port = node.ssh_port or 22
     ssh_key = "/home/autobot/.ssh/id_rsa"
-
-    # Use sudo -n (non-interactive) to run systemctl as root
-    remote_cmd = f"sudo -n systemctl {systemctl_action} {service_name}"
-
-    ssh_cmd = [
+    return [
         "/usr/bin/ssh",
         "-o",
         "StrictHostKeyChecking=no",
@@ -96,6 +74,16 @@ async def _run_ansible_service_action(
         f"{ssh_user}@{node.ip_address}",
         remote_cmd,
     ]
+
+
+async def _run_ansible_service_action(
+    node: Node,
+    service_name: str,
+    action: str,
+) -> Tuple[bool, str]:
+    """Run SSH command to control a service via systemctl. Ref: #1088."""
+    remote_cmd = f"sudo -n systemctl {action} {service_name}"
+    ssh_cmd = _build_service_ssh_cmd(node, remote_cmd)
 
     try:
         process = await asyncio.create_subprocess_exec(
@@ -1245,6 +1233,25 @@ async def update_service_category(
     }
 
 
+async def _get_fleet_nodes_or_raise(
+    db: AsyncSession,
+    service_name: str,
+) -> Tuple[list, dict]:
+    """Get fleet services and nodes, raising 404 if service not found. Ref: #1088."""
+    query = select(Service).where(Service.service_name == service_name)
+    result = await db.execute(query)
+    services = result.scalars().all()
+    if not services:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Service {service_name} not found on any node",
+        )
+    node_ids = [s.node_id for s in services]
+    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
+    nodes = {n.node_id: n for n in nodes_result.scalars().all()}
+    return services, nodes
+
+
 @fleet_router.post(
     "/services/{service_name}/start",
     response_model=ServiceActionResponse,
@@ -1254,25 +1261,8 @@ async def start_fleet_service(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
 ) -> ServiceActionResponse:
-    """Start a service on all nodes that have it.
-
-    Canonical endpoint for fleet-wide service start (Issue #850).
-    """
-    # Find all nodes with this service
-    query = select(Service).where(Service.service_name == service_name)
-    result = await db.execute(query)
-    services = result.scalars().all()
-
-    if not services:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Service {service_name} not found on any node",
-        )
-
-    # Get nodes
-    node_ids = [s.node_id for s in services]
-    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
-    nodes = {n.node_id: n for n in nodes_result.scalars().all()}
+    """Start a service on all nodes that have it. Ref: #1088."""
+    services, nodes = await _get_fleet_nodes_or_raise(db, service_name)
 
     # Start on each node
     success_count = 0
@@ -1330,23 +1320,8 @@ async def stop_fleet_service(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
 ) -> ServiceActionResponse:
-    """Stop a service on all nodes.
-
-    Canonical endpoint for fleet-wide service stop (Issue #850).
-    """
-    query = select(Service).where(Service.service_name == service_name)
-    result = await db.execute(query)
-    services = result.scalars().all()
-
-    if not services:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Service {service_name} not found on any node",
-        )
-
-    node_ids = [s.node_id for s in services]
-    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
-    nodes = {n.node_id: n for n in nodes_result.scalars().all()}
+    """Stop a service on all nodes. Ref: #1088."""
+    services, nodes = await _get_fleet_nodes_or_raise(db, service_name)
 
     success_count = 0
     fail_count = 0
@@ -1403,23 +1378,8 @@ async def restart_fleet_service(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
 ) -> ServiceActionResponse:
-    """Restart a service on all nodes that have it.
-
-    Canonical endpoint for fleet-wide service restart (Issue #850).
-    """
-    query = select(Service).where(Service.service_name == service_name)
-    result = await db.execute(query)
-    services = result.scalars().all()
-
-    if not services:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Service {service_name} not found on any node",
-        )
-
-    node_ids = [s.node_id for s in services]
-    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
-    nodes = {n.node_id: n for n in nodes_result.scalars().all()}
+    """Restart a service on all nodes that have it. Ref: #1088."""
+    services, nodes = await _get_fleet_nodes_or_raise(db, service_name)
 
     success_count = 0
     fail_count = 0

@@ -15,8 +15,14 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
+from backend.knowledge_factory import get_or_create_knowledge_base
+from backend.services.slm_client import init_slm_client, shutdown_slm_client
+from backend.type_defs.common import Metadata
+from backend.user_management.database import init_database
+from backend.utils.background_llm_sync import BackgroundLLMSync
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
+from config import ConfigManager
 from fastapi import FastAPI
 from security_layer import SecurityLayer
 
@@ -25,12 +31,6 @@ from autobot_shared.tracing import (
     instrument_redis,
     shutdown_tracing,
 )
-from backend.knowledge_factory import get_or_create_knowledge_base
-from backend.services.slm_client import init_slm_client, shutdown_slm_client
-from backend.type_defs.common import Metadata
-from backend.user_management.database import init_database
-from backend.utils.background_llm_sync import BackgroundLLMSync
-from config import ConfigManager
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -198,11 +198,110 @@ async def _init_chat_workflow_manager(app: FastAPI) -> None:
         raise RuntimeError(f"Chat workflow manager initialization failed: {chat_error}")
 
 
+async def _init_config(app: FastAPI) -> None:
+    """Helper for initialize_critical_services. Ref: #1088."""
+    logger.info("✅ [ 10%] Config: Loading unified configuration...")
+    config = ConfigManager()
+    app.state.config = config
+    await update_app_state("config", config)
+    logger.info("✅ [ 10%] Config: Configuration loaded successfully")
+
+
+async def _init_security_layer(app: FastAPI) -> None:
+    """Helper for initialize_critical_services. Ref: #1088."""
+    logger.info("✅ [ 15%] Security: Initializing security layer...")
+    security_layer = SecurityLayer()
+    app.state.security_layer = security_layer
+    await update_app_state("security_layer", security_layer)
+    logger.info("✅ [ 15%] Security: Security layer initialized successfully")
+
+
+async def _init_database() -> None:
+    """Helper for initialize_critical_services. Ref: #1088.
+
+    Issue #898: Initialize PostgreSQL async engine. Raises RuntimeError on failure.
+    """
+    logger.info("✅ [ 16%] Database: Initializing PostgreSQL async engine...")
+    logger.info("🔍 DEBUG: About to call get_deployment_config()")
+    try:
+        from backend.user_management.config import get_deployment_config
+
+        config = get_deployment_config()
+        logger.info(
+            "🔍 DEBUG: Deployment config loaded - mode=%s, postgres_enabled=%s",
+            config.mode.value,
+            config.postgres_enabled,
+        )
+        logger.info(
+            "🔍 DEBUG: PostgreSQL - host=%s, port=%s, db=%s",
+            config.postgres_host,
+            config.postgres_port,
+            config.postgres_db,
+        )
+        logger.info("🔍 DEBUG: About to call init_database()")
+        await init_database()
+        logger.info("✅ [ 16%] Database: PostgreSQL async engine initialized")
+    except Exception as db_error:
+        logger.error("❌ CRITICAL: Database initialization failed: %s", db_error)
+        import traceback
+
+        logger.error("❌ TRACEBACK: %s", traceback.format_exc())
+        raise RuntimeError(f"Database initialization failed: {db_error}")
+
+
+async def _init_telemetry_and_redis() -> None:
+    """Helper for initialize_critical_services. Ref: #1088.
+
+    Issue #881: Gateway skipped (testing event loop deadlock).
+    Issue #697: Instruments Redis and aiohttp with OpenTelemetry.
+    """
+    # Issue #732: Initialize Gateway - CRITICAL
+    # Issue #881: TEMP DISABLED - testing if Gateway blocks event loop
+    logger.info("✅ [ 17%] Gateway: SKIPPED (testing event loop deadlock)")
+    # try:
+    #     from backend.services.gateway import ChannelType, Gateway, WebSocketAdapter
+    #
+    #     gateway = Gateway()
+    #     await gateway.start()
+    #
+    #     # Register WebSocket adapter
+    #     ws_adapter = WebSocketAdapter()
+    #     gateway.register_channel_adapter(ChannelType.WEBSOCKET, ws_adapter)
+    #
+    #     app.state.gateway = gateway
+    #     await update_app_state("gateway", gateway)
+    #     logger.info("✅ [ 17%] Gateway: Gateway initialized with WebSocket adapter")
+    # except Exception as gateway_error:
+    #     logger.error(f"❌ CRITICAL: Gateway initialization failed: {gateway_error}")
+    #     raise RuntimeError(f"Gateway initialization failed: {gateway_error}")
+
+    instrument_redis()
+    instrument_aiohttp()
+    logger.info(
+        "✅ [ 20%] Redis: Using centralized Redis client management (src.utils.redis_client)"
+    )
+
+
+async def _init_skills(app: FastAPI) -> None:
+    """Helper for initialize_critical_services. Ref: #1088.
+
+    Initializes skills system tables and discovers builtin skills (non-critical).
+    """
+    try:
+        await _init_skills_tables()
+        await _init_skills_discovery()
+    except Exception as skills_db_error:
+        logger.warning(
+            "Skills initialization failed (non-critical): %s", skills_db_error
+        )
+
+
 async def initialize_critical_services(app: FastAPI):
     """
     Phase 1: Initialize critical services (BLOCKING).
 
     Issue #665: Refactored to use extracted helper methods for each service.
+    Issue #1088: Further extracted inline blocks into private helpers.
 
     These services MUST be operational before serving requests.
     Failure in this phase will prevent app startup.
@@ -220,79 +319,12 @@ async def initialize_critical_services(app: FastAPI):
     logger.info("=== PHASE 1: Critical Services Initialization ===")
 
     try:
-        # Initialize configuration - CRITICAL
-        logger.info("✅ [ 10%] Config: Loading unified configuration...")
-        config = ConfigManager()
-        app.state.config = config
-        await update_app_state("config", config)
-        logger.info("✅ [ 10%] Config: Configuration loaded successfully")
+        await _init_config(app)
+        await _init_security_layer(app)
+        await _init_database()
+        await _init_telemetry_and_redis()
 
-        # Initialize Security Layer - CRITICAL
-        logger.info("✅ [ 15%] Security: Initializing security layer...")
-        security_layer = SecurityLayer()
-        app.state.security_layer = security_layer
-        await update_app_state("security_layer", security_layer)
-        logger.info("✅ [ 15%] Security: Security layer initialized successfully")
-
-        # Issue #898: Initialize PostgreSQL database - CRITICAL
-        logger.info("✅ [ 16%] Database: Initializing PostgreSQL async engine...")
-        logger.info("🔍 DEBUG: About to call get_deployment_config()")
-        try:
-            from backend.user_management.config import get_deployment_config
-
-            config = get_deployment_config()
-            logger.info(
-                f"🔍 DEBUG: Deployment config loaded - "
-                f"mode={config.mode.value}, "
-                f"postgres_enabled={config.postgres_enabled}"
-            )
-            logger.info(
-                f"🔍 DEBUG: PostgreSQL - "
-                f"host={config.postgres_host}, "
-                f"port={config.postgres_port}, "
-                f"db={config.postgres_db}"
-            )
-
-            logger.info("🔍 DEBUG: About to call init_database()")
-            await init_database()
-            logger.info("✅ [ 16%] Database: PostgreSQL async engine initialized")
-        except Exception as db_error:
-            logger.error(f"❌ CRITICAL: Database initialization failed: {db_error}")
-            import traceback
-
-            logger.error(f"❌ TRACEBACK: {traceback.format_exc()}")
-            raise RuntimeError(f"Database initialization failed: {db_error}")
-
-        # Issue #732: Initialize Gateway - CRITICAL
-        # Issue #881: TEMP DISABLED - testing if Gateway blocks event loop
-        logger.info("✅ [ 17%] Gateway: SKIPPED (testing event loop deadlock)")
-        # try:
-        #     from backend.services.gateway import ChannelType, Gateway, WebSocketAdapter
-        #
-        #     gateway = Gateway()
-        #     await gateway.start()
-        #
-        #     # Register WebSocket adapter
-        #     ws_adapter = WebSocketAdapter()
-        #     gateway.register_channel_adapter(ChannelType.WEBSOCKET, ws_adapter)
-        #
-        #     app.state.gateway = gateway
-        #     await update_app_state("gateway", gateway)
-        #     logger.info("✅ [ 17%] Gateway: Gateway initialized with WebSocket adapter")
-        # except Exception as gateway_error:
-        #     logger.error(f"❌ CRITICAL: Gateway initialization failed: {gateway_error}")
-        #     raise RuntimeError(f"Gateway initialization failed: {gateway_error}")
-
-        # Issue #697: Instrument Redis and aiohttp with OpenTelemetry
-        instrument_redis()
-        instrument_aiohttp()
-
-        # Redis connections managed centrally via src.utils.redis_client
-        logger.info(
-            "✅ [ 20%] Redis: Using centralized Redis client management (src.utils.redis_client)"
-        )
-
-        # Initialize critical services (Issue #665: uses helpers)
+        # Issue #665: uses helpers
         await _init_chat_history_manager(app)
         await _init_conversation_file_manager(app)
         await _init_chat_workflow_manager(app)
@@ -300,14 +332,7 @@ async def initialize_critical_services(app: FastAPI):
         # Issue #743: Register caches with CacheCoordinator for memory optimization
         await _init_cache_coordinator()
 
-        # Initialize skills system tables and discover builtin skills (non-blocking)
-        try:
-            await _init_skills_tables()
-            await _init_skills_discovery()
-        except Exception as skills_db_error:
-            logger.warning(
-                "Skills initialization failed (non-critical): %s", skills_db_error
-            )
+        await _init_skills(app)
 
         logger.info("✅ [ 60%] PHASE 1 COMPLETE: All critical services operational")
 

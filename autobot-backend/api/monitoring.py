@@ -15,20 +15,6 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 from auth_middleware import check_admin_permission
-from fastapi import (
-    APIRouter,
-    BackgroundTasks,
-    Depends,
-    Query,
-    Response,
-    WebSocket,
-    WebSocketDisconnect,
-)
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
-
-# Import AutoBot monitoring system
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import monitoring utility functions
 from backend.api.monitoring_utils import (
@@ -53,6 +39,20 @@ from backend.utils.performance_monitor import (
     stop_monitoring,
 )
 from config import ConfigManager
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Query,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
+
+# Import AutoBot monitoring system
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Hardware monitor moved to monitoring_hardware.py (Issue #213)
 
@@ -284,21 +284,12 @@ class MonitoringWebSocketManager:
 ws_manager = MonitoringWebSocketManager()
 
 
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_services_health",
-    error_code_prefix="MONITORING",
-)
-@router.get("/services/health")
-async def get_services_health():
-    """Return service health in ServicesSummary format for frontend.
+def _resolve_service_urls() -> tuple:
+    """Helper for get_services_health. Ref: #1088.
 
-    Issue #1006: Frontend composables (usePrometheusMetrics, SystemArchitectureDiagram,
-    ApiClient, api.ts) all call /api/monitoring/services/health expecting a
-    ServicesSummary-shaped response.  Delegates to service_monitor helpers.
+    Resolve health-check URLs for NPU worker, browser, and Ollama from the
+    config manager, falling back to known static addresses on any error.
     """
-    from backend.api.service_monitor import _check_http_health, _check_redis_health
-
     try:
         npu_url = config.get_service_url("npu_worker", "health")
         browser_url = config.get_service_url("browser", "health")
@@ -307,22 +298,19 @@ async def get_services_health():
         npu_url = "http://172.16.168.22:8081/health"
         browser_url = "http://172.16.168.25:3000/health"
         ollama_url = "http://172.16.168.24:11434/api/version"
+    return npu_url, browser_url, ollama_url
 
-    results = await asyncio.gather(
-        _check_redis_health(),
-        _check_http_health(npu_url),
-        _check_http_health(ollama_url),
-        _check_http_health(browser_url),
-        return_exceptions=True,
-    )
+
+def _build_service_list(results: list) -> list:
+    """Helper for get_services_health. Ref: #1088.
+
+    Unpack asyncio.gather results into a ServicesSummary-compatible list.
+    Each entry is a dict with name, host, port, status, response_time_ms,
+    health_score, and uptime_hours fields.
+    """
 
     def _safe(res, default=("offline", "Error")):
         return res if isinstance(res, tuple) else default
-
-    redis_s, redis_m = _safe(results[0])
-    npu_s, npu_m = _safe(results[1])
-    ollama_s, ollama_m = _safe(results[2])
-    browser_s, browser_m = _safe(results[3])
 
     def _to_service(name, host, port, status, msg):
         is_healthy = status == "online"
@@ -336,7 +324,12 @@ async def get_services_health():
             "uptime_hours": 0,
         }
 
-    svc_list = [
+    redis_s, redis_m = _safe(results[0])
+    npu_s, npu_m = _safe(results[1])
+    ollama_s, ollama_m = _safe(results[2])
+    browser_s, browser_m = _safe(results[3])
+
+    return [
         _to_service("Backend API", "172.16.168.20", 8443, "online", "Running"),
         _to_service("Redis", "172.16.168.23", 6379, redis_s, redis_m),
         _to_service("NPU Worker", "172.16.168.22", 8081, npu_s, npu_m),
@@ -344,6 +337,14 @@ async def get_services_health():
         _to_service("Browser", "172.16.168.25", 3000, browser_s, browser_m),
     ]
 
+
+def _compute_overall_status(svc_list: list) -> dict:
+    """Helper for get_services_health. Ref: #1088.
+
+    Derive aggregate health counts and overall_status string from a service
+    list produced by _build_service_list.  Returns the full ServicesSummary
+    response dict (without the 'services' key -- caller merges it).
+    """
     healthy = sum(1 for s in svc_list if s["status"] == "healthy")
     total = len(svc_list)
     degraded = 0
@@ -363,8 +364,38 @@ async def get_services_health():
         "critical_services": critical,
         "overall_status": overall,
         "health_percentage": round((healthy / total) * 100) if total else 0,
-        "services": svc_list,
     }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_services_health",
+    error_code_prefix="MONITORING",
+)
+@router.get("/services/health")
+async def get_services_health():
+    """Return service health in ServicesSummary format for frontend.
+
+    Issue #1006: Frontend composables (usePrometheusMetrics, SystemArchitectureDiagram,
+    ApiClient, api.ts) all call /api/monitoring/services/health expecting a
+    ServicesSummary-shaped response.  Delegates to service_monitor helpers.
+    """
+    from backend.api.service_monitor import _check_http_health, _check_redis_health
+
+    npu_url, browser_url, ollama_url = _resolve_service_urls()
+
+    results = await asyncio.gather(
+        _check_redis_health(),
+        _check_http_health(npu_url),
+        _check_http_health(ollama_url),
+        _check_http_health(browser_url),
+        return_exceptions=True,
+    )
+
+    svc_list = _build_service_list(results)
+    summary = _compute_overall_status(svc_list)
+    summary["services"] = svc_list
+    return summary
 
 
 @with_error_handling(

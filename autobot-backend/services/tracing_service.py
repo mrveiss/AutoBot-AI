@@ -191,6 +191,25 @@ class TracingService:
             self._provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
             logger.info("Console span exporter enabled for debugging")
 
+    def _finalize_tracer(self) -> None:
+        """Helper for initialize. Ref: #1088.
+
+        Registers the provider as the global OTel tracer provider, sets up W3C
+        TraceContext + B3 composite propagator, and acquires the tracer instance.
+        """
+        trace.set_tracer_provider(self._provider)
+        propagator = CompositePropagator(
+            [
+                TraceContextTextMapPropagator(),
+                B3MultiFormat(),
+            ]
+        )
+        set_global_textmap(propagator)
+        self._tracer = trace.get_tracer(
+            self._service_name,
+            self._service_version,
+        )
+
     def initialize(
         self,
         service_name: Optional[str] = None,
@@ -203,6 +222,7 @@ class TracingService:
 
         Issue #665: Refactored to use extracted helper methods for
         service name resolution, resource creation, and exporter setup.
+        Ref: #1088.
 
         Args:
             service_name: Name of this service for trace attribution
@@ -214,42 +234,17 @@ class TracingService:
             True if initialization succeeded, False otherwise
         """
         try:
-            # Determine service name from IP if not provided (Issue #665: uses helper)
             self._service_name = self._resolve_service_name(service_name)
             self._service_version = service_version
 
             if jaeger_endpoint:
                 self._jaeger_endpoint = jaeger_endpoint
 
-            # Create resource with service information (Issue #665: uses helper)
             resource = self._create_resource()
-
-            # Issue #697: Create sampler for trace sampling strategy
             sampler = self._create_sampler()
-
-            # Create tracer provider with sampling
             self._provider = TracerProvider(resource=resource, sampler=sampler)
-
-            # Configure exporters (Issue #665: uses helper)
             self._setup_exporters(enable_console_export)
-
-            # Set as global tracer provider
-            trace.set_tracer_provider(self._provider)
-
-            # Set up context propagation (W3C TraceContext + B3 for compatibility)
-            propagator = CompositePropagator(
-                [
-                    TraceContextTextMapPropagator(),
-                    B3MultiFormat(),
-                ]
-            )
-            set_global_textmap(propagator)
-
-            # Get tracer instance
-            self._tracer = trace.get_tracer(
-                self._service_name,
-                self._service_version,
-            )
+            self._finalize_tracer()
 
             self._enabled = True
             logger.info(

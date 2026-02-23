@@ -71,6 +71,28 @@ class AdvancedWorkflowOrchestrator:
         """Access templates through template manager"""
         return self.template_manager.templates
 
+    async def _build_workflow_intelligence(
+        self, workflow_id: str, optimized_steps: List[SmartWorkflowStep]
+    ) -> WorkflowIntelligence:
+        """Helper for generate_intelligent_workflow. Ref: #1088."""
+        return WorkflowIntelligence(
+            workflow_id=workflow_id,
+            estimated_completion_time=self.risk_analyzer.estimate_workflow_duration(
+                optimized_steps
+            ),
+            confidence_score=self.risk_analyzer.calculate_workflow_confidence(
+                optimized_steps
+            ),
+            optimization_suggestions=(
+                await self.risk_analyzer.generate_optimization_suggestions(
+                    optimized_steps
+                )
+            ),
+            risk_mitigation_strategies=(
+                await self.risk_analyzer.generate_risk_mitigation(optimized_steps)
+            ),
+        )
+
     async def generate_intelligent_workflow(
         self, user_request: str, session_id: str, context: Metadata = None
     ) -> str:
@@ -95,24 +117,9 @@ class AdvancedWorkflowOrchestrator:
             )
 
             # Step 4: Create workflow intelligence profile
-            intelligence = WorkflowIntelligence(
-                workflow_id=workflow_id,
-                estimated_completion_time=self.risk_analyzer.estimate_workflow_duration(
-                    optimized_steps
-                ),
-                confidence_score=self.risk_analyzer.calculate_workflow_confidence(
-                    optimized_steps
-                ),
-                optimization_suggestions=(
-                    await self.risk_analyzer.generate_optimization_suggestions(
-                        optimized_steps
-                    )
-                ),
-                risk_mitigation_strategies=(
-                    await self.risk_analyzer.generate_risk_mitigation(optimized_steps)
-                ),
+            intelligence = await self._build_workflow_intelligence(
+                workflow_id, optimized_steps
             )
-
             self.workflow_intelligence[workflow_id] = intelligence
 
             # Step 5: Create enhanced workflow

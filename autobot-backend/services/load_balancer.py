@@ -501,18 +501,7 @@ class NPULoadBalancer:
         task_data: Metadata,
         max_retries: int = RetryConfig.MIN_RETRIES,
     ) -> Metadata:
-        """
-        Submit task to specific worker with retry logic.
-
-        Args:
-            worker_id: Target worker ID
-            task_type: Type of task to execute
-            task_data: Task data payload
-            max_retries: Maximum retry attempts on different workers
-
-        Returns:
-            Task result dictionary
-        """
+        """Submit task to specific worker with retry logic. Ref: #1088."""
         worker = self.get_worker(worker_id)
         if not worker:
             return {"success": False, "error": f"Worker {worker_id} not found"}

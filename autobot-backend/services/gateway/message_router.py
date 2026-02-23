@@ -43,6 +43,53 @@ class MessageRouter:
         """
         self._agent_router = agent_router
 
+    async def _route_non_text_message(
+        self, message: UnifiedMessage
+    ) -> Optional[RoutingDecision]:
+        """Helper for route_message. Ref: #1088."""
+        if self._is_system_message(message):
+            return RoutingDecision(
+                agent_type="system",
+                confidence=1.0,
+                reasoning="System message",
+            )
+        if message.message_type == MessageType.USER_VOICE:
+            return RoutingDecision(
+                agent_type="voice_transcription",
+                confidence=1.0,
+                reasoning="Voice message requires transcription",
+            )
+        if message.message_type == MessageType.USER_IMAGE:
+            return RoutingDecision(
+                agent_type="image_analysis",
+                confidence=1.0,
+                reasoning="Image message requires vision analysis",
+            )
+        return None
+
+    async def _delegate_to_agent_router(
+        self, message: UnifiedMessage, context: Optional[Dict[str, Any]]
+    ) -> RoutingDecision:
+        """Helper for route_message. Ref: #1088."""
+        try:
+            routing_result = await self._agent_router.determine_routing(
+                request=str(message.content),
+                context=context or {},
+            )
+            return RoutingDecision(
+                agent_type=routing_result.get("agent_type", "chat"),
+                confidence=routing_result.get("confidence", 0.5),
+                reasoning=routing_result.get("reasoning", ""),
+                metadata=routing_result,
+            )
+        except Exception as e:
+            logger.error("Error in agent routing: %s", e, exc_info=True)
+            return RoutingDecision(
+                agent_type="chat",
+                confidence=0.5,
+                reasoning=f"Fallback due to routing error: {e}",
+            )
+
     async def route_message(
         self,
         message: UnifiedMessage,
@@ -58,50 +105,13 @@ class MessageRouter:
         Returns:
             RoutingDecision with agent type and confidence
         """
-        # Handle system messages (no routing needed)
-        if self._is_system_message(message):
-            return RoutingDecision(
-                agent_type="system",
-                confidence=1.0,
-                reasoning="System message",
-            )
-
-        # Handle non-text messages
-        if message.message_type == MessageType.USER_VOICE:
-            return RoutingDecision(
-                agent_type="voice_transcription",
-                confidence=1.0,
-                reasoning="Voice message requires transcription",
-            )
-        elif message.message_type == MessageType.USER_IMAGE:
-            return RoutingDecision(
-                agent_type="image_analysis",
-                confidence=1.0,
-                reasoning="Image message requires vision analysis",
-            )
+        non_text_decision = await self._route_non_text_message(message)
+        if non_text_decision is not None:
+            return non_text_decision
 
         # For text messages, delegate to agent router
         if self._agent_router and message.message_type == MessageType.USER_TEXT:
-            try:
-                routing_result = await self._agent_router.determine_routing(
-                    request=str(message.content),
-                    context=context or {},
-                )
-
-                return RoutingDecision(
-                    agent_type=routing_result.get("agent_type", "chat"),
-                    confidence=routing_result.get("confidence", 0.5),
-                    reasoning=routing_result.get("reasoning", ""),
-                    metadata=routing_result,
-                )
-            except Exception as e:
-                logger.error("Error in agent routing: %s", e, exc_info=True)
-                # Fallback to chat agent
-                return RoutingDecision(
-                    agent_type="chat",
-                    confidence=0.5,
-                    reasoning=f"Fallback due to routing error: {e}",
-                )
+            return await self._delegate_to_agent_router(message, context)
 
         # Default fallback
         return RoutingDecision(

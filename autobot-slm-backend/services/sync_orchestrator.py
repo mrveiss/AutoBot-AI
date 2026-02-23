@@ -418,13 +418,38 @@ class SyncOrchestrator:
             await db.commit()
             logger.info("Updated CodeSource commit to %s", commit[:12])
 
-    async def pull_from_source(self) -> Tuple[bool, str, Optional[str]]:
-        """
-        Pull code from code-source node to SLM cache.
+    async def _run_rsync(
+        self,
+        rsync_cmd: list,
+        commit: str,
+        node_ip: str,
+        cache_path: Path,
+    ) -> Tuple[bool, str, Optional[str]]:
+        """Execute rsync to pull code to cache. Helper for pull_from_source. Ref: #1088."""
+        try:
+            logger.info(
+                "Pulling code from %s to cache (commit: %s)", node_ip, commit[:12]
+            )
+            proc = await asyncio.create_subprocess_exec(
+                *rsync_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+            if proc.returncode != 0:
+                output = stdout.decode("utf-8", errors="replace")
+                logger.error("Pull failed: %s", output[:500])
+                return False, f"Pull failed: {output[:200]}", None
+            logger.info("Code pulled to cache: %s", cache_path)
+            return True, f"Code cached at {commit[:12]}", commit
+        except asyncio.TimeoutError:
+            return False, "Pull timed out", None
+        except Exception as e:
+            logger.error("Pull error: %s", e)
+            return False, str(e), None
 
-        Returns:
-            Tuple of (success, message, commit_hash)
-        """
+    async def pull_from_source(self) -> Tuple[bool, str, Optional[str]]:
+        """Pull code from code-source node to SLM cache. Ref: #1088."""
         # Get source node info from database
         async with db_service.session() as db:
             success, msg, node_info = await self._get_source_node_info(db)
@@ -460,34 +485,9 @@ class SyncOrchestrator:
             node_info["repo_path"],
             cache_path,
         )
-
-        # Execute rsync
-        try:
-            logger.info(
-                "Pulling code from %s to cache (commit: %s)",
-                node_info["node_ip"],
-                commit[:12],
-            )
-            proc = await asyncio.create_subprocess_exec(
-                *rsync_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
-
-            if proc.returncode != 0:
-                output = stdout.decode("utf-8", errors="replace")
-                logger.error("Pull failed: %s", output[:500])
-                return False, f"Pull failed: {output[:200]}", None
-
-            logger.info("Code pulled to cache: %s", cache_path)
-            return True, f"Code cached at {commit[:12]}", commit
-
-        except asyncio.TimeoutError:
-            return False, "Pull timed out", None
-        except Exception as e:
-            logger.error("Pull error: %s", e)
-            return False, str(e), None
+        return await self._run_rsync(
+            rsync_cmd, commit, node_info["node_ip"], cache_path
+        )
 
     async def sync_node_role(
         self,

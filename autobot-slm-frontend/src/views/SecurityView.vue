@@ -14,12 +14,15 @@
  * aria-hidden on decorative icons, accessible button labels.
  */
 
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SecurityView')
 const slmApi = useSlmApi()
+const route = useRoute()
+const router = useRouter()
 
 interface SecurityEvent {
   id: number
@@ -106,8 +109,16 @@ interface TLSEndpoint {
   days_until_expiry: number | null
 }
 
-// All security API calls use slmApi composable (initialized above)
-const activeTab = ref('overview')
+// Active tab — route-based
+type SecurityTab = 'overview' | 'tls-settings' | 'certificates' | 'audit' | 'threats' | 'policies'
+const validSecurityTabs: SecurityTab[] = ['overview', 'tls-settings', 'certificates', 'audit', 'threats', 'policies']
+function resolveSecurityTab(param: unknown): SecurityTab {
+  return validSecurityTabs.includes(param as SecurityTab) ? (param as SecurityTab) : 'overview'
+}
+const activeTab = computed(() => resolveSecurityTab(route.params.tab))
+function navigateToTab(tab: string): void {
+  router.push({ name: 'security', params: { tab } })
+}
 const loading = ref(false)
 const error = ref<string | null>(null)
 
@@ -539,7 +550,7 @@ async function enableTlsOnSelectedServices() {
 
 // Watch tab changes
 function onTabChange(tabId: string) {
-  activeTab.value = tabId
+  navigateToTab(tabId)
   currentPage.value = 1
   error.value = null
 

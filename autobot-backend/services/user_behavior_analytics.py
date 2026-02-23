@@ -107,6 +107,44 @@ class UserBehaviorAnalytics:
             )
         return self._redis
 
+    def _build_event_operations(self, redis, event: UserEvent) -> list:
+        """Helper for track_event. Ref: #1088.
+
+        Builds the full list of Redis coroutines for a single event, including
+        stream write, feature stats, daily stats, heatmap, and conditional
+        user/session/duration updates.
+        """
+        date_key = event.get_date_key()
+        hour_key = event.get_hour_key()
+        feature_key = f"{self.FEATURE_STATS_KEY}:{event.feature}"
+        daily_key = f"{self.DAILY_STATS_KEY}:{date_key}"
+        heatmap_key = f"{self.HEATMAP_KEY}:{date_key}"
+
+        ops = [
+            redis.xadd(self.EVENTS_KEY, event.to_tracking_dict(), maxlen=100000),
+            redis.hincrby(feature_key, "total_views", 1),
+            redis.hincrby(feature_key, f"events:{event.event_type}", 1),
+            redis.hincrby(daily_key, f"{event.feature}:views", 1),
+            redis.hincrby(daily_key, f"{event.feature}:events:{event.event_type}", 1),
+            redis.expire(daily_key, 90 * 24 * 3600),
+            redis.hincrby(heatmap_key, f"{hour_key}:{event.feature}", 1),
+            redis.expire(heatmap_key, 30 * 24 * 3600),
+        ]
+
+        if event.user_id:
+            ops.append(redis.sadd(f"{feature_key}:users", event.user_id))
+
+        if event.session_id:
+            ops.append(redis.sadd(f"{feature_key}:sessions", event.session_id))
+            journey_key = f"{self.USER_JOURNEY_KEY}:{event.session_id}"
+            ops.append(redis.rpush(journey_key, event.get_journey_entry()))
+            ops.append(redis.expire(journey_key, 24 * 3600))
+
+        if event.duration_ms and event.duration_ms > 0:
+            ops.append(redis.hincrby(feature_key, "total_time_ms", event.duration_ms))
+
+        return ops
+
     async def track_event(self, event: UserEvent) -> bool:
         """
         Track a user behavior event (Issue #372 - uses model methods).
@@ -120,55 +158,9 @@ class UserBehaviorAnalytics:
         """
         try:
             redis = await self.get_redis()
-            # Use model methods to reduce feature envy (Issue #372)
-            date_key = event.get_date_key()
-            hour_key = event.get_hour_key()
-            feature_key = f"{self.FEATURE_STATS_KEY}:{event.feature}"
-            daily_key = f"{self.DAILY_STATS_KEY}:{date_key}"
-            heatmap_key = f"{self.HEATMAP_KEY}:{date_key}"
-
-            # Issue #483: Collect all independent Redis operations
-            operations = [
-                # Store event in stream
-                redis.xadd(
-                    self.EVENTS_KEY,
-                    event.to_tracking_dict(),
-                    maxlen=100000,
-                ),
-                # Update feature statistics
-                redis.hincrby(feature_key, "total_views", 1),
-                redis.hincrby(feature_key, f"events:{event.event_type}", 1),
-                # Update daily statistics
-                redis.hincrby(daily_key, f"{event.feature}:views", 1),
-                redis.hincrby(
-                    daily_key, f"{event.feature}:events:{event.event_type}", 1
-                ),
-                redis.expire(daily_key, 90 * 24 * 3600),  # 90 days retention
-                # Update hourly heatmap
-                redis.hincrby(heatmap_key, f"{hour_key}:{event.feature}", 1),
-                redis.expire(heatmap_key, 30 * 24 * 3600),  # 30 days retention
-            ]
-
-            # Conditional operations
-            if event.user_id:
-                operations.append(redis.sadd(f"{feature_key}:users", event.user_id))
-
-            if event.session_id:
-                operations.append(
-                    redis.sadd(f"{feature_key}:sessions", event.session_id)
-                )
-                journey_key = f"{self.USER_JOURNEY_KEY}:{event.session_id}"
-                operations.append(redis.rpush(journey_key, event.get_journey_entry()))
-                operations.append(redis.expire(journey_key, 24 * 3600))
-
-            if event.duration_ms and event.duration_ms > 0:
-                operations.append(
-                    redis.hincrby(feature_key, "total_time_ms", event.duration_ms)
-                )
-
+            operations = self._build_event_operations(redis, event)
             # Issue #483: Execute all operations in parallel
             await asyncio.gather(*operations, return_exceptions=True)
-
             logger.debug(
                 f"Tracked event: {event.event_type} on {event.feature} "
                 f"for session {event.session_id}"
@@ -490,9 +482,9 @@ class UserBehaviorAnalytics:
                     "pages_per_session": round(pages_per_session, 2),
                 },
                 "feature_popularity": popularity,
-                "most_popular_feature": popularity[0]["feature"]
-                if popularity
-                else None,
+                "most_popular_feature": (
+                    popularity[0]["feature"] if popularity else None
+                ),
             }
 
         except Exception as e:

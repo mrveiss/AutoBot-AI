@@ -222,6 +222,72 @@ presence_manager = PresenceManager()
 # ====================================================================
 
 
+async def _send_presence_sync(websocket: WebSocket, session_id: str) -> None:
+    """Helper for presence_websocket_handler. Send initial online users list. Ref: #1088."""
+    online_users = await presence_manager.get_online_users(session_id)
+    await websocket.send_json(
+        {
+            "type": "presence_sync",
+            "online_users": online_users,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+    )
+
+
+async def _handle_presence_message(
+    websocket: WebSocket,
+    session_id: str,
+    user_id: str,
+    message: dict,
+) -> bool:
+    """Helper for presence_websocket_handler. Handle one inbound message. Ref: #1088.
+
+    Returns True to continue the loop, False to break out.
+    """
+    if message.get("type") == "ping":
+        await websocket.send_json(
+            {"type": "pong", "timestamp": datetime.utcnow().isoformat()}
+        )
+        return True
+    if message.get("type") == "broadcast":
+        payload = message.get("payload", {})
+        await presence_manager.broadcast_to_session(
+            session_id,
+            {
+                "type": "user_message",
+                "user_id": user_id,
+                "payload": payload,
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        )
+    return True
+
+
+async def _presence_message_loop(
+    websocket: WebSocket, session_id: str, user_id: str
+) -> None:
+    """Helper for presence_websocket_handler. Run the receive-dispatch loop. Ref: #1088."""
+    while True:
+        try:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            if not await _handle_presence_message(
+                websocket, session_id, user_id, message
+            ):
+                break
+        except WebSocketDisconnect:
+            logger.info(
+                f"WebSocket disconnected for user {user_id} in session {session_id}"
+            )
+            break
+        except json.JSONDecodeError as e:
+            logger.warning(f"Invalid JSON from client: {e}")
+            await websocket.send_json({"type": "error", "message": "Invalid JSON"})
+        except Exception as e:
+            logger.error(f"Error handling WebSocket message: {e}")
+            break
+
+
 async def presence_websocket_handler(
     websocket: WebSocket,
     session_id: str,
@@ -236,65 +302,11 @@ async def presence_websocket_handler(
         user_id: User identifier
     """
     await websocket.accept()
-
     try:
-        # Register connection
         await presence_manager.connect(session_id, user_id, websocket)
-
-        # Send current online users
-        online_users = await presence_manager.get_online_users(session_id)
-        await websocket.send_json(
-            {
-                "type": "presence_sync",
-                "online_users": online_users,
-                "timestamp": datetime.utcnow().isoformat(),
-            }
-        )
-
-        # Keep connection alive and handle messages
-        while True:
-            try:
-                data = await websocket.receive_text()
-                message = json.loads(data)
-
-                # Handle ping/pong for keep-alive
-                if message.get("type") == "ping":
-                    await websocket.send_json(
-                        {
-                            "type": "pong",
-                            "timestamp": datetime.utcnow().isoformat(),
-                        }
-                    )
-                    continue
-
-                # Broadcast custom messages to session
-                if message.get("type") == "broadcast":
-                    payload = message.get("payload", {})
-                    await presence_manager.broadcast_to_session(
-                        session_id,
-                        {
-                            "type": "user_message",
-                            "user_id": user_id,
-                            "payload": payload,
-                            "timestamp": datetime.utcnow().isoformat(),
-                        },
-                    )
-
-            except WebSocketDisconnect:
-                logger.info(
-                    f"WebSocket disconnected for user {user_id} "
-                    f"in session {session_id}"
-                )
-                break
-            except json.JSONDecodeError as e:
-                logger.warning(f"Invalid JSON from client: {e}")
-                await websocket.send_json({"type": "error", "message": "Invalid JSON"})
-            except Exception as e:
-                logger.error(f"Error handling WebSocket message: {e}")
-                break
-
+        await _send_presence_sync(websocket, session_id)
+        await _presence_message_loop(websocket, session_id, user_id)
     except Exception as e:
         logger.error(f"WebSocket handler error: {e}")
     finally:
-        # Unregister connection
         await presence_manager.disconnect(websocket)

@@ -252,52 +252,13 @@ async def extract_entities(
     current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """
-    Extract entities from conversation and populate graph.
+    Extract entities from conversation and populate knowledge graph. Ref: #1088.
 
-    This endpoint uses the GraphEntityExtractor to automatically extract
-    entities and relationships from conversation messages and populate the
-    knowledge graph.
-
-    Args:
-        extraction_request: Extraction request parameters
-        extractor: GraphEntityExtractor dependency
+    Uses GraphEntityExtractor to extract entities/relationships from messages.
+    Issues #665 (helpers), #744 (auth required).
 
     Returns:
         JSONResponse with extraction results and metrics
-
-    Raises:
-        HTTPException: If extraction fails
-
-    Example Request:
-        ```json
-        {
-            "conversation_id": "conv-abc-123",
-            "messages": [
-                {"role": "user", "content": "Redis is timing out"},
-                {"role": "assistant", "content": "Fixed by increasing timeout to 30s"}
-            ],
-            "session_metadata": {
-                "user_id": "user-123",
-                "timestamp": "2025-01-15T10:30:00Z"
-            }
-        }
-        ```
-
-    Example Response:
-        ```json
-        {
-            "success": true,
-            "conversation_id": "conv-abc-123",
-            "facts_analyzed": 3,
-            "entities_created": 2,
-            "relations_created": 1,
-            "processing_time": 1.23,
-            "errors": [],
-            "request_id": "req-def-456"
-        }
-        ```
-    Issue #665: Refactored from 97 lines to use extracted helper methods.
-    Issue #744: Requires authenticated user.
     """
     request_id = generate_request_id()
 
@@ -429,23 +390,12 @@ async def extract_entities_batch(
     current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """
-    Extract entities from multiple conversations in batch.
+    Extract entities from multiple conversations in batch. Ref: #1088.
 
-    Issue #281: Refactored from 137 lines to use extracted helper methods.
-    Issue #744: Requires authenticated user.
-
-    This endpoint processes multiple conversations in parallel for efficient
-    batch entity extraction.
-
-    Args:
-        batch_request: Batch extraction request
-        extractor: GraphEntityExtractor dependency
+    Issues #281 (helpers), #744 (auth). Processes conversations in parallel.
 
     Returns:
         JSONResponse with batch extraction results
-
-    Raises:
-        HTTPException: If batch extraction fails
     """
     import asyncio
     import time
@@ -511,27 +461,9 @@ async def entity_extraction_health(
     current_user: dict = Depends(get_current_user),
 ) -> JSONResponse:
     """
-    Check entity extraction service health.
+    Check entity extraction service health. Ref: #1088.
 
-    Returns health status of the service and its components.
-
-    Issue #744: Requires authenticated user.
-
-    Returns:
-        JSONResponse with health status
-
-    Example Response:
-        ```json
-        {
-            "status": "healthy",
-            "components": {
-                "entity_extractor": "healthy",
-                "knowledge_extraction_agent": "healthy",
-                "memory_graph": "healthy"
-            },
-            "timestamp": "2025-01-15T10:30:00Z"
-        }
-        ```
+    Issue #744 (auth). Returns status of extractor/graph/agent components.
     """
     from datetime import datetime
 

@@ -428,9 +428,9 @@ class AgentLoop:
             tool_calls = create_tool_calls(tools)
             return await self.tool_executor.execute_batch(
                 tool_calls,
-                task_id=self._current_context.task_id
-                if self._current_context
-                else None,
+                task_id=(
+                    self._current_context.task_id if self._current_context else None
+                ),
             )
 
         # Sequential execution (fallback)
@@ -572,9 +572,9 @@ class AgentLoop:
             result = await self.think_tool.think(
                 ThinkCategory.GIT_DECISION,
                 context,
-                task_id=self._current_context.task_id
-                if self._current_context
-                else None,
+                task_id=(
+                    self._current_context.task_id if self._current_context else None
+                ),
             )
             if self._current_context:
                 self._current_context.add_think(result)
@@ -631,9 +631,9 @@ Duration: {self._current_context.get_duration_ms():.0f}ms
             result = await self.think_tool.think(
                 ThinkCategory.ERROR_RECOVERY,
                 f"Error: {error}",
-                task_id=self._current_context.task_id
-                if self._current_context
-                else None,
+                task_id=(
+                    self._current_context.task_id if self._current_context else None
+                ),
             )
             if self._current_context:
                 self._current_context.add_think(result)

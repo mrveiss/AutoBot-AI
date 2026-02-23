@@ -341,26 +341,10 @@ class AuditLogger:
         performance_ms: Optional[float] = None,
     ) -> bool:
         """
-        Log a security-sensitive operation.
+        Log a security-sensitive operation. Ref: #1088.
 
-        Issue #665: Refactored to use extracted helpers for reduced function length.
-
-        This is the primary interface for audit logging. Automatically adds
-        VM source information and sanitizes sensitive data.
-
-        Args:
-            operation: Operation type (e.g., 'auth.login', 'file.delete')
-            result: Operation result ('success', 'denied', 'failed', 'error')
-            user_id: Username or user identifier
-            session_id: Session ID if applicable
-            ip_address: Client IP address
-            resource: Resource affected (e.g., file path, API endpoint)
-            user_role: User's role (e.g., 'admin', 'user', 'guest')
-            details: Additional operation-specific metadata
-            performance_ms: Operation duration in milliseconds
-
-        Returns:
-            bool: True if logged successfully, False if fallback used
+        Issue #665: uses _create_sanitized_entry and _add_to_batch_and_schedule.
+        Returns True if logged, False if fallback used.
         """
         start_time = datetime.now()
         entry = None

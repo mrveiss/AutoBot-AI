@@ -237,24 +237,10 @@ class CommandExecutor:
         self, session: AgentTerminalSession, reason: str = "timeout"
     ) -> bool:
         """
-        Cancel a running command with graceful shutdown.
+        Cancel a running command with graceful shutdown. Ref: #1088.
 
-        Issue #665: Refactored to use extracted helpers for SIGINT and SIGKILL operations.
-
-        CRITICAL FIX (Critical #3): Proper cleanup for timeouts to prevent orphaned processes.
-
-        Process:
-        1. Send SIGTERM to gracefully stop the process
-        2. Wait 2-3 seconds for graceful shutdown
-        3. Send SIGKILL if still running
-        4. Clean up resources and log the cancellation
-
-        Args:
-            session: Agent terminal session
-            reason: Reason for cancellation (default: "timeout")
-
-        Returns:
-            True if command was cancelled successfully
+        Issue #665: Uses _send_sigint_to_pty, _force_close_pty_session, _finalize_cancellation.
+        CRITICAL FIX (Critical #3): Prevents orphaned processes on timeout.
         """
         if not session.has_pty_session():
             logger.warning(

@@ -122,6 +122,51 @@ class ChatKnowledgeService:
             enable_doc_search,
         )
 
+    async def _search_filter_and_format(
+        self,
+        query: str,
+        top_k: int,
+        score_threshold: float,
+        categories: Optional[List[str]],
+        start_time: float,
+    ) -> Tuple[str, List[Dict]]:
+        """Helper for retrieve_relevant_knowledge. Ref: #1088.
+
+        Runs the advanced RAG search, filters by score, formats context and
+        citations, then logs timing.
+
+        Args:
+            query: User query string
+            top_k: Maximum results to request from RAG
+            score_threshold: Minimum relevance score to keep
+            categories: Optional category filter list
+            start_time: Monotonic start time for elapsed logging
+
+        Returns:
+            Tuple of (formatted_context_string, citation_list)
+        """
+        # Issue #382: metrics unused; Issue #556: pass categories
+        results, _ = await self.rag_service.advanced_search(
+            query=query,
+            max_results=top_k,
+            enable_reranking=True,
+            categories=categories,
+        )
+
+        filtered_results = self._filter_by_score(results, score_threshold)
+        context_string = self.format_knowledge_context(filtered_results)
+        citations = self.format_citations(filtered_results)
+
+        logger.info(
+            "Retrieved %d/%d facts (threshold: %s) in %.3fs",
+            len(filtered_results),
+            len(results),
+            score_threshold,
+            time.time() - start_time,
+        )
+
+        return context_string, citations
+
     async def retrieve_relevant_knowledge(
         self,
         query: str,
@@ -157,33 +202,9 @@ class ChatKnowledgeService:
         start_time = time.time()
 
         try:
-            # Perform advanced search using RAGService
-            # Issue #382: metrics unused, using _ to indicate intentionally discarded
-            # Issue #556: Pass categories for filtering
-            results, _ = await self.rag_service.advanced_search(
-                query=query,
-                max_results=top_k,
-                enable_reranking=True,
-                categories=categories,
+            return await self._search_filter_and_format(
+                query, top_k, score_threshold, categories, start_time
             )
-
-            # Filter by score threshold
-            filtered_results = self._filter_by_score(results, score_threshold)
-
-            # Format for chat integration
-            context_string = self.format_knowledge_context(filtered_results)
-            citations = self.format_citations(filtered_results)
-
-            retrieval_time = time.time() - start_time
-            logger.info(
-                "Retrieved %d/%d facts (threshold: %s) in %.3fs",
-                len(filtered_results),
-                len(results),
-                score_threshold,
-                retrieval_time,
-            )
-
-            return context_string, citations
 
         except Exception as e:
             # Graceful degradation - don't break chat flow

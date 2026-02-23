@@ -85,7 +85,6 @@ from typing import Any, AsyncGenerator, Dict, Optional, Union
 
 import redis
 import redis.asyncio as async_redis
-
 from backend.utils.redis_management.config import (
     PoolConfig,
     RedisConfig,
@@ -220,26 +219,6 @@ def get_redis_client(
             >>> async def store_data():
             ...     redis = await get_redis_client(async_client=True, database="main")
             ...     await redis.set("key", "value")
-
-        Advanced usage with new features:
-            >>> # Named database methods
-            >>> manager = RedisConnectionManager()
-            >>> main_client = await manager.main()
-            >>> knowledge_client = await manager.knowledge()
-            >>>
-            >>> # Pipeline context manager
-            >>> async with manager.pipeline("main") as pipe:
-            ...     pipe.set("key1", "value1")
-            ...     pipe.set("key2", "value2")
-            ...     # Auto-executes on context exit
-            >>>
-            >>> # Get statistics
-            >>> stats = manager.get_statistics()
-            >>> print(f"Success rate: {stats.overall_success_rate}%")
-            >>>
-            >>> # Pool statistics
-            >>> pool_stats = manager.get_pool_statistics("main")
-            >>> print(f"Active connections: {pool_stats.in_use_connections}")
     """
     if async_client:
         # Return coroutine for async client
@@ -313,7 +292,7 @@ def get_connection_info(database: str = "main") -> Dict[str, Any]:
 
     Example:
         >>> info = get_connection_info("main")
-        >>> print(f"Connected: {info['connected']}")
+        >>> print(f"Connected: {info['connected']}")  # noqa: print
     """
     try:
         client = get_redis_client(async_client=False, database=database)
@@ -359,7 +338,7 @@ def test_redis_connection(database: str = "main") -> bool:
 
     Example:
         >>> if test_redis_connection("main"):
-        ...     print("Redis is accessible")
+        ...     print("Redis is accessible")  # noqa: print
     """
     try:
         client = get_redis_client(async_client=False, database=database)

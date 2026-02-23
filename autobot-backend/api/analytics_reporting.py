@@ -229,6 +229,59 @@ def aggregate_categories(charts_data: Dict[str, Any]) -> Dict[str, Any]:
     return categories
 
 
+def _build_unified_report_response(
+    health_score: float,
+    quality_data: Dict[str, Any],
+    charts_data: Dict[str, Any],
+    debt_data: Dict[str, Any],
+    performance_data: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Helper for get_unified_report. Ref: #1088.
+
+    Assembles the full report dict from pre-computed analytics values.
+    """
+    chart_data = charts_data.get("chart_data", {})
+    severity_counts = chart_data.get("severity_counts", [])
+    top_files = chart_data.get("top_files", [])
+
+    severity_totals = {s["severity"]: s["count"] for s in severity_counts}
+    total_issues = sum(severity_totals.values())
+    categories = aggregate_categories(charts_data)
+
+    return {
+        "status": "success",
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "summary": {
+            "health_score": health_score,
+            "grade": get_grade(health_score),
+            "total_issues": total_issues,
+            "critical": severity_totals.get("critical", 0),
+            "high": severity_totals.get("high", 0),
+            "medium": severity_totals.get("medium", 0),
+            "low": severity_totals.get("low", 0),
+        },
+        "quality": {
+            "overall": quality_data.get("overall", 0),
+            "grade": quality_data.get("grade", "N/A"),
+            "breakdown": quality_data.get("breakdown", {}),
+            "recommendations": quality_data.get("recommendations", []),
+        },
+        "categories": categories,
+        "top_files": top_files[:10],  # Top 10 problematic files
+        "technical_debt": {
+            "total_items": debt_data.get("summary", {}).get("total_items", 0),
+            "total_hours": debt_data.get("summary", {}).get("total_hours", 0),
+            "total_cost_usd": debt_data.get("summary", {}).get("total_cost_usd", 0),
+        },
+        "performance": {
+            "analyses_count": performance_data.get("total_analyses", 0),
+            "average_score": performance_data.get("average_score", 0),
+            "patterns_enabled": performance_data.get("patterns_enabled", 0),
+            "common_issues": performance_data.get("common_issues", [])[:5],
+        },
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.API,
     error_code_prefix="UNIFIED",
@@ -261,51 +314,9 @@ async def get_unified_report():
         quality_data, charts_data, debt_data, performance_data
     )
 
-    # Extract chart data
-    chart_data = charts_data.get("chart_data", {})
-    severity_counts = chart_data.get("severity_counts", [])
-    top_files = chart_data.get("top_files", [])
-
-    # Calculate totals by severity
-    severity_totals = {s["severity"]: s["count"] for s in severity_counts}
-    total_issues = sum(severity_totals.values())
-
-    # Aggregate categories
-    categories = aggregate_categories(charts_data)
-
-    # Build response
-    response = {
-        "status": "success",
-        "generated_at": datetime.utcnow().isoformat() + "Z",
-        "summary": {
-            "health_score": health_score,
-            "grade": get_grade(health_score),
-            "total_issues": total_issues,
-            "critical": severity_totals.get("critical", 0),
-            "high": severity_totals.get("high", 0),
-            "medium": severity_totals.get("medium", 0),
-            "low": severity_totals.get("low", 0),
-        },
-        "quality": {
-            "overall": quality_data.get("overall", 0),
-            "grade": quality_data.get("grade", "N/A"),
-            "breakdown": quality_data.get("breakdown", {}),
-            "recommendations": quality_data.get("recommendations", []),
-        },
-        "categories": categories,
-        "top_files": top_files[:10],  # Top 10 problematic files
-        "technical_debt": {
-            "total_items": debt_data.get("summary", {}).get("total_items", 0),
-            "total_hours": debt_data.get("summary", {}).get("total_hours", 0),
-            "total_cost_usd": debt_data.get("summary", {}).get("total_cost_usd", 0),
-        },
-        "performance": {
-            "analyses_count": performance_data.get("total_analyses", 0),
-            "average_score": performance_data.get("average_score", 0),
-            "patterns_enabled": performance_data.get("patterns_enabled", 0),
-            "common_issues": performance_data.get("common_issues", [])[:5],
-        },
-    }
+    response = _build_unified_report_response(
+        health_score, quality_data, charts_data, debt_data, performance_data
+    )
 
     return JSONResponse(content=response)
 

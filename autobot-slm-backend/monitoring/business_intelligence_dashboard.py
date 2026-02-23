@@ -248,27 +248,50 @@ class BusinessIntelligenceDashboard:
             self.logger.error(f"❌ Failed to connect to Redis for BI: {e}")
             self.redis_client = None
 
+    def _compute_savings_and_roi(
+        self,
+        total_hardware_cost: float,
+        monthly_operational_cost: float,
+        productivity_gain_hours: float,
+    ) -> tuple:
+        """Compute break-even months and total ROI percentage.
+
+        Helper for calculate_roi_metrics. Ref: #1088.
+
+        Returns:
+            Tuple of (break_even_months, total_roi_percent).
+        """
+        monthly_savings = productivity_gain_hours * 50  # $50/hour value
+        break_even_months = (
+            total_hardware_cost / monthly_savings
+            if monthly_savings > 0
+            else float("inf")
+        )
+        annual_savings = monthly_savings * 12
+        total_roi = (
+            (annual_savings - monthly_operational_cost * 12) / total_hardware_cost * 100
+            if total_hardware_cost > 0
+            else 0
+        )
+        return break_even_months, total_roi
+
     async def calculate_roi_metrics(self) -> ROIMetrics:
         """Calculate comprehensive ROI metrics."""
         try:
-            # Calculate total hardware investment
             total_hardware_cost = sum(
                 hw["cost"] for hw in self.hardware_investments.values()
             )
             monthly_operational_cost = sum(self.operational_costs.values())
 
-            # Get performance improvement metrics
             performance_data = await self._get_historical_performance_data()
             performance_improvement = await self._calculate_performance_improvement(
                 performance_data
             )
 
-            # Calculate productivity gains (estimated)
             productivity_gain_hours = self._estimate_productivity_gains(
                 performance_improvement
             )
 
-            # Estimate cost per operation
             total_monthly_operations = await self._estimate_monthly_operations()
             cost_per_operation = (
                 monthly_operational_cost / total_monthly_operations
@@ -276,24 +299,8 @@ class BusinessIntelligenceDashboard:
                 else 0
             )
 
-            # Calculate break-even point
-            monthly_savings = productivity_gain_hours * 50  # $50/hour value
-            break_even_months = (
-                total_hardware_cost / monthly_savings
-                if monthly_savings > 0
-                else float("inf")
-            )
-
-            # Calculate total ROI
-            annual_savings = monthly_savings * 12
-            total_roi = (
-                (
-                    (annual_savings - monthly_operational_cost * 12)
-                    / total_hardware_cost
-                    * 100
-                )
-                if total_hardware_cost > 0
-                else 0
+            break_even_months, total_roi = self._compute_savings_and_roi(
+                total_hardware_cost, monthly_operational_cost, productivity_gain_hours
             )
 
             return ROIMetrics(
@@ -435,6 +442,43 @@ class BusinessIntelligenceDashboard:
             self.logger.error(f"Error estimating monthly operations: {e}")
             return 0
 
+    def _build_component_definitions(
+        self, utilization_data: Dict[str, float]
+    ) -> Dict[str, Dict]:
+        """Helper for analyze_cost_efficiency. Ref: #1088."""
+        return {
+            "cpu": {
+                "monthly_cost": 50,  # Portion of total operational cost
+                "utilization": utilization_data.get("cpu", 0),
+                "baseline_efficiency": 70,
+            },
+            "gpu": {
+                "monthly_cost": 80,  # Higher due to power consumption
+                "utilization": utilization_data.get("gpu", 0),
+                "baseline_efficiency": 60,
+            },
+            "npu": {
+                "monthly_cost": 30,
+                "utilization": utilization_data.get("npu", 0),
+                "baseline_efficiency": 50,
+            },
+            "memory": {
+                "monthly_cost": 20,
+                "utilization": utilization_data.get("memory", 0),
+                "baseline_efficiency": 80,
+            },
+            "storage": {
+                "monthly_cost": 25,
+                "utilization": utilization_data.get("storage", 0),
+                "baseline_efficiency": 60,
+            },
+            "network": {
+                "monthly_cost": 80,  # Internet costs
+                "utilization": utilization_data.get("network", 0),
+                "baseline_efficiency": 40,
+            },
+        }
+
     async def analyze_cost_efficiency(self) -> List[CostAnalysis]:
         """Analyze cost efficiency of different system components."""
         cost_analyses = []
@@ -442,40 +486,7 @@ class BusinessIntelligenceDashboard:
         try:
             # Get current utilization data
             utilization_data = await self._get_current_utilization()
-
-            # Analyze each major component
-            components = {
-                "cpu": {
-                    "monthly_cost": 50,  # Portion of total operational cost
-                    "utilization": utilization_data.get("cpu", 0),
-                    "baseline_efficiency": 70,
-                },
-                "gpu": {
-                    "monthly_cost": 80,  # Higher due to power consumption
-                    "utilization": utilization_data.get("gpu", 0),
-                    "baseline_efficiency": 60,
-                },
-                "npu": {
-                    "monthly_cost": 30,
-                    "utilization": utilization_data.get("npu", 0),
-                    "baseline_efficiency": 50,
-                },
-                "memory": {
-                    "monthly_cost": 20,
-                    "utilization": utilization_data.get("memory", 0),
-                    "baseline_efficiency": 80,
-                },
-                "storage": {
-                    "monthly_cost": 25,
-                    "utilization": utilization_data.get("storage", 0),
-                    "baseline_efficiency": 60,
-                },
-                "network": {
-                    "monthly_cost": 80,  # Internet costs
-                    "utilization": utilization_data.get("network", 0),
-                    "baseline_efficiency": 40,
-                },
-            }
+            components = self._build_component_definitions(utilization_data)
 
             for component, data in components.items():
                 utilization = data["utilization"]
@@ -594,6 +605,36 @@ class BusinessIntelligenceDashboard:
 
         return predictions
 
+    def _compute_linear_trend(self, data: List[float]) -> tuple:
+        """Run linear regression on data and return trend statistics.
+
+        Helper for _predict_metric_trend. Ref: #1088.
+
+        Returns:
+            Tuple of (current_value, predicted_7d, predicted_30d,
+                      trend_direction, confidence_percent).
+        """
+        x = np.arange(len(data))
+        y = np.array(data)
+        z = np.polyfit(x, y, 1)
+        slope = z[0]
+
+        current_value = data[-1]
+        predicted_7d = current_value + (slope * 7)
+        predicted_30d = current_value + (slope * 30)
+
+        if abs(slope) < 0.1:
+            trend_direction = "stable"
+        elif slope > 0:
+            trend_direction = "increasing"
+        else:
+            trend_direction = "decreasing"
+
+        std_dev = np.std(data)
+        confidence = max(0, 100 - (std_dev * 10))
+
+        return current_value, predicted_7d, predicted_30d, trend_direction, confidence
+
     async def _predict_metric_trend(
         self, data: List[float], metric_name: str
     ) -> PerformancePrediction:
@@ -611,31 +652,14 @@ class BusinessIntelligenceDashboard:
                     recommended_action="Insufficient data for prediction",
                 )
 
-            # Simple linear regression for trend prediction
-            x = np.arange(len(data))
-            y = np.array(data)
+            (
+                current_value,
+                predicted_7d,
+                predicted_30d,
+                trend_direction,
+                confidence,
+            ) = self._compute_linear_trend(data)
 
-            # Calculate linear trend
-            z = np.polyfit(x, y, 1)
-            slope = z[0]
-
-            current_value = data[-1]
-            predicted_7d = current_value + (slope * 7)
-            predicted_30d = current_value + (slope * 30)
-
-            # Determine trend direction
-            if abs(slope) < 0.1:
-                trend_direction = "stable"
-            elif slope > 0:
-                trend_direction = "increasing"
-            else:
-                trend_direction = "decreasing"
-
-            # Calculate confidence (based on data consistency)
-            std_dev = np.std(data)
-            confidence = max(0, 100 - (std_dev * 10))  # Simple confidence calculation
-
-            # Generate recommendation
             recommendation = self._generate_metric_recommendation(
                 metric_name, trend_direction, predicted_30d
             )

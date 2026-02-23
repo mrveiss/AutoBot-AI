@@ -269,6 +269,50 @@ async def get_code_quality_metrics(
     return quality_metrics
 
 
+def _build_chain_correlation(static_endpoints: list, runtime_patterns: dict) -> dict:
+    """Helper for get_communication_chains. Ref: #1088."""
+    correlation = {}
+    for endpoint in static_endpoints:
+        if endpoint in runtime_patterns:
+            response_times = analytics_controller.response_times[endpoint]
+            correlation[endpoint] = {
+                "static_detected": True,
+                "runtime_calls": runtime_patterns[endpoint],
+                "avg_response_time": (
+                    sum(response_times) / len(response_times) if response_times else 0
+                ),
+            }
+    return correlation
+
+
+def _build_chain_insights(static_endpoints: list, runtime_patterns: dict) -> list:
+    """Helper for get_communication_chains. Ref: #1088."""
+    insights = []
+    unused = [ep for ep in static_endpoints if ep not in runtime_patterns]
+    if unused:
+        insights.append(
+            {
+                "type": "unused_endpoints",
+                "message": (
+                    f"Found {len(unused)} endpoints that are defined but not used"
+                ),
+                "details": unused[:5],
+            }
+        )
+    runtime_only = [ep for ep in runtime_patterns if ep not in static_endpoints]
+    if runtime_only:
+        insights.append(
+            {
+                "type": "undocumented_endpoints",
+                "message": (
+                    f"Found {len(runtime_only)} endpoints in use but not in static analysis"
+                ),
+                "details": runtime_only[:5],
+            }
+        )
+    return insights
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_communication_chains",
@@ -295,56 +339,17 @@ async def get_communication_chains(
         }
 
     chains = cached_analysis["communication_chains"]
-
-    # Enhance with runtime patterns
-    enhanced_chains = {
-        "static_analysis": chains,
-        "runtime_patterns": dict(analytics_controller.communication_chains),
-        "correlation_analysis": {},
-        "insights": [],
-    }
-
-    # Correlate static and runtime patterns
     static_endpoints = chains.get("api_endpoints", [])
     runtime_patterns = analytics_controller.api_frequencies
 
-    for endpoint in static_endpoints:
-        if endpoint in runtime_patterns:
-            enhanced_chains["correlation_analysis"][endpoint] = {
-                "static_detected": True,
-                "runtime_calls": runtime_patterns[endpoint],
-                "avg_response_time": (
-                    sum(analytics_controller.response_times[endpoint])
-                    / len(analytics_controller.response_times[endpoint])
-                    if analytics_controller.response_times[endpoint]
-                    else 0
-                ),
-            }
-
-    # Generate insights
-    unused_endpoints = [ep for ep in static_endpoints if ep not in runtime_patterns]
-    if unused_endpoints:
-        enhanced_chains["insights"].append(
-            {
-                "type": "unused_endpoints",
-                "message": (
-                    f"Found {len(unused_endpoints)} endpoints that are defined but not used"
-                ),
-                "details": unused_endpoints[:5],
-            }
-        )
-
-    runtime_only = [ep for ep in runtime_patterns if ep not in static_endpoints]
-    if runtime_only:
-        enhanced_chains["insights"].append(
-            {
-                "type": "undocumented_endpoints",
-                "message": (
-                    f"Found {len(runtime_only)} endpoints in use but not in static analysis"
-                ),
-                "details": runtime_only[:5],
-            }
-        )
+    enhanced_chains = {
+        "static_analysis": chains,
+        "runtime_patterns": dict(analytics_controller.communication_chains),
+        "correlation_analysis": _build_chain_correlation(
+            static_endpoints, runtime_patterns
+        ),
+        "insights": _build_chain_insights(static_endpoints, runtime_patterns),
+    }
 
     return enhanced_chains
 

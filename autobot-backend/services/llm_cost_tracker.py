@@ -229,6 +229,61 @@ class LLMCostTracker:
 
         return round(input_cost + output_cost, 6)
 
+    def _extract_params_from_request(self, request: "TrackUsageRequest") -> tuple:
+        """Helper for _extract_usage_params. Ref: #1088."""
+        return (
+            request.provider,
+            request.model,
+            request.input_tokens,
+            request.output_tokens,
+            request.session_id,
+            request.user_id,
+            request.endpoint,
+            request.latency_ms,
+            request.success,
+            request.error_message,
+            request.metadata,
+        )
+
+    def _extract_params_from_kwargs(
+        self,
+        provider: Optional[str],
+        model: Optional[str],
+        input_tokens: Optional[int],
+        output_tokens: Optional[int],
+        session_id: Optional[str],
+        user_id: Optional[str],
+        endpoint: Optional[str],
+        latency_ms: Optional[float],
+        success: bool,
+        error_message: Optional[str],
+        metadata: Optional[Dict[str, Any]],
+    ) -> tuple:
+        """Helper for _extract_usage_params. Ref: #1088."""
+        if (
+            provider is None
+            or model is None
+            or input_tokens is None
+            or output_tokens is None
+        ):
+            raise ValueError(
+                "Either 'request' object or 'provider', 'model', "
+                "'input_tokens', 'output_tokens' are required"
+            )
+        return (
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            session_id,
+            user_id,
+            endpoint,
+            latency_ms,
+            success,
+            error_message,
+            metadata,
+        )
+
     def _extract_usage_params(
         self,
         request: Optional["TrackUsageRequest"],
@@ -248,6 +303,8 @@ class LLMCostTracker:
         Extract usage parameters from request object or individual args.
 
         Issue #665: Extracted from track_usage to reduce function length.
+        Issue #1088: Delegated branches to _extract_params_from_request /
+            _extract_params_from_kwargs.
 
         Args:
             request: Optional TrackUsageRequest object
@@ -260,32 +317,8 @@ class LLMCostTracker:
             ValueError: If required parameters are missing
         """
         if request is not None:
-            return (
-                request.provider,
-                request.model,
-                request.input_tokens,
-                request.output_tokens,
-                request.session_id,
-                request.user_id,
-                request.endpoint,
-                request.latency_ms,
-                request.success,
-                request.error_message,
-                request.metadata,
-            )
-
-        if (
-            provider is None
-            or model is None
-            or input_tokens is None
-            or output_tokens is None
-        ):
-            raise ValueError(
-                "Either 'request' object or 'provider', 'model', "
-                "'input_tokens', 'output_tokens' are required"
-            )
-
-        return (
+            return self._extract_params_from_request(request)
+        return self._extract_params_from_kwargs(
             provider,
             model,
             input_tokens,
@@ -341,6 +374,82 @@ class LLMCostTracker:
             metadata=metadata or {},
         )
 
+    def _resolve_usage_params(
+        self,
+        request: Optional[TrackUsageRequest],
+        provider: Optional[str],
+        model: Optional[str],
+        input_tokens: Optional[int],
+        output_tokens: Optional[int],
+        session_id: Optional[str],
+        user_id: Optional[str],
+        endpoint: Optional[str],
+        latency_ms: Optional[float],
+        success: bool,
+        error_message: Optional[str],
+        metadata: Optional[Dict[str, Any]],
+    ) -> tuple:
+        """Helper for track_usage. Ref: #1088."""
+        return self._extract_usage_params(
+            request,
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            session_id,
+            user_id,
+            endpoint,
+            latency_ms,
+            success,
+            error_message,
+            metadata,
+        )
+
+    async def _build_and_persist_record(
+        self,
+        provider: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        session_id: Optional[str],
+        user_id: Optional[str],
+        endpoint: Optional[str],
+        latency_ms: Optional[float],
+        success: bool,
+        error_message: Optional[str],
+        metadata: Optional[Dict[str, Any]],
+    ) -> LLMUsageRecord:
+        """Helper for track_usage. Ref: #1088."""
+        cost = self.calculate_cost(model, input_tokens, output_tokens)
+        record = self._create_usage_record(
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            cost,
+            session_id,
+            user_id,
+            endpoint,
+            latency_ms,
+            success,
+            error_message,
+            metadata,
+        )
+        # Issue #379: Parallelize independent tracking operations
+        await asyncio.gather(
+            self._store_usage_record(record),
+            self._check_budget_alerts(cost),
+        )
+        logger.debug(
+            "Tracked LLM usage: %s/%s - %din/%dout = $%.6f",
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            cost,
+        )
+        return record
+
     async def track_usage(
         self,
         request: Optional[TrackUsageRequest] = None,
@@ -358,29 +467,14 @@ class LLMCostTracker:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> LLMUsageRecord:
         """
-        Track an LLM API usage event.
+        Track an LLM API usage event. Ref: #1088.
 
-        Issue #375: Supports both request object and individual parameters.
-        Issue #665: Refactored to use _extract_usage_params and _create_usage_record.
-
-        Args:
-            request: TrackUsageRequest object (preferred, reduces param count)
-            provider: LLM provider (legacy, use request instead)
-            model: Model name (legacy, use request instead)
-            input_tokens: Number of input tokens (legacy, use request instead)
-            output_tokens: Number of output tokens (legacy, use request instead)
-            session_id: Optional session identifier
-            user_id: Optional user identifier
-            endpoint: Optional API endpoint called
-            latency_ms: Optional response latency in milliseconds
-            success: Whether the call succeeded
-            error_message: Error message if failed
-            metadata: Additional metadata
+        Supports request object or individual keyword params (legacy).
+        Delegates to _resolve_usage_params then _build_and_persist_record.
 
         Returns:
             LLMUsageRecord with calculated cost
         """
-        # Extract parameters using helper (Issue #665)
         (
             provider,
             model,
@@ -393,7 +487,7 @@ class LLMCostTracker:
             success,
             error_message,
             metadata,
-        ) = self._extract_usage_params(
+        ) = self._resolve_usage_params(
             request,
             provider,
             model,
@@ -407,16 +501,11 @@ class LLMCostTracker:
             error_message,
             metadata,
         )
-
-        cost = self.calculate_cost(model, input_tokens, output_tokens)
-
-        # Create record using helper (Issue #665)
-        record = self._create_usage_record(
+        return await self._build_and_persist_record(
             provider,
             model,
             input_tokens,
             output_tokens,
-            cost,
             session_id,
             user_id,
             endpoint,
@@ -425,23 +514,6 @@ class LLMCostTracker:
             error_message,
             metadata,
         )
-
-        # Issue #379: Parallelize independent tracking operations
-        await asyncio.gather(
-            self._store_usage_record(record),
-            self._check_budget_alerts(cost),
-        )
-
-        logger.debug(
-            "Tracked LLM usage: %s/%s - %din/%dout = $%.6f",
-            provider,
-            model,
-            input_tokens,
-            output_tokens,
-            cost,
-        )
-
-        return record
 
     async def _store_usage_record(self, record: LLMUsageRecord) -> None:
         """Store usage record in Redis.
@@ -696,11 +768,13 @@ class LLMCostTracker:
             "period_days": days,
             "total_cost_usd": summary.get("total_cost_usd", 0),
             "daily_costs": daily_costs,
-            "trend": "increasing"
-            if growth_rate > 5
-            else "decreasing"
-            if growth_rate < -5
-            else "stable",
+            "trend": (
+                "increasing"
+                if growth_rate > 5
+                else "decreasing"
+                if growth_rate < -5
+                else "stable"
+            ),
             "growth_rate_percent": round(growth_rate, 2),
             "avg_daily_cost": summary.get("avg_daily_cost", 0),
         }

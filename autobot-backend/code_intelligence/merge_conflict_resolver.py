@@ -165,14 +165,72 @@ class ConflictParser:
     CONFLICT_END = re.compile(r"^>{7} (.+)$")
 
     @staticmethod
+    def _collect_ours_lines(lines: list, start: int) -> tuple:
+        """Helper for parse_file. Ref: #1088.
+
+        Collect 'ours' lines starting after the conflict-start marker.
+        Stops at CONFLICT_MIDDLE or CONFLICT_BASE marker.
+        Returns (ours_lines, index_after_stop).
+        """
+        ours_lines = []
+        i = start
+        while i < len(lines):
+            line = lines[i]
+            if ConflictParser.CONFLICT_MIDDLE.match(line.strip()):
+                break
+            if ConflictParser.CONFLICT_BASE.match(line.strip()):
+                break
+            ours_lines.append(line)
+            i += 1
+        return ours_lines, i
+
+    @staticmethod
+    def _collect_base_lines(lines: list, start: int) -> tuple:
+        """Helper for parse_file. Ref: #1088.
+
+        Collect optional diff3-style base lines if a CONFLICT_BASE marker is
+        present at the current position.  Stops at CONFLICT_MIDDLE.
+        Returns (base_lines, index_after_stop).
+        """
+        base_lines = []
+        i = start
+        if i < len(lines) and ConflictParser.CONFLICT_BASE.match(lines[i].strip()):
+            i += 1
+            while i < len(lines):
+                line = lines[i]
+                if ConflictParser.CONFLICT_MIDDLE.match(line.strip()):
+                    break
+                base_lines.append(line)
+                i += 1
+        return base_lines, i
+
+    @staticmethod
+    def _collect_theirs_lines(lines: list, start: int) -> tuple:
+        """Helper for parse_file. Ref: #1088.
+
+        Collect 'theirs' lines starting after the separator (index already
+        advanced past the CONFLICT_MIDDLE marker by the caller).
+        Stops at CONFLICT_END.  Returns (theirs_lines, index_at_end_marker).
+        """
+        theirs_lines = []
+        i = start
+        while i < len(lines):
+            line = lines[i]
+            if ConflictParser.CONFLICT_END.match(line.strip()):
+                break
+            theirs_lines.append(line)
+            i += 1
+        return theirs_lines, i
+
+    @staticmethod
     def parse_file(file_path: str) -> List[ConflictBlock]:
         """
         Parse a file with git conflict markers.
 
         Returns list of ConflictBlock objects for each conflict found.
+        Issue #1088: Inner collection loops extracted to helpers.
         """
         conflicts = []
-
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
@@ -182,63 +240,27 @@ class ConflictParser:
 
         i = 0
         while i < len(lines):
-            line = lines[i].strip()
-
-            # Look for conflict start marker
-            start_match = ConflictParser.CONFLICT_START.match(line)
+            start_match = ConflictParser.CONFLICT_START.match(lines[i].strip())
             if not start_match:
                 i += 1
                 continue
 
             start_line = i
-            ours_lines = []
-
-            # Collect "ours" content
-            i += 1
-            while i < len(lines):
-                line = lines[i]
-                if ConflictParser.CONFLICT_MIDDLE.match(line.strip()):
-                    break
-                if ConflictParser.CONFLICT_BASE.match(line.strip()):
-                    # Found base marker (diff3 style)
-                    break
-                ours_lines.append(line)
-                i += 1
-
-            # Check for base content (diff3 style)
-            base_lines = []
-            if i < len(lines) and ConflictParser.CONFLICT_BASE.match(lines[i].strip()):
-                i += 1
-                while i < len(lines):
-                    line = lines[i]
-                    if ConflictParser.CONFLICT_MIDDLE.match(line.strip()):
-                        break
-                    base_lines.append(line)
-                    i += 1
-
-            # Collect "theirs" content
-            theirs_lines = []
-            i += 1
-            while i < len(lines):
-                line = lines[i]
-                if ConflictParser.CONFLICT_END.match(line.strip()):
-                    break
-                theirs_lines.append(line)
-                i += 1
-
+            ours_lines, i = ConflictParser._collect_ours_lines(lines, i + 1)
+            base_lines, i = ConflictParser._collect_base_lines(lines, i)
+            theirs_lines, i = ConflictParser._collect_theirs_lines(lines, i + 1)
             end_line = i
 
-            # Create conflict block
-            conflict = ConflictBlock(
-                file_path=file_path,
-                start_line=start_line,
-                end_line=end_line,
-                ours_content="".join(ours_lines),
-                theirs_content="".join(theirs_lines),
-                base_content="".join(base_lines) if base_lines else None,
+            conflicts.append(
+                ConflictBlock(
+                    file_path=file_path,
+                    start_line=start_line,
+                    end_line=end_line,
+                    ours_content="".join(ours_lines),
+                    theirs_content="".join(theirs_lines),
+                    base_content="".join(base_lines) if base_lines else None,
+                )
             )
-
-            conflicts.append(conflict)
             i += 1
 
         logger.info("Found %d conflicts in %s", len(conflicts), file_path)

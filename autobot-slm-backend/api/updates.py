@@ -365,6 +365,70 @@ async def get_fleet_update_summary(
     )
 
 
+async def _validate_node_and_updates(
+    db: AsyncSession,
+    node_id: str,
+    update_ids: List[str],
+) -> tuple:
+    """Helper for apply_updates. Ref: #1088.
+
+    Fetch and validate node and updates. Raises HTTPException on failure.
+    Returns (node, updates).
+    """
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+    updates_result = await db.execute(
+        select(UpdateInfo).where(UpdateInfo.update_id.in_(update_ids))
+    )
+    updates = updates_result.scalars().all()
+    if not updates:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No valid updates found",
+        )
+    return node, updates
+
+
+async def _create_and_dispatch_update_job(
+    db: AsyncSession,
+    request: UpdateApplyRequest,
+    updates: list,
+) -> str:
+    """Helper for apply_updates. Ref: #1088.
+
+    Create UpdateJob record, emit start event, commit, launch background task.
+    Returns the new job_id.
+    """
+    job_id = str(uuid.uuid4())[:16]
+    job = UpdateJob(
+        job_id=job_id,
+        node_id=request.node_id,
+        status=UpdateJobStatus.PENDING.value,
+        update_ids=request.update_ids,
+        total_steps=len(updates),
+    )
+    db.add(job)
+    await _create_node_event(
+        db,
+        request.node_id,
+        EventType.DEPLOYMENT_STARTED,
+        EventSeverity.INFO,
+        f"Update job started: {len(updates)} package(s)",
+        {"job_id": job_id, "update_ids": request.update_ids},
+    )
+    await db.commit()
+    task = asyncio.create_task(
+        _run_update_job(job_id, request.node_id, request.update_ids)
+    )
+    _running_jobs[job_id] = task
+    return job_id
+
+
 @router.post("/apply", response_model=UpdateApplyResponse)
 async def apply_updates(
     request: UpdateApplyRequest,
@@ -377,53 +441,10 @@ async def apply_updates(
     Creates an update job that runs in the background. Use the job_id
     to poll for status via GET /updates/jobs/{job_id}.
     """
-    result = await db.execute(select(Node).where(Node.node_id == request.node_id))
-    node = result.scalar_one_or_none()
-
-    if not node:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Node not found",
-        )
-
-    updates_result = await db.execute(
-        select(UpdateInfo).where(UpdateInfo.update_id.in_(request.update_ids))
+    _node, updates = await _validate_node_and_updates(
+        db, request.node_id, request.update_ids
     )
-    updates = updates_result.scalars().all()
-
-    if not updates:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No valid updates found",
-        )
-
-    # Create update job
-    job_id = str(uuid.uuid4())[:16]
-    job = UpdateJob(
-        job_id=job_id,
-        node_id=request.node_id,
-        status=UpdateJobStatus.PENDING.value,
-        update_ids=request.update_ids,
-        total_steps=len(updates),
-    )
-    db.add(job)
-
-    await _create_node_event(
-        db,
-        request.node_id,
-        EventType.DEPLOYMENT_STARTED,
-        EventSeverity.INFO,
-        f"Update job started: {len(updates)} package(s)",
-        {"job_id": job_id, "update_ids": request.update_ids},
-    )
-
-    await db.commit()
-
-    # Start background task
-    task = asyncio.create_task(
-        _run_update_job(job_id, request.node_id, request.update_ids)
-    )
-    _running_jobs[job_id] = task
+    job_id = await _create_and_dispatch_update_job(db, request, updates)
 
     logger.info(
         "Update job created: %s for node %s (%d updates)",

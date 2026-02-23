@@ -5,11 +5,6 @@ import asyncio
 import logging
 
 from auth_middleware import check_admin_permission, get_current_user
-from config import ConfigManager
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import unified configuration system - NO HARDCODED VALUES
 from backend.constants.model_constants import ModelConstants
@@ -18,6 +13,11 @@ from backend.services.config_service import ConfigService
 # Import caching utilities from unified cache manager (P4 Cache Consolidation)
 from backend.utils.advanced_cache_manager import cache_response
 from backend.utils.connection_utils import ConnectionTester, ModelManager
+from config import ConfigManager
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Create singleton config instance
 config = ConfigManager()
@@ -318,6 +318,26 @@ async def get_available_embedding_models(
         )
 
 
+async def _apply_embedding_config(
+    provider: str, model: str, embedding_data: dict
+) -> None:
+    """Helper for update_embedding_model. Ref: #1088."""
+    config.set("backend.llm.embedding.provider", provider)
+    config.set(f"backend.llm.embedding.providers.{provider}.selected_model", model)
+    if "endpoint" in embedding_data:
+        config.set(
+            f"backend.llm.embedding.providers.{provider}.endpoint",
+            embedding_data["endpoint"],
+        )
+    if provider == "openai" and "api_key" in embedding_data:
+        config.set(
+            f"backend.llm.embedding.providers.{provider}.api_key",
+            embedding_data["api_key"],
+        )
+    await asyncio.to_thread(config.save_settings)
+    await asyncio.to_thread(config.save_config_to_yaml)
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_embedding_model",
@@ -328,51 +348,21 @@ async def update_embedding_model(
     embedding_data: dict,
     admin_check: bool = Depends(check_admin_permission),
 ):
-    """Update embedding model configuration.
-
-    Issue #744: Requires admin authentication.
-    """
+    """Update embedding model configuration. Issue #744: Requires admin authentication."""
     try:
         logger.info(
-            f"UNIFIED CONFIG: Received embedding model update: {embedding_data}"
+            "UNIFIED CONFIG: Received embedding model update: %s", embedding_data
         )
-
-        # Use unified configuration system
-
         provider = embedding_data.get("provider", "ollama")
         model = embedding_data.get("model")
-
         if not model:
             raise HTTPException(status_code=400, detail="Model name is required")
-
         logger.info(
             "UNIFIED CONFIG: Updating embedding model to: %s/%s", provider, model
         )
-
-        # Update embedding configuration in unified config
-        config.set("backend.llm.embedding.provider", provider)
-        config.set(f"backend.llm.embedding.providers.{provider}.selected_model", model)
-
-        if "endpoint" in embedding_data:
-            config.set(
-                f"backend.llm.embedding.providers.{provider}.endpoint",
-                embedding_data["endpoint"],
-            )
-
-        if provider == "openai" and "api_key" in embedding_data:
-            config.set(
-                f"backend.llm.embedding.providers.{provider}.api_key",
-                embedding_data["api_key"],
-            )
-
-        # Save configuration changes (wrapped for async - Issue #362)
-        await asyncio.to_thread(config.save_settings)
-        await asyncio.to_thread(config.save_config_to_yaml)
-
-        # Get current configuration for response
+        await _apply_embedding_config(provider, model, embedding_data)
         current_config = config.get("llm", {})
         embedding_config = current_config.get("unified", {}).get("embedding", {})
-
         return {
             "status": "success",
             "message": f"Embedding model updated to {provider}/{model}",
@@ -385,7 +375,6 @@ async def update_embedding_model(
                 ),
             },
         }
-
     except Exception as e:
         logger.error("Error updating embedding model: %s", str(e))
         raise HTTPException(
@@ -680,6 +669,24 @@ async def get_quick_llm_status(
 # =============================================================================
 
 
+def _build_providers_health_dict(results: dict) -> tuple:
+    """Helper for get_all_providers_health. Ref: #1088."""
+    providers_health = {}
+    available_count = 0
+    for provider_name, result in results.items():
+        is_available = result.available
+        if is_available:
+            available_count += 1
+        providers_health[provider_name] = {
+            "status": result.status.value,
+            "available": is_available,
+            "message": result.message,
+            "response_time_ms": round(result.response_time * 1000, 2),
+            "details": result.details or {},
+        }
+    return providers_health, available_count
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_all_providers_health",
@@ -703,37 +710,17 @@ async def get_all_providers_health():
     from backend.services.provider_health import ProviderHealthManager
 
     try:
-        # Check all providers in parallel (uses 30s cache internally)
         results = await ProviderHealthManager.check_all_providers(
             timeout=5.0, use_cache=True
         )
-
-        # Convert results to JSON-serializable format
-        providers_health = {}
-        available_count = 0
+        providers_health, available_count = _build_providers_health_dict(results)
         total_count = len(results)
-
-        for provider_name, result in results.items():
-            is_available = result.available
-            if is_available:
-                available_count += 1
-
-            providers_health[provider_name] = {
-                "status": result.status.value,
-                "available": is_available,
-                "message": result.message,
-                "response_time_ms": round(result.response_time * 1000, 2),
-                "details": result.details or {},
-            }
-
-        # Determine overall status
         if available_count == total_count:
             overall_status = "healthy"
         elif available_count > 0:
             overall_status = "degraded"
         else:
             overall_status = "unavailable"
-
         return JSONResponse(
             status_code=200,
             content={
@@ -747,7 +734,6 @@ async def get_all_providers_health():
                 .replace("+00:00", "Z"),
             },
         )
-
     except Exception as e:
         logger.error("Failed to check providers health: %s", e)
         return JSONResponse(
@@ -993,6 +979,69 @@ async def get_tiered_routing_config(
         )
 
 
+def _get_tier_router(llm_interface):
+    """Helper for update_tiered_routing_config. Ref: #1088.
+
+    Returns the tier router from llm_interface, or raises HTTPException if absent.
+    """
+    if not hasattr(llm_interface, "_tier_router") or not llm_interface._tier_router:
+        raise HTTPException(
+            status_code=400,
+            detail="Tiered routing is not initialized",
+        )
+    return llm_interface._tier_router
+
+
+def _apply_tiered_routing_updates(tier_router, config_data: dict) -> None:
+    """Helper for update_tiered_routing_config. Ref: #1088.
+
+    Applies each field from config_data onto tier_router.config in-place.
+    Raises HTTPException for out-of-range complexity_threshold.
+    """
+    if "enabled" in config_data:
+        tier_router.config.enabled = bool(config_data["enabled"])
+
+    if "complexity_threshold" in config_data:
+        threshold = float(config_data["complexity_threshold"])
+        if not 0 <= threshold <= 10:
+            raise HTTPException(
+                status_code=400,
+                detail="complexity_threshold must be between 0 and 10",
+            )
+        tier_router.config.complexity_threshold = threshold
+
+    if "models" in config_data:
+        if "simple" in config_data["models"]:
+            tier_router.config.models.simple = str(config_data["models"]["simple"])
+        if "complex" in config_data["models"]:
+            tier_router.config.models.complex = str(config_data["models"]["complex"])
+
+    if "fallback_to_complex" in config_data:
+        tier_router.config.fallback_to_complex = bool(
+            config_data["fallback_to_complex"]
+        )
+
+
+def _build_tiered_routing_response(tier_router) -> dict:
+    """Helper for update_tiered_routing_config. Ref: #1088.
+
+    Builds the JSON-serializable response dict from the current tier_router config.
+    """
+    return {
+        "success": True,
+        "message": "Tiered routing configuration updated successfully",
+        "config": {
+            "enabled": tier_router.config.enabled,
+            "complexity_threshold": tier_router.config.complexity_threshold,
+            "models": {
+                "simple": tier_router.config.models.simple,
+                "complex": tier_router.config.models.complex,
+            },
+            "fallback_to_complex": tier_router.config.fallback_to_complex,
+        },
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_tiered_routing_config",
@@ -1022,57 +1071,12 @@ async def update_tiered_routing_config(
     """
     try:
         llm_interface = _get_llm_interface()
-
-        if not hasattr(llm_interface, "_tier_router") or not llm_interface._tier_router:
-            raise HTTPException(
-                status_code=400,
-                detail="Tiered routing is not initialized",
-            )
-
-        router = llm_interface._tier_router
-
-        # Update enabled status
-        if "enabled" in config_data:
-            router.config.enabled = bool(config_data["enabled"])
-
-        # Update complexity threshold
-        if "complexity_threshold" in config_data:
-            threshold = float(config_data["complexity_threshold"])
-            if not 0 <= threshold <= 10:
-                raise HTTPException(
-                    status_code=400,
-                    detail="complexity_threshold must be between 0 and 10",
-                )
-            router.config.complexity_threshold = threshold
-
-        # Update model assignments
-        if "models" in config_data:
-            if "simple" in config_data["models"]:
-                router.config.models.simple = str(config_data["models"]["simple"])
-            if "complex" in config_data["models"]:
-                router.config.models.complex = str(config_data["models"]["complex"])
-
-        # Update fallback behavior
-        if "fallback_to_complex" in config_data:
-            router.config.fallback_to_complex = bool(config_data["fallback_to_complex"])
-
+        tier_router = _get_tier_router(llm_interface)
+        _apply_tiered_routing_updates(tier_router, config_data)
         logger.info("Tiered routing configuration updated: %s", config_data)
-
         return JSONResponse(
             status_code=200,
-            content={
-                "success": True,
-                "message": "Tiered routing configuration updated successfully",
-                "config": {
-                    "enabled": router.config.enabled,
-                    "complexity_threshold": router.config.complexity_threshold,
-                    "models": {
-                        "simple": router.config.models.simple,
-                        "complex": router.config.models.complex,
-                    },
-                    "fallback_to_complex": router.config.fallback_to_complex,
-                },
-            },
+            content=_build_tiered_routing_response(tier_router),
         )
 
     except HTTPException:

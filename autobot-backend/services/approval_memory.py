@@ -322,19 +322,7 @@ class ApprovalMemoryManager:
         risk_level: str,
         tool: str = "Bash",
     ) -> bool:
-        """
-        Check if a command should be auto-approved based on memory.
-
-        Args:
-            project_path: Project directory path
-            command: Command to check
-            user_id: User requesting execution
-            risk_level: Risk level of the command
-            tool: Tool name (default: "Bash")
-
-        Returns:
-            True if command should be auto-approved, False otherwise
-        """
+        """Check if a command should be auto-approved based on memory. Ref: #1088."""
         if not self.enabled:
             return False
 
@@ -485,18 +473,7 @@ class ApprovalMemoryManager:
         pattern: str,
         tool: str = "Bash",
     ) -> bool:
-        """
-        Remove a specific approval record.
-
-        Args:
-            project_path: Project directory path
-            user_id: User identifier
-            pattern: Command pattern to remove
-            tool: Tool name
-
-        Returns:
-            True if removed, False if not found
-        """
+        """Remove a specific approval record. Ref: #1088."""
         if not self.enabled:
             return False
 

@@ -19,6 +19,46 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 
+def _build_command_metadata(shell_type: str) -> dict:
+    """Helper for track_command_execution. Ref: #1088."""
+    return {"shell": shell_type}
+
+
+async def _call_track_terminal_activity(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    command: str,
+    session_id: Optional[str],
+    working_directory: Optional[str],
+    exit_code: Optional[int],
+    output: Optional[str],
+    metadata: dict,
+) -> uuid.UUID:
+    """Helper for track_command_execution. Ref: #1088."""
+    try:
+        activity_id = await track_terminal_activity(
+            db=db,
+            user_id=user_id,
+            command=command,
+            session_id=session_id,
+            working_directory=working_directory,
+            exit_code=exit_code,
+            output=output,
+            metadata=metadata,
+        )
+        logger.info(
+            f"Terminal activity tracked: user={user_id}, "
+            f"command={command[:50]}, activity_id={activity_id}"
+        )
+        return activity_id
+    except Exception as e:
+        logger.error(
+            f"Failed to track terminal activity: {e}",
+            exc_info=True,
+        )
+        raise
+
+
 async def track_command_execution(
     db: AsyncSession,
     user_id: uuid.UUID,
@@ -58,35 +98,17 @@ async def track_command_execution(
         ...         output="file1.txt\\nfile2.txt",
         ...     )
     """
-    metadata = {
-        "shell": shell_type,
-    }
-
-    try:
-        activity_id = await track_terminal_activity(
-            db=db,
-            user_id=user_id,
-            command=command,
-            session_id=session_id,
-            working_directory=working_directory,
-            exit_code=exit_code,
-            output=output,
-            metadata=metadata,
-        )
-
-        logger.info(
-            f"Terminal activity tracked: user={user_id}, "
-            f"command={command[:50]}, activity_id={activity_id}"
-        )
-
-        return activity_id
-
-    except Exception as e:
-        logger.error(
-            f"Failed to track terminal activity: {e}",
-            exc_info=True,
-        )
-        raise
+    metadata = _build_command_metadata(shell_type)
+    return await _call_track_terminal_activity(
+        db=db,
+        user_id=user_id,
+        command=command,
+        session_id=session_id,
+        working_directory=working_directory,
+        exit_code=exit_code,
+        output=output,
+        metadata=metadata,
+    )
 
 
 async def track_pty_session_creation(

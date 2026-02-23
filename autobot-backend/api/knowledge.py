@@ -451,6 +451,89 @@ async def get_knowledge_categories(
     return {"categories": categories, "total": len(categories)}
 
 
+def _extract_add_text_fields(request: dict) -> tuple:
+    """Helper for add_text_to_knowledge. Ref: #1088.
+
+    Extracts and validates all request fields for the add_text endpoint.
+    Raises ValueError when the text field is empty.
+
+    Returns:
+        Tuple of (text, title, source, category, access_level,
+                  visibility, owner_id, organization_id, group_ids, shared_with)
+    """
+    text = request.get("text", "")
+    title = request.get("title", "")
+    source = request.get("source", "manual")
+    category = request.get("category", "general")
+    # Issue #685: hierarchical access fields
+    access_level = request.get("access_level", "user")
+    visibility = request.get("visibility", "private")
+    owner_id = request.get("owner_id")
+    organization_id = request.get("organization_id")
+    group_ids = request.get("group_ids", [])
+    shared_with = request.get("shared_with", [])
+    if not text:
+        raise ValueError("Text content is required")
+    logger.info(
+        "Adding text to knowledge: title='%s', source='%s', "
+        "access_level='%s', visibility='%s', length=%d",
+        title,
+        source,
+        access_level,
+        visibility,
+        len(text),
+    )
+    return (
+        text,
+        title,
+        source,
+        category,
+        access_level,
+        visibility,
+        owner_id,
+        organization_id,
+        group_ids,
+        shared_with,
+    )
+
+
+def _build_ownership_metadata(
+    title: str,
+    source: str,
+    category: str,
+    access_level: str,
+    visibility: str,
+    owner_id,
+    organization_id,
+    group_ids: list,
+    shared_with: list,
+) -> dict:
+    """Helper for add_text_to_knowledge. Ref: #1088.
+
+    Builds the metadata dict including optional ownership fields.
+    Only non-empty/non-falsy ownership fields are included.
+
+    Returns:
+        Metadata dictionary ready to pass to store_fact.
+    """
+    metadata = {
+        "title": title,
+        "source": source,
+        "category": category,
+        "access_level": access_level,
+        "visibility": visibility,
+    }
+    if owner_id:
+        metadata["owner_id"] = owner_id
+    if organization_id:
+        metadata["organization_id"] = organization_id
+    if group_ids:
+        metadata["group_ids"] = group_ids
+    if shared_with:
+        metadata["shared_with"] = shared_with
+    return metadata
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="add_text_to_knowledge",
@@ -468,66 +551,37 @@ async def add_text_to_knowledge(
     Issue #685: Added hierarchical access level support.
     """
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-
     if kb_to_use is None:
         raise InternalError(
             "Knowledge base not initialized - please check logs for errors"
         )
 
-    text = request.get("text", "")
-    title = request.get("title", "")
-    source = request.get("source", "manual")
-    category = request.get("category", "general")
+    (
+        text,
+        title,
+        source,
+        category,
+        access_level,
+        visibility,
+        owner_id,
+        organization_id,
+        group_ids,
+        shared_with,
+    ) = _extract_add_text_fields(request)
 
-    # Issue #685: Extract hierarchical access fields
-    access_level = request.get("access_level", "user")
-    visibility = request.get("visibility", "private")
-    owner_id = request.get("owner_id")
-    organization_id = request.get("organization_id")
-    group_ids = request.get("group_ids", [])
-    shared_with = request.get("shared_with", [])
-
-    if not text:
-        raise ValueError("Text content is required")
-
-    logger.info(
-        f"Adding text to knowledge: title='{title}', source='{source}', "
-        f"access_level='{access_level}', visibility='{visibility}', length={len(text)}"
+    metadata = _build_ownership_metadata(
+        title,
+        source,
+        category,
+        access_level,
+        visibility,
+        owner_id,
+        organization_id,
+        group_ids,
+        shared_with,
     )
 
-    # Build metadata with ownership fields
-    metadata = {
-        "title": title,
-        "source": source,
-        "category": category,
-        "access_level": access_level,
-        "visibility": visibility,
-    }
-
-    if owner_id:
-        metadata["owner_id"] = owner_id
-    if organization_id:
-        metadata["organization_id"] = organization_id
-    if group_ids:
-        metadata["group_ids"] = group_ids
-    if shared_with:
-        metadata["shared_with"] = shared_with
-
-    # Use the store_fact method for KnowledgeBaseV2 or add_fact for compatibility
-    if hasattr(kb_to_use, "store_fact"):
-        # KnowledgeBaseV2
-        result = await kb_to_use.store_fact(
-            content=text,
-            metadata=metadata,
-        )
-        fact_id = result.get("fact_id")
-    else:
-        # Original KnowledgeBase
-        result = await kb_to_use.store_fact(
-            text=text,
-            metadata=metadata,
-        )
-        fact_id = result.get("fact_id")
+    fact_id = await _store_fact_in_kb(kb_to_use, text, metadata)
 
     return {
         "status": "success",

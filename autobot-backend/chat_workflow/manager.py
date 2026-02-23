@@ -691,9 +691,13 @@ class ChatWorkflowManager(
         transition_content: Optional[str],
         current_message_type: str,
     ) -> None:
-        """Stream chunk content to the streaming message. Issue #620."""
-        if just_transitioned and transition_content:
-            streaming_msg.stream(transition_content)
+        """Stream chunk content to the streaming message. Issue #620, #1140."""
+        if just_transitioned:
+            # Only stream transition_content (text after the tag); skip chunk_text
+            # (which is just the closing ] of the tag) to prevent ] leaking into
+            # the new message when transition_content is empty.
+            if transition_content:
+                streaming_msg.stream(transition_content)
         else:
             streaming_msg.stream(chunk_text)
         streaming_msg.set_metadata("display_type", current_message_type)
@@ -2486,6 +2490,13 @@ before summarizing.
             # Persist all collected WorkflowMessages
             for wf_msg in workflow_messages:
                 message_type = wf_msg.type
+
+                # Skip segment_complete markers — internal stream control messages
+                # with empty content that pollute history and share message_id
+                # with the content message they terminate (Issue #1141).
+                if message_type == "segment_complete":
+                    continue
+
                 sender = "system" if message_type == "terminal_output" else "assistant"
 
                 await chat_mgr.add_message(

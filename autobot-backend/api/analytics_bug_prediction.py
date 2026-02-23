@@ -438,6 +438,52 @@ _MAX_HISTORY_ENTRIES = 400
 _TREND_STABILITY_THRESHOLD_PCT = 5.0
 
 
+def _calculate_avg_risk_score(analyzed_files: List[Dict[str, Any]]) -> float:
+    """Helper for _store_prediction_history. Ref: #1088."""
+    if not analyzed_files:
+        return 0.0
+    return sum(f.get("risk_score", 0) for f in analyzed_files) / len(analyzed_files)
+
+
+def _build_prediction_snapshot(
+    timestamp: datetime,
+    total_files: int,
+    high_risk_count: int,
+    risk_distribution: Dict[str, int],
+    avg_risk: float,
+) -> Dict[str, Any]:
+    """Helper for _store_prediction_history. Ref: #1088."""
+    return {
+        "timestamp": timestamp.isoformat(),
+        "total_files": total_files,
+        "high_risk_count": high_risk_count,
+        "risk_distribution": risk_distribution,
+        "average_risk_score": round(avg_risk, 2),
+        "critical_count": risk_distribution.get("critical", 0),
+        "high_count": risk_distribution.get("high", 0),
+        "medium_count": risk_distribution.get("medium", 0),
+        "low_count": risk_distribution.get("low", 0),
+        "minimal_count": risk_distribution.get("minimal", 0),
+    }
+
+
+async def _persist_prediction_to_redis(
+    redis, snapshot: Dict[str, Any], timestamp_ms: int
+) -> None:
+    """Helper for _store_prediction_history. Ref: #1088."""
+    await asyncio.to_thread(
+        redis.zadd,
+        _PREDICTION_HISTORY_KEY,
+        {json.dumps(snapshot): timestamp_ms},
+    )
+    await asyncio.to_thread(
+        redis.zremrangebyrank,
+        _PREDICTION_HISTORY_KEY,
+        0,
+        -(_MAX_HISTORY_ENTRIES + 1),
+    )
+
+
 async def _store_prediction_history(
     total_files: int,
     high_risk_count: int,
@@ -468,42 +514,14 @@ async def _store_prediction_history(
         timestamp = datetime.now()
         timestamp_ms = int(timestamp.timestamp() * 1000)
 
-        # Calculate average risk score
-        avg_risk = 0.0
-        if analyzed_files:
-            avg_risk = sum(f.get("risk_score", 0) for f in analyzed_files) / len(
-                analyzed_files
-            )
-
-        # Build prediction snapshot
-        prediction_snapshot = {
-            "timestamp": timestamp.isoformat(),
-            "total_files": total_files,
-            "high_risk_count": high_risk_count,
-            "risk_distribution": risk_distribution,
-            "average_risk_score": round(avg_risk, 2),
-            "critical_count": risk_distribution.get("critical", 0),
-            "high_count": risk_distribution.get("high", 0),
-            "medium_count": risk_distribution.get("medium", 0),
-            "low_count": risk_distribution.get("low", 0),
-            "minimal_count": risk_distribution.get("minimal", 0),
-        }
-
-        # Store in sorted set with timestamp as score (for range queries)
-        await asyncio.to_thread(
-            redis.zadd,
-            _PREDICTION_HISTORY_KEY,
-            {json.dumps(prediction_snapshot): timestamp_ms},
+        # Calculate average risk score and build snapshot
+        avg_risk = _calculate_avg_risk_score(analyzed_files)
+        prediction_snapshot = _build_prediction_snapshot(
+            timestamp, total_files, high_risk_count, risk_distribution, avg_risk
         )
 
-        # Trim to keep only the most recent entries
-        # zremrangebyrank removes entries from index 0 to stop_index, keeping -MAX to -1
-        await asyncio.to_thread(
-            redis.zremrangebyrank,
-            _PREDICTION_HISTORY_KEY,
-            0,
-            -(_MAX_HISTORY_ENTRIES + 1),
-        )
+        # Persist to Redis sorted set and trim old entries
+        await _persist_prediction_to_redis(redis, prediction_snapshot, timestamp_ms)
 
         logger.debug("Stored prediction history snapshot at %s", timestamp.isoformat())
         return True
@@ -559,6 +577,43 @@ async def _get_prediction_history(days: int) -> List[Dict[str, Any]]:
         return []
 
 
+def _calculate_trend_direction(avg_risk_scores: List[float]) -> tuple:
+    """Helper for _calculate_trend_metrics. Ref: #1088.
+
+    Returns (trend_direction, risk_change_pct) by comparing first half to second half.
+    """
+    half = len(avg_risk_scores) // 2
+    if half == 0:
+        return "insufficient_data", 0.0
+
+    first_half_avg = sum(avg_risk_scores[:half]) / half
+    second_half_avg = sum(avg_risk_scores[half:]) / (len(avg_risk_scores) - half)
+
+    if first_half_avg > 0:
+        risk_change_pct = ((second_half_avg - first_half_avg) / first_half_avg) * 100
+    else:
+        risk_change_pct = 0.0
+
+    if risk_change_pct > _TREND_STABILITY_THRESHOLD_PCT:
+        return "increasing", risk_change_pct
+    if risk_change_pct < -_TREND_STABILITY_THRESHOLD_PCT:
+        return "decreasing", risk_change_pct
+    return "stable", risk_change_pct
+
+
+def _build_trend_data_points(history: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Helper for _calculate_trend_metrics. Ref: #1088."""
+    return [
+        {
+            "timestamp": h.get("timestamp"),
+            "average_risk": h.get("average_risk_score", 0),
+            "high_risk_count": h.get("high_risk_count", 0),
+            "total_files": h.get("total_files", 0),
+        }
+        for h in history
+    ]
+
+
 def _calculate_trend_metrics(history: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Calculate trend metrics from historical prediction data.
@@ -577,50 +632,16 @@ def _calculate_trend_metrics(history: List[Dict[str, Any]]) -> Dict[str, Any]:
     # Calculate averages
     avg_risk_scores = [h.get("average_risk_score", 0) for h in history]
     high_risk_counts = [h.get("high_risk_count", 0) for h in history]
-
     overall_avg = sum(avg_risk_scores) / len(avg_risk_scores) if avg_risk_scores else 0
     avg_high_risk = (
         sum(high_risk_counts) / len(high_risk_counts) if high_risk_counts else 0
     )
 
-    # Calculate trend direction (compare first half to second half)
-    half = len(history) // 2
-    if half > 0:
-        first_half_avg = sum(avg_risk_scores[:half]) / half
-        second_half_avg = sum(avg_risk_scores[half:]) / (len(avg_risk_scores) - half)
-
-        if first_half_avg > 0:
-            risk_change_pct = (
-                (second_half_avg - first_half_avg) / first_half_avg
-            ) * 100
-        else:
-            risk_change_pct = 0
-
-        # Determine trend direction using stability threshold
-        if risk_change_pct > _TREND_STABILITY_THRESHOLD_PCT:
-            trend_direction = "increasing"
-        elif risk_change_pct < -_TREND_STABILITY_THRESHOLD_PCT:
-            trend_direction = "decreasing"
-        else:
-            trend_direction = "stable"
-    else:
-        risk_change_pct = 0
-        trend_direction = "insufficient_data"
-
-    # Build data points for charting
-    data_points = []
-    for h in history:
-        data_points.append(
-            {
-                "timestamp": h.get("timestamp"),
-                "average_risk": h.get("average_risk_score", 0),
-                "high_risk_count": h.get("high_risk_count", 0),
-                "total_files": h.get("total_files", 0),
-            }
-        )
+    # Calculate trend direction using extracted helper
+    trend_direction, risk_change_pct = _calculate_trend_direction(avg_risk_scores)
 
     return {
-        "data_points": data_points,
+        "data_points": _build_trend_data_points(history),
         "summary": {
             "overall_average_risk": round(overall_avg, 2),
             "average_high_risk_files": round(avg_high_risk, 1),

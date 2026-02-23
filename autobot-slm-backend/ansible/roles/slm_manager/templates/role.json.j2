@@ -1,0 +1,15 @@
+{
+  "role": "slm-server",
+  "version": "{{ slm_version | default(git_commit) | default('unknown') }}",
+  "deploy_path": "{{ slm_backend_dir }}",
+  "service": "autobot-slm-backend",
+  "ansible_playbook": "deploy-slm-manager.yml",
+  "build_steps": [
+    "pip install -r requirements.txt",
+    "cd {{ slm_base_dir }}/autobot-slm-frontend && npm install && npm run build"
+  ],
+  "depends_on": [],
+  "required": true,
+  "degraded_without": [],
+  "deployed_at": "{{ ansible_date_time.iso8601 }}"
+}

@@ -258,6 +258,39 @@ async def get_current_indexing_job():
     )
 
 
+def _cancel_active_task(task_id: str, existing_task) -> JSONResponse:
+    """Helper for cancel_indexing_job. Ref: #1088."""
+    global _current_indexing_task_id
+    try:
+        existing_task.cancel()
+        logger.info("\U0001f6d1 Cancelled indexing task: %s", task_id)
+
+        if task_id in indexing_tasks:
+            indexing_tasks[task_id]["status"] = "cancelled"
+            indexing_tasks[task_id]["error"] = "Cancelled by user"
+            indexing_tasks[task_id]["failed_at"] = datetime.now().isoformat()
+
+        _current_indexing_task_id = None
+        _active_tasks.pop(task_id, None)
+
+        return JSONResponse(
+            {
+                "success": True,
+                "task_id": task_id,
+                "message": "Indexing job cancelled successfully",
+            }
+        )
+    except Exception as e:
+        logger.error("Failed to cancel task %s: %s", task_id, e)
+        return JSONResponse(
+            {
+                "success": False,
+                "task_id": task_id,
+                "message": f"Failed to cancel job: {str(e)}",
+            }
+        )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cancel_indexing_job",
@@ -298,35 +331,4 @@ async def cancel_indexing_job():
                 }
             )
 
-        # Cancel the task
-        try:
-            existing_task.cancel()
-            logger.info("🛑 Cancelled indexing task: %s", task_id)
-
-            # Update task status
-            if task_id in indexing_tasks:
-                indexing_tasks[task_id]["status"] = "cancelled"
-                indexing_tasks[task_id]["error"] = "Cancelled by user"
-                indexing_tasks[task_id]["failed_at"] = datetime.now().isoformat()
-
-            # Clear current task
-            _current_indexing_task_id = None
-            _active_tasks.pop(task_id, None)
-
-            return JSONResponse(
-                {
-                    "success": True,
-                    "task_id": task_id,
-                    "message": "Indexing job cancelled successfully",
-                }
-            )
-
-        except Exception as e:
-            logger.error("Failed to cancel task %s: %s", task_id, e)
-            return JSONResponse(
-                {
-                    "success": False,
-                    "task_id": task_id,
-                    "message": f"Failed to cancel job: {str(e)}",
-                }
-            )
+        return _cancel_active_task(task_id, existing_task)

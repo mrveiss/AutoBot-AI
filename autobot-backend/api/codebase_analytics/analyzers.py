@@ -75,8 +75,8 @@ _JS_API_PATH_RE = re.compile(r'[\'"`](/api/[^\'"` ]+)[\'"`]')
 _LOG_INDICATORS = frozenset({"log", "logs", ".log", "logging", "debug", "trace"})
 # nosec B108 - These are string patterns for detection, not actual temp directory usage
 _TEMP_INDICATORS = frozenset(
-    {"tmp", "temp", "tempfile", "temporary", "/tmp/"}  # nosec B108
-)
+    {"tmp", "temp", "tempfile", "temporary", "/tmp/"}
+)  # nosec B108
 _SAFE_FILE_TYPES = frozenset(
     {
         ".pid",

@@ -32,10 +32,10 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from backend.constants.path_constants import PATH
 from config import ConfigManager
 
 from autobot_shared.http_client import get_http_client
-from backend.constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ class StartupValidator:
         # Note: Obsolete chat_workflow_consolidated removed in Issue #567 archive cleanup
         self.optional_modules = [
             "src.agents.kb_librarian_agent",
-            "src.agents.librarian_assistant_agent",
+            "src.agents.librarian_assistant",
             "src.agents.llm_failsafe_agent",
             "src.conversation",
             "src.async_chat_workflow",

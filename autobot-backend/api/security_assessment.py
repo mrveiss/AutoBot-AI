@@ -688,19 +688,7 @@ async def get_findings(
             or f.get("severity") == severity
         ]
 
-    # Also include vulnerabilities from hosts
-    vulnerabilities = []
-    for host in assessment.hosts:
-        for vuln in host.vulnerabilities:
-            if severity and vuln.get("severity") != severity:
-                continue
-            vulnerabilities.append(
-                {
-                    "type": "vulnerability",
-                    "host": host.ip,
-                    **vuln,
-                }
-            )
+    vulnerabilities = _collect_host_vulnerabilities(assessment, severity)
 
     return JSONResponse(
         status_code=200,
@@ -715,6 +703,23 @@ async def get_findings(
             "request_id": request_id,
         },
     )
+
+
+def _collect_host_vulnerabilities(assessment, severity: Optional[str]) -> list:
+    """Helper for get_findings. Ref: #1088."""
+    vulnerabilities = []
+    for host in assessment.hosts:
+        for vuln in host.vulnerabilities:
+            if severity and vuln.get("severity") != severity:
+                continue
+            vulnerabilities.append(
+                {
+                    "type": "vulnerability",
+                    "host": host.ip,
+                    **vuln,
+                }
+            )
+    return vulnerabilities
 
 
 async def _store_parsed_hosts(manager, assessment_id: str, parsed) -> tuple[int, int]:

@@ -321,6 +321,68 @@ async def _restart_slm_service(service: str) -> None:
         logger.warning("Failed to restart %s: %s", service, exc)
 
 
+async def _fetch_code_source_connection_info(
+    db_service,
+) -> Optional[Tuple[str, str, str, str]]:
+    """Helper for _sync_slm_from_code_source. Ref: #1088.
+
+    Read code source connection details from DB.
+
+    Returns:
+        Tuple of (source_ip, source_user, repo_path, last_known_commit)
+        or None if the required records are missing.
+    """
+    from models.database import CodeSource, Node  # avoid circular import
+
+    try:
+        async with db_service.session() as db:
+            source_result = await db.execute(
+                select(CodeSource).where(CodeSource.is_active.is_(True))
+            )
+            source = source_result.scalar_one_or_none()
+            if not source:
+                logger.error("SLM self-sync failed: no active code source")
+                return None
+
+            node_result = await db.execute(
+                select(Node).where(Node.node_id == source.node_id)
+            )
+            source_node = node_result.scalar_one_or_none()
+            if not source_node:
+                logger.error("SLM self-sync failed: code source node not found in DB")
+                return None
+
+            return (
+                source_node.ip_address,
+                source_node.ssh_user or "autobot",
+                source.repo_path,
+                source.last_known_commit or "",
+            )
+    except Exception as db_err:
+        logger.error("SLM self-sync failed: DB read error: %s", db_err)
+        return None
+
+
+async def _mark_slm_node_up_to_date(
+    db_service, node_id: str, last_known_commit: str
+) -> None:
+    """Helper for _sync_slm_from_code_source. Ref: #1088.
+
+    Persist UP_TO_DATE status for the SLM node after a successful rsync.
+    """
+    from models.database import Node  # avoid circular import
+
+    try:
+        async with db_service.session() as db:
+            slm_result = await db.execute(select(Node).where(Node.node_id == node_id))
+            slm_node = slm_result.scalar_one_or_none()
+            if slm_node:
+                slm_node.code_version = last_known_commit
+                slm_node.code_status = CodeStatus.UP_TO_DATE.value
+    except Exception as db_err:
+        logger.warning("SLM self-sync: could not update node status: %s", db_err)
+
+
 async def _sync_slm_from_code_source(node_id: str) -> None:
     """Pull SLM components from the code source node and restart services.
 
@@ -332,39 +394,13 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
     NOTE: Must create its own DB session — the request-scoped session passed
     from sync_node is closed by FastAPI before this background task runs.
     """
-    from models.database import CodeSource, Node  # avoid circular import
     from services.database import db_service  # own session to avoid closed-session bug
 
     # --- Phase 1: gather connection info from DB ---
-    source_ip = None
-    source_user = None
-    repo_path = None
-    last_known_commit = ""
-    try:
-        async with db_service.session() as db:
-            source_result = await db.execute(
-                select(CodeSource).where(CodeSource.is_active.is_(True))
-            )
-            source = source_result.scalar_one_or_none()
-            if not source:
-                logger.error("SLM self-sync failed: no active code source")
-                return
-
-            node_result = await db.execute(
-                select(Node).where(Node.node_id == source.node_id)
-            )
-            source_node = node_result.scalar_one_or_none()
-            if not source_node:
-                logger.error("SLM self-sync failed: code source node not found in DB")
-                return
-
-            source_ip = source_node.ip_address
-            source_user = source_node.ssh_user or "autobot"
-            repo_path = source.repo_path
-            last_known_commit = source.last_known_commit or ""
-    except Exception as db_err:
-        logger.error("SLM self-sync failed: DB read error: %s", db_err)
+    conn_info = await _fetch_code_source_connection_info(db_service)
+    if conn_info is None:
         return
+    source_ip, source_user, repo_path, last_known_commit = conn_info
 
     ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
     if not Path(ssh_key).exists():
@@ -390,20 +426,54 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
         return
 
     # --- Phase 3: mark up-to-date in DB before restarting ---
-    try:
-        async with db_service.session() as db:
-            slm_result = await db.execute(select(Node).where(Node.node_id == node_id))
-            slm_node = slm_result.scalar_one_or_none()
-            if slm_node:
-                slm_node.code_version = last_known_commit
-                slm_node.code_status = CodeStatus.UP_TO_DATE.value
-    except Exception as db_err:
-        logger.warning("SLM self-sync: could not update node status: %s", db_err)
+    await _mark_slm_node_up_to_date(db_service, node_id, last_known_commit)
 
     # --- Phase 4: restart services ---
     await _restart_slm_service("autobot-slm-backend")
     await _restart_slm_service("nginx")
     logger.info("SLM self-sync complete and services restarted")
+
+
+async def _execute_node_playbook(
+    executor,
+    node: Node,
+    node_id: str,
+    request: NodeSyncRequest,
+    progress_callback,
+    db: AsyncSession,
+) -> NodeSyncResponse:
+    """Helper for sync_node. Ref: #1088.
+
+    Build playbook params, run the playbook, update the node version in DB,
+    and return the NodeSyncResponse for the normal (non-SLM-self) path.
+    """
+    # Use node_id (maps to slm_node_id in Ansible inventory) not hostname —
+    # hostname is user-editable and can drift from inventory host names (#921)
+    # Issue #1091: Include localhost so Play 0 (archive build) runs
+    limit = ["localhost", node.node_id]
+    tags = []
+    if not request.restart:
+        tags.append("!restart")  # Skip restart tasks
+
+    playbook_result = await executor.execute_playbook(
+        playbook_name="update-all-nodes.yml",
+        limit=limit,
+        tags=tags if tags else None,
+        progress_callback=progress_callback,
+    )
+
+    if playbook_result["success"]:
+        await _update_node_version_after_sync(db, node, node_id)
+
+    return NodeSyncResponse(
+        success=playbook_result["success"],
+        message=(
+            playbook_result["output"]
+            if playbook_result["success"]
+            else f"Playbook failed: {playbook_result['output']}"
+        ),
+        node_id=node_id,
+    )
 
 
 async def _broadcast_sync_progress(node_id: str, progress: Dict[str, str]) -> None:
@@ -471,15 +541,6 @@ async def sync_node(
 
     executor = get_playbook_executor()
 
-    # Build playbook parameters
-    # Use node_id (maps to slm_node_id in Ansible inventory) not hostname —
-    # hostname is user-editable and can drift from inventory host names (#921)
-    # Issue #1091: Include localhost so Play 0 (archive build) runs
-    limit = ["localhost", node.node_id]
-    tags = []
-    if not request.restart:
-        tags.append("!restart")  # Skip restart tasks
-
     # Progress callback for WebSocket broadcasts (Issue #880)
     async def progress_callback(progress: Dict[str, str]) -> None:
         await _broadcast_sync_progress(node_id, progress)
@@ -506,26 +567,11 @@ async def sync_node(
             ),
             node_id=node_id,
         )
-    else:
-        # Normal execution - wait for result with progress updates
-        playbook_result = await executor.execute_playbook(
-            playbook_name="update-all-nodes.yml",
-            limit=limit,
-            tags=tags if tags else None,
-            progress_callback=progress_callback,
-        )
 
-        # Update node version in database after successful sync
-        if playbook_result["success"]:
-            await _update_node_version_after_sync(db, node, node_id)
-
-        return NodeSyncResponse(
-            success=playbook_result["success"],
-            message=playbook_result["output"]
-            if playbook_result["success"]
-            else f"Playbook failed: {playbook_result['output']}",
-            node_id=node_id,
-        )
+    # Normal execution - wait for result with progress updates
+    return await _execute_node_playbook(
+        executor, node, node_id, request, progress_callback, db
+    )
 
 
 async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
@@ -667,6 +713,31 @@ async def mark_node_synced(
     return MarkSyncedResponse(success=True, node_id=node_id, version=version)
 
 
+def _build_fleet_sync_job_from_nodes(
+    nodes: List[Node], request: FleetSyncRequest
+) -> FleetSyncJob:
+    """Helper for sync_fleet. Ref: #1088.
+
+    Construct a FleetSyncJob with one NodeSyncState per node.
+    """
+    job_id = str(uuid.uuid4())[:16]
+    job = FleetSyncJob(
+        job_id=job_id,
+        strategy=request.strategy,
+        batch_size=request.batch_size,
+        restart=request.restart,
+    )
+    for node in nodes:
+        job.nodes[node.node_id] = NodeSyncState(
+            node_id=node.node_id,
+            hostname=node.hostname,
+            ip_address=node.ip_address,
+            ssh_user=node.ssh_user or "autobot",
+            ssh_port=node.ssh_port or 22,
+        )
+    return job
+
+
 @router.post("/fleet/sync", response_model=FleetSyncResponse)
 async def sync_fleet(
     request: FleetSyncRequest,
@@ -699,39 +770,20 @@ async def sync_fleet(
             nodes_queued=0,
         )
 
-    # Create a job ID for tracking
-    job_id = str(uuid.uuid4())[:16]
-
-    # Create job with node states
-    job = FleetSyncJob(
-        job_id=job_id,
-        strategy=request.strategy,
-        batch_size=request.batch_size,
-        restart=request.restart,
-    )
-
-    for node in nodes:
-        job.nodes[node.node_id] = NodeSyncState(
-            node_id=node.node_id,
-            hostname=node.hostname,
-            ip_address=node.ip_address,
-            ssh_user=node.ssh_user or "autobot",
-            ssh_port=node.ssh_port or 22,
-        )
-
-    # Store job and start background task
-    _fleet_sync_jobs[job_id] = job
+    # Create job with node states and store it
+    job = _build_fleet_sync_job_from_nodes(nodes, request)
+    _fleet_sync_jobs[job.job_id] = job
 
     if request.strategy != "manual":
         task = asyncio.create_task(_run_fleet_sync_job(job))
-        _running_tasks[job_id] = task
+        _running_tasks[job.job_id] = task
 
-    logger.info("Fleet sync job %s queued for %d nodes", job_id, len(nodes))
+    logger.info("Fleet sync job %s queued for %d nodes", job.job_id, len(nodes))
 
     return FleetSyncResponse(
         success=True,
         message=f"Sync queued for {len(nodes)} node(s)",
-        job_id=job_id,
+        job_id=job.job_id,
         nodes_queued=len(nodes),
     )
 
@@ -940,9 +992,11 @@ async def _broadcast_code_version_update(
                     "new_version": notification.commit,
                     "source_node": notification.node_id,
                     "outdated_nodes": outdated_count,
-                    "timestamp": notification.timestamp.isoformat()
-                    if notification.timestamp
-                    else None,
+                    "timestamp": (
+                        notification.timestamp.isoformat()
+                        if notification.timestamp
+                        else None
+                    ),
                 },
             }
         )

@@ -1746,6 +1746,44 @@ async def add_session_activities_batch(
     )
 
 
+async def _fetch_activities_from_graph(
+    memory_graph,
+    session_id: str,
+    activity_type,
+    user_id,
+    limit: int,
+    request_id: str,
+):
+    """Helper for get_session_activities. Ref: #1088."""
+    try:
+        activities = await memory_graph.get_session_activities(
+            session_id=session_id,
+            activity_type=activity_type,
+            user_id=user_id,
+            limit=limit,
+        )
+        return create_success_response(
+            data={
+                "activities": activities,
+                "total": len(activities),
+                "session_id": session_id,
+            },
+            message="Activities retrieved successfully",
+            request_id=request_id,
+        )
+    except Exception as graph_error:
+        logger.warning(
+            "[%s] Failed to retrieve activities: %s",
+            request_id,
+            graph_error,
+        )
+        return create_success_response(
+            data={"activities": [], "total": 0},
+            message="Failed to retrieve activities",
+            request_id=request_id,
+        )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_activities",
@@ -1792,36 +1830,9 @@ async def get_session_activities(
             request_id=request_id,
         )
 
-    try:
-        # Get session activities from memory graph
-        activities = await memory_graph.get_session_activities(
-            session_id=session_id,
-            activity_type=activity_type,
-            user_id=user_id,
-            limit=limit,
-        )
-
-        return create_success_response(
-            data={
-                "activities": activities,
-                "total": len(activities),
-                "session_id": session_id,
-            },
-            message="Activities retrieved successfully",
-            request_id=request_id,
-        )
-
-    except Exception as graph_error:
-        logger.warning(
-            "[%s] Failed to retrieve activities: %s",
-            request_id,
-            graph_error,
-        )
-        return create_success_response(
-            data={"activities": [], "total": 0},
-            message="Failed to retrieve activities",
-            request_id=request_id,
-        )
+    return await _fetch_activities_from_graph(
+        memory_graph, session_id, activity_type, user_id, limit, request_id
+    )
 
 
 # ====================================================================

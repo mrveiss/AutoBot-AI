@@ -1048,6 +1048,47 @@ class TaintSummary(BaseModel):
 # =============================================================================
 
 
+def _build_graph_response(graph) -> DataFlowResponse:
+    """Helper for _build_analysis_response. Ref: #1088.
+
+    Convert a single DataFlowGraph into a DataFlowResponse with serialized
+    definition and vulnerability lists.
+    """
+    defs = [
+        VariableDefResponse(
+            name=d.name,
+            line=d.line,
+            column=d.column,
+            scope=d.scope,
+            taint_level=d.taint_level.value,
+            source_type=d.source_type.value if d.source_type else None,
+        )
+        for d in graph.definitions
+    ]
+    vulns = [
+        VulnerabilityResponse(
+            vulnerability_type=v.vulnerability_type.value,
+            severity=v.severity.value,
+            line=v.line,
+            column=v.column,
+            description=v.description,
+            tainted_variable=v.tainted_variable,
+            sink_function=v.sink_function,
+            recommendation=v.recommendation,
+        )
+        for v in graph.vulnerabilities
+    ]
+    return DataFlowResponse(
+        name=graph.name,
+        definitions_count=len(graph.definitions),
+        uses_count=len(graph.uses),
+        edges_count=len(graph.edges),
+        vulnerabilities_count=len(graph.vulnerabilities),
+        definitions=defs,
+        vulnerabilities=vulns,
+    )
+
+
 def _build_analysis_response(
     graphs: List["DataFlowGraph"], file_path: str
 ) -> AnalysisResponse:
@@ -1059,48 +1100,10 @@ def _build_analysis_response(
     all_tainted: Set[str] = set()
 
     for graph in graphs:
-        defs = [
-            VariableDefResponse(
-                name=d.name,
-                line=d.line,
-                column=d.column,
-                scope=d.scope,
-                taint_level=d.taint_level.value,
-                source_type=d.source_type.value if d.source_type else None,
-            )
-            for d in graph.definitions
-        ]
-
-        vulns = [
-            VulnerabilityResponse(
-                vulnerability_type=v.vulnerability_type.value,
-                severity=v.severity.value,
-                line=v.line,
-                column=v.column,
-                description=v.description,
-                tainted_variable=v.tainted_variable,
-                sink_function=v.sink_function,
-                recommendation=v.recommendation,
-            )
-            for v in graph.vulnerabilities
-        ]
-
-        graph_responses.append(
-            DataFlowResponse(
-                name=graph.name,
-                definitions_count=len(graph.definitions),
-                uses_count=len(graph.uses),
-                edges_count=len(graph.edges),
-                vulnerabilities_count=len(graph.vulnerabilities),
-                definitions=defs,
-                vulnerabilities=vulns,
-            )
-        )
-
+        graph_responses.append(_build_graph_response(graph))
         total_defs += len(graph.definitions)
         total_uses += len(graph.uses)
         total_vulns += len(graph.vulnerabilities)
-
         for d in graph.definitions:
             if d.taint_level in _TAINTED_LEVELS:
                 all_tainted.add(d.name)

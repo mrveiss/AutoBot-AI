@@ -69,9 +69,9 @@ except ImportError:
 # Import specialized agents
 try:
     from .chat_agent import get_chat_agent
-    from .containerized_librarian_assistant import get_containerized_librarian_assistant
     from .enhanced_system_commands_agent import get_enhanced_system_commands_agent
     from .kb_librarian_agent import get_kb_librarian
+    from .librarian_assistant import get_librarian_assistant
     from .rag_agent import get_rag_agent
 
     LEGACY_AGENTS_AVAILABLE = True
@@ -403,7 +403,7 @@ class AgentOrchestrator:
     def _get_research_agent(self):
         """Lazy-load and return research agent instance."""
         if self._research_agent is None:
-            self._research_agent = get_containerized_librarian_assistant()
+            self._research_agent = get_librarian_assistant()
         return self._research_agent
 
     async def get_statistics(self) -> Dict[str, Any]:

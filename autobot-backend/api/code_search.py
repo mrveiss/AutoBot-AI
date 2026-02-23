@@ -752,6 +752,50 @@ def _build_duplicate_candidate(pattern: str, similar_blocks: list) -> dict:
     }
 
 
+def _build_declarations_summary(analysis_results: dict, root_path: str) -> dict:
+    """Helper for analyze_declarations. Ref: #1088."""
+    total_declarations = sum(len(results) for results in analysis_results.values())
+    most_reused = max(
+        (item for results in analysis_results.values() for item in results),
+        key=lambda x: x["usage_count"],
+        default={"name": "None", "usage_count": 0},
+    )
+    return {
+        "summary": {
+            "total_declarations": total_declarations,
+            "most_reused_declaration": most_reused["name"],
+            "max_usage_count": most_reused["usage_count"],
+            "analysis_root": root_path,
+            "pattern_types_analyzed": list(DECLARATION_PATTERNS.keys()),
+        },
+        "declarations_by_type": analysis_results,
+        "reusability_insights": _build_reusability_insights(analysis_results),
+    }
+
+
+async def _analyze_all_pattern_types() -> dict:
+    """Helper for analyze_declarations. Ref: #1088."""
+    analysis_results = {}
+    for pattern_type, pattern_list in DECLARATION_PATTERNS.items():
+        logger.info("Analyzing %s patterns...", pattern_type)
+        declaration_stats = defaultdict(
+            lambda: {
+                "definition_count": 0,
+                "usage_count": 0,
+                "files": set(),
+                "lines": [],
+                "contexts": [],
+            }
+        )
+        for pattern in pattern_list:
+            await _process_pattern_matches(pattern, declaration_stats)
+        await _count_usages(declaration_stats)
+        analysis_results[pattern_type] = _build_type_results(
+            declaration_stats, pattern_type
+        )
+    return analysis_results
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="analyze_declarations",
@@ -773,56 +817,11 @@ async def analyze_declarations(request: AnalyticsRequest):
         if index_result["status"] not in SUCCESSFUL_INDEX_STATUSES:
             raise HTTPException(status_code=500, detail="Failed to index codebase")
 
-        # Analyze each pattern type using extracted helpers (Issue #315)
-        analysis_results = {}
-
-        for pattern_type, pattern_list in DECLARATION_PATTERNS.items():
-            logger.info("Analyzing %s patterns...", pattern_type)
-
-            # Fresh stats for each pattern type
-            declaration_stats = defaultdict(
-                lambda: {
-                    "definition_count": 0,
-                    "usage_count": 0,
-                    "files": set(),
-                    "lines": [],
-                    "contexts": [],
-                }
-            )
-
-            # Process all patterns for this type
-            for pattern in pattern_list:
-                await _process_pattern_matches(pattern, declaration_stats)
-
-            # Count usages after all patterns processed
-            await _count_usages(declaration_stats)
-
-            # Build results for this type
-            analysis_results[pattern_type] = _build_type_results(
-                declaration_stats, pattern_type
-            )
-
-        # Generate summary statistics
-        total_declarations = sum(len(results) for results in analysis_results.values())
-        most_reused = max(
-            (item for results in analysis_results.values() for item in results),
-            key=lambda x: x["usage_count"],
-            default={"name": "None", "usage_count": 0},
-        )
+        analysis_results = await _analyze_all_pattern_types()
 
         return JSONResponse(
             status_code=200,
-            content={
-                "summary": {
-                    "total_declarations": total_declarations,
-                    "most_reused_declaration": most_reused["name"],
-                    "max_usage_count": most_reused["usage_count"],
-                    "analysis_root": request.root_path,
-                    "pattern_types_analyzed": list(DECLARATION_PATTERNS.keys()),
-                },
-                "declarations_by_type": analysis_results,
-                "reusability_insights": _build_reusability_insights(analysis_results),
-            },
+            content=_build_declarations_summary(analysis_results, request.root_path),
         )
 
     except Exception as e:

@@ -126,6 +126,18 @@ class IncrementalTrainer:
         avg_loss = total_loss / num_batches if num_batches > 0 else 0.0
         return avg_loss, num_batches
 
+    def _fetch_recent_feedback(self, db, time_window_hours: int):
+        """Helper for update_from_feedback. Ref: #1088."""
+        since = datetime.utcnow() - timedelta(hours=time_window_hours)
+        return (
+            db.query(CompletionFeedback)
+            .filter(
+                CompletionFeedback.timestamp > since,
+                CompletionFeedback.action == "accepted",
+            )
+            .all()
+        )
+
     def update_from_feedback(
         self, time_window_hours: int = 24, min_feedback: int = 10
     ) -> dict:
@@ -141,16 +153,7 @@ class IncrementalTrainer:
         """
         db = self.SessionLocal()
         try:
-            # Get recent feedback
-            since = datetime.utcnow() - timedelta(hours=time_window_hours)
-            feedback_events = (
-                db.query(CompletionFeedback)
-                .filter(
-                    CompletionFeedback.timestamp > since,
-                    CompletionFeedback.action == "accepted",
-                )
-                .all()
-            )
+            feedback_events = self._fetch_recent_feedback(db, time_window_hours)
 
             if len(feedback_events) < min_feedback:
                 logger.info(

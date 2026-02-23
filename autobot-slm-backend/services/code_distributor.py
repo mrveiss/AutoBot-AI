@@ -396,6 +396,16 @@ class CodeDistributor:
         except Exception as e:
             logger.warning("Could not update node version in database: %s", e)
 
+    def _build_ssh_opts(self, ssh_port: int) -> str:
+        """Helper for trigger_node_sync. Ref: #1088."""
+        ssh_opts = (
+            f"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
+            f"-o ConnectTimeout=30 -p {ssh_port}"
+        )
+        if Path(SSH_KEY_PATH).exists():
+            ssh_opts += f" -i {SSH_KEY_PATH}"
+        return ssh_opts
+
     async def trigger_node_sync(
         self,
         node_id: str,
@@ -430,13 +440,7 @@ class CodeDistributor:
         if not commit_hash:
             return False, "Could not determine current commit"
 
-        # Build SSH options string for rsync
-        ssh_opts = (
-            f"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "
-            f"-o ConnectTimeout=30 -p {ssh_port}"
-        )
-        if Path(SSH_KEY_PATH).exists():
-            ssh_opts += f" -i {SSH_KEY_PATH}"
+        ssh_opts = self._build_ssh_opts(ssh_port)
 
         # Step 1: Ensure remote directory structure exists
         await self._ensure_remote_directories(node_id, ip_address, ssh_user, ssh_port)

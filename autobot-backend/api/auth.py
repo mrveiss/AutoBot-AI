@@ -14,12 +14,12 @@ from typing import Dict, List, Optional
 
 import jwt as pyjwt
 from auth_middleware import auth_middleware
+from backend.user_management.database import db_session_context
+from backend.user_management.services.user_service import UserService
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, validator
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from backend.user_management.database import db_session_context
-from backend.user_management.services.user_service import UserService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -165,6 +165,40 @@ class ChangePasswordResponse(BaseModel):
     message: str
 
 
+async def _authenticate_and_build_user_data(
+    username: str, password: str, ip_address: str
+) -> Dict:
+    """Helper for login. Ref: #1088.
+
+    Authenticates credentials against PostgreSQL and returns the user data dict
+    for JWT creation. Must run inside a DB session context to avoid lazy-load
+    errors after session closes (Issue #898).
+
+    Raises HTTPException(401) if credentials are invalid.
+    """
+    async with db_session_context() as session:
+        user_service = UserService(session)
+        user = await user_service.authenticate(
+            username_or_email=username,
+            password=password,
+            ip_address=ip_address,
+        )
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+        user_data = {
+            "username": user.username,
+            "user_id": str(user.id),
+            "role": "admin" if user.is_platform_admin else "user",
+            "email": user.email,
+            "last_login": (
+                user.last_login_at.isoformat() if user.last_login_at else None
+            ),
+        }
+        if user.org_id:
+            user_data["org_id"] = str(user.org_id)
+    return user_data
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="login",
@@ -180,42 +214,14 @@ async def login(request: Request, login_data: LoginRequest):
     try:
         ip_address = request.client.host if request.client else "unknown"
 
-        # Authenticate user against PostgreSQL database (Issue #888)
-        async with db_session_context() as session:
-            user_service = UserService(session)
-            user = await user_service.authenticate(
-                username_or_email=login_data.username,
-                password=login_data.password,
-                ip_address=ip_address,
-            )
+        # Authenticate against PostgreSQL and build user data (Issue #888, #898)
+        user_data = await _authenticate_and_build_user_data(
+            login_data.username, login_data.password, ip_address
+        )
 
-            if not user:
-                # Generic error message to prevent username enumeration
-                raise HTTPException(
-                    status_code=401, detail="Invalid username or password"
-                )
-
-            # Build user data dict for JWT token INSIDE session context
-            # to avoid lazy-load errors after session closes (Issue #898)
-            user_data = {
-                "username": user.username,
-                "user_id": str(user.id),
-                "role": "admin" if user.is_platform_admin else "user",
-                "email": user.email,
-                "last_login": user.last_login_at.isoformat()
-                if user.last_login_at
-                else None,
-            }
-            if user.org_id:
-                user_data["org_id"] = str(user.org_id)
-
-        # Create JWT token
         jwt_token = auth_middleware.create_jwt_token(user_data)
-
-        # Create session
         session_id = auth_middleware.create_session(user_data, request)
 
-        # Remove sensitive data from response
         safe_user_data = {
             "username": user_data["username"],
             "user_id": user_data.get("user_id", user_data["username"]),

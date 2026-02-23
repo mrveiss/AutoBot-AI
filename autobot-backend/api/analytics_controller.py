@@ -23,16 +23,16 @@ from typing import Dict, List
 
 import psutil
 import redis
-from config import ConfigManager
-from constants import PATH
-
-from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 # Import models from dedicated module (Issue #185)
 from backend.api.analytics_models import CodeAnalysisRequest, CommunicationPattern
 from backend.constants.threshold_constants import TimingConstants
 from backend.type_defs.common import Metadata
 from backend.utils.system_metrics import get_metrics_collector
+from config import ConfigManager
+from constants import PATH
+
+from autobot_shared.redis_client import RedisDatabase, get_redis_client
 
 # Import existing monitoring infrastructure
 from .monitoring_hardware import hardware_monitor
@@ -316,6 +316,53 @@ class AnalyticsController:
         except Exception as e:
             results["code_index_error"] = str(e)
 
+    def _collect_system_performance(self) -> Dict:
+        """Helper for collect_performance_metrics. Ref: #1088."""
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage("/")
+        return {
+            "cpu_percent": cpu_percent,
+            "memory_percent": memory.percent,
+            "disk_percent": (disk.used / disk.total) * 100,
+            "load_average": (
+                psutil.getloadavg() if hasattr(psutil, "getloadavg") else [0, 0, 0]
+            ),
+        }
+
+    def _collect_api_performance(self) -> Dict:
+        """Helper for collect_performance_metrics. Ref: #1088."""
+        api_performance = {}
+        for endpoint, times in self.response_times.items():
+            if times:
+                api_performance[endpoint] = {
+                    "avg_response_time": sum(times) / len(times),
+                    "min_response_time": min(times),
+                    "max_response_time": max(times),
+                    "total_calls": self.api_frequencies[endpoint],
+                    "error_rate": (
+                        (
+                            self.error_counts[endpoint]
+                            / self.api_frequencies[endpoint]
+                            * 100
+                        )
+                        if self.api_frequencies[endpoint] > 0
+                        else 0
+                    ),
+                }
+        return api_performance
+
+    async def _collect_hardware_performance(self) -> Dict:
+        """Helper for collect_performance_metrics. Ref: #1088."""
+        gpu_status = await hardware_monitor.get_gpu_status()
+        npu_status = await hardware_monitor.get_npu_status()
+        return {
+            "gpu": gpu_status,
+            "npu": npu_status,
+            "gpu_utilization": gpu_status.get("utilization_percent", 0),
+            "gpu_memory_usage": gpu_status.get("memory_utilization_percent", 0),
+        }
+
     async def collect_performance_metrics(self) -> Metadata:
         """Collect comprehensive performance metrics"""
         metrics = {}
@@ -325,54 +372,13 @@ class AnalyticsController:
             current_metrics = await self.metrics_collector.collect_all_metrics()
             summary = await self.metrics_collector.get_metric_summary()
 
-            # System performance
-            cpu_percent = psutil.cpu_percent(interval=0.1)
-            memory = psutil.virtual_memory()
-            disk = psutil.disk_usage("/")
-
-            metrics["system_performance"] = {
-                "cpu_percent": cpu_percent,
-                "memory_percent": memory.percent,
-                "disk_percent": (disk.used / disk.total) * 100,
-                "load_average": (
-                    psutil.getloadavg() if hasattr(psutil, "getloadavg") else [0, 0, 0]
-                ),
-            }
-
-            # API performance from tracking
-            api_performance = {}
-            for endpoint, times in self.response_times.items():
-                if times:
-                    api_performance[endpoint] = {
-                        "avg_response_time": sum(times) / len(times),
-                        "min_response_time": min(times),
-                        "max_response_time": max(times),
-                        "total_calls": self.api_frequencies[endpoint],
-                        "error_rate": (
-                            (
-                                self.error_counts[endpoint]
-                                / self.api_frequencies[endpoint]
-                                * 100
-                            )
-                            if self.api_frequencies[endpoint] > 0
-                            else 0
-                        ),
-                    }
-
-            metrics["api_performance"] = api_performance
+            metrics["system_performance"] = self._collect_system_performance()
+            metrics["api_performance"] = self._collect_api_performance()
             metrics["advanced_metrics"] = summary
             metrics["detailed_metrics"] = current_metrics
 
             # Hardware performance from existing monitor (Issue #430: await async)
-            gpu_status = await hardware_monitor.get_gpu_status()
-            npu_status = await hardware_monitor.get_npu_status()
-
-            metrics["hardware_performance"] = {
-                "gpu": gpu_status,
-                "npu": npu_status,
-                "gpu_utilization": gpu_status.get("utilization_percent", 0),
-                "gpu_memory_usage": gpu_status.get("memory_utilization_percent", 0),
-            }
+            metrics["hardware_performance"] = await self._collect_hardware_performance()
 
             # Network and I/O
             network = psutil.net_io_counters()

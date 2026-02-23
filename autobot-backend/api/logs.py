@@ -557,6 +557,79 @@ async def read_log(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def _execute_docker_logs_command(
+    container_name: str, lines: int, tail: bool, since: Optional[str]
+) -> bytes:
+    """Helper for read_container_logs. Ref: #1088.
+
+    Builds and runs the docker logs command, returning raw stdout bytes.
+
+    Args:
+        container_name: Docker container name
+        lines: Number of lines to retrieve
+        tail: If True, use --tail; otherwise use --since=1d
+        since: Optional duration filter (e.g. '1h', '30m')
+
+    Returns:
+        Raw stdout bytes from docker logs
+
+    Raises:
+        HTTPException: 408 on timeout, 500 on non-zero exit
+    """
+    cmd = ["docker", "logs", container_name, "--timestamps"]
+    if tail:
+        cmd.append(f"--tail={lines}")
+    else:
+        cmd.append("--since=1d")
+    if since:
+        cmd.extend(["--since", since])
+
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+    except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        raise HTTPException(status_code=408, detail="Container log read timed out")
+
+    if process.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get container logs: {stderr.decode()}",
+        )
+    return stdout
+
+
+def _parse_and_limit_container_output(
+    stdout: bytes, service: str, lines: int, tail: bool
+) -> List[Metadata]:
+    """Helper for read_container_logs. Ref: #1088.
+
+    Parses raw docker log bytes into structured entries and applies line limit.
+
+    Args:
+        stdout: Raw bytes from docker logs
+        service: Service name used for log entry labelling
+        lines: Maximum number of log lines to return
+        tail: If True, skip truncation (docker already limited output)
+
+    Returns:
+        List of parsed log entry dicts
+    """
+    log_lines = [
+        parse_docker_log_line(line, service)
+        for line in stdout.decode().split("\n")
+        if line.strip()
+    ]
+    if not tail and len(log_lines) > lines:
+        log_lines = log_lines[-lines:]
+    return log_lines
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="read_container_logs",
@@ -573,6 +646,8 @@ async def read_container_logs(
     """Read logs from a Docker container.
 
     Issue #744: Requires admin authentication.
+    Issue #1088: Extracted _execute_docker_logs_command and
+    _parse_and_limit_container_output helpers to reduce to <=65 lines.
     """
     try:
         if service not in CONTAINER_LOGS:
@@ -581,47 +656,8 @@ async def read_container_logs(
             )
 
         container_name = CONTAINER_LOGS[service]
-
-        # Build docker logs command
-        cmd = ["docker", "logs", container_name, "--timestamps"]
-
-        if tail:
-            cmd.append(f"--tail={lines}")
-        else:
-            cmd.append("--since=1d")  # Get recent logs if not tailing
-
-        if since:
-            cmd.extend(["--since", since])
-
-        # Execute command asynchronously
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
-        except asyncio.TimeoutError:
-            process.kill()
-            await process.wait()
-            raise HTTPException(status_code=408, detail="Container log read timed out")
-
-        if process.returncode != 0:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to get container logs: {stderr.decode()}",
-            )
-
-        # Parse logs
-        log_lines = []
-        for line in stdout.decode().split("\n"):
-            if line.strip():
-                parsed_line = parse_docker_log_line(line, service)
-                log_lines.append(parsed_line)
-
-        # Limit results
-        if not tail and len(log_lines) > lines:
-            log_lines = log_lines[-lines:]
+        stdout = await _execute_docker_logs_command(container_name, lines, tail, since)
+        log_lines = _parse_and_limit_container_output(stdout, service, lines, tail)
 
         return {
             "service": service,

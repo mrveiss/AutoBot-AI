@@ -112,9 +112,9 @@ def _build_conflict_data(conflict: "ConflictBlock") -> dict:
         "start_line": conflict.start_line,
         "end_line": conflict.end_line,
         "severity": conflict.severity.value,
-        "conflict_type": conflict.conflict_type.value
-        if conflict.conflict_type
-        else None,
+        "conflict_type": (
+            conflict.conflict_type.value if conflict.conflict_type else None
+        ),
         "ours_lines": len(conflict.ours_content.split("\n")),
         "theirs_lines": len(conflict.theirs_content.split("\n")),
         "has_base": conflict.base_content is not None,
@@ -137,6 +137,83 @@ def _calculate_severity_distribution(conflicts: list) -> dict:
             1 for c in conflicts if c.severity == ConflictSeverity.CRITICAL
         ),
     }
+
+
+def _build_resolution_response(
+    results: list, file_path: str, safe_mode: bool
+) -> JSONResponse:
+    """Build the JSONResponse for a successful conflict resolution.
+
+    Helper for resolve_conflicts. Ref: #1088.
+    """
+    resolutions = [r.to_dict() for r in results]
+    avg_confidence = sum(r.confidence_score for r in results) / len(results)
+    all_validated = all(r.is_validated for r in results)
+    any_require_review = any(r.requires_review for r in results)
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "file_path": file_path,
+            "resolution_count": len(results),
+            "resolutions": resolutions,
+            "summary": {
+                "average_confidence": round(avg_confidence, 2),
+                "all_validated": all_validated,
+                "requires_review": any_require_review,
+            },
+            "safe_mode": safe_mode,
+            "timestamp": datetime.now().isoformat(),
+        },
+    )
+
+
+def _parse_resolution_strategy(
+    strategy_str: Optional[str],
+) -> Optional[ResolutionStrategy]:
+    """Parse a strategy string into a ResolutionStrategy enum value.
+
+    Helper for resolve_conflicts. Ref: #1088.
+    """
+    if not strategy_str:
+        return None
+    try:
+        return ResolutionStrategy(strategy_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid resolution strategy: {strategy_str}",
+        )
+
+
+async def _validate_conflict_file(file_path: str) -> None:
+    """Helper for analyze_conflicts. Ref: #1088."""
+    file_exists = await asyncio.to_thread(os.path.exists, file_path)
+    if not file_exists:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File does not exist: {file_path}",
+        )
+    if not file_path.endswith((".py", ".js", ".ts", ".java", ".cpp", ".c")):
+        raise HTTPException(
+            status_code=400,
+            detail="Only source code files are supported",
+        )
+
+
+def _build_no_conflicts_response(file_path: str) -> JSONResponse:
+    """Helper for analyze_conflicts. Ref: #1088."""
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "message": "No conflicts found in file",
+            "file_path": file_path,
+            "conflict_count": 0,
+            "timestamp": datetime.now().isoformat(),
+        },
+    )
 
 
 # =============================================================================
@@ -166,39 +243,15 @@ async def analyze_conflicts(
     Issue #246: Intelligent Merge Conflict Resolution
     Issue #744: Requires admin authentication
     """
-    # Validate file exists
-    file_exists = await asyncio.to_thread(os.path.exists, request.file_path)
-    if not file_exists:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File does not exist: {request.file_path}",
-        )
-
-    # Validate it's a text file
-    if not request.file_path.endswith((".py", ".js", ".ts", ".java", ".cpp", ".c")):
-        raise HTTPException(
-            status_code=400,
-            detail="Only source code files are supported",
-        )
+    await _validate_conflict_file(request.file_path)
 
     try:
-        # Parse conflicts
         parser = ConflictParser()
         conflicts = await asyncio.to_thread(parser.parse_file, request.file_path)
 
         if not conflicts:
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "status": "success",
-                    "message": "No conflicts found in file",
-                    "file_path": request.file_path,
-                    "conflict_count": 0,
-                    "timestamp": datetime.now().isoformat(),
-                },
-            )
+            return _build_no_conflicts_response(request.file_path)
 
-        # Build analysis response
         conflicts_data = [_build_conflict_data(c) for c in conflicts]
         severity_counts = _calculate_severity_distribution(conflicts)
 
@@ -254,25 +307,14 @@ async def resolve_conflicts(
             detail=f"File does not exist: {request.file_path}",
         )
 
-    # Parse strategy
-    strategy = None
-    if request.strategy:
-        try:
-            strategy = ResolutionStrategy(request.strategy)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid resolution strategy: {request.strategy}",
-            )
+    strategy = _parse_resolution_strategy(request.strategy)
 
     try:
-        # Create resolver
         resolver = MergeConflictResolver(
             safe_mode=request.safe_mode,
             require_validation=request.validate,
         )
 
-        # Resolve conflicts
         results = await asyncio.to_thread(
             resolver.resolve_file,
             request.file_path,
@@ -290,30 +332,7 @@ async def resolve_conflicts(
                 },
             )
 
-        # Convert results to API response
-        resolutions = [r.to_dict() for r in results]
-
-        # Calculate summary
-        avg_confidence = sum(r.confidence_score for r in results) / len(results)
-        all_validated = all(r.is_validated for r in results)
-        any_require_review = any(r.requires_review for r in results)
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "file_path": request.file_path,
-                "resolution_count": len(results),
-                "resolutions": resolutions,
-                "summary": {
-                    "average_confidence": round(avg_confidence, 2),
-                    "all_validated": all_validated,
-                    "requires_review": any_require_review,
-                },
-                "safe_mode": request.safe_mode,
-                "timestamp": datetime.now().isoformat(),
-            },
-        )
+        return _build_resolution_response(results, request.file_path, request.safe_mode)
 
     except Exception as e:
         logger.error("Conflict resolution failed: %s", e)

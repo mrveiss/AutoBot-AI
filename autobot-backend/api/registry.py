@@ -207,15 +207,10 @@ def _get_file_and_security_routers() -> Dict[str, RouterConfig]:
     }
 
 
-def _get_development_automation_routers() -> Dict[str, RouterConfig]:
-    """
-    Get development and automation router configurations.
+def _get_dev_tool_routers() -> Dict[str, RouterConfig]:
+    """Helper for _get_development_automation_routers. Ref: #1088.
 
-    Issue #281: Extracted from _initialize_routers to reduce function length
-    and improve maintainability of router definitions by category.
-
-    Returns:
-        Dict of development and automation router configurations
+    Return playwright, terminal, and logs router configs.
     """
     return {
         "playwright": RouterConfig(
@@ -241,6 +236,15 @@ def _get_development_automation_routers() -> Dict[str, RouterConfig]:
             status=RouterStatus.ENABLED,
             description="Log viewing and analysis",
         ),
+    }
+
+
+def _get_dev_workflow_routers() -> Dict[str, RouterConfig]:
+    """Helper for _get_development_automation_routers. Ref: #1088.
+
+    Return workflow, batch, research_browser, and hot_reload router configs.
+    """
+    return {
         "workflow": RouterConfig(
             name="workflow",
             module_path="backend.api.workflow",
@@ -273,6 +277,19 @@ def _get_development_automation_routers() -> Dict[str, RouterConfig]:
             description="Hot reload functionality for chat workflow modules during development",
         ),
     }
+
+
+def _get_development_automation_routers() -> Dict[str, RouterConfig]:
+    """
+    Get development and automation router configurations.
+
+    Issue #281: Extracted from _initialize_routers to reduce function length
+    and improve maintainability of router definitions by category.
+
+    Returns:
+        Dict of development and automation router configurations
+    """
+    return {**_get_dev_tool_routers(), **_get_dev_workflow_routers()}
 
 
 def _get_monitoring_routers() -> Dict[str, RouterConfig]:

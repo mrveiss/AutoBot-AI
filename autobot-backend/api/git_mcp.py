@@ -589,15 +589,7 @@ def _get_git_status_tools() -> List[MCPTool]:
 
 
 def _get_git_history_tools() -> List[MCPTool]:
-    """
-    Get MCP tools for git history operations (log, show).
-
-    Issue #281: Extracted from get_git_mcp_tools to reduce function length
-    and improve maintainability of tool definitions by category.
-
-    Returns:
-        List of history-related git MCP tools
-    """
+    """Get MCP tools for git history operations (log, show). Ref: #1088."""
     return [
         MCPTool(
             name="git_log",
@@ -656,16 +648,44 @@ def _get_git_history_tools() -> List[MCPTool]:
     ]
 
 
+def _make_git_blame_tool() -> MCPTool:
+    """Helper for _get_git_change_tools. Ref: #1088."""
+    return MCPTool(
+        name="git_blame",
+        description=(
+            "Show line-by-line authorship of a file. Useful for"
+            "understanding code history."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "repo_path": {
+                    "type": "string",
+                    "description": "Repository path",
+                    "default": DEFAULT_REPO_PATH,
+                },
+                "file_path": {
+                    "type": "string",
+                    "description": "File to analyze",
+                },
+                "line_start": {
+                    "type": "integer",
+                    "description": "Starting line number",
+                    "minimum": 1,
+                },
+                "line_end": {
+                    "type": "integer",
+                    "description": "Ending line number",
+                    "minimum": 1,
+                },
+            },
+            "required": ["file_path"],
+        },
+    )
+
+
 def _get_git_change_tools() -> List[MCPTool]:
-    """
-    Get MCP tools for git change analysis operations (diff, blame).
-
-    Issue #281: Extracted from get_git_mcp_tools to reduce function length
-    and improve maintainability of tool definitions by category.
-
-    Returns:
-        List of change-analysis git MCP tools
-    """
+    """Get MCP tools for git change analysis operations (diff, blame). Ref: #1088."""
     return [
         MCPTool(
             name="git_diff",
@@ -700,38 +720,7 @@ def _get_git_change_tools() -> List[MCPTool]:
                 "required": [],
             },
         ),
-        MCPTool(
-            name="git_blame",
-            description=(
-                "Show line-by-line authorship of a file. Useful for"
-                "understanding code history."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "repo_path": {
-                        "type": "string",
-                        "description": "Repository path",
-                        "default": DEFAULT_REPO_PATH,
-                    },
-                    "file_path": {
-                        "type": "string",
-                        "description": "File to analyze",
-                    },
-                    "line_start": {
-                        "type": "integer",
-                        "description": "Starting line number",
-                        "minimum": 1,
-                    },
-                    "line_end": {
-                        "type": "integer",
-                        "description": "Ending line number",
-                        "minimum": 1,
-                    },
-                },
-                "required": ["file_path"],
-            },
-        ),
+        _make_git_blame_tool(),
     ]
 
 

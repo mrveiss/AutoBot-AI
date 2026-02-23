@@ -267,19 +267,57 @@ class ConfigService:
         }
 
     @staticmethod
+    def _build_config_data(get, llm_config: Metadata) -> Metadata:
+        """Helper for get_full_config. Ref: #1088.
+
+        Assembles the full configuration dict from all section builders.
+
+        Args:
+            get: Config getter function
+            llm_config: LLM configuration dict
+
+        Returns:
+            Complete configuration dict
+        """
+        ui_security = ConfigService._build_ui_and_security_config(get)
+        other_sections = ConfigService._build_other_config_sections(get)
+        return {
+            "message_display": {
+                "show_thoughts": get("message_display.show_thoughts", True),
+                "show_json": get("message_display.show_json", False),
+                "show_utility": get("message_display.show_utility", False),
+                "show_planning": get("message_display.show_planning", True),
+                "show_debug": get("message_display.show_debug", False),
+            },
+            "chat": {
+                "auto_scroll": get("chat.auto_scroll", True),
+                "max_messages": get("chat.max_messages", 100),
+                "message_retention_days": get("chat.message_retention_days", 30),
+            },
+            "backend": ConfigService._build_backend_config(get, llm_config),
+            "ui": ui_security["ui"],
+            "security": ui_security["security"],
+            "logging": ConfigService._build_logging_config(get),
+            "knowledge_base": other_sections["knowledge_base"],
+            "voice_interface": other_sections["voice_interface"],
+            "memory": ConfigService._build_memory_config(get),
+            "developer": other_sections["developer"],
+        }
+
+    @staticmethod
     def get_full_config() -> Metadata:
         """
         Get complete application configuration.
 
         Issue #281: Refactored from 145 lines to use extracted helper methods.
         Issue #665: Further refactored to reduce from 103 lines to below 65 lines.
+        Issue #1088: Extracted _build_config_data helper to reduce to <=65 lines.
 
         Returns:
             Complete configuration dictionary
         """
         import time
 
-        # Return cached config if still valid
         if not ConfigService._should_refresh_cache():
             logger.debug("Returning cached configuration")
             return ConfigService._cached_config
@@ -287,44 +325,14 @@ class ConfigService:
         logger.debug("Refreshing configuration cache")
 
         try:
-            # Get the complete config once to avoid repeated calls (Issue #372)
             full_config = unified_config_manager.to_dict()
             llm_config = unified_config_manager.get_llm_config()
 
-            # Use local helper to access already-fetched config (Issue #372 fix)
             def get(path, default=None):
                 return ConfigService._get_nested_from_dict(full_config, path, default)
 
-            # Build comprehensive config structure matching frontend expectations
-            # Note: Prompts section is excluded as it's managed separately
-            # Issue #665: Uses extracted helpers for all config sections
-            ui_security = ConfigService._build_ui_and_security_config(get)
-            other_sections = ConfigService._build_other_config_sections(get)
+            config_data = ConfigService._build_config_data(get, llm_config)
 
-            config_data = {
-                "message_display": {
-                    "show_thoughts": get("message_display.show_thoughts", True),
-                    "show_json": get("message_display.show_json", False),
-                    "show_utility": get("message_display.show_utility", False),
-                    "show_planning": get("message_display.show_planning", True),
-                    "show_debug": get("message_display.show_debug", False),
-                },
-                "chat": {
-                    "auto_scroll": get("chat.auto_scroll", True),
-                    "max_messages": get("chat.max_messages", 100),
-                    "message_retention_days": get("chat.message_retention_days", 30),
-                },
-                "backend": ConfigService._build_backend_config(get, llm_config),
-                "ui": ui_security["ui"],
-                "security": ui_security["security"],
-                "logging": ConfigService._build_logging_config(get),
-                "knowledge_base": other_sections["knowledge_base"],
-                "voice_interface": other_sections["voice_interface"],
-                "memory": ConfigService._build_memory_config(get),
-                "developer": other_sections["developer"],
-            }
-
-            # Cache the configuration
             ConfigService._cached_config = config_data
             ConfigService._cache_timestamp = time.time()
             logger.debug(
@@ -334,7 +342,6 @@ class ConfigService:
             return config_data
         except Exception as e:
             logger.error("Error getting full config: %s", str(e))
-            # Return cached config if available, even if refresh failed
             if ConfigService._cached_config is not None:
                 logger.warning("Returning cached config due to refresh failure")
                 return ConfigService._cached_config

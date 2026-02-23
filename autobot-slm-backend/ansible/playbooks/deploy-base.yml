@@ -333,6 +333,7 @@
         name:
           - "prometheus-node-exporter"
         state: present
+        install_recommends: false  # Prevent hardware-specific textfile collectors (#1147)
       when: monitoring.enabled
 
     - name: Configure node exporter

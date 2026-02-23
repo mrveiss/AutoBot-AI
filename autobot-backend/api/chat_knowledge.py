@@ -353,46 +353,11 @@ class ChatKnowledgeManager:
 
         return True
 
-    async def compile_chat_to_knowledge(
-        self,
-        chat_id: str,
-        title: Optional[str] = None,
-        include_system_messages: bool = False,
-    ) -> Metadata:
-        """Compile entire chat conversation to knowledge base"""
-        # Get chat history
-        chat_history = self.chat_history_manager.get_chat_history(chat_id)
-
-        if not chat_history or not chat_history.get("messages"):
-            raise ValueError(f"No chat history found for {chat_id}")
-
-        messages = chat_history["messages"]
-
-        # Filter messages
-        if not include_system_messages:
-            messages = [m for m in messages if m.get("role") != "system"]
-
-        # Generate summary using LLM
-        summary_prompt = """
-        Summarize this conversation into a comprehensive knowledge base entry.
-        Include key topics, solutions, code examples, and important information.
-
-        Conversation:
-        {json.dumps(messages, indent=2)}
-
-        Format the summary with clear sections and bullet points.
-        """
-
-        summary_response = await self.llm_interface.chat_completion(
-            model="default", messages=[{"role": "user", "content": summary_prompt}]
-        )
-
-        summary = summary_response.get("content", "")
-
-        # Extract key information
-        context = self.chat_contexts.get(chat_id)
-
-        compiled_knowledge = {
+    def _build_compiled_knowledge_dict(
+        self, chat_id: str, title: Optional[str], context, messages: list, summary: str
+    ) -> dict:
+        """Helper for compile_chat_to_knowledge. Ref: #1088."""
+        return {
             "chat_id": chat_id,
             "title": title or context.topic if context else f"Chat Session {chat_id}",
             "summary": summary,
@@ -413,26 +378,66 @@ class ChatKnowledgeManager:
             },
         }
 
-        # Add to knowledge base
+    def _build_chat_kb_metadata(
+        self, base_metadata: dict, chat_id: str, context
+    ) -> dict:
+        """Helper for compile_chat_to_knowledge. Ref: #1088."""
         # Issue #547: Include source_session_id for orphan cleanup
         # Issue #688: Include ownership metadata for chat-compiled knowledge
         kb_metadata = {
-            **compiled_knowledge["metadata"],
+            **base_metadata,
             "source_session_id": chat_id,  # Issue #547: Track source session
             "source_type": "chat",  # Issue #688: Mark as chat-derived
             "category": "chat_knowledge",  # Issue #688: Category for chat facts
         }
-
         # Issue #688: Add user ownership if available from context
-        context = self.chat_contexts.get(chat_id)
         if context and hasattr(context, "user_id") and context.user_id:
             kb_metadata["owner_id"] = context.user_id
             kb_metadata["visibility"] = "private"  # Default visibility
+        return kb_metadata
+
+    async def compile_chat_to_knowledge(
+        self,
+        chat_id: str,
+        title: Optional[str] = None,
+        include_system_messages: bool = False,
+    ) -> Metadata:
+        """Compile entire chat conversation to knowledge base"""
+        chat_history = self.chat_history_manager.get_chat_history(chat_id)
+
+        if not chat_history or not chat_history.get("messages"):
+            raise ValueError(f"No chat history found for {chat_id}")
+
+        messages = chat_history["messages"]
+        if not include_system_messages:
+            messages = [m for m in messages if m.get("role") != "system"]
+
+        summary_prompt = """
+        Summarize this conversation into a comprehensive knowledge base entry.
+        Include key topics, solutions, code examples, and important information.
+
+        Conversation:
+        {json.dumps(messages, indent=2)}
+
+        Format the summary with clear sections and bullet points.
+        """
+
+        summary_response = await self.llm_interface.chat_completion(
+            model="default", messages=[{"role": "user", "content": summary_prompt}]
+        )
+        summary = summary_response.get("content", "")
+
+        context = self.chat_contexts.get(chat_id)
+        compiled_knowledge = self._build_compiled_knowledge_dict(
+            chat_id, title, context, messages, summary
+        )
+        kb_metadata = self._build_chat_kb_metadata(
+            compiled_knowledge["metadata"], chat_id, context
+        )
 
         kb_id = await self.knowledge_base.add_content(
             content=summary, metadata=kb_metadata
         )
-
         compiled_knowledge["kb_id"] = kb_id
 
         logger.info("Chat %s compiled to knowledge base as %s", chat_id, kb_id)

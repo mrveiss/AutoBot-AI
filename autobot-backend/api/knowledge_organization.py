@@ -11,11 +11,10 @@ import logging
 from typing import Dict, List, Optional
 
 from auth_middleware import get_current_user
-from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
-
 from backend.knowledge.ownership import VisibilityLevel
 from backend.knowledge_factory import get_or_create_knowledge_base
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -303,6 +302,45 @@ async def get_organization_knowledge_stats(
         raise HTTPException(status_code=500, detail=f"Failed to retrieve stats: {e}")
 
 
+async def _delete_expired_facts(kb, fact_ids: list, cutoff_date) -> int:
+    """Delete facts whose creation date precedes cutoff_date.
+
+    Helper for cleanup_organization_knowledge. Ref: #1088.
+    """
+    import json
+    from datetime import datetime
+
+    deleted_count = 0
+    for fact_id in fact_ids:
+        fact_data = await kb.aioredis_client.hgetall(f"fact:{fact_id}")
+        if not fact_data:
+            continue
+
+        metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata")
+        if not metadata_raw:
+            continue
+
+        if isinstance(metadata_raw, bytes):
+            metadata_raw = metadata_raw.decode("utf-8")
+        metadata = json.loads(metadata_raw)
+
+        created_at_str = metadata.get("created_at")
+        if not created_at_str:
+            continue
+
+        try:
+            created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+            if created_at < cutoff_date:
+                await kb.ownership_manager.cleanup_ownership_indexes(fact_id, metadata)
+                await kb.aioredis_client.delete(f"fact:{fact_id}")
+                deleted_count += 1
+        except (ValueError, TypeError):
+            # Skip if date parsing fails
+            pass
+
+    return deleted_count
+
+
 @router.delete("/cleanup")
 async def cleanup_organization_knowledge(
     request: Request,
@@ -322,6 +360,8 @@ async def cleanup_organization_knowledge(
     Raises:
         403: If user is not an organization admin
     """
+    from datetime import datetime, timedelta
+
     org_id = current_user.get("org_id")
     if not org_id:
         raise HTTPException(
@@ -337,49 +377,13 @@ async def cleanup_organization_knowledge(
         raise HTTPException(status_code=503, detail="Knowledge base not available")
 
     try:
-        import json
-        from datetime import datetime, timedelta
-
         org_id = str(org_id)
-
-        # Get all organization facts
         fact_ids = await kb.ownership_manager.get_organization_facts(
             organization_id=org_id
         )
 
-        # Calculate cutoff date
         cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
-        deleted_count = 0
-
-        for fact_id in fact_ids:
-            fact_data = await kb.aioredis_client.hgetall(f"fact:{fact_id}")
-            if not fact_data:
-                continue
-
-            # Get metadata
-            metadata_raw = fact_data.get(b"metadata") or fact_data.get("metadata")
-            if metadata_raw:
-                if isinstance(metadata_raw, bytes):
-                    metadata_raw = metadata_raw.decode("utf-8")
-                metadata = json.loads(metadata_raw)
-
-                # Check creation date
-                created_at_str = metadata.get("created_at")
-                if created_at_str:
-                    try:
-                        created_at = datetime.fromisoformat(
-                            created_at_str.replace("Z", "+00:00")
-                        )
-                        if created_at < cutoff_date:
-                            # Delete the fact
-                            await kb.ownership_manager.cleanup_ownership_indexes(
-                                fact_id, metadata
-                            )
-                            await kb.aioredis_client.delete(f"fact:{fact_id}")
-                            deleted_count += 1
-                    except (ValueError, TypeError):
-                        # Skip if date parsing fails
-                        pass
+        deleted_count = await _delete_expired_facts(kb, fact_ids, cutoff_date)
 
         logger.info(
             "Cleaned up %d facts older than %d days for org %s",

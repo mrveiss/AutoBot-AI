@@ -38,6 +38,15 @@ logger = logging.getLogger(__name__)
 # Performance optimization: O(1) lookup for subcommand patterns (Issue #326)
 SUBCOMMAND_TOOLS = {"git", "docker", "kubectl", "npm", "yarn"}
 
+# Numeric risk levels for comparison
+_RISK_LEVELS = {
+    CommandRisk.SAFE: 0,
+    CommandRisk.MODERATE: 1,
+    CommandRisk.HIGH: 2,
+    CommandRisk.CRITICAL: 3,
+    CommandRisk.FORBIDDEN: 4,
+}
+
 
 class AgentRole(Enum):
     """Agent roles with different privilege levels"""
@@ -163,6 +172,38 @@ class CommandApprovalManager:
         logger.info("CommandApprovalManager initialized")
 
     @staticmethod
+    def _check_risk_exceeds_limit(
+        command_risk: CommandRisk,
+        perms: AgentPermissions,
+    ) -> Tuple[bool, str]:
+        """Helper for check_permission. Ref: #1088.
+
+        Returns (exceeded, reason) where exceeded=True means the risk level
+        surpasses the effective maximum allowed for the given permissions.
+        """
+        supervised_mode = perms.supervised_mode
+        effective_max_risk = (
+            CommandRisk.FORBIDDEN if supervised_mode else perms.max_risk
+        )
+
+        if _RISK_LEVELS.get(command_risk, 999) > _RISK_LEVELS.get(
+            effective_max_risk, 0
+        ):
+            if supervised_mode:
+                reason = (
+                    f"Command risk {command_risk.value} exceeds supervised mode limit"
+                )
+            else:
+                reason = (
+                    f"Command risk {command_risk.value} exceeds agent max risk "
+                    f"{perms.max_risk.value} "
+                    f"(enable supervised mode for guided dangerous actions)"
+                )
+            return True, reason
+
+        return False, ""
+
+    @staticmethod
     def check_permission(
         agent_role: AgentRole,
         command_risk: CommandRisk,
@@ -197,38 +238,14 @@ class CommandApprovalManager:
         if not perms:
             return False, f"Unknown agent role: {agent_role}"
 
-        # Check supervised mode - allows FORBIDDEN commands with approval
-        supervised_mode = perms.supervised_mode
-
-        # Map risk levels to numerical values for comparison
-        risk_levels = {
-            CommandRisk.SAFE: 0,
-            CommandRisk.MODERATE: 1,
-            CommandRisk.HIGH: 2,
-            CommandRisk.CRITICAL: 3,
-            CommandRisk.FORBIDDEN: 4,
-        }
-
-        # In supervised mode, allow up to FORBIDDEN but require approval
-        effective_max_risk = (
-            CommandRisk.FORBIDDEN if supervised_mode else perms.max_risk
+        exceeded, reason = CommandApprovalManager._check_risk_exceeds_limit(
+            command_risk, perms
         )
-
-        if risk_levels.get(command_risk, 999) > risk_levels.get(effective_max_risk, 0):
-            if supervised_mode:
-                return (
-                    False,
-                    f"Command risk {command_risk.value} exceeds supervised mode limit",
-                )
-            else:
-                return (
-                    False,
-                    f"Command risk {command_risk.value} exceeds agent max risk {perms.max_risk.value} "
-                    f"(enable supervised mode for guided dangerous actions)",
-                )
+        if exceeded:
+            return False, reason
 
         # Check specific risk permissions (not needed in supervised mode)
-        if not supervised_mode:
+        if not perms.supervised_mode:
             if command_risk == CommandRisk.HIGH and not perms.allow_high:
                 return False, "Agent not permitted to execute HIGH risk commands"
 

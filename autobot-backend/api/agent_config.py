@@ -376,35 +376,24 @@ DEFAULT_AGENT_CONFIGS = {
     },
     "librarian_assistant": {
         "name": "Librarian Assistant Agent",
-        "description": "Performs web research using Playwright and manages knowledge. Finds relevant information, presents with source attribution, and stores quality content (above threshold) in knowledge base for future reference.",
+        "description": (
+            "Performs web research via the browser VM Playwright service (.25). "
+            "Searches the web, extracts page content, assesses quality, and stores "
+            "high-quality results in the knowledge base. Called by the orchestrator "
+            "when local KB results are insufficient or the query requires current data."
+        ),
         "default_model": TIER_4_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 4,
-        "tasks": ["document_organization", "metadata_management", "library_curation"],
-        "mcp_tools": ["knowledge_mcp", "filesystem_mcp", "database_mcp"],
-        "invoked_by": "ResearchAgent, knowledge_mcp tools for web research",
-        "source_file": "src/agents/librarian_assistant_agent.py",
-    },
-    "containerized_librarian": {
-        "name": "Containerized Librarian Agent",
-        "description": "Performs web research using containerized Playwright service (Docker). Provides isolated execution environment for secure document processing. Connects to playwright-vnc service for browser automation.",
-        "default_model": TIER_4_MODEL,
-        "provider": "ollama",
-        "enabled": True,
-        "priority": 4,
-        "tasks": [
-            "isolated_processing",
-            "secure_document_handling",
-            "container_orchestration",
-        ],
-        "mcp_tools": ["filesystem_mcp", "knowledge_mcp"],
-        "invoked_by": "LibrarianAssistant when containerized mode configured",
-        "source_file": "src/agents/containerized_librarian_assistant.py",
+        "tasks": ["web_research", "content_extraction", "knowledge_storage"],
+        "mcp_tools": ["knowledge_mcp", "filesystem_mcp"],
+        "invoked_by": "AgentOrchestrator when external research is needed",
+        "source_file": "src/agents/librarian_assistant.py",
     },
     "system_knowledge_manager": {
         "name": "System Knowledge Manager",
-        "description": "Manages immutable system knowledge templates and runtime copies. Handles intelligent change detection, backup creation, and knowledge base integration. Uses EnhancedKBLibrarian for document processing.",
+        "description": "Manages immutable system knowledge templates and runtime copies. Handles intelligent change detection, backup creation, and knowledge base integration. Uses the kb_librarian package for document processing.",
         "default_model": TIER_4_MODEL,
         "provider": "ollama",
         "enabled": True,
@@ -538,6 +527,39 @@ DEFAULT_AGENT_CONFIGS = {
 }
 
 
+async def _resolve_agent_effective_config(
+    agent_id: str, config: dict, unified_config_manager
+) -> tuple:
+    """Helper for list_agents and get_all_agents. Ref: #1088.
+
+    Resolves model, provider, enabled, and config_source for an agent
+    by checking SLM first and falling back to the local config manager.
+
+    Returns:
+        Tuple of (current_model, current_provider, enabled, config_source)
+    """
+    slm_config = await _get_agent_config_from_slm(agent_id)
+
+    if slm_config:
+        return (
+            slm_config.get("model", config["default_model"]),
+            slm_config.get("provider", config["provider"]),
+            slm_config.get("enabled", True),
+            "slm",
+        )
+
+    current_model = unified_config_manager.get_nested(
+        f"agents.{agent_id}.model", config["default_model"]
+    )
+    current_provider = unified_config_manager.get_nested(
+        f"agents.{agent_id}.provider", config["provider"]
+    )
+    enabled = unified_config_manager.get_nested(
+        f"agents.{agent_id}.enabled", config["enabled"]
+    )
+    return current_model, current_provider, enabled, "local"
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_agents",
@@ -557,28 +579,15 @@ async def list_agents(admin_check: bool = Depends(check_admin_permission)):
 
     agents = []
     for agent_id, config in DEFAULT_AGENT_CONFIGS.items():
-        # Try SLM first, fallback to local config
-        slm_config = await _get_agent_config_from_slm(agent_id)
+        (
+            current_model,
+            current_provider,
+            enabled,
+            config_source,
+        ) = await _resolve_agent_effective_config(
+            agent_id, config, unified_config_manager
+        )
 
-        if slm_config:
-            current_model = slm_config.get("model", config["default_model"])
-            current_provider = slm_config.get("provider", config["provider"])
-            enabled = slm_config.get("enabled", True)
-            config_source = "slm"
-        else:
-            # Fallback to local unified_config_manager
-            current_model = unified_config_manager.get_nested(
-                f"agents.{agent_id}.model", config["default_model"]
-            )
-            current_provider = unified_config_manager.get_nested(
-                f"agents.{agent_id}.provider", config["provider"]
-            )
-            enabled = unified_config_manager.get_nested(
-                f"agents.{agent_id}.enabled", config["enabled"]
-            )
-            config_source = "local"
-
-        # Determine status based on configuration
         status = "connected" if enabled and current_model else "disconnected"
 
         agent_info = {
@@ -887,6 +896,43 @@ async def disable_agent(
     )
 
 
+async def _check_provider_availability(agent_id: str) -> tuple:
+    """Helper for check_agent_health. Ref: #1088.
+
+    Checks whether the provider configured for the given agent is reachable
+    via ProviderHealthManager.
+
+    Returns:
+        Tuple of (provider_available: bool, response_time: float)
+    """
+    provider_available = False
+    start_time = datetime.now()
+
+    try:
+        from backend.services.provider_health import ProviderHealthManager
+
+        provider_config = DEFAULT_AGENT_CONFIGS[agent_id].get("provider", "ollama")
+        health_result = await ProviderHealthManager.check_provider_health(
+            provider=provider_config,
+            timeout=3.0,
+            use_cache=True,
+        )
+        provider_available = health_result.available
+        if not provider_available:
+            logger.warning(
+                f"Provider {provider_config} unavailable for agent {agent_id}: "
+                f"{health_result.message}"
+            )
+    except Exception as e:
+        logger.warning(
+            f"Provider availability check failed for agent {agent_id}: {str(e)}"
+        )
+        provider_available = False
+
+    response_time = (datetime.now() - start_time).total_seconds()
+    return provider_available, response_time
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="check_agent_health",
@@ -911,40 +957,8 @@ async def check_agent_health(
         f"agents.{agent_id}.model", DEFAULT_AGENT_CONFIGS[agent_id]["default_model"]
     )
 
-    # Check provider availability using ProviderHealthManager
-    provider_available = False
-    start_time = datetime.now()
+    provider_available, response_time = await _check_provider_availability(agent_id)
 
-    try:
-        from backend.services.provider_health import ProviderHealthManager
-
-        provider_config = DEFAULT_AGENT_CONFIGS[agent_id].get("provider", "ollama")
-
-        # Check provider health using unified health manager
-        health_result = await ProviderHealthManager.check_provider_health(
-            provider=provider_config,
-            timeout=3.0,  # Quick check for agent status endpoint
-            use_cache=True,  # Use caching to avoid excessive checks
-        )
-
-        provider_available = health_result.available
-
-        # Log if provider is unavailable
-        if not provider_available:
-            logger.warning(
-                f"Provider {provider_config} unavailable for agent {agent_id}: "
-                f"{health_result.message}"
-            )
-
-    except Exception as e:
-        logger.warning(
-            f"Provider availability check failed for agent {agent_id}: {str(e)}"
-        ),
-        provider_available = False
-
-    response_time = (datetime.now() - start_time).total_seconds()
-
-    # Health check: enabled + model configured + provider available
     is_healthy = enabled and bool(model) and provider_available
 
     health_status = {

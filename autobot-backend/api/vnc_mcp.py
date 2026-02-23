@@ -350,14 +350,7 @@ async def observe_vnc_activity_mcp(request: VNCObservationRequest) -> Metadata:
 )
 @router.post("/mcp/get_browser_vnc_context")
 async def get_browser_vnc_context_mcp() -> Metadata:
-    """
-    MCP tool implementation: get_browser_vnc_context
-
-    Get comprehensive context about what's happening in the browser VNC:
-    - Current Playwright page state (URL, title)
-    - Recent VNC activity (user interactions)
-    - Combined view for full situational awareness
-    """
+    """Get comprehensive browser VNC context: Playwright state + VNC activity. Ref: #1088."""
     backend_url = (
         f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
     )

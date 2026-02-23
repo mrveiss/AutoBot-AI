@@ -366,41 +366,13 @@ class IntentClassifier:
 
         return None
 
-    def _classify_from_signals(
+    def _classify_lower_priority_signals(
         self,
-        message: str,
-        message_lower: str,
         words: List[str],
         signals: Dict[str, bool],
         conversation_history: Optional[List[Dict[str, str]]],
     ) -> IntentClassification:
-        """
-        Internal classification logic based on detected signals.
-
-        Issue #281: Refactored from 123 lines to use extracted helper methods.
-
-        Args:
-            message: Original message
-            message_lower: Lowercased message
-            words: List of words in message
-            signals: Detected signals dictionary
-            conversation_history: Previous conversation messages
-
-        Returns:
-            IntentClassification with intent, confidence, and reasoning
-        """
-        # RULE 1: Check for explicit exit phrases (highest priority)
-        # Issue #281: uses helper
-        exit_result = self._check_exit_phrase_intent(signals)
-        if exit_result:
-            return exit_result
-
-        # RULE 2: Question indicators (high priority for continuation)
-        # Issue #281: uses helper
-        question_result = self._check_question_intent(signals)
-        if question_result:
-            return question_result
-
+        """Helper for _classify_from_signals. Ref: #1088."""
         # RULE 3: Task request indicators
         if signals["has_task_word"]:
             return IntentClassification(
@@ -420,7 +392,6 @@ class IntentClassifier:
             )
 
         # RULE 5: Very short messages - likely acknowledgment or continuation
-        # Issue #281: uses helper
         short_msg_result = self._check_short_message_intent(
             words, signals, conversation_history
         )
@@ -442,4 +413,43 @@ class IntentClassifier:
             confidence=0.60,
             reasoning="Default to continuation - no clear exit signal",
             signals=signals,
+        )
+
+    def _classify_from_signals(
+        self,
+        message: str,
+        message_lower: str,
+        words: List[str],
+        signals: Dict[str, bool],
+        conversation_history: Optional[List[Dict[str, str]]],
+    ) -> IntentClassification:
+        """
+        Internal classification logic based on detected signals.
+
+        Issue #281: Refactored from 123 lines to use extracted helper methods.
+        Issue #1088: Extracted _classify_lower_priority_signals to reduce function length.
+
+        Args:
+            message: Original message
+            message_lower: Lowercased message
+            words: List of words in message
+            signals: Detected signals dictionary
+            conversation_history: Previous conversation messages
+
+        Returns:
+            IntentClassification with intent, confidence, and reasoning
+        """
+        # RULE 1: Check for explicit exit phrases (highest priority)
+        exit_result = self._check_exit_phrase_intent(signals)
+        if exit_result:
+            return exit_result
+
+        # RULE 2: Question indicators (high priority for continuation)
+        question_result = self._check_question_intent(signals)
+        if question_result:
+            return question_result
+
+        # RULES 3-6 + DEFAULT: delegate to lower-priority helper
+        return self._classify_lower_priority_signals(
+            words, signals, conversation_history
         )

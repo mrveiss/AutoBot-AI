@@ -17,10 +17,10 @@ from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
 import aiohttp
-
-from autobot_shared.http_client import get_http_client
 from backend.constants.network_constants import NetworkConstants
 from backend.type_defs.common import Metadata
+
+from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -193,22 +193,7 @@ class AIStackClient:
         params: Optional[Metadata] = None,
         headers: Optional[Dict[str, str]] = None,
     ) -> Metadata:
-        """
-        Make HTTP request to AI Stack with retry logic.
-
-        Args:
-            method: HTTP method (GET, POST, etc.)
-            endpoint: API endpoint path
-            data: Request body data
-            params: URL parameters
-            headers: Additional headers
-
-        Returns:
-            Response data as dictionary
-
-        Raises:
-            AIStackError: If request fails after retries
-        """
+        """Make HTTP request to AI Stack with retry logic. Ref: #1088."""
         url = urljoin(self.base_url, endpoint)
         request_headers = headers or {}
 

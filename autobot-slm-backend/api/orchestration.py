@@ -739,6 +739,78 @@ async def update_fleet_service_category(
     }
 
 
+async def _fetch_fleet_services_and_nodes(
+    db: AsyncSession,
+    service_name: str,
+) -> tuple:
+    """Helper for start/stop/restart_fleet_service. Ref: #1088.
+
+    Fetch all Service records for service_name and their Node objects.
+    Raises HTTP 404 if no records found. Returns (services, nodes_dict).
+    """
+    query = select(Service).where(Service.service_name == service_name)
+    result = await db.execute(query)
+    services = result.scalars().all()
+    if not services:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Service {service_name} not found on any node",
+        )
+    node_ids = [s.node_id for s in services]
+    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
+    nodes = {n.node_id: n for n in nodes_result.scalars().all()}
+    return services, nodes
+
+
+async def _apply_fleet_action(
+    service_name: str,
+    action: str,
+    services: list,
+    nodes: dict,
+    running_state: Optional[str],
+    active_state: Optional[str],
+    sub_state: Optional[str],
+) -> tuple:
+    """Helper for start/stop/restart_fleet_service. Ref: #1088.
+
+    Run action on each node, update svc fields, broadcast status.
+    Returns (success_count, fail_count).
+    """
+    success_count = 0
+    fail_count = 0
+    for svc in services:
+        node = nodes.get(svc.node_id)
+        if not node:
+            fail_count += 1
+            continue
+        success, msg = await _run_ssh_service_action(node, service_name, action)
+        if success:
+            success_count += 1
+            svc.status = running_state
+            svc.active_state = active_state
+            svc.sub_state = sub_state
+            svc.last_checked = datetime.utcnow()
+            await ws_manager.send_service_status(
+                node_id=svc.node_id,
+                service_name=service_name,
+                status=running_state,
+                action=action,
+                success=True,
+                message=msg,
+            )
+        else:
+            fail_count += 1
+            await ws_manager.send_service_status(
+                node_id=svc.node_id,
+                service_name=service_name,
+                status="unknown",
+                action=action,
+                success=False,
+                message=msg,
+            )
+    return success_count, fail_count
+
+
 @fleet_router.post(
     "/services/{service_name}/start",
     response_model=ServiceActionResponse,
@@ -753,60 +825,17 @@ async def start_fleet_service(
 
     Issue #850: Moved from /fleet/services/{name}/start to /orchestration/fleet/services/{name}/start.
     """
-    # Find all nodes with this service
-    query = select(Service).where(Service.service_name == service_name)
-    result = await db.execute(query)
-    services = result.scalars().all()
-
-    if not services:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Service {service_name} not found on any node",
-        )
-
-    # Get nodes
-    node_ids = [s.node_id for s in services]
-    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
-    nodes = {n.node_id: n for n in nodes_result.scalars().all()}
-
-    # Start on each node
-    success_count = 0
-    fail_count = 0
-    for svc in services:
-        node = nodes.get(svc.node_id)
-        if not node:
-            fail_count += 1
-            continue
-
-        success, msg = await _run_ssh_service_action(node, service_name, "start")
-        if success:
-            success_count += 1
-            svc.status = ServiceStatus.RUNNING.value
-            svc.active_state = "active"
-            svc.sub_state = "running"
-            svc.last_checked = datetime.utcnow()
-            # Broadcast status change for this node
-            await ws_manager.send_service_status(
-                node_id=svc.node_id,
-                service_name=service_name,
-                status="running",
-                action="start",
-                success=True,
-                message=msg,
-            )
-        else:
-            fail_count += 1
-            await ws_manager.send_service_status(
-                node_id=svc.node_id,
-                service_name=service_name,
-                status="unknown",
-                action="start",
-                success=False,
-                message=msg,
-            )
-
+    services, nodes = await _fetch_fleet_services_and_nodes(db, service_name)
+    success_count, fail_count = await _apply_fleet_action(
+        service_name,
+        "start",
+        services,
+        nodes,
+        ServiceStatus.RUNNING.value,
+        "active",
+        "running",
+    )
     await db.commit()
-
     return ServiceActionResponse(
         action="start",
         service_name=service_name,
@@ -830,57 +859,17 @@ async def stop_fleet_service(
 
     Issue #850: Moved from /fleet/services/{name}/stop to /orchestration/fleet/services/{name}/stop.
     """
-    query = select(Service).where(Service.service_name == service_name)
-    result = await db.execute(query)
-    services = result.scalars().all()
-
-    if not services:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Service {service_name} not found on any node",
-        )
-
-    node_ids = [s.node_id for s in services]
-    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
-    nodes = {n.node_id: n for n in nodes_result.scalars().all()}
-
-    success_count = 0
-    fail_count = 0
-    for svc in services:
-        node = nodes.get(svc.node_id)
-        if not node:
-            fail_count += 1
-            continue
-
-        success, msg = await _run_ssh_service_action(node, service_name, "stop")
-        if success:
-            success_count += 1
-            svc.status = ServiceStatus.STOPPED.value
-            svc.active_state = "inactive"
-            svc.sub_state = "dead"
-            svc.last_checked = datetime.utcnow()
-            # Broadcast status change for this node
-            await ws_manager.send_service_status(
-                node_id=svc.node_id,
-                service_name=service_name,
-                status="stopped",
-                action="stop",
-                success=True,
-                message=msg,
-            )
-        else:
-            fail_count += 1
-            await ws_manager.send_service_status(
-                node_id=svc.node_id,
-                service_name=service_name,
-                status="unknown",
-                action="stop",
-                success=False,
-                message=msg,
-            )
-
+    services, nodes = await _fetch_fleet_services_and_nodes(db, service_name)
+    success_count, fail_count = await _apply_fleet_action(
+        service_name,
+        "stop",
+        services,
+        nodes,
+        ServiceStatus.STOPPED.value,
+        "inactive",
+        "dead",
+    )
     await db.commit()
-
     return ServiceActionResponse(
         action="stop",
         service_name=service_name,
@@ -904,57 +893,17 @@ async def restart_fleet_service(
 
     Issue #850: Moved from /fleet/services/{name}/restart to /orchestration/fleet/services/{name}/restart.
     """
-    query = select(Service).where(Service.service_name == service_name)
-    result = await db.execute(query)
-    services = result.scalars().all()
-
-    if not services:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Service {service_name} not found on any node",
-        )
-
-    node_ids = [s.node_id for s in services]
-    nodes_result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
-    nodes = {n.node_id: n for n in nodes_result.scalars().all()}
-
-    success_count = 0
-    fail_count = 0
-    for svc in services:
-        node = nodes.get(svc.node_id)
-        if not node:
-            fail_count += 1
-            continue
-
-        success, msg = await _run_ssh_service_action(node, service_name, "restart")
-        if success:
-            success_count += 1
-            svc.status = ServiceStatus.RUNNING.value
-            svc.active_state = "active"
-            svc.sub_state = "running"
-            svc.last_checked = datetime.utcnow()
-            # Broadcast status change for this node
-            await ws_manager.send_service_status(
-                node_id=svc.node_id,
-                service_name=service_name,
-                status="running",
-                action="restart",
-                success=True,
-                message=msg,
-            )
-        else:
-            fail_count += 1
-            await ws_manager.send_service_status(
-                node_id=svc.node_id,
-                service_name=service_name,
-                status="unknown",
-                action="restart",
-                success=False,
-                message=msg,
-            )
-
+    services, nodes = await _fetch_fleet_services_and_nodes(db, service_name)
+    success_count, fail_count = await _apply_fleet_action(
+        service_name,
+        "restart",
+        services,
+        nodes,
+        ServiceStatus.RUNNING.value,
+        "active",
+        "running",
+    )
     await db.commit()
-
     return ServiceActionResponse(
         action="restart",
         service_name=service_name,

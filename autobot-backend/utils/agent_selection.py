@@ -124,6 +124,47 @@ def _select_best_agent_from_candidates(
     return best_agent_id
 
 
+def _build_scored_candidates(
+    agent_registry: Dict[str, Any],
+    task_type: str,
+    required_capabilities: Set[Any],
+    availability_status_attr: str,
+    current_workload_attr: str,
+    max_concurrent_tasks_attr: str,
+    capabilities_attr: str,
+    preferred_task_types_attr: str,
+    specializations_attr: str,
+    success_rate_attr: str,
+) -> List[Tuple[str, float]]:
+    """Helper for find_best_agent_for_task. Ref: #1088.
+
+    Iterates the agent registry and returns a list of (agent_id, score) tuples
+    for all agents that pass eligibility checks.
+    """
+    suitable_agents: List[Tuple[str, float]] = []
+    for agent_id, agent in agent_registry.items():
+        if not _is_agent_eligible(
+            agent,
+            required_capabilities,
+            availability_status_attr,
+            current_workload_attr,
+            max_concurrent_tasks_attr,
+            capabilities_attr,
+        ):
+            continue
+        score = _calculate_agent_suitability_score(
+            agent,
+            task_type,
+            current_workload_attr,
+            max_concurrent_tasks_attr,
+            preferred_task_types_attr,
+            specializations_attr,
+            success_rate_attr,
+        )
+        suitable_agents.append((agent_id, score))
+    return suitable_agents
+
+
 def find_best_agent_for_task(
     agent_registry: Dict[str, Any],
     task_type: str,
@@ -139,11 +180,8 @@ def find_best_agent_for_task(
     """
     Find the best agent for a specific task based on capabilities and current workload.
 
-    This is a standalone function that can be used by any orchestrator implementation.
-    It calculates a suitability score based on:
-    - Task type match (preferred tasks and specializations)
-    - Current workload (agents with less load are preferred)
-    - Historical performance (success rate)
+    Uses _build_scored_candidates to evaluate all eligible agents, then returns
+    the highest-scoring one via _select_best_agent_from_candidates. Ref: #1088.
 
     Args:
         agent_registry: Dictionary mapping agent_id to agent objects
@@ -159,41 +197,20 @@ def find_best_agent_for_task(
 
     Returns:
         Agent ID of the best suitable agent, or None if no suitable agent found
-
-    Example:
-        >>> best_agent = find_best_agent_for_task(
-        ...     agent_registry=self.agent_registry,
-        ...     task_type="code_review",
-        ...     required_capabilities={AgentCapability.ANALYSIS}
-        ... )
     """
-    required_capabilities = required_capabilities or set()
-
-    # Find eligible agents and calculate scores (Issue #398: refactored to use helpers)
-    suitable_agents: List[Tuple[str, float]] = []
-
-    for agent_id, agent in agent_registry.items():
-        if not _is_agent_eligible(
-            agent,
-            required_capabilities,
-            availability_status_attr,
-            current_workload_attr,
-            max_concurrent_tasks_attr,
-            capabilities_attr,
-        ):
-            continue
-
-        suitability_score = _calculate_agent_suitability_score(
-            agent,
-            task_type,
-            current_workload_attr,
-            max_concurrent_tasks_attr,
-            preferred_task_types_attr,
-            specializations_attr,
-            success_rate_attr,
-        )
-        suitable_agents.append((agent_id, suitability_score))
-
+    caps = required_capabilities or set()
+    suitable_agents = _build_scored_candidates(
+        agent_registry,
+        task_type,
+        caps,
+        availability_status_attr,
+        current_workload_attr,
+        max_concurrent_tasks_attr,
+        capabilities_attr,
+        preferred_task_types_attr,
+        specializations_attr,
+        success_rate_attr,
+    )
     return _select_best_agent_from_candidates(suitable_agents, task_type)
 
 

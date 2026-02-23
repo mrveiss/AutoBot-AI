@@ -335,6 +335,76 @@ async def stop_scheduler():
     return {"success": True, "message": "Workflow scheduler stopped"}
 
 
+def _parse_template_variables(variables: Optional[str]) -> Metadata:
+    """Helper for schedule_template_workflow. Ref: #1088.
+
+    Parses the JSON-encoded template variables query parameter.
+
+    Args:
+        variables: JSON string of template variables, or None
+
+    Returns:
+        Parsed variables dict (empty dict if variables is None)
+
+    Raises:
+        HTTPException: 400 if JSON is invalid
+    """
+    if not variables:
+        return {}
+    import json
+
+    try:
+        return json.loads(variables)
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=400, detail="Invalid JSON in variables parameter"
+        )
+
+
+def _build_template_schedule_request(
+    template_id: str,
+    template,
+    template_variables: Metadata,
+    scheduled_time: str,
+    priority: str,
+    auto_approve: bool,
+    user_id: Optional[str],
+) -> InternalScheduleRequest:
+    """Helper for schedule_template_workflow. Ref: #1088.
+
+    Builds an InternalScheduleRequest from the resolved template and parameters.
+
+    Args:
+        template_id: Template identifier
+        template: Resolved template object
+        template_variables: Parsed variable dict
+        scheduled_time: ISO-formatted scheduled time string
+        priority: Workflow priority string
+        auto_approve: Whether to auto-approve workflow steps
+        user_id: Optional user identifier
+
+    Returns:
+        Populated InternalScheduleRequest
+    """
+    user_message = f"Execute template: {template.name}"
+    if template_variables:
+        user_message += f" with variables: {template_variables}"
+    return InternalScheduleRequest(
+        user_message=user_message,
+        scheduled_time=scheduled_time,
+        priority=priority,
+        complexity=(
+            template.complexity.value if hasattr(template, "complexity") else "simple"
+        ),
+        template_id=template_id,
+        variables=template_variables,
+        auto_approve=auto_approve,
+        user_id=user_id,
+        estimated_duration_minutes=template.estimated_duration_minutes,
+        tags=template.tags.copy(),
+    )
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="schedule_template_workflow",
@@ -351,49 +421,29 @@ async def schedule_template_workflow(
     auto_approve: bool = Query(False, description="Auto-approve workflow steps"),
     user_id: Optional[str] = Query(None, description="User ID for the workflow"),
 ):
-    """Schedule a workflow from a template"""
-    # Parse variables if provided
-    template_variables = {}
-    if variables:
-        import json
+    """Schedule a workflow from a template.
 
-        try:
-            template_variables = json.loads(variables)
-        except json.JSONDecodeError:
-            raise HTTPException(
-                status_code=400, detail="Invalid JSON in variables parameter"
-            )
+    Issue #1088: Extracted _parse_template_variables and
+    _build_template_schedule_request helpers to reduce to <=65 lines.
+    """
+    template_variables = _parse_template_variables(variables)
 
-    # Validate template exists
     from workflow_templates import workflow_template_manager
 
     template = workflow_template_manager.get_template(template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
 
-    # Create user message from template
-    user_message = f"Execute template: {template.name}"
-    if template_variables:
-        user_message += f" with variables: {template_variables}"
-
-    # Issue #319: Use request object to reduce parameter count
-    internal_request = InternalScheduleRequest(
-        user_message=user_message,
-        scheduled_time=scheduled_time,
-        priority=priority,
-        complexity=(
-            template.complexity.value if hasattr(template, "complexity") else "simple"
-        ),
-        template_id=template_id,
-        variables=template_variables,
-        auto_approve=auto_approve,
-        user_id=user_id,
-        estimated_duration_minutes=template.estimated_duration_minutes,
-        tags=template.tags.copy(),
+    internal_request = _build_template_schedule_request(
+        template_id,
+        template,
+        template_variables,
+        scheduled_time,
+        priority,
+        auto_approve,
+        user_id,
     )
     workflow_id = workflow_scheduler.schedule_workflow(request=internal_request)
-
-    # Get the created workflow
     workflow = workflow_scheduler.get_workflow(workflow_id)
 
     return {

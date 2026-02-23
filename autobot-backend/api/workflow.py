@@ -462,6 +462,57 @@ async def get_workflow_status(
     }
 
 
+async def _resolve_approval_future(
+    approval_key: str, approval: "WorkflowApprovalResponse"
+) -> None:
+    """Helper for approve_workflow_step. Ref: #1088.
+
+    Pop and resolve the pending approval future for approval_key.
+    Raises HTTPException(404) if no pending approval exists.
+    """
+    async with _approvals_lock:
+        if approval_key not in pending_approvals:
+            raise HTTPException(
+                status_code=404, detail="No pending approval for this workflow step"
+            )
+        future = pending_approvals.pop(approval_key)
+    if not future.done():
+        future.set_result(
+            {
+                "approved": approval.approved,
+                "user_input": approval.user_input,
+                "timestamp": approval.timestamp,
+            }
+        )
+
+
+async def _update_step_status_and_metrics(
+    workflow_id: str, approval: "WorkflowApprovalResponse"
+) -> None:
+    """Helper for approve_workflow_step. Ref: #1088.
+
+    Update the current step's status and user_response in the workflow,
+    then record the approval decision in Prometheus.
+    """
+    async with _workflows_lock:
+        workflow = active_workflows[workflow_id]
+        steps = workflow.get("steps", [])
+        current_step = workflow.get("current_step", 0)
+
+        if current_step < len(steps):
+            steps[current_step]["status"] = (
+                "approved" if approval.approved else "denied"
+            )
+            steps[current_step]["user_response"] = approval.user_input
+
+        # Get workflow type for metrics
+        workflow_type = workflow.get("classification", "unknown")
+    prometheus_metrics.record_workflow_approval(
+        workflow_type=workflow_type,
+        decision="approved" if approval.approved else "rejected",
+    )
+
+
 @with_error_handling(
     category=ErrorCategory.NOT_FOUND,
     operation="approve_workflow_step",
@@ -482,41 +533,11 @@ async def approve_workflow_step(
 
     approval_key = f"{workflow_id}_{approval.step_id}"
 
-    async with _approvals_lock:
-        if approval_key not in pending_approvals:
-            raise HTTPException(
-                status_code=404, detail="No pending approval for this workflow step"
-            )
+    # Resolve the pending future (Issue #1088: extracted helper)
+    await _resolve_approval_future(approval_key, approval)
 
-        # Set the approval result
-        future = pending_approvals.pop(approval_key)
-    if not future.done():
-        future.set_result(
-            {
-                "approved": approval.approved,
-                "user_input": approval.user_input,
-                "timestamp": approval.timestamp,
-            }
-        )
-
-    # Update workflow status (thread-safe)
-    async with _workflows_lock:
-        workflow = active_workflows[workflow_id]
-        steps = workflow.get("steps", [])
-        current_step = workflow.get("current_step", 0)
-
-        if current_step < len(steps):
-            steps[current_step]["status"] = (
-                "approved" if approval.approved else "denied"
-            )
-            steps[current_step]["user_response"] = approval.user_input
-
-        # Get workflow type for metrics
-        workflow_type = workflow.get("classification", "unknown")
-    prometheus_metrics.record_workflow_approval(
-        workflow_type=workflow_type,
-        decision="approved" if approval.approved else "rejected",
-    )
+    # Update step status and record metrics (Issue #1088: extracted helper)
+    await _update_step_status_and_metrics(workflow_id, approval)
 
     # Publish approval event
     await event_manager.publish(
@@ -827,6 +848,94 @@ async def _execute_step_with_approval(
     return True
 
 
+async def _execute_step_iteration(
+    workflow_id: str,
+    workflow: Metadata,
+    steps: list,
+    step_index: int,
+    step: Metadata,
+    orchestrator,
+) -> bool:
+    """Helper for execute_workflow_steps. Ref: #1088.
+
+    Initialize step state, publish step-started, run with approval, publish
+    step-completed. Returns False if the step was cancelled or timed out,
+    True on success.
+    """
+    async with _workflows_lock:
+        workflow["current_step"] = step_index
+        step["status"] = "in_progress"
+        step["started_at"] = datetime.now().isoformat()
+
+    # Publish step start event (Issue #281: uses helper)
+    await _publish_step_started(workflow_id, step, step_index, len(steps))
+
+    # Execute step with approval handling (Issue #281: uses helper)
+    if not await _execute_step_with_approval(
+        workflow_id, workflow, step, step_index, orchestrator
+    ):
+        return False  # Timeout or cancelled
+
+    # Publish step completion event (Issue #281: uses helper)
+    await _publish_step_completed(workflow_id, step)
+    return True
+
+
+async def _finalize_workflow_completed(
+    workflow_id: str, workflow: Metadata, steps: list
+) -> None:
+    """Helper for execute_workflow_steps. Ref: #1088.
+
+    Mark the workflow as completed, record metrics, and publish the
+    workflow_completed event.
+    """
+    async with _workflows_lock:
+        workflow["status"] = "completed"
+        workflow["completed_at"] = datetime.now().isoformat()
+        workflow_start_time = workflow.get("workflow_start_time")
+        workflow_type = workflow.get("classification", "unknown")
+
+    # Record metrics (Issue #281: uses helper)
+    _record_workflow_metrics(workflow_type, workflow_start_time, "success")
+
+    await event_manager.publish(
+        "workflow_completed",
+        {
+            "workflow_id": workflow_id,
+            "user_message": workflow["user_message"],
+            "total_steps": len(steps),
+            "execution_time": "calculated_time_here",
+        },
+    )
+
+
+async def _finalize_workflow_failed(
+    workflow_id: str, workflow: Metadata, error: Exception
+) -> None:
+    """Helper for execute_workflow_steps. Ref: #1088.
+
+    Mark the workflow as failed, record metrics, and publish the
+    workflow_failed event.
+    """
+    async with _workflows_lock:
+        workflow["status"] = "failed"
+        workflow["error"] = str(error)
+        workflow_start_time = workflow.get("workflow_start_time")
+        workflow_type = workflow.get("classification", "unknown")
+
+    # Record metrics (Issue #281: uses helper)
+    _record_workflow_metrics(workflow_type, workflow_start_time, "failed")
+
+    await event_manager.publish(
+        "workflow_failed",
+        {
+            "workflow_id": workflow_id,
+            "error": str(error),
+            "current_step": workflow.get("current_step", 0),
+        },
+    )
+
+
 async def execute_workflow_steps(workflow_id: str, orchestrator):
     """
     Execute workflow steps in sequence with proper coordination.
@@ -843,61 +952,18 @@ async def execute_workflow_steps(workflow_id: str, orchestrator):
 
     try:
         for step_index, step in enumerate(steps):
-            async with _workflows_lock:
-                workflow["current_step"] = step_index
-                step["status"] = "in_progress"
-                step["started_at"] = datetime.now().isoformat()
-
-            # Publish step start event (Issue #281: uses helper)
-            await _publish_step_started(workflow_id, step, step_index, len(steps))
-
-            # Execute step with approval handling (Issue #281: uses helper)
-            if not await _execute_step_with_approval(
-                workflow_id, workflow, step, step_index, orchestrator
+            # Execute one step: init state, approval, publish (Issue #1088: extracted)
+            if not await _execute_step_iteration(
+                workflow_id, workflow, steps, step_index, step, orchestrator
             ):
                 return  # Timeout or cancelled
 
-            # Publish step completion event (Issue #281: uses helper)
-            await _publish_step_completed(workflow_id, step)
-
-        # Workflow completed
-        async with _workflows_lock:
-            workflow["status"] = "completed"
-            workflow["completed_at"] = datetime.now().isoformat()
-            workflow_start_time = workflow.get("workflow_start_time")
-            workflow_type = workflow.get("classification", "unknown")
-
-        # Record metrics (Issue #281: uses helper)
-        _record_workflow_metrics(workflow_type, workflow_start_time, "success")
-
-        await event_manager.publish(
-            "workflow_completed",
-            {
-                "workflow_id": workflow_id,
-                "user_message": workflow["user_message"],
-                "total_steps": len(steps),
-                "execution_time": "calculated_time_here",
-            },
-        )
+        # Workflow completed (Issue #1088: extracted)
+        await _finalize_workflow_completed(workflow_id, workflow, steps)
 
     except Exception as e:
-        async with _workflows_lock:
-            workflow["status"] = "failed"
-            workflow["error"] = str(e)
-            workflow_start_time = workflow.get("workflow_start_time")
-            workflow_type = workflow.get("classification", "unknown")
-
-        # Record metrics (Issue #281: uses helper)
-        _record_workflow_metrics(workflow_type, workflow_start_time, "failed")
-
-        await event_manager.publish(
-            "workflow_failed",
-            {
-                "workflow_id": workflow_id,
-                "error": str(e),
-                "current_step": workflow.get("current_step", 0),
-            },
-        )
+        # Workflow failed (Issue #1088: extracted)
+        await _finalize_workflow_failed(workflow_id, workflow, e)
 
 
 async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):

@@ -60,6 +60,14 @@ server {
         proxy_read_timeout 300s;
     }
 
+    # Issue #1105: Voice stream WebSocket
+    location /api/voice/stream {
+        proxy_pass         http://127.0.0.1:{{ backend_port }};
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_read_timeout 86400s;
+    }
+
     # Nginx health check (does not proxy to backend)
     location /nginx-health {
         access_log off;

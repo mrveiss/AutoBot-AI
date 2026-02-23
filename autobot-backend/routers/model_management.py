@@ -13,13 +13,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from backend.models.ml_model import MLModel
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from autobot_shared.ssot_config import config
-from backend.models.ml_model import MLModel
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +126,65 @@ class PredictResponse(BaseModel):
 # =============================================================================
 
 
+def _register_trained_model(trainer, request, final_metrics, duration):
+    """Helper for _train_background. Ref: #1088.
+
+    Persists the trained model checkpoint as an MLModel record in the database.
+    Looks up the most recently modified checkpoint file in trainer.model_dir and
+    writes all training metrics into the record.
+    """
+    db = _get_session()
+    try:
+        model_files = list(Path(trainer.model_dir).glob("completion_model_v*.pt"))
+        if model_files:
+            latest_checkpoint = max(model_files, key=lambda p: p.stat().st_mtime)
+            version = latest_checkpoint.stem.replace("completion_model_", "")
+            model_record = MLModel(
+                version=version,
+                model_type="lstm_completion",
+                language=request.language,
+                pattern_type=request.pattern_type,
+                file_path=str(latest_checkpoint),
+                config=trainer.model.get_config(),
+                val_loss=final_metrics.get("val_loss"),
+                accuracy=final_metrics.get("accuracy"),
+                mrr=final_metrics.get("mrr"),
+                hit_at_1=final_metrics.get("hit@1"),
+                hit_at_5=final_metrics.get("hit@5"),
+                hit_at_10=final_metrics.get("hit@10"),
+                epochs_trained=trainer.current_epoch,
+                training_duration_seconds=duration,
+                num_parameters=sum(p.numel() for p in trainer.model.parameters()),
+                notes=request.notes,
+            )
+            db.add(model_record)
+            db.commit()
+            logger.info(f"Training complete: {version}")
+    finally:
+        db.close()
+
+
+def _train_background(request):
+    """Helper for train_model. Ref: #1088.
+
+    Runs the full training pipeline (init, prepare, train, save, register)
+    in a background task. Errors are caught and logged without re-raising.
+    """
+    try:
+        start_time = time.time()
+        trainer = _get_trainer_class()(
+            language=request.language, pattern_type=request.pattern_type
+        )
+        trainer.prepare_data(batch_size=request.batch_size)
+        history = trainer.train(num_epochs=request.num_epochs)
+        trainer.save_checkpoint(is_best=True)
+        duration = int(time.time() - start_time)
+        final_metrics = history["metrics"][-1] if history["metrics"] else {}
+        _register_trained_model(trainer, request, final_metrics, duration)
+    except Exception as e:
+        logger.error(f"Training failed: {e}", exc_info=True)
+
+
 @router.post("/train", response_model=TrainResponse)
 async def train_model(request: TrainRequest, background_tasks: BackgroundTasks):
     """
@@ -136,77 +195,7 @@ async def train_model(request: TrainRequest, background_tasks: BackgroundTasks):
     - **num_epochs**: Number of training epochs
     - **batch_size**: Training batch size
     """
-
-    def _train_background():
-        """Background training task."""
-        try:
-            start_time = time.time()
-
-            # Initialize trainer
-            trainer = _get_trainer_class()(
-                language=request.language, pattern_type=request.pattern_type
-            )
-
-            # Prepare data
-            trainer.prepare_data(batch_size=request.batch_size)
-
-            # Train
-            history = trainer.train(num_epochs=request.num_epochs)
-
-            # Save final model
-            trainer.save_checkpoint(is_best=True)
-
-            duration = int(time.time() - start_time)
-
-            # Get final metrics
-            final_metrics = history["metrics"][-1] if history["metrics"] else {}
-
-            # Register in database
-            db = _get_session()
-            try:
-                # Get model version from checkpoint
-                model_files = list(
-                    Path(trainer.model_dir).glob("completion_model_v*.pt")
-                )
-                if model_files:
-                    latest_checkpoint = max(
-                        model_files, key=lambda p: p.stat().st_mtime
-                    )
-                    version = latest_checkpoint.stem.replace("completion_model_", "")
-
-                    model_record = MLModel(
-                        version=version,
-                        model_type="lstm_completion",
-                        language=request.language,
-                        pattern_type=request.pattern_type,
-                        file_path=str(latest_checkpoint),
-                        config=trainer.model.get_config(),
-                        val_loss=final_metrics.get("val_loss"),
-                        accuracy=final_metrics.get("accuracy"),
-                        mrr=final_metrics.get("mrr"),
-                        hit_at_1=final_metrics.get("hit@1"),
-                        hit_at_5=final_metrics.get("hit@5"),
-                        hit_at_10=final_metrics.get("hit@10"),
-                        epochs_trained=trainer.current_epoch,
-                        training_duration_seconds=duration,
-                        num_parameters=sum(
-                            p.numel() for p in trainer.model.parameters()
-                        ),
-                        notes=request.notes,
-                    )
-                    db.add(model_record)
-                    db.commit()
-
-                    logger.info(f"Training complete: {version}")
-            finally:
-                db.close()
-
-        except Exception as e:
-            logger.error(f"Training failed: {e}", exc_info=True)
-
-    # Start background training
-    background_tasks.add_task(_train_background)
-
+    background_tasks.add_task(_train_background, request)
     return TrainResponse(
         status="success",
         message="Training started in background",

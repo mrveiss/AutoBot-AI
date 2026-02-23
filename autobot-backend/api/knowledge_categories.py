@@ -375,22 +375,9 @@ async def delete_category(
     - deleted_count: Number of categories deleted
     - facts_reassigned: Number of facts reassigned
     """
-    # Validate category_id format
-    category_id = category_id.strip()
-    if not _CATEGORY_ID_RE.match(category_id):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid category_id format: only alphanumeric, hyphens, underscores",
-        )
-
-    # Validate reassign_to if provided
-    if reassign_to:
-        reassign_to = reassign_to.strip()
-        if not _CATEGORY_ID_RE.match(reassign_to):
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid reassign_to format: only alphanumeric, hyphens, underscores",
-            )
+    category_id, reassign_to = _validate_delete_category_params(
+        category_id, reassign_to
+    )
 
     # Get knowledge base instance
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -415,14 +402,38 @@ async def delete_category(
             "facts_reassigned": result.get("facts_reassigned", 0),
             "message": result.get("message", "Category deleted successfully"),
         }
+    _raise_delete_category_error(result)
+
+
+def _validate_delete_category_params(
+    category_id: str, reassign_to: Optional[str]
+) -> tuple:
+    """Helper for delete_category. Ref: #1088."""
+    category_id = category_id.strip()
+    if not _CATEGORY_ID_RE.match(category_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid category_id format: only alphanumeric, hyphens, underscores",
+        )
+    if reassign_to:
+        reassign_to = reassign_to.strip()
+        if not _CATEGORY_ID_RE.match(reassign_to):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid reassign_to format: only alphanumeric, hyphens, underscores",
+            )
+    return category_id, reassign_to
+
+
+def _raise_delete_category_error(result: dict) -> None:
+    """Helper for delete_category. Ref: #1088."""
+    error_message = result.get("message", "Unknown error")
+    if "not found" in error_message.lower():
+        raise HTTPException(status_code=404, detail=error_message)
+    elif "has children" in error_message.lower():
+        raise HTTPException(status_code=409, detail=error_message)
     else:
-        error_message = result.get("message", "Unknown error")
-        if "not found" in error_message.lower():
-            raise HTTPException(status_code=404, detail=error_message)
-        elif "has children" in error_message.lower():
-            raise HTTPException(status_code=409, detail=error_message)
-        else:
-            raise HTTPException(status_code=400, detail=error_message)
+        raise HTTPException(status_code=400, detail=error_message)
 
 
 # ===== CATEGORY HIERARCHY OPERATIONS (Issue #411) =====

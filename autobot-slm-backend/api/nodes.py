@@ -566,6 +566,54 @@ async def get_node_detected_roles(
     )
 
 
+def _check_role_conflicts(
+    role_name: str,
+    existing_role: str,
+    candidate_ports: set,
+    hard_conflicts: set,
+    soft_warnings: set,
+    loader,
+) -> tuple:
+    """Helper for _run_preflight. Ref: #1088.
+
+    Evaluates a single existing_role against the candidate role and returns
+    (conflicts, warnings) lists for that pairing.
+    """
+    conflicts: list = []
+    warnings: list = []
+
+    if existing_role in hard_conflicts:
+        conflicts.append(
+            PreflightConflict(
+                kind="hard_conflict",
+                role=existing_role,
+                detail=f"{role_name} declares {existing_role} as a hard conflict",
+            )
+        )
+
+    existing_ports = set(loader.get_port_numbers(existing_role))
+    overlap = candidate_ports & existing_ports
+    if overlap:
+        conflicts.append(
+            PreflightConflict(
+                kind="port_conflict",
+                role=existing_role,
+                detail=f"Port(s) {sorted(overlap)} also used by {existing_role}",
+            )
+        )
+
+    if existing_role in soft_warnings:
+        warnings.append(
+            PreflightConflict(
+                kind="warning",
+                role=existing_role,
+                detail=f"{role_name} warns about coexisting with {existing_role}",
+            )
+        )
+
+    return conflicts, warnings
+
+
 async def _run_preflight(
     node_id: str, role_name: str, db: AsyncSession
 ) -> PreflightResult:
@@ -582,69 +630,88 @@ async def _run_preflight(
 
     if candidate is None:
         return PreflightResult(
-            allowed=True,
-            role_name=role_name,
-            node_id=node_id,
-            manifest_found=False,
+            allowed=True, role_name=role_name, node_id=node_id, manifest_found=False
         )
 
     candidate_ports = set(candidate.port_numbers())
     hard_conflicts = set(candidate.hard_conflicts())
     soft_warnings = set(candidate.coexistence.warns_with)
 
-    # Fetch roles currently assigned to this node
     existing_result = await db.execute(
         select(NodeRole).where(NodeRole.node_id == node_id)
     )
     existing_roles = [r.role_name for r in existing_result.scalars().all()]
 
-    conflicts: list = []
-    warnings: list = []
-
+    all_conflicts: list = []
+    all_warnings: list = []
     for existing_role in existing_roles:
         if existing_role == role_name:
             continue
-
-        # Hard manifest-defined conflict
-        if existing_role in hard_conflicts:
-            conflicts.append(
-                PreflightConflict(
-                    kind="hard_conflict",
-                    role=existing_role,
-                    detail=f"{role_name} declares {existing_role} as a hard conflict",
-                )
-            )
-
-        # Port collision
-        existing_ports = set(loader.get_port_numbers(existing_role))
-        overlap = candidate_ports & existing_ports
-        if overlap:
-            conflicts.append(
-                PreflightConflict(
-                    kind="port_conflict",
-                    role=existing_role,
-                    detail=f"Port(s) {sorted(overlap)} also used by {existing_role}",
-                )
-            )
-
-        # Soft warning
-        if existing_role in soft_warnings:
-            warnings.append(
-                PreflightConflict(
-                    kind="warning",
-                    role=existing_role,
-                    detail=f"{role_name} warns about coexisting with {existing_role}",
-                )
-            )
+        c, w = _check_role_conflicts(
+            role_name,
+            existing_role,
+            candidate_ports,
+            hard_conflicts,
+            soft_warnings,
+            loader,
+        )
+        all_conflicts.extend(c)
+        all_warnings.extend(w)
 
     return PreflightResult(
-        allowed=len(conflicts) == 0,
+        allowed=len(all_conflicts) == 0,
         role_name=role_name,
         node_id=node_id,
-        conflicts=conflicts,
-        warnings=warnings,
+        conflicts=all_conflicts,
+        warnings=all_warnings,
         manifest_found=True,
     )
+
+
+async def _upsert_node_role(
+    db: AsyncSession,
+    node_id: str,
+    role_request: NodeRoleAssignRequest,
+) -> NodeRoleResponse:
+    """Helper for assign_role_to_node. Ref: #1088.
+
+    Creates or updates the NodeRole record and returns the validated response.
+    """
+    role_result = await db.execute(
+        select(NodeRole).where(
+            NodeRole.node_id == node_id, NodeRole.role_name == role_request.role_name
+        )
+    )
+    existing = role_result.scalar_one_or_none()
+
+    if existing:
+        existing.assignment_type = role_request.assignment_type
+        await db.commit()
+        await db.refresh(existing)
+        logger.info(
+            "Updated role assignment: %s -> %s (%s)",
+            node_id,
+            role_request.role_name,
+            role_request.assignment_type,
+        )
+        return NodeRoleResponse.model_validate(existing)
+
+    node_role = NodeRole(
+        node_id=node_id,
+        role_name=role_request.role_name,
+        assignment_type=role_request.assignment_type,
+        status="not_installed",
+    )
+    db.add(node_role)
+    await db.commit()
+    await db.refresh(node_role)
+    logger.info(
+        "Assigned role to node: %s -> %s (%s)",
+        node_id,
+        role_request.role_name,
+        role_request.assignment_type,
+    )
+    return NodeRoleResponse.model_validate(node_role)
 
 
 @router.post("/{node_id}/detected-roles", response_model=NodeRoleResponse)
@@ -660,7 +727,6 @@ async def assign_role_to_node(
     Runs manifest pre-flight checks before assignment — rejects if hard
     port or coexistence conflicts are found.
     """
-    # Verify node exists
     result = await db.execute(select(Node).where(Node.node_id == node_id))
     node = result.scalar_one_or_none()
 
@@ -670,7 +736,6 @@ async def assign_role_to_node(
             detail="Node not found",
         )
 
-    # Manifest pre-flight check (Issue #926 Phase 3)
     preflight = await _run_preflight(node_id, role_request.role_name, db)
     if not preflight.allowed:
         conflict_details = "; ".join(c.detail for c in preflight.conflicts)
@@ -679,7 +744,6 @@ async def assign_role_to_node(
             detail=f"Role assignment blocked by pre-flight check: {conflict_details}",
         )
 
-    # Log warnings (soft conflicts allowed but flagged)
     for warn in preflight.warnings:
         logger.warning(
             "Role assignment warning %s -> %s: %s",
@@ -688,45 +752,50 @@ async def assign_role_to_node(
             warn.detail,
         )
 
-    # Check if role assignment already exists
-    role_result = await db.execute(
-        select(NodeRole).where(
-            NodeRole.node_id == node_id, NodeRole.role_name == role_request.role_name
-        )
-    )
-    existing = role_result.scalar_one_or_none()
+    return await _upsert_node_role(db, node_id, role_request)
 
-    if existing:
-        # Update assignment type to manual
-        existing.assignment_type = role_request.assignment_type
-        await db.commit()
-        await db.refresh(existing)
-        logger.info(
-            "Updated role assignment: %s -> %s (%s)",
-            node_id,
-            role_request.role_name,
-            role_request.assignment_type,
-        )
-        return NodeRoleResponse.model_validate(existing)
 
-    # Create new role assignment
-    node_role = NodeRole(
-        node_id=node_id,
-        role_name=role_request.role_name,
-        assignment_type=role_request.assignment_type,
-        status="not_installed",
+async def _execute_provision_playbook(
+    db: AsyncSession,
+    node_id: str,
+    node,
+    roles: list,
+    target_roles: list,
+) -> dict:
+    """Helper for provision_node_roles. Ref: #1088.
+
+    Runs deploy.yml playbook, updates role statuses, and returns result dict.
+    Raises HTTPException on playbook failure.
+    """
+    from services.playbook_executor import get_playbook_executor
+
+    # Use node_id (maps to slm_node_id in Ansible inventory) not hostname —
+    # hostname is user-editable and can drift from inventory host names (#921)
+    executor = get_playbook_executor()
+    result = await executor.execute_playbook(
+        playbook_name="deploy.yml",
+        limit=[node.node_id],
+        extra_vars={"target_roles": ",".join(target_roles)},
     )
-    db.add(node_role)
+
+    for role in roles:
+        role.status = "installed" if result["success"] else "failed"
     await db.commit()
-    await db.refresh(node_role)
 
-    logger.info(
-        "Assigned role to node: %s -> %s (%s)",
-        node_id,
-        role_request.role_name,
-        role_request.assignment_type,
+    if result["success"]:
+        logger.info("Provisioned roles %s on node %s", target_roles, node_id)
+        return {
+            "success": True,
+            "message": f"Provisioned {len(target_roles)} role(s) on {node.hostname}",
+            "roles": target_roles,
+            "output": result["output"][:500],
+        }
+
+    logger.error("Failed to provision node %s: %s", node_id, result["output"])
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Provisioning failed: {result['output'][:500]}",
     )
-    return NodeRoleResponse.model_validate(node_role)
 
 
 @router.post("/{node_id}/provision")
@@ -745,9 +814,6 @@ async def provision_node_roles(
 
     Uses deploy.yml playbook with --limit and --tags for targeted provisioning.
     """
-    from services.playbook_executor import get_playbook_executor
-
-    # Verify node exists
     result = await db.execute(select(Node).where(Node.node_id == node_id))
     node = result.scalar_one_or_none()
 
@@ -757,11 +823,9 @@ async def provision_node_roles(
             detail="Node not found",
         )
 
-    # Get assigned roles
     query = select(NodeRole).where(NodeRole.node_id == node_id)
     if role_names:
         query = query.where(NodeRole.role_name.in_(role_names))
-
     roles_result = await db.execute(query)
     roles = roles_result.scalars().all()
 
@@ -771,41 +835,12 @@ async def provision_node_roles(
             detail="No roles assigned to provision",
         )
 
-    # Extract role names and update status to installing
     target_roles = [r.role_name for r in roles]
     for role in roles:
         role.status = "installing"
     await db.commit()
 
-    # Execute deploy playbook
-    # Use node_id (maps to slm_node_id in Ansible inventory) not hostname —
-    # hostname is user-editable and can drift from inventory host names (#921)
-    executor = get_playbook_executor()
-    result = await executor.execute_playbook(
-        playbook_name="deploy.yml",
-        limit=[node.node_id],
-        extra_vars={"target_roles": ",".join(target_roles)},
-    )
-
-    # Update role status based on result
-    for role in roles:
-        role.status = "installed" if result["success"] else "failed"
-    await db.commit()
-
-    if result["success"]:
-        logger.info("Provisioned roles %s on node %s", target_roles, node_id)
-        return {
-            "success": True,
-            "message": f"Provisioned {len(target_roles)} role(s) on {node.hostname}",
-            "roles": target_roles,
-            "output": result["output"][:500],
-        }
-    else:
-        logger.error("Failed to provision node %s: %s", node_id, result["output"])
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Provisioning failed: {result['output'][:500]}",
-        )
+    return await _execute_provision_playbook(db, node_id, node, roles, target_roles)
 
 
 @router.delete("/{node_id}/detected-roles/{role_name}")
@@ -1062,58 +1097,19 @@ async def replace_node(
     return NodeResponse.model_validate(new_node)
 
 
-@router.post("/{node_id}/heartbeat", response_model=HeartbeatResponse)
-async def node_heartbeat(
-    node_id: str,
-    heartbeat: HeartbeatRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> HeartbeatResponse:
-    """Receive heartbeat from node agent."""
-    node = await reconciler_service.update_node_heartbeat(
-        db,
-        node_id,
-        heartbeat.cpu_percent,
-        heartbeat.memory_percent,
-        heartbeat.disk_percent,
-        heartbeat.agent_version,
-        heartbeat.os_info,
-        heartbeat.extra_data,
-    )
+async def _update_heartbeat_code_status(db: AsyncSession, node: Node) -> str | None:
+    """Query latest commit setting and update node.code_status.
 
-    if not node:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Node not found",
-        )
-
-    # Issue #889: Do NOT overwrite code_version from heartbeats
-    # Code version should only be updated by sync/deployment operations,
-    # not by agent heartbeats (agents report stale values before restart).
-    # Heartbeat code_version is used for status comparison only (see below).
-
-    # Process role report (Issue #779)
-    if heartbeat.role_report:
-        await _process_role_report(db, node_id, heartbeat.role_report)
-        # Update node's detected_roles and role_versions
-        node.detected_roles = list(heartbeat.role_report.keys())
-        node.role_versions = {
-            name: report.version
-            for name, report in heartbeat.role_report.items()
-            if report.version
-        }
-
-    # Store listening ports (Issue #779)
-    if heartbeat.listening_ports:
-        node.listening_ports = [p.model_dump() for p in heartbeat.listening_ports]
-
-    # Get latest agent code version from settings (Issue #741)
+    Returns the latest_version string or None.
+    Helper for node_heartbeat (Issue #1102).
+    """
     latest_result = await db.execute(
         select(Setting).where(Setting.key == "slm_agent_latest_commit")
     )
     latest_setting = latest_result.scalar_one_or_none()
     latest_version = latest_setting.value if latest_setting else None
 
-    # Compare node.code_version (DB, set by mark-synced) against latest (Issue #918)
+    # Compare node.code_version (DB, set by mark-synced) against latest (Issue #918).
     # Do NOT use heartbeat.code_version — agents report stale values (Issue #889).
     if latest_version:
         if node.code_version == latest_version:
@@ -1123,21 +1119,95 @@ async def node_heartbeat(
         else:
             node.code_status = CodeStatus.UNKNOWN.value
 
-    # Commit changes to database
-    await db.commit()
-    await db.refresh(node)
+    return latest_version
 
-    # Build and return HeartbeatResponse (Issue #741)
-    update_available = (
-        node.code_status == CodeStatus.OUTDATED.value and latest_version is not None
-    )
 
-    return HeartbeatResponse(
-        status="ok",
-        update_available=update_available,
-        latest_version=latest_version if update_available else None,
-        update_url=f"/api/nodes/{node_id}/code-package" if update_available else None,
-    )
+async def _apply_heartbeat_reports(
+    db: AsyncSession, node_id: str, heartbeat: HeartbeatRequest, node
+) -> None:
+    """Helper for node_heartbeat. Ref: #1088.
+
+    Applies role_report (soft failure) and listening_ports updates to node in-place.
+    Issue #779: role report failure must never break the broader heartbeat.
+    """
+    if heartbeat.role_report:
+        try:
+            await _process_role_report(db, node_id, heartbeat.role_report)
+            node.detected_roles = list(heartbeat.role_report.keys())
+            node.role_versions = {
+                name: report.version
+                for name, report in heartbeat.role_report.items()
+                if report.version
+            }
+        except Exception as role_exc:
+            logger.warning(
+                "heartbeat role_report failed node=%s error_type=%s error=%s",
+                node_id,
+                type(role_exc).__name__,
+                role_exc,
+            )
+
+    if heartbeat.listening_ports:
+        node.listening_ports = [p.model_dump() for p in heartbeat.listening_ports]
+
+
+@router.post("/{node_id}/heartbeat", response_model=HeartbeatResponse)
+async def node_heartbeat(
+    node_id: str,
+    heartbeat: HeartbeatRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> HeartbeatResponse:
+    """Receive heartbeat from node agent (#1102: exception handling added)."""
+    try:
+        node = await reconciler_service.update_node_heartbeat(
+            db,
+            node_id,
+            heartbeat.cpu_percent,
+            heartbeat.memory_percent,
+            heartbeat.disk_percent,
+            heartbeat.agent_version,
+            heartbeat.os_info,
+            heartbeat.extra_data,
+        )
+
+        if not node:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Node not found",
+            )
+
+        await _apply_heartbeat_reports(db, node_id, heartbeat, node)
+
+        latest_version = await _update_heartbeat_code_status(db, node)
+        await db.commit()
+        await db.refresh(node)
+
+        update_available = (
+            node.code_status == CodeStatus.OUTDATED.value and latest_version is not None
+        )
+        return HeartbeatResponse(
+            status="ok",
+            update_available=update_available,
+            latest_version=latest_version if update_available else None,
+            update_url=(
+                f"/api/nodes/{node_id}/code-package" if update_available else None
+            ),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        exc_type = type(exc).__name__
+        logger.error(
+            "heartbeat processing failed node=%s error_type=%s error=%s",
+            node_id,
+            exc_type,
+            exc,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Heartbeat processing failed: {exc_type}",
+        )
 
 
 class NodeHealthResponse(BaseModel):
@@ -1291,6 +1361,56 @@ async def resume_node(
     return NodeResponse.model_validate(node)
 
 
+async def _emit_reboot_event(db: AsyncSession, node_id: str, node) -> None:
+    """Helper for reboot_node. Ref: #1088.
+
+    Persists the reboot-initiated event and broadcasts the lifecycle WebSocket message.
+    """
+    await _create_node_event(
+        db,
+        node_id,
+        EventType.MANUAL_ACTION,
+        EventSeverity.WARNING,
+        f"Reboot initiated for {node.hostname}",
+        {"action": "reboot", "initiated_by": "api"},
+    )
+    await db.commit()
+    await _broadcast_lifecycle_event(
+        node_id,
+        "reboot_initiated",
+        {"hostname": node.hostname, "ip_address": node.ip_address},
+    )
+
+
+async def _execute_reboot_playbook(node_id: str, node) -> dict:
+    """Helper for reboot_node. Ref: #1088.
+
+    Runs reboot-node.yml playbook and returns the success response dict.
+    Raises HTTPException on playbook failure.
+    """
+    from services.playbook_executor import get_playbook_executor
+
+    executor = get_playbook_executor()
+    result = await executor.execute_playbook(
+        playbook_name="reboot-node.yml",
+        limit=[node.node_id],
+    )
+
+    if result["success"]:
+        logger.info("Reboot completed for node %s (%s)", node_id, node.ip_address)
+        return {
+            "success": True,
+            "message": f"Reboot completed for {node.hostname}. Node is back online.",
+            "node_id": node_id,
+        }
+
+    logger.error("Failed to reboot node %s: %s", node_id, result["output"])
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Failed to reboot node: {result['output'][:500]}",
+    )
+
+
 @router.post("/{node_id}/reboot")
 async def reboot_node(
     node_id: str,
@@ -1318,46 +1438,8 @@ async def reboot_node(
             detail="Cannot reboot an offline node",
         )
 
-    # Create reboot event before issuing command
-    await _create_node_event(
-        db,
-        node_id,
-        EventType.MANUAL_ACTION,
-        EventSeverity.WARNING,
-        f"Reboot initiated for {node.hostname}",
-        {"action": "reboot", "initiated_by": "api"},
-    )
-    await db.commit()
-
-    # Broadcast lifecycle event via WebSocket
-    await _broadcast_lifecycle_event(
-        node_id,
-        "reboot_initiated",
-        {"hostname": node.hostname, "ip_address": node.ip_address},
-    )
-
-    # Execute reboot via Ansible playbook
-    from services.playbook_executor import get_playbook_executor
-
-    executor = get_playbook_executor()
-    result = await executor.execute_playbook(
-        playbook_name="reboot-node.yml",
-        limit=[node.node_id],
-    )
-
-    if result["success"]:
-        logger.info("Reboot completed for node %s (%s)", node_id, node.ip_address)
-        return {
-            "success": True,
-            "message": f"Reboot completed for {node.hostname}. Node is back online.",
-            "node_id": node_id,
-        }
-    else:
-        logger.error("Failed to reboot node %s: %s", node_id, result["output"])
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to reboot node: {result['output'][:500]}",
-        )
+    await _emit_reboot_event(db, node_id, node)
+    return await _execute_reboot_playbook(node_id, node)
 
 
 @router.post("/{node_id}/acknowledge-remediation")
@@ -1863,9 +1945,9 @@ async def apply_node_updates(
     logger.info("Applied %d updates to node %s", len(applied), node_id)
     return UpdateApplyResponse(
         success=len(failed) == 0,
-        message=f"Applied {len(applied)} update(s)"
-        if applied
-        else "No updates applied",
+        message=(
+            f"Applied {len(applied)} update(s)" if applied else "No updates applied"
+        ),
         applied_updates=applied,
         failed_updates=failed,
     )

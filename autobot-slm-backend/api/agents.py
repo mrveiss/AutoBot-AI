@@ -12,13 +12,9 @@ import logging
 from typing import Optional
 
 from api.websocket import ws_manager
+from config import settings
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
-from config import settings
 from models.database import Agent
 from models.schemas import (
     AgentCreateRequest,
@@ -29,6 +25,9 @@ from models.schemas import (
 )
 from services.auth import get_current_user
 from services.database import get_db
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -184,6 +183,31 @@ async def get_agent_llm_config(
     )
 
 
+async def _clear_default_agents(db: AsyncSession) -> None:
+    """Helper for create_agent and update_agent. Ref: #1088."""
+    current_default_result = await db.execute(
+        select(Agent).where(Agent.is_default.is_(True))
+    )
+    for default_agent in current_default_result.scalars():
+        default_agent.is_default = False
+
+
+async def _broadcast_agent_event(event_type: str, agent: Agent) -> None:
+    """Helper for create_agent and update_agent. Ref: #1088."""
+    await ws_manager.broadcast(
+        "events:global",
+        {
+            "type": event_type,
+            "data": {
+                "agent_id": agent.agent_id,
+                "name": agent.name,
+                "llm_provider": agent.llm_provider,
+                "is_default": agent.is_default,
+            },
+        },
+    )
+
+
 @router.post("", response_model=AgentResponse, status_code=status.HTTP_201_CREATED)
 async def create_agent(
     request: AgentCreateRequest,
@@ -191,7 +215,6 @@ async def create_agent(
     _: Annotated[dict, Depends(get_current_user)],
 ) -> AgentResponse:
     """Create a new agent."""
-    # Check if agent_id already exists
     result = await db.execute(select(Agent).where(Agent.agent_id == request.agent_id))
     if result.scalar_one_or_none():
         raise HTTPException(
@@ -199,25 +222,13 @@ async def create_agent(
             detail=f"Agent with ID '{request.agent_id}' already exists",
         )
 
-    # If setting as default, unset other defaults
     if request.is_default:
-        await db.execute(
-            select(Agent)
-            .where(Agent.is_default.is_(True))
-            .execution_options(synchronize_session=False)
-        )
-        current_default_result = await db.execute(
-            select(Agent).where(Agent.is_default.is_(True))
-        )
-        for default_agent in current_default_result.scalars():
-            default_agent.is_default = False
+        await _clear_default_agents(db)
 
-    # Encrypt API key if provided
-    encrypted_key = None
-    if request.llm_api_key:
-        encrypted_key = _encrypt_api_key(request.llm_api_key)
+    encrypted_key = (
+        _encrypt_api_key(request.llm_api_key) if request.llm_api_key else None
+    )
 
-    # Create agent
     agent = Agent(
         agent_id=request.agent_id,
         name=request.name,
@@ -242,50 +253,13 @@ async def create_agent(
         agent.name,
         agent.llm_provider,
     )
-
-    # Broadcast agent creation via WebSocket
-    await ws_manager.broadcast(
-        "events:global",
-        {
-            "type": "agent_created",
-            "data": {
-                "agent_id": agent.agent_id,
-                "name": agent.name,
-                "llm_provider": agent.llm_provider,
-                "is_default": agent.is_default,
-            },
-        },
-    )
+    await _broadcast_agent_event("agent_created", agent)
 
     return AgentResponse.model_validate(agent)
 
 
-@router.put("/{agent_id}", response_model=AgentResponse)
-async def update_agent(
-    agent_id: str,
-    request: AgentUpdateRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
-) -> AgentResponse:
-    """Update an existing agent."""
-    result = await db.execute(select(Agent).where(Agent.agent_id == agent_id))
-    agent = result.scalar_one_or_none()
-
-    if not agent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Agent not found",
-        )
-
-    # If setting as default, unset other defaults
-    if request.is_default is True and not agent.is_default:
-        current_default_result = await db.execute(
-            select(Agent).where(Agent.is_default.is_(True))
-        )
-        for default_agent in current_default_result.scalars():
-            default_agent.is_default = False
-
-    # Update fields
+def _apply_agent_update_fields(agent: Agent, request: AgentUpdateRequest) -> None:
+    """Helper for update_agent. Ref: #1088."""
     if request.name is not None:
         agent.name = request.name
     if request.description is not None:
@@ -306,29 +280,37 @@ async def update_agent(
         agent.is_default = request.is_default
     if request.is_active is not None:
         agent.is_active = request.is_active
-
-    # Update API key if provided
     if request.llm_api_key is not None:
         agent.llm_api_key_encrypted = _encrypt_api_key(request.llm_api_key)
+
+
+@router.put("/{agent_id}", response_model=AgentResponse)
+async def update_agent(
+    agent_id: str,
+    request: AgentUpdateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> AgentResponse:
+    """Update an existing agent."""
+    result = await db.execute(select(Agent).where(Agent.agent_id == agent_id))
+    agent = result.scalar_one_or_none()
+
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent not found",
+        )
+
+    if request.is_default is True and not agent.is_default:
+        await _clear_default_agents(db)
+
+    _apply_agent_update_fields(agent, request)
 
     await db.commit()
     await db.refresh(agent)
 
     logger.info("Updated agent %s (%s)", agent.agent_id, agent.name)
-
-    # Broadcast agent config change via WebSocket
-    await ws_manager.broadcast(
-        "events:global",
-        {
-            "type": "agent_config_changed",
-            "data": {
-                "agent_id": agent.agent_id,
-                "name": agent.name,
-                "llm_provider": agent.llm_provider,
-                "is_default": agent.is_default,
-            },
-        },
-    )
+    await _broadcast_agent_event("agent_config_changed", agent)
 
     return AgentResponse.model_validate(agent)
 

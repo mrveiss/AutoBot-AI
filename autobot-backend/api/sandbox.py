@@ -82,16 +82,8 @@ async def execute_command(
     try:
         logger.info("Sandbox execution request: %s...", request.command[:50])
 
-        # Validate security level
-        try:
-            security_level = SandboxSecurityLevel(request.security_level)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid security level. Must be one of: {[level.value for level in SandboxSecurityLevel]}",
-            )
-
-        # Create sandbox configuration
+        # Validate security level and build config
+        security_level = _validate_security_level(request.security_level)
         config = SandboxConfig(
             security_level=security_level,
             execution_mode=SandboxExecutionMode(request.execution_mode),
@@ -101,26 +93,14 @@ async def execute_command(
         )
 
         # Get sandbox instance with lazy initialization
-        sandbox = get_secure_sandbox()
-        if sandbox is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Secure sandbox unavailable - command execution blocked for security",
-            )
+        sandbox = _get_sandbox_or_raise(
+            "Secure sandbox unavailable - command execution blocked for security"
+        )
 
         # Execute command
         result = await sandbox.execute_command(request.command, config)
+        data = _build_execution_result_data(result)
 
-        data = {
-            "exit_code": result.exit_code,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "execution_time": result.execution_time,
-            "container_id": result.container_id,
-            "security_events": result.security_events,
-            "resource_usage": result.resource_usage,
-            "metadata": result.metadata,
-        }
         if result.success:
             return success_response(data=data, message="Command executed successfully")
         return error_response(
@@ -161,16 +141,8 @@ async def execute_script(
     try:
         logger.info("Sandbox script execution: %s", request.language)
 
-        # Validate security level
-        try:
-            security_level = SandboxSecurityLevel(request.security_level)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid security level. Must be one of: {[level.value for level in SandboxSecurityLevel]}",
-            )
-
-        # Create sandbox configuration
+        # Validate security level and build config
+        security_level = _validate_security_level(request.security_level)
         config = SandboxConfig(
             security_level=security_level,
             execution_mode=SandboxExecutionMode.SCRIPT,
@@ -180,28 +152,16 @@ async def execute_script(
         )
 
         # Get sandbox instance with lazy initialization
-        sandbox = get_secure_sandbox()
-        if sandbox is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Secure sandbox unavailable - script execution blocked for security",
-            )
+        sandbox = _get_sandbox_or_raise(
+            "Secure sandbox unavailable - script execution blocked for security"
+        )
 
         # Execute script
         result = await sandbox.execute_script(
             request.script_content, request.language, config
         )
+        data = _build_execution_result_data(result)
 
-        data = {
-            "exit_code": result.exit_code,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "execution_time": result.execution_time,
-            "container_id": result.container_id,
-            "security_events": result.security_events,
-            "resource_usage": result.resource_usage,
-            "metadata": result.metadata,
-        }
         if result.success:
             return success_response(data=data, message="Script executed successfully")
         return error_response(
@@ -258,12 +218,9 @@ async def execute_batch(
         )
 
         # Get sandbox instance with lazy initialization
-        sandbox = get_secure_sandbox()
-        if sandbox is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Secure sandbox unavailable - batch execution blocked for security",
-            )
+        sandbox = _get_sandbox_or_raise(
+            "Secure sandbox unavailable - batch execution blocked for security"
+        )
 
         # Execute as script
         result = await sandbox.execute_script(script_content, "bash", config)
@@ -287,8 +244,8 @@ async def execute_batch(
         )
 
 
-def _validate_batch_security_level(security_level_str: str) -> SandboxSecurityLevel:
-    """Validate and parse security level (Issue #665: extracted helper)."""
+def _validate_security_level(security_level_str: str) -> SandboxSecurityLevel:
+    """Helper for execute_command/execute_script/execute_batch. Ref: #1088."""
     try:
         return SandboxSecurityLevel(security_level_str)
     except ValueError:
@@ -296,6 +253,33 @@ def _validate_batch_security_level(security_level_str: str) -> SandboxSecurityLe
             status_code=400,
             detail=f"Invalid security level. Must be one of: {[level.value for level in SandboxSecurityLevel]}",
         )
+
+
+def _get_sandbox_or_raise(detail: str):
+    """Helper for execute_command/execute_script/execute_batch. Ref: #1088."""
+    sandbox = get_secure_sandbox()
+    if sandbox is None:
+        raise HTTPException(status_code=503, detail=detail)
+    return sandbox
+
+
+def _build_execution_result_data(result: Any) -> Dict[str, Any]:
+    """Helper for execute_command/execute_script. Ref: #1088."""
+    return {
+        "exit_code": result.exit_code,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "execution_time": result.execution_time,
+        "container_id": result.container_id,
+        "security_events": result.security_events,
+        "resource_usage": result.resource_usage,
+        "metadata": result.metadata,
+    }
+
+
+def _validate_batch_security_level(security_level_str: str) -> SandboxSecurityLevel:
+    """Validate and parse security level (Issue #665: extracted helper)."""
+    return _validate_security_level(security_level_str)
 
 
 def _build_batch_script(commands: List[str], stop_on_error: bool) -> str:
@@ -491,7 +475,7 @@ async def get_sandbox_examples(
                         "commands": [
                             "echo 'Starting batch execution'",
                             "ls -la /sandbox",
-                            "python3 -c 'print(\"Python is available\")'",
+                            "python3 -c 'print(\"Python is available\")'",  # noqa: print
                             "echo 'Batch completed'",
                         ],
                         "security_level": "high",

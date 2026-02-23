@@ -100,9 +100,9 @@ class AgentTask:
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat()
-            if self.completed_at
-            else None,
+            "completed_at": (
+                self.completed_at.isoformat() if self.completed_at else None
+            ),
             "error": self.error,
         }
 
@@ -164,25 +164,29 @@ class StepResult:
             "total_steps": self.total_steps,
             "status": self.status.value,
             "command": self.command,
-            "command_explanation": {
-                "summary": self.command_explanation.summary,
-                "breakdown": [
-                    {"part": p.part, "explanation": p.explanation}
-                    for p in self.command_explanation.breakdown
-                ],
-                "security_notes": self.command_explanation.security_notes,
-            }
-            if self.command_explanation
-            else None,
+            "command_explanation": (
+                {
+                    "summary": self.command_explanation.summary,
+                    "breakdown": [
+                        {"part": p.part, "explanation": p.explanation}
+                        for p in self.command_explanation.breakdown
+                    ],
+                    "security_notes": self.command_explanation.security_notes,
+                }
+                if self.command_explanation
+                else None
+            ),
             "output": self.output,
-            "output_explanation": {
-                "summary": self.output_explanation.summary,
-                "key_findings": self.output_explanation.key_findings,
-                "details": self.output_explanation.details,
-                "next_steps": self.output_explanation.next_steps,
-            }
-            if self.output_explanation
-            else None,
+            "output_explanation": (
+                {
+                    "summary": self.output_explanation.summary,
+                    "key_findings": self.output_explanation.key_findings,
+                    "details": self.output_explanation.details,
+                    "next_steps": self.output_explanation.next_steps,
+                }
+                if self.output_explanation
+                else None
+            ),
             "return_code": self.return_code,
             "execution_time": self.execution_time,
             "error": self.error,

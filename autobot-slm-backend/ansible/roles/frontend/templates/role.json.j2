@@ -1,0 +1,15 @@
+{
+  "role": "frontend",
+  "version": "{{ frontend_version | default(git_commit) | default('unknown') }}",
+  "deploy_path": "{{ frontend_install_dir }}/autobot-frontend",
+  "service": "autobot-frontend",
+  "ansible_playbook": "deploy-frontend.yml",
+  "build_steps": [
+    "npm install",
+    "npm run build"
+  ],
+  "depends_on": [],
+  "required": true,
+  "degraded_without": [],
+  "deployed_at": "{{ ansible_date_time.iso8601 }}"
+}

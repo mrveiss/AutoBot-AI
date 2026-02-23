@@ -6,11 +6,11 @@ import logging
 import os
 import tempfile
 
+from backend.services.tts_client import get_tts_client
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from backend.services.tts_client import get_tts_client
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

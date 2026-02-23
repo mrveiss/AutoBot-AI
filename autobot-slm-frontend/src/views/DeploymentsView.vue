@@ -9,7 +9,8 @@
  * Unified view for standard and blue-green deployments (Issue #726).
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
@@ -20,9 +21,18 @@ const logger = createLogger('DeploymentsView')
 const api = useSlmApi()
 const ws = useSlmWebSocket()
 const fleetStore = useFleetStore()
+const route = useRoute()
+const router = useRouter()
 
-// Active tab
-const activeTab = ref<'standard' | 'blue-green'>('standard')
+// Active tab — route-based
+type DeployTab = 'standard' | 'blue-green'
+function resolveTab(param: unknown): DeployTab {
+  return param === 'blue-green' ? 'blue-green' : 'standard'
+}
+const activeTab = computed(() => resolveTab(route.params.tab))
+function navigateToTab(tab: DeployTab): void {
+  router.push({ name: 'deployments', params: { tab } })
+}
 
 // ===== STANDARD DEPLOYMENTS STATE =====
 const deployments = ref<Deployment[]>([])
@@ -617,6 +627,7 @@ function getNodeHostname(nodeId: string): string {
       <div class="flex items-center gap-3">
         <button
           @click="activeTab === 'standard' ? fetchDeployments() : fetchBgDeployments()"
+
           :disabled="isLoading || isLoadingBg"
           class="btn btn-secondary flex items-center gap-2"
         >
@@ -662,7 +673,7 @@ function getNodeHostname(nodeId: string): string {
     <div class="border-b border-gray-200 mb-6">
       <nav class="flex gap-8">
         <button
-          @click="activeTab = 'standard'"
+          @click="navigateToTab('standard')"
           :class="[
             'py-4 px-1 text-sm font-medium border-b-2 transition-colors',
             activeTab === 'standard'
@@ -676,7 +687,7 @@ function getNodeHostname(nodeId: string): string {
           </span>
         </button>
         <button
-          @click="activeTab = 'blue-green'"
+          @click="navigateToTab('blue-green')"
           :class="[
             'py-4 px-1 text-sm font-medium border-b-2 transition-colors',
             activeTab === 'blue-green'

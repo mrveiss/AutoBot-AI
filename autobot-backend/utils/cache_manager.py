@@ -198,6 +198,38 @@ class CacheManager:
 cache_manager = CacheManager()
 
 
+def _extract_request_from_call(args, kwargs) -> Optional[Request]:
+    """Helper for cache_response. Ref: #1088.
+
+    Finds and returns the FastAPI Request object from positional or
+    keyword arguments, or None if not present.
+    """
+    for value in kwargs.values():
+        if isinstance(value, Request):
+            return value
+    for arg in args:
+        if isinstance(arg, Request):
+            return arg
+    return None
+
+
+def _resolve_cache_key(
+    cache_key: Optional[str], request: Optional[Request], func, kwargs
+) -> str:
+    """Helper for cache_response. Ref: #1088.
+
+    Derives the cache key from an explicit key, the request path+params,
+    or a hash of the function name and keyword arguments.
+    """
+    if cache_key:
+        return cache_key
+    if request:
+        query_hash = hash(str(sorted(request.query_params.items())))
+        return f"endpoint:{request.url.path}:{query_hash}"
+    params_hash = hash(str(sorted(kwargs.items())))
+    return f"func:{func.__name__}:{params_hash}"
+
+
 # FastAPI 0.115.9 compatible decorator for caching API responses
 def cache_response(cache_key: str = None, ttl: int = 300):
     """
@@ -214,33 +246,8 @@ def cache_response(cache_key: str = None, ttl: int = 300):
         @functools.wraps(func)  # Preserve function signature for FastAPI
         async def wrapper(*args, **kwargs):
             """Async wrapper with cache lookup before execution and cache storage after."""
-            # Extract request object from FastAPI dependency injection
-            request = None
-
-            # Check for Request object in kwargs (FastAPI dependency injection)
-            for key, value in kwargs.items():
-                if isinstance(value, Request):
-                    request = value
-                    break
-
-            # Fallback: check args for Request object
-            if not request:
-                for arg in args:
-                    if isinstance(arg, Request):
-                        request = arg
-                        break
-
-            # Generate cache key based on request or function
-            if cache_key:
-                key = cache_key
-            elif request:
-                # Include query parameters in cache key for uniqueness
-                query_hash = hash(str(sorted(request.query_params.items())))
-                key = f"endpoint:{request.url.path}:{query_hash}"
-            else:
-                # Fallback for non-HTTP endpoints
-                params_hash = hash(str(sorted(kwargs.items())))
-                key = f"func:{func.__name__}:{params_hash}"
+            request = _extract_request_from_call(args, kwargs)
+            key = _resolve_cache_key(cache_key, request, func, kwargs)
 
             # Try to get from cache first
             try:
