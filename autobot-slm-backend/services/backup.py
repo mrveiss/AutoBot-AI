@@ -15,11 +15,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from config import settings
 from models.database import Backup, BackupStatus, Node
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
@@ -36,29 +35,32 @@ class BackupService:
         # Ensure backup directory exists
         BACKUP_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
+    async def _mark_backup_in_progress(
+        self, db: AsyncSession, backup_id: str
+    ) -> Optional["Backup"]:
+        """Mark backup as in_progress and return record. Helper for execute_redis_backup. Ref: #1088."""
+        result = await db.execute(select(Backup).where(Backup.backup_id == backup_id))
+        backup = result.scalar_one_or_none()
+        if backup:
+            backup.status = BackupStatus.IN_PROGRESS.value
+            backup.started_at = datetime.utcnow()
+            await db.commit()
+        return backup
+
     async def execute_redis_backup(
         self,
         db: AsyncSession,
         backup_id: str,
         node: Node,
     ) -> Tuple[bool, str]:
-        """Execute a Redis backup with BGSAVE and checksum verification.
-
-        Returns (success, message).
-        """
+        """Execute a Redis backup with BGSAVE and checksum verification. Ref: #1088."""
         host = node.ip_address
         ssh_user = node.ssh_user or "autobot"
         ssh_port = node.ssh_port or 22
 
-        # Update backup status to in_progress
-        result = await db.execute(select(Backup).where(Backup.backup_id == backup_id))
-        backup = result.scalar_one_or_none()
+        backup = await self._mark_backup_in_progress(db, backup_id)
         if not backup:
             return False, "Backup not found"
-
-        backup.status = BackupStatus.IN_PROGRESS.value
-        backup.started_at = datetime.utcnow()
-        await db.commit()
 
         try:
             # Step 1: Discover Redis configuration (data dir, auth)
