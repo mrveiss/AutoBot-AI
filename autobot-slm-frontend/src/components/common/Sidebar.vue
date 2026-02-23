@@ -280,6 +280,10 @@ onUnmounted(() => {
               <svg v-else-if="item.icon === 'tools'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0-5.758a3 3 0 10-4.243-4.243 3 3 0 004.243 4.243z" />
               </svg>
+              <!-- Issue #731: Skills icon (lightning bolt / sparkle) -->
+              <svg v-else-if="item.icon === 'skills'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
             </span>
             <span class="flex-1 text-left">{{ item.name }}</span>
             <!-- Issue #741: Badge for Code Sync updates -->
