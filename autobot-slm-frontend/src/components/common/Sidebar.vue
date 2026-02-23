@@ -31,23 +31,19 @@ const CODE_SYNC_POLL_INTERVAL = 60000
 let codeSyncPollTimer: ReturnType<typeof setInterval> | null = null
 
 const navItems = [
-  { name: 'Fleet Overview', path: '/', icon: 'grid' },
+  { name: 'Fleet Overview', path: '/fleet', icon: 'grid' },
   // Issue #850: Consolidated Services and Roles into Orchestration
   { name: 'Orchestration', path: '/orchestration', icon: 'orchestration' },
   { name: 'Deployments', path: '/deployments', icon: 'rocket' },
-  // Issue #786: Infrastructure setup wizard
-  { name: 'Infrastructure', path: '/infrastructure', icon: 'infra' },
   { name: 'Backups', path: '/backups', icon: 'database' },
   { name: 'Replication', path: '/replications', icon: 'replicate' },
   { name: 'Code Sync', path: '/code-sync', icon: 'download', showBadge: true },
-  // Issue #760: Agent LLM configuration management
-  { name: 'Agent Config', path: '/agent-config', icon: 'agents' },
+  // Issue #760: Agents — local + external (merged)
+  { name: 'Agents', path: '/agents', icon: 'agents' },
   // Issue #840: Updates management page
   { name: 'Updates', path: '/updates', icon: 'updates' },
   // Issue #731: Skills system management
   { name: 'Skills', path: '/skills', icon: 'skills' },
-  // Issue #963: External A2A Agent Registry
-  { name: 'External Agents', path: '/external-agents', icon: 'agents' },
   { name: 'Maintenance', path: '/maintenance', icon: 'wrench' },
   { name: 'Settings', path: '/settings', icon: 'cog' },
   { name: 'Performance', path: '/performance', icon: 'performance' },
@@ -57,6 +53,14 @@ const navItems = [
 ]
 
 const currentPath = computed(() => route.path)
+
+/**
+ * Check if a nav item is active, supporting :tab? subroutes.
+ */
+function isItemActive(itemPath: string): boolean {
+  const cp = currentPath.value
+  return cp === itemPath || cp.startsWith(itemPath + '/')
+}
 
 const healthClass = computed(() => {
   switch (fleetStore.overallHealth) {
@@ -200,12 +204,12 @@ onUnmounted(() => {
             @click="navigate(item.path)"
             @keydown="handleNavKeydown($event, index)"
             :data-nav-index="index"
-            :aria-current="currentPath === item.path ? 'page' : undefined"
+            :aria-current="isItemActive(item.path) ? 'page' : undefined"
             role="menuitem"
-            :tabindex="currentPath === item.path ? 0 : -1"
+            :tabindex="isItemActive(item.path) ? 0 : -1"
             :class="[
               'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors',
-              currentPath === item.path
+              isItemActive(item.path)
                 ? 'bg-primary-600 text-white'
                 : 'text-gray-300 hover:bg-gray-800 hover:text-white'
             ]"
