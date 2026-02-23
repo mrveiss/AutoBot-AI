@@ -18,7 +18,9 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('usePersonality')
 
-const API_BASE = '/autobot-api/personality'
+// Issue #1145: Route through SLM backend proxy (validates SLM JWT + forwards to main backend).
+// Using /autobot-api/personality caused JWT mismatch since SLM tokens are unknown to main backend.
+const API_BASE = '/api/personality'
 
 export interface ProfileSummary {
   id: string
