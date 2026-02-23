@@ -213,6 +213,8 @@ const roleFormData = ref({
   health_check_path: '',
   pre_sync_cmd: '',
   post_sync_cmd: '',
+  required: false,
+  degraded_without: '',
 })
 
 // =============================================================================
@@ -230,6 +232,15 @@ const migrationResult = ref<{
   message: string
   details: Array<{ node_id: string; success: boolean; message: string }>
 } | null>(null)
+
+// =============================================================================
+// Role data: per-node detected roles cache (Issue #1129)
+// =============================================================================
+
+// Use reactive Record so Vue tracks property additions
+const nodeRolesCache = reactive<Record<string, NodeRolesInfo>>({})
+const loadingRolesForNode = reactive<Record<string, boolean>>({})
+const playbookMigrateResult = ref<PlaybookMigrateResult | null>(null)
 
 // =============================================================================
 // Tab 5: Infrastructure Overview State
