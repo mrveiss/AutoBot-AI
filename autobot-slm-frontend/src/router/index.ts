@@ -91,11 +91,20 @@ const router = createRouter({
       meta: { title: 'Code Sync' }
     },
     {
-      // Issue #760: Agent LLM configuration management
-      path: '/agent-config',
-      name: 'agent-config',
+      // Issue #760: Agent management - local + external agents
+      path: '/agents/:tab?',
+      name: 'agents',
       component: () => import('@/views/AgentsView.vue'),
-      meta: { title: 'Agent Configuration' }
+      meta: { title: 'Agents' },
+      beforeEnter: (to) => {
+        if (!to.params.tab) {
+          return { name: 'agents', params: { tab: 'local-agents' }, replace: true }
+        }
+      },
+    },
+    {
+      path: '/agent-config',
+      redirect: '/agents/local-agents',
     },
     {
       // Issue #786: Infrastructure moved to Fleet Overview infrastructure tab
@@ -328,23 +337,31 @@ const router = createRouter({
     },
     {
       // Issue #731: Skills system management
-      path: '/skills',
+      path: '/skills/:tab?',
       name: 'skills',
       component: () => import('@/views/SkillsView.vue'),
-      meta: { title: 'Skills' }
+      meta: { title: 'Skills' },
+      beforeEnter: (to) => {
+        if (!to.params.tab) {
+          return { name: 'skills', params: { tab: 'active' }, replace: true }
+        }
+      },
     },
     {
-      // Issue #963: External A2A Agent Registry
+      // Issue #963: External agents moved to /agents/external-agents
       path: '/external-agents',
-      name: 'external-agents',
-      component: () => import('@/views/ExternalAgentsView.vue'),
-      meta: { title: 'External Agents' }
+      redirect: '/agents/external-agents',
     },
     {
-      path: '/security',
+      path: '/security/:tab?',
       name: 'security',
       component: () => import('@/views/SecurityView.vue'),
-      meta: { title: 'Security Analytics' }
+      meta: { title: 'Security Analytics' },
+      beforeEnter: (to) => {
+        if (!to.params.tab) {
+          return { name: 'security', params: { tab: 'overview' }, replace: true }
+        }
+      },
     },
     {
       path: '/tools',
