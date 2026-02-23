@@ -78,6 +78,82 @@
   become: yes
   tags: ['slm_agent', 'node_exporter']
 
+# ── Hardware-specific textfile collector remediation (#1147) ──────────────────
+# Mask collectors whose required hardware is absent to prevent failed-service
+# noise in the SLM fleet-health dashboard.  All checks use failed_when: false
+# so missing packages on already-clean nodes are silently skipped.
+
+- name: "Node Exporter | Detect IPMI device"
+  ansible.builtin.stat:
+    path: /dev/ipmi0
+  register: _ne_ipmi_device
+  tags: ['slm_agent', 'node_exporter', 'collectors']
+
+- name: "Node Exporter | Detect Mellanox InfiniBand directory"
+  ansible.builtin.find:
+    paths: /sys/class/infiniband
+    file_type: any
+  register: _ne_infiniband_devices
+  failed_when: false
+  tags: ['slm_agent', 'node_exporter', 'collectors']
+
+- name: "Node Exporter | Detect NVMe block devices"
+  ansible.builtin.find:
+    paths: /dev
+    patterns: "nvme[0-9]*"
+    file_type: any
+  register: _ne_nvme_devices
+  tags: ['slm_agent', 'node_exporter', 'collectors']
+
+- name: "Node Exporter | Detect smartctl availability"
+  ansible.builtin.command: which smartctl
+  register: _ne_smartctl
+  changed_when: false
+  failed_when: false
+  tags: ['slm_agent', 'node_exporter', 'collectors']
+
+- name: "Node Exporter | Mask IPMI sensor collector (no IPMI hardware)"
+  ansible.builtin.systemd:
+    name: prometheus-node-exporter-ipmitool-sensor
+    masked: true
+    daemon_reload: true
+  become: yes
+  when: not _ne_ipmi_device.stat.exists
+  failed_when: false
+  tags: ['slm_agent', 'node_exporter', 'collectors']
+
+- name: "Node Exporter | Mask Mellanox HCA temp collector (no Mellanox NIC)"
+  ansible.builtin.systemd:
+    name: prometheus-node-exporter-mellanox-hca-temp
+    masked: true
+    daemon_reload: true
+  become: yes
+  when: _ne_infiniband_devices.files | default([]) | length == 0
+  failed_when: false
+  tags: ['slm_agent', 'node_exporter', 'collectors']
+
+- name: "Node Exporter | Mask NVMe collector (no NVMe devices)"
+  ansible.builtin.systemd:
+    name: prometheus-node-exporter-nvme
+    masked: true
+    daemon_reload: true
+  become: yes
+  when: _ne_nvme_devices.files | length == 0
+  failed_when: false
+  tags: ['slm_agent', 'node_exporter', 'collectors']
+
+- name: "Node Exporter | Mask smartmon collector (smartctl absent)"
+  ansible.builtin.systemd:
+    name: prometheus-node-exporter-smartmon
+    masked: true
+    daemon_reload: true
+  become: yes
+  when: _ne_smartctl.rc != 0
+  failed_when: false
+  tags: ['slm_agent', 'node_exporter', 'collectors']
+
+# ─────────────────────────────────────────────────────────────────────────────
+
 - name: "Node Exporter | Check if UFW is installed"
   ansible.builtin.command: which ufw
   register: _ufw_check
