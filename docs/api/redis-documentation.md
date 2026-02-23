@@ -36,7 +36,42 @@ redis:
 
 ## Database Schema
 
-AutoBot uses multiple Redis databases for organization:
+### Database Allocation
+
+AutoBot uses dedicated Redis databases for different data types, enabling individual repopulation and maintenance without affecting other datasets.
+
+| Database | Purpose | Key Patterns | Notes |
+|----------|---------|--------------|-------|
+| **DB 0** | Main application data | `session:*`, `user:*` | Sessions, WebSocket state |
+| **DB 1** | Knowledge base | `kb:*`, `document:*` | Knowledge facts and metadata |
+| **DB 2** | Prompt templates | `prompt:*` | AI prompt configurations |
+| **DB 3** | System data | — | Restored system data, miscellaneous |
+| **DB 4** | Metrics | `metric:*` | Performance and system metrics |
+| **DB 5** | Cache | `cache:*`, `api:*` | Temporary cached responses |
+| **DB 6** | Sessions | `session:*` | User session data |
+| **DB 7** | Tasks | `job:*`, `queue:*` | Background task queues |
+| **DB 8** | Analytics | `analytics:*` | Code analytics and indexing data |
+| **DB 9** | Temp | — | Temporary data storage |
+| **DB 10** | Backup | — | Backup and recovery data |
+| **DB 11** | Additional data | — | Extended system data |
+| **DB 15** | Testing | — | Test data and development |
+
+### Management Commands
+
+```bash
+# Check all database sizes
+for db in {0..15}; do echo -n "DB$db: "; redis-cli -h 172.16.168.23 -p 6379 -n $db DBSIZE; done
+
+# Clear a specific database (example: temp data in DB 9)
+redis-cli -h 172.16.168.23 -p 6379 -n 9 FLUSHDB
+
+# Backup a specific database
+redis-cli -h 172.16.168.23 -p 6379 -n 0 --rdb main_backup.rdb
+```
+
+### Legacy schema (Docker-based deployment)
+
+When running with Docker Compose instead of the distributed VM setup:
 
 | Database | Purpose | Key Patterns |
 |----------|---------|--------------|
