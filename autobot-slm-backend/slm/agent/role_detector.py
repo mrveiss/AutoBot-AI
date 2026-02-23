@@ -45,13 +45,18 @@ class RoleStatus:
 
     @property
     def status(self) -> str:
-        """Determine overall status."""
-        if self.path_exists and self.service_running:
-            return "active"
-        elif self.path_exists:
-            return "inactive"
-        else:
+        """Determine overall status.
+
+        - active: path exists and service running (or no service required)
+        - inactive: path exists but service is down
+        - not_installed: path absent
+        """
+        if not self.path_exists:
             return "not_installed"
+        # No service name means it's a library/passive role — path = active
+        if not self.service_name:
+            return "active"
+        return "active" if self.service_running else "inactive"
 
 
 class RoleDetector:
