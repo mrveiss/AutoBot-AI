@@ -16,6 +16,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+from config import settings
 from models.database import (
     Deployment,
     DeploymentStatus,
@@ -32,8 +33,6 @@ from models.database import (
 from services.service_categorizer import categorize_service
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -788,9 +787,11 @@ class ReconcilerService:
             await ws_manager.send_service_status(
                 node_id,
                 service_name,
-                status="restarting"
-                if event_type == "started"
-                else ("running" if success else "failed"),
+                status=(
+                    "restarting"
+                    if event_type == "started"
+                    else ("running" if success else "failed")
+                ),
                 action="auto_restart",
                 success=success if event_type == "completed" else None,
                 message=message,
@@ -1196,9 +1197,9 @@ class ReconcilerService:
                 memory_percent,
                 disk_percent,
                 new_status,
-                last_heartbeat=node.last_heartbeat.isoformat()
-                if node.last_heartbeat
-                else None,
+                last_heartbeat=(
+                    node.last_heartbeat.isoformat() if node.last_heartbeat else None
+                ),
             )
         except Exception as e:
             logger.debug("Failed to broadcast health update: %s", e)
@@ -1250,6 +1251,132 @@ class ReconcilerService:
 
         return node
 
+    def _update_existing_service(
+        self,
+        service: Service,
+        svc_data: dict,
+        status: str,
+        error_msg: str,
+        now: datetime,
+    ) -> None:
+        """Apply heartbeat data to an existing Service row.
+
+        Helper for _upsert_service. Ref: #1088.
+        """
+        service.status = status
+        service.active_state = svc_data.get("active_state")
+        service.sub_state = svc_data.get("sub_state")
+        service.main_pid = svc_data.get("main_pid")
+        service.memory_bytes = svc_data.get("memory_bytes")
+        service.enabled = svc_data.get("enabled", False)
+        service.description = svc_data.get("description")
+        service.last_checked = now
+        existing_extra = service.extra_data or {}
+        if error_msg:
+            existing_extra["error_message"] = error_msg
+        else:
+            existing_extra.pop("error_message", None)
+        service.extra_data = existing_extra
+
+    def _create_new_service(
+        self,
+        node_id: str,
+        service_name: str,
+        svc_data: dict,
+        status: str,
+        svc_extra: dict,
+        now: datetime,
+    ) -> Service:
+        """Construct a new Service ORM object from heartbeat data.
+
+        Helper for _upsert_service. Ref: #1088.
+        """
+        category = categorize_service(service_name)
+        return Service(
+            node_id=node_id,
+            service_name=service_name,
+            status=status,
+            category=category,
+            active_state=svc_data.get("active_state"),
+            sub_state=svc_data.get("sub_state"),
+            main_pid=svc_data.get("main_pid"),
+            memory_bytes=svc_data.get("memory_bytes"),
+            enabled=svc_data.get("enabled", False),
+            description=svc_data.get("description"),
+            last_checked=now,
+            extra_data=svc_extra,
+        )
+
+    async def _upsert_service(
+        self,
+        db: AsyncSession,
+        node_id: str,
+        svc_data: dict,
+        now: datetime,
+    ) -> None:
+        """Upsert a single discovered service record into the database.
+
+        Helper for _sync_discovered_services. Ref: #1088.
+        """
+        service_name = svc_data.get("name")
+        if not service_name:
+            return
+
+        try:
+            result = await db.execute(
+                select(Service).where(
+                    Service.node_id == node_id,
+                    Service.service_name == service_name,
+                )
+            )
+            service = result.scalar_one_or_none()
+
+            status = svc_data.get("status", "unknown")
+            if status not in [s.value for s in ServiceStatus]:
+                status = ServiceStatus.UNKNOWN.value
+
+            # Issue #1019: Capture error context for failed services
+            error_msg = svc_data.get("error_message", "")
+            svc_extra = {"error_message": error_msg} if error_msg else {}
+
+            if service:
+                self._update_existing_service(service, svc_data, status, error_msg, now)
+            else:
+                service = self._create_new_service(
+                    node_id, service_name, svc_data, status, svc_extra, now
+                )
+                db.add(service)
+        except Exception as exc:
+            logger.warning(
+                "service sync failed node=%s service=%s error=%s",
+                node_id,
+                service_name,
+                exc,
+            )
+
+    async def _remove_stale_services(
+        self,
+        db: AsyncSession,
+        node_id: str,
+        discovered_services: list,
+    ) -> None:
+        """Delete services no longer reported by the agent for a node.
+
+        Helper for _sync_discovered_services. Ref: #1088.
+        """
+        discovered_names = {s.get("name") for s in discovered_services if s.get("name")}
+        if not discovered_names:
+            return
+
+        stale_result = await db.execute(
+            select(Service).where(
+                Service.node_id == node_id,
+                Service.service_name.notin_(discovered_names),
+            )
+        )
+        for stale_svc in stale_result.scalars().all():
+            await db.delete(stale_svc)
+
     async def _sync_discovered_services(
         self,
         db: AsyncSession,
@@ -1267,75 +1394,10 @@ class ReconcilerService:
         now = datetime.utcnow()
 
         for svc_data in discovered_services:
-            service_name = svc_data.get("name")
-            if not service_name:
-                continue
-
-            # Check if service exists
-            result = await db.execute(
-                select(Service).where(
-                    Service.node_id == node_id,
-                    Service.service_name == service_name,
-                )
-            )
-            service = result.scalar_one_or_none()
-
-            # Map status from agent
-            status = svc_data.get("status", "unknown")
-            if status not in [s.value for s in ServiceStatus]:
-                status = ServiceStatus.UNKNOWN.value
-
-            # Issue #1019: Capture error context for failed services
-            error_msg = svc_data.get("error_message", "")
-            svc_extra = {"error_message": error_msg} if error_msg else {}
-
-            if service:
-                # Update existing
-                service.status = status
-                service.active_state = svc_data.get("active_state")
-                service.sub_state = svc_data.get("sub_state")
-                service.main_pid = svc_data.get("main_pid")
-                service.memory_bytes = svc_data.get("memory_bytes")
-                service.enabled = svc_data.get("enabled", False)
-                service.description = svc_data.get("description")
-                service.last_checked = now
-                # Store/clear error context in extra_data
-                existing_extra = service.extra_data or {}
-                if error_msg:
-                    existing_extra["error_message"] = error_msg
-                else:
-                    existing_extra.pop("error_message", None)
-                service.extra_data = existing_extra
-            else:
-                # Create new - auto-categorize based on service name
-                category = categorize_service(service_name)
-                service = Service(
-                    node_id=node_id,
-                    service_name=service_name,
-                    status=status,
-                    category=category,
-                    active_state=svc_data.get("active_state"),
-                    sub_state=svc_data.get("sub_state"),
-                    main_pid=svc_data.get("main_pid"),
-                    memory_bytes=svc_data.get("memory_bytes"),
-                    enabled=svc_data.get("enabled", False),
-                    description=svc_data.get("description"),
-                    last_checked=now,
-                    extra_data=svc_extra,
-                )
-                db.add(service)
+            await self._upsert_service(db, node_id, svc_data, now)
 
         # Remove stale services no longer reported by the agent (#1018)
-        discovered_names = {s.get("name") for s in discovered_services if s.get("name")}
-        if discovered_names:
-            stale_result = await db.execute(
-                select(Service).where(
-                    Service.node_id == node_id,
-                    Service.service_name.notin_(discovered_names),
-                )
-            )
-            for stale_svc in stale_result.scalars().all():
-                await db.delete(stale_svc)
+        await self._remove_stale_services(db, node_id, discovered_services)
 
         # Note: commit happens in the calling method (update_node_heartbeat)
 

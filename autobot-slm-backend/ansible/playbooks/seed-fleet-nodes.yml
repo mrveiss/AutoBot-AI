@@ -64,8 +64,9 @@
       browser-automation:
         - autobot-slm-agent
         - autobot-browser-worker
-      05-Node-26:
+      05-LLM-CPU:
         - autobot-slm-agent
+        - llm-cpu
       06-Node-27:
         - autobot-slm-agent
 
