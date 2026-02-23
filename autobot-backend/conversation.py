@@ -157,13 +157,17 @@ class Conversation:
             await self._classify_message(user_message)
             kb_results = await self._search_knowledge_base(user_message)
 
-            # Step 2: Conduct research if needed
+            # Step 2: Conduct research if needed.
+            # Current-data queries (weather, scores, prices) bypass the complexity
+            # gate — the LLM's training data is always stale for these topics.
+            # Complex queries with insufficient KB results also trigger research.
             research_results = None
-            if (
+            needs_research = self._needs_current_data(user_message) or (
                 self.state.classification
                 and self.state.classification.complexity == TaskComplexity.COMPLEX
                 and self._needs_external_research(user_message, kb_results)
-            ):
+            )
+            if needs_research:
                 research_results = await self._conduct_research(user_message)
 
             # Step 3: Generate response and add attribution
@@ -561,13 +565,54 @@ class Conversation:
                 "I'm having trouble generating a response right now. Please try again."
             )
 
+    # Keywords indicating the answer requires real-time data the LLM cannot have.
+    # Queries matching these always trigger external research regardless of
+    # complexity classification (Issue #1151).
+    _CURRENT_DATA_KEYWORDS = [
+        "weather",
+        "forecast",
+        "temperature outside",
+        "is it raining",
+        "will it rain",
+        "stock price",
+        "share price",
+        "exchange rate",
+        "bitcoin price",
+        "crypto price",
+        "current price of",
+        "price of bitcoin",
+        "price of ethereum",
+        "sports score",
+        "match score",
+        "game score",
+        "match result",
+        "game result",
+        "who won",
+        "final score",
+        "standings",
+        "league table",
+        "breaking news",
+        "right now",
+        "at the moment",
+        "is it open",
+        "opening hours",
+        "current time in",
+    ]
+
+    def _needs_current_data(self, user_message: str) -> bool:
+        """Return True when the query requires real-time data the LLM cannot have.
+
+        These queries bypass the complexity gate — weather, live scores, and
+        current prices are always stale in LLM training data (Issue #1151).
+        """
+        user_lower = user_message.lower()
+        return any(kw in user_lower for kw in self._CURRENT_DATA_KEYWORDS)
+
     def _needs_external_research(
         self, user_message: str, kb_results: List[Dict[str, Any]]
     ) -> bool:
-        """Determine if external research is needed"""
-        # Check if KB results are insufficient
+        """Return True when a COMPLEX query has insufficient KB coverage."""
         if not kb_results or len(kb_results) < 2:
-            # Check for research keywords
             research_keywords = [
                 "latest",
                 "current",
@@ -576,6 +621,7 @@ class Conversation:
                 "today",
                 "2024",
                 "2025",
+                "2026",
                 "what's happening",
                 "news",
                 "trends",
@@ -594,11 +640,13 @@ class Conversation:
                 "buy",
                 "purchase",
                 "review",
+                "weather",
+                "forecast",
+                "score",
+                "standings",
             ]
-
             user_lower = user_message.lower()
             return any(keyword in user_lower for keyword in research_keywords)
-
         return False
 
     def _add_system_message(
