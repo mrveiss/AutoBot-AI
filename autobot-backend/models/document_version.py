@@ -251,21 +251,7 @@ class DocumentChangeTracker:
         metadata: Optional[Metadata] = None,
         os_version: Optional[str] = None,
     ) -> DocumentVersion:
-        """
-        Record a new document version.
-
-        Args:
-            document_id: Document identifier
-            content: Document content
-            machine_id: Host machine ID
-            os_type: Operating system type
-            change_type: Type of change
-            metadata: Additional metadata
-            os_version: OS version string
-
-        Returns:
-            Created DocumentVersion instance
-        """
+        """Record a new document version. Ref: #1088."""
         # Get current version number
         current_version = await self.get_latest_version_number(document_id)
         new_version = current_version + 1

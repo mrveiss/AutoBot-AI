@@ -203,6 +203,29 @@ class SecretsService:
         )
         self._audit_action(cursor, secret_id, "accessed", accessed_by)
 
+    def _build_secret_result(
+        self,
+        secret_id: str,
+        name: str,
+        description: Optional[str],
+        secret_type: str,
+        scope: str,
+        chat_id: Optional[str],
+        now: str,
+        expires_at: Optional[str],
+    ) -> dict:
+        """Build secret result dict. Helper for create_secret. Ref: #1088."""
+        return {
+            "id": secret_id,
+            "name": name,
+            "description": description,
+            "secret_type": secret_type,
+            "scope": scope,
+            "chat_id": chat_id,
+            "created_at": now,
+            "expires_at": expires_at,
+        }
+
     def create_secret(
         self,
         name: str,
@@ -253,16 +276,16 @@ class SecretsService:
 
             conn.commit()
 
-            return {
-                "id": secret_id,
-                "name": name,
-                "description": description,
-                "secret_type": secret_type,
-                "scope": scope,
-                "chat_id": chat_id,
-                "created_at": now,
-                "expires_at": expires_at,
-            }
+            return self._build_secret_result(
+                secret_id,
+                name,
+                description,
+                secret_type,
+                scope,
+                chat_id,
+                now,
+                expires_at,
+            )
 
         except sqlite3.IntegrityError:
             conn.rollback()
