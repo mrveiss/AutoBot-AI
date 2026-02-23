@@ -10,16 +10,25 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import type { Backup, BackupRequest, Replication, ReplicationRequest } from '@/types/slm'
 
 const api = useSlmApi()
 const fleetStore = useFleetStore()
+const route = useRoute()
+const router = useRouter()
 
-// Active tab
+// Active tab — route-based
 type Tab = 'backups' | 'replications'
-const activeTab = ref<Tab>('backups')
+function resolveTab(param: unknown): Tab {
+  return param === 'replications' ? 'replications' : 'backups'
+}
+const activeTab = computed(() => resolveTab(route.params.tab))
+function navigateToTab(tab: Tab): void {
+  router.push({ name: 'backups', params: { tab } })
+}
 
 // Backups state
 const backups = ref<Backup[]>([])
@@ -221,7 +230,7 @@ function getNodeHostname(nodeId: string): string {
     <div class="border-b border-gray-200 mb-6">
       <nav class="-mb-px flex space-x-8">
         <button
-          @click="activeTab = 'backups'"
+          @click="navigateToTab('backups')"
           :class="[
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'backups'
