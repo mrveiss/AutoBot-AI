@@ -17,10 +17,6 @@ from typing import Any, Dict, List, Tuple
 
 import httpx
 from auth_middleware import get_current_user
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
-
-from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.redis_client import RedisDatabase
 
 # Import controller class (extracted from this file - Issue #212)
 from backend.api.analytics_controller import (
@@ -33,6 +29,10 @@ from backend.api.analytics_controller import (
 from backend.api.analytics_models import AnalyticsOverview, RealTimeEvent
 from backend.constants.network_constants import NetworkConstants
 from backend.constants.threshold_constants import TimingConstants
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+
+from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.redis_client import RedisDatabase
 
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import hardware_monitor

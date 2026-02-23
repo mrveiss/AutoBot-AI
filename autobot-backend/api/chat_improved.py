@@ -93,6 +93,31 @@ async def list_chats(
         )
 
 
+def _load_chat_session(chat_history_manager, chat_id: str):
+    """Helper for get_chat. Ref: #1088.
+
+    Load a chat session from the history manager, mapping filesystem and
+    data errors to AutoBot domain exceptions.
+    """
+    try:
+        history = chat_history_manager.load_session(chat_id)
+        if history is None:
+            raise ResourceNotFoundError(
+                "Chat session not found", resource_type="chat", resource_id=chat_id
+            )
+        return history
+    except FileNotFoundError:
+        raise ResourceNotFoundError(
+            "Chat session file not found", resource_type="chat", resource_id=chat_id
+        )
+    except PermissionError as e:
+        logger.error(f"Permission denied accessing chat {chat_id}: {e}")
+        raise InternalError("Unable to access chat session")
+    except ValueError as e:
+        logger.error(f"Corrupted chat data for {chat_id}: {e}")
+        raise InternalError("Chat session data is corrupted")
+
+
 @router.get("/chats/{chat_id}")
 async def get_chat(
     chat_id: str,
@@ -120,32 +145,10 @@ async def get_chat(
         if chat_history_manager is None:
             raise InternalError("Chat history manager not initialized")
 
-        # Load session with proper error handling
-        try:
-            history = chat_history_manager.load_session(chat_id)
-
-            if history is None:
-                raise ResourceNotFoundError(
-                    "Chat session not found", resource_type="chat", resource_id=chat_id
-                )
-
-            return JSONResponse(
-                status_code=200, content={"chat_id": chat_id, "history": history}
-            )
-
-        except FileNotFoundError:
-            # Handle specific case of missing file
-            raise ResourceNotFoundError(
-                "Chat session file not found", resource_type="chat", resource_id=chat_id
-            )
-        except PermissionError as e:
-            # Handle permission issues
-            logger.error(f"Permission denied accessing chat {chat_id}: {e}")
-            raise InternalError("Unable to access chat session")
-        except ValueError as e:
-            # Handle corrupted data
-            logger.error(f"Corrupted chat data for {chat_id}: {e}")
-            raise InternalError("Chat session data is corrupted")
+        history = _load_chat_session(chat_history_manager, chat_id)
+        return JSONResponse(
+            status_code=200, content={"chat_id": chat_id, "history": history}
+        )
 
     except AutoBotError as e:
         log_error(e, context=f"get_chat:{chat_id}", include_traceback=False)

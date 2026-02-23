@@ -244,9 +244,11 @@ class SystemCommandAgent:
             "exit_code": exit_code,
             "duration": result["duration"],
             "output_lines": result["line_count"],
-            "message": "Command completed successfully"
-            if exit_code == 0
-            else f"Command failed with exit code {exit_code}",
+            "message": (
+                "Command completed successfully"
+                if exit_code == 0
+                else f"Command failed with exit code {exit_code}"
+            ),
         }
 
     def _get_or_create_terminal(self, chat_id: str) -> tuple:

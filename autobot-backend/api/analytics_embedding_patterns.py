@@ -442,6 +442,52 @@ class EmbeddingPatternAnalyzer:
             logger.error("Failed to get model comparison: %s", e)
             return {"status": "error", "error": str(e)}
 
+    def _build_batch_recommendations(
+        self, avg_batch_size: float, tokens_per_second: float
+    ) -> list:
+        """Helper for get_batch_optimization_recommendations. Ref: #1088."""
+        recommendations = []
+        if avg_batch_size < 10:
+            recommendations.append(
+                {
+                    "type": "increase_batch_size",
+                    "current_value": round(avg_batch_size, 2),
+                    "recommended_value": 50,
+                    "potential_improvement": "2-3x throughput increase",
+                    "reasoning": (
+                        "Current batch size is low. Increasing to 50 documents "
+                        "per batch can significantly improve throughput."
+                    ),
+                }
+            )
+        elif avg_batch_size > 100:
+            recommendations.append(
+                {
+                    "type": "reduce_batch_size",
+                    "current_value": round(avg_batch_size, 2),
+                    "recommended_value": 50,
+                    "potential_improvement": "Better memory efficiency",
+                    "reasoning": (
+                        "Large batch sizes may cause memory issues. "
+                        "Consider reducing to 50 for stability."
+                    ),
+                }
+            )
+        if tokens_per_second < 1000:
+            recommendations.append(
+                {
+                    "type": "improve_throughput",
+                    "current_value": round(tokens_per_second, 2),
+                    "recommended_value": 5000,
+                    "potential_improvement": "5x speed increase",
+                    "reasoning": (
+                        "Low throughput detected. Consider using GPU acceleration "
+                        "or switching to a faster embedding model."
+                    ),
+                }
+            )
+        return recommendations
+
     async def get_batch_optimization_recommendations(self) -> Dict[str, Any]:
         """Get recommendations for batch size optimization"""
         try:
@@ -453,52 +499,9 @@ class EmbeddingPatternAnalyzer:
             current_stats = stats.get("stats", {})
             avg_batch_size = current_stats.get("avg_batch_size", 1)
             tokens_per_second = current_stats.get("tokens_per_second", 0)
-
-            recommendations = []
-
-            # Batch size optimization
-            if avg_batch_size < 10:
-                recommendations.append(
-                    {
-                        "type": "increase_batch_size",
-                        "current_value": round(avg_batch_size, 2),
-                        "recommended_value": 50,
-                        "potential_improvement": "2-3x throughput increase",
-                        "reasoning": (
-                            "Current batch size is low. Increasing to 50 documents "
-                            "per batch can significantly improve throughput."
-                        ),
-                    }
-                )
-            elif avg_batch_size > 100:
-                recommendations.append(
-                    {
-                        "type": "reduce_batch_size",
-                        "current_value": round(avg_batch_size, 2),
-                        "recommended_value": 50,
-                        "potential_improvement": "Better memory efficiency",
-                        "reasoning": (
-                            "Large batch sizes may cause memory issues. "
-                            "Consider reducing to 50 for stability."
-                        ),
-                    }
-                )
-
-            # Throughput optimization
-            if tokens_per_second < 1000:
-                recommendations.append(
-                    {
-                        "type": "improve_throughput",
-                        "current_value": round(tokens_per_second, 2),
-                        "recommended_value": 5000,
-                        "potential_improvement": "5x speed increase",
-                        "reasoning": (
-                            "Low throughput detected. Consider using GPU acceleration "
-                            "or switching to a faster embedding model."
-                        ),
-                    }
-                )
-
+            recommendations = self._build_batch_recommendations(
+                avg_batch_size, tokens_per_second
+            )
             return {
                 "status": "success",
                 "recommendations": recommendations,
