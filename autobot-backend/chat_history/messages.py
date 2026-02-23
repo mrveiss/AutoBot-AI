@@ -17,6 +17,7 @@ SKIP_WEBSOCKET_PERSISTENCE_TYPES in backend/type_defs/common.py
 
 import logging
 import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,7 @@ class MessagesMixin:
         Issue #620.
         """
         message = {
+            "id": str(uuid.uuid4()),
             "sender": sender,
             "text": text,
             "messageType": message_type,

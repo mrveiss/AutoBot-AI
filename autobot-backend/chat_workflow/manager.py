@@ -2490,6 +2490,13 @@ before summarizing.
             # Persist all collected WorkflowMessages
             for wf_msg in workflow_messages:
                 message_type = wf_msg.type
+
+                # Skip segment_complete markers — internal stream control messages
+                # with empty content that pollute history and share message_id
+                # with the content message they terminate (Issue #1141).
+                if message_type == "segment_complete":
+                    continue
+
                 sender = "system" if message_type == "terminal_output" else "assistant"
 
                 await chat_mgr.add_message(
