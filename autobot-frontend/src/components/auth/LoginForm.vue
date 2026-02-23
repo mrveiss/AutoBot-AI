@@ -335,6 +335,8 @@ onMounted(async () => {
 }
 
 .form-input {
+  width: 100%;
+  box-sizing: border-box;
   padding: var(--spacing-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -367,6 +369,10 @@ onMounted(async () => {
 
 .password-input-wrapper {
   position: relative;
+}
+
+.password-input-wrapper .form-input {
+  padding-right: 2.5rem;
 }
 
 .password-toggle {
