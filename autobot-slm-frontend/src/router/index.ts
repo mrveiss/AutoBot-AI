@@ -29,9 +29,18 @@ const router = createRouter({
     },
     {
       path: '/',
+      redirect: '/fleet'
+    },
+    {
+      path: '/fleet/:tab?',
       name: 'fleet',
       component: () => import('@/views/FleetOverview.vue'),
-      meta: { title: 'Fleet Overview' }
+      meta: { title: 'Fleet Overview' },
+      beforeEnter: (to) => {
+        if (!to.params.tab) {
+          return { name: 'fleet', params: { tab: 'nodes' }, replace: true }
+        }
+      },
     },
     {
       // Issue #850: Consolidated into unified orchestration view
@@ -41,16 +50,26 @@ const router = createRouter({
       meta: { title: 'Services' }
     },
     {
-      path: '/deployments',
+      path: '/deployments/:tab?',
       name: 'deployments',
       component: () => import('@/views/DeploymentsView.vue'),
-      meta: { title: 'Deployments' }
+      meta: { title: 'Deployments' },
+      beforeEnter: (to) => {
+        if (!to.params.tab) {
+          return { name: 'deployments', params: { tab: 'standard' }, replace: true }
+        }
+      },
     },
     {
-      path: '/backups',
+      path: '/backups/:tab?',
       name: 'backups',
       component: () => import('@/views/BackupsView.vue'),
-      meta: { title: 'Backups' }
+      meta: { title: 'Backups' },
+      beforeEnter: (to) => {
+        if (!to.params.tab) {
+          return { name: 'backups', params: { tab: 'backups' }, replace: true }
+        }
+      },
     },
     {
       path: '/replications',
@@ -79,11 +98,9 @@ const router = createRouter({
       meta: { title: 'Agent Configuration' }
     },
     {
-      // Issue #786: Infrastructure setup wizard
+      // Issue #786: Infrastructure moved to Fleet Overview infrastructure tab
       path: '/infrastructure',
-      name: 'infrastructure',
-      component: () => import('@/views/InfrastructureView.vue'),
-      meta: { title: 'Infrastructure Setup' }
+      redirect: '/fleet/infrastructure',
     },
     {
       path: '/settings',
