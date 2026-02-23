@@ -244,7 +244,7 @@ function getNodeHostname(nodeId: string): string {
           </span>
         </button>
         <button
-          @click="activeTab = 'replications'"
+          @click="navigateToTab('replications')"
           :class="[
             'py-4 px-1 border-b-2 font-medium text-sm',
             activeTab === 'replications'
