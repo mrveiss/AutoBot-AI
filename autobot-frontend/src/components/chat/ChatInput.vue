@@ -406,6 +406,10 @@ const handleInput = (event: Event) => {
 const sendMessage = async () => {
   if (!canSend.value) return
 
+  // Issue #1146: ensure AudioContext is unlocked from this user-gesture so TTS
+  // can play even if voice output was enabled from localStorage (no prior click).
+  unlockAudio()
+
   const message = messageText.value.trim()
   const files = [...attachedFiles.value]
 
