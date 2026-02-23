@@ -17,7 +17,13 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useOrchestrationManagement } from '@/composables/useOrchestrationManagement'
-import { useRoles, type Role } from '@/composables/useRoles'
+import {
+  useRoles,
+  type Role,
+  type FleetHealth,
+  type PlaybookMigrateResult,
+  type NodeRolesInfo,
+} from '@/composables/useRoles'
 import { createLogger } from '@/utils/debugUtils'
 import ServiceStatusBadge from '@/components/orchestration/ServiceStatusBadge.vue'
 import ServiceActionButtons from '@/components/orchestration/ServiceActionButtons.vue'
