@@ -1,0 +1,16 @@
+{
+  "role": "npu-worker",
+  "version": "{{ npu_version | default(git_commit) | default('unknown') }}",
+  "deploy_path": "{{ npu_install_dir }}",
+  "service": "autobot-npu-worker",
+  "ansible_playbook": "setup-npu-worker.yml",
+  "build_steps": [
+    "pip install -r requirements.txt"
+  ],
+  "depends_on": ["autobot-shared"],
+  "required": false,
+  "degraded_without": [
+    "GPU inference offloading — backend falls back to local Ollama"
+  ],
+  "deployed_at": "{{ ansible_date_time.iso8601 }}"
+}

@@ -1,0 +1,16 @@
+{
+  "role": "browser-service",
+  "version": "{{ browser_version | default(git_commit) | default('unknown') }}",
+  "deploy_path": "{{ browser_install_dir }}",
+  "service": "autobot-browser",
+  "ansible_playbook": "setup-browser-worker.yml",
+  "build_steps": [
+    "npm install"
+  ],
+  "depends_on": [],
+  "required": false,
+  "degraded_without": [
+    "Browser automation tasks — features degrade gracefully"
+  ],
+  "deployed_at": "{{ ansible_date_time.iso8601 }}"
+}

@@ -2,7 +2,7 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Role Registry Service (Issue #779).
+Role Registry Service (Issue #779, #1129).
 
 Manages role definitions and provides default roles for code distribution.
 """
@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 _BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-_SLM_AGENT_DIR = os.environ.get("SLM_AGENT_DIR", "/opt/slm-agent")
+_SLM_AGENT_DIR = os.environ.get("SLM_AGENT_DIR", "/opt/autobot/autobot-slm-agent")
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,9 @@ DEFAULT_ROLES = [
         "source_paths": [],
         "target_path": "",
         "auto_restart": False,
+        "required": False,
+        "degraded_without": [],
+        "ansible_playbook": None,
     },
     {
         "name": "backend",
@@ -39,6 +42,14 @@ DEFAULT_ROLES = [
         "auto_restart": True,
         "health_check_port": 8443,
         "health_check_path": "/api/health",
+        "post_sync_cmd": (
+            f"cd {_BASE_DIR}/autobot-backend && "
+            "pip install -r requirements.txt && "
+            "alembic upgrade head"
+        ),
+        "required": True,
+        "degraded_without": [],
+        "ansible_playbook": "deploy-backend.yml",
     },
     {
         "name": "frontend",
@@ -49,7 +60,12 @@ DEFAULT_ROLES = [
         "systemd_service": "autobot-frontend",
         "auto_restart": True,
         "health_check_port": 443,
-        "post_sync_cmd": f"cd {_BASE_DIR}/autobot-frontend && npm install && npm run build",
+        "post_sync_cmd": (
+            f"cd {_BASE_DIR}/autobot-frontend && npm install && npm run build"
+        ),
+        "required": True,
+        "degraded_without": [],
+        "ansible_playbook": "deploy-frontend.yml",
     },
     {
         "name": "slm-server",
@@ -61,7 +77,12 @@ DEFAULT_ROLES = [
         "auto_restart": True,
         "health_check_port": 8000,
         "health_check_path": "/api/health",
-        "post_sync_cmd": f"cd {_BASE_DIR}/autobot-slm-frontend && npm install && npm run build",
+        "post_sync_cmd": (
+            f"cd {_BASE_DIR}/autobot-slm-frontend && npm install && npm run build"
+        ),
+        "required": True,
+        "degraded_without": [],
+        "ansible_playbook": "deploy-slm-manager.yml",
     },
     {
         "name": "slm-agent",
@@ -71,6 +92,10 @@ DEFAULT_ROLES = [
         "target_path": _SLM_AGENT_DIR,
         "systemd_service": "slm-agent",
         "auto_restart": True,
+        "post_sync_cmd": (f"cd {_SLM_AGENT_DIR} && pip install aiohttp psutil"),
+        "required": True,
+        "degraded_without": [],
+        "ansible_playbook": "deploy-slm-agent.yml",
     },
     {
         "name": "npu-worker",
@@ -80,6 +105,14 @@ DEFAULT_ROLES = [
         "target_path": f"{_BASE_DIR}/autobot-npu-worker",
         "auto_restart": False,
         "health_check_port": 8081,
+        "post_sync_cmd": (
+            f"cd {_BASE_DIR}/autobot-npu-worker && pip install -r requirements.txt"
+        ),
+        "required": False,
+        "degraded_without": [
+            "GPU inference offloading — backend falls back to local Ollama"
+        ],
+        "ansible_playbook": "setup-npu-worker.yml",
     },
     {
         "name": "browser-service",
@@ -90,6 +123,22 @@ DEFAULT_ROLES = [
         "systemd_service": "autobot-browser",
         "auto_restart": True,
         "health_check_port": 3000,
+        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-browser-worker && npm install"),
+        "required": False,
+        "degraded_without": ["Browser automation tasks — features degrade gracefully"],
+        "ansible_playbook": "setup-browser-worker.yml",
+    },
+    {
+        "name": "autobot-shared",
+        "display_name": "Shared Library",
+        "sync_type": SyncType.PACKAGE.value,
+        "source_paths": ["autobot-shared/"],
+        "target_path": f"{_BASE_DIR}/autobot-shared",
+        "auto_restart": False,
+        "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-shared && pip install -e ."),
+        "required": True,
+        "degraded_without": [],
+        "ansible_playbook": "deploy-shared.yml",
     },
 ]
 
@@ -131,6 +180,7 @@ async def get_role_definitions() -> List[Dict]:
             "target_path": r["target_path"],
             "systemd_service": r.get("systemd_service"),
             "health_check_port": r.get("health_check_port"),
+            "required": r.get("required", False),
         }
         for r in DEFAULT_ROLES
         if r.get("target_path")
