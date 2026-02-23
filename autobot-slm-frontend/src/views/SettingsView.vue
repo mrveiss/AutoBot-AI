@@ -39,7 +39,7 @@ const tabs = [
   { id: 'prompts', name: 'Prompts', path: '/settings/admin/prompts', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z' },
   { id: 'personality', name: 'Personality', path: '/settings/admin/personality', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
   { id: 'log-forwarding', name: 'Log Forwarding', path: '/settings/admin/log-forwarding', icon: 'M12 19l9 2-9-18-9 18 9-2zm0 0v-8' },
-  { id: 'npu-workers', name: 'NPU Workers', path: '/settings/admin/npu-workers', icon: 'M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z' },
+  // Issue: NPU Workers consolidated to Fleet Overview /fleet/npu (Worker Registry sub-tab)
 ]
 
 // Get active tab based on current route
