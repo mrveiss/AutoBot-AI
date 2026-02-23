@@ -20,12 +20,13 @@ import AssignNPURoleModal from './AssignNPURoleModal.vue'
 import NPUWorkerMonitor from './NPUWorkerMonitor.vue'
 import NPUPerformanceMetrics from './NPUPerformanceMetrics.vue'
 import LoadBalancingView from './LoadBalancingView.vue'
+import NPUWorkersSettings from '@/views/settings/admin/NPUWorkersSettings.vue'
 import type { SLMNode } from '@/types/slm'
 
 const fleetStore = useFleetStore()
 
 // Sub-tab navigation (Issue #590)
-type SubTab = 'overview' | 'monitor' | 'performance' | 'load-balancing'
+type SubTab = 'overview' | 'monitor' | 'performance' | 'load-balancing' | 'worker-registry'
 const activeTab = ref<SubTab>('overview')
 
 const tabs: { key: SubTab; label: string }[] = [
@@ -33,6 +34,7 @@ const tabs: { key: SubTab; label: string }[] = [
   { key: 'monitor', label: 'Monitor' },
   { key: 'performance', label: 'Performance' },
   { key: 'load-balancing', label: 'Load Balancing' },
+  { key: 'worker-registry', label: 'Worker Registry' },
 ]
 
 // State
@@ -278,6 +280,9 @@ watch(() => fleetStore.nodeList, () => {
 
     <!-- Load Balancing Tab (Issue #590) -->
     <LoadBalancingView v-if="activeTab === 'load-balancing'" />
+
+    <!-- Worker Registry Tab — CRUD + Windows pairing (consolidated from Settings) -->
+    <NPUWorkersSettings v-if="activeTab === 'worker-registry'" />
 
     <!-- Details Panel (shared across tabs) -->
     <NPUDetailsPanel
