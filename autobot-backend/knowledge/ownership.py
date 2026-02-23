@@ -73,35 +73,20 @@ class KnowledgeOwnership:
         self.redis_client = redis_client
         logger.info("KnowledgeOwnership initialized")
 
-    async def set_owner(
+    async def _set_owner_indexes(
         self,
         fact_id: str,
         owner_id: str,
-        visibility: str = VisibilityLevel.PRIVATE,
-        source_type: str = SourceType.MANUAL,
-        shared_with: Optional[List[str]] = None,
-        organization_id: Optional[str] = None,
-        group_ids: Optional[List[str]] = None,
-        access_level: str = AccessLevel.USER,
+        visibility: str,
+        source_type: str,
+        organization_id: Optional[str],
+        group_ids: List[str],
+        shared_with: List[str],
     ) -> None:
-        """Set ownership metadata and update Redis indexes.
+        """Helper for set_owner. Ref: #1088.
 
-        Issue #679: Extended with organization and group support.
-        Issue #685: Added access_level for hierarchical knowledge types.
-
-        Args:
-            fact_id: Fact ID
-            owner_id: User ID of the owner
-            visibility: Visibility level (private/shared/group/organization/system)
-            source_type: Source type (chat/manual/import/system)
-            shared_with: Optional list of user IDs to share with
-            organization_id: Organization ID for org-level knowledge
-            group_ids: List of group/team IDs for group-level knowledge
-            access_level: Access level (autobot/general/system/user)
+        Writes all Redis index entries for a newly owned fact.
         """
-        shared_with = shared_with or []
-        group_ids = group_ids or []
-
         # Add to owner's facts index
         await asyncio.to_thread(
             self.redis_client.sadd, f"user:kb:facts:{owner_id}", fact_id
@@ -137,6 +122,45 @@ class KnowledgeOwnership:
         if visibility == VisibilityLevel.SYSTEM:
             await asyncio.to_thread(self.redis_client.sadd, "kb:system:facts", fact_id)
 
+    async def set_owner(
+        self,
+        fact_id: str,
+        owner_id: str,
+        visibility: str = VisibilityLevel.PRIVATE,
+        source_type: str = SourceType.MANUAL,
+        shared_with: Optional[List[str]] = None,
+        organization_id: Optional[str] = None,
+        group_ids: Optional[List[str]] = None,
+        access_level: str = AccessLevel.USER,
+    ) -> None:
+        """Set ownership metadata and update Redis indexes.
+
+        Issue #679: Extended with organization and group support.
+        Issue #685: Added access_level for hierarchical knowledge types.
+
+        Args:
+            fact_id: Fact ID
+            owner_id: User ID of the owner
+            visibility: Visibility level (private/shared/group/organization/system)
+            source_type: Source type (chat/manual/import/system)
+            shared_with: Optional list of user IDs to share with
+            organization_id: Organization ID for org-level knowledge
+            group_ids: List of group/team IDs for group-level knowledge
+            access_level: Access level (autobot/general/system/user)
+        """
+        shared_with = shared_with or []
+        group_ids = group_ids or []
+
+        await self._set_owner_indexes(
+            fact_id,
+            owner_id,
+            visibility,
+            source_type,
+            organization_id,
+            group_ids,
+            shared_with,
+        )
+
         logger.debug(
             "Set ownership for fact %s: owner=%s, visibility=%s, org=%s, groups=%d, shared=%d",
             fact_id,
@@ -146,6 +170,66 @@ class KnowledgeOwnership:
             len(group_ids),
             len(shared_with),
         )
+
+    def _check_access_level_grants(
+        self,
+        access_level: str,
+        is_authenticated: bool,
+    ) -> Optional[bool]:
+        """Helper for check_access. Ref: #1088.
+
+        Returns True if access_level alone grants access, None otherwise.
+        """
+        # GENERAL knowledge: Public, no auth required
+        if access_level == AccessLevel.GENERAL:
+            return True
+        # AUTOBOT knowledge: Platform docs, requires authentication
+        if access_level == AccessLevel.AUTOBOT and is_authenticated:
+            return True
+        return None
+
+    def _check_visibility_grants(
+        self,
+        user_id: str,
+        visibility: str,
+        owner_id: Optional[str],
+        shared_with: List,
+        fact_org_id: Optional[str],
+        fact_group_ids: List,
+        user_org_id: Optional[str],
+        user_group_ids: List[str],
+        is_authenticated: bool,
+    ) -> bool:
+        """Helper for check_access. Ref: #1088.
+
+        Evaluates owner, visibility, org, group, and share grants.
+        """
+        # Owner always has access
+        if owner_id and owner_id == user_id:
+            return True
+
+        # System-level facts are accessible to all authenticated users
+        if visibility in (VisibilityLevel.SYSTEM, VisibilityLevel.PUBLIC):
+            return is_authenticated
+
+        # Organization-level facts accessible to org members
+        if (
+            visibility == VisibilityLevel.ORGANIZATION
+            and user_org_id
+            and fact_org_id == user_org_id
+        ):
+            return True
+
+        # Group-level facts accessible to group members
+        if visibility == VisibilityLevel.GROUP and fact_group_ids:
+            if any(gid in user_group_ids for gid in fact_group_ids):
+                return True
+
+        # Check if explicitly shared with user
+        if visibility == VisibilityLevel.SHARED and user_id in shared_with:
+            return True
+
+        return False
 
     async def check_access(
         self,
@@ -183,42 +267,57 @@ class KnowledgeOwnership:
         fact_group_ids = fact_metadata.get("group_ids", [])
 
         # Issue #685: Access level-based checks
-        # GENERAL knowledge: Public, no auth required
-        if access_level == AccessLevel.GENERAL:
-            return True
+        level_grant = self._check_access_level_grants(access_level, is_authenticated)
+        if level_grant is not None:
+            return level_grant
 
-        # AUTOBOT knowledge: Platform docs, requires authentication
-        if access_level == AccessLevel.AUTOBOT and is_authenticated:
-            return True
+        return self._check_visibility_grants(
+            user_id,
+            visibility,
+            owner_id,
+            shared_with,
+            fact_org_id,
+            fact_group_ids,
+            user_org_id,
+            user_group_ids,
+            is_authenticated,
+        )
 
-        # Owner always has access
-        if owner_id and owner_id == user_id:
-            return True
+    async def _share_with_users(
+        self, fact_id: str, user_ids: List[str], shared_with: set
+    ) -> List[str]:
+        """Helper for share_fact. Ref: #1088.
 
-        # System-level facts are accessible to all authenticated users
-        if visibility in (VisibilityLevel.SYSTEM, VisibilityLevel.PUBLIC):
-            return is_authenticated
+        Adds user_ids to the shared set and updates Redis indexes.
+        Returns list of newly added user IDs.
+        """
+        new_users = []
+        for user_id in user_ids:
+            if user_id not in shared_with:
+                shared_with.add(user_id)
+                new_users.append(user_id)
+                await asyncio.to_thread(
+                    self.redis_client.sadd, f"user:kb:shared:{user_id}", fact_id
+                )
+        return new_users
 
-        # Organization-level facts accessible to org members
-        if (
-            visibility == VisibilityLevel.ORGANIZATION
-            and user_org_id
-            and fact_org_id == user_org_id
-        ):
-            return True
+    async def _share_with_groups(
+        self, fact_id: str, group_ids: List[str], fact_group_ids: set
+    ) -> List[str]:
+        """Helper for share_fact. Ref: #1088.
 
-        # Group-level facts accessible to group members
-        if visibility == VisibilityLevel.GROUP and fact_group_ids:
-            # Check if user belongs to any of the fact's groups
-            if any(gid in user_group_ids for gid in fact_group_ids):
-                return True
-
-        # Check if explicitly shared with user
-        if visibility == VisibilityLevel.SHARED and user_id in shared_with:
-            return True
-
-        # No access
-        return False
+        Adds group_ids to the group set and updates Redis indexes.
+        Returns list of newly added group IDs.
+        """
+        new_groups = []
+        for group_id in group_ids:
+            if group_id not in fact_group_ids:
+                fact_group_ids.add(group_id)
+                new_groups.append(group_id)
+                await asyncio.to_thread(
+                    self.redis_client.sadd, f"group:kb:facts:{group_id}", fact_id
+                )
+        return new_groups
 
     async def share_fact(
         self,
@@ -246,31 +345,11 @@ class KnowledgeOwnership:
         if fact_metadata is None:
             fact_metadata = {}
 
-        # Share with individual users
         shared_with = set(fact_metadata.get("shared_with", []))
-        new_users = []
-
-        for user_id in user_ids:
-            if user_id not in shared_with:
-                shared_with.add(user_id)
-                new_users.append(user_id)
-                # Add to user's shared index
-                await asyncio.to_thread(
-                    self.redis_client.sadd, f"user:kb:shared:{user_id}", fact_id
-                )
-
-        # Share with groups
         fact_group_ids = set(fact_metadata.get("group_ids", []))
-        new_groups = []
 
-        for group_id in group_ids:
-            if group_id not in fact_group_ids:
-                fact_group_ids.add(group_id)
-                new_groups.append(group_id)
-                # Add to group's facts index
-                await asyncio.to_thread(
-                    self.redis_client.sadd, f"group:kb:facts:{group_id}", fact_id
-                )
+        new_users = await self._share_with_users(fact_id, user_ids, shared_with)
+        new_groups = await self._share_with_groups(fact_id, group_ids, fact_group_ids)
 
         # Update metadata
         fact_metadata["shared_with"] = list(shared_with)
@@ -292,6 +371,42 @@ class KnowledgeOwnership:
         )
 
         return fact_metadata
+
+    async def _unshare_from_users(
+        self, fact_id: str, user_ids: List[str], shared_with: set
+    ) -> List[str]:
+        """Helper for unshare_fact. Ref: #1088.
+
+        Removes user_ids from the shared set and updates Redis indexes.
+        Returns list of removed user IDs.
+        """
+        removed_users = []
+        for user_id in user_ids:
+            if user_id in shared_with:
+                shared_with.remove(user_id)
+                removed_users.append(user_id)
+                await asyncio.to_thread(
+                    self.redis_client.srem, f"user:kb:shared:{user_id}", fact_id
+                )
+        return removed_users
+
+    async def _unshare_from_groups(
+        self, fact_id: str, group_ids: List[str], fact_group_ids: set
+    ) -> List[str]:
+        """Helper for unshare_fact. Ref: #1088.
+
+        Removes group_ids from the group set and updates Redis indexes.
+        Returns list of removed group IDs.
+        """
+        removed_groups = []
+        for group_id in group_ids:
+            if group_id in fact_group_ids:
+                fact_group_ids.remove(group_id)
+                removed_groups.append(group_id)
+                await asyncio.to_thread(
+                    self.redis_client.srem, f"group:kb:facts:{group_id}", fact_id
+                )
+        return removed_groups
 
     async def unshare_fact(
         self,
@@ -319,31 +434,13 @@ class KnowledgeOwnership:
         if fact_metadata is None:
             fact_metadata = {}
 
-        # Unshare from individual users
         shared_with = set(fact_metadata.get("shared_with", []))
-        removed_users = []
-
-        for user_id in user_ids:
-            if user_id in shared_with:
-                shared_with.remove(user_id)
-                removed_users.append(user_id)
-                # Remove from user's shared index
-                await asyncio.to_thread(
-                    self.redis_client.srem, f"user:kb:shared:{user_id}", fact_id
-                )
-
-        # Unshare from groups
         fact_group_ids = set(fact_metadata.get("group_ids", []))
-        removed_groups = []
 
-        for group_id in group_ids:
-            if group_id in fact_group_ids:
-                fact_group_ids.remove(group_id)
-                removed_groups.append(group_id)
-                # Remove from group's facts index
-                await asyncio.to_thread(
-                    self.redis_client.srem, f"group:kb:facts:{group_id}", fact_id
-                )
+        removed_users = await self._unshare_from_users(fact_id, user_ids, shared_with)
+        removed_groups = await self._unshare_from_groups(
+            fact_id, group_ids, fact_group_ids
+        )
 
         # Update metadata
         fact_metadata["shared_with"] = list(shared_with)

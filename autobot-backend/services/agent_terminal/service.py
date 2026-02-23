@@ -489,6 +489,48 @@ class AgentTerminalService:
             session, command, True, user_id, comment
         )
 
+    async def _run_approved_command_body(
+        self,
+        session: AgentTerminalSession,
+        command: str,
+        command_id: str,
+        risk_level: str,
+        user_id: Optional[str],
+        comment: Optional[str],
+        auto_approve_future: bool,
+    ) -> Metadata:
+        """Helper for _execute_approved_command. Ref: #1088."""
+        await self._log_command_approval(session, command, user_id)
+
+        result = await self.command_executor.execute_in_pty(session, command)
+
+        await self.approval_handler.update_command_queue_status(
+            command_id=command_id,
+            approved=True,
+            output=result.get("stdout", ""),
+            stderr=result.get("stderr", ""),
+            return_code=result.get("return_code", 0),
+        )
+
+        await self._log_command_result(session, command, result, user_id)
+        await self._post_execution_updates(
+            session,
+            command,
+            result,
+            risk_level,
+            user_id,
+            comment,
+            auto_approve_future,
+        )
+
+        return {
+            "status": "approved",
+            "command": command,
+            "result": result,
+            "comment": comment,
+            "auto_approve_stored": auto_approve_future,
+        }
+
     async def _execute_approved_command(
         self,
         session: AgentTerminalSession,
@@ -504,6 +546,7 @@ class AgentTerminalService:
 
         Issue #281: Extracted from approve_command.
         Issue #665: Refactored to extract logging and post-execution helpers.
+        Issue #1088: Extracted _run_approved_command_body to reduce function length.
 
         Args:
             session: Terminal session
@@ -517,7 +560,6 @@ class AgentTerminalService:
         Returns:
             Execution result metadata
         """
-        # Update queue status
         await self.approval_handler.update_command_queue_status(
             command_id=command_id,
             approved=True,
@@ -526,39 +568,15 @@ class AgentTerminalService:
         )
 
         try:
-            await self._log_command_approval(session, command, user_id)
-
-            # Execute command
-            result = await self.command_executor.execute_in_pty(session, command)
-
-            # Update queue with results
-            await self.approval_handler.update_command_queue_status(
+            return await self._run_approved_command_body(
+                session=session,
+                command=command,
                 command_id=command_id,
-                approved=True,
-                output=result.get("stdout", ""),
-                stderr=result.get("stderr", ""),
-                return_code=result.get("return_code", 0),
+                risk_level=risk_level,
+                user_id=user_id,
+                comment=comment,
+                auto_approve_future=auto_approve_future,
             )
-
-            await self._log_command_result(session, command, result, user_id)
-            await self._post_execution_updates(
-                session,
-                command,
-                result,
-                risk_level,
-                user_id,
-                comment,
-                auto_approve_future,
-            )
-
-            return {
-                "status": "approved",
-                "command": command,
-                "result": result,
-                "comment": comment,
-                "auto_approve_stored": auto_approve_future,
-            }
-
         except Exception as e:
             logger.error("Approved command execution error: %s", e)
             return {

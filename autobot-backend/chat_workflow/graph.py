@@ -185,24 +185,15 @@ async def prepare_llm(state: ChatState, config: dict) -> dict:
     }
 
 
-async def generate_response(state: ChatState, config: dict) -> dict:
-    """Run one LLM iteration: call LLM, stream response, parse tool calls.
+def _build_llm_iteration_context(state: ChatState):
+    """Helper for generate_response. Ref: #1088.
 
-    Delegates to the manager's continuation loop logic for one iteration.
-    Streams WorkflowMessage chunks to frontend via stream_callback.
+    Reconstructs an LLMIterationContext from the current graph state so that
+    generate_response can delegate to the manager's continuation loop method.
     """
-    if state.get("error"):
-        return {}
-
-    manager = config["configurable"]["manager"]
-    stream_cb = config["configurable"].get("stream_callback")
-    messages = list(state.get("workflow_messages", []))
-    iteration = state.get("iteration_count", 0) + 1
-
     from .models import LLMIterationContext
 
-    # Reconstruct the iteration context from state
-    ctx = LLMIterationContext(
+    return LLMIterationContext(
         ollama_endpoint=state["llm_params"]["ollama_endpoint"],
         selected_model=state["llm_params"]["selected_model"],
         session_id=state["session_id"],
@@ -216,7 +207,15 @@ async def generate_response(state: ChatState, config: dict) -> dict:
         message=state["user_message"],
     )
 
-    import aiohttp
+
+async def _run_llm_iteration(manager, ctx, iteration, messages, stream_cb):
+    """Helper for generate_response. Ref: #1088.
+
+    Drives one pass through manager._run_continuation_loop_iteration, streaming
+    non-terminal messages to the frontend and accumulating persisted ones.
+    Returns (messages, llm_response, should_continue) on success.
+    Raises aiohttp.ClientError on LLM transport failure.
+    """
 
     from autobot_shared.http_client import get_http_client
 
@@ -224,41 +223,57 @@ async def generate_response(state: ChatState, config: dict) -> dict:
     llm_response = None
     should_continue = False
 
-    try:
-        async for item in manager._run_continuation_loop_iteration(
-            http_client,
-            ctx.initial_prompt,
-            iteration,
-            ctx,
-        ):
-            if isinstance(item, tuple) and len(item) == 2:
-                llm_response, should_continue = item
-            else:
-                msg_dict = item.to_dict() if hasattr(item, "to_dict") else item
-                # Stream ALL messages for real-time display
-                if stream_cb:
-                    stream_cb(msg_dict)
-                # Only persist non-streaming chunks (#1064)
-                is_streaming = msg_dict.get("metadata", {}).get("streaming", False)
-                if not is_streaming:
-                    messages.append(msg_dict)
+    async for item in manager._run_continuation_loop_iteration(
+        http_client,
+        ctx.initial_prompt,
+        iteration,
+        ctx,
+    ):
+        if isinstance(item, tuple) and len(item) == 2:
+            llm_response, should_continue = item
+        else:
+            msg_dict = item.to_dict() if hasattr(item, "to_dict") else item
+            if stream_cb:
+                stream_cb(msg_dict)
+            is_streaming = msg_dict.get("metadata", {}).get("streaming", False)
+            if not is_streaming:
+                messages.append(msg_dict)
 
+    return messages, llm_response, should_continue
+
+
+async def generate_response(state: ChatState, config: dict) -> dict:
+    """Run one LLM iteration: call LLM, stream response, parse tool calls.
+
+    Delegates to the manager's continuation loop logic for one iteration.
+    Streams WorkflowMessage chunks to frontend via stream_callback.
+    """
+    if state.get("error"):
+        return {}
+
+    import aiohttp
+
+    manager = config["configurable"]["manager"]
+    stream_cb = config["configurable"].get("stream_callback")
+    messages = list(state.get("workflow_messages", []))
+    iteration = state.get("iteration_count", 0) + 1
+    ctx = _build_llm_iteration_context(state)
+
+    try:
+        messages, llm_response, should_continue = await _run_llm_iteration(
+            manager, ctx, iteration, messages, stream_cb
+        )
     except aiohttp.ClientError as exc:
         logger.error("LLM call failed: %s", exc)
         error_msg = {"type": "error", "content": f"LLM error: {exc}"}
         messages.append(error_msg)
         if stream_cb:
             stream_cb(error_msg)
-        return {
-            "error": str(exc),
-            "workflow_messages": messages,
-        }
+        return {"error": str(exc), "workflow_messages": messages}
 
     all_responses = list(state.get("all_llm_responses", []))
     if llm_response:
         all_responses.append(llm_response)
-
-    # Extract tool calls from the iteration context
     parsed_tool_calls = list(ctx.execution_history) if ctx.execution_history else []
 
     return {

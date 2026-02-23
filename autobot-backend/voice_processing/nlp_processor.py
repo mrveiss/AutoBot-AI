@@ -205,6 +205,63 @@ class NaturalLanguageProcessor:
             f"(confidence: {confidence:.2f})"
         )
 
+    async def _run_analysis_pipeline(
+        self,
+        transcription: str,
+        context: Optional[Dict[str, Any]],
+        task_context: Any,
+    ) -> VoiceCommandAnalysis:
+        """Helper for analyze_voice_command. Ref: #1088.
+
+        Runs the four-step NLP pipeline (classify, extract intent+entities,
+        extract parameters, finalize checks) and returns a VoiceCommandAnalysis.
+        """
+        # Step 1: Classify command type (required for subsequent steps)
+        command_type, classification_confidence = await self._classify_command_type(
+            transcription
+        )
+
+        # Step 2: Extract intent and entities in parallel
+        intent, entities = await asyncio.gather(
+            self._extract_intent(transcription, command_type),
+            self._extract_entities(transcription, command_type),
+        )
+
+        # Step 3: Extract parameters (depends on entities from step 2)
+        parameters = await self._extract_parameters(
+            transcription, command_type, entities
+        )
+
+        # Step 4: Run final checks in parallel
+        requires_confirmation, context_needed, suggested_actions = await asyncio.gather(
+            self._requires_confirmation(command_type, intent, parameters),
+            self._needs_context(command_type, intent, parameters, context),
+            self._generate_suggested_actions(
+                command_type, intent, entities, parameters
+            ),
+        )
+
+        confidence = classification_confidence * 0.8
+        analysis = self._build_analysis_result(
+            command_type,
+            intent,
+            entities,
+            parameters,
+            confidence,
+            suggested_actions,
+            requires_confirmation,
+            context_needed,
+        )
+        self._log_analysis_outputs(
+            task_context,
+            command_type,
+            intent,
+            confidence,
+            entities,
+            suggested_actions,
+        )
+        return analysis
+
     async def analyze_voice_command(
         self, transcription: str, context: Optional[Dict[str, Any]] = None
     ) -> VoiceCommandAnalysis:
@@ -218,58 +275,9 @@ class NaturalLanguageProcessor:
             inputs={"transcription": transcription, "has_context": context is not None},
         ) as task_context:
             try:
-                # Step 1: Classify command type first (required for subsequent steps)
-                (
-                    command_type,
-                    classification_confidence,
-                ) = await self._classify_command_type(transcription)
-
-                # Step 2: Extract intent and entities in parallel
-                intent, entities = await asyncio.gather(
-                    self._extract_intent(transcription, command_type),
-                    self._extract_entities(transcription, command_type),
+                return await self._run_analysis_pipeline(
+                    transcription, context, task_context
                 )
-
-                # Step 3: Extract parameters (depends on entities from step 2)
-                parameters = await self._extract_parameters(
-                    transcription, command_type, entities
-                )
-
-                # Step 4: Run final checks in parallel
-                (
-                    requires_confirmation,
-                    context_needed,
-                    suggested_actions,
-                ) = await asyncio.gather(
-                    self._requires_confirmation(command_type, intent, parameters),
-                    self._needs_context(command_type, intent, parameters, context),
-                    self._generate_suggested_actions(
-                        command_type, intent, entities, parameters
-                    ),
-                )
-
-                # Build result and log outputs
-                confidence = classification_confidence * 0.8
-                analysis = self._build_analysis_result(
-                    command_type,
-                    intent,
-                    entities,
-                    parameters,
-                    confidence,
-                    suggested_actions,
-                    requires_confirmation,
-                    context_needed,
-                )
-                self._log_analysis_outputs(
-                    task_context,
-                    command_type,
-                    intent,
-                    confidence,
-                    entities,
-                    suggested_actions,
-                )
-                return analysis
-
             except Exception as e:
                 task_context.set_outputs({"error": str(e)})
                 logger.error("Voice command analysis failed: %s", e)

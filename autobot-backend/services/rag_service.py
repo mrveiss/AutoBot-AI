@@ -123,6 +123,49 @@ class RAGService:
             timeout=timeout_seconds,
         )
 
+    async def _execute_and_cache_search(
+        self,
+        query: str,
+        max_results: int,
+        enable_reranking: bool,
+        timeout_seconds: float,
+        categories: Optional[List[str]],
+        cache_key: str,
+    ) -> Tuple[List[SearchResult], RAGMetrics]:
+        """Helper for advanced_search. Ref: #1088.
+
+        Executes timed search, applies category filter, caches result, and
+        handles timeout/exception fallback according to config.
+        """
+        fetch_limit = max_results * (2 if categories else 1)
+        try:
+            results, metrics = await self._execute_search_with_timeout(
+                query, fetch_limit, enable_reranking, timeout_seconds
+            )
+            if categories:
+                results = self._filter_by_categories(results, categories)[:max_results]
+                metrics.final_results_count = len(results)
+                logger.info(
+                    "Category filter applied: %s, results: %d", categories, len(results)
+                )
+            await self._add_to_cache(cache_key, (results, metrics))
+            logger.info(
+                f"Advanced search completed: {len(results)} results in {metrics.total_time:.3f}s"
+            )
+            return results, metrics
+        except asyncio.TimeoutError:
+            logger.error(
+                f"Advanced search timed out after {timeout_seconds}s, using fallback"
+            )
+            if self.config.fallback_to_basic_search:
+                return await self._fallback_basic_search(query, max_results)
+            raise
+        except Exception as e:
+            logger.error("Advanced search failed: %s", e)
+            if self.config.fallback_to_basic_search:
+                return await self._fallback_basic_search(query, max_results)
+            raise
+
     async def advanced_search(
         self,
         query: str,
@@ -136,6 +179,7 @@ class RAGService:
 
         Issue #556: Added categories parameter for category-based filtering.
         Issue #665: Refactored with extracted helper methods.
+        Issue #1088: Extracted _execute_and_cache_search helper.
 
         Args:
             query: Search query string
@@ -151,7 +195,6 @@ class RAGService:
             logger.info("Advanced RAG disabled in configuration")
             return await self._fallback_basic_search(query, max_results, categories)
 
-        # Check cache (Issue #665: uses helper)
         cache_key = self._build_cache_key(
             query, max_results, enable_reranking, categories
         )
@@ -160,47 +203,14 @@ class RAGService:
             logger.debug("Cache hit for query: '%s...'", query[:50])
             return cached_result
 
-        # Ensure initialized
         if not await self.initialize():
             logger.warning("RAG optimizer initialization failed, using fallback")
             return await self._fallback_basic_search(query, max_results, categories)
 
         timeout_seconds = timeout or self.config.timeout_seconds
-        fetch_limit = max_results * (2 if categories else 1)
-
-        try:
-            # Execute search (Issue #665: uses helper)
-            results, metrics = await self._execute_search_with_timeout(
-                query, fetch_limit, enable_reranking, timeout_seconds
-            )
-
-            # Apply category filtering if specified
-            if categories:
-                results = self._filter_by_categories(results, categories)[:max_results]
-                metrics.final_results_count = len(results)
-                logger.info(
-                    "Category filter applied: %s, results: %d", categories, len(results)
-                )
-
-            await self._add_to_cache(cache_key, (results, metrics))
-            logger.info(
-                f"Advanced search completed: {len(results)} results in {metrics.total_time:.3f}s"
-            )
-            return results, metrics
-
-        except asyncio.TimeoutError:
-            logger.error(
-                f"Advanced search timed out after {timeout_seconds}s, using fallback"
-            )
-            if self.config.fallback_to_basic_search:
-                return await self._fallback_basic_search(query, max_results)
-            raise
-
-        except Exception as e:
-            logger.error("Advanced search failed: %s", e)
-            if self.config.fallback_to_basic_search:
-                return await self._fallback_basic_search(query, max_results)
-            raise
+        return await self._execute_and_cache_search(
+            query, max_results, enable_reranking, timeout_seconds, categories, cache_key
+        )
 
     async def get_optimized_context(
         self,

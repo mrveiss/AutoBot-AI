@@ -235,9 +235,9 @@ async def create_workflow_from_chat(request: dict):
                     "workflow_id": workflow_id,
                     "message": "Workflow plan presented for approval",
                     "status": "awaiting_approval",
-                    "plan": plan_approval.to_presentation_dict()
-                    if plan_approval
-                    else None,
+                    "plan": (
+                        plan_approval.to_presentation_dict() if plan_approval else None
+                    ),
                 }
             else:
                 # Legacy behavior: auto-start immediately (backward compatible default)
@@ -303,6 +303,44 @@ async def present_plan(workflow_id: str, request: PlanPresentationRequest = None
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _validate_approval_request(workflow_id: str) -> None:
+    """Helper for approve_plan. Ref: #1088.
+
+    Verifies that the workflow exists and has a pending approval.
+    Raises HTTPException(404) if either check fails.
+    """
+    if not get_workflow_manager().get_workflow_status(workflow_id):
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    if not get_workflow_manager().get_pending_approval(workflow_id):
+        raise HTTPException(
+            status_code=404, detail="No pending approval for this workflow"
+        )
+
+
+async def _execute_approval_outcome(request: PlanApprovalResponse) -> dict:
+    """Helper for approve_plan. Ref: #1088.
+
+    Starts workflow execution on approval, or cancels it on rejection.
+    Returns the appropriate response dict.
+    """
+    if request.approved:
+        await get_workflow_manager().start_workflow_execution(request.workflow_id)
+        return {
+            "success": True,
+            "workflow_id": request.workflow_id,
+            "status": "executing",
+            "message": "Plan approved, workflow execution started",
+        }
+
+    await get_workflow_manager().cancel_workflow(request.workflow_id)
+    return {
+        "success": True,
+        "workflow_id": request.workflow_id,
+        "status": "rejected",
+        "message": f"Plan rejected: {request.reason or 'No reason provided'}",
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="approve_plan",
@@ -319,27 +357,11 @@ async def approve_plan(request: PlanApprovalResponse):
     The client must provide the correct session_id that owns the workflow.
     """
     try:
-        # Issue #390 Security Fix: Verify workflow exists and get session info
-        workflow_status = get_workflow_manager().get_workflow_status(
-            request.workflow_id
-        )
-        if not workflow_status:
-            raise HTTPException(status_code=404, detail="Workflow not found")
+        # Issue #390 Security Fix: Verify workflow exists and has pending approval.
+        # Full session ownership validation should be done at API gateway level
+        # or via session token in request headers.
+        _validate_approval_request(request.workflow_id)
 
-        # Get pending approval to verify it exists
-        pending_approval = get_workflow_manager().get_pending_approval(
-            request.workflow_id
-        )
-        if not pending_approval:
-            raise HTTPException(
-                status_code=404, detail="No pending approval for this workflow"
-            )
-
-        # Note: Full session ownership validation should be done at API gateway level
-        # or via session token in request headers. Here we verify the workflow exists
-        # and has a pending approval before allowing modification.
-
-        # Handle the approval response
         success = get_workflow_manager().handle_plan_approval_response(
             workflow_id=request.workflow_id,
             approved=request.approved,
@@ -352,26 +374,7 @@ async def approve_plan(request: PlanApprovalResponse):
                 status_code=400, detail="Failed to process approval response"
             )
 
-        if request.approved:
-            # Start execution after approval
-            await get_workflow_manager().start_workflow_execution(request.workflow_id)
-
-            return {
-                "success": True,
-                "workflow_id": request.workflow_id,
-                "status": "executing",
-                "message": "Plan approved, workflow execution started",
-            }
-        else:
-            # Plan rejected - cancel workflow
-            await get_workflow_manager().cancel_workflow(request.workflow_id)
-
-            return {
-                "success": True,
-                "workflow_id": request.workflow_id,
-                "status": "rejected",
-                "message": f"Plan rejected: {request.reason or 'No reason provided'}",
-            }
+        return await _execute_approval_outcome(request)
 
     except HTTPException:
         raise

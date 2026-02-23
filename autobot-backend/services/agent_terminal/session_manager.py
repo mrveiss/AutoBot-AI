@@ -198,6 +198,36 @@ class SessionManager:
         except Exception as e:
             logger.error(f"Failed to register PTY session with session_manager: {e}")
 
+    async def _setup_pty_for_session(
+        self,
+        session_id: str,
+        conversation_id: Optional[str],
+    ) -> Optional[str]:
+        """Helper for create_session. Ref: #1088.
+
+        Creates or reuses a PTY session and registers it for WebSocket logging.
+
+        Args:
+            session_id: Agent session ID
+            conversation_id: Optional conversation ID for logging linkage
+
+        Returns:
+            PTY session ID if successful, None otherwise
+        """
+        try:
+            desired_pty_id = conversation_id or session_id
+            pty_session_id = self._create_or_reuse_pty_session(
+                desired_pty_id, session_id
+            )
+            if pty_session_id and conversation_id:
+                self._register_pty_with_terminal_manager(
+                    pty_session_id, conversation_id
+                )
+            return pty_session_id
+        except Exception as e:
+            logger.error("Error creating PTY session: %s", e)
+            return None
+
     async def create_session(
         self,
         agent_id: str,
@@ -210,6 +240,7 @@ class SessionManager:
         Create a new agent terminal session with PTY integration.
 
         Issue #281: Refactored from 113 lines to use extracted helper methods.
+        Issue #1088: Extracted _setup_pty_for_session to reduce to <=65 lines.
 
         Args:
             agent_id: Unique identifier for the agent
@@ -222,24 +253,7 @@ class SessionManager:
             Created session
         """
         session_id = str(uuid.uuid4())
-
-        # Create PTY session for terminal display (Issue #281: uses helper)
-        pty_session_id = None
-        try:
-            desired_pty_id = conversation_id or session_id
-            pty_session_id = self._create_or_reuse_pty_session(
-                desired_pty_id, session_id
-            )
-
-            # Register PTY for WebSocket logging (Issue #281: uses helper)
-            if pty_session_id and conversation_id:
-                self._register_pty_with_terminal_manager(
-                    pty_session_id, conversation_id
-                )
-
-        except Exception as e:
-            logger.error("Error creating PTY session: %s", e)
-            pty_session_id = None
+        pty_session_id = await self._setup_pty_for_session(session_id, conversation_id)
 
         session = AgentTerminalSession(
             session_id=session_id,
@@ -251,7 +265,6 @@ class SessionManager:
             pty_session_id=pty_session_id,
         )
 
-        # Protect session dictionary access with lock
         async with self._sessions_lock:
             self.sessions[session_id] = session
 
@@ -261,11 +274,9 @@ class SessionManager:
             f"PTY session: {pty_session_id}"
         )
 
-        # Restore pending approvals from chat history (survives restarts)
         if conversation_id and self.chat_history_manager:
             await self._restore_pending_approval(session, conversation_id)
 
-        # Persist to Redis if available
         if self.redis_client:
             await self._persist_session(session)
 

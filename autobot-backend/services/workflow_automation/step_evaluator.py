@@ -238,24 +238,15 @@ class WorkflowStepEvaluator:
     async def evaluate_step(
         self, workflow: ActiveWorkflow, step: WorkflowStep
     ) -> Metadata:
-        """
-        Evaluate workflow step using LLM judges.
+        """Evaluate workflow step using LLM judges. Ref: #1088.
 
         Issue #281: Refactored from 144 lines to use extracted helper methods.
         Issue #665: Further refactored with _run_judge_evaluations and error handler.
-
-        Args:
-            workflow: Active workflow containing the step
-            step: WorkflowStep to evaluate
-
-        Returns:
-            Evaluation result with should_proceed and judgment details
         """
         if not self.judges_enabled:
             return {"should_proceed": True, "reason": "Judges disabled"}
 
         try:
-            # Prepare data (Issue #281: uses helpers)
             step_data = self._prepare_step_data(step)
             workflow_context = self._prepare_workflow_context(workflow)
             user_context = {
@@ -263,31 +254,21 @@ class WorkflowStepEvaluator:
                 "experience_level": "intermediate",
                 "environment": "development",
             }
-
-            # Evaluate with judges (Issue #665: uses helper)
             workflow_judgment, security_judgment = await self._run_judge_evaluations(
                 step_data, workflow_context, user_context, step.command
             )
-
-            # Combine judgments
             should_approve_workflow = (
                 workflow_judgment.recommendation in APPROVAL_RECOMMENDATIONS
             )
             should_approve_security = (
                 security_judgment.recommendation in APPROVAL_RECOMMENDATIONS
             )
-
-            # Extract safety scores (Issue #281: uses helper)
             workflow_safety = self._extract_safety_score(workflow_judgment)
             security_safety = self._extract_safety_score(security_judgment)
             min_safety = min(workflow_safety, security_safety)
-
-            # Decision logic
             should_proceed = (
                 should_approve_workflow and should_approve_security and min_safety > 0.7
             )
-
-            # Build result (Issue #281: uses helper)
             evaluation_result = self._build_evaluation_result(
                 should_proceed,
                 workflow_judgment,
@@ -296,7 +277,6 @@ class WorkflowStepEvaluator:
                 should_approve_workflow,
                 should_approve_security,
             )
-
             logger.info(
                 "Step evaluation for %s: proceed=%s, workflow_score=%.2f, security_score=%.2f",
                 step.step_id,
@@ -304,7 +284,6 @@ class WorkflowStepEvaluator:
                 workflow_judgment.overall_score,
                 security_judgment.overall_score,
             )
-
             return evaluation_result
 
         except Exception as e:

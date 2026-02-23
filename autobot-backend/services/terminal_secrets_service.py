@@ -96,6 +96,29 @@ class TerminalSecretsService:
             self._agent_secrets = get_agent_secrets_integration()
         return self._agent_secrets
 
+    def _create_session_state(
+        self, session_id: str, chat_id: Optional[str]
+    ) -> SessionKeyState:
+        """Helper for setup_ssh_keys. Ref: #1088."""
+        state = SessionKeyState(session_id=session_id, chat_id=chat_id)
+        state.temp_dir = tempfile.mkdtemp(prefix=f"autobot_ssh_{session_id}_")
+        return state
+
+    def _store_session_state(self, session_id: str, state: SessionKeyState) -> None:
+        """Helper for setup_ssh_keys. Ref: #1088."""
+        with self._sessions_lock:
+            self._sessions[session_id] = state
+
+    @staticmethod
+    def _make_setup_result(session_id: str) -> Dict:
+        """Helper for setup_ssh_keys. Ref: #1088."""
+        return {
+            "keys_available": [],
+            "keys_loaded": 0,
+            "errors": [],
+            "session_id": session_id,
+        }
+
     def _filter_keys_by_name(
         self, ssh_keys: List[Dict], specific_key_names: Optional[List[str]]
     ) -> List[Dict]:
@@ -167,12 +190,7 @@ class TerminalSecretsService:
             - keys_loaded: Number of keys loaded
             - errors: Any errors encountered
         """
-        result = {
-            "keys_available": [],
-            "keys_loaded": 0,
-            "errors": [],
-            "session_id": session_id,
-        }
+        result = self._make_setup_result(session_id)
 
         try:
             # Get SSH keys from secrets
@@ -188,17 +206,13 @@ class TerminalSecretsService:
             ssh_keys = self._filter_keys_by_name(ssh_keys, specific_key_names)
 
             # Create session state with temp directory
-            session_state = SessionKeyState(session_id=session_id, chat_id=chat_id)
-            session_state.temp_dir = tempfile.mkdtemp(
-                prefix=f"autobot_ssh_{session_id}_"
-            )
+            session_state = self._create_session_state(session_id, chat_id)
 
             # Prepare all keys (Issue #665: uses helper)
             await self._prepare_session_keys(session_state, ssh_keys, result)
 
             # Store session state
-            with self._sessions_lock:
-                self._sessions[session_id] = session_state
+            self._store_session_state(session_id, session_state)
 
             logger.info(
                 "SSH key setup complete for session %s: %d keys loaded",

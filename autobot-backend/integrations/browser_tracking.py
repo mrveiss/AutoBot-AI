@@ -19,6 +19,56 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 
+def _build_browser_action_metadata(
+    status_code: Optional[int],
+    redirect_url: Optional[str],
+) -> dict[str, Any]:
+    """Helper for track_browser_action. Ref: #1088."""
+    metadata: dict[str, Any] = {}
+    if status_code:
+        metadata["status_code"] = status_code
+    if redirect_url:
+        metadata["redirect_url"] = redirect_url
+    return metadata
+
+
+async def _invoke_browser_activity_tracker(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    url: str,
+    action: str,
+    session_id: Optional[str],
+    selector: Optional[str],
+    input_value: Optional[str],
+    secrets_used: Optional[list[uuid.UUID]],
+    metadata: dict[str, Any],
+) -> uuid.UUID:
+    """Helper for track_browser_action. Ref: #1088."""
+    try:
+        activity_id = await track_browser_activity(
+            db=db,
+            user_id=user_id,
+            url=url,
+            action=action,
+            session_id=session_id,
+            selector=selector,
+            input_value=input_value,
+            secrets_used=secrets_used,
+            metadata=metadata,
+        )
+        logger.info(
+            f"Browser activity tracked: user={user_id}, "
+            f"action={action}, url={url[:50]}"
+        )
+        return activity_id
+    except Exception as e:
+        logger.error(
+            f"Failed to track browser activity: {e}",
+            exc_info=True,
+        )
+        raise
+
+
 async def track_browser_action(
     db: AsyncSession,
     user_id: uuid.UUID,
@@ -61,38 +111,18 @@ async def track_browser_action(
         ...         status_code=200,
         ...     )
     """
-    metadata: dict[str, Any] = {}
-    if status_code:
-        metadata["status_code"] = status_code
-    if redirect_url:
-        metadata["redirect_url"] = redirect_url
-
-    try:
-        activity_id = await track_browser_activity(
-            db=db,
-            user_id=user_id,
-            url=url,
-            action=action,
-            session_id=session_id,
-            selector=selector,
-            input_value=input_value,
-            secrets_used=secrets_used,
-            metadata=metadata,
-        )
-
-        logger.info(
-            f"Browser activity tracked: user={user_id}, "
-            f"action={action}, url={url[:50]}"
-        )
-
-        return activity_id
-
-    except Exception as e:
-        logger.error(
-            f"Failed to track browser activity: {e}",
-            exc_info=True,
-        )
-        raise
+    metadata = _build_browser_action_metadata(status_code, redirect_url)
+    return await _invoke_browser_activity_tracker(
+        db=db,
+        user_id=user_id,
+        url=url,
+        action=action,
+        session_id=session_id,
+        selector=selector,
+        input_value=input_value,
+        secrets_used=secrets_used,
+        metadata=metadata,
+    )
 
 
 async def track_browser_navigation(
