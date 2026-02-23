@@ -49,7 +49,8 @@ get_staged_ts_files() {
         grep -v -E '(\.spec\.(ts|js)$|\.test\.(ts|js)$|\.e2e\.(ts|js)$|-test\.(ts|js)$)' | \
         grep -v -E '(debugUtils\.ts$|RumConsoleHelper\.ts$)' | \
         grep -v -E '(\.d\.ts$|vite\.config\.(ts|js)$|vitest\.config\.(ts|js)$)' | \
-        grep -v -E '(autobot-infrastructure/)' || true
+        grep -v -E '(autobot-infrastructure/)' | \
+        grep -v -E '(autobot-browser-worker/)' || true  # Node.js server: console.* is appropriate
 }
 
 # Check a Python file for print() calls
