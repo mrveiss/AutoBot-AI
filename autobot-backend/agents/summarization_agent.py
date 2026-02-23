@@ -117,9 +117,9 @@ class SummarizationAgent(StandardizedAgent):
                 "response_text": response_text,
                 "agent_type": "summarization",
                 "model_used": self.model_name,
-                "token_usage": response.get("usage", {})
-                if isinstance(response, dict)
-                else {},
+                "token_usage": (
+                    response.get("usage", {}) if isinstance(response, dict) else {}
+                ),
             }
         except Exception as e:
             logger.error("Summarization Agent error: %s", e)

@@ -29,9 +29,11 @@ from config import config
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 
-from autobot_shared.ssot_config import (get_agent_endpoint_explicit,
-                                        get_agent_model_explicit,
-                                        get_agent_provider_explicit)
+from autobot_shared.ssot_config import (
+    get_agent_endpoint_explicit,
+    get_agent_model_explicit,
+    get_agent_provider_explicit,
+)
 
 logger = logging.getLogger(__name__)
 

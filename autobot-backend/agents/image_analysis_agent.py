@@ -132,9 +132,9 @@ class ImageAnalysisAgent(StandardizedAgent):
                 "response_text": response_text,
                 "agent_type": "image_analysis",
                 "model_used": self.model_name,
-                "token_usage": response.get("usage", {})
-                if isinstance(response, dict)
-                else {},
+                "token_usage": (
+                    response.get("usage", {}) if isinstance(response, dict) else {}
+                ),
             }
         except Exception as e:
             logger.error("Image Analysis Agent error: %s", e)

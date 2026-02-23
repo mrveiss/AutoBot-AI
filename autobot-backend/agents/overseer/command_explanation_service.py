@@ -16,8 +16,9 @@ import json
 import logging
 from typing import Dict, Optional
 
-from autobot_shared.http_client import get_http_client
 from backend.dependencies import global_config_manager
+
+from autobot_shared.http_client import get_http_client
 
 from .types import CommandBreakdownPart, CommandExplanation, OutputExplanation
 
@@ -161,9 +162,11 @@ class CommandExplanationService:
             logger.error("Failed to explain output: %s", e)
             # Return a basic fallback explanation
             return OutputExplanation(
-                summary="Command execution completed."
-                if return_code == 0
-                else f"Command failed with return code {return_code}.",
+                summary=(
+                    "Command execution completed."
+                    if return_code == 0
+                    else f"Command failed with return code {return_code}."
+                ),
                 key_findings=["See output above for details."],
             )
 

@@ -114,9 +114,9 @@ class CodeGenerationAgent(StandardizedAgent):
                 "response_text": response_text,
                 "agent_type": "code_generation",
                 "model_used": self.model_name,
-                "token_usage": response.get("usage", {})
-                if isinstance(response, dict)
-                else {},
+                "token_usage": (
+                    response.get("usage", {}) if isinstance(response, dict) else {}
+                ),
             }
         except Exception as e:
             logger.error("Code Generation Agent error: %s", e)

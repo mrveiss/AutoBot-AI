@@ -20,8 +20,9 @@ import re
 import uuid
 from typing import Any, AsyncGenerator, Dict, Optional
 
-from autobot_shared.http_client import get_http_client
 from backend.dependencies import global_config_manager
+
+from autobot_shared.http_client import get_http_client
 
 from .types import AgentTask, OverseerUpdate, StepResult, StepStatus, TaskPlan
 
