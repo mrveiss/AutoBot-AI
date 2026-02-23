@@ -313,6 +313,21 @@ class EmbeddingPatternAnalyzer:
         except Exception as e:
             logger.error("Failed to update embedding stats: %s", e)
 
+    def _sum_daily_stats(self, all_stats: list) -> tuple:
+        """Aggregate daily Redis stats into counters. Ref: #1088."""
+        ops = tokens = documents = batch = successful = 0
+        cost = processing_time = 0.0
+        for stats in all_stats:
+            if stats:
+                ops += int(stats.get(b"total_operations", 0))
+                tokens += int(stats.get(b"total_tokens", 0))
+                documents += int(stats.get(b"total_documents", 0))
+                cost += float(stats.get(b"total_cost", 0))
+                processing_time += float(stats.get(b"total_processing_time", 0))
+                batch += int(stats.get(b"total_batch_size", 0))
+                successful += int(stats.get(b"successful_operations", 0))
+        return ops, tokens, documents, cost, processing_time, batch, successful
+
     async def get_stats(
         self,
         days: int = 7,
@@ -321,14 +336,6 @@ class EmbeddingPatternAnalyzer:
         """Get embedding usage statistics for a time period"""
         try:
             redis = await self._get_redis()
-
-            total_ops = 0
-            total_tokens = 0
-            total_documents = 0
-            total_cost = 0.0
-            total_processing_time = 0.0
-            total_batch_size = 0
-            successful_ops = 0
 
             # Aggregate daily stats - batch fetch using pipeline to eliminate N+1
             dates = [
@@ -342,17 +349,15 @@ class EmbeddingPatternAnalyzer:
                     await pipe.hgetall(key)
                 all_stats = await pipe.execute()
 
-            for stats in all_stats:
-                if stats:
-                    total_ops += int(stats.get(b"total_operations", 0))
-                    total_tokens += int(stats.get(b"total_tokens", 0))
-                    total_documents += int(stats.get(b"total_documents", 0))
-                    total_cost += float(stats.get(b"total_cost", 0))
-                    total_processing_time += float(
-                        stats.get(b"total_processing_time", 0)
-                    )
-                    total_batch_size += int(stats.get(b"total_batch_size", 0))
-                    successful_ops += int(stats.get(b"successful_operations", 0))
+            (
+                total_ops,
+                total_tokens,
+                total_documents,
+                total_cost,
+                total_processing_time,
+                total_batch_size,
+                successful_ops,
+            ) = self._sum_daily_stats(all_stats)
 
             # Calculate derived metrics
             avg_processing_time = (
