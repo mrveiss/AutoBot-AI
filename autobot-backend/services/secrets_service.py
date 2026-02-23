@@ -20,6 +20,13 @@ from cryptography.fernet import Fernet
 
 logger = logging.getLogger(__name__)
 
+_INSERT_SECRET_SQL = (
+    "INSERT INTO secrets ("
+    "id, name, description, secret_type, encrypted_value, "
+    "scope, chat_id, created_at, updated_at, expires_at, created_by, metadata"
+    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+)
+
 
 class SecretsService:
     """Service for managing secrets with encryption and scope isolation"""
@@ -248,13 +255,7 @@ class SecretsService:
 
         try:
             cursor.execute(
-                """
-                INSERT INTO secrets (
-                    id, name, description, secret_type, encrypted_value,
-                    scope, chat_id, created_at, updated_at, expires_at,
-                    created_by, metadata
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
+                _INSERT_SECRET_SQL,
                 (
                     secret_id,
                     name,
