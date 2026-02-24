@@ -17,7 +17,6 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 import aiofiles
-from backend.type_defs.common import Metadata
 from chat_history import ChatHistoryManager
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
@@ -25,6 +24,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 from pydantic import BaseModel
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

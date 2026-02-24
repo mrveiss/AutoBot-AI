@@ -20,13 +20,10 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from backend.services.captcha_human_loop import (
-    CaptchaResolutionStatus,
-    get_captcha_human_loop,
-)
 from fastapi import APIRouter, HTTPException, Path
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from services.captcha_human_loop import CaptchaResolutionStatus, get_captcha_human_loop
 
 router = APIRouter(prefix="/captcha", tags=["captcha"])
 logger = logging.getLogger(__name__)

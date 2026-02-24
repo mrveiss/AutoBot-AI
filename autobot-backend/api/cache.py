@@ -10,8 +10,8 @@ import asyncio
 import json
 import logging
 
-from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client

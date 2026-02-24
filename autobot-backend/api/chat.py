@@ -19,21 +19,24 @@ from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from auth_middleware import get_current_user
-from backend.constants.threshold_constants import CategoryDefaults, TimingConstants
+from constants.threshold_constants import CategoryDefaults, TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
-from backend.dependencies import get_config, get_knowledge_base
+from dependencies import get_config, get_knowledge_base
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
 
 # CRITICAL SECURITY FIX: Import session ownership validation
-from backend.security.session_ownership import validate_session_ownership
-from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
-from backend.type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
+from security.session_ownership import validate_session_ownership
+from services.ai_stack_client import AIStackError, get_ai_stack_client
+from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
-from backend.utils.chat_exceptions import get_exceptions_lazy
+from utils.chat_exceptions import get_exceptions_lazy
 
 # Import reusable chat utilities - Phase 1 Utility Extraction
-from backend.utils.chat_utils import (
+from utils.chat_utils import (
     create_error_response,
     create_success_response,
     generate_chat_session_id,
@@ -43,9 +46,6 @@ from backend.utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -303,7 +303,7 @@ router = APIRouter(tags=["chat"])
 logger = logging.getLogger(__name__)
 
 # Include session management router
-from backend.api.chat_sessions import router as sessions_router
+from api.chat_sessions import router as sessions_router
 
 router.include_router(sessions_router)
 
