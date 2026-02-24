@@ -13,13 +13,12 @@ For new code, prefer importing directly from knowledge:
     from knowledge import KnowledgeBase, get_knowledge_base
 """
 
-from backend.knowledge.embedding_cache import EmbeddingCache, get_embedding_cache
-from backend.knowledge.utils import (
-    sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb,
-)
-
 # Re-export everything from the modular implementation
 from knowledge import KnowledgeBase, get_knowledge_base
+from knowledge.embedding_cache import EmbeddingCache, get_embedding_cache
+from knowledge.utils import (
+    sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb,
+)
 
 # Public exports
 __all__ = [

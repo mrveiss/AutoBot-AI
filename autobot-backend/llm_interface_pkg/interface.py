@@ -18,12 +18,12 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 import xxhash
+from config import ConfigManager
+from constants.model_constants import ModelConstants
 
 from autobot_shared.error_boundaries import error_boundary, get_error_boundary_manager
 from autobot_shared.http_client import get_http_client
 from autobot_shared.tracing import get_tracer
-from backend.constants.model_constants import ModelConstants
-from config import ConfigManager
 
 from .cache import CachedResponse, get_llm_cache
 from .hardware import HardwareDetector
@@ -50,7 +50,7 @@ from .types import ProviderType
 
 # Issue #756: Import provider health checking to prevent stalls
 try:
-    from backend.services.provider_health import ProviderHealthManager, ProviderStatus
+    from services.provider_health import ProviderHealthManager, ProviderStatus
 
     HEALTH_CHECK_AVAILABLE = True
 except ImportError:
@@ -73,10 +73,7 @@ except ImportError:
 
 # LLM Pattern Analyzer integration for cost optimization (Issue #229)
 try:
-    from backend.api.analytics_llm_patterns import (
-        UsageRecordRequest,
-        get_pattern_analyzer,
-    )
+    from api.analytics_llm_patterns import UsageRecordRequest, get_pattern_analyzer
 
     PATTERN_ANALYZER_AVAILABLE = True
 except ImportError:

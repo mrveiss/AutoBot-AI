@@ -13,8 +13,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 async def test_consolidation_success():
     """Test core consolidation features without external dependencies"""
-    print("🧪 Testing LLM Interface Consolidation")
-    print("=" * 50)
+    print("🧪 Testing LLM Interface Consolidation")  # noqa: print
+    print("=" * 50)  # noqa: print
 
     success_count = 0
     total_tests = 0
@@ -33,20 +33,20 @@ async def test_consolidation_success():
             safe_query,
         )
 
-        print("✅ All imports successful")
+        print("✅ All imports successful")  # noqa: print
         success_count += 1
     except Exception as e:
-        print(f"❌ Import test failed: {e}")
+        print(f"❌ Import test failed: {e}")  # noqa: print
 
     # Test 2: Interface initialization
     total_tests += 1
     try:
         settings = LLMSettings()
         interface = LLMInterface(settings)
-        print("✅ Interface initialization works")
+        print("✅ Interface initialization works")  # noqa: print
         success_count += 1
     except Exception as e:
-        print(f"❌ Interface initialization failed: {e}")
+        print(f"❌ Interface initialization failed: {e}")  # noqa: print
         return False
 
     # Test 3: Settings validation
@@ -56,10 +56,10 @@ async def test_consolidation_success():
         assert hasattr(settings, "temperature")
         assert hasattr(settings, "connection_pool_size")
         assert hasattr(settings, "chunk_timeout")
-        print("✅ Settings structure is correct")
+        print("✅ Settings structure is correct")  # noqa: print
         success_count += 1
     except Exception as e:
-        print(f"❌ Settings validation failed: {e}")
+        print(f"❌ Settings validation failed: {e}")  # noqa: print
 
     # Test 4: Interface has all required methods
     total_tests += 1
@@ -83,12 +83,12 @@ async def test_consolidation_success():
                 missing_methods.append(method)
 
         if not missing_methods:
-            print("✅ All required methods present")
+            print("✅ All required methods present")  # noqa: print
             success_count += 1
         else:
-            print(f"❌ Missing methods: {missing_methods}")
+            print(f"❌ Missing methods: {missing_methods}")  # noqa: print
     except Exception as e:
-        print(f"❌ Method validation failed: {e}")
+        print(f"❌ Method validation failed: {e}")  # noqa: print
 
     # Test 5: Provider routing system
     total_tests += 1
@@ -108,12 +108,12 @@ async def test_consolidation_success():
                 missing_providers.append(provider)
 
         if not missing_providers:
-            print("✅ All providers in routing table")
+            print("✅ All providers in routing table")  # noqa: print
             success_count += 1
         else:
-            print(f"❌ Missing providers: {missing_providers}")
+            print(f"❌ Missing providers: {missing_providers}")  # noqa: print
     except Exception as e:
-        print(f"❌ Provider routing test failed: {e}")
+        print(f"❌ Provider routing test failed: {e}")  # noqa: print
 
     # Test 6: Mock provider functionality (guaranteed to work)
     total_tests += 1
@@ -128,10 +128,10 @@ async def test_consolidation_success():
         assert isinstance(response, LLMResponse)
         assert response.provider == "mock"
         assert len(response.content) > 0
-        print("✅ Mock provider works correctly")
+        print("✅ Mock provider works correctly")  # noqa: print
         success_count += 1
     except Exception as e:
-        print(f"❌ Mock provider test failed: {e}")
+        print(f"❌ Mock provider test failed: {e}")  # noqa: print
 
     # Test 7: Local provider functionality
     total_tests += 1
@@ -145,10 +145,10 @@ async def test_consolidation_success():
         assert isinstance(response, LLMResponse)
         assert response.provider == "local"
         assert "Local TinyLLaMA response" in response.content
-        print("✅ Local provider works correctly")
+        print("✅ Local provider works correctly")  # noqa: print
         success_count += 1
     except Exception as e:
-        print(f"❌ Local provider test failed: {e}")
+        print(f"❌ Local provider test failed: {e}")  # noqa: print
 
     # Test 8: Hardware detection
     total_tests += 1
@@ -166,10 +166,12 @@ async def test_consolidation_success():
             "openvino_cpu",
             "openvino_npu",
         ]
-        print(f"✅ Hardware detection works (detected: {detected}, backend: {backend})")
+        print(  # noqa: print
+            f"✅ Hardware detection works (detected: {detected}, backend: {backend})"
+        )  # noqa: print
         success_count += 1
     except Exception as e:
-        print(f"❌ Hardware detection failed: {e}")
+        print(f"❌ Hardware detection failed: {e}")  # noqa: print
 
     # Test 9: Provider and model determination
     total_tests += 1
@@ -192,12 +194,12 @@ async def test_consolidation_success():
         )
         assert provider == "mock"
 
-        print("✅ Provider and model determination works")
+        print("✅ Provider and model determination works")  # noqa: print
         success_count += 1
     except AssertionError as e:
-        print(f"❌ Provider determination assertion failed: {e}")
+        print(f"❌ Provider determination assertion failed: {e}")  # noqa: print
     except Exception as e:
-        print(f"❌ Provider determination failed: {e}")
+        print(f"❌ Provider determination failed: {e}")  # noqa: print
         import traceback
 
         traceback.print_exc()
@@ -216,10 +218,10 @@ async def test_consolidation_success():
         for key in expected_keys:
             assert key in metrics
 
-        print("✅ Metrics collection works")
+        print("✅ Metrics collection works")  # noqa: print
         success_count += 1
     except Exception as e:
-        print(f"❌ Metrics collection failed: {e}")
+        print(f"❌ Metrics collection failed: {e}")  # noqa: print
 
     # Test 11: Streaming intelligence
     total_tests += 1
@@ -239,10 +241,10 @@ async def test_consolidation_success():
         # Success should reduce failure count
         interface._record_streaming_success(model)
 
-        print("✅ Streaming intelligence works")
+        print("✅ Streaming intelligence works")  # noqa: print
         success_count += 1
     except Exception as e:
-        print(f"❌ Streaming intelligence failed: {e}")
+        print(f"❌ Streaming intelligence failed: {e}")  # noqa: print
 
     # Test 12: Legacy compatibility functions
     total_tests += 1
@@ -256,41 +258,41 @@ async def test_consolidation_success():
         assert callable(execute_ollama_request)
         assert safe_query == execute_ollama_request  # Should be the same function
 
-        print("✅ Legacy compatibility functions work")
+        print("✅ Legacy compatibility functions work")  # noqa: print
         success_count += 1
     except Exception as e:
-        print(f"❌ Legacy compatibility test failed: {e}")
+        print(f"❌ Legacy compatibility test failed: {e}")  # noqa: print
 
     # Cleanup
     try:
         await interface.cleanup()
-        print("✅ Cleanup successful")
+        print("✅ Cleanup successful")  # noqa: print
     except Exception as e:
-        print(f"⚠️  Cleanup warning: {e}")
+        print(f"⚠️  Cleanup warning: {e}")  # noqa: print
 
-    print("=" * 50)
-    print(f"📊 Test Results: {success_count}/{total_tests} tests passed")
+    print("=" * 50)  # noqa: print
+    print(f"📊 Test Results: {success_count}/{total_tests} tests passed")  # noqa: print
 
     if success_count == total_tests:
-        print("🎉 ALL TESTS PASSED!")
-        print("✅ Consolidated interface is ready for deployment")
+        print("🎉 ALL TESTS PASSED!")  # noqa: print
+        print("✅ Consolidated interface is ready for deployment")  # noqa: print
         return True
     else:
-        print(f"⚠️  {total_tests - success_count} tests failed")
-        print("🔧 Fix the issues before proceeding with consolidation")
+        print(f"⚠️  {total_tests - success_count} tests failed")  # noqa: print
+        print("🔧 Fix the issues before proceeding with consolidation")  # noqa: print
         return False
 
 
 async def test_line_count_reduction():
     """Verify that consolidation actually reduces code"""
-    print("\n📏 Testing Code Reduction")
-    print("=" * 30)
+    print("\n📏 Testing Code Reduction")  # noqa: print
+    print("=" * 30)  # noqa: print
 
     # Read consolidated file
     consolidated_path = Path("src/llm_interface.py")
     if consolidated_path.exists():
         consolidated_lines = len(consolidated_path.read_text().splitlines())
-        print(f"Consolidated file: {consolidated_lines} lines")
+        print(f"Consolidated file: {consolidated_lines} lines")  # noqa: print
 
         # Compare with original files
         original_files = [
@@ -306,21 +308,21 @@ async def test_line_count_reduction():
             if Path(file_path).exists():
                 lines = len(Path(file_path).read_text().splitlines())
                 total_original_lines += lines
-                print(f"{file_path}: {lines} lines")
+                print(f"{file_path}: {lines} lines")  # noqa: print
 
         reduction = total_original_lines - consolidated_lines
         reduction_percent = (reduction / total_original_lines) * 100
 
-        print(f"\nTotal original: {total_original_lines} lines")
-        print(f"Consolidated: {consolidated_lines} lines")
-        print(f"Reduction: {reduction} lines ({reduction_percent:.1f}%)")
+        print(f"\nTotal original: {total_original_lines} lines")  # noqa: print
+        print(f"Consolidated: {consolidated_lines} lines")  # noqa: print
+        print(f"Reduction: {reduction} lines ({reduction_percent:.1f}%)")  # noqa: print
 
         if reduction > 0:
-            print("✅ Successful code consolidation!")
+            print("✅ Successful code consolidation!")  # noqa: print
         else:
-            print("⚠️  No code reduction achieved")
+            print("⚠️  No code reduction achieved")  # noqa: print
     else:
-        print("❌ Consolidated file not found")
+        print("❌ Consolidated file not found")  # noqa: print
 
 
 if __name__ == "__main__":

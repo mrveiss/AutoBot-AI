@@ -32,9 +32,9 @@ import aiofiles
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.constants.threshold_constants import TimingConstants
-from backend.utils.semantic_chunker_gpu import get_gpu_semantic_chunker
+from constants.threshold_constants import TimingConstants
 from knowledge_base import KnowledgeBase
+from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 from autobot_shared.logging_manager import get_llm_logger
 
@@ -873,12 +873,12 @@ if __name__ == "__main__":
             sync = IncrementalKnowledgeSync()
             await sync.initialize()
             status = sync.get_sync_status()
-            print(json.dumps(status, indent=2))
+            print(json.dumps(status, indent=2))  # noqa: print
         elif args.daemon:
             await start_background_sync_daemon(check_interval_minutes=args.interval)
         else:
             metrics = await run_incremental_sync()
-            print(
+            print(  # noqa: print
                 f"Sync completed - processed {metrics.total_chunks_processed} chunks "
                 f"in {metrics.total_processing_time:.3f}s"
             )

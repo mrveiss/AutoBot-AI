@@ -11,24 +11,24 @@ import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
-from backend.llm_interface_pkg.optimization.cloud_batcher import CloudRequestBatcher
-from backend.llm_interface_pkg.optimization.prompt_compressor import (
+from llm_interface_pkg.optimization.cloud_batcher import CloudRequestBatcher
+from llm_interface_pkg.optimization.prompt_compressor import (
     CompressionConfig,
     CompressionResult,
     PromptCompressor,
 )
-from backend.llm_interface_pkg.optimization.rate_limiter import (
+from llm_interface_pkg.optimization.rate_limiter import (
     RateLimitConfig,
     RateLimitError,
     RateLimitHandler,
     RetryStrategy,
 )
-from backend.llm_interface_pkg.optimization.router import (
+from llm_interface_pkg.optimization.router import (
     OptimizationCategory,
     OptimizationConfig,
     OptimizationRouter,
 )
-from backend.llm_interface_pkg.types import ProviderType
+from llm_interface_pkg.types import ProviderType
 
 
 class TestOptimizationRouter:
@@ -158,7 +158,7 @@ class TestPromptCompressor:
         result = compressor.compress(text)
 
         assert "```python" in result.compressed_text
-        assert "print('hello')" in result.compressed_text
+        assert "print('hello')" in result.compressed_text  # noqa: print
 
     def test_compress_preserves_urls(self):
         """Should preserve URLs when configured."""

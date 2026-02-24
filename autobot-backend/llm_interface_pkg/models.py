@@ -11,8 +11,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
-from backend.constants.model_constants import ModelConfig, ModelConstants
-from backend.constants.network_constants import NetworkConstants
+from constants.model_constants import ModelConfig, ModelConstants
+from constants.network_constants import NetworkConstants
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
