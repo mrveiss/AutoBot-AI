@@ -16,7 +16,7 @@ import ast
 import re
 from typing import List, Set
 
-from backend.code_intelligence.fingerprinting.types import CodeFragment
+from code_intelligence.fingerprinting.types import CodeFragment
 
 
 class SimilarityCalculator:

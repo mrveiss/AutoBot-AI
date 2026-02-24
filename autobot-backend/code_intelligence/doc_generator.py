@@ -36,11 +36,9 @@ import os
 from typing import List, Optional, Set
 
 # Issue #394: Import refactored modules for delegation
-from backend.code_intelligence.doc_generation.docstring_parser import DocstringParser
-from backend.code_intelligence.doc_generation.markdown_generator import (
-    MarkdownGenerator,
-)
-from backend.code_intelligence.doc_generation.models import (
+from code_intelligence.doc_generation.docstring_parser import DocstringParser
+from code_intelligence.doc_generation.markdown_generator import MarkdownGenerator
+from code_intelligence.doc_generation.models import (
     ClassDoc,
     DiagramSpec,
     FunctionDoc,
@@ -48,10 +46,10 @@ from backend.code_intelligence.doc_generation.models import (
     ModuleDoc,
     PackageDoc,
 )
-from backend.code_intelligence.doc_generation.module_analyzer import ModuleAnalyzer
+from code_intelligence.doc_generation.module_analyzer import ModuleAnalyzer
 
 # Import types and models from the doc_generation package (Issue #381 refactoring)
-from backend.code_intelligence.doc_generation.types import (
+from code_intelligence.doc_generation.types import (
     DiagramType,
     DocCompleteness,
     DocFormat,
@@ -126,7 +124,7 @@ class DocGenerator:
         >>> generator = DocGenerator()
         >>> module_doc = generator.analyze_module('path/to/module.py')
         >>> markdown = generator.generate_api_docs([module_doc])
-        >>> print(markdown)
+        >>> print(markdown)  # noqa: print
     """
 
     def __init__(

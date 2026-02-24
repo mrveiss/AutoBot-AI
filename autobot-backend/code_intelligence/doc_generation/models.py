@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
-from backend.code_intelligence.doc_generation.types import (
+from code_intelligence.doc_generation.types import (
     DiagramType,
     DocCompleteness,
     DocFormat,

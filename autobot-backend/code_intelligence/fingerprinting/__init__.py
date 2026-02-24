@@ -28,22 +28,22 @@ still exports all classes directly.
 """
 
 # AST Hasher
-from backend.code_intelligence.fingerprinting.ast_hasher import ASTHasher
+from code_intelligence.fingerprinting.ast_hasher import ASTHasher
 
 # AST Normalizer
-from backend.code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
+from code_intelligence.fingerprinting.ast_normalizer import ASTNormalizer
 
 # Clone Detector
-from backend.code_intelligence.fingerprinting.detector import CloneDetector
+from code_intelligence.fingerprinting.detector import CloneDetector
 
 # Semantic Hasher
-from backend.code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
+from code_intelligence.fingerprinting.semantic_hasher import SemanticHasher
 
 # Similarity Calculator
-from backend.code_intelligence.fingerprinting.similarity import SimilarityCalculator
+from code_intelligence.fingerprinting.similarity import SimilarityCalculator
 
 # Types and data classes
-from backend.code_intelligence.fingerprinting.types import (
+from code_intelligence.fingerprinting.types import (
     CloneDetectionReport,
     CloneGroup,
     CloneInstance,
