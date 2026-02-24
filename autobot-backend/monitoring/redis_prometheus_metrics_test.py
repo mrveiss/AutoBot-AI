@@ -6,8 +6,8 @@ Tests that Redis operations properly record metrics to Prometheus.
 from unittest.mock import MagicMock, call, patch
 
 import pytest
-from backend.monitoring.prometheus_metrics import get_metrics_manager
-from backend.utils.redis_client import RedisConnectionManager
+from monitoring.prometheus_metrics import get_metrics_manager
+from utils.redis_client import RedisConnectionManager
 
 
 @pytest.fixture

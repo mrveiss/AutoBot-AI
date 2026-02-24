@@ -162,7 +162,7 @@ class TestMultiModalWorkflowIntegration:
         assert decision.confidence > 0.5
         assert decision.chosen_action.get("action") is not None
 
-        print("✅ Text-to-multimodal workflow completed successfully")
+        print("✅ Text-to-multimodal workflow completed successfully")  # noqa: print
 
     async def test_image_audio_combined_workflow(self):
         """Test workflow combining image and audio inputs"""
@@ -319,7 +319,7 @@ class TestMultiModalWorkflowIntegration:
             max_processing_time < 2.0
         ), "Maximum processing time too high for real-time"
 
-        print(
+        print(  # noqa: print
             f"✅ Real-time stream: {len(results)} inputs, avg {avg_processing_time:.3f}s"
         )
 
@@ -420,7 +420,7 @@ class TestMultiModalWorkflowIntegration:
         assert decision.confidence > 0.7
         assert decision.chosen_action.get("action") is not None
 
-        print(f"✅ Cross-modal context preserved across {3} modalities")
+        print(f"✅ Cross-modal context preserved across {3} modalities")  # noqa: print
 
     async def test_error_recovery_multimodal_workflow(self):
         """Test error recovery in multi-modal workflows"""
@@ -519,7 +519,9 @@ class TestMultiModalWorkflowIntegration:
             assert isinstance(audio_result, dict)
             assert "error" in audio_result or not audio_result.get("success", True)
 
-        print("✅ Error recovery workflow completed - system remained stable")
+        print(  # noqa: print
+            "✅ Error recovery workflow completed - system remained stable"
+        )  # noqa: print
 
     async def test_performance_under_multimodal_load(self):
         """Test system performance under concurrent multi-modal load"""
@@ -622,7 +624,7 @@ class TestMultiModalWorkflowIntegration:
             avg_time_per_request < 3.0
         ), f"Average per request too high: {avg_time_per_request:.2f}s"
 
-        print(
+        print(  # noqa: print
             f"✅ Load test: {len(successful_results)}/{concurrent_requests} succeeded in {total_time:.2f}s"
         )
 

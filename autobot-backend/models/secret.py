@@ -13,10 +13,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from backend.user_management.models.base import Base, TimestampMixin
 from sqlalchemy import Boolean, DateTime, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
+from user_management.models.base import Base, TimestampMixin
 
 
 class SecretScope(str, Enum):

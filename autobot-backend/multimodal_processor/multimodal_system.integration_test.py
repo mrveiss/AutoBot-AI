@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from computer_vision_system import ComputerVisionSystem
+from config.manager import ConfigManager as ConfigManager
 from multimodal_processor import (
     ContextProcessor,
     ModalityType,
@@ -17,8 +18,6 @@ from multimodal_processor import (
     VisionProcessor,
     VoiceProcessor,
 )
-
-from backend.config.manager import ConfigManager as ConfigManager
 
 
 class TestUnifiedMultiModalSystem:
