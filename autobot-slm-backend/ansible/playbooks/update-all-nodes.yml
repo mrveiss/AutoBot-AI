@@ -292,13 +292,10 @@
       when: "'01-Backend' in inventory_hostname"
       changed_when: true
 
-    - name: "[PLAY 2] Backend | Create backend package symlink"
+    - name: "[PLAY 2] Backend | Remove legacy backend symlink"
       file:
-        src: /opt/autobot/autobot-backend
-        dest: /opt/autobot/autobot-backend/backend
-        state: link
-        owner: autobot
-        group: autobot
+        path: /opt/autobot/autobot-backend/backend
+        state: absent
       become: true
       when: "'01-Backend' in inventory_hostname"
 
