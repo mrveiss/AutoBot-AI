@@ -22,6 +22,18 @@ def _make_manifest(name, description, tags, tools):
     )
 
 
+def _make_skill_dict(name, description, tags, tools):
+    """Build the dict format returned by registry.list_skills()."""
+    return {
+        "name": name,
+        "description": description,
+        "tags": tags,
+        "tools": tools,
+        "status": "available",
+        "enabled": False,
+    }
+
+
 def test_tokenize_splits_on_non_word():
     assert _tokenize("analyze this PDF document") == {
         "analyze",
@@ -132,35 +144,24 @@ def test_llm_rerank_handles_markdown_code_block():
     assert reason == "code task"
 
 
-def _make_registry_skill(name, description, tags, tools):
-    """Build a minimal mock skill with a manifest."""
-    mock_skill = MagicMock()
-    mock_skill.get_manifest.return_value = _make_manifest(
-        name, description, tags, tools
-    )
-    return mock_skill
-
-
 def test_find_skill_enables_best_match_via_llm():
     """find_skill should enable the LLM-chosen winner and return it."""
     mock_llm_response = MagicMock()
     mock_llm_response.content = '{"skill": "document-analysis", "reason": "PDF task"}'
     mock_llm_response.error = None
 
-    registry_skills = {
-        "document-analysis": _make_registry_skill(
+    mock_registry = MagicMock()
+    mock_registry.list_skills.return_value = [
+        _make_skill_dict(
             "document-analysis",
             "Analyze documents",
             ["document", "pdf"],
             ["analyze_doc"],
         ),
-        "browser-automation": _make_registry_skill(
+        _make_skill_dict(
             "browser-automation", "Automate browser", ["browser", "web"], ["browse"]
         ),
-    }
-
-    mock_registry = MagicMock()
-    mock_registry._skills = registry_skills
+    ]
     mock_registry.enable_skill.return_value = {"success": True}
 
     with patch(
@@ -185,20 +186,18 @@ def test_find_skill_enables_best_match_via_llm():
 
 def test_find_skill_falls_back_to_keyword_on_llm_error():
     """If LLM fails, use the top keyword-scored skill."""
-    registry_skills = {
-        "document-analysis": _make_registry_skill(
+    mock_registry = MagicMock()
+    mock_registry.list_skills.return_value = [
+        _make_skill_dict(
             "document-analysis",
             "Analyze documents",
             ["document", "pdf"],
             ["analyze_doc"],
         ),
-        "browser-automation": _make_registry_skill(
+        _make_skill_dict(
             "browser-automation", "Automate browser", ["browser"], ["browse"]
         ),
-    }
-
-    mock_registry = MagicMock()
-    mock_registry._skills = registry_skills
+    ]
     mock_registry.enable_skill.return_value = {"success": True}
 
     with patch(
@@ -224,17 +223,15 @@ def test_find_skill_dry_run_does_not_enable():
     mock_llm_response.content = '{"skill": "document-analysis", "reason": "test"}'
     mock_llm_response.error = None
 
-    registry_skills = {
-        "document-analysis": _make_registry_skill(
+    mock_registry = MagicMock()
+    mock_registry.list_skills.return_value = [
+        _make_skill_dict(
             "document-analysis",
             "Analyze documents",
             ["document", "pdf"],
             ["analyze_doc"],
         ),
-    }
-
-    mock_registry = MagicMock()
-    mock_registry._skills = registry_skills
+    ]
 
     with patch(
         "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
@@ -263,7 +260,7 @@ def test_find_skill_requires_task_param():
 def test_find_skill_no_skills_registered():
     """find_skill returns error when registry is empty."""
     mock_registry = MagicMock()
-    mock_registry._skills = {}
+    mock_registry.list_skills.return_value = []
 
     with patch(
         "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry

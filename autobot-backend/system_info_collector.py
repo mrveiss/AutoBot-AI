@@ -41,4 +41,4 @@ def get_os_info():
 
 if __name__ == "__main__":
     os_info = get_os_info()
-    print(json.dumps(os_info, indent=2))
+    print(json.dumps(os_info, indent=2))  # noqa: print

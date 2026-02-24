@@ -9,19 +9,16 @@ Auto-enables the best matching skill for a given task description.
 """
 
 import json
-import logging
 import re
 from typing import Any, Dict, List, Set, Tuple
 
-from skills.base_skill import BaseSkill, SkillManifest
+from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 from skills.registry import get_skill_registry
 
 try:
     from llm_interface_pkg import LLMInterface
 except ImportError:
     LLMInterface = None  # type: ignore[assignment,misc]
-
-logger = logging.getLogger(__name__)
 
 
 def _tokenize(text: str) -> Set[str]:
@@ -37,25 +34,41 @@ _W_TOOLS = 2.0
 _W_DESC = 1.0
 
 
-def _score_skill(task_tokens: Set[str], manifest: SkillManifest) -> float:
-    """Score a skill manifest against task tokens.
-
-    Weights: name (3x), tags (3x), tools (2x), description (1x).
-    """
-    name_tokens = _tokenize(manifest.name)
+def _score_from_tokens(
+    task_tokens: Set[str],
+    name: str,
+    tags: List[str],
+    tools: List[str],
+    description: str,
+) -> float:
+    """Score a skill against task tokens using weighted field overlap."""
+    name_tokens = _tokenize(name)
     tag_tokens: Set[str] = set()
-    for tag in manifest.tags:
+    for tag in tags:
         tag_tokens.update(_tokenize(tag))
     tool_tokens: Set[str] = set()
-    for tool in manifest.tools:
+    for tool in tools:
         tool_tokens.update(_tokenize(tool))
-    desc_tokens = _tokenize(manifest.description)
-
+    desc_tokens = _tokenize(description)
     return (
         len(task_tokens & name_tokens) * _W_NAME
         + len(task_tokens & tag_tokens) * _W_TAGS
         + len(task_tokens & tool_tokens) * _W_TOOLS
         + len(task_tokens & desc_tokens) * _W_DESC
+    )
+
+
+def _score_skill(task_tokens: Set[str], manifest: SkillManifest) -> float:
+    """Score a skill manifest against task tokens.
+
+    Weights: name (3x), tags (3x), tools (2x), description (1x).
+    """
+    return _score_from_tokens(
+        task_tokens,
+        manifest.name,
+        manifest.tags,
+        manifest.tools,
+        manifest.description,
     )
 
 
@@ -71,6 +84,18 @@ class SkillRouterSkill(BaseSkill):
             author="mrveiss",
             category="meta",
             tags=["meta", "routing", "discovery", "orchestration"],
+            config={
+                "top_k": SkillConfigField(
+                    type="int",
+                    default=5,
+                    description="Max candidates sent to LLM for re-ranking",
+                ),
+                "auto_enable": SkillConfigField(
+                    type="bool",
+                    default=True,
+                    description="Automatically enable the winning skill",
+                ),
+            },
         )
 
     async def _llm_rerank(
@@ -141,13 +166,19 @@ class SkillRouterSkill(BaseSkill):
         task_tokens = _tokenize(task)
         scored = [
             {
-                "name": s.get_manifest().name,
-                "description": s.get_manifest().description,
-                "tags": s.get_manifest().tags,
-                "tools": s.get_manifest().tools,
-                "score": _score_skill(task_tokens, s.get_manifest()),
+                "name": s["name"],
+                "description": s.get("description", ""),
+                "tags": s.get("tags", []),
+                "tools": s.get("tools", []),
+                "score": _score_from_tokens(
+                    task_tokens,
+                    s["name"],
+                    s.get("tags", []),
+                    s.get("tools", []),
+                    s.get("description", ""),
+                ),
             }
-            for s in registry._skills.values()
+            for s in registry.list_skills()
         ]
         scored.sort(key=lambda x: x["score"], reverse=True)
         candidates = [c for c in scored[:top_k] if c["score"] > 0]
