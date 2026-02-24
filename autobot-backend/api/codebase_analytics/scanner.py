@@ -17,9 +17,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from backend.constants.path_constants import PATH
-from backend.type_defs.common import Metadata
-from backend.utils.file_categorization import (
+from constants.path_constants import PATH
+from fastapi import HTTPException
+from type_defs.common import Metadata
+from utils.file_categorization import (
     ALL_CODE_EXTENSIONS,
     CONFIG_EXTENSIONS,
     CSS_EXTENSIONS,
@@ -40,10 +41,9 @@ from backend.utils.file_categorization import (
     TS_EXTENSIONS,
     VUE_EXTENSIONS,
 )
-from backend.utils.file_categorization import (
+from utils.file_categorization import (
     get_file_category as _get_file_category,  # Category constants; Extension sets; Directory sets; Functions
 )
-from fastapi import HTTPException
 
 from .analyzers import (
     analyze_documentation_file,
@@ -229,7 +229,7 @@ async def _generate_batch_embeddings(
 
     # Issue #681: Use NPU-accelerated embeddings with automatic fallback
     try:
-        from backend.api.codebase_analytics.npu_embeddings import (
+        from api.codebase_analytics.npu_embeddings import (
             generate_codebase_embeddings_batch,
         )
 
@@ -562,6 +562,43 @@ _current_indexing_task_id: Optional[str] = None
 # FIFO queue of pending indexing jobs (#1133)
 # Each item: {"source_id": str, "root_path": str, "queued_at": str, "requested_by": str}
 _index_queue: deque = deque()
+
+# Redis key prefix for task state (#1179: cross-worker visibility)
+_TASK_REDIS_PREFIX = "indexing_task:"
+_TASK_REDIS_TTL = 86400  # 24 hours
+
+
+async def _save_task_to_redis(task_id: str) -> None:
+    """Persist task state to Redis so all uvicorn workers can read it (#1179)."""
+    try:
+        redis = await get_redis_connection_async()
+        if redis:
+            state = indexing_tasks.get(task_id)
+            if state:
+                await redis.set(
+                    f"{_TASK_REDIS_PREFIX}{task_id}",
+                    json.dumps(state, default=str),
+                    ex=_TASK_REDIS_TTL,
+                )
+    except Exception as e:
+        logger.debug(
+            "[Task %s] Redis task state save failed (non-fatal): %s", task_id, e
+        )
+
+
+async def _load_task_from_redis(task_id: str) -> Optional[Dict]:
+    """Load task state from Redis (#1179: cross-worker visibility)."""
+    try:
+        redis = await get_redis_connection_async()
+        if redis:
+            data = await redis.get(f"{_TASK_REDIS_PREFIX}{task_id}")
+            if data:
+                return json.loads(data)
+    except Exception as e:
+        logger.debug(
+            "[Task %s] Redis task state load failed (non-fatal): %s", task_id, e
+        )
+    return None
 
 
 # =============================================================================
@@ -2731,6 +2768,8 @@ def _create_progress_updater(task_id: str, update_phase, update_batch_info):
             total,
             percent,
         )
+        # #1179: Persist state to Redis so other workers can read it
+        await _save_task_to_redis(task_id)
 
     return update_progress
 
@@ -2808,6 +2847,8 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
 
         async with _tasks_lock:
             indexing_tasks[task_id] = _create_initial_task_state()
+            # #1179: Persist initial state so other workers can see task as "running"
+            await _save_task_to_redis(task_id)
 
         # Create task-specific helper closures
         def update_phase(phase_id, status):
@@ -2835,8 +2876,12 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
         update_phase("finalize", "running")
         _mark_task_completed(task_id, analysis_results, hardcodes_stored, "chromadb")
         update_phase("finalize", "completed")
+        # #1179: Persist final completed state to Redis
+        await _save_task_to_redis(task_id)
         logger.info("[Task %s] ✅ Indexing completed successfully", task_id)
 
     except Exception as e:
         logger.error("[Task %s] ❌ Indexing failed: %s", task_id, e, exc_info=True)
         _mark_task_failed(task_id, e)
+        # #1179: Persist failed state to Redis
+        await _save_task_to_redis(task_id)

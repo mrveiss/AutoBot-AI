@@ -37,6 +37,7 @@ from ..scanner import (
     _active_tasks,
     _current_indexing_task_id,
     _index_queue,
+    _load_task_from_redis,
     _tasks_lock,
     _tasks_sync_lock,
     do_indexing_with_progress,
@@ -234,7 +235,13 @@ async def get_indexing_status(task_id: str):
     - result: Final indexing results (if completed)
     - error: Error message (if failed)
     """
-    if task_id not in indexing_tasks:
+    # #1179: With --workers N, this worker may not have the task in local memory.
+    # Fall back to Redis where the owning worker persists task state.
+    task_data = indexing_tasks.get(task_id)
+    if task_data is None:
+        task_data = await _load_task_from_redis(task_id)
+
+    if task_data is None:
         return JSONResponse(
             status_code=404,
             content={
@@ -243,8 +250,6 @@ async def get_indexing_status(task_id: str):
                 "error": "Task not found. It may have expired or never existed.",
             },
         )
-
-    task_data = indexing_tasks[task_id]
 
     response = {
         "task_id": task_id,

@@ -16,9 +16,7 @@ import asyncio
 import logging
 from typing import Optional
 
-from backend.code_intelligence.cross_language_patterns import (
-    CrossLanguagePatternDetector,
-)
+from code_intelligence.cross_language_patterns import CrossLanguagePatternDetector
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 

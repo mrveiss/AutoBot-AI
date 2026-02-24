@@ -19,7 +19,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from backend.constants.threshold_constants import AnalyticsConfig
+from constants.threshold_constants import AnalyticsConfig
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
