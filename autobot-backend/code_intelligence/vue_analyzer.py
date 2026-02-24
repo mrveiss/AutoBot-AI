@@ -18,7 +18,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from backend.code_intelligence.base_analyzer import (
+from code_intelligence.base_analyzer import (
     AnalysisIssue,
     BaseLanguageAnalyzer,
     IssueCategory,

@@ -16,23 +16,23 @@ async def test_config_consolidation():
     """Test all features of unified config manager"""
     from config import unified_config_manager
 
-    print("=" * 80)
-    print("TESTING P2 CONFIG CONSOLIDATION")
-    print("=" * 80)
+    print("=" * 80)  # noqa: print
+    print("TESTING P2 CONFIG CONSOLIDATION")  # noqa: print
+    print("=" * 80)  # noqa: print
 
     # Test 1: Basic config loading
-    print("\n[TEST 1] Basic config loading...")
+    print("\n[TEST 1] Basic config loading...")  # noqa: print
     try:
         config = unified_config_manager.to_dict()
         assert isinstance(config, dict), "Config should be a dictionary"
         assert len(config) > 0, "Config should not be empty"
-        print("✅ PASSED: Basic config loading works")
+        print("✅ PASSED: Basic config loading works")  # noqa: print
     except Exception as e:
-        print(f"❌ FAILED: Basic config loading - {e}")
+        print(f"❌ FAILED: Basic config loading - {e}")  # noqa: print
         return False
 
     # Test 2: Default config completeness
-    print("\n[TEST 2] Default config completeness...")
+    print("\n[TEST 2] Default config completeness...")  # noqa: print
     try:
         # Get the default config directly (before merging with config.yaml)
         default_config = unified_config_manager._get_default_config()
@@ -59,15 +59,15 @@ async def test_config_consolidation():
             assert (
                 section in default_config
             ), f"Missing expected section in defaults: {section}"
-            print(f"   ✓ Found default section: {section}")
+            print(f"   ✓ Found default section: {section}")  # noqa: print
 
-        print("✅ PASSED: All default config sections present")
+        print("✅ PASSED: All default config sections present")  # noqa: print
     except Exception as e:
-        print(f"❌ FAILED: Default config completeness - {e}")
+        print(f"❌ FAILED: Default config completeness - {e}")  # noqa: print
         return False
 
     # Test 3: Sensitive data filtering
-    print("\n[TEST 3] Sensitive data filtering...")
+    print("\n[TEST 3] Sensitive data filtering...")  # noqa: print
     try:
         test_data = {
             "redis": {"host": "localhost", "password": "secret123", "port": 6379},
@@ -93,13 +93,13 @@ async def test_config_consolidation():
             filtered["redis"]["port"] == 6379
         ), "Non-sensitive port should be preserved"
 
-        print("✅ PASSED: Sensitive data filtering works correctly")
+        print("✅ PASSED: Sensitive data filtering works correctly")  # noqa: print
     except Exception as e:
-        print(f"❌ FAILED: Sensitive data filtering - {e}")
+        print(f"❌ FAILED: Sensitive data filtering - {e}")  # noqa: print
         return False
 
     # Test 4: Async config operations
-    print("\n[TEST 4] Async config operations...")
+    print("\n[TEST 4] Async config operations...")  # noqa: print
     try:
         # Test async load
         test_config = await unified_config_manager.load_config_async(
@@ -119,25 +119,25 @@ async def test_config_consolidation():
             reloaded.get("test_key") == "test_value"
         ), "Saved data should be retrievable"
 
-        print("✅ PASSED: Async config operations work")
+        print("✅ PASSED: Async config operations work")  # noqa: print
     except Exception as e:
-        print(f"❌ FAILED: Async config operations - {e}")
+        print(f"❌ FAILED: Async config operations - {e}")  # noqa: print
         return False
 
     # Test 5: Redis cache key generation
-    print("\n[TEST 5] Redis cache key generation...")
+    print("\n[TEST 5] Redis cache key generation...")  # noqa: print
     try:
         cache_key = unified_config_manager._get_redis_cache_key("test")
         assert cache_key.startswith("config:"), "Cache key should have correct prefix"
         assert "test" in cache_key, "Cache key should contain config type"
-        print(f"   Cache key: {cache_key}")
-        print("✅ PASSED: Redis cache key generation works")
+        print(f"   Cache key: {cache_key}")  # noqa: print
+        print("✅ PASSED: Redis cache key generation works")  # noqa: print
     except Exception as e:
-        print(f"❌ FAILED: Redis cache key generation - {e}")
+        print(f"❌ FAILED: Redis cache key generation - {e}")  # noqa: print
         return False
 
     # Test 6: Nested config access
-    print("\n[TEST 6] Nested config access...")
+    print("\n[TEST 6] Nested config access...")  # noqa: print
     try:
         # Test get_nested
         backend_config = unified_config_manager.get_nested("backend.llm", {})
@@ -147,13 +147,13 @@ async def test_config_consolidation():
         redis_host = unified_config_manager.get_nested("redis.host", "default")
         assert redis_host is not None, "Should retrieve nested Redis host"
 
-        print("✅ PASSED: Nested config access works")
+        print("✅ PASSED: Nested config access works")  # noqa: print
     except Exception as e:
-        print(f"❌ FAILED: Nested config access - {e}")
+        print(f"❌ FAILED: Nested config access - {e}")  # noqa: print
         return False
 
     # Test 7: Environment variable overrides
-    print("\n[TEST 7] Environment variable handling...")
+    print("\n[TEST 7] Environment variable handling...")  # noqa: print
     try:
         import os
 
@@ -167,15 +167,15 @@ async def test_config_consolidation():
         for var in env_vars:
             value = os.getenv(var)
             if value:
-                print(f"   Found env var: {var} = {value}")
+                print(f"   Found env var: {var} = {value}")  # noqa: print
 
-        print("✅ PASSED: Environment variable handling works")
+        print("✅ PASSED: Environment variable handling works")  # noqa: print
     except Exception as e:
-        print(f"❌ FAILED: Environment variable handling - {e}")
+        print(f"❌ FAILED: Environment variable handling - {e}")  # noqa: print
         return False
 
     # Test 8: Multimodal config (from utils/config_manager.py)
-    print("\n[TEST 8] Multimodal config consolidation...")
+    print("\n[TEST 8] Multimodal config consolidation...")  # noqa: print
     try:
         default_config = unified_config_manager._get_default_config()
         multimodal = default_config.get("multimodal", {})
@@ -188,13 +188,13 @@ async def test_config_consolidation():
         assert multimodal["voice"]["confidence_threshold"] == 0.8
         assert multimodal["context"]["decision_threshold"] == 0.9
 
-        print("✅ PASSED: Multimodal config properly consolidated")
+        print("✅ PASSED: Multimodal config properly consolidated")  # noqa: print
     except Exception as e:
-        print(f"❌ FAILED: Multimodal config - {e}")
+        print(f"❌ FAILED: Multimodal config - {e}")  # noqa: print
         return False
 
     # Test 9: NPU config (from utils/config_manager.py)
-    print("\n[TEST 9] NPU config consolidation...")
+    print("\n[TEST 9] NPU config consolidation...")  # noqa: print
     try:
         default_config = unified_config_manager._get_default_config()
         npu = default_config.get("npu", {})
@@ -202,27 +202,27 @@ async def test_config_consolidation():
         assert npu["device"] == "CPU", "Default device should be CPU"
         assert npu["optimization_level"] == "PERFORMANCE"
 
-        print("✅ PASSED: NPU config properly consolidated")
+        print("✅ PASSED: NPU config properly consolidated")  # noqa: print
     except Exception as e:
-        print(f"❌ FAILED: NPU config - {e}")
+        print(f"❌ FAILED: NPU config - {e}")  # noqa: print
         return False
 
     # Test 10: Security config (from utils/config_manager.py)
-    print("\n[TEST 10] Security config consolidation...")
+    print("\n[TEST 10] Security config consolidation...")  # noqa: print
     try:
         default_config = unified_config_manager._get_default_config()
         security = default_config.get("security", {})
         assert security["enable_sandboxing"] is True
         assert "rm -rf" in security["blocked_commands"]
 
-        print("✅ PASSED: Security config properly consolidated")
+        print("✅ PASSED: Security config properly consolidated")  # noqa: print
     except Exception as e:
-        print(f"❌ FAILED: Security config - {e}")
+        print(f"❌ FAILED: Security config - {e}")  # noqa: print
         return False
 
-    print("\n" + "=" * 80)
-    print("ALL TESTS PASSED! ✅")
-    print("=" * 80)
+    print("\n" + "=" * 80)  # noqa: print
+    print("ALL TESTS PASSED! ✅")  # noqa: print
+    print("=" * 80)  # noqa: print
     return True
 
 
