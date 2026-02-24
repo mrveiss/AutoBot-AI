@@ -26,15 +26,15 @@ import logging
 import re
 from typing import Optional
 
-from backend.api.knowledge_models import (
+from api.knowledge_models import (
     AssignFactToCategoryRequest,
     CreateCategoryRequest,
     SearchCategoriesByPathRequest,
     UpdateCategoryRequest,
 )
-from backend.constants.threshold_constants import QueryDefaults
-from backend.knowledge_factory import get_or_create_knowledge_base
+from constants.threshold_constants import QueryDefaults
 from fastapi import APIRouter, HTTPException, Path, Query, Request
+from knowledge_factory import get_or_create_knowledge_base
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

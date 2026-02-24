@@ -9,13 +9,7 @@ import logging
 from typing import List, Optional
 
 from auth_middleware import check_admin_permission, get_current_user
-from backend.constants.threshold_constants import CategoryDefaults, QueryDefaults
-
-# NOTE: Pydantic models moved to knowledge_maintenance.py (Issue #185 - split oversized files)
-# NOTE: Tag-related models moved to knowledge_tags.py
-# NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
-from backend.knowledge_factory import get_or_create_knowledge_base
-from backend.utils.path_validation import contains_path_traversal
+from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from exceptions import InternalError
 from fastapi import (
     APIRouter,
@@ -26,7 +20,13 @@ from fastapi import (
     Query,
     Request,
 )
+
+# NOTE: Pydantic models moved to knowledge_maintenance.py (Issue #185 - split oversized files)
+# NOTE: Tag-related models moved to knowledge_tags.py
+# NOTE: Search models (EnhancedSearchRequest) moved to knowledge_search.py
+from knowledge_factory import get_or_create_knowledge_base
 from pydantic import BaseModel, Field, field_validator
+from utils.path_validation import contains_path_traversal
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -193,12 +193,12 @@ def _parse_man_page_fact(fact_json: bytes) -> tuple:
 router = APIRouter()
 
 # Import vectorization router (extracted from this file - Issue #185)
-from backend.api.knowledge_vectorization import router as vectorization_router
+from api.knowledge_vectorization import router as vectorization_router
 
 router.include_router(vectorization_router)
 
 # Import population functions (extracted from this file - Issue #209)
-from backend.api.knowledge_population import (
+from api.knowledge_population import (
     _populate_man_pages_background,
     populate_system_commands,
 )
@@ -267,7 +267,7 @@ async def test_main_categories(
 
     Issue #744: Requires admin authentication.
     """
-    from backend.knowledge_categories import CATEGORY_METADATA
+    from knowledge_categories import CATEGORY_METADATA
 
     return {"status": "working", "categories": list(CATEGORY_METADATA.keys())}
 
@@ -368,7 +368,7 @@ async def get_main_categories(
     Issue #910: Available to all authenticated users (not admin-only).
     The 3 top-level categories are non-sensitive public metadata.
     """
-    from backend.knowledge_categories import (
+    from knowledge_categories import (
         CATEGORY_METADATA,
         KnowledgeCategory,
         get_category_for_source,
@@ -1632,7 +1632,7 @@ async def query_knowledge(
     Issue #744: Requires admin authentication.
     """
     # Import search function from knowledge_search module
-    from backend.api.knowledge_search import search_knowledge
+    from api.knowledge_search import search_knowledge
 
     return await search_knowledge(request, req)
 
@@ -1814,7 +1814,7 @@ async def get_facts_by_category(
     if cached_result:
         return cached_result
 
-    from backend.knowledge_categories import KnowledgeCategory
+    from knowledge_categories import KnowledgeCategory
 
     categories_to_fetch = (
         [category] if category else [c.value for c in KnowledgeCategory]
@@ -1907,7 +1907,7 @@ def _parse_fact_entry(
 
 async def _get_facts_by_category_legacy(kb, category: Optional[str], limit: int):
     """Legacy fallback: Get facts by scanning all keys (Issue #398: refactored)."""
-    from backend.knowledge_categories import get_category_for_source
+    from knowledge_categories import get_category_for_source
 
     all_fact_keys = await _scan_all_fact_keys(kb)
     if not all_fact_keys:
@@ -2072,7 +2072,7 @@ async def get_import_status(
 
     Issue #744: Requires admin authentication.
     """
-    from backend.models.knowledge_import_tracking import ImportTracker
+    from models.knowledge_import_tracking import ImportTracker
 
     tracker = ImportTracker()
     results = tracker.get_import_status(file_path=file_path, category=category)
@@ -2094,7 +2094,7 @@ async def get_import_statistics(
 
     Issue #744: Requires admin authentication.
     """
-    from backend.models.knowledge_import_tracking import ImportTracker
+    from models.knowledge_import_tracking import ImportTracker
 
     tracker = ImportTracker()
     stats = tracker.get_statistics()
@@ -2413,7 +2413,7 @@ async def get_documentation_watcher_status(
     Issue #744: Requires admin authentication.
     """
     try:
-        from backend.services.documentation_watcher import get_documentation_watcher
+        from services.documentation_watcher import get_documentation_watcher
 
         watcher = get_documentation_watcher()
         stats = watcher.get_stats()
@@ -2452,7 +2452,7 @@ async def control_documentation_watcher(
     action = request.get("action", "status")
 
     try:
-        from backend.services.documentation_watcher import (
+        from services.documentation_watcher import (
             get_documentation_watcher,
             start_documentation_watcher,
             stop_documentation_watcher,
@@ -2496,7 +2496,7 @@ async def control_documentation_watcher(
 # NOTE: Maintenance and bulk operation endpoints moved to knowledge_maintenance.py (Issue #185)
 # Includes: deduplication, bulk operations, orphaned facts, export/import, cleanup, host scanning
 
-from backend.api.knowledge_maintenance import router as maintenance_router
+from api.knowledge_maintenance import router as maintenance_router
 
 router.include_router(maintenance_router)
 
@@ -2508,7 +2508,7 @@ router.include_router(maintenance_router)
 # Provides: /search/enhanced, /search/rag, /extract, /analyze/documents, /query/reformulate,
 #           /system/insights, /stats/enhanced, /health/enhanced
 try:
-    from backend.api.knowledge_ai_stack import router as ai_stack_router
+    from api.knowledge_ai_stack import router as ai_stack_router
 
     router.include_router(
         ai_stack_router, prefix="/ai-stack", tags=["knowledge-enhanced", "ai-stack"]
@@ -2519,7 +2519,7 @@ except ImportError as e:
 # Debug/Testing Endpoints - Fresh stats, Redis debug, index rebuild
 # Provides: /fresh_stats, /debug_redis, /rebuild_index
 try:
-    from backend.api.knowledge_debug import router as debug_router
+    from api.knowledge_debug import router as debug_router
 
     router.include_router(debug_router, prefix="/debug", tags=["knowledge-debug"])
 except ImportError as e:
@@ -2529,7 +2529,7 @@ except ImportError as e:
 # Provides: /unified/search, /unified/stats, /unified/context, /unified/documentation/*,
 #           /unified/graph (for KnowledgeGraph.vue visualization)
 try:
-    from backend.api.knowledge_search_aggregator import router as unified_router
+    from api.knowledge_search_aggregator import router as unified_router
 
     router.include_router(unified_router, tags=["knowledge-unified", "documentation"])
 except ImportError as e:

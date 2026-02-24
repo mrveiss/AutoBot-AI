@@ -17,10 +17,10 @@ import logging
 from typing import Dict, List, Optional
 
 from auth_middleware import get_current_user
-from backend.knowledge.ownership import VisibilityLevel
-from backend.knowledge.search_filters import extract_user_context_from_request
-from backend.knowledge_factory import get_or_create_knowledge_base
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from knowledge.ownership import VisibilityLevel
+from knowledge.search_filters import extract_user_context_from_request
+from knowledge_factory import get_or_create_knowledge_base
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
