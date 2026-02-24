@@ -389,8 +389,8 @@ def run_integration_tests():
     import subprocess
     import sys
 
-    print("🔄 Running AutoBot System Integration Tests")
-    print("=" * 60)
+    print("🔄 Running AutoBot System Integration Tests")  # noqa: print
+    print("=" * 60)  # noqa: print
 
     try:
         result = subprocess.run(
@@ -407,17 +407,17 @@ def run_integration_tests():
         )
 
         if result.returncode == 0:
-            print("✅ All integration tests passed!")
+            print("✅ All integration tests passed!")  # noqa: print
         else:
-            print("❌ Some integration tests failed.")
+            print("❌ Some integration tests failed.")  # noqa: print
 
         return result.returncode == 0
 
     except subprocess.TimeoutExpired:
-        print("⏰ Integration tests timed out")
+        print("⏰ Integration tests timed out")  # noqa: print
         return False
     except Exception as e:
-        print(f"❌ Error running integration tests: {e}")
+        print(f"❌ Error running integration tests: {e}")  # noqa: print
         return False
 
 
