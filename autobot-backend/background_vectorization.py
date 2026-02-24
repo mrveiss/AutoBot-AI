@@ -16,11 +16,11 @@ import time
 from datetime import datetime
 from typing import Optional
 
-from backend.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 # Embedding analytics integration (Issue #285)
 try:
-    from backend.api.analytics_embedding_patterns import (
+    from api.analytics_embedding_patterns import (
         EmbeddingUsageRequest,
         get_embedding_analyzer,
     )

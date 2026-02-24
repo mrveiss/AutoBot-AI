@@ -33,9 +33,9 @@ from enum import Enum
 from typing import Callable, List, Union
 
 from auth_middleware import auth_middleware
-from backend.utils.catalog_http_exceptions import raise_auth_error
 from fastapi import Request
 from security_layer import SecurityLayer
+from utils.catalog_http_exceptions import raise_auth_error
 
 logger = logging.getLogger(__name__)
 

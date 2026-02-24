@@ -19,9 +19,9 @@ sys.path.insert(0, str(project_root))
 
 def test_imports():
     """Test 1: All imports work correctly"""
-    print("\n" + "=" * 70)
-    print("TEST 1: Import Verification")
-    print("=" * 70)
+    print("\n" + "=" * 70)  # noqa: print
+    print("TEST 1: Import Verification")  # noqa: print
+    print("=" * 70)  # noqa: print
 
     try:
         # Import unified cache manager components
@@ -31,43 +31,43 @@ def test_imports():
             cache_manager,
         )
 
-        print("✓ All AdvancedCacheManager imports successful")
+        print("✓ All AdvancedCacheManager imports successful")  # noqa: print
 
         # Verify global instances exist
         assert advanced_cache is not None, "advanced_cache instance missing"
         assert cache_manager is not None, "cache_manager instance missing"
-        print("✓ Global cache instances verified")
+        print("✓ Global cache instances verified")  # noqa: print
 
         # Verify SimpleCacheManager is instance
         assert isinstance(
             cache_manager, SimpleCacheManager
         ), "cache_manager should be SimpleCacheManager instance"
-        print("✓ cache_manager is SimpleCacheManager instance")
+        print("✓ cache_manager is SimpleCacheManager instance")  # noqa: print
 
         return True
 
     except Exception as e:
-        print(f"✗ Import test failed: {e}")
+        print(f"✗ Import test failed: {e}")  # noqa: print
         return False
 
 
 def test_simple_cache_basic_operations():
     """Test 2: SimpleCacheManager basic operations (get, set, delete)"""
-    print("\n" + "=" * 70)
-    print("TEST 2: SimpleCacheManager Basic Operations")
-    print("=" * 70)
+    print("\n" + "=" * 70)  # noqa: print
+    print("TEST 2: SimpleCacheManager Basic Operations")  # noqa: print
+    print("=" * 70)  # noqa: print
 
     try:
         from utils.advanced_cache_manager import SimpleCacheManager
 
         # Create cache instance
         cache = SimpleCacheManager(default_ttl=300)
-        print("✓ SimpleCacheManager created")
+        print("✓ SimpleCacheManager created")  # noqa: print
 
         # Test attributes
         assert cache.default_ttl == 300, "default_ttl mismatch"
         assert cache.cache_prefix == "cache:", "cache_prefix mismatch"
-        print("✓ SimpleCacheManager attributes verified")
+        print("✓ SimpleCacheManager attributes verified")  # noqa: print
 
         # Test methods exist
         assert hasattr(cache, "get"), "Missing get method"
@@ -80,19 +80,19 @@ def test_simple_cache_basic_operations():
             cache, "_ensure_redis_client"
         ), "Missing _ensure_redis_client method"
         assert hasattr(cache, "cache_response"), "Missing cache_response decorator"
-        print("✓ All SimpleCacheManager methods present")
+        print("✓ All SimpleCacheManager methods present")  # noqa: print
 
         # Test properties
         assert hasattr(cache, "_redis_client"), "Missing _redis_client property"
         assert hasattr(
             cache, "_redis_initialized"
         ), "Missing _redis_initialized property"
-        print("✓ All SimpleCacheManager properties present")
+        print("✓ All SimpleCacheManager properties present")  # noqa: print
 
         return True
 
     except Exception as e:
-        print(f"✗ SimpleCacheManager basic operations test failed: {e}")
+        print(f"✗ SimpleCacheManager basic operations test failed: {e}")  # noqa: print
         import traceback
 
         traceback.print_exc()
@@ -101,33 +101,33 @@ def test_simple_cache_basic_operations():
 
 def test_cache_response_decorator():
     """Test 3: cache_response decorator functionality"""
-    print("\n" + "=" * 70)
-    print("TEST 3: cache_response Decorator")
-    print("=" * 70)
+    print("\n" + "=" * 70)  # noqa: print
+    print("TEST 3: cache_response Decorator")  # noqa: print
+    print("=" * 70)  # noqa: print
 
     try:
         from utils.advanced_cache_manager import cache_response
 
         # Test decorator is callable
         assert callable(cache_response), "cache_response should be callable"
-        print("✓ cache_response is callable")
+        print("✓ cache_response is callable")  # noqa: print
 
         # Test decorator with parameters
         decorator = cache_response(cache_key="test_key", ttl=60)
         assert callable(decorator), "cache_response decorator should return callable"
-        print("✓ cache_response decorator returns callable")
+        print("✓ cache_response decorator returns callable")  # noqa: print
 
         # Test decorator without parameters
         decorator_default = cache_response()
         assert callable(
             decorator_default
         ), "cache_response with defaults should return callable"
-        print("✓ cache_response with defaults works")
+        print("✓ cache_response with defaults works")  # noqa: print
 
         return True
 
     except Exception as e:
-        print(f"✗ cache_response decorator test failed: {e}")
+        print(f"✗ cache_response decorator test failed: {e}")  # noqa: print
         import traceback
 
         traceback.print_exc()
@@ -136,9 +136,9 @@ def test_cache_response_decorator():
 
 def test_knowledge_cache_functions():
     """Test 4: Knowledge cache functions"""
-    print("\n" + "=" * 70)
-    print("TEST 4: Knowledge Cache Functions")
-    print("=" * 70)
+    print("\n" + "=" * 70)  # noqa: print
+    print("TEST 4: Knowledge Cache Functions")  # noqa: print
+    print("=" * 70)  # noqa: print
 
     try:
         from utils.advanced_cache_manager import (
@@ -153,17 +153,17 @@ def test_knowledge_cache_functions():
         ), "Missing get_cached_knowledge_results"
         assert callable(cache_knowledge_results), "Missing cache_knowledge_results"
         assert callable(get_knowledge_cache), "Missing get_knowledge_cache"
-        print("✓ All knowledge cache functions present")
+        print("✓ All knowledge cache functions present")  # noqa: print
 
         # Test get_knowledge_cache returns cache instance
         kb_cache = get_knowledge_cache()
         assert kb_cache is not None, "get_knowledge_cache should return instance"
-        print("✓ get_knowledge_cache returns instance")
+        print("✓ get_knowledge_cache returns instance")  # noqa: print
 
         return True
 
     except Exception as e:
-        print(f"✗ Knowledge cache functions test failed: {e}")
+        print(f"✗ Knowledge cache functions test failed: {e}")  # noqa: print
         import traceback
 
         traceback.print_exc()
@@ -172,16 +172,16 @@ def test_knowledge_cache_functions():
 
 def test_advanced_cache_manager_features():
     """Test 5: AdvancedCacheManager knowledge features"""
-    print("\n" + "=" * 70)
-    print("TEST 5: AdvancedCacheManager Knowledge Features")
-    print("=" * 70)
+    print("\n" + "=" * 70)  # noqa: print
+    print("TEST 5: AdvancedCacheManager Knowledge Features")  # noqa: print
+    print("=" * 70)  # noqa: print
 
     try:
         from utils.advanced_cache_manager import AdvancedCacheManager, CacheStrategy
 
         # Test KNOWLEDGE strategy exists
         assert hasattr(CacheStrategy, "KNOWLEDGE"), "Missing KNOWLEDGE cache strategy"
-        print("✓ KNOWLEDGE cache strategy exists")
+        print("✓ KNOWLEDGE cache strategy exists")  # noqa: print
 
         # Test AdvancedCacheManager has knowledge methods
         cache = AdvancedCacheManager()
@@ -195,7 +195,7 @@ def test_advanced_cache_manager_features():
             cache, "_generate_knowledge_key"
         ), "Missing _generate_knowledge_key"
         assert hasattr(cache, "_manage_cache_size"), "Missing _manage_cache_size"
-        print("✓ All knowledge-specific methods present")
+        print("✓ All knowledge-specific methods present")  # noqa: print
 
         # Test knowledge cache configs
         assert (
@@ -204,19 +204,21 @@ def test_advanced_cache_manager_features():
         assert (
             "knowledge_embeddings" in cache.cache_configs
         ), "Missing knowledge_embeddings config"
-        print("✓ Knowledge cache configs present")
+        print("✓ Knowledge cache configs present")  # noqa: print
 
         # Verify knowledge configs use KNOWLEDGE strategy
         kb_query_config = cache.cache_configs["knowledge_queries"]
         assert (
             kb_query_config.strategy == CacheStrategy.KNOWLEDGE
         ), "knowledge_queries should use KNOWLEDGE strategy"
-        print("✓ Knowledge configs use KNOWLEDGE strategy")
+        print("✓ Knowledge configs use KNOWLEDGE strategy")  # noqa: print
 
         return True
 
     except Exception as e:
-        print(f"✗ AdvancedCacheManager knowledge features test failed: {e}")
+        print(  # noqa: print
+            f"✗ AdvancedCacheManager knowledge features test failed: {e}"
+        )  # noqa: print
         import traceback
 
         traceback.print_exc()
@@ -225,9 +227,9 @@ def test_advanced_cache_manager_features():
 
 def test_backward_compatibility_simple():
     """Test 6: SimpleCacheManager backward compatibility"""
-    print("\n" + "=" * 70)
-    print("TEST 6: SimpleCacheManager Backward Compatibility")
-    print("=" * 70)
+    print("\n" + "=" * 70)  # noqa: print
+    print("TEST 6: SimpleCacheManager Backward Compatibility")  # noqa: print
+    print("=" * 70)  # noqa: print
 
     try:
         from utils.advanced_cache_manager import SimpleCacheManager
@@ -248,7 +250,9 @@ def test_backward_compatibility_simple():
 
         for method in methods:
             assert hasattr(cache, method), f"Missing method: {method}"
-        print(f"✓ All {len(methods)} original CacheManager methods present")
+        print(  # noqa: print
+            f"✓ All {len(methods)} original CacheManager methods present"
+        )  # noqa: print
 
         # Test all original CacheManager attributes exist
         attributes = [
@@ -260,12 +264,16 @@ def test_backward_compatibility_simple():
 
         for attr in attributes:
             assert hasattr(cache, attr), f"Missing attribute: {attr}"
-        print(f"✓ All {len(attributes)} original CacheManager attributes present")
+        print(  # noqa: print
+            f"✓ All {len(attributes)} original CacheManager attributes present"
+        )  # noqa: print
 
         return True
 
     except Exception as e:
-        print(f"✗ SimpleCacheManager backward compatibility test failed: {e}")
+        print(  # noqa: print
+            f"✗ SimpleCacheManager backward compatibility test failed: {e}"
+        )  # noqa: print
         import traceback
 
         traceback.print_exc()
@@ -274,34 +282,34 @@ def test_backward_compatibility_simple():
 
 def test_migrated_files_import():
     """Test 7: Migrated files can import successfully"""
-    print("\n" + "=" * 70)
-    print("TEST 7: Migrated Files Import Verification")
-    print("=" * 70)
+    print("\n" + "=" * 70)  # noqa: print
+    print("TEST 7: Migrated Files Import Verification")  # noqa: print
+    print("=" * 70)  # noqa: print
 
     try:
         # Test backend/api/llm.py
         pass
 
-        print("✓ backend/api/llm.py imports successfully")
+        print("✓ backend/api/llm.py imports successfully")  # noqa: print
 
         # Test backend/api/system.py
 
-        print("✓ backend/api/system.py imports successfully")
+        print("✓ backend/api/system.py imports successfully")  # noqa: print
 
         # Test src/utils/system_validator.py
 
-        print("✓ src/utils/system_validator.py imports successfully")
+        print("✓ src/utils/system_validator.py imports successfully")  # noqa: print
 
         # Test files already using AdvancedCacheManager
 
-        print("✓ backend/api/cache_management.py imports successfully")
-        print("✓ backend/api/project_state.py imports successfully")
-        print("✓ backend/api/templates.py imports successfully")
+        print("✓ backend/api/cache_management.py imports successfully")  # noqa: print
+        print("✓ backend/api/project_state.py imports successfully")  # noqa: print
+        print("✓ backend/api/templates.py imports successfully")  # noqa: print
 
         return True
 
     except Exception as e:
-        print(f"✗ Migrated files import test failed: {e}")
+        print(f"✗ Migrated files import test failed: {e}")  # noqa: print
         import traceback
 
         traceback.print_exc()
@@ -310,26 +318,26 @@ def test_migrated_files_import():
 
 def test_cache_function_decorator():
     """Test 8: cache_function decorator"""
-    print("\n" + "=" * 70)
-    print("TEST 8: cache_function Decorator")
-    print("=" * 70)
+    print("\n" + "=" * 70)  # noqa: print
+    print("TEST 8: cache_function Decorator")  # noqa: print
+    print("=" * 70)  # noqa: print
 
     try:
         from utils.advanced_cache_manager import cache_function
 
         # Test decorator exists and is callable
         assert callable(cache_function), "cache_function should be callable"
-        print("✓ cache_function is callable")
+        print("✓ cache_function is callable")  # noqa: print
 
         # Test decorator with parameters
         decorator = cache_function(cache_key="test_func", ttl=120)
         assert callable(decorator), "cache_function decorator should return callable"
-        print("✓ cache_function decorator returns callable")
+        print("✓ cache_function decorator returns callable")  # noqa: print
 
         return True
 
     except Exception as e:
-        print(f"✗ cache_function decorator test failed: {e}")
+        print(f"✗ cache_function decorator test failed: {e}")  # noqa: print
         import traceback
 
         traceback.print_exc()
@@ -338,9 +346,9 @@ def test_cache_function_decorator():
 
 def test_global_instances():
     """Test 9: Global cache instances work correctly"""
-    print("\n" + "=" * 70)
-    print("TEST 9: Global Cache Instances")
-    print("=" * 70)
+    print("\n" + "=" * 70)  # noqa: print
+    print("TEST 9: Global Cache Instances")  # noqa: print
+    print("=" * 70)  # noqa: print
 
     try:
         from utils.advanced_cache_manager import (
@@ -354,24 +362,24 @@ def test_global_instances():
         assert isinstance(
             advanced_cache, AdvancedCacheManager
         ), "advanced_cache should be AdvancedCacheManager instance"
-        print("✓ advanced_cache is AdvancedCacheManager instance")
+        print("✓ advanced_cache is AdvancedCacheManager instance")  # noqa: print
 
         # Test cache_manager is SimpleCacheManager instance
         assert isinstance(
             cache_manager, SimpleCacheManager
         ), "cache_manager should be SimpleCacheManager instance"
-        print("✓ cache_manager is SimpleCacheManager instance")
+        print("✓ cache_manager is SimpleCacheManager instance")  # noqa: print
 
         # Test cache_manager wraps advanced_cache
         assert (
             cache_manager._cache is advanced_cache
         ), "cache_manager should wrap advanced_cache"
-        print("✓ cache_manager wraps advanced_cache")
+        print("✓ cache_manager wraps advanced_cache")  # noqa: print
 
         return True
 
     except Exception as e:
-        print(f"✗ Global instances test failed: {e}")
+        print(f"✗ Global instances test failed: {e}")  # noqa: print
         import traceback
 
         traceback.print_exc()
@@ -380,9 +388,9 @@ def test_global_instances():
 
 def test_feature_completeness():
     """Test 10: All features from 3 cache managers preserved"""
-    print("\n" + "=" * 70)
-    print("TEST 10: Feature Completeness Verification")
-    print("=" * 70)
+    print("\n" + "=" * 70)  # noqa: print
+    print("TEST 10: Feature Completeness Verification")  # noqa: print
+    print("=" * 70)  # noqa: print
 
     try:
         from utils.advanced_cache_manager import (
@@ -402,7 +410,7 @@ def test_feature_completeness():
             assert hasattr(
                 cache, feature
             ), f"Missing AdvancedCacheManager feature: {feature}"
-        print(
+        print(  # noqa: print
             f"✓ All {len(adv_features)} AdvancedCacheManager original features present"
         )
 
@@ -420,7 +428,9 @@ def test_feature_completeness():
             assert hasattr(
                 simple, feature
             ), f"Missing SimpleCacheManager feature: {feature}"
-        print(f"✓ All {len(simple_features)} SimpleCacheManager features present")
+        print(  # noqa: print
+            f"✓ All {len(simple_features)} SimpleCacheManager features present"
+        )  # noqa: print
 
         # Test knowledge cache features
         knowledge_features = [
@@ -433,7 +443,9 @@ def test_feature_completeness():
             assert hasattr(
                 cache, feature
             ), f"Missing knowledge cache feature: {feature}"
-        print(f"✓ All {len(knowledge_features)} knowledge cache features present")
+        print(  # noqa: print
+            f"✓ All {len(knowledge_features)} knowledge cache features present"
+        )  # noqa: print
 
         # Test cache strategies
         strategies = [
@@ -448,12 +460,12 @@ def test_feature_completeness():
             assert hasattr(
                 CacheStrategy, strategy
             ), f"Missing cache strategy: {strategy}"
-        print(f"✓ All {len(strategies)} cache strategies present")
+        print(f"✓ All {len(strategies)} cache strategies present")  # noqa: print
 
         return True
 
     except Exception as e:
-        print(f"✗ Feature completeness test failed: {e}")
+        print(f"✗ Feature completeness test failed: {e}")  # noqa: print
         import traceback
 
         traceback.print_exc()
@@ -462,12 +474,16 @@ def test_feature_completeness():
 
 def run_all_tests():
     """Run all P4 cache consolidation tests"""
-    print("\n" + "=" * 70)
-    print("PHASE 4: CACHE CONSOLIDATION - COMPREHENSIVE TEST SUITE")
-    print("=" * 70)
-    print("\nTesting unified AdvancedCacheManager with backward compatibility")
-    print("Target files: 6 (3 migrated + 3 already using AdvancedCacheManager)")
-    print(
+    print("\n" + "=" * 70)  # noqa: print
+    print("PHASE 4: CACHE CONSOLIDATION - COMPREHENSIVE TEST SUITE")  # noqa: print
+    print("=" * 70)  # noqa: print
+    print(  # noqa: print
+        "\nTesting unified AdvancedCacheManager with backward compatibility"
+    )  # noqa: print
+    print(  # noqa: print
+        "Target files: 6 (3 migrated + 3 already using AdvancedCacheManager)"
+    )  # noqa: print
+    print(  # noqa: print
         "Consolidating: cache_manager.py + knowledge_cache.py + advanced_cache_manager.py"
     )
 
@@ -496,37 +512,41 @@ def run_all_tests():
             result = test_func()
             results.append((test_name, result))
         except Exception as e:
-            print(f"\n✗ Test '{test_name}' failed with exception: {e}")
+            print(f"\n✗ Test '{test_name}' failed with exception: {e}")  # noqa: print
             import traceback
 
             traceback.print_exc()
             results.append((test_name, False))
 
     # Print summary
-    print("\n" + "=" * 70)
-    print("TEST SUMMARY")
-    print("=" * 70)
+    print("\n" + "=" * 70)  # noqa: print
+    print("TEST SUMMARY")  # noqa: print
+    print("=" * 70)  # noqa: print
 
     passed = sum(1 for _, result in results if result)
     total = len(results)
 
     for test_name, result in results:
         status = "✓ PASSED" if result else "✗ FAILED"
-        print(f"{status}: {test_name}")
+        print(f"{status}: {test_name}")  # noqa: print
 
-    print("\n" + "=" * 70)
-    print(f"OVERALL: {passed}/{total} tests passed")
-    print("=" * 70)
+    print("\n" + "=" * 70)  # noqa: print
+    print(f"OVERALL: {passed}/{total} tests passed")  # noqa: print
+    print("=" * 70)  # noqa: print
 
     if passed == total:
-        print("\n✓ ALL TESTS PASSED - P4 Cache Consolidation Successful!")
-        print("\nNext steps:")
-        print("1. Code review (mandatory)")
-        print("2. Archive old cache managers")
-        print("3. Commit P4 consolidation")
+        print(  # noqa: print
+            "\n✓ ALL TESTS PASSED - P4 Cache Consolidation Successful!"
+        )  # noqa: print
+        print("\nNext steps:")  # noqa: print
+        print("1. Code review (mandatory)")  # noqa: print
+        print("2. Archive old cache managers")  # noqa: print
+        print("3. Commit P4 consolidation")  # noqa: print
         return True
     else:
-        print(f"\n✗ {total - passed} tests failed - Fix issues before proceeding")
+        print(  # noqa: print
+            f"\n✗ {total - passed} tests failed - Fix issues before proceeding"
+        )  # noqa: print
         return False
 
 

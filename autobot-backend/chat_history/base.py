@@ -18,11 +18,11 @@ from typing import Optional
 
 from autobot_memory_graph import AutoBotMemoryGraph
 from config import config as global_config_manager
+from constants.network_constants import NetworkConstants
 from context_window_manager import ContextWindowManager
 from encryption_service import get_encryption_service, is_encryption_enabled
 
 from autobot_shared.redis_client import get_redis_client
-from backend.constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
