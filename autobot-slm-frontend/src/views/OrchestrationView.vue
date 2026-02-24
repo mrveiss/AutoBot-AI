@@ -217,6 +217,32 @@ const roleFormData = ref({
 })
 
 // =============================================================================
+// Tab 4: Role Assignment State (quick assign without full migration)
+// =============================================================================
+
+const assignNodeId = ref('')
+
+function isRoleAssigned(nodeId: string, roleName: string): boolean {
+  const cached = nodeRolesCache[nodeId]
+  if (!cached) return false
+  return cached.roles.some(
+    (r) => r.role_name === roleName && r.status !== 'not_installed',
+  )
+}
+
+async function assignRoleToNode(nodeId: string, roleName: string): Promise<void> {
+  await roles.assignRole(nodeId, roleName)
+  delete nodeRolesCache[nodeId]
+  await loadRolesForNode(nodeId)
+}
+
+async function removeRoleFromNode(nodeId: string, roleName: string): Promise<void> {
+  await roles.removeRole(nodeId, roleName)
+  delete nodeRolesCache[nodeId]
+  await loadRolesForNode(nodeId)
+}
+
+// =============================================================================
 // Tab 4: Migration State (role-based)
 // =============================================================================
 
@@ -240,6 +266,12 @@ const migrationResult = ref<{
 const nodeRolesCache = reactive<Record<string, NodeRolesInfo>>({})
 const loadingRolesForNode = reactive<Record<string, boolean>>({})
 const playbookMigrateResult = ref<PlaybookMigrateResult | null>(null)
+
+watch(assignNodeId, (nodeId) => {
+  if (nodeId && !nodeRolesCache[nodeId]) {
+    loadRolesForNode(nodeId)
+  }
+})
 
 // =============================================================================
 // Tab 5: Infrastructure Overview State
@@ -1300,6 +1332,70 @@ onUnmounted(() => {
 
       <!-- Tab 4: Migration (role-based) -->
       <div v-if="activeTab === 'migration'" class="space-y-4">
+        <!-- Quick Role Assignment Card -->
+        <div class="card p-4">
+          <h3 class="font-medium text-gray-900 mb-1">Quick Role Assignment</h3>
+          <p class="text-sm text-gray-600 mb-4">
+            Assign or remove roles from nodes without running a full code sync.
+          </p>
+
+          <!-- Node selector -->
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Node</label>
+            <select v-model="assignNodeId" class="w-full px-3 py-2 border rounded-lg text-sm">
+              <option value="">Select a node...</option>
+              <option
+                v-for="node in orchestration.fleetStore.nodeList"
+                :key="node.node_id"
+                :value="node.node_id"
+              >
+                {{ node.hostname }} ({{ node.ip_address }})
+              </option>
+            </select>
+          </div>
+
+          <!-- Role matrix -->
+          <div v-if="assignNodeId">
+            <div v-if="loadingRolesForNode[assignNodeId]" class="text-sm text-gray-400 italic py-2">
+              Loading roles...
+            </div>
+            <div v-else-if="roles.roles.length === 0" class="text-sm text-gray-500 py-2">
+              No roles defined. Create roles in the Roles &amp; Deployment tab first.
+            </div>
+            <div v-else class="grid grid-cols-2 gap-2">
+              <div
+                v-for="role in roles.roles"
+                :key="role.name"
+                class="flex items-center justify-between border rounded-lg p-2.5 hover:bg-gray-50"
+              >
+                <div class="min-w-0 mr-2">
+                  <p class="text-sm font-medium text-gray-900 truncate">
+                    {{ role.display_name || role.name }}
+                  </p>
+                  <p class="text-xs text-gray-400 truncate">{{ role.systemd_service || role.name }}</p>
+                </div>
+                <div class="flex-shrink-0">
+                  <button
+                    v-if="!isRoleAssigned(assignNodeId, role.name)"
+                    @click="assignRoleToNode(assignNodeId, role.name)"
+                    class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 whitespace-nowrap"
+                  >
+                    Assign
+                  </button>
+                  <button
+                    v-else
+                    @click="removeRoleFromNode(assignNodeId, role.name)"
+                    class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 whitespace-nowrap"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p v-else class="text-sm text-gray-400 italic">Select a node above to manage its roles.</p>
+        </div>
+
         <!-- Step 1: Select a role -->
         <div v-if="!migrationRole" class="card p-4">
           <h3 class="font-medium text-gray-900 mb-1">Role Migration</h3>
