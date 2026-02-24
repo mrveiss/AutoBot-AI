@@ -517,19 +517,21 @@ if __name__ == "__main__":
     def show_history(agent: ClassificationAgent) -> None:
         """Display recent classification history entries."""
         history = agent.get_classification_history()
-        print("📊 Classification History:")
+        print("📊 Classification History:")  # noqa: print
         for entry in history:
-            print(f"   Message: {entry['user_message']}")
+            print(f"   Message: {entry['user_message']}")  # noqa: print
             classification = entry["classification"]
             confidence = entry["confidence"]
-            print(f"   Classification: {classification} (confidence: {confidence})")
-            print(f"   Reasoning: {entry['reasoning']}")
-            print()
+            print(  # noqa: print
+                f"   Classification: {classification} (confidence: {confidence})"
+            )  # noqa: print
+            print(f"   Reasoning: {entry['reasoning']}")  # noqa: print
+            print()  # noqa: print
 
     async def run_interactive(agent: ClassificationAgent) -> None:
         """Run interactive classification mode with user input prompts."""
-        print("🤖 Interactive Classification Agent")
-        print("Enter messages to classify (Ctrl+C to exit)")
+        print("🤖 Interactive Classification Agent")  # noqa: print
+        print("Enter messages to classify (Ctrl+C to exit)")  # noqa: print
 
         while True:
             try:
@@ -537,30 +539,34 @@ if __name__ == "__main__":
 
                 message = safe_input("\n> ", timeout=10.0, default="exit").strip()
                 if not message or message == "exit":
-                    print("Exiting interactive mode...")
+                    print("Exiting interactive mode...")  # noqa: print
                     break
 
                 result = await agent.classify_request(message)
-                print(f"\nClassification: {result.complexity.value}")
-                print(f"Confidence: {result.confidence:.2f}")
-                print(f"Reasoning: {result.reasoning}")
-                print(f"Suggested agents: {', '.join(result.suggested_agents)}")
-                print(f"Estimated steps: {result.estimated_steps}")
+                print(f"\nClassification: {result.complexity.value}")  # noqa: print
+                print(f"Confidence: {result.confidence:.2f}")  # noqa: print
+                print(f"Reasoning: {result.reasoning}")  # noqa: print
+                print(  # noqa: print
+                    f"Suggested agents: {', '.join(result.suggested_agents)}"
+                )  # noqa: print
+                print(f"Estimated steps: {result.estimated_steps}")  # noqa: print
                 if result.context_analysis.get("domain"):
-                    print(f"Domain: {result.context_analysis['domain']}")
+                    print(f"Domain: {result.context_analysis['domain']}")  # noqa: print
             except KeyboardInterrupt:
-                print("\n👋 Goodbye!")
+                print("\n👋 Goodbye!")  # noqa: print
                 break
 
     async def classify_single(agent: ClassificationAgent, message: str) -> None:
         """Classify a single message and print detailed results."""
         result = await agent.classify_request(message)
-        print(f"Message: {message}")
-        print(f"Classification: {result.complexity.value}")
-        print(f"Confidence: {result.confidence:.2f}")
-        print(f"Reasoning: {result.reasoning}")
-        print(f"Suggested agents: {', '.join(result.suggested_agents)}")
-        print(f"Context: {json.dumps(result.context_analysis, indent=2)}")
+        print(f"Message: {message}")  # noqa: print
+        print(f"Classification: {result.complexity.value}")  # noqa: print
+        print(f"Confidence: {result.confidence:.2f}")  # noqa: print
+        print(f"Reasoning: {result.reasoning}")  # noqa: print
+        print(f"Suggested agents: {', '.join(result.suggested_agents)}")  # noqa: print
+        print(  # noqa: print
+            f"Context: {json.dumps(result.context_analysis, indent=2)}"
+        )  # noqa: print
 
     async def main() -> None:
         """Main entry point for CLI classification agent testing."""
@@ -573,6 +579,8 @@ if __name__ == "__main__":
         elif args.message:
             await classify_single(agent, args.message)
         else:
-            print("Usage: python3 classification_agent.py 'message' or --interactive")
+            print(  # noqa: print
+                "Usage: python3 classification_agent.py 'message' or --interactive"
+            )  # noqa: print
 
     asyncio.run(main())
