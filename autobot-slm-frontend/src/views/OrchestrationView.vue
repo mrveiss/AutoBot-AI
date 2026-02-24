@@ -189,6 +189,10 @@ function getNodeHostname(nodeId: string): string {
   return node?.hostname ?? nodeId
 }
 
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
 // Per-service fleet action confirmation
 const showFleetServiceConfirm = ref(false)
 const pendingFleetServiceAction = ref<{
@@ -204,7 +208,7 @@ function handleFleetServiceAction(
   const service = orchestration.fleetServices.find((s) => s.service_name === serviceName)
   const affectedNodes = (service?.nodes ?? []).map((n) => ({
     nodeId: n.node_id,
-    hostname: getNodeHostname(n.node_id),
+    hostname: n.hostname,
   }))
   pendingFleetServiceAction.value = { serviceName, action, affectedNodes }
   showFleetServiceConfirm.value = true
