@@ -73,7 +73,7 @@ def _score_skill(task_tokens: Set[str], manifest: SkillManifest) -> float:
 
 
 class SkillRouterSkill(BaseSkill):
-    """Stub — full implementation in later tasks."""
+    """Meta-skill: finds and enables the best skill for a given task."""
 
     @staticmethod
     def get_manifest() -> SkillManifest:
@@ -83,6 +83,7 @@ class SkillRouterSkill(BaseSkill):
             description="Meta-skill that routes tasks to the most appropriate skill",
             author="mrveiss",
             category="meta",
+            tools=["find_skill"],
             tags=["meta", "routing", "discovery", "orchestration"],
             config={
                 "top_k": SkillConfigField(
