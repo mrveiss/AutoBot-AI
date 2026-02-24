@@ -6,8 +6,8 @@ Prometheus Metrics HTTP Endpoint
 Exposes Prometheus-format metrics for scraping
 """
 
-from backend.monitoring.prometheus_metrics import get_metrics_manager
 from fastapi import APIRouter, Response
+from monitoring.prometheus_metrics import get_metrics_manager
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 router = APIRouter()

@@ -9,17 +9,17 @@ Provides native API access to containerized Playwright functionality
 import logging
 
 import aiohttp
-from backend.constants.network_constants import NetworkConstants
-from backend.services.playwright_service import (
+from config import ConfigManager
+from constants.network_constants import NetworkConstants
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from pydantic import BaseModel
+from services.playwright_service import (
     get_playwright_service,
     playwright_service,
     search_web_embedded,
     send_test_message_embedded,
     test_frontend_embedded,
 )
-from config import ConfigManager
-from fastapi import APIRouter, BackgroundTasks, HTTPException
-from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client

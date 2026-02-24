@@ -24,7 +24,7 @@ def add_phase9_monitoring_to_registry():
     # Find the monitoring section and add the Phase 9 monitoring router
     phase9_router_config = """            "phase9_monitoring": RouterConfig(
                 name="phase9_monitoring",
-                module_path="backend.api.phase9_monitoring",
+                module_path="api.phase9_monitoring",
                 prefix="/api/monitoring/phase9",
                 tags=["monitoring", "phase9", "gpu", "npu", "performance"],
                 status=RouterStatus.ENABLED,

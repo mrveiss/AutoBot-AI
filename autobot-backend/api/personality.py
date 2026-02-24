@@ -14,9 +14,9 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from auth_middleware import check_admin_permission
-from backend.services.personality_service import get_personality_manager
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
+from services.personality_service import get_personality_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["personality"])

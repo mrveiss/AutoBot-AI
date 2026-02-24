@@ -17,12 +17,9 @@ from datetime import datetime
 from typing import Optional
 
 from auth_middleware import auth_middleware
-from backend.services.redis_service_manager import (
-    RedisConnectionError,
-    RedisServiceManager,
-)
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from services.redis_service_manager import RedisConnectionError, RedisServiceManager
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
