@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 # Import the modules to test
-from backend.api.secure_terminal_websocket import (
+from api.secure_terminal_websocket import (
     SecureTerminalSession,
     get_secure_session,
     handle_secure_terminal_websocket,
@@ -359,7 +359,7 @@ class TestSecureTerminalWebSocketHandler:
         mock_websocket.receive_text.side_effect = messages + [asyncio.TimeoutError()]
 
         with patch(
-            "backend.api.secure_terminal_websocket._secure_sessions", {}
+            "api.secure_terminal_websocket._secure_sessions", {}
         ) as mock_sessions:
             # Should complete without raising exception
             await handle_secure_terminal_websocket(
@@ -384,7 +384,7 @@ class TestSecureTerminalWebSocketHandler:
         mock_websocket.receive_text.side_effect = [asyncio.TimeoutError()]
 
         with patch(
-            "backend.api.secure_terminal_websocket._secure_sessions",
+            "api.secure_terminal_websocket._secure_sessions",
             {session_id: existing_session},
         ):
             await handle_secure_terminal_websocket(
@@ -409,7 +409,7 @@ class TestSecureTerminalWebSocketHandler:
             asyncio.TimeoutError(),
         ]
 
-        with patch("backend.api.secure_terminal_websocket._secure_sessions", {}):
+        with patch("api.secure_terminal_websocket._secure_sessions", {}):
             # Should handle gracefully
             await handle_secure_terminal_websocket(mock_websocket, session_id, None)
 
@@ -424,7 +424,7 @@ class TestSecureTerminalWebSocketHandler:
 
         session_id = "test_session"
 
-        with patch("backend.api.secure_terminal_websocket._secure_sessions", {}):
+        with patch("api.secure_terminal_websocket._secure_sessions", {}):
             # Should handle disconnect gracefully
             await handle_secure_terminal_websocket(mock_websocket, session_id, None)
 
@@ -448,7 +448,7 @@ class TestSecureTerminalWebSocketHandler:
         mock_websocket.receive_text.side_effect = messages + [asyncio.TimeoutError()]
 
         with patch(
-            "backend.api.secure_terminal_websocket.SecureTerminalSession"
+            "api.secure_terminal_websocket.SecureTerminalSession"
         ) as MockSession:
             MockSession.return_value = mock_session
 
@@ -469,7 +469,7 @@ class TestSecureTerminalUtilities:
         mock_session = MagicMock()
 
         with patch(
-            "backend.api.secure_terminal_websocket._secure_sessions",
+            "api.secure_terminal_websocket._secure_sessions",
             {session_id: mock_session},
         ):
             result = get_secure_session(session_id)
@@ -479,7 +479,7 @@ class TestSecureTerminalUtilities:
         """Test getting non-existent secure session"""
         session_id = "nonexistent_session"
 
-        with patch("backend.api.secure_terminal_websocket._secure_sessions", {}):
+        with patch("api.secure_terminal_websocket._secure_sessions", {}):
             result = get_secure_session(session_id)
             assert result is None
 

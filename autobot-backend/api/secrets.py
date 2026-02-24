@@ -30,11 +30,11 @@ from typing import Dict, List, Optional
 
 from auth_middleware import check_admin_permission
 from autobot_memory_graph import AutoBotMemoryGraph
-from backend.type_defs.common import Metadata
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -237,7 +237,7 @@ class SecretsManager:
     def __init__(self):
         """Initialize secrets manager with encryption and caching."""
         # Use centralized path management
-        from backend.utils.paths_manager import ensure_data_directory, get_data_path
+        from utils.paths_manager import ensure_data_directory, get_data_path
 
         # Ensure data directory exists
         ensure_data_directory()
@@ -255,7 +255,7 @@ class SecretsManager:
     def _ensure_directories(self):
         """Ensure data directory exists - now handled by centralized paths"""
         # This method is kept for compatibility but functionality moved to centralized paths
-        from backend.utils.paths_manager import ensure_data_directory
+        from utils.paths_manager import ensure_data_directory
 
         ensure_data_directory()
 

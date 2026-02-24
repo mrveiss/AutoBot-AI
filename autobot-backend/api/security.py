@@ -15,15 +15,12 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import aiofiles
-from backend.security.domain_security import get_domain_security_manager
-from backend.security.threat_intelligence import (
-    ThreatLevel,
-    get_threat_intelligence_service,
-)
-from backend.type_defs.common import Metadata
 from enhanced_security_layer import EnhancedSecurityLayer
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
+from security.domain_security import get_domain_security_manager
+from security.threat_intelligence import ThreatLevel, get_threat_intelligence_service
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
