@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from typing import Dict, List, Optional
 
 from backend.constants.network_constants import NetworkConstants
-from backend.utils.service_registry import get_service_url
+from utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
 
