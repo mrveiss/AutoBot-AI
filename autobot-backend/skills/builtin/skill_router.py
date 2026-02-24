@@ -4,8 +4,11 @@
 """
 Skill Router Meta-Skill
 
-Two-phase skill discovery: keyword scoring (Phase 1) + LLM re-ranking (Phase 2).
-Auto-enables the best matching skill for a given task description.
+Three-phase pipeline for skill selection and generation:
+  Phase 1 — Keyword scoring: score registered skills against task tokens.
+  Phase 2 — LLM re-ranking: send top-K candidates to LLM for best match.
+  Phase 3 — Gap fill: when no skill matches, research the capability via
+             skill-researcher, then delegate to autonomous-skill-development.
 """
 
 import json
@@ -24,6 +27,18 @@ except ImportError:
 def _tokenize(text: str) -> Set[str]:
     """Lowercase and split text on non-word characters."""
     return {t for t in re.split(r"[\W_]+", text.lower()) if t}
+
+
+def _enrich_capability(task: str, research: Dict[str, Any]) -> str:
+    """Append research hints to the capability string for the skill generator.
+
+    If research found implementation_hints, append them so SkillGenerator has
+    richer context without changing the core capability description.
+    """
+    hints = research.get("implementation_hints", "")
+    if not hints:
+        return task
+    return f"{task}\n\nResearch context: {hints}"
 
 
 # Scoring weights — name and tags are preferred over tools and description
@@ -239,10 +254,11 @@ class SkillRouterSkill(BaseSkill):
     async def _build_missing_skill(
         self, task: str, registry: Any, dry_run: bool
     ) -> Dict[str, Any]:
-        """Delegate to autonomous-skill-development when no skill matches the task.
+        """Three-step gap-fill pipeline: research → build.
 
         Called when _build_candidates returns an empty list (empty registry or
-        all skills score zero against the task tokens).
+        all skills score zero).  Step 1 (gap detection) already happened in
+        _find_skill; this method handles steps 2 and 3.
         """
         if dry_run:
             return {
@@ -250,21 +266,49 @@ class SkillRouterSkill(BaseSkill):
                 "enabled_skill": None,
                 "build_triggered": False,
                 "reason": (
-                    "No matching skill; would trigger autonomous-skill-development"
+                    "No matching skill; would research then trigger "
+                    "autonomous-skill-development"
                 ),
                 "dry_run": True,
             }
+        # Step 2: Research the capability from multiple angles.
+        research = await self._research_capability(task, registry)
+
+        # Step 3: Build the skill, enriching the capability with research context.
         build_skill = registry.get("autonomous-skill-development")
         if not build_skill:
             return {"success": False, "error": "no skills registered"}
+        enriched = _enrich_capability(task, research)
         result = await build_skill.execute(
-            {"capability": task, "requested_by": "skill-router"}
+            {
+                "capability": enriched,
+                "requested_by": "skill-router",
+                "context": research,
+            }
         )
         return {
             "success": result.get("success", False),
             "enabled_skill": None,
             "build_triggered": True,
+            "research_performed": bool(research),
             "build_result": result,
-            "reason": "No matching skill; delegated to autonomous-skill-development",
+            "reason": (
+                "No matching skill; researched and delegated to "
+                "autonomous-skill-development"
+            ),
             "dry_run": False,
         }
+
+    async def _research_capability(self, task: str, registry: Any) -> Dict[str, Any]:
+        """Call skill-researcher if registered; return empty dict on any failure."""
+        researcher = registry.get("skill-researcher")
+        if not researcher:
+            return {}
+        try:
+            result = await researcher.execute(
+                "research_capability", {"capability": task}
+            )
+            return result if result.get("success") else {}
+        except Exception as exc:
+            self.logger.warning("Research phase failed, proceeding without: %s", exc)
+            return {}

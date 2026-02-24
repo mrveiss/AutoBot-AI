@@ -293,7 +293,10 @@ def test_find_skill_no_match_delegates_to_autonomous():
             ["create_event"],
         ),
     ]
-    mock_registry.get.return_value = mock_build_skill
+    # skill-researcher not registered; autonomous-skill-development is
+    mock_registry.get.side_effect = lambda name: (
+        None if name == "skill-researcher" else mock_build_skill
+    )
 
     with patch(
         "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
@@ -307,9 +310,57 @@ def test_find_skill_no_match_delegates_to_autonomous():
     assert result["success"] is True
     assert result["build_triggered"] is True
     assert result["enabled_skill"] is None
-    mock_registry.get.assert_called_with("autonomous-skill-development")
     mock_build_skill.execute.assert_called_once_with(
-        {"capability": "transcribe this audio file", "requested_by": "skill-router"}
+        {
+            "capability": "transcribe this audio file",
+            "requested_by": "skill-router",
+            "context": {},
+        }
+    )
+
+
+def test_find_skill_no_match_uses_research_context():
+    """Research findings should enrich the capability passed to autonomous-skill-development."""
+    mock_researcher = MagicMock()
+    mock_researcher.execute = AsyncMock(
+        return_value={
+            "success": True,
+            "capability": "voice transcription",
+            "sources_consulted": 3,
+            "summary": "Converts speech to text",
+            "key_libraries": ["whisper"],
+            "best_practices": [],
+            "common_pitfalls": [],
+            "implementation_hints": "Use faster-whisper for speed",
+        }
+    )
+    mock_build_skill = MagicMock()
+    mock_build_skill.execute = AsyncMock(
+        return_value={"success": True, "state": "pending_approval"}
+    )
+    mock_registry = MagicMock()
+    mock_registry.list_skills.return_value = []
+    mock_registry.get.side_effect = lambda name: (
+        mock_researcher if name == "skill-researcher" else mock_build_skill
+    )
+
+    with patch(
+        "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
+    ):
+        skill = SkillRouterSkill()
+        skill.apply_config({"top_k": 5, "auto_enable": True})
+        result = asyncio.run(
+            skill.execute("find_skill", {"task": "voice transcription"})
+        )
+
+    assert result["success"] is True
+    assert result["research_performed"] is True
+    # capability must be enriched with implementation hints
+    call_args = mock_build_skill.execute.call_args[0][0]
+    assert "faster-whisper" in call_args["capability"]
+    assert (
+        call_args["context"].get("implementation_hints")
+        == "Use faster-whisper for speed"
     )
 
 
