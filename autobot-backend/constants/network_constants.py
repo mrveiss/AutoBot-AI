@@ -31,7 +31,7 @@ import warnings
 from functools import cached_property
 from typing import Optional
 
-from backend.config.registry import ConfigRegistry
+from config.registry import ConfigRegistry
 
 # Deprecation flag - set to True to enable deprecation warnings
 _SHOW_DEPRECATION_WARNINGS = (

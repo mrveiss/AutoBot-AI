@@ -17,9 +17,9 @@ from agents import get_kb_librarian
 from agents.classification_agent import ClassificationAgent, ClassificationResult
 from agents.llm_failsafe_agent import get_robust_llm_response
 from autobot_types import TaskComplexity
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.threshold_constants import TimingConstants
 from config import config as global_config_manager
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import TimingConstants
 from research_browser_manager import research_browser_manager
 from source_attribution import (
     SourceType,

@@ -20,20 +20,12 @@ import uuid
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Set
 
-from backend.constants.threshold_constants import (
+from circuit_breaker import circuit_breaker_async
+from constants.threshold_constants import (
     AgentThresholds,
     CircuitBreakerDefaults,
     RetryConfig,
 )
-
-# Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
-from backend.utils.agent_selection import find_best_agent_for_task as _find_best_agent
-from backend.utils.agent_selection import release_agent as _release_agent
-from backend.utils.agent_selection import reserve_agent as _reserve_agent
-from backend.utils.agent_selection import (
-    update_agent_performance as _update_performance,
-)
-from circuit_breaker import circuit_breaker_async
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 
@@ -54,6 +46,12 @@ from orchestration import (
 # Import existing orchestrator components
 from orchestrator import Orchestrator, TaskComplexity
 from retry_mechanism import RetryStrategy, retry_async
+
+# Import shared agent selection utilities (Issue #292 - Eliminate duplicate code)
+from utils.agent_selection import find_best_agent_for_task as _find_best_agent
+from utils.agent_selection import release_agent as _release_agent
+from utils.agent_selection import reserve_agent as _reserve_agent
+from utils.agent_selection import update_agent_performance as _update_performance
 
 # Re-export for backward compatibility
 __all__ = [
@@ -555,13 +553,13 @@ if __name__ == "__main__":
             context={"priority": "high", "deadline": "2024-01-01"},
         )
 
-        print("Workflow Result:")
-        print(json.dumps(result, indent=2, default=str))
+        print("Workflow Result:")  # noqa: print
+        print(json.dumps(result, indent=2, default=str))  # noqa: print
 
         # Get orchestrator status
         status = enhanced_orchestrator.get_orchestrator_status()
-        print("\nOrchestrator Status:")
-        print(json.dumps(status, indent=2, default=str))
+        print("\nOrchestrator Status:")  # noqa: print
+        print(json.dumps(status, indent=2, default=str))  # noqa: print
 
     # Run example
     asyncio.run(example_usage())

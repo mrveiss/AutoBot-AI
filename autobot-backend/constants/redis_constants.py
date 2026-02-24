@@ -27,7 +27,7 @@ Usage:
 
 from dataclasses import dataclass
 
-from backend.config.registry import ConfigRegistry
+from config.registry import ConfigRegistry
 
 
 @dataclass(frozen=True)

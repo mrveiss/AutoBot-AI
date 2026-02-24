@@ -21,8 +21,8 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
-from backend.conversation_context import ConversationContext
-from backend.intent_classifier import ConversationIntent, IntentClassification
+from conversation_context import ConversationContext
+from intent_classifier import ConversationIntent, IntentClassification
 
 logger = logging.getLogger(__name__)
 
