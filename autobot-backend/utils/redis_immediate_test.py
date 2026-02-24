@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, Tuple
 
 import redis
-from backend.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 
 from autobot_shared.redis_client import get_redis_client
 

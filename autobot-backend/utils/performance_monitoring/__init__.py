@@ -41,13 +41,13 @@ still exports all classes and functions directly.
 """
 
 # Analyzers
-from backend.utils.performance_monitoring.analyzers import (
+from utils.performance_monitoring.analyzers import (
     AlertAnalyzer,
     RecommendationGenerator,
 )
 
 # Collectors
-from backend.utils.performance_monitoring.collectors import (
+from utils.performance_monitoring.collectors import (
     GPUCollector,
     MultiModalCollector,
     NPUCollector,
@@ -56,16 +56,13 @@ from backend.utils.performance_monitoring.collectors import (
 )
 
 # Decorator
-from backend.utils.performance_monitoring.decorator import (
-    monitor_performance,
-    set_redis_client,
-)
+from utils.performance_monitoring.decorator import monitor_performance, set_redis_client
 
 # Hardware detection
-from backend.utils.performance_monitoring.hardware import HardwareDetector
+from utils.performance_monitoring.hardware import HardwareDetector
 
 # Metrics dataclasses
-from backend.utils.performance_monitoring.metrics import (
+from utils.performance_monitoring.metrics import (
     GPUMetrics,
     MultiModalMetrics,
     NPUMetrics,
@@ -74,10 +71,10 @@ from backend.utils.performance_monitoring.metrics import (
 )
 
 # Main monitor class
-from backend.utils.performance_monitoring.monitor import PerformanceMonitor
+from utils.performance_monitoring.monitor import PerformanceMonitor
 
 # Types and constants
-from backend.utils.performance_monitoring.types import (
+from utils.performance_monitoring.types import (
     AUTOBOT_PROCESS_KEYWORDS,
     CRITICAL_SERVICE_STATUSES,
     DEFAULT_COLLECTION_INTERVAL,

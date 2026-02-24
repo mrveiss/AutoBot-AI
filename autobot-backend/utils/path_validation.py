@@ -26,7 +26,7 @@ BENEFITS:
 
 USAGE:
 ======
-from backend.utils.path_validation import contains_path_traversal, is_invalid_name
+from utils.path_validation import contains_path_traversal, is_invalid_name
 
 # In files.py
 if is_invalid_name(new_name):
