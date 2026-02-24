@@ -13,9 +13,9 @@ import json
 import logging
 from typing import Callable, Dict, Optional, Tuple
 
-from backend.type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
+from type_defs.common import SKIP_WEBSOCKET_PERSISTENCE_TYPES
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -232,7 +232,7 @@ async def _handle_command_approval(websocket: WebSocket, data: dict) -> None:
     user_id = data.get("user_id", "web_user")
 
     try:
-        from backend.services.agent_terminal import AgentTerminalService
+        from services.agent_terminal import AgentTerminalService
 
         service = AgentTerminalService()
         result = await service.approve_command(
@@ -670,7 +670,7 @@ async def _send_initial_worker_list(websocket: WebSocket) -> None:
         websocket: The WebSocket connection
     """
     try:
-        from backend.services.npu_worker_manager import get_worker_manager
+        from services.npu_worker_manager import get_worker_manager
 
         worker_manager = await get_worker_manager()
         workers = await worker_manager.list_workers()

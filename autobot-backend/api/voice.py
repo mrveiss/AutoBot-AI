@@ -6,9 +6,9 @@ import logging
 import os
 import tempfile
 
-from backend.services.tts_client import get_tts_client
 from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
+from services.tts_client import get_tts_client
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
