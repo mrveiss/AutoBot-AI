@@ -63,13 +63,13 @@ class MultiAgentWorkflowValidator:
         self.results.append(result)
 
         status_icon = {"pass": "✅", "fail": "❌", "warning": "⚠️", "skip": "⏭️"}
-        print(f"{status_icon.get(status, '?')} {test_name}: {message}")
+        print(f"{status_icon.get(status, '?')} {test_name}: {message}")  # noqa: print
 
         if agents_involved:
-            print(f"    Agents: {', '.join(agents_involved)}")
+            print(f"    Agents: {', '.join(agents_involved)}")  # noqa: print
         if performance_metrics:
             for key, value in performance_metrics.items():
-                print(f"    {key}: {value}")
+                print(f"    {key}: {value}")  # noqa: print
 
     def test_backend_availability(self) -> bool:
         """Test if backend is available for testing"""
@@ -104,7 +104,7 @@ class MultiAgentWorkflowValidator:
 
     def test_multi_agent_coordination(self):
         """Test multi-agent coordination system"""
-        print("\n=== MULTI-AGENT COORDINATION TESTS ===")
+        print("\n=== MULTI-AGENT COORDINATION TESTS ===")  # noqa: print
 
         if not self.test_backend_availability():
             self.log_result(
@@ -175,7 +175,7 @@ class MultiAgentWorkflowValidator:
 
     def test_parallel_task_execution(self):
         """Test parallel task execution capabilities"""
-        print("\n=== PARALLEL TASK EXECUTION TESTS ===")
+        print("\n=== PARALLEL TASK EXECUTION TESTS ===")  # noqa: print
 
         if not self.test_backend_availability():
             return
@@ -263,7 +263,7 @@ class MultiAgentWorkflowValidator:
 
     def test_agent_task_completion(self):
         """Test agent task completion tracking"""
-        print("\n=== AGENT TASK COMPLETION TESTS ===")
+        print("\n=== AGENT TASK COMPLETION TESTS ===")  # noqa: print
 
         if not self.test_backend_availability():
             return
@@ -315,7 +315,7 @@ class MultiAgentWorkflowValidator:
 
     def test_agent_communication_workflow(self):
         """Test inter-agent communication workflow"""
-        print("\n=== INTER-AGENT COMMUNICATION TESTS ===")
+        print("\n=== INTER-AGENT COMMUNICATION TESTS ===")  # noqa: print
 
         if not self.test_backend_availability():
             return
@@ -375,7 +375,7 @@ class MultiAgentWorkflowValidator:
 
     def test_system_resilience(self):
         """Test system resilience and error recovery"""
-        print("\n=== SYSTEM RESILIENCE TESTS ===")
+        print("\n=== SYSTEM RESILIENCE TESTS ===")  # noqa: print
 
         if not self.test_backend_availability():
             return
@@ -488,9 +488,11 @@ class MultiAgentWorkflowValidator:
 
     def run_multi_agent_validation(self):
         """Run complete multi-agent workflow validation"""
-        print("🚀 AutoBot Multi-Agent Workflow Validation")
-        print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print("=" * 60)
+        print("🚀 AutoBot Multi-Agent Workflow Validation")  # noqa: print
+        print(  # noqa: print
+            f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )  # noqa: print
+        print("=" * 60)  # noqa: print
 
         # Run all multi-agent tests
         self.test_multi_agent_coordination()
@@ -500,38 +502,40 @@ class MultiAgentWorkflowValidator:
         self.test_system_resilience()
 
         # Generate comprehensive report
-        print("\n" + "=" * 60)
-        print("📊 MULTI-AGENT VALIDATION SUMMARY")
-        print("=" * 60)
+        print("\n" + "=" * 60)  # noqa: print
+        print("📊 MULTI-AGENT VALIDATION SUMMARY")  # noqa: print
+        print("=" * 60)  # noqa: print
 
         report = self.generate_workflow_report()
 
         # Console summary
-        print(f"Total Tests: {report['test_summary']['total_tests']}")
-        print(f"✅ Passed: {report['test_summary']['passed']}")
-        print(f"❌ Failed: {report['test_summary']['failed']}")
-        print(f"⚠️ Warnings: {report['test_summary']['warnings']}")
-        print(f"⏭️ Skipped: {report['test_summary']['skipped']}")
-        print(f"Success Rate: {report['test_summary']['success_rate']}")
+        print(f"Total Tests: {report['test_summary']['total_tests']}")  # noqa: print
+        print(f"✅ Passed: {report['test_summary']['passed']}")  # noqa: print
+        print(f"❌ Failed: {report['test_summary']['failed']}")  # noqa: print
+        print(f"⚠️ Warnings: {report['test_summary']['warnings']}")  # noqa: print
+        print(f"⏭️ Skipped: {report['test_summary']['skipped']}")  # noqa: print
+        print(f"Success Rate: {report['test_summary']['success_rate']}")  # noqa: print
 
-        print("\n🤖 AGENT ANALYSIS:")
-        print(f"Agents Tested: {report['agent_analysis']['agent_count']}")
-        print(
+        print("\n🤖 AGENT ANALYSIS:")  # noqa: print
+        print(  # noqa: print
+            f"Agents Tested: {report['agent_analysis']['agent_count']}"
+        )  # noqa: print
+        print(  # noqa: print
             f"Coordination Capable: {'✅ Yes' if report['agent_analysis']['coordination_capable'] else '⚠️ Limited'}"
         )
 
-        print("\n⚡ PERFORMANCE:")
-        print(
+        print("\n⚡ PERFORMANCE:")  # noqa: print
+        print(  # noqa: print
             f"Average Response Time: {report['performance_metrics']['average_response_time']}"
         )
-        print(
+        print(  # noqa: print
             f"Range: {report['performance_metrics']['fastest_response']} - {report['performance_metrics']['slowest_response']}"
         )
 
-        print("\n🏭 PRODUCTION READINESS:")
+        print("\n🏭 PRODUCTION READINESS:")  # noqa: print
         for key, value in report["production_readiness"].items():
             status = "✅ Ready" if value else "⚠️ Needs Review"
-            print(f"{key.replace('_', ' ').title()}: {status}")
+            print(f"{key.replace('_', ' ').title()}: {status}")  # noqa: print
 
         # Save results
         self.save_workflow_results(report)
@@ -569,7 +573,9 @@ class MultiAgentWorkflowValidator:
         with open(results_file, "w") as f:
             json.dump(full_report, f, indent=2)
 
-        print(f"\n💾 Multi-agent validation results saved to: {results_file}")
+        print(  # noqa: print
+            f"\n💾 Multi-agent validation results saved to: {results_file}"
+        )  # noqa: print
 
 
 def main():
@@ -583,20 +589,24 @@ def main():
         production_ready = all(report["production_readiness"].values())
 
         if production_ready and report["test_summary"]["failed"] == 0:
-            print("\n✅ Multi-agent system is production ready!")
+            print("\n✅ Multi-agent system is production ready!")  # noqa: print
             sys.exit(0)
         elif report["test_summary"]["failed"] > 0:
-            print("\n❌ Multi-agent validation failed with critical issues")
+            print(  # noqa: print
+                "\n❌ Multi-agent validation failed with critical issues"
+            )  # noqa: print
             sys.exit(1)
         else:
-            print("\n⚠️ Multi-agent system needs review before production")
+            print(  # noqa: print
+                "\n⚠️ Multi-agent system needs review before production"
+            )  # noqa: print
             sys.exit(2)
 
     except KeyboardInterrupt:
-        print("\n⚠️ Multi-agent validation interrupted")
+        print("\n⚠️ Multi-agent validation interrupted")  # noqa: print
         sys.exit(130)
     except Exception as e:
-        print(f"\n❌ Multi-agent validation failed: {str(e)}")
+        print(f"\n❌ Multi-agent validation failed: {str(e)}")  # noqa: print
         sys.exit(1)
 
 

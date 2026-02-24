@@ -24,8 +24,8 @@ import time
 from datetime import datetime
 from typing import AsyncGenerator, Optional, Tuple, Union
 
-from backend.security.command_patterns import check_dangerous_patterns, is_safe_command
-from backend.utils.command_utils import execute_shell_command_streaming
+from security.command_patterns import check_dangerous_patterns, is_safe_command
+from utils.command_utils import execute_shell_command_streaming
 
 from .command_explanation_service import (
     CommandExplanationService,
