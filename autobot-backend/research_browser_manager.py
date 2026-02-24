@@ -15,7 +15,6 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 
 import aiofiles
-
 from config import ConfigManager
 
 try:
@@ -25,12 +24,11 @@ try:
 except ImportError:
     Browser = BrowserContext = Page = async_playwright = None  # type: ignore[assignment]
     PLAYWRIGHT_AVAILABLE = False
+from constants.network_constants import ServiceURLs
+from constants.security_constants import SecurityConstants
+from constants.threshold_constants import TimingConstants
 from source_attribution import SourceType, track_source
-
-from backend.constants.network_constants import ServiceURLs
-from backend.constants.security_constants import SecurityConstants
-from backend.constants.threshold_constants import TimingConstants
-from backend.utils.display_utils import get_playwright_config
+from utils.display_utils import get_playwright_config
 
 logger = logging.getLogger(__name__)
 

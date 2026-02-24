@@ -26,8 +26,8 @@ Usage:
         await planner.complete_step(plan.plan_id, step.step_id)
 """
 
-from backend.planner.planner import LLMPlannerModule, PlannerModule
-from backend.planner.types import ExecutionPlan, PlanStatus, PlanStep, StepStatus
+from planner.planner import LLMPlannerModule, PlannerModule
+from planner.types import ExecutionPlan, PlanStatus, PlanStep, StepStatus
 
 __all__ = [
     # Types
