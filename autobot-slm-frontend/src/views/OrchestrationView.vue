@@ -174,6 +174,29 @@ const categoryCounts = computed(() => {
 const fleetSearchQuery = ref('')
 const fleetCategoryFilter = ref<'autobot' | 'system' | 'all'>('all')
 
+const expandedFleetServices = ref<Set<string>>(new Set())
+
+function toggleFleetService(serviceName: string): void {
+  if (expandedFleetServices.value.has(serviceName)) {
+    expandedFleetServices.value.delete(serviceName)
+  } else {
+    expandedFleetServices.value.add(serviceName)
+  }
+}
+
+function getNodeHostname(nodeId: string): string {
+  const node = orchestration.fleetStore.nodeList.find((n) => n.node_id === nodeId)
+  return node?.hostname ?? nodeId
+}
+
+// Temporary stub — will be replaced in Task 5
+function handleFleetServiceAction(
+  serviceName: string,
+  action: 'start' | 'stop' | 'restart'
+): void {
+  handleFleetAction(serviceName, action)
+}
+
 const filteredFleetServices = computed(() => {
   if (!Array.isArray(orchestration.fleetServices)) {
     return []
@@ -1105,62 +1128,101 @@ onUnmounted(() => {
               </tr>
             </thead>
             <tbody>
-              <tr
-                v-for="service in filteredFleetServices"
-                :key="service.service_name"
-                class="border-t border-gray-50 hover:bg-gray-50"
-              >
-                <td class="px-4 py-2">
-                  <span class="font-medium text-gray-900">{{ service.service_name }}</span>
-                  <span class="text-xs text-gray-500 ml-2">({{ service.total_nodes }} nodes)</span>
-                </td>
-                <td class="px-4 py-2">
-                  <span
-                    :class="[
-                      'px-1.5 py-0.5 text-xs font-medium rounded',
-                      service.category === 'autobot'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-gray-100 text-gray-700'
-                    ]"
-                  >
-                    {{ service.category === 'autobot' ? 'AutoBot' : 'System' }}
-                  </span>
-                </td>
-                <td class="px-4 py-2 text-center text-green-600 font-medium">
-                  {{ service.running_count }}
-                </td>
-                <td class="px-4 py-2 text-center text-gray-500 font-medium">
-                  {{ service.stopped_count }}
-                </td>
-                <td class="px-4 py-2 text-center text-red-600 font-medium">
-                  {{ service.failed_count }}
-                </td>
-                <td class="px-4 py-2">
-                  <div class="flex items-center justify-end gap-1">
-                    <button
-                      @click="handleFleetAction(service.service_name, 'start')"
-                      class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
-                      title="Start on all nodes"
+              <template v-for="service in filteredFleetServices" :key="service.service_name">
+                <!-- Summary row -->
+                <tr class="border-t border-gray-50 hover:bg-gray-50">
+                  <td class="px-4 py-2">
+                    <div class="flex items-center gap-2">
+                      <button
+                        @click="toggleFleetService(service.service_name)"
+                        class="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                        :title="expandedFleetServices.has(service.service_name) ? 'Collapse' : 'Expand nodes'"
+                      >
+                        <svg
+                          class="w-4 h-4 transition-transform"
+                          :class="{ 'rotate-90': expandedFleetServices.has(service.service_name) }"
+                          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        >
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                      <span class="font-medium text-gray-900">{{ service.service_name }}</span>
+                      <span class="text-xs text-gray-500">({{ service.total_nodes }} nodes)</span>
+                    </div>
+                  </td>
+                  <td class="px-4 py-2">
+                    <span
+                      :class="[
+                        'px-1.5 py-0.5 text-xs font-medium rounded',
+                        service.category === 'autobot'
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-gray-100 text-gray-700'
+                      ]"
                     >
-                      Start
-                    </button>
-                    <button
-                      @click="handleFleetAction(service.service_name, 'stop')"
-                      class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
-                      title="Stop on all nodes"
-                    >
-                      Stop
-                    </button>
-                    <button
-                      @click="handleFleetAction(service.service_name, 'restart')"
-                      class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                      title="Restart on all nodes"
-                    >
-                      Restart
-                    </button>
-                  </div>
-                </td>
-              </tr>
+                      {{ service.category === 'autobot' ? 'AutoBot' : 'System' }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-2 text-center text-green-600 font-medium">{{ service.running_count }}</td>
+                  <td class="px-4 py-2 text-center text-gray-500 font-medium">{{ service.stopped_count }}</td>
+                  <td class="px-4 py-2 text-center text-red-600 font-medium">{{ service.failed_count }}</td>
+                  <td class="px-4 py-2">
+                    <div class="flex items-center justify-end gap-1">
+                      <button
+                        @click="handleFleetServiceAction(service.service_name, 'start')"
+                        class="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200"
+                        title="Start on all nodes"
+                      >Start</button>
+                      <button
+                        @click="handleFleetServiceAction(service.service_name, 'stop')"
+                        class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                        title="Stop on all nodes"
+                      >Stop</button>
+                      <button
+                        @click="handleFleetServiceAction(service.service_name, 'restart')"
+                        class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                        title="Restart on all nodes"
+                      >Restart</button>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Expanded per-node rows -->
+                <tr v-if="expandedFleetServices.has(service.service_name)" class="bg-gray-50">
+                  <td colspan="6" class="px-0 py-0">
+                    <table class="w-full">
+                      <tbody>
+                        <tr
+                          v-for="nodeStatus in service.nodes"
+                          :key="nodeStatus.node_id"
+                          class="border-t border-gray-100"
+                        >
+                          <td class="pl-12 pr-4 py-1.5 w-64">
+                            <span class="text-sm text-gray-700 font-medium">
+                              {{ getNodeHostname(nodeStatus.node_id) }}
+                            </span>
+                            <span class="text-xs text-gray-400 ml-1.5 font-mono">{{ nodeStatus.node_id }}</span>
+                          </td>
+                          <td class="px-4 py-1.5 w-28">
+                            <ServiceStatusBadge :status="nodeStatus.status as any" />
+                          </td>
+                          <td class="px-4 py-1.5 text-right">
+                            <ServiceActionButtons
+                              :serviceName="service.service_name"
+                              :nodeId="nodeStatus.node_id"
+                              :status="nodeStatus.status as any"
+                              :isActionInProgress="orchestration.actionInProgress"
+                              :activeAction="orchestration.activeAction"
+                              @start="(nId, svc) => handleServiceAction(nId, svc, 'start')"
+                              @stop="(nId, svc) => handleServiceAction(nId, svc, 'stop')"
+                              @restart="(nId, svc) => handleServiceAction(nId, svc, 'restart')"
+                            />
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
