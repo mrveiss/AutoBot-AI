@@ -13,14 +13,13 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from auth_middleware import check_admin_permission
-
 # Import existing components
-from backend.api.workflow_automation import (
+from api.workflow_automation import (
     AutomationMode,
     WorkflowAutomationManager,
     WorkflowStep,
 )
+from auth_middleware import check_admin_permission
 from enhanced_orchestrator import EnhancedOrchestrator
 from fastapi import APIRouter, Depends, HTTPException
 from knowledge_base import KnowledgeBase

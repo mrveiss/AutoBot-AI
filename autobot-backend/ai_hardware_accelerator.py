@@ -19,15 +19,15 @@ import aiohttp
 import numpy as np
 import torch
 import torch.nn.functional as F
+from config import cfg
 
 # Import centralized components
-from backend.constants.model_constants import model_config
-from backend.constants.threshold_constants import (
+from constants.model_constants import model_config
+from constants.threshold_constants import (
     HardwareAcceleratorConfig,
     ResourceThresholds,
     TimingConstants,
 )
-from config import cfg
 from PIL import Image
 
 from autobot_shared.http_client import get_http_client

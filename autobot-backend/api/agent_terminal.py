@@ -229,12 +229,12 @@ import logging
 from typing import Dict, Optional
 
 from auth_middleware import get_current_user
-from backend.dependencies import get_redis_client
-from backend.services.agent_terminal import AgentSessionState, AgentTerminalService
-from backend.services.command_approval_manager import AgentRole
-from backend.services.command_execution_queue import get_command_queue
+from dependencies import get_redis_client
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from services.agent_terminal import AgentSessionState, AgentTerminalService
+from services.command_approval_manager import AgentRole
+from services.command_execution_queue import get_command_queue
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
