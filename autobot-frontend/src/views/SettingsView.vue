@@ -141,12 +141,6 @@ const activeTab = ref<PreferenceTab>('appearance')
  * SETTINGS SECTIONS
  * ============================================ */
 
-.settings-sections {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2xl);
-}
-
 .settings-section {
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
@@ -210,8 +204,8 @@ const activeTab = ref<PreferenceTab>('appearance')
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-3) var(--spacing-4);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
   color: var(--text-secondary);
   background: transparent;
   border: none;
