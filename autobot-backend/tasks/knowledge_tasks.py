@@ -14,8 +14,8 @@ import logging
 import subprocess  # nosec B404 - used for internal script execution only
 import sys
 
-from backend.celery_app import celery_app
-from backend.type_defs.common import Metadata
+from celery_app import celery_app
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -270,8 +270,8 @@ async def _scan_man_page_changes_async(
     Returns:
         Dict with scan results and storage statistics
     """
-    from backend.services.fast_document_scanner import FastDocumentScanner
     from knowledge import get_knowledge_base
+    from services.fast_document_scanner import FastDocumentScanner
 
     from autobot_shared.redis_client import get_redis_client
 
@@ -389,9 +389,9 @@ async def _execute_full_man_page_index(
     Returns:
         Dict with indexing results
     """
-    from backend.services.fast_document_scanner import FastDocumentScanner
     from constants.threshold_constants import TimingConstants
     from knowledge import get_knowledge_base
+    from services.fast_document_scanner import FastDocumentScanner
 
     from autobot_shared.redis_client import get_redis_client
 

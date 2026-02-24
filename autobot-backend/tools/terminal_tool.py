@@ -48,7 +48,7 @@ class TerminalTool:
 
     def _parse_agent_role(self, agent_role: str):
         """Parse agent role string to enum. Returns (role_enum, error_dict or None)."""
-        from backend.services.command_approval_manager import AgentRole
+        from services.command_approval_manager import AgentRole
 
         try:
             return AgentRole[agent_role.upper()], None
@@ -106,7 +106,7 @@ class TerminalTool:
 
     async def _create_new_session(self, conversation_id: str) -> str:
         """Create a new terminal session for a conversation. Returns session_id."""
-        from backend.services.command_approval_manager import AgentRole
+        from services.command_approval_manager import AgentRole
 
         create_result = await self.agent_terminal_service.create_session(
             agent_id=f"chat_agent_{conversation_id}",
@@ -125,7 +125,7 @@ class TerminalTool:
         self, conversation_id: str, old_session_id: str
     ) -> str:
         """Recreate an inactive session. Returns new session_id."""
-        from backend.services.command_approval_manager import AgentRole
+        from services.command_approval_manager import AgentRole
 
         logger.warning(
             f"Session {old_session_id} for conversation {conversation_id} is inactive. "

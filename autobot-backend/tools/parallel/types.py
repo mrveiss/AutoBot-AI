@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Optional
 
-from backend.constants.status_enums import TaskStatus
+from constants.status_enums import TaskStatus
 
 
 class DependencyType(Enum):
