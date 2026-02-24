@@ -3,9 +3,11 @@
 # Author: mrveiss
 """Tests for SkillRouterSkill (skill-router meta-skill)."""
 
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from skills.base_skill import SkillManifest
-from skills.builtin.skill_router import _score_skill, _tokenize
+from skills.builtin.skill_router import SkillRouterSkill, _score_skill, _tokenize
 
 
 def _make_manifest(name, description, tags, tools):
@@ -73,3 +75,61 @@ def test_score_skill_zero_for_no_match():
     )
     score = _score_skill({"browser", "scrape", "web"}, manifest)
     assert score == 0.0
+
+
+def test_llm_rerank_parses_json_response():
+    """_llm_rerank should parse skill name and reason from LLM JSON."""
+    mock_response = MagicMock()
+    mock_response.content = '{"skill": "document-analysis", "reason": "PDF task"}'
+    mock_response.error = None
+
+    candidates = [
+        {
+            "name": "document-analysis",
+            "description": "Analyze docs",
+            "tags": [],
+            "tools": [],
+        },
+        {
+            "name": "browser-automation",
+            "description": "Browse web",
+            "tags": [],
+            "tools": [],
+        },
+    ]
+
+    with patch("skills.builtin.skill_router.LLMInterface") as MockLLM:
+        instance = MockLLM.return_value
+        instance.chat_completion = AsyncMock(return_value=mock_response)
+
+        skill = SkillRouterSkill()
+        name, reason = asyncio.get_event_loop().run_until_complete(
+            skill._llm_rerank("analyze this pdf", candidates)
+        )
+
+    assert name == "document-analysis"
+    assert reason == "PDF task"
+
+
+def test_llm_rerank_handles_markdown_code_block():
+    """_llm_rerank should extract JSON from ```json ... ``` blocks."""
+    mock_response = MagicMock()
+    mock_response.content = (
+        '```json\n{"skill": "code-review", "reason": "code task"}\n```'
+    )
+    mock_response.error = None
+
+    candidates = [
+        {"name": "code-review", "description": "Review code", "tags": [], "tools": []},
+    ]
+
+    with patch("skills.builtin.skill_router.LLMInterface") as MockLLM:
+        instance = MockLLM.return_value
+        instance.chat_completion = AsyncMock(return_value=mock_response)
+
+        skill = SkillRouterSkill()
+        name, reason = asyncio.get_event_loop().run_until_complete(
+            skill._llm_rerank("review my code", candidates)
+        )
+
+    assert name == "code-review"

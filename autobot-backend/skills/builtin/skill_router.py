@@ -8,11 +8,17 @@ Two-phase skill discovery: keyword scoring (Phase 1) + LLM re-ranking (Phase 2).
 Auto-enables the best matching skill for a given task description.
 """
 
+import json
 import logging
 import re
-from typing import Any, Dict, Set
+from typing import Any, Dict, List, Set, Tuple
 
 from skills.base_skill import BaseSkill, SkillManifest
+
+try:
+    from llm_interface_pkg import LLMInterface
+except ImportError:
+    LLMInterface = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +71,38 @@ class SkillRouterSkill(BaseSkill):
             category="meta",
             tags=["meta", "routing", "discovery", "orchestration"],
         )
+
+    async def _llm_rerank(
+        self, task: str, candidates: List[Dict[str, Any]]
+    ) -> Tuple[str, str]:
+        """Re-rank candidates via LLM. Returns (skill_name, reason).
+
+        Raises ValueError if LLM unavailable or response unparseable.
+        """
+        if LLMInterface is None:
+            raise ValueError("LLMInterface not available")
+
+        summaries = [
+            f"- {c['name']}: {c['description']} "
+            f"(tags: {', '.join(c['tags'])}, tools: {', '.join(c['tools'])})"
+            for c in candidates
+        ]
+        prompt = (
+            f'Given this task: "{task}"\n\n'
+            f"Choose the most appropriate skill from:\n"
+            + "\n".join(summaries)
+            + '\n\nRespond with JSON only: {"skill": "<name>", "reason": "<brief reason>"}'
+        )
+        messages = [{"role": "user", "content": prompt}]
+        llm = LLMInterface()
+        response = await llm.chat_completion(messages, llm_type="task")
+
+        content = response.content.strip()
+        match = re.search(r"\{.*?\}", content, re.DOTALL)
+        if not match:
+            raise ValueError(f"No JSON found in LLM response: {content[:100]}")
+        data = json.loads(match.group())
+        return data["skill"], data.get("reason", "")
 
     async def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
         return {"success": False, "error": "not implemented"}
