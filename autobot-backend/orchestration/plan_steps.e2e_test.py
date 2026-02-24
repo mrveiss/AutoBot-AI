@@ -22,9 +22,9 @@ def test_plan_workflow_steps():
     for complexity in complexities:
         try:
             steps = orchestrator.plan_workflow_steps("test message", complexity)
-            print(f"{complexity.value}: {len(steps)} steps")
+            print(f"{complexity.value}: {len(steps)} steps")  # noqa: print
         except Exception as e:
-            print(f"{complexity.value}: ERROR - {e}")
+            print(f"{complexity.value}: ERROR - {e}")  # noqa: print
             import traceback
 
             traceback.print_exc()

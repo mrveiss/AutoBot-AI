@@ -16,11 +16,11 @@ import time
 from typing import Any, Dict, List, Optional
 
 import torch
-from backend.utils.multimodal_performance_monitor import performance_monitor
 from enhanced_memory_manager_async import (
     TaskPriority,
     get_async_enhanced_memory_manager,
 )
+from utils.multimodal_performance_monitor import performance_monitor
 
 from .models import MultiModalInput, ProcessingResult
 from .processors import ContextProcessor, VisionProcessor, VoiceProcessor

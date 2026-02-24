@@ -20,9 +20,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
 import yaml
 
 if TYPE_CHECKING:
-    from backend.utils.service_client import ServiceHTTPClient
+    from utils.service_client import ServiceHTTPClient
 
-from backend.constants.threshold_constants import LLMDefaults, TimingConstants
+from constants.threshold_constants import LLMDefaults, TimingConstants
 from utils.service_registry import get_service_url
 
 from autobot_shared.http_client import HTTPClientManager, get_http_client
@@ -171,7 +171,7 @@ class NPUWorkerClient:
         if self._use_auth and not self._auth_client_initialized:
             try:
                 # Import here to avoid circular imports
-                from backend.utils.service_client import create_service_client
+                from utils.service_client import create_service_client
 
                 self._http_client = await create_service_client("main-backend")
                 self._auth_client_initialized = True
