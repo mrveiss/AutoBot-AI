@@ -44,13 +44,36 @@
     deploy_tmp: "/tmp/autobot-deploy"
 
   tasks:
-    - name: "[PRE-FLIGHT] Sync code from GitHub"
+    - name: "[PRE-FLIGHT] Verify code_source exists"
+      stat:
+        path: "{{ git_repo_root }}/.git"
+      register: code_source_stat
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Abort if code_source missing"
+      fail:
+        msg: >-
+          Code source not found at {{ git_repo_root }}.
+          Initialize with: git clone {{ github_repo }} {{ git_repo_root }}
+      when: not code_source_stat.stat.exists
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Sync latest code from GitHub (if reachable)"
       git:
         repo: "{{ github_repo }}"
         dest: "{{ git_repo_root }}"
         version: "{{ deploy_ref }}"
-        force: yes
-        depth: 1
+        update: yes
+      ignore_errors: yes
+      register: github_sync
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Warn if GitHub sync skipped"
+      debug:
+        msg: >-
+          WARNING: GitHub sync failed (no internet access?).
+          Deploying from existing code_source at {{ git_repo_root }}.
+      when: github_sync is failed
       tags: [always]
 
     - name: "[PRE-FLIGHT] Get current git branch"
