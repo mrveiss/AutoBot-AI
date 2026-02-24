@@ -478,7 +478,7 @@ async def _filter_user_sessions(sessions: list, username: str) -> list:
 
 def _build_ownership_validator(redis):
     """Build a SessionOwnershipValidator instance (#684)."""
-    from backend.security.session_ownership import SessionOwnershipValidator
+    from security.session_ownership import SessionOwnershipValidator
 
     return SessionOwnershipValidator(redis)
 
@@ -627,7 +627,7 @@ async def _list_shared_sessions(
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
 
     redis = await get_redis_mgr(async_client=True, database="main")
-    from backend.security.session_ownership import SessionOwnershipValidator
+    from security.session_ownership import SessionOwnershipValidator
 
     validator = SessionOwnershipValidator(redis)
     user_id = user_data.get("user_id", user_data.get("username"))
@@ -1888,7 +1888,7 @@ async def share_session(
     shared_by = user_data.get("username", "unknown")
 
     # Share session access
-    from backend.security.session_ownership import SessionOwnershipValidator
+    from security.session_ownership import SessionOwnershipValidator
 
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
 

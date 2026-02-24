@@ -51,7 +51,7 @@ def _make_clone_path(source_id: str) -> str:
 async def _resolve_token(credential_id: str) -> Optional[str]:
     """Return the decrypted token value for a credential ID, or None."""
     try:
-        from backend.api.secrets import secrets_manager
+        from api.secrets import secrets_manager
 
         secret = await asyncio.to_thread(secrets_manager.get_secret, credential_id)
         return secret["value"] if secret else None

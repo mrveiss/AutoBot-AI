@@ -13,11 +13,11 @@ Tests the following functionality:
 
 import ast
 
-from backend.api.codebase_analytics.endpoints.call_graph import (
+from api.codebase_analytics.endpoints.call_graph import (
     _extract_import_context,
     _resolve_callee_id,
 )
-from backend.api.codebase_analytics.endpoints.shared import (
+from api.codebase_analytics.endpoints.shared import (
     COMMON_THIRD_PARTY,
     STDLIB_MODULES,
     ImportContext,
@@ -109,7 +109,7 @@ class TestIsExternalModule:
     def test_internal_module(self):
         """Test internal modules are detected correctly."""
         assert is_external_module("src.utils.helper") is False
-        assert is_external_module("backend.api.routes") is False
+        assert is_external_module("api.routes") is False
 
     def test_unknown_module(self):
         """Test unknown modules are assumed external."""
@@ -167,7 +167,7 @@ class TestExtractImportContext:
         code = """
 import json
 from pathlib import Path
-from backend.utils.helper import helper_func as hf
+from utils.helper import helper_func as hf
 
 def my_function():
     data = json.loads("{}")
