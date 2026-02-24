@@ -15,7 +15,7 @@ Components:
 Part of EPIC #217 - Advanced Code Intelligence Methods
 """
 
-from backend.code_intelligence.shared.ast_cache import (
+from code_intelligence.shared.ast_cache import (
     ASTCache,
     get_ast,
     get_ast_cache_stats,
@@ -23,7 +23,7 @@ from backend.code_intelligence.shared.ast_cache import (
     get_ast_with_content,
     invalidate_ast_cache,
 )
-from backend.code_intelligence.shared.file_cache import (
+from code_intelligence.shared.file_cache import (
     FileListCache,
     get_all_code_files,
     get_file_cache_stats,
@@ -33,7 +33,7 @@ from backend.code_intelligence.shared.file_cache import (
 )
 
 # Issue #686: Scoring utilities for consistent score calculation
-from backend.code_intelligence.shared.scoring import (
+from code_intelligence.shared.scoring import (
     DEFAULT_DECAY_CONSTANT,
     DEFAULT_SEVERITY_WEIGHTS,
     calculate_exponential_score,

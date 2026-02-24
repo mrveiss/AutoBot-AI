@@ -20,7 +20,7 @@ import tempfile
 import textwrap
 
 import pytest
-from backend.code_intelligence.performance_analyzer import (
+from code_intelligence.performance_analyzer import (
     PerformanceAnalyzer,
     PerformanceIssueType,
     PerformanceSeverity,
@@ -73,7 +73,7 @@ class TestNestedLoopDetection:
                 for x in data:
                     for y in x:
                         for z in y:
-                            print(z)
+                            print(z)  # noqa: print
         """
         )
 
@@ -468,7 +468,7 @@ class TestDirectoryAnalysis:
             def slow_function(items):
                 for i in items:
                     for j in items:
-                        print(i, j)
+                        print(i, j)  # noqa: print
         """
             )
         )
@@ -479,7 +479,7 @@ class TestDirectoryAnalysis:
                 """
             def fast_function(items):
                 for item in items:
-                    print(item)
+                    print(item)  # noqa: print
         """
             )
         )

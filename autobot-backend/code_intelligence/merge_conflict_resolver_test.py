@@ -17,7 +17,7 @@ import tempfile
 import textwrap
 
 import pytest
-from backend.code_intelligence.merge_conflict_resolver import (
+from code_intelligence.merge_conflict_resolver import (
     ConflictParser,
     ConflictSeverity,
     MergeConflictResolver,
