@@ -7,7 +7,6 @@ error handling, and monitoring.
 """
 
 import asyncio
-import logging
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -33,8 +32,7 @@ except ImportError:
     openai = None
 
 import aiohttp
-
-from backend.config.manager import get_config_manager as _get_cfg
+from config.manager import get_config_manager as _get_cfg
 
 config_manager = _get_cfg()
 from dotenv import load_dotenv

@@ -31,8 +31,8 @@ if _env_path.exists():
 # See: https://github.com/huggingface/tokenizers/issues/1062
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-from backend.app_factory import create_app
-from backend.constants.network_constants import NetworkConstants
+from app_factory import create_app
+from constants.network_constants import NetworkConstants
 
 from autobot_shared.logging_manager import get_logger
 
