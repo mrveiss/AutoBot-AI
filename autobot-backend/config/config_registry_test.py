@@ -135,7 +135,7 @@ class TestConfigRegistryBasic:
             with patch.dict(
                 os.environ, {"AUTOBOT_BACKEND_API_PORT": "9000"}, clear=True
             ):
-                result = ConfigRegistry.get("backend.api.port", default="8001")
+                result = ConfigRegistry.get("api.port", default="8001")
                 assert result == "9000"
 
 

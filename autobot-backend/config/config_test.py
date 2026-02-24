@@ -14,7 +14,7 @@ import pytest
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.utils.terminal_input_handler import (
+from utils.terminal_input_handler import (
     configure_testing_defaults,
     get_terminal_input_handler,
     patch_builtin_input,
@@ -208,11 +208,11 @@ if __name__ != "__main__":
 
 
 if __name__ == "__main__":
-    print("Test Configuration Module")
-    print("=" * 40)
+    print("Test Configuration Module")  # noqa: print
+    print("=" * 40)  # noqa: print
 
     # Test the configuration
-    print("Testing terminal input handler...")
+    print("Testing terminal input handler...")  # noqa: print
 
     from utils.terminal_input_handler import safe_input
 
@@ -224,12 +224,12 @@ if __name__ == "__main__":
     result2 = safe_input("Test prompt 2: ")
     result3 = safe_input("Test prompt 3: ")
 
-    print(f"Response 1: '{result1}'")
-    print(f"Response 2: '{result2}'")
-    print(f"Response 3: '{result3}'")
+    print(f"Response 1: '{result1}'")  # noqa: print
+    print(f"Response 2: '{result2}'")  # noqa: print
+    print(f"Response 3: '{result3}'")  # noqa: print
 
     # Test default behavior
     result4 = safe_input("Test prompt 4: ", default="default_value")
-    print(f"Response 4: '{result4}'")
+    print(f"Response 4: '{result4}'")  # noqa: print
 
-    print("✅ Test configuration working correctly!")
+    print("✅ Test configuration working correctly!")  # noqa: print

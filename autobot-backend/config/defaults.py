@@ -13,7 +13,7 @@ SSOT Migration (Issue #639):
 import os
 from typing import Any, Dict
 
-from backend.config.registry import ConfigRegistry
+from config.registry import ConfigRegistry
 
 
 def _get_backend_config(

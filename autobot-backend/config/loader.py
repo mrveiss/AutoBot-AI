@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import yaml
-from backend.config.defaults import get_default_config
-from backend.constants.threshold_constants import StringParsingConstants
+from config.defaults import get_default_config
+from constants.threshold_constants import StringParsingConstants
 
 logger = logging.getLogger(__name__)
 
