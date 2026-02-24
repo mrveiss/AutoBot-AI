@@ -17,7 +17,7 @@ This runs as part of the system startup to ensure configuration consistency.
 import asyncio
 import logging
 
-from backend.type_defs.common import Metadata
+from type_defs.common import Metadata
 
 # Import network constants
 
@@ -156,7 +156,7 @@ class LLMConfigurationSynchronizer:
             Dict containing the synchronization result
         """
         try:
-            from backend.api.agent_config import DEFAULT_AGENT_CONFIGS
+            from api.agent_config import DEFAULT_AGENT_CONFIGS
             from config import config as global_config_manager
 
             logger.info("Starting LLM configuration synchronization...")
@@ -215,8 +215,8 @@ class LLMConfigurationSynchronizer:
             Dict containing the population result
         """
         try:
-            from backend.utils.connection_utils import ModelManager
             from config import config as global_config_manager
+            from utils.connection_utils import ModelManager
 
             logger.info("Ensuring models list is populated...")
 

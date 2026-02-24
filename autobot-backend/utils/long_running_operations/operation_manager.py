@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
-from backend.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 from .checkpoint_manager import OperationCheckpointManager
 from .progress_tracker import OperationProgressTracker

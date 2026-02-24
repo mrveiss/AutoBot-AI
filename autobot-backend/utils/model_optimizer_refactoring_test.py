@@ -6,7 +6,7 @@ Test suite for model_optimizer.py refactoring (Issue #353)
 Verifies backward compatibility and Feature Envy fixes
 """
 
-from backend.utils.model_optimizer import (
+from utils.model_optimizer import (
     ModelInfo,
     ModelOptimizer,
     ModelPerformanceLevel,
@@ -33,7 +33,7 @@ def test_imports():
     assert SystemResourceAnalyzer is not None
     assert ModelPerformanceTracker is not None
     assert ModelSelector is not None
-    print("✅ All imports successful")
+    print("✅ All imports successful")  # noqa: print
 
 
 def test_system_resources_dataclass():
@@ -59,7 +59,7 @@ def test_system_resources_dataclass():
     assert high_load.allows_large_models() is False
     assert high_load.get_max_model_size_gb() == 4.0
 
-    print("✅ SystemResources dataclass works correctly")
+    print("✅ SystemResources dataclass works correctly")  # noqa: print
 
 
 def test_task_request_analyze_complexity():
@@ -92,7 +92,7 @@ def test_task_request_analyze_complexity():
         == TaskComplexity.SPECIALIZED
     )
 
-    print("✅ TaskRequest.analyze_complexity() works correctly")
+    print("✅ TaskRequest.analyze_complexity() works correctly")  # noqa: print
 
 
 def test_model_info_fits_resource_constraints():
@@ -126,7 +126,7 @@ def test_model_info_fits_resource_constraints():
     )
     assert model.fits_resource_constraints(low_resources) is False
 
-    print("✅ ModelInfo.fits_resource_constraints() backward compatible")
+    print("✅ ModelInfo.fits_resource_constraints() backward compatible")  # noqa: print
 
 
 def test_model_optimizer_initialization():
@@ -144,7 +144,7 @@ def test_model_optimizer_initialization():
     assert hasattr(optimizer, "model_classifications")
     assert hasattr(optimizer, "_models_cache")
 
-    print("✅ ModelOptimizer initializes with new components")
+    print("✅ ModelOptimizer initializes with new components")  # noqa: print
 
 
 def test_model_optimizer_backward_compatibility_methods():
@@ -163,7 +163,7 @@ def test_model_optimizer_backward_compatibility_methods():
     complexity = optimizer.analyze_task_complexity(task)
     assert isinstance(complexity, TaskComplexity)
 
-    print("✅ ModelOptimizer backward compatibility methods work")
+    print("✅ ModelOptimizer backward compatibility methods work")  # noqa: print
 
 
 def test_model_optimizer_delegation():
@@ -205,7 +205,7 @@ def test_model_optimizer_delegation():
     assert len(filtered) == 1  # Only small model fits
     assert filtered[0].name == "small-model"
 
-    print("✅ ModelOptimizer delegation to new components works")
+    print("✅ ModelOptimizer delegation to new components works")  # noqa: print
 
 
 def test_global_optimizer_singleton():
@@ -216,7 +216,7 @@ def test_global_optimizer_singleton():
     assert optimizer1 is optimizer2  # Same instance
     assert isinstance(optimizer1, ModelOptimizer)
 
-    print("✅ Global optimizer singleton works")
+    print("✅ Global optimizer singleton works")  # noqa: print
 
 
 def test_model_selector_methods():
@@ -270,11 +270,13 @@ def test_model_selector_methods():
     assert len(ranked) == 3
     # Should be ranked by score (descending)
 
-    print("✅ ModelSelector methods work correctly")
+    print("✅ ModelSelector methods work correctly")  # noqa: print
 
 
 if __name__ == "__main__":
-    print("\n=== Running Model Optimizer Refactoring Tests (Issue #353) ===\n")
+    print(  # noqa: print
+        "\n=== Running Model Optimizer Refactoring Tests (Issue #353) ===\n"
+    )  # noqa: print
 
     test_imports()
     test_system_resources_dataclass()
@@ -286,6 +288,6 @@ if __name__ == "__main__":
     test_global_optimizer_singleton()
     test_model_selector_methods()
 
-    print(
+    print(  # noqa: print
         "\n✅ All tests passed! Feature Envy refactoring successful with full backward compatibility."
     )
