@@ -26,8 +26,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiofiles
-from backend.constants.path_constants import PATH
-from backend.constants.threshold_constants import TimingConstants
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 from knowledge_base_factory import get_knowledge_base
 
 logger = logging.getLogger(__name__)

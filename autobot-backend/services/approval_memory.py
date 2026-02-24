@@ -16,7 +16,7 @@ Features:
 - User-scoped (approvals are per-user per-project)
 
 Usage:
-    from backend.services.approval_memory import ApprovalMemoryManager
+    from services.approval_memory import ApprovalMemoryManager
 
     manager = ApprovalMemoryManager()
 
