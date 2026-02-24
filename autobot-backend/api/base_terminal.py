@@ -12,7 +12,7 @@ import threading
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from backend.utils.terminal_websocket_manager import TerminalWebSocketAdapter
+from utils.terminal_websocket_manager import TerminalWebSocketAdapter
 
 logger = logging.getLogger(__name__)
 

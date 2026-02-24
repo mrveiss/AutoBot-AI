@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Optional
 
 from auth_middleware import check_admin_permission
-from backend.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -685,10 +685,10 @@ echo "Running AutoBot pre-commit checks..."
 RESULT=$(curl -s -X GET "http://localhost:{backend_port}/api/precommit/check?fast_mode=true" 2>/dev/null)
 
 if [ $? -eq 0 ] && [ -n "$RESULT" ]; then
-    PASSED=$(echo "$RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin).get('passed', True))" 2>/dev/null)
-    BLOCKED=$(echo "$RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin).get('blocked', False))" 2>/dev/null)
-    FAILED=$(echo "$RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin).get('failed_checks', 0))" 2>/dev/null)
-    DURATION=$(echo "$RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin).get('duration_ms', 0))" 2>/dev/null)
+    PASSED=$(echo "$RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin).get('passed', True))" 2>/dev/null)  # noqa: print
+    BLOCKED=$(echo "$RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin).get('blocked', False))" 2>/dev/null)  # noqa: print
+    FAILED=$(echo "$RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin).get('failed_checks', 0))" 2>/dev/null)  # noqa: print
+    DURATION=$(echo "$RESULT" | python3 -c "import sys, json; print(json.load(sys.stdin).get('duration_ms', 0))" 2>/dev/null)  # noqa: print
 
     if [ "$BLOCKED" = "True" ]; then
         echo -e "${{RED}}Pre-commit checks failed!${{NC}}"

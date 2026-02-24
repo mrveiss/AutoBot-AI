@@ -21,14 +21,14 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from auth_middleware import auth_middleware
-from backend.services.audit_logger import AuditResult, get_audit_logger
-from backend.utils.catalog_http_exceptions import (
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
+from services.audit_logger import AuditResult, get_audit_logger
+from utils.catalog_http_exceptions import (
     raise_auth_error,
     raise_server_error,
     raise_validation_error,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
