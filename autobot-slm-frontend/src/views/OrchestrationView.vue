@@ -167,6 +167,17 @@ const categoryCounts = computed(() => {
   return counts
 })
 
+const fleetCategoryCounts = computed(() => {
+  const counts = { autobot: 0, system: 0, all: 0 }
+  if (Array.isArray(orchestration.fleetServices)) {
+    for (const svc of orchestration.fleetServices) {
+      counts[svc.category as 'autobot' | 'system']++
+      counts.all++
+    }
+  }
+  return counts
+})
+
 // =============================================================================
 // Tab 2: Fleet Operations State
 // =============================================================================
@@ -1007,6 +1018,55 @@ onUnmounted(() => {
                 :key="r"
                 class="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded"
               >{{ r }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Fleet Filter Bar -->
+        <div class="card p-4">
+          <div class="flex flex-wrap items-center gap-4">
+            <div class="flex-1 min-w-52">
+              <input
+                v-model="fleetSearchQuery"
+                type="text"
+                placeholder="Search services..."
+                class="w-full px-3 py-2 border rounded-lg text-sm"
+              />
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                @click="fleetCategoryFilter = 'autobot'"
+                :class="[
+                  'px-3 py-1.5 text-sm font-medium rounded-lg',
+                  fleetCategoryFilter === 'autobot'
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ]"
+              >
+                AutoBot ({{ fleetCategoryCounts.autobot }})
+              </button>
+              <button
+                @click="fleetCategoryFilter = 'system'"
+                :class="[
+                  'px-3 py-1.5 text-sm font-medium rounded-lg',
+                  fleetCategoryFilter === 'system'
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ]"
+              >
+                System ({{ fleetCategoryCounts.system }})
+              </button>
+              <button
+                @click="fleetCategoryFilter = 'all'"
+                :class="[
+                  'px-3 py-1.5 text-sm font-medium rounded-lg',
+                  fleetCategoryFilter === 'all'
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ]"
+              >
+                All ({{ fleetCategoryCounts.all }})
+              </button>
             </div>
           </div>
         </div>
