@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 import aiohttp
-from backend.integrations.base import (
+from integrations.base import (
     BaseIntegration,
     IntegrationAction,
     IntegrationConfig,

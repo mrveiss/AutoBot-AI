@@ -14,8 +14,8 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from backend.utils.activity_tracker import track_file_activity
 from sqlalchemy.ext.asyncio import AsyncSession
+from utils.activity_tracker import track_file_activity
 
 logger = logging.getLogger(__name__)
 

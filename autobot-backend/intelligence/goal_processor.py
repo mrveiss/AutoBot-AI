@@ -627,7 +627,7 @@ if __name__ == "__main__":
         similar = await processor.get_similar_intents("show network info", limit=3)
 
         for suggestion in similar:
-            print(
+            print(  # noqa: print
                 f"- {suggestion.explanation} "
                 f"(confidence: {suggestion.confidence:.2f})"
             )
