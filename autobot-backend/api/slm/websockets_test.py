@@ -9,7 +9,7 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from backend.api.slm.websockets import SLMWebSocketManager, create_reconciler_callbacks
+from api.slm.websockets import SLMWebSocketManager, create_reconciler_callbacks
 from starlette.websockets import WebSocketState
 
 
@@ -178,7 +178,7 @@ class TestReconcilerCallbacks:
     @pytest.mark.asyncio
     async def test_state_change_callback_broadcasts(self):
         """Test state change callback triggers broadcast."""
-        with patch("backend.api.slm.websockets.get_ws_manager") as mock_get:
+        with patch("api.slm.websockets.get_ws_manager") as mock_get:
             mock_manager = AsyncMock()
             mock_get.return_value = mock_manager
 
@@ -197,7 +197,7 @@ class TestReconcilerCallbacks:
     @pytest.mark.asyncio
     async def test_alert_callback_broadcasts(self):
         """Test alert callback triggers broadcast."""
-        with patch("backend.api.slm.websockets.get_ws_manager") as mock_get:
+        with patch("api.slm.websockets.get_ws_manager") as mock_get:
             mock_manager = AsyncMock()
             mock_get.return_value = mock_manager
 

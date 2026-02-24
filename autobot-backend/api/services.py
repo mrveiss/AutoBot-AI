@@ -19,7 +19,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 # Import existing monitoring functionality
 try:
-    from backend.api.monitoring import get_services_health as monitoring_services_health
+    from api.monitoring import get_services_health as monitoring_services_health
 except ImportError:
     monitoring_services_health = None
 
@@ -84,7 +84,7 @@ async def _get_redis_status():
         Redis status object or None on failure
     """
     try:
-        from backend.api.redis_service import get_service_manager
+        from api.redis_service import get_service_manager
 
         manager = await get_service_manager()
         return await manager.get_service_status()

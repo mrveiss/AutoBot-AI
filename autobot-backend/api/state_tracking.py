@@ -11,7 +11,6 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from backend.type_defs.common import Metadata
 from enhanced_project_state_tracker import (
     StateChangeType,
     TrackingMetric,
@@ -20,6 +19,7 @@ from enhanced_project_state_tracker import (
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -375,7 +375,7 @@ async def export_state_data(request: ExportRequest):
         tracker = get_state_tracker()
 
         # Generate filename using centralized path management
-        from backend.utils.paths_manager import ensure_data_directory, get_data_path
+        from utils.paths_manager import ensure_data_directory, get_data_path
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"state_tracking_export_{timestamp}.{request.format}"

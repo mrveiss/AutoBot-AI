@@ -11,10 +11,10 @@ configure, execute, and monitor skills.
 import logging
 from typing import Any, Dict, Optional
 
-from backend.skills.manager import SkillManager
-from backend.skills.registry import get_skill_registry
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
+from skills.manager import SkillManager
+from skills.registry import get_skill_registry
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

@@ -7,17 +7,17 @@ from pathlib import Path
 from typing import Optional
 
 from auth_middleware import check_admin_permission
-from backend.celery_app import celery_app
-from backend.services.config_service import ConfigService
-from backend.tasks.system_tasks import (
+from celery.result import AsyncResult
+from celery_app import celery_app
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from services.config_service import ConfigService
+from tasks.system_tasks import (
     check_available_updates,
     initialize_rbac,
     run_system_update,
 )
-from backend.utils.catalog_http_exceptions import raise_server_error
-from celery.result import AsyncResult
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from utils.catalog_http_exceptions import raise_server_error
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
