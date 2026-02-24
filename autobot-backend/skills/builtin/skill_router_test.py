@@ -129,3 +129,147 @@ def test_llm_rerank_handles_markdown_code_block():
         name, reason = asyncio.run(skill._llm_rerank("review my code", candidates))
 
     assert name == "code-review"
+    assert reason == "code task"
+
+
+def _make_registry_skill(name, description, tags, tools):
+    """Build a minimal mock skill with a manifest."""
+    mock_skill = MagicMock()
+    mock_skill.get_manifest.return_value = _make_manifest(
+        name, description, tags, tools
+    )
+    return mock_skill
+
+
+def test_find_skill_enables_best_match_via_llm():
+    """find_skill should enable the LLM-chosen winner and return it."""
+    mock_llm_response = MagicMock()
+    mock_llm_response.content = '{"skill": "document-analysis", "reason": "PDF task"}'
+    mock_llm_response.error = None
+
+    registry_skills = {
+        "document-analysis": _make_registry_skill(
+            "document-analysis",
+            "Analyze documents",
+            ["document", "pdf"],
+            ["analyze_doc"],
+        ),
+        "browser-automation": _make_registry_skill(
+            "browser-automation", "Automate browser", ["browser", "web"], ["browse"]
+        ),
+    }
+
+    mock_registry = MagicMock()
+    mock_registry._skills = registry_skills
+    mock_registry.enable_skill.return_value = {"success": True}
+
+    with patch(
+        "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
+    ), patch("skills.builtin.skill_router.LLMInterface") as MockLLM:
+        instance = MockLLM.return_value
+        instance.chat_completion = AsyncMock(return_value=mock_llm_response)
+
+        skill = SkillRouterSkill()
+        skill.apply_config({"top_k": 5, "auto_enable": True})
+        result = asyncio.run(
+            skill.execute("find_skill", {"task": "analyze this pdf document"})
+        )
+
+    assert result["success"] is True
+    assert result["enabled_skill"] == "document-analysis"
+    assert result["method"] == "llm"
+    assert "reason" in result
+    assert len(result["candidates"]) > 0
+    mock_registry.enable_skill.assert_called_once_with("document-analysis")
+
+
+def test_find_skill_falls_back_to_keyword_on_llm_error():
+    """If LLM fails, use the top keyword-scored skill."""
+    registry_skills = {
+        "document-analysis": _make_registry_skill(
+            "document-analysis",
+            "Analyze documents",
+            ["document", "pdf"],
+            ["analyze_doc"],
+        ),
+        "browser-automation": _make_registry_skill(
+            "browser-automation", "Automate browser", ["browser"], ["browse"]
+        ),
+    }
+
+    mock_registry = MagicMock()
+    mock_registry._skills = registry_skills
+    mock_registry.enable_skill.return_value = {"success": True}
+
+    with patch(
+        "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
+    ), patch("skills.builtin.skill_router.LLMInterface") as MockLLM:
+        instance = MockLLM.return_value
+        instance.chat_completion = AsyncMock(side_effect=Exception("LLM timeout"))
+
+        skill = SkillRouterSkill()
+        skill.apply_config({"top_k": 5, "auto_enable": True})
+        result = asyncio.run(
+            skill.execute("find_skill", {"task": "analyze this pdf document"})
+        )
+
+    assert result["success"] is True
+    assert result["enabled_skill"] == "document-analysis"
+    assert result["method"] == "keyword_fallback"
+
+
+def test_find_skill_dry_run_does_not_enable():
+    """dry_run=True should return result without calling enable_skill."""
+    mock_llm_response = MagicMock()
+    mock_llm_response.content = '{"skill": "document-analysis", "reason": "test"}'
+    mock_llm_response.error = None
+
+    registry_skills = {
+        "document-analysis": _make_registry_skill(
+            "document-analysis",
+            "Analyze documents",
+            ["document", "pdf"],
+            ["analyze_doc"],
+        ),
+    }
+
+    mock_registry = MagicMock()
+    mock_registry._skills = registry_skills
+
+    with patch(
+        "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
+    ), patch("skills.builtin.skill_router.LLMInterface") as MockLLM:
+        instance = MockLLM.return_value
+        instance.chat_completion = AsyncMock(return_value=mock_llm_response)
+
+        skill = SkillRouterSkill()
+        skill.apply_config({"top_k": 5, "auto_enable": True})
+        result = asyncio.run(
+            skill.execute("find_skill", {"task": "analyze pdf", "dry_run": True})
+        )
+
+    assert result["success"] is True
+    mock_registry.enable_skill.assert_not_called()
+
+
+def test_find_skill_requires_task_param():
+    """find_skill with no task returns error."""
+    skill = SkillRouterSkill()
+    result = asyncio.run(skill.execute("find_skill", {}))
+    assert result["success"] is False
+    assert "task" in result["error"].lower()
+
+
+def test_find_skill_no_skills_registered():
+    """find_skill returns error when registry is empty."""
+    mock_registry = MagicMock()
+    mock_registry._skills = {}
+
+    with patch(
+        "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
+    ):
+        skill = SkillRouterSkill()
+        result = asyncio.run(skill.execute("find_skill", {"task": "do something"}))
+
+    assert result["success"] is False
+    assert "no skills" in result["error"].lower()

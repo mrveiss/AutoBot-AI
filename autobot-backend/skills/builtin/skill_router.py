@@ -14,6 +14,7 @@ import re
 from typing import Any, Dict, List, Set, Tuple
 
 from skills.base_skill import BaseSkill, SkillManifest
+from skills.registry import get_skill_registry
 
 try:
     from llm_interface_pkg import LLMInterface
@@ -110,4 +111,96 @@ class SkillRouterSkill(BaseSkill):
         return data["skill"], data.get("reason", "")
 
     async def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        return {"success": False, "error": "not implemented"}
+        """Execute a skill router action."""
+        if action == "find_skill":
+            return await self._find_skill(params)
+        return {"success": False, "error": f"Unknown action: {action}"}
+
+    async def _find_skill(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Find and enable the best skill for the given task."""
+        task: str = params.get("task", "").strip()
+        dry_run: bool = params.get("dry_run", False)
+
+        if not task:
+            return {"success": False, "error": "task parameter is required"}
+
+        registry = get_skill_registry()
+        candidates = self._build_candidates(task, registry)
+
+        if not candidates:
+            return {"success": False, "error": "no skills registered"}
+
+        winner, reason, method = await self._pick_winner(task, candidates)
+        return await self._enable_and_respond(
+            winner, reason, method, candidates, registry, dry_run
+        )
+
+    def _build_candidates(self, task: str, registry: Any) -> List[Dict[str, Any]]:
+        """Score all registered skills and return top-K candidates."""
+        top_k: int = self._config.get("top_k", 5)
+        task_tokens = _tokenize(task)
+        scored = [
+            {
+                "name": s.get_manifest().name,
+                "description": s.get_manifest().description,
+                "tags": s.get_manifest().tags,
+                "tools": s.get_manifest().tools,
+                "score": _score_skill(task_tokens, s.get_manifest()),
+            }
+            for s in registry._skills.values()
+        ]
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        candidates = [c for c in scored[:top_k] if c["score"] > 0]
+        return candidates or scored[:1]
+
+    async def _pick_winner(
+        self, task: str, candidates: List[Dict[str, Any]]
+    ) -> Tuple[str, str, str]:
+        """Run LLM re-ranking; fall back to keyword winner on failure."""
+        winner = candidates[0]["name"]
+        reason = "top keyword match"
+        method = "keyword_fallback"
+        try:
+            llm_winner, llm_reason = await self._llm_rerank(task, candidates)
+            if llm_winner in {c["name"] for c in candidates}:
+                winner, reason, method = llm_winner, llm_reason, "llm"
+            else:
+                self.logger.warning(
+                    "LLM returned unknown skill '%s', using keyword winner '%s'",
+                    llm_winner,
+                    winner,
+                )
+        except Exception as exc:
+            self.logger.warning(
+                "LLM re-ranking failed, using keyword fallback: %s", exc
+            )
+        return winner, reason, method
+
+    async def _enable_and_respond(
+        self,
+        winner: str,
+        reason: str,
+        method: str,
+        candidates: List[Dict[str, Any]],
+        registry: Any,
+        dry_run: bool,
+    ) -> Dict[str, Any]:
+        """Enable the winning skill (unless dry_run) and return result."""
+        auto_enable: bool = self._config.get("auto_enable", True)
+        if auto_enable and not dry_run:
+            enable_result = registry.enable_skill(winner)
+            if not enable_result.get("success"):
+                return {
+                    "success": False,
+                    "error": f"Failed to enable '{winner}': {enable_result.get('error')}",
+                }
+        return {
+            "success": True,
+            "enabled_skill": winner,
+            "reason": reason,
+            "method": method,
+            "candidates": [
+                {"name": c["name"], "score": c["score"]} for c in candidates
+            ],
+            "dry_run": dry_run,
+        }
