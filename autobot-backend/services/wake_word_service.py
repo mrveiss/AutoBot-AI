@@ -21,7 +21,7 @@ try:
 except ImportError:
     _psutil = None  # psutil optional – CPU monitoring disabled without it
 
-from backend.type_defs.common import Metadata
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 

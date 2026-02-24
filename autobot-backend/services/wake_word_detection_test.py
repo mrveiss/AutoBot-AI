@@ -7,8 +7,7 @@ import asyncio
 import time
 
 import pytest
-
-from backend.services.wake_word_service import (
+from services.wake_word_service import (
     WakeWordConfig,
     WakeWordDetector,
     WakeWordEvent,
