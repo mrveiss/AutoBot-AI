@@ -8,7 +8,9 @@ and content for all response types.
 import json
 
 import pytest
-from backend.utils.api_responses import (
+from fastapi import status
+from fastapi.responses import JSONResponse
+from utils.api_responses import (
     ErrorResponse,
     PaginatedResponse,
     StandardResponse,
@@ -29,8 +31,6 @@ from backend.utils.api_responses import (
     success_response,
     unauthorized,
 )
-from fastapi import status
-from fastapi.responses import JSONResponse
 
 
 class TestSuccessResponse:

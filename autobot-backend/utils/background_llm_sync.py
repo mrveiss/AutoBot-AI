@@ -23,8 +23,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.threshold_constants import TimingConstants
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 

@@ -23,8 +23,8 @@ import json
 import logging
 from typing import Any, Optional
 
-from backend.type_defs.common import Metadata
 from fastapi import Request
+from type_defs.common import Metadata
 
 # Import centralized Redis client utility
 from autobot_shared.redis_client import get_redis_client
