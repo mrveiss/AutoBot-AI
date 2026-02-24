@@ -17,9 +17,9 @@ from pathlib import Path
 from typing import Optional
 
 from auth_middleware import check_admin_permission
-from backend.utils.catalog_http_exceptions import raise_server_error
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from utils.catalog_http_exceptions import raise_server_error
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

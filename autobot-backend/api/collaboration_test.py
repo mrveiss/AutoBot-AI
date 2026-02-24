@@ -11,7 +11,7 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from backend.api.collaboration import (
+from api.collaboration import (
     InviteRequest,
     RemoveRequest,
     ShareSecretRequest,
@@ -23,9 +23,9 @@ from backend.api.collaboration import (
     remove_collaborator,
     share_secret_with_session,
 )
-from backend.models.secret import Secret, SecretScope, SecretType
-from backend.models.session_collaboration import PermissionLevel, SessionCollaboration
 from fastapi import HTTPException, status
+from models.secret import Secret, SecretScope, SecretType
+from models.session_collaboration import PermissionLevel, SessionCollaboration
 from sqlalchemy.ext.asyncio import AsyncSession
 
 

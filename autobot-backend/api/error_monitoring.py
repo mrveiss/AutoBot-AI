@@ -15,11 +15,11 @@ import os
 import sys
 from typing import Optional
 
-from backend.type_defs.common import Metadata
-from backend.utils.error_metrics import get_metrics_collector
 from config import ConfigManager
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel
+from type_defs.common import Metadata
+from utils.error_metrics import get_metrics_collector
 
 from autobot_shared.error_boundaries import (
     ErrorCategory,
