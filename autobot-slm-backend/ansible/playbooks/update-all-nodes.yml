@@ -103,6 +103,32 @@
       debug:
         msg: "7 deploy archives created from {{ deploy_ref }} ({{ deploy_info.stdout }})"
 
+    - name: "[PRE-FLIGHT] Get full commit hash"
+      command: git -C {{ git_repo_root }} log -1 --format='%H'
+      register: deploy_commit_full
+      changed_when: false
+
+    - name: "[PRE-FLIGHT] Get commit subject"
+      command: git -C {{ git_repo_root }} log -1 --format='%s'
+      register: deploy_commit_subject
+      changed_when: false
+
+    - name: "[PRE-FLIGHT] Notify SLM of new commit"
+      uri:
+        url: "https://localhost/api/code-source/notify"
+        method: POST
+        body_format: json
+        body:
+          node_id: "00-SLM-Manager"
+          commit: "{{ deploy_commit_full.stdout }}"
+          branch: "{{ deploy_ref }}"
+          message: "{{ deploy_commit_subject.stdout }}"
+          is_code_source: true
+          changed_roles: []
+        validate_certs: false
+        status_code: [200, 404]
+      ignore_errors: true
+
 # =============================================================================
 # PLAY 1: Update SLM Server First
 # =============================================================================
