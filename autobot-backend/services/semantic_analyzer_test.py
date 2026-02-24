@@ -9,7 +9,7 @@ Tests for framework detection and coding pattern analysis.
 
 import ast
 
-from backend.services.semantic_analyzer import SemanticAnalyzer
+from services.semantic_analyzer import SemanticAnalyzer
 
 
 def test_semantic_analyzer_initialization():

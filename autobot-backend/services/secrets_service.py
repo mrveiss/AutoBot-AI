@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import uuid4
 
-from backend.type_defs.common import Metadata
 from config import config_manager
 from cryptography.fernet import Fernet
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class SecretsService:
         """Initialize the secrets service with encryption"""
         if db_path is None:
             # Use centralized path management for default path
-            from backend.utils.paths_manager import ensure_data_directory, get_data_path
+            from utils.paths_manager import ensure_data_directory, get_data_path
 
             ensure_data_directory()
             db_path = str(get_data_path("secrets.db"))

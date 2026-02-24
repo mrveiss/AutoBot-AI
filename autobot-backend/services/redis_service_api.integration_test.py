@@ -65,7 +65,7 @@ def viewer_token():
 @pytest.fixture
 def mock_redis_service_manager():
     """Mock RedisServiceManager for API testing."""
-    with patch("backend.api.service_management.redis_service_manager") as mock:
+    with patch("api.service_management.redis_service_manager") as mock:
         manager = MagicMock()
 
         # Mock methods

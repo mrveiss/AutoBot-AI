@@ -41,7 +41,7 @@ async def _get_memory_integration():
             # Double-check after acquiring lock
             if _memory_integration is None:
                 try:
-                    from backend.services.security_memory_integration import (
+                    from services.security_memory_integration import (
                         get_security_memory_integration,
                     )
 
@@ -1039,9 +1039,7 @@ class SecurityWorkflowManager:
                 )
 
             # Issue #319: Use request object to reduce parameter count
-            from backend.services.security_memory_integration import (
-                VulnerabilityRequest,
-            )
+            from services.security_memory_integration import VulnerabilityRequest
 
             vuln_request = VulnerabilityRequest(
                 assessment_id=assessment_id,

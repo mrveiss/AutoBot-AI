@@ -26,9 +26,8 @@ from datetime import datetime
 from typing import List, Optional, Tuple
 
 import aiohttp
-
-from backend.constants.threshold_constants import TimingConstants
-from backend.type_defs.common import Metadata
+from constants.threshold_constants import TimingConstants
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 

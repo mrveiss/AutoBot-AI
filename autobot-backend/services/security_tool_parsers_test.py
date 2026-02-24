@@ -7,7 +7,7 @@ Tests for Security Tool Output Parsers
 Issue: #260
 """
 
-from backend.services.security_tool_parsers import (
+from services.security_tool_parsers import (
     GobusterParser,
     MasscanParser,
     NiktoParser,
