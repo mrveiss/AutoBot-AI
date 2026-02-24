@@ -8,12 +8,12 @@ import sys
 from datetime import datetime
 
 from auth_middleware import check_admin_permission
-from backend.constants.model_constants import ModelConstants as ModelConsts
+from config import ConfigManager
+from constants.model_constants import ModelConstants as ModelConsts
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 # Add caching support from unified cache manager (P4 Cache Consolidation)
-from backend.utils.advanced_cache_manager import cache_manager, cache_response
-from config import ConfigManager
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from utils.advanced_cache_manager import cache_manager, cache_response
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 _ALLOWED_IMPORT_MODULES = (
     "src.config",
     "src.llm_interface",
-    "backend.services",
-    "backend.utils",
+    "services",
+    "utils",
 )
 
 
@@ -189,7 +189,7 @@ async def get_system_health(
     """
     try:
         # Import app_state to get initialization status
-        from backend.initialization.lifespan import app_state
+        from initialization.lifespan import app_state
 
         # Check various system components
         health_status = {
@@ -546,7 +546,7 @@ async def get_cache_stats(admin_check: bool = Depends(check_admin_permission)):
     Issue #744: Requires admin authentication.
     """
     try:
-        from backend.utils.cache_manager import cache_manager
+        from utils.cache_manager import cache_manager
 
         # Get cache statistics
         cache_stats = await cache_manager.get_stats()
@@ -654,7 +654,7 @@ async def get_cache_activity(admin_check: bool = Depends(check_admin_permission)
     Issue #744: Requires admin authentication.
     """
     try:
-        from backend.utils.cache_manager import cache_manager
+        from utils.cache_manager import cache_manager
 
         activity_response = {
             "timestamp": datetime.now().isoformat(),

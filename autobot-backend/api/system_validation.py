@@ -9,14 +9,11 @@ System Validation API endpoints for AutoBot optimization suite
 import logging
 from typing import Dict, List
 
-from backend.type_defs.common import Metadata
-from backend.utils.catalog_http_exceptions import (
-    raise_not_found_error,
-    raise_server_error,
-)
-from backend.utils.system_validator import get_system_validator
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
+from type_defs.common import Metadata
+from utils.catalog_http_exceptions import raise_not_found_error, raise_server_error
+from utils.system_validator import get_system_validator
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

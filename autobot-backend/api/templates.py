@@ -14,9 +14,9 @@ segments as path parameters.
 from typing import Dict, Optional
 
 from autobot_types import TaskComplexity
-from backend.utils.advanced_cache_manager import smart_cache
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
+from utils.advanced_cache_manager import smart_cache
 from workflow_templates import TemplateCategory, workflow_template_manager
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -456,8 +456,8 @@ async def execute_template_workflow(
             raise HTTPException(status_code=404, detail="Template not found or invalid")
 
         # Execute the workflow using the workflow API
-        from backend.api.workflow import WorkflowExecutionRequest as WorkflowExecRequest
-        from backend.api.workflow import execute_workflow
+        from api.workflow import WorkflowExecutionRequest as WorkflowExecRequest
+        from api.workflow import execute_workflow
         from fastapi import BackgroundTasks
 
         # Create execution request

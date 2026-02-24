@@ -19,7 +19,7 @@ These endpoints are imported into terminal.py via router inclusion.
 
 import logging
 
-from backend.api.terminal_models import ToolInstallRequest
+from api.terminal_models import ToolInstallRequest
 from fastapi import APIRouter
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

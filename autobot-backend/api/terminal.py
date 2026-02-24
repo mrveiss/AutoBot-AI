@@ -116,10 +116,8 @@ import time
 import uuid
 from datetime import datetime
 
-from auth_middleware import get_current_user
-
 # Import models from dedicated module (Issue #185 - split oversized files)
-from backend.api.terminal_models import (
+from api.terminal_models import (
     MODERATE_RISK_PATTERNS,
     RISKY_COMMAND_PATTERNS,
     AdminExecuteRequest,
@@ -131,11 +129,12 @@ from backend.api.terminal_models import (
     TerminalInputRequest,
     TerminalSessionRequest,
 )
-from backend.services.simple_pty import simple_pty_manager
+from auth_middleware import get_current_user
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from services.simple_pty import simple_pty_manager
 
 # Import terminal secrets service for SSH key integration (Issue #211)
-from backend.services.terminal_secrets_service import get_terminal_secrets_service
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from services.terminal_secrets_service import get_terminal_secrets_service
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -146,13 +145,13 @@ router = APIRouter(tags=["terminal"])
 
 
 # Import SSH terminal handlers for infrastructure host connections (Issue #715)
-from backend.api.ssh_terminal_handlers import SSHTerminalWebSocket, ssh_terminal_manager
+from api.ssh_terminal_handlers import SSHTerminalWebSocket, ssh_terminal_manager
 
 # Import handler classes (extracted from this file - Issue #210)
-from backend.api.terminal_handlers import ConsolidatedTerminalWebSocket, session_manager
+from api.terminal_handlers import ConsolidatedTerminalWebSocket, session_manager
 
 # Import tool management router (extracted from this file - Issue #185)
-from backend.api.terminal_tools import router as tools_router
+from api.terminal_tools import router as tools_router
 
 # Include tool management router
 router.include_router(tools_router, prefix="/terminal")
@@ -694,7 +693,7 @@ async def _init_terminal_handler(
     # Issue #666: Use async Redis client since TerminalLogger uses await with Redis ops
     redis_client = None
     try:
-        from backend.dependencies import get_async_redis_client
+        from dependencies import get_async_redis_client
 
         redis_client = await get_async_redis_client(database="main")
     except Exception as e:
@@ -840,7 +839,7 @@ async def _init_ssh_redis_client():
         Redis client or None if unavailable
     """
     try:
-        from backend.dependencies import get_async_redis_client
+        from dependencies import get_async_redis_client
 
         return await get_async_redis_client(database="main")
     except Exception as e:
