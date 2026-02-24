@@ -22,6 +22,14 @@ def _tokenize(text: str) -> Set[str]:
     return {t for t in re.split(r"[\W_]+", text.lower()) if t}
 
 
+# Scoring weights — name and tags are preferred over tools and description
+# because manifests are canonically authored; adjust when recall is poor.
+_W_NAME = 3.0
+_W_TAGS = 3.0
+_W_TOOLS = 2.0
+_W_DESC = 1.0
+
+
 def _score_skill(task_tokens: Set[str], manifest: SkillManifest) -> float:
     """Score a skill manifest against task tokens.
 
@@ -37,10 +45,10 @@ def _score_skill(task_tokens: Set[str], manifest: SkillManifest) -> float:
     desc_tokens = _tokenize(manifest.description)
 
     return (
-        len(task_tokens & name_tokens) * 3.0
-        + len(task_tokens & tag_tokens) * 3.0
-        + len(task_tokens & tool_tokens) * 2.0
-        + len(task_tokens & desc_tokens) * 1.0
+        len(task_tokens & name_tokens) * _W_NAME
+        + len(task_tokens & tag_tokens) * _W_TAGS
+        + len(task_tokens & tool_tokens) * _W_TOOLS
+        + len(task_tokens & desc_tokens) * _W_DESC
     )
 
 
@@ -55,6 +63,7 @@ class SkillRouterSkill(BaseSkill):
             description="Meta-skill that routes tasks to the most appropriate skill",
             author="mrveiss",
             category="meta",
+            tags=["meta", "routing", "discovery", "orchestration"],
         )
 
     async def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:

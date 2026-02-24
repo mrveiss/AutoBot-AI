@@ -43,7 +43,7 @@ def test_score_skill_matches_tags():
         tools=["analyze_doc"],
     )
     score = _score_skill({"pdf", "document"}, manifest)
-    assert score > 0
+    assert score == 9.0
 
 
 def test_score_skill_tag_and_name_weighted_higher_than_description():
