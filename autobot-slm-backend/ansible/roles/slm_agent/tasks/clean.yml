@@ -18,8 +18,25 @@
     state: absent
   tags: ['clean']
 
+# Issue #1163: Remove symlink workaround before deploying real directory
+- name: "SLM Agent | Clean: stat canonical agent dir (detect symlink)"
+  ansible.builtin.stat:
+    path: "{{ slm_agent_dir }}"
+    follow: false
+  register: slm_agent_dir_stat
+  tags: ['clean']
+
+- name: "SLM Agent | Clean: remove symlink at canonical path (replaced by real dir)"
+  ansible.builtin.file:
+    path: "{{ slm_agent_dir }}"
+    state: absent
+  when: slm_agent_dir_stat.stat.exists and slm_agent_dir_stat.stat.islnk
+  become: yes
+  tags: ['clean']
+
 - name: "SLM Agent | Clean: pre-#1129 flat install at /opt/slm-agent"
   ansible.builtin.file:
     path: /opt/slm-agent
     state: absent
+  become: yes
   tags: ['clean']

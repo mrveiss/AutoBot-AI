@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 class ConnectionPoolConfig:
     """Configuration for Ollama connection pool"""
 
-    max_connections: int = 3  # Maximum concurrent connections to Ollama
+    max_connections: int = 6  # Maximum concurrent connections to Ollama
     max_queue_size: int = 50  # Maximum queued requests
     connection_timeout: float = (
         TimingConstants.SHORT_TIMEOUT
@@ -190,7 +190,7 @@ class OllamaConnectionPool:
         """
         Wait for an available connection slot and mark as queued.
 
-        Issue #620.
+        Issue #620. Issue #1154: warn when queue depth > 0.
 
         Args:
             request_id: Request identifier for logging
@@ -201,6 +201,16 @@ class OllamaConnectionPool:
         logger.debug("[%s] Waiting for connection slot", request_id)
         async with self._stats_lock:
             self.connection_stats["queued"] += 1
+            queue_depth = self.connection_stats["queued"]
+            active = self.active_connections
+
+        if queue_depth > 0:
+            logger.warning(
+                "Ollama pool queue depth: %d (active: %d/%d) — latency may increase",
+                queue_depth,
+                active,
+                self.config.max_connections,
+            )
 
         await asyncio.wait_for(
             self.semaphore.acquire(), timeout=self.config.queue_timeout
@@ -384,13 +394,22 @@ _ollama_pool_lock = threading.Lock()
 
 
 def get_ollama_pool() -> OllamaConnectionPool:
-    """Get the global Ollama connection pool instance (thread-safe)"""
+    """Get the global Ollama connection pool instance (thread-safe).
+
+    Issue #1154: reads max_connections from SSOT config
+    (AUTOBOT_OLLAMA_POOL_MAX_CONNECTIONS) on first initialization.
+    """
     global _ollama_pool
     if _ollama_pool is None:
         with _ollama_pool_lock:
             # Double-check after acquiring lock
             if _ollama_pool is None:
-                _ollama_pool = OllamaConnectionPool()
+                from autobot_shared.ssot_config import get_config
+
+                max_conn = get_config().llm.ollama_pool_max_connections
+                _ollama_pool = OllamaConnectionPool(
+                    ConnectionPoolConfig(max_connections=max_conn)
+                )
     return _ollama_pool
 
 

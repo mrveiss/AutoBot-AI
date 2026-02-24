@@ -195,6 +195,13 @@ class LLMConfig(BaseSettings):
     ollama_gpu_endpoint: str = Field(default="", alias="AUTOBOT_OLLAMA_GPU_ENDPOINT")
     ollama_gpu_models: str = Field(default="", alias="AUTOBOT_OLLAMA_GPU_MODELS")
 
+    # Connection pool size for Ollama requests (#1154)
+    # Default 6 matches typical concurrent capacity for RTX 4070 (8GB VRAM)
+    # Override with AUTOBOT_OLLAMA_POOL_MAX_CONNECTIONS
+    ollama_pool_max_connections: int = Field(
+        default=6, alias="AUTOBOT_OLLAMA_POOL_MAX_CONNECTIONS"
+    )
+
     # API keys (optional - can also come from provider-specific env vars)
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")

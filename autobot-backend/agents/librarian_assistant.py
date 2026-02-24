@@ -19,10 +19,9 @@ from typing import Any, Dict, List, Optional
 from config import config
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
+from utils.service_registry import get_service_url
 
 from autobot_shared.http_client import get_http_client
-
-from ..utils.service_registry import get_service_url
 
 logger = logging.getLogger(__name__)
 

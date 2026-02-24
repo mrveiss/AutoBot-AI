@@ -20,13 +20,14 @@ DEPRECATED: Import directly from workflow_templates instead.
 """
 
 # Re-export everything from the new package for backward compatibility
-from workflow_templates import (  # Core types; Manager; Security templates; Research templates; Sysadmin templates; Development templates; Analysis templates
+from workflow_templates import (  # noqa: E401 — re-export facade for backward compat
     TemplateCategory,
     WorkflowStep,
     WorkflowTemplate,
     WorkflowTemplateManager,
     create_backup_and_recovery_template,
     create_code_review_template,
+    create_community_digest_post_template,
     create_competitive_analysis_template,
     create_comprehensive_research_template,
     create_data_analysis_template,
@@ -34,12 +35,15 @@ from workflow_templates import (  # Core types; Manager; Security templates; Res
     create_log_analysis_template,
     create_network_security_scan_template,
     create_performance_optimization_template,
+    create_reddit_monitor_reply_template,
+    create_release_announcement_blast_template,
     create_security_audit_template,
     create_system_health_check_template,
     create_technology_research_template,
     create_testing_strategy_template,
     create_vulnerability_assessment_template,
     get_all_analysis_templates,
+    get_all_community_templates,
     get_all_development_templates,
     get_all_research_templates,
     get_all_security_templates,
@@ -81,4 +85,9 @@ __all__ = [
     "create_data_analysis_template",
     "create_log_analysis_template",
     "get_all_analysis_templates",
+    # Community templates
+    "create_reddit_monitor_reply_template",
+    "create_release_announcement_blast_template",
+    "create_community_digest_post_template",
+    "get_all_community_templates",
 ]

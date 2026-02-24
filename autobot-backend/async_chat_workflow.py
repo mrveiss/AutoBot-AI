@@ -187,7 +187,6 @@ class AsyncChatWorkflow:
         await self.add_workflow_message(
             "planning", "📋 Planning my response approach...", step="planning"
         )
-        await asyncio.sleep(0.2)  # Brief pause for UX
 
     async def _workflow_classify(
         self, user_message: str, workflow_steps: List[Dict[str, Any]]
@@ -221,7 +220,6 @@ class AsyncChatWorkflow:
         )
         knowledge_status = KnowledgeStatus.BYPASSED  # Simplified for now
         kb_results: List[Dict[str, Any]] = []
-        await asyncio.sleep(0.1)  # Simulate search
         await self.add_workflow_message(
             "utility",
             "📚 Knowledge base search completed",

@@ -23,6 +23,7 @@ class TemplateCategory(Enum):
     SYSTEM_ADMIN = "system_admin"
     DEVELOPMENT = "development"
     ANALYSIS = "analysis"
+    COMMUNITY = "community"
 
 
 @dataclass

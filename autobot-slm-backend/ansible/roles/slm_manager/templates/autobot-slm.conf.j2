@@ -90,6 +90,13 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_read_timeout 3600;
+
+        # Issue #1160: Override server-level security headers for Grafana iframe embedding.
+        # nginx add_header in location replaces parent context headers, so all headers re-declared.
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss:; frame-ancestors 'self'; base-uri 'self';" always;
     }
 
     # Grafana reverse proxy (monitoring dashboards)
@@ -101,6 +108,14 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Issue #1160: Override server-level security headers for Grafana iframe embedding.
+        # nginx add_header in location replaces parent context headers, so all headers re-declared.
+        # frame-ancestors 'self' allows the SLM admin (same origin) to embed Grafana dashboards.
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss:; frame-ancestors 'self'; base-uri 'self';" always;
 {% if grafana_enable_cors | default(false) %}
 
         # CORS headers for external Grafana iframe embedding

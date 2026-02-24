@@ -14,6 +14,7 @@ Package Structure:
 - sysadmin.py: System administration workflow templates
 - development.py: Development workflow templates
 - analysis.py: Analysis workflow templates
+- community.py: Community growth workflow templates
 - manager.py: WorkflowTemplateManager coordinator class
 """
 
@@ -21,6 +22,12 @@ from .analysis import (
     create_data_analysis_template,
     create_log_analysis_template,
     get_all_analysis_templates,
+)
+from .community import (
+    create_community_digest_post_template,
+    create_reddit_monitor_reply_template,
+    create_release_announcement_blast_template,
+    get_all_community_templates,
 )
 from .development import (
     create_code_review_template,
@@ -92,4 +99,9 @@ __all__ = [
     "create_data_analysis_template",
     "create_log_analysis_template",
     "get_all_analysis_templates",
+    # Community templates
+    "create_reddit_monitor_reply_template",
+    "create_release_announcement_blast_template",
+    "create_community_digest_post_template",
+    "get_all_community_templates",
 ]
