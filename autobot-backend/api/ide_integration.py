@@ -25,11 +25,11 @@ import re
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from backend.models.completion_context import CompletionContext
-from backend.services.context_analyzer import ContextAnalyzer
-from backend.services.pattern_extractor import PatternExtractor
 from fastapi import APIRouter
+from models.completion_context import CompletionContext
 from pydantic import BaseModel, Field
+from services.context_analyzer import ContextAnalyzer
+from services.pattern_extractor import PatternExtractor
 
 from autobot_shared.redis_client import get_redis_client
 
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 # Optional ML dependencies (Issue #906)
 try:
-    from backend.training.completion_trainer import CompletionTrainer
+    from training.completion_trainer import CompletionTrainer
 
     HAS_ML = True
 except ImportError:

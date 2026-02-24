@@ -32,10 +32,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
-from backend.constants.threshold_constants import QueryDefaults
-from backend.type_defs.common import JSONObject, Metadata
+from constants.threshold_constants import QueryDefaults
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
+from type_defs.common import JSONObject, Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.ssot_config import PROJECT_ROOT

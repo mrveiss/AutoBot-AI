@@ -10,13 +10,13 @@ Tests for code completion endpoint.
 from unittest.mock import MagicMock, patch
 
 import pytest
-from backend.api.ide_integration import (
+from api.ide_integration import (
     CompletionItem,
     CompletionItemKind,
     CompletionRequest,
     IDEIntegrationEngine,
 )
-from backend.models.completion_context import CompletionContext
+from models.completion_context import CompletionContext
 
 
 @pytest.fixture
@@ -55,8 +55,8 @@ def sample_context():
 
 
 @pytest.mark.anyio
-@patch("backend.api.ide_integration.context_analyzer")
-@patch("backend.api.ide_integration.redis_client")
+@patch("api.ide_integration.context_analyzer")
+@patch("api.ide_integration.redis_client")
 async def test_completion_caching(
     mock_redis, mock_analyzer, engine, sample_request, sample_context
 ):
@@ -93,10 +93,10 @@ async def test_completion_caching(
 
 
 @pytest.mark.anyio
-@patch("backend.api.ide_integration.HAS_ML", True)
-@patch("backend.api.ide_integration.context_analyzer")
-@patch("backend.api.ide_integration.redis_client")
-@patch("backend.api.ide_integration.trainer")
+@patch("api.ide_integration.HAS_ML", True)
+@patch("api.ide_integration.context_analyzer")
+@patch("api.ide_integration.redis_client")
+@patch("api.ide_integration.trainer")
 async def test_ml_completions(
     mock_trainer, mock_redis, mock_analyzer, engine, sample_request, sample_context
 ):
@@ -125,8 +125,8 @@ async def test_ml_completions(
 
 
 @pytest.mark.anyio
-@patch("backend.api.ide_integration.context_analyzer")
-@patch("backend.api.ide_integration.redis_client")
+@patch("api.ide_integration.context_analyzer")
+@patch("api.ide_integration.redis_client")
 async def test_pattern_completions(
     mock_redis, mock_analyzer, engine, sample_request, sample_context
 ):
@@ -185,7 +185,7 @@ def test_completion_ranking(engine):
         CompletionItem(label="medium", kind=CompletionItemKind.TEXT, score=0.6),
     ]
 
-    from backend.models.completion_context import CompletionContext
+    from models.completion_context import CompletionContext
 
     context = CompletionContext(context_id="test", language="python")
     ranked = engine._rank_completions(completions, context)
@@ -196,8 +196,8 @@ def test_completion_ranking(engine):
 
 
 @pytest.mark.anyio
-@patch("backend.api.ide_integration.context_analyzer")
-@patch("backend.api.ide_integration.redis_client")
+@patch("api.ide_integration.context_analyzer")
+@patch("api.ide_integration.redis_client")
 async def test_completion_max_limit(mock_redis, mock_analyzer, engine, sample_context):
     """Test completion result limit."""
     # Setup mocks
@@ -219,9 +219,9 @@ async def test_completion_max_limit(mock_redis, mock_analyzer, engine, sample_co
 
 
 @pytest.mark.anyio
-@patch("backend.api.ide_integration.context_analyzer")
-@patch("backend.api.ide_integration.redis_client")
-@patch("backend.api.ide_integration.trainer")
+@patch("api.ide_integration.context_analyzer")
+@patch("api.ide_integration.redis_client")
+@patch("api.ide_integration.trainer")
 async def test_ml_timeout_fallback(
     mock_trainer, mock_redis, mock_analyzer, engine, sample_request, sample_context
 ):
@@ -249,7 +249,7 @@ async def test_ml_timeout_fallback(
 
 def test_pattern_relevance_filtering(engine):
     """Test completion filtering by context."""
-    from backend.models.completion_context import CompletionContext
+    from models.completion_context import CompletionContext
 
     # Test FastAPI completions are returned when fastapi in frameworks
     context_with_fastapi = CompletionContext(
@@ -274,8 +274,8 @@ def test_pattern_relevance_filtering(engine):
 
 
 @pytest.mark.anyio
-@patch("backend.api.ide_integration.context_analyzer")
-@patch("backend.api.ide_integration.redis_client")
+@patch("api.ide_integration.context_analyzer")
+@patch("api.ide_integration.redis_client")
 async def test_completion_performance(
     mock_redis, mock_analyzer, engine, sample_request, sample_context
 ):
