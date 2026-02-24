@@ -17,8 +17,7 @@ from typing import Dict, List
 import structlog
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
-
-from backend.security.service_auth import validate_service_auth
+from security.service_auth import validate_service_auth
 
 logger = structlog.get_logger()
 

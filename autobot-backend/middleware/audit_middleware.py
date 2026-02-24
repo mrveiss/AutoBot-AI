@@ -35,8 +35,8 @@ import logging
 import time
 from typing import Any, Callable, Optional
 
-from backend.services.audit_logger import AuditResult, get_audit_logger
 from fastapi import Request
+from services.audit_logger import AuditResult, get_audit_logger
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 

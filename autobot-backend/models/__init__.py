@@ -13,7 +13,7 @@ before relationships are configured.
 
 # Activity tracking models - MUST be imported before user_management models
 # to resolve forward references in User.terminal_activities, etc.
-from backend.models.activities import (
+from models.activities import (
     BrowserActivityModel,
     DesktopActivityModel,
     FileActivityModel,
@@ -22,11 +22,11 @@ from backend.models.activities import (
 )
 
 # Other backend models (SQLAlchemy models only)
-from backend.models.code_pattern import CodePattern
-from backend.models.completion_feedback import CompletionFeedback
-from backend.models.ml_model import MLModel
-from backend.models.secret import Secret
-from backend.models.session_collaboration import SessionCollaboration
+from models.code_pattern import CodePattern
+from models.completion_feedback import CompletionFeedback
+from models.ml_model import MLModel
+from models.secret import Secret
+from models.session_collaboration import SessionCollaboration
 
 __all__ = [
     # Activity models (referenced by User model)
