@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Optional
 
-from backend.models.activities import (
+from models.activities import (
     BrowserActivityModel,
     DesktopActivityModel,
     FileActivityModel,

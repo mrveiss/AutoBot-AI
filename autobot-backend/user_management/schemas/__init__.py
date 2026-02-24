@@ -7,7 +7,7 @@ Pydantic Schemas for User Management
 Request/response validation models for API endpoints.
 """
 
-from backend.user_management.schemas.user import (
+from user_management.schemas.user import (
     PasswordChange,
     UserCreate,
     UserListResponse,
