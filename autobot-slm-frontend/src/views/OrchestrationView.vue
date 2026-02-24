@@ -231,13 +231,15 @@ function isRoleAssigned(nodeId: string, roleName: string): boolean {
 }
 
 async function assignRoleToNode(nodeId: string, roleName: string): Promise<void> {
-  await roles.assignRole(nodeId, roleName)
+  const result = await roles.assignRole(nodeId, roleName)
+  if (!result) return
   delete nodeRolesCache[nodeId]
   await loadRolesForNode(nodeId)
 }
 
 async function removeRoleFromNode(nodeId: string, roleName: string): Promise<void> {
-  await roles.removeRole(nodeId, roleName)
+  const result = await roles.removeRole(nodeId, roleName)
+  if (!result.success) return
   delete nodeRolesCache[nodeId]
   await loadRolesForNode(nodeId)
 }
