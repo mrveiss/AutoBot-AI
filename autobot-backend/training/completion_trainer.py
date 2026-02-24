@@ -16,10 +16,10 @@ from typing import Dict, Optional
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from backend.llm_interface_pkg.hardware import HardwareDetector
-from backend.training.completion_model import CompletionModel
-from backend.training.data_loader import create_dataloaders
-from backend.training.evaluator import CompletionEvaluator
+from llm_interface_pkg.hardware import HardwareDetector
+from training.completion_model import CompletionModel
+from training.data_loader import create_dataloaders
+from training.evaluator import CompletionEvaluator
 
 logger = logging.getLogger(__name__)
 

@@ -11,9 +11,9 @@ import tempfile
 from pathlib import Path
 
 import torch
-from backend.training.completion_model import CompletionModel
-from backend.training.data_loader import Tokenizer
-from backend.training.evaluator import CompletionEvaluator
+from training.completion_model import CompletionModel
+from training.data_loader import Tokenizer
+from training.evaluator import CompletionEvaluator
 
 
 def test_tokenizer_initialization():
@@ -221,7 +221,7 @@ def test_model_gradient_flow():
 
 def test_mrr_metric():
     """Test Mean Reciprocal Rank metric."""
-    from backend.training.evaluator import MeanReciprocalRank
+    from training.evaluator import MeanReciprocalRank
 
     mrr = MeanReciprocalRank()
 
@@ -241,7 +241,7 @@ def test_mrr_metric():
 
 def test_hit_at_k_metric():
     """Test Hit@K metric."""
-    from backend.training.evaluator import HitAtK
+    from training.evaluator import HitAtK
 
     hit5 = HitAtK(k=5)
 

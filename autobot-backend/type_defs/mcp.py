@@ -9,8 +9,8 @@ Provides strongly-typed MCP tool and response structures.
 
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from backend.type_defs.common import JSONValue, Metadata
 from pydantic import BaseModel, Field
+from type_defs.common import JSONValue, Metadata
 
 # MCP-specific type aliases
 MCPToolName = str

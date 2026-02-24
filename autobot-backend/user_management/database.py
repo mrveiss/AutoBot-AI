@@ -12,13 +12,13 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 
-from backend.user_management.config import get_deployment_config
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+from user_management.config import get_deployment_config
 
 logger = logging.getLogger(__name__)
 
