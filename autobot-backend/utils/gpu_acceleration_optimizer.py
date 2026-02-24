@@ -25,7 +25,7 @@ from typing import Any, Dict, List
 
 # Re-export benchmarking functions for backward compatibility (used by external code)
 # Re-export all public API from the package for backward compatibility
-from backend.utils.gpu_optimization import (  # noqa: F401
+from utils.gpu_optimization import (  # noqa: F401
     DEFAULT_PERFORMANCE_BASELINES,
     GPUCapabilities,
     GPUOptimizationConfig,
@@ -45,7 +45,7 @@ from backend.utils.gpu_optimization import (  # noqa: F401
     optimize_tensor_cores,
     run_comprehensive_benchmark,
 )
-from backend.utils.performance_monitor import performance_monitor
+from utils.performance_monitor import performance_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -426,23 +426,27 @@ if __name__ == "__main__":
 
     async def test_gpu_optimization():
         """Test GPU optimization functionality."""
-        print("Testing GPU Acceleration Optimizer...")
+        print("Testing GPU Acceleration Optimizer...")  # noqa: print
 
         # Get capabilities
         capabilities = get_gpu_capabilities()
-        print(f"GPU Capabilities: {json.dumps(capabilities, indent=2)}")
+        print(f"GPU Capabilities: {json.dumps(capabilities, indent=2)}")  # noqa: print
 
         # Run benchmark
         benchmark = await benchmark_gpu()
-        print(f"GPU Benchmark: {json.dumps(benchmark, indent=2, default=str)}")
+        print(  # noqa: print
+            f"GPU Benchmark: {json.dumps(benchmark, indent=2, default=str)}"
+        )  # noqa: print
 
         # Monitor efficiency
         efficiency = await monitor_gpu_efficiency()
-        print(f"GPU Efficiency: {json.dumps(efficiency, indent=2, default=str)}")
+        print(  # noqa: print
+            f"GPU Efficiency: {json.dumps(efficiency, indent=2, default=str)}"
+        )  # noqa: print
 
         # Optimize for multi-modal
         optimization = await optimize_gpu_for_multimodal()
-        print(
+        print(  # noqa: print
             f"Optimization Result: "
             f"{json.dumps(asdict(optimization), indent=2, default=str)}"
         )

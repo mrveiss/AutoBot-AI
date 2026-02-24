@@ -119,7 +119,7 @@ class TestFilesystemMCPPerFileLocking:
     @pytest.mark.asyncio
     async def test_get_file_lock_returns_lock(self):
         """Test that _get_file_lock returns an asyncio.Lock"""
-        from backend.api.filesystem_mcp import _get_file_lock
+        from api.filesystem_mcp import _get_file_lock
 
         lock = await _get_file_lock("/test/path/file.txt")
         assert isinstance(lock, asyncio.Lock)
@@ -127,7 +127,7 @@ class TestFilesystemMCPPerFileLocking:
     @pytest.mark.asyncio
     async def test_get_file_lock_same_path_same_lock(self):
         """Test that same path returns same lock instance"""
-        from backend.api.filesystem_mcp import _get_file_lock
+        from api.filesystem_mcp import _get_file_lock
 
         lock1 = await _get_file_lock("/test/path/same.txt")
         lock2 = await _get_file_lock("/test/path/same.txt")
@@ -136,7 +136,7 @@ class TestFilesystemMCPPerFileLocking:
     @pytest.mark.asyncio
     async def test_get_file_lock_different_paths_different_locks(self):
         """Test that different paths return different locks"""
-        from backend.api.filesystem_mcp import _get_file_lock
+        from api.filesystem_mcp import _get_file_lock
 
         lock1 = await _get_file_lock("/test/path/file1.txt")
         lock2 = await _get_file_lock("/test/path/file2.txt")
@@ -145,7 +145,7 @@ class TestFilesystemMCPPerFileLocking:
     @pytest.mark.asyncio
     async def test_concurrent_get_file_lock(self):
         """Test concurrent calls to _get_file_lock"""
-        from backend.api.filesystem_mcp import _get_file_lock
+        from api.filesystem_mcp import _get_file_lock
 
         locks = []
         errors = []
@@ -195,7 +195,7 @@ class TestPromptsPyPerFileLocking:
     @pytest.mark.asyncio
     async def test_get_prompt_file_lock_returns_lock(self):
         """Test that _get_prompt_file_lock returns an asyncio.Lock"""
-        from backend.api.prompts import _get_prompt_file_lock
+        from api.prompts import _get_prompt_file_lock
 
         lock = await _get_prompt_file_lock("/test/prompts/test.md")
         assert isinstance(lock, asyncio.Lock)
@@ -203,7 +203,7 @@ class TestPromptsPyPerFileLocking:
     @pytest.mark.asyncio
     async def test_get_prompt_file_lock_same_path_same_lock(self):
         """Test that same path returns same lock instance"""
-        from backend.api.prompts import _get_prompt_file_lock
+        from api.prompts import _get_prompt_file_lock
 
         lock1 = await _get_prompt_file_lock("/test/prompts/same.md")
         lock2 = await _get_prompt_file_lock("/test/prompts/same.md")
@@ -212,7 +212,7 @@ class TestPromptsPyPerFileLocking:
     @pytest.mark.asyncio
     async def test_concurrent_get_prompt_file_lock(self):
         """Test concurrent calls to _get_prompt_file_lock"""
-        from backend.api.prompts import _get_prompt_file_lock
+        from api.prompts import _get_prompt_file_lock
 
         locks = []
         errors = []
@@ -261,7 +261,7 @@ class TestLogsPyPerFileLocking:
     @pytest.mark.asyncio
     async def test_get_log_file_lock_returns_lock(self):
         """Test that _get_log_file_lock returns an asyncio.Lock"""
-        from backend.api.logs import _get_log_file_lock
+        from api.logs import _get_log_file_lock
 
         lock = await _get_log_file_lock("/test/logs/test.log")
         assert isinstance(lock, asyncio.Lock)
@@ -269,7 +269,7 @@ class TestLogsPyPerFileLocking:
     @pytest.mark.asyncio
     async def test_get_log_file_lock_same_path_same_lock(self):
         """Test that same path returns same lock instance"""
-        from backend.api.logs import _get_log_file_lock
+        from api.logs import _get_log_file_lock
 
         lock1 = await _get_log_file_lock("/test/logs/same.log")
         lock2 = await _get_log_file_lock("/test/logs/same.log")
@@ -278,7 +278,7 @@ class TestLogsPyPerFileLocking:
     @pytest.mark.asyncio
     async def test_concurrent_get_log_file_lock(self):
         """Test concurrent calls to _get_log_file_lock"""
-        from backend.api.logs import _get_log_file_lock
+        from api.logs import _get_log_file_lock
 
         locks = []
         errors = []
@@ -307,7 +307,7 @@ class TestConcurrentFileWriteSafety:
     async def test_concurrent_writes_same_file_no_corruption(self):
         """Test that concurrent writes to same file don't corrupt data"""
         import aiofiles
-        from backend.api.filesystem_mcp import _get_file_lock
+        from api.filesystem_mcp import _get_file_lock
 
         with tempfile.TemporaryDirectory() as tmpdir:
             test_file = Path(tmpdir) / "concurrent_test.txt"
@@ -347,7 +347,7 @@ class TestConcurrentFileWriteSafety:
         import time
 
         import aiofiles
-        from backend.api.filesystem_mcp import _get_file_lock
+        from api.filesystem_mcp import _get_file_lock
 
         with tempfile.TemporaryDirectory() as tmpdir:
             start_times = {}
@@ -380,9 +380,9 @@ class TestLockPatternConsistency:
     @pytest.mark.asyncio
     async def test_all_locks_are_asyncio_locks(self):
         """Verify all file locks use asyncio.Lock"""
-        from backend.api.filesystem_mcp import _get_file_lock as fs_lock
-        from backend.api.logs import _get_log_file_lock as log_lock
-        from backend.api.prompts import _get_prompt_file_lock as prompt_lock
+        from api.filesystem_mcp import _get_file_lock as fs_lock
+        from api.logs import _get_log_file_lock as log_lock
+        from api.prompts import _get_prompt_file_lock as prompt_lock
 
         fs = await fs_lock("/test/fs.txt")
         prompt = await prompt_lock("/test/prompt.md")
