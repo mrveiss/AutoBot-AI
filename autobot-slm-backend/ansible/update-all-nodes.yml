@@ -136,6 +136,16 @@
       changed_when: true
       tags: [always]
 
+    # Issue #1164: Archive slm-agent code (autobot-slm-backend/slm/agent/)
+    # Deployed to /opt/autobot/autobot-slm-agent/slm/agent/ on all fleet nodes.
+    # strip-components=1 removes the leading autobot-slm-backend/ path prefix.
+    - name: "[PRE-FLIGHT] Create slm-agent code archive"
+      shell: >-
+        git -C {{ git_repo_root }} archive {{ deploy_ref }}
+        -- autobot-slm-backend/slm/agent/ | gzip > {{ deploy_tmp }}/slm-agent.tar.gz
+      changed_when: true
+      tags: [always, slm-agent]
+
     - name: "[PRE-FLIGHT] Create AI Stack archive"
       shell: >-
         git -C {{ git_repo_root }} archive {{ deploy_ref }}
@@ -216,6 +226,24 @@
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: "{{ code_base_dir }}/"
       tags: [shared, library]
+
+    # =========================================================================
+    # SLM AGENT - Issue #1164: Keep agent code in sync on every fleet update
+    # =========================================================================
+    - name: "[PLAY 1] SLM Agent | Deploy agent code to slm-agent dir"
+      unarchive:
+        src: "{{ deploy_tmp }}/slm-agent.tar.gz"
+        dest: "{{ code_base_dir }}/autobot-slm-agent/"
+        extra_opts: ['--strip-components=1']
+      tags: [slm-agent]
+
+    - name: "[PLAY 1] SLM Agent | Restart slm-agent service"
+      systemd:
+        name: slm-agent
+        state: restarted
+      when: restart_services | bool
+      failed_when: false
+      tags: [slm-agent, restart]
 
   post_tasks:
     # =========================================================================
@@ -432,6 +460,27 @@
         'browser_worker' in group_names or
         'aiml' in group_names
       tags: [shared, library]
+
+    # =========================================================================
+    # SLM AGENT - Issue #1164: Keep agent code in sync on every fleet update
+    # =========================================================================
+    - name: "[PLAY 2] SLM Agent | Deploy agent code to slm-agent dir"
+      unarchive:
+        src: "{{ deploy_tmp }}/slm-agent.tar.gz"
+        dest: "{{ code_base_dir }}/autobot-slm-agent/"
+        extra_opts: ['--strip-components=1']
+      when: slm_node_id is defined
+      tags: [slm-agent]
+
+    - name: "[PLAY 2] SLM Agent | Restart slm-agent service"
+      systemd:
+        name: slm-agent
+        state: restarted
+      when:
+        - slm_node_id is defined
+        - restart_services | bool
+      failed_when: false
+      tags: [slm-agent, restart]
 
   post_tasks:
     # =========================================================================

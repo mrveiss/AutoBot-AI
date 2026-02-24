@@ -159,6 +159,29 @@
   notify: Restart SLM agent
   tags: ['slm_agent', 'deploy']
 
+# Issue #1164: Deploy role detection modules (added after #779)
+- name: "SLM Agent | Copy agent source - role_detector.py"
+  copy:
+    src: slm/agent/role_detector.py
+    dest: "{{ slm_agent_dir }}/slm/agent/role_detector.py"
+    owner: "{{ slm_agent_user }}"
+    group: "{{ slm_agent_group }}"
+    mode: '0644'
+  become: yes
+  notify: Restart SLM agent
+  tags: ['slm_agent', 'deploy']
+
+- name: "SLM Agent | Copy agent source - port_scanner.py"
+  copy:
+    src: slm/agent/port_scanner.py
+    dest: "{{ slm_agent_dir }}/slm/agent/port_scanner.py"
+    owner: "{{ slm_agent_user }}"
+    group: "{{ slm_agent_group }}"
+    mode: '0644'
+  become: yes
+  notify: Restart SLM agent
+  tags: ['slm_agent', 'deploy']
+
 - name: "SLM Agent | Deploy agent configuration"
   template:
     src: agent-config.yaml.j2

@@ -145,8 +145,8 @@ class SLMAgent:
             # Truncate long hashes for logging
             current_short = current[:12] if len(current) > 12 else current
             latest_short = latest[:12] if len(latest) > 12 else latest
-            logger.info(
-                "Update available: current=%s, latest=%s",
+            logger.debug(
+                "Update available: current=%s, latest=%s (deploy via Ansible)",
                 current_short,
                 latest_short,
             )
