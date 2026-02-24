@@ -154,7 +154,7 @@ class SkillRouterSkill(BaseSkill):
         candidates = self._build_candidates(task, registry)
 
         if not candidates:
-            return {"success": False, "error": "no skills registered"}
+            return await self._build_missing_skill(task, registry, dry_run)
 
         winner, reason, method = await self._pick_winner(task, candidates)
         return await self._enable_and_respond(
@@ -182,8 +182,7 @@ class SkillRouterSkill(BaseSkill):
             for s in registry.list_skills()
         ]
         scored.sort(key=lambda x: x["score"], reverse=True)
-        candidates = [c for c in scored[:top_k] if c["score"] > 0]
-        return candidates or scored[:1]
+        return [c for c in scored[:top_k] if c["score"] > 0]
 
     async def _pick_winner(
         self, task: str, candidates: List[Dict[str, Any]]
@@ -235,4 +234,37 @@ class SkillRouterSkill(BaseSkill):
                 {"name": c["name"], "score": c["score"]} for c in candidates
             ],
             "dry_run": dry_run,
+        }
+
+    async def _build_missing_skill(
+        self, task: str, registry: Any, dry_run: bool
+    ) -> Dict[str, Any]:
+        """Delegate to autonomous-skill-development when no skill matches the task.
+
+        Called when _build_candidates returns an empty list (empty registry or
+        all skills score zero against the task tokens).
+        """
+        if dry_run:
+            return {
+                "success": True,
+                "enabled_skill": None,
+                "build_triggered": False,
+                "reason": (
+                    "No matching skill; would trigger autonomous-skill-development"
+                ),
+                "dry_run": True,
+            }
+        build_skill = registry.get("autonomous-skill-development")
+        if not build_skill:
+            return {"success": False, "error": "no skills registered"}
+        result = await build_skill.execute(
+            {"capability": task, "requested_by": "skill-router"}
+        )
+        return {
+            "success": result.get("success", False),
+            "enabled_skill": None,
+            "build_triggered": True,
+            "build_result": result,
+            "reason": "No matching skill; delegated to autonomous-skill-development",
+            "dry_run": False,
         }

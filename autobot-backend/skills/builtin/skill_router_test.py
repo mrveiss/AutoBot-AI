@@ -258,9 +258,10 @@ def test_find_skill_requires_task_param():
 
 
 def test_find_skill_no_skills_registered():
-    """find_skill returns error when registry is empty."""
+    """find_skill returns error when registry is empty and no build-skill available."""
     mock_registry = MagicMock()
     mock_registry.list_skills.return_value = []
+    mock_registry.get.return_value = None  # autonomous-skill-development not found
 
     with patch(
         "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
@@ -270,3 +271,63 @@ def test_find_skill_no_skills_registered():
 
     assert result["success"] is False
     assert "no skills" in result["error"].lower()
+
+
+def test_find_skill_no_match_delegates_to_autonomous():
+    """When no skill matches the task, delegate to autonomous-skill-development."""
+    mock_build_skill = MagicMock()
+    mock_build_skill.execute = AsyncMock(
+        return_value={
+            "success": True,
+            "state": "pending_approval",
+            "skill_name": "audio-transcriber",
+            "message": "Skill queued for approval.",
+        }
+    )
+    mock_registry = MagicMock()
+    mock_registry.list_skills.return_value = [
+        _make_skill_dict(
+            "calendar-integration",
+            "Manage calendar events",
+            ["calendar"],
+            ["create_event"],
+        ),
+    ]
+    mock_registry.get.return_value = mock_build_skill
+
+    with patch(
+        "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
+    ):
+        skill = SkillRouterSkill()
+        skill.apply_config({"top_k": 5, "auto_enable": True})
+        result = asyncio.run(
+            skill.execute("find_skill", {"task": "transcribe this audio file"})
+        )
+
+    assert result["success"] is True
+    assert result["build_triggered"] is True
+    assert result["enabled_skill"] is None
+    mock_registry.get.assert_called_with("autonomous-skill-development")
+    mock_build_skill.execute.assert_called_once_with(
+        {"capability": "transcribe this audio file", "requested_by": "skill-router"}
+    )
+
+
+def test_find_skill_no_match_dry_run_skips_build():
+    """dry_run=True with no matching skill returns info without triggering build."""
+    mock_registry = MagicMock()
+    mock_registry.list_skills.return_value = []
+
+    with patch(
+        "skills.builtin.skill_router.get_skill_registry", return_value=mock_registry
+    ):
+        skill = SkillRouterSkill()
+        skill.apply_config({"top_k": 5, "auto_enable": True})
+        result = asyncio.run(
+            skill.execute("find_skill", {"task": "transcribe audio", "dry_run": True})
+        )
+
+    assert result["success"] is True
+    assert result["dry_run"] is True
+    assert result["build_triggered"] is False
+    mock_registry.get.assert_not_called()
