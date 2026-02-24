@@ -14,11 +14,11 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-from backend.constants.threshold_constants import CategoryDefaults
-from backend.user_management.models.base import Base, TimestampMixin
+from constants.threshold_constants import CategoryDefaults
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from user_management.models.organization import Organization

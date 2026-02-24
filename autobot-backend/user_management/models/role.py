@@ -10,10 +10,10 @@ Implements database-driven RBAC (Role-Based Access Control).
 import uuid
 from typing import TYPE_CHECKING, Optional
 
-from backend.user_management.models.base import Base, TimestampMixin
 from sqlalchemy import Boolean, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from user_management.models.organization import Organization
