@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.constants.threshold_constants import QueryDefaults
+from constants.threshold_constants import QueryDefaults
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -1121,7 +1121,7 @@ async def natural_language_search(request: NLSearchRequest):
 
         # Perform semantic search
         try:
-            from backend.api.code_search import search_codebase
+            from api.code_search import search_codebase
 
             search_results = await search_codebase(
                 query=" ".join(parsed.search_terms),

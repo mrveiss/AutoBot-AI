@@ -33,11 +33,11 @@ from typing import Dict, List, Optional
 
 from auth_middleware import check_admin_permission
 from autobot_memory_graph import AutoBotMemoryGraph
-from backend.type_defs.common import Metadata
-from backend.utils.request_utils import generate_request_id
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
+from type_defs.common import Metadata
+from utils.request_utils import generate_request_id
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -637,7 +637,7 @@ async def _get_existing_session_ids(request: Request) -> set:
     Raises:
         HTTPException: If chat manager unavailable
     """
-    from backend.utils.chat_utils import get_chat_history_manager
+    from utils.chat_utils import get_chat_history_manager
 
     chat_manager = get_chat_history_manager(request)
     if chat_manager is None:

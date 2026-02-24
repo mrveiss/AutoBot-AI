@@ -17,10 +17,10 @@ Endpoints:
 import logging
 from typing import Any, Dict, List, Optional
 
-from backend.auth_rbac import require_auth
-from backend.services.nl_database_service import get_nl_database_service
+from auth_rbac import require_auth
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
+from services.nl_database_service import get_nl_database_service
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,7 @@ async def _resolve_db_url(
         return None
 
     try:
-        from backend.api.secrets import get_secrets_manager
+        from api.secrets import get_secrets_manager
 
         manager = get_secrets_manager()
         secret = await manager.get_secret(db_secret_id, user_id=None)

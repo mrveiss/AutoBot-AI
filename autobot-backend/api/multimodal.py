@@ -15,8 +15,7 @@ from typing import Dict, List, Optional, Union
 import torch
 from ai_hardware_accelerator import HardwareDevice, accelerated_embedding_generation
 from auth_middleware import get_current_user
-from backend.constants.threshold_constants import QueryDefaults
-from backend.type_defs.common import Metadata
+from constants.threshold_constants import QueryDefaults
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from multimodal_processor import (
     ModalityType,
@@ -28,6 +27,7 @@ from multimodal_processor import (
 # Import AutoBot multi-modal components
 from npu_semantic_search import get_npu_search_engine
 from pydantic import BaseModel, Field
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
