@@ -11,7 +11,7 @@ summarization, and structured data extraction.
 import logging
 from typing import Any, Dict
 
-from backend.skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
+from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 
 logger = logging.getLogger(__name__)
 
