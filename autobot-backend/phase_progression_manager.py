@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import aiofiles
+from constants.path_constants import PATH
 from project_state_manager import ProjectStateManager
 
-from backend.constants.path_constants import PATH
 from scripts.phase_validation_system import PhaseValidator
 
 # Setup logging

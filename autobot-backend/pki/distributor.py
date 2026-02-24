@@ -19,9 +19,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import asyncssh
-from backend.pki.config import VM_DEFINITIONS, TLSConfig, VMCertificateInfo
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
+from pki.config import VM_DEFINITIONS, TLSConfig, VMCertificateInfo
 
 logger = logging.getLogger(__name__)
 

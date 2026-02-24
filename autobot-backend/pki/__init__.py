@@ -36,10 +36,10 @@ Usage:
         await pki.renew()
 """
 
-from backend.pki.configurator import ServiceConfigurator
-from backend.pki.distributor import CertificateDistributor
-from backend.pki.generator import CertificateGenerator
-from backend.pki.manager import PKIManager
+from pki.configurator import ServiceConfigurator
+from pki.distributor import CertificateDistributor
+from pki.generator import CertificateGenerator
+from pki.manager import PKIManager
 
 __all__ = [
     "PKIManager",

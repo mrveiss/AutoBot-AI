@@ -18,12 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from backend.pki.config import (
-    VM_DEFINITIONS,
-    CertificateStatus,
-    TLSConfig,
-    VMCertificateInfo,
-)
+from pki.config import VM_DEFINITIONS, CertificateStatus, TLSConfig, VMCertificateInfo
 
 logger = logging.getLogger(__name__)
 
