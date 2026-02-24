@@ -25,6 +25,10 @@ class IndexCodebaseRequest(BaseModel):
         default=None,
         description="Path to index. Defaults to PROJECT_ROOT if not provided.",
     )
+    source_id: Optional[str] = Field(
+        default=None,
+        description="Code source registry ID (#1133). Resolves to the source's clone_path.",
+    )
 
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -32,6 +36,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from ..scanner import (
     _active_tasks,
     _current_indexing_task_id,
+    _index_queue,
     _tasks_lock,
     _tasks_sync_lock,
     do_indexing_with_progress,
@@ -43,28 +48,62 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _check_existing_task() -> Optional[JSONResponse]:
-    """Check if indexing task is already running (Issue #398: extracted)."""
-    if _current_indexing_task_id is not None:
-        existing_task = _active_tasks.get(_current_indexing_task_id)
-        if existing_task and not existing_task.done():
-            logger.info("🔒 Indexing already in progress: %s", _current_indexing_task_id)
-            return JSONResponse(
-                {
-                    "task_id": _current_indexing_task_id,
-                    "status": "already_running",
-                    "message": (
-                        f"Indexing is already in progress. Poll "
-                        f"/api/analytics/codebase/index/status/{_current_indexing_task_id} "
-                        "for progress."
-                    ),
-                }
+def _check_existing_task_and_queue(
+    source_id: Optional[str], root_path_for_queue: str
+) -> Optional[JSONResponse]:
+    """If a job is running, enqueue the request and return a queued response.
+
+    Returns None when no job is running (caller should start a new job).
+    Issue #1133: queuing replaces the old "already_running" rejection.
+    """
+    if _current_indexing_task_id is None:
+        return None
+    existing_task = _active_tasks.get(_current_indexing_task_id)
+    if existing_task is None or existing_task.done():
+        return None
+    # A job is running — add to FIFO queue
+    from datetime import datetime as _dt
+
+    position = len(_index_queue) + 1
+    _index_queue.append(
+        {
+            "source_id": source_id,
+            "root_path": root_path_for_queue,
+            "queued_at": _dt.now().isoformat(),
+            "requested_by": "api",
+        }
+    )
+    logger.info("📋 Indexing queued (position %d): %s", position, root_path_for_queue)
+    return JSONResponse(
+        {
+            "task_id": None,
+            "status": "queued",
+            "position": position,
+            "message": (
+                f"Queued behind current job (position {position}). "
+                "The job will start automatically when the running job finishes."
+            ),
+        }
+    )
+
+
+async def _validate_and_get_path(request: Optional[IndexCodebaseRequest]) -> str:
+    """Validate request and return the resolved index path (Issue #398 + #1133)."""
+    if request and request.source_id:
+        from ..source_storage import get_source
+
+        source = await get_source(request.source_id)
+        if source is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Source {request.source_id} not found",
             )
-    return None
-
-
-def _validate_and_get_path(request: Optional[IndexCodebaseRequest]) -> str:
-    """Validate request path and return resolved path (Issue #398: extracted)."""
+        if not source.clone_path:
+            raise HTTPException(
+                status_code=400,
+                detail="Source has no clone path; sync it first",
+            )
+        return source.clone_path
     if request and request.root_path:
         target_path = Path(request.root_path)
         if not target_path.exists():
@@ -81,8 +120,25 @@ def _validate_and_get_path(request: Optional[IndexCodebaseRequest]) -> str:
     return str(PATH.PROJECT_ROOT)
 
 
+def _start_next_queued_job() -> None:
+    """Dequeue and start the next pending indexing job if any (#1133)."""
+    global _current_indexing_task_id
+    if not _index_queue:
+        return
+    next_job = _index_queue.popleft()
+    next_path = next_job.get("root_path", str(PATH.PROJECT_ROOT))
+    next_task_id = str(uuid.uuid4())
+    _current_indexing_task_id = next_task_id
+    task = asyncio.get_event_loop().create_task(
+        do_indexing_with_progress(next_task_id, next_path)
+    )
+    _active_tasks[next_task_id] = task
+    task.add_done_callback(_create_cleanup_callback(next_task_id))
+    logger.info("▶️  Auto-started queued job %s for %s", next_task_id, next_path)
+
+
 def _create_cleanup_callback(task_id: str):
-    """Create cleanup callback for task completion (Issue #398: extracted)."""
+    """Create cleanup callback for task completion (Issue #398 + #1133: auto-dequeue)."""
 
     def cleanup_task(t):
         global _current_indexing_task_id
@@ -90,6 +146,7 @@ def _create_cleanup_callback(task_id: str):
             _active_tasks.pop(task_id, None)
             if _current_indexing_task_id == task_id:
                 _current_indexing_task_id = None
+            _start_next_queued_job()
         logger.info("🧹 Task %s cleaned up", task_id)
 
     return cleanup_task
@@ -103,24 +160,25 @@ def _create_cleanup_callback(task_id: str):
 @router.post("/index")
 async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
     """
-    Start background indexing of a codebase path (Issue #398: refactored).
+    Start background indexing of a codebase path (Issue #398: refactored, #1133: queued).
 
-    Returns immediately with a task_id that can be used to poll progress.
-    Only one indexing task can run at a time.
+    Accepts optional source_id (code source registry) or root_path.
+    Returns immediately with a task_id. If another job is running, queues the request.
     """
     global _current_indexing_task_id
 
     logger.info("✅ ENTRY: index_codebase endpoint called!")
 
-    async with _tasks_lock:
-        # Check for existing task
-        existing_response = _check_existing_task()
-        if existing_response:
-            return existing_response
+    # Resolve the path first (may be async for source_id lookup)
+    root_path = await _validate_and_get_path(request)
+    source_id = request.source_id if request else None
+    logger.info("📁 Indexing path = %s", root_path)
 
-        # Validate and get path
-        root_path = _validate_and_get_path(request)
-        logger.info("📁 Indexing path = %s", root_path)
+    async with _tasks_lock:
+        # Check for existing task — queue if busy (#1133)
+        queued_response = _check_existing_task_and_queue(source_id, root_path)
+        if queued_response:
+            return queued_response
 
         # Generate unique task ID and start task
         task_id = str(uuid.uuid4())

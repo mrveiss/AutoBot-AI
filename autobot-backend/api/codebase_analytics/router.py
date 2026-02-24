@@ -23,9 +23,9 @@ from .endpoints import (
     import_tree,
     indexing,
     pattern_analysis,
-    report,
-    stats,
 )
+from .endpoints import queue as queue_router
+from .endpoints import report, sources, stats
 
 # Create main router — prefix provided by analytics_routers.py registry (#1027)
 router = APIRouter(tags=["codebase-analytics"])
@@ -48,3 +48,5 @@ router.include_router(
 )  # Issue #244: Cross-Language Patterns
 router.include_router(pattern_analysis.router)  # Issue #208: Code Pattern Detection
 router.include_router(ownership.router)  # Issue #248: Code Ownership and Expertise Map
+router.include_router(sources.router)  # Issue #1133: Code Source Registry
+router.include_router(queue_router.router)  # Issue #1133: Index job queue

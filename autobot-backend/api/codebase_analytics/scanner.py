@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import threading
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
@@ -557,6 +558,10 @@ _tasks_lock = asyncio.Lock()
 _tasks_sync_lock = threading.Lock()
 
 _current_indexing_task_id: Optional[str] = None
+
+# FIFO queue of pending indexing jobs (#1133)
+# Each item: {"source_id": str, "root_path": str, "queued_at": str, "requested_by": str}
+_index_queue: deque = deque()
 
 
 # =============================================================================
