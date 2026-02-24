@@ -167,17 +167,6 @@ const categoryCounts = computed(() => {
   return counts
 })
 
-const fleetCategoryCounts = computed(() => {
-  const counts = { autobot: 0, system: 0, all: 0 }
-  if (Array.isArray(orchestration.fleetServices)) {
-    for (const svc of orchestration.fleetServices) {
-      counts[svc.category as 'autobot' | 'system']++
-      counts.all++
-    }
-  }
-  return counts
-})
-
 // =============================================================================
 // Tab 2: Fleet Operations State
 // =============================================================================
@@ -1043,7 +1032,7 @@ onUnmounted(() => {
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 ]"
               >
-                AutoBot ({{ fleetCategoryCounts.autobot }})
+                AutoBot ({{ categoryCounts.autobot }})
               </button>
               <button
                 @click="fleetCategoryFilter = 'system'"
@@ -1054,7 +1043,7 @@ onUnmounted(() => {
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 ]"
               >
-                System ({{ fleetCategoryCounts.system }})
+                System ({{ categoryCounts.system }})
               </button>
               <button
                 @click="fleetCategoryFilter = 'all'"
@@ -1065,7 +1054,7 @@ onUnmounted(() => {
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 ]"
               >
-                All ({{ fleetCategoryCounts.all }})
+                All ({{ categoryCounts.all }})
               </button>
             </div>
           </div>
