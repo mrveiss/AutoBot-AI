@@ -12,7 +12,7 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
-from backend.constants.threshold_constants import LLMDefaults
+from constants.threshold_constants import LLMDefaults
 
 from .types import (
     AUDIO_PROCESSING_PATTERNS,
