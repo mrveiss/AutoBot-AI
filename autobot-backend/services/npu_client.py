@@ -9,7 +9,7 @@ When NPU worker is available, embedding generation and other compute tasks
 are offloaded to NPU/GPU for acceleration. Falls back to Ollama if unavailable.
 
 Usage:
-    from backend.services.npu_client import get_npu_client, NPUClient
+    from services.npu_client import get_npu_client, NPUClient
 
     client = get_npu_client()
     if await client.is_available():

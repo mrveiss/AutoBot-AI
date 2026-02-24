@@ -12,9 +12,10 @@ import re
 import threading
 from typing import Any, Dict, List, Optional
 
+from constants.path_constants import PATH
+
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import get_ollama_url
-from backend.constants.path_constants import PATH
 
 logger = get_llm_logger("doc_searcher")
 
