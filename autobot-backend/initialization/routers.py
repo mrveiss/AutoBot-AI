@@ -17,7 +17,7 @@ in the router_registry package to reduce coupling and improve maintainability.
 
 import logging
 
-from backend.initialization.router_registry import (
+from initialization.router_registry import (
     load_analytics_routers,
     load_core_routers,
     load_feature_routers,

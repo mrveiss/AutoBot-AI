@@ -14,7 +14,7 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List
 
-from backend.integrations.base import (
+from integrations.base import (
     BaseIntegration,
     IntegrationAction,
     IntegrationHealth,
