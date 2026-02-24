@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from backend.services.man_page_parser import ManPageContent, ManPageParser
+from services.man_page_parser import ManPageContent, ManPageParser
 
 logger = logging.getLogger(__name__)
 

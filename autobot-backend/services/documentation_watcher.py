@@ -259,7 +259,7 @@ class DocumentationWatcherService:
             content_hash = hashlib.sha256(content.encode()).hexdigest()
 
             # Import indexing functions
-            from backend.knowledge_factory import get_knowledge_base_async
+            from knowledge_factory import get_knowledge_base_async
 
             from scripts.utilities.index_documentation import (
                 detect_category,
@@ -307,7 +307,7 @@ class DocumentationWatcherService:
             file_path: Path to the deleted file
         """
         try:
-            from backend.knowledge_factory import get_knowledge_base_async
+            from knowledge_factory import get_knowledge_base_async
 
             kb = await get_knowledge_base_async()
             if not kb:

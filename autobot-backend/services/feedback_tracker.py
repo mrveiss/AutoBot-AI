@@ -12,8 +12,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from backend.models.code_pattern import CodePattern
-from backend.models.completion_feedback import CompletionFeedback
+from models.code_pattern import CodePattern
+from models.completion_feedback import CompletionFeedback
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 

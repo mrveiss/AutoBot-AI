@@ -10,8 +10,8 @@ Tests for feedback tracking and learning loop.
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from backend.models.code_pattern import CodePattern
-from backend.models.completion_feedback import CompletionFeedback
+from models.code_pattern import CodePattern
+from models.completion_feedback import CompletionFeedback
 
 
 def test_completion_feedback_model():
@@ -58,11 +58,11 @@ def test_feedback_was_accepted_property():
     assert rejected.was_accepted is False
 
 
-@patch("backend.services.feedback_tracker.get_redis_client")
-@patch("backend.services.feedback_tracker.create_engine")
+@patch("services.feedback_tracker.get_redis_client")
+@patch("services.feedback_tracker.create_engine")
 def test_feedback_tracker_initialization(mock_engine, mock_redis):
     """Test FeedbackTracker initialization."""
-    from backend.services.feedback_tracker import FeedbackTracker
+    from services.feedback_tracker import FeedbackTracker
 
     mock_redis.return_value = MagicMock()
     tracker = FeedbackTracker()
@@ -71,11 +71,11 @@ def test_feedback_tracker_initialization(mock_engine, mock_redis):
     assert tracker.redis_client is not None
 
 
-@patch("backend.services.feedback_tracker.get_redis_client")
-@patch("backend.services.feedback_tracker.create_engine")
+@patch("services.feedback_tracker.get_redis_client")
+@patch("services.feedback_tracker.create_engine")
 def test_record_feedback_creates_record(mock_engine, mock_redis):
     """Test feedback recording creates database record."""
-    from backend.services.feedback_tracker import FeedbackTracker
+    from services.feedback_tracker import FeedbackTracker
 
     # Mock database session
     mock_session = MagicMock()
@@ -88,7 +88,7 @@ def test_record_feedback_creates_record(mock_engine, mock_redis):
     # Record feedback
     feedback = tracker.record_feedback(
         context="def hello():",
-        suggestion="print('Hello')",
+        suggestion="print('Hello')",  # noqa: print
         action="accepted",
         pattern_id=1,
     )
@@ -159,11 +159,11 @@ def test_acceptance_rate_after_rejection():
     assert pattern.acceptance_rate == 0.5
 
 
-@patch("backend.services.feedback_tracker.get_redis_client")
-@patch("backend.services.feedback_tracker.create_engine")
+@patch("services.feedback_tracker.get_redis_client")
+@patch("services.feedback_tracker.create_engine")
 def test_get_acceptance_metrics(mock_engine, mock_redis):
     """Test metrics calculation."""
-    from backend.services.feedback_tracker import FeedbackTracker
+    from services.feedback_tracker import FeedbackTracker
 
     mock_session = MagicMock()
     mock_redis.return_value = MagicMock()
