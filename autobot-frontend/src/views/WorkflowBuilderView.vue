@@ -132,6 +132,21 @@
           </svg>
           <span>Agents</span>
         </div>
+
+        <button
+          class="category-item"
+          :class="{ active: activeSection === 'gui-automation' }"
+          @click="activeSection = 'gui-automation'"
+          role="button"
+          aria-label="GUI automation from screen capture"
+          tabindex="0"
+        >
+          <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          <span>GUI Automation</span>
+        </button>
       </nav>
 
       <!-- Quick Actions -->
@@ -432,6 +447,11 @@
           />
         </section>
 
+        <!-- GUI Automation Section -->
+        <section v-if="activeSection === 'gui-automation'" class="section-gui-automation">
+          <VisionAutomationPage />
+        </section>
+
         <!-- Agents Section -->
         <section v-if="activeSection === 'agents'" class="section-agents">
           <div class="agents-container">
@@ -510,6 +530,7 @@ import WorkflowTemplateGallery from '@/components/workflow/WorkflowTemplateGalle
 import WorkflowRunner from '@/components/workflow/WorkflowRunner.vue';
 import WorkflowHistory from '@/components/workflow/WorkflowHistory.vue';
 import OrchestrationVisualizer from '@/components/workflow/OrchestrationVisualizer.vue';
+import VisionAutomationPage from '@/components/vision/VisionAutomationPage.vue';
 
 const logger = createLogger('WorkflowBuilderView');
 const { showToast } = useToast();
@@ -523,7 +544,8 @@ type SectionType =
   | 'runner'
   | 'history'
   | 'orchestration'
-  | 'agents';
+  | 'agents'
+  | 'gui-automation';
 
 // Composable
 const {
@@ -619,6 +641,7 @@ const sectionTitle = computed(() => {
     history: 'Execution History',
     orchestration: 'Orchestration Visualizer',
     agents: 'Agent Management',
+    'gui-automation': 'GUI Automation',
   };
   return titles[activeSection.value] || 'Workflow Builder';
 });
@@ -633,6 +656,7 @@ const sectionDescription = computed(() => {
     history: 'View past workflow executions and results',
     orchestration: 'Visualize multi-agent orchestration chains',
     agents: 'View agent capabilities and performance metrics',
+    'gui-automation': 'Detect and execute GUI automation opportunities from screen capture',
   };
   return descriptions[activeSection.value] || '';
 });
