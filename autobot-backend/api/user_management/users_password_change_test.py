@@ -12,12 +12,12 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from backend.user_management.middleware.rate_limit import RateLimitExceeded
-from backend.user_management.services.user_service import (
+from fastapi import status
+from user_management.middleware.rate_limit import RateLimitExceeded
+from user_management.services.user_service import (
     InvalidCredentialsError,
     UserNotFoundError,
 )
-from fastapi import status
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -83,7 +83,7 @@ class TestPasswordChangeRateLimiting:
     ):
         """Rate limit should be checked before attempting password change."""
         with patch(
-            "backend.api.user_management.users.PasswordChangeRateLimiter"
+            "api.user_management.users.PasswordChangeRateLimiter"
         ) as MockLimiter:
             mock_limiter = AsyncMock()
             mock_limiter.check_rate_limit = AsyncMock(return_value=(True, 3))
@@ -91,10 +91,10 @@ class TestPasswordChangeRateLimiting:
             MockLimiter.return_value = mock_limiter
 
             with patch(
-                "backend.api.user_management.users.get_user_service",
+                "api.user_management.users.get_user_service",
                 return_value=mock_user_service,
             ):
-                from backend.api.user_management.users import change_password
+                from api.user_management.users import change_password
                 from user_management.schemas import PasswordChange
 
                 pwd_change = PasswordChange(**password_data)
@@ -114,7 +114,7 @@ class TestPasswordChangeRateLimiting:
     ):
         """Should return 429 when rate limit is exceeded."""
         with patch(
-            "backend.api.user_management.users.PasswordChangeRateLimiter"
+            "api.user_management.users.PasswordChangeRateLimiter"
         ) as MockLimiter:
             mock_limiter = AsyncMock()
             mock_limiter.check_rate_limit = AsyncMock(
@@ -124,7 +124,7 @@ class TestPasswordChangeRateLimiting:
             )
             MockLimiter.return_value = mock_limiter
 
-            from backend.api.user_management.users import change_password
+            from api.user_management.users import change_password
             from fastapi import HTTPException
             from user_management.schemas import PasswordChange
 
@@ -148,14 +148,14 @@ class TestPasswordChangeRateLimiting:
     ):
         """Successful password change should clear rate limit counter."""
         with patch(
-            "backend.api.user_management.users.PasswordChangeRateLimiter"
+            "api.user_management.users.PasswordChangeRateLimiter"
         ) as MockLimiter:
             mock_limiter = AsyncMock()
             mock_limiter.check_rate_limit = AsyncMock(return_value=(True, 3))
             mock_limiter.record_attempt = AsyncMock()
             MockLimiter.return_value = mock_limiter
 
-            from backend.api.user_management.users import change_password
+            from api.user_management.users import change_password
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)
@@ -179,14 +179,14 @@ class TestPasswordChangeRateLimiting:
         )
 
         with patch(
-            "backend.api.user_management.users.PasswordChangeRateLimiter"
+            "api.user_management.users.PasswordChangeRateLimiter"
         ) as MockLimiter:
             mock_limiter = AsyncMock()
             mock_limiter.check_rate_limit = AsyncMock(return_value=(True, 3))
             mock_limiter.record_attempt = AsyncMock()
             MockLimiter.return_value = mock_limiter
 
-            from backend.api.user_management.users import change_password
+            from api.user_management.users import change_password
             from fastapi import HTTPException
             from user_management.schemas import PasswordChange
 
@@ -223,13 +223,13 @@ class TestPasswordChangeResponses:
         )
 
         with patch(
-            "backend.api.user_management.users.PasswordChangeRateLimiter"
+            "api.user_management.users.PasswordChangeRateLimiter"
         ) as MockLimiter:
             mock_limiter = AsyncMock()
             mock_limiter.check_rate_limit = AsyncMock(return_value=(True, 3))
             MockLimiter.return_value = mock_limiter
 
-            from backend.api.user_management.users import change_password
+            from api.user_management.users import change_password
             from fastapi import HTTPException
             from user_management.schemas import PasswordChange
 
@@ -256,14 +256,14 @@ class TestPasswordChangeResponses:
         )
 
         with patch(
-            "backend.api.user_management.users.PasswordChangeRateLimiter"
+            "api.user_management.users.PasswordChangeRateLimiter"
         ) as MockLimiter:
             mock_limiter = AsyncMock()
             mock_limiter.check_rate_limit = AsyncMock(return_value=(True, 3))
             mock_limiter.record_attempt = AsyncMock()
             MockLimiter.return_value = mock_limiter
 
-            from backend.api.user_management.users import change_password
+            from api.user_management.users import change_password
             from fastapi import HTTPException
             from user_management.schemas import PasswordChange
 
@@ -287,14 +287,14 @@ class TestPasswordChangeResponses:
     ):
         """Should return success message on successful password change."""
         with patch(
-            "backend.api.user_management.users.PasswordChangeRateLimiter"
+            "api.user_management.users.PasswordChangeRateLimiter"
         ) as MockLimiter:
             mock_limiter = AsyncMock()
             mock_limiter.check_rate_limit = AsyncMock(return_value=(True, 3))
             mock_limiter.record_attempt = AsyncMock()
             MockLimiter.return_value = mock_limiter
 
-            from backend.api.user_management.users import change_password
+            from api.user_management.users import change_password
             from user_management.schemas import PasswordChange
 
             pwd_change = PasswordChange(**password_data)

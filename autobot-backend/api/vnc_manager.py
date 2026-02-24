@@ -26,8 +26,8 @@ from api.vnc_humanization import (
     simulate_mouse_curve,
 )
 from auth_middleware import check_admin_permission
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.threshold_constants import TimingConstants
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 

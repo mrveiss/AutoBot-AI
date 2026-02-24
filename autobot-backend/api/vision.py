@@ -13,10 +13,10 @@ import logging
 from typing import Dict, List, Optional
 
 from auth_middleware import get_current_user
-from backend.type_defs.common import Metadata
 from computer_vision_system import ElementType, InteractionType, ScreenAnalyzer
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

@@ -12,18 +12,18 @@ import logging
 import uuid
 from typing import List, Optional
 
-from backend.api.user_management.dependencies import (
+from api.user_management.dependencies import (
     get_organization_service,
     require_platform_admin,
     require_user_management_enabled,
 )
-from backend.user_management.services import OrganizationService
-from backend.user_management.services.organization_service import (
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+from user_management.services import OrganizationService
+from user_management.services.organization_service import (
     DuplicateOrganizationError,
     OrganizationNotFoundError,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/organizations", tags=["Organizations"])
 logger = logging.getLogger(__name__)

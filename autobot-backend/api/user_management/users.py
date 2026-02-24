@@ -11,30 +11,30 @@ import logging
 import uuid
 from typing import Optional
 
-from backend.api.user_management.dependencies import (
+from api.user_management.dependencies import (
     get_current_user,
     get_user_service,
     require_user_management_enabled,
 )
-from backend.user_management.middleware.rate_limit import (
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from user_management.middleware.rate_limit import (
     PasswordChangeRateLimiter,
     RateLimitExceeded,
 )
-from backend.user_management.schemas import (
+from user_management.schemas import (
     PasswordChange,
     UserCreate,
     UserListResponse,
     UserResponse,
     UserUpdate,
 )
-from backend.user_management.services import UserService
-from backend.user_management.services.user_service import (
+from user_management.services import UserService
+from user_management.services.user_service import (
     DuplicateUserError,
     InvalidCredentialsError,
     UserNotFoundError,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
 
 router = APIRouter(prefix="/users", tags=["Users"])
 logger = logging.getLogger(__name__)
