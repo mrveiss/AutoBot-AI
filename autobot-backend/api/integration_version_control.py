@@ -7,12 +7,12 @@
 import logging
 from typing import Any, Dict, List, Optional
 
-from backend.integrations.base import IntegrationConfig, IntegrationHealth
-from backend.integrations.version_control_integration import (
+from fastapi import APIRouter, HTTPException, Query
+from integrations.base import IntegrationConfig, IntegrationHealth
+from integrations.version_control_integration import (
     BitbucketIntegration,
     GitLabIntegration,
 )
-from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)

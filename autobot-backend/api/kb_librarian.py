@@ -7,9 +7,9 @@ import logging
 from typing import List, Optional
 
 from agents.kb_librarian_agent import get_kb_librarian
-from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

@@ -12,13 +12,13 @@ getting account information.
 import logging
 from typing import Any, Dict, List, Optional
 
-from backend.integrations.base import IntegrationConfig
-from backend.integrations.cloud_integration import (
+from fastapi import APIRouter, HTTPException
+from integrations.base import IntegrationConfig
+from integrations.cloud_integration import (
     AWSIntegration,
     AzureIntegration,
     GCPIntegration,
 )
-from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 router = APIRouter(tags=["integrations-cloud"])
