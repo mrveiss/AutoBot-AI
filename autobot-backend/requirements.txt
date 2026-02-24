@@ -45,6 +45,9 @@ markdownify>=0.11.0  # HTML to Markdown conversion
 mcp>=1.0.0             # MCP protocol for skill subprocesses (Issue #731)
 PyYAML>=6.0            # SKILL.md frontmatter parsing (Phase 3 sync engine)
 
+# Community growth skill (Issue #1161)
+praw>=7.7.0             # Reddit OAuth API for CommunityGrowthSkill
+
 # Media processing pipelines (Issue #932)
 aiohttp>=3.9.0          # Async HTTP client for link pipeline
 beautifulsoup4>=4.12.0  # HTML parsing for link pipeline

@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from autobot_types import TaskComplexity
 
 from .analysis import get_all_analysis_templates
+from .community import get_all_community_templates
 from .development import get_all_development_templates
 from .research import get_all_research_templates
 from .security import get_all_security_templates
@@ -37,6 +38,7 @@ class WorkflowTemplateManager:
             + get_all_sysadmin_templates()
             + get_all_development_templates()
             + get_all_analysis_templates()
+            + get_all_community_templates()
         )
 
         for template in all_templates:
