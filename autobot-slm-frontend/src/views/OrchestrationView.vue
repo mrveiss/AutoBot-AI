@@ -189,13 +189,61 @@ function getNodeHostname(nodeId: string): string {
   return node?.hostname ?? nodeId
 }
 
-// Temporary stub — will be replaced in Task 5
+// Per-service fleet action confirmation
+const showFleetServiceConfirm = ref(false)
+const pendingFleetServiceAction = ref<{
+  serviceName: string
+  action: 'start' | 'stop' | 'restart'
+  affectedNodes: Array<{ nodeId: string; hostname: string }>
+} | null>(null)
+
 function handleFleetServiceAction(
   serviceName: string,
-  action: 'start' | 'stop' | 'restart'
+  action: 'start' | 'stop' | 'restart',
 ): void {
-  handleFleetAction(serviceName, action)
+  const service = orchestration.fleetServices.find((s) => s.service_name === serviceName)
+  const affectedNodes = (service?.nodes ?? []).map((n) => ({
+    nodeId: n.node_id,
+    hostname: getNodeHostname(n.node_id),
+  }))
+  pendingFleetServiceAction.value = { serviceName, action, affectedNodes }
+  showFleetServiceConfirm.value = true
 }
+
+async function confirmFleetServiceAction(): Promise<void> {
+  const pending = pendingFleetServiceAction.value
+  showFleetServiceConfirm.value = false
+  pendingFleetServiceAction.value = null
+  if (!pending) return
+  await handleFleetAction(pending.serviceName, pending.action)
+}
+
+const fleetServiceConfirmMessage = computed(() => {
+  const pending = pendingFleetServiceAction.value
+  if (!pending) return ''
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+  const nodeList = pending.affectedNodes
+    .map((n) => `• ${n.hostname} <span class="text-gray-400">${n.nodeId}</span>`)
+    .join('<br>')
+  return (
+    `<strong>${cap(pending.action)}</strong> <code>${pending.serviceName}</code>` +
+    ` on ${pending.affectedNodes.length} node(s):<br><br>${nodeList}`
+  )
+})
+
+const fleetServiceConfirmTitle = computed(() => {
+  const pending = pendingFleetServiceAction.value
+  if (!pending) return 'Confirm Action'
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+  return `${cap(pending.action)} Fleet Service`
+})
+
+const fleetServiceConfirmButtonText = computed(() => {
+  const pending = pendingFleetServiceAction.value
+  if (!pending) return 'Confirm'
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+  return cap(pending.action)
+})
 
 const filteredFleetServices = computed(() => {
   if (!Array.isArray(orchestration.fleetServices)) {
@@ -1881,6 +1929,16 @@ onUnmounted(() => {
       :confirmButtonText="`${pendingBulkAction ? pendingBulkAction.charAt(0).toUpperCase() + pendingBulkAction.slice(1) : ''} All Services`"
       @confirm="confirmBulkAction"
       @cancel="showBulkConfirm = false"
+    />
+
+    <!-- Per-service fleet action confirmation -->
+    <RestartConfirmDialog
+      :show="showFleetServiceConfirm"
+      :title="fleetServiceConfirmTitle"
+      :message="fleetServiceConfirmMessage"
+      :confirmButtonText="fleetServiceConfirmButtonText"
+      @confirm="confirmFleetServiceAction"
+      @cancel="showFleetServiceConfirm = false"
     />
   </div>
 </template>
