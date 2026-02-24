@@ -469,16 +469,16 @@ def test_utf8_support() -> dict:
 
 if __name__ == "__main__":
     # Run UTF-8 support tests
-    print("Testing UTF-8 support...")
+    print("Testing UTF-8 support...")  # noqa: print
     results = test_utf8_support()
 
     for name, result in results.items():
         status = "✅" if result is True else "❌"
-        print(f"{status} {name}: {result}")
+        print(f"{status} {name}: {result}")  # noqa: print
 
     # Test ANSI stripping
-    print("\nTesting ANSI code stripping...")
+    print("\nTesting ANSI code stripping...")  # noqa: print
     test_ansi = "\x1b[31mRed\x1b[0m [?2004h]0;Title\x07Text"
     cleaned = strip_ansi_codes(test_ansi)
-    print(f"Input:  {repr(test_ansi)}")
-    print(f"Output: {repr(cleaned)}")
+    print(f"Input:  {repr(test_ansi)}")  # noqa: print
+    print(f"Output: {repr(cleaned)}")  # noqa: print

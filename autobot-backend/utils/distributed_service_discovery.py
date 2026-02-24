@@ -17,11 +17,10 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 import aiohttp
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import ServiceDiscoveryConfig, TimingConstants
 
 from autobot_shared.http_client import get_http_client
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.threshold_constants import (ServiceDiscoveryConfig,
-                                                   TimingConstants)
 
 logger = logging.getLogger(__name__)
 
@@ -290,7 +289,7 @@ class DistributedServiceDiscovery:
     async def _check_redis_health(self, endpoint: ServiceEndpoint) -> bool:
         """Quick Redis connection test
 
-        NOTE: This method uses direct redis.Redis() instantiation intentionally
+        NOTE: This method uses direct Redis instantiation intentionally
         for health check diagnostics. This is a monitoring/diagnostic function,
         NOT for production client creation. For production clients, use
         get_redis_client() from autobot_shared.redis_client.
@@ -306,7 +305,7 @@ class DistributedServiceDiscovery:
 
             # Direct instantiation for health check (intentional exception to canonical pattern)
             # Immediate connection test (no retries)
-            client = redis.Redis(
+            client = redis.Redis(  # noqa: redis
                 host=endpoint.host,
                 port=endpoint.port,
                 socket_connect_timeout=0.1,  # 100ms max
