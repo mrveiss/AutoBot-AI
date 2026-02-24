@@ -35,7 +35,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from backend.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +44,9 @@ SEMANTIC_ANALYSIS_AVAILABLE = False
 SemanticAnalysisMixin = None
 
 try:
-    from code_intelligence.analytics_infrastructure import \
-        SemanticAnalysisMixin as _SemanticAnalysisMixin
+    from code_intelligence.analytics_infrastructure import (
+        SemanticAnalysisMixin as _SemanticAnalysisMixin,
+    )
 
     SemanticAnalysisMixin = _SemanticAnalysisMixin
     SEMANTIC_ANALYSIS_AVAILABLE = True

@@ -30,20 +30,20 @@ still exports all classes directly.
 """
 
 # Docstring parsing (Issue #394)
-from backend.code_intelligence.doc_generation.docstring_parser import (
+from code_intelligence.doc_generation.docstring_parser import (
     DocstringParser,
     enhance_function_doc,
 )
 
 # Markdown generation (Issue #394)
-from backend.code_intelligence.doc_generation.markdown_generator import (
+from code_intelligence.doc_generation.markdown_generator import (
     MarkdownGenerator,
     generate_api_docs,
     generate_module_overview,
 )
 
 # Larger data classes / models
-from backend.code_intelligence.doc_generation.models import (
+from code_intelligence.doc_generation.models import (
     ClassDoc,
     DiagramSpec,
     FunctionDoc,
@@ -53,14 +53,14 @@ from backend.code_intelligence.doc_generation.models import (
 )
 
 # Module analysis (Issue #394)
-from backend.code_intelligence.doc_generation.module_analyzer import (
+from code_intelligence.doc_generation.module_analyzer import (
     ModuleAnalyzer,
     analyze_module,
     analyze_package,
 )
 
 # Types and simple data classes
-from backend.code_intelligence.doc_generation.types import (
+from code_intelligence.doc_generation.types import (
     DiagramType,
     DocCompleteness,
     DocFormat,

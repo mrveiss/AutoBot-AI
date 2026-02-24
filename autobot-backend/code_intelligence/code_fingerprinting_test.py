@@ -28,7 +28,7 @@ import pytest
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from backend.code_intelligence.code_fingerprinting import (
+from code_intelligence.code_fingerprinting import (
     ASTHasher,
     ASTNormalizer,
     CloneDetectionReport,
@@ -419,7 +419,7 @@ def compute(a, b):
 def foo(x):
     if x > 0:
         for i in range(x):
-            print(i)
+            print(i)  # noqa: print
     return x
 """
         tree = ast.parse(code)
@@ -523,7 +523,7 @@ def foo():
         code2 = """
 def bar(x, y, z):
     for i in range(x):
-        print(i)
+        print(i)  # noqa: print
     return y + z
 """
         tree1 = ast.parse(code1)
