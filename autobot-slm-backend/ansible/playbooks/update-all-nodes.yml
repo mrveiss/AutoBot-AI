@@ -287,11 +287,18 @@
       when: "'01-Backend' in inventory_hostname"
 
     - name: "[PLAY 2] Backend | Fix ownership"
+      command: chown --no-dereference -R autobot:autobot /opt/autobot/autobot-backend
+      become: true
+      when: "'01-Backend' in inventory_hostname"
+      changed_when: true
+
+    - name: "[PLAY 2] Backend | Create backend symlink for imports"
       file:
-        path: /opt/autobot/autobot-backend
+        path: /opt/autobot/autobot-backend/backend
+        src: "."
+        state: link
         owner: autobot
         group: autobot
-        recurse: true
       become: true
       when: "'01-Backend' in inventory_hostname"
 
