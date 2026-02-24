@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 from typing import Dict, List
 
-from backend.api.monitoring import ws_manager
+from api.monitoring import ws_manager
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 

@@ -16,19 +16,19 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 
 import httpx
-from auth_middleware import get_current_user
 
 # Import controller class (extracted from this file - Issue #212)
-from backend.api.analytics_controller import (
+from api.analytics_controller import (
     analytics_controller,
     analytics_state,
     get_service_address,
 )
 
 # Import models from dedicated module (Issue #185 - split oversized files)
-from backend.api.analytics_models import AnalyticsOverview, RealTimeEvent
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.threshold_constants import TimingConstants
+from api.analytics_models import AnalyticsOverview, RealTimeEvent
+from auth_middleware import get_current_user
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -378,7 +378,7 @@ async def get_usage_statistics(current_user: Dict = Depends(get_current_user)):
 # Import new analytics modules (Issue #59 - Advanced Analytics & BI)
 # Import code analysis router (split to maintain <20 functions)
 # NOTE: analytics_monitoring.py removed in Issue #532 - monitoring endpoints consolidated in monitoring.py
-from backend.api import (
+from api import (
     analytics_agents,
     analytics_behavior,
     analytics_code,

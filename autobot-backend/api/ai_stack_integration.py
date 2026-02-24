@@ -13,15 +13,15 @@ from datetime import datetime
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from auth_middleware import check_admin_permission
-from backend.dependencies import get_knowledge_base
-from backend.services.ai_stack_client import AIStackError, get_ai_stack_client
-from backend.type_defs.common import Metadata
-
-# Import shared response utilities (Issue #292 - Eliminate duplicate code)
-from backend.utils.response_helpers import create_success_response
+from dependencies import get_knowledge_base
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from services.ai_stack_client import AIStackError, get_ai_stack_client
+from type_defs.common import Metadata
+
+# Import shared response utilities (Issue #292 - Eliminate duplicate code)
+from utils.response_helpers import create_success_response
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

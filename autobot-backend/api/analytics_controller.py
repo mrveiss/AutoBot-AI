@@ -25,12 +25,12 @@ import psutil
 import redis
 
 # Import models from dedicated module (Issue #185)
-from backend.api.analytics_models import CodeAnalysisRequest, CommunicationPattern
-from backend.constants.threshold_constants import TimingConstants
-from backend.type_defs.common import Metadata
-from backend.utils.system_metrics import get_metrics_collector
+from api.analytics_models import CodeAnalysisRequest, CommunicationPattern
 from config import ConfigManager
 from constants import PATH
+from constants.threshold_constants import TimingConstants
+from type_defs.common import Metadata
+from utils.system_metrics import get_metrics_collector
 
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 

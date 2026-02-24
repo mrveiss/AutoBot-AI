@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import aiofiles
 from auth_middleware import check_admin_permission
-from backend.constants.path_constants import PATH
+from constants.path_constants import PATH
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
