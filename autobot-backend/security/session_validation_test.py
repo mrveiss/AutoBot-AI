@@ -69,8 +69,8 @@ def validate_chat_session_id(session_id: str) -> bool:
 def test_session_validation():
     """Test session ID validation with various inputs"""
 
-    print("Testing Session ID Validation")
-    print("=" * 60)
+    print("Testing Session ID Validation")  # noqa: print
+    print("=" * 60)  # noqa: print
 
     test_cases = [
         # (session_id, expected_result, description)
@@ -126,21 +126,21 @@ def test_session_validation():
             else:
                 failed += 1
 
-            print(f"{status}: {description}")
-            print(f"  Input: {repr(session_id)}")
-            print(f"  Expected: {expected}, Got: {result}")
-            print()
+            print(f"{status}: {description}")  # noqa: print
+            print(f"  Input: {repr(session_id)}")  # noqa: print
+            print(f"  Expected: {expected}, Got: {result}")  # noqa: print
+            print()  # noqa: print
 
         except Exception as e:
             failed += 1
-            print(f"ERROR: {description}")
-            print(f"  Input: {repr(session_id)}")
-            print(f"  Exception: {e}")
-            print()
+            print(f"ERROR: {description}")  # noqa: print
+            print(f"  Input: {repr(session_id)}")  # noqa: print
+            print(f"  Exception: {e}")  # noqa: print
+            print()  # noqa: print
 
-    print("=" * 60)
-    print(f"Results: {passed} passed, {failed} failed")
-    print("=" * 60)
+    print("=" * 60)  # noqa: print
+    print(f"Results: {passed} passed, {failed} failed")  # noqa: print
+    print("=" * 60)  # noqa: print
 
     return failed == 0
 

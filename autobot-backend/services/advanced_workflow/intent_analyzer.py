@@ -11,8 +11,8 @@ import json
 import logging
 from typing import List
 
-from backend.type_defs.common import Metadata
 from llm_interface import LLMInterface
+from type_defs.common import Metadata
 
 from .models import WorkflowComplexity, WorkflowIntent
 

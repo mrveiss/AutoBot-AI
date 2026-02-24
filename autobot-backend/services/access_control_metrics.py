@@ -22,7 +22,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from backend.type_defs.common import Metadata
+from type_defs.common import Metadata
 
 from autobot_shared.redis_client import get_redis_client
 

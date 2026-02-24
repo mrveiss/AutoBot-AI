@@ -11,15 +11,15 @@ import logging
 import uuid
 from typing import Dict, List
 
-from backend.services.workflow_automation import (
+from enhanced_orchestrator import EnhancedOrchestrator
+from knowledge_base import KnowledgeBase
+from llm_interface import LLMInterface
+from services.workflow_automation import (
     AutomationMode,
     WorkflowAutomationManager,
     WorkflowStep,
 )
-from backend.type_defs.common import Metadata
-from enhanced_orchestrator import EnhancedOrchestrator
-from knowledge_base import KnowledgeBase
-from llm_interface import LLMInterface
+from type_defs.common import Metadata
 
 from .intent_analyzer import IntentAnalyzer
 from .learning_engine import WorkflowLearningEngine

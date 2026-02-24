@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 from typing import List
 
-from backend.type_defs.common import Metadata
+from type_defs.common import Metadata
 
 from .models import SmartWorkflowStep
 
