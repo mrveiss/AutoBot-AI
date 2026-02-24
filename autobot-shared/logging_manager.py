@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-from backend.config import config_manager
+from config import config_manager
 
 # Module-level logger for logging_manager itself
 _logger = logging.getLogger(__name__)
