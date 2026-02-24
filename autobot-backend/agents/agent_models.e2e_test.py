@@ -30,7 +30,7 @@ def test_ollama_models():
                 model_name = line.split()[0]
                 available_models.add(model_name)
 
-        print(
+        print(  # noqa: print
             f"📋 Available models: {', '.join(sorted(available_models))}"
         )  # noqa: print
 
@@ -101,7 +101,7 @@ def main():
 
     print("\n" + "=" * 50)  # noqa: print
     if success:
-        print(
+        print(  # noqa: print
             "✅ All agent models are properly configured and available!"
         )  # noqa: print
         return 0

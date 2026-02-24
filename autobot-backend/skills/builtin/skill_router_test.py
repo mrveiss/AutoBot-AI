@@ -103,9 +103,7 @@ def test_llm_rerank_parses_json_response():
         instance.chat_completion = AsyncMock(return_value=mock_response)
 
         skill = SkillRouterSkill()
-        name, reason = asyncio.get_event_loop().run_until_complete(
-            skill._llm_rerank("analyze this pdf", candidates)
-        )
+        name, reason = asyncio.run(skill._llm_rerank("analyze this pdf", candidates))
 
     assert name == "document-analysis"
     assert reason == "PDF task"
@@ -128,8 +126,6 @@ def test_llm_rerank_handles_markdown_code_block():
         instance.chat_completion = AsyncMock(return_value=mock_response)
 
         skill = SkillRouterSkill()
-        name, reason = asyncio.get_event_loop().run_until_complete(
-            skill._llm_rerank("review my code", candidates)
-        )
+        name, reason = asyncio.run(skill._llm_rerank("review my code", candidates))
 
     assert name == "code-review"

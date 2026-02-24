@@ -87,7 +87,7 @@ class TestAtomicFactsExtraction:
         # Display some extracted facts
         print("  Sample extracted facts:")  # noqa: print
         for i, fact in enumerate(result.facts[:3]):
-            print(
+            print(  # noqa: print
                 f"    {i+1}. {fact.subject} {fact.predicate} {fact.object}"
             )  # noqa: print
             print(  # noqa: print
@@ -105,7 +105,7 @@ class TestAtomicFactsExtraction:
             content=self.test_content["mixed_temporal"], source="test_temporal"
         )
 
-        print(
+        print(  # noqa: print
             f"✓ Extracted {result.total_facts} facts for temporal analysis"
         )  # noqa: print
 
@@ -137,7 +137,7 @@ class TestAtomicFactsExtraction:
             content=self.test_content["opinion_based"], source="test_opinion"
         )
 
-        print(
+        print(  # noqa: print
             f"✓ Extracted {result.total_facts} facts for type analysis"
         )  # noqa: print
 
@@ -156,7 +156,7 @@ class TestAtomicFactsExtraction:
         if opinion_facts:
             print("  Sample opinion facts:")  # noqa: print
             for fact in opinion_facts[:2]:
-                print(
+                print(  # noqa: print
                     f"    - {fact.subject} {fact.predicate} {fact.object}"
                 )  # noqa: print
 
@@ -211,7 +211,7 @@ class TestAtomicFactsExtraction:
         avg_confidence_ambiguous = result2.average_confidence if result2.facts else 0
 
         print(f"  Clear content confidence: {avg_confidence_clear:.3f}")  # noqa: print
-        print(
+        print(  # noqa: print
             f"  Ambiguous content confidence: {avg_confidence_ambiguous:.3f}"
         )  # noqa: print
 
@@ -403,7 +403,7 @@ class TestAtomicFactsExtraction:
             print("✅ All Atomic Facts Extraction Tests Passed!")  # noqa: print
             print("=" * 70)  # noqa: print
             print("Summary:")  # noqa: print
-            print(
+            print(  # noqa: print
                 f"  - Basic extraction: {basic_result.total_facts} facts"
             )  # noqa: print
             print(  # noqa: print
@@ -412,13 +412,13 @@ class TestAtomicFactsExtraction:
             print(  # noqa: print
                 f"  - Fact type classification: {len(type_result.fact_type_distribution)} types"
             )
-            print(
+            print(  # noqa: print
                 f"  - Entity extraction: {len(entities)} unique entities"
             )  # noqa: print
             print(  # noqa: print
                 f"  - Confidence scoring: Clear={conf_clear:.3f}, Ambiguous={conf_amb:.3f}"
             )
-            print(
+            print(  # noqa: print
                 f"  - Chunk processing: {chunk_result.total_facts} facts from chunks"
             )  # noqa: print
             print(f"  - Filtering capabilities: {filter_stats}")  # noqa: print
@@ -440,7 +440,7 @@ async def main():
     success = await tester.run_all_tests()
 
     if success:
-        print(
+        print(  # noqa: print
             "\n🎉 Atomic facts extraction implementation is working correctly!"
         )  # noqa: print
         return 0

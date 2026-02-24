@@ -101,7 +101,12 @@ class SkillRouterSkill(BaseSkill):
         match = re.search(r"\{.*?\}", content, re.DOTALL)
         if not match:
             raise ValueError(f"No JSON found in LLM response: {content[:100]}")
-        data = json.loads(match.group())
+        try:
+            data = json.loads(match.group())
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Malformed JSON in LLM response: {match.group()[:100]}"
+            ) from exc
         return data["skill"], data.get("reason", "")
 
     async def execute(self, action: str, params: Dict[str, Any]) -> Dict[str, Any]:

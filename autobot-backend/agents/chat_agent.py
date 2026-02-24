@@ -11,7 +11,7 @@ Focuses on quick, natural interactions without complex reasoning.
 import logging
 from typing import Any, Dict, List, Optional
 
-from backend.constants.threshold_constants import LLMDefaults
+from constants.threshold_constants import LLMDefaults
 from llm_interface import LLMInterface
 
 from autobot_shared.ssot_config import (
