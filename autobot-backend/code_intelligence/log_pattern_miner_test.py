@@ -15,7 +15,7 @@ Tests the dynamic log pattern mining functionality including:
 from datetime import datetime, timedelta
 
 import pytest
-from backend.code_intelligence.log_pattern_miner import (
+from code_intelligence.log_pattern_miner import (
     Anomaly,
     AnomalyType,
     LogEntry,

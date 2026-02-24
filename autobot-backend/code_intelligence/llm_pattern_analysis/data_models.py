@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.code_intelligence.llm_pattern_analysis.types import (
+from code_intelligence.llm_pattern_analysis.types import (
     HIGH_PRIORITY_LEVELS,
     VALID_BACKOFF_STRATEGIES,
     CacheOpportunityType,

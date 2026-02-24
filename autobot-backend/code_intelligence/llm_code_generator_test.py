@@ -9,7 +9,7 @@ implemented as part of Issue #228 under EPIC #217.
 """
 
 import pytest
-from backend.code_intelligence.llm_code_generator import (
+from code_intelligence.llm_code_generator import (
     CodeContext,
     CodeValidator,
     DiffGenerator,
@@ -194,11 +194,11 @@ class TestCodeContext:
         """Test creating a CodeContext."""
         context = CodeContext(
             file_path="/test/file.py",
-            code_snippet="print('hello')",
+            code_snippet="print('hello')",  # noqa: print
             language="python",
         )
         assert context.file_path == "/test/file.py"
-        assert context.code_snippet == "print('hello')"
+        assert context.code_snippet == "print('hello')"  # noqa: print
         assert context.language == "python"
         assert context.imports == []
         assert context.start_line == 1
@@ -401,7 +401,7 @@ def foo(x):
         code = """
 def foo(items):
     for item in items:
-        print(item)
+        print(item)  # noqa: print
 """
         result = CodeValidator.validate(code)
         assert result.complexity_score >= 2.0  # At least 1 base + 1 for loop
