@@ -11,7 +11,7 @@ import json
 import logging
 from typing import Any, Dict, List
 
-from backend.knowledge.pipeline.models.entity import Entity
+from knowledge.pipeline.models.entity import Entity
 
 logger = logging.getLogger(__name__)
 

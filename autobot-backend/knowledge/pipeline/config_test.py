@@ -8,8 +8,7 @@ Issue #1075: Test coverage for config.py including SEC-3 task name validation.
 """
 
 import pytest
-
-from backend.knowledge.pipeline.config import (
+from knowledge.pipeline.config import (
     DEFAULT_KNOWLEDGE_PIPELINE,
     _validate_stage_config,
     get_default_config,

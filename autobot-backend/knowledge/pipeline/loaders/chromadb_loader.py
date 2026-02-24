@@ -10,11 +10,11 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 import logging
 from typing import Any, List, Optional
 
-from backend.knowledge.pipeline.base import BaseLoader, PipelineContext
-from backend.knowledge.pipeline.models.chunk import ProcessedChunk
-from backend.knowledge.pipeline.models.summary import Summary
-from backend.knowledge.pipeline.registry import TaskRegistry
-from backend.utils.async_chromadb_client import get_async_chromadb_client
+from knowledge.pipeline.base import BaseLoader, PipelineContext
+from knowledge.pipeline.models.chunk import ProcessedChunk
+from knowledge.pipeline.models.summary import Summary
+from knowledge.pipeline.registry import TaskRegistry
+from utils.async_chromadb_client import get_async_chromadb_client
 
 logger = logging.getLogger(__name__)
 

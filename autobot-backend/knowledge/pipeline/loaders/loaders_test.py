@@ -11,13 +11,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-
-from backend.knowledge.pipeline.base import PipelineContext
-from backend.knowledge.pipeline.models.chunk import ProcessedChunk
-from backend.knowledge.pipeline.models.entity import Entity
-from backend.knowledge.pipeline.models.event import TemporalEvent
-from backend.knowledge.pipeline.models.relationship import Relationship
-from backend.knowledge.pipeline.models.summary import Summary
+from knowledge.pipeline.base import PipelineContext
+from knowledge.pipeline.models.chunk import ProcessedChunk
+from knowledge.pipeline.models.entity import Entity
+from knowledge.pipeline.models.event import TemporalEvent
+from knowledge.pipeline.models.relationship import Relationship
+from knowledge.pipeline.models.summary import Summary
 
 # --- Fixtures ---
 
@@ -88,9 +87,7 @@ class TestChromaDBLoader:
             "get_async_chromadb_client",
             return_value=mock_client,
         ):
-            from backend.knowledge.pipeline.loaders.chromadb_loader import (
-                ChromaDBLoader,
-            )
+            from knowledge.pipeline.loaders.chromadb_loader import ChromaDBLoader
 
             loader = ChromaDBLoader()
             await loader.load(context_with_data)
@@ -108,9 +105,7 @@ class TestChromaDBLoader:
             "get_async_chromadb_client",
             return_value=mock_client,
         ):
-            from backend.knowledge.pipeline.loaders.chromadb_loader import (
-                ChromaDBLoader,
-            )
+            from knowledge.pipeline.loaders.chromadb_loader import ChromaDBLoader
 
             loader = ChromaDBLoader(load_summaries=True)
             await loader.load(context_with_data)
@@ -128,9 +123,7 @@ class TestChromaDBLoader:
             "get_async_chromadb_client",
             return_value=mock_client,
         ):
-            from backend.knowledge.pipeline.loaders.chromadb_loader import (
-                ChromaDBLoader,
-            )
+            from knowledge.pipeline.loaders.chromadb_loader import ChromaDBLoader
 
             loader = ChromaDBLoader(load_summaries=False)
             await loader.load(context_with_data)
@@ -146,9 +139,7 @@ class TestChromaDBLoader:
             "get_async_chromadb_client",
             return_value=mock_client,
         ):
-            from backend.knowledge.pipeline.loaders.chromadb_loader import (
-                ChromaDBLoader,
-            )
+            from knowledge.pipeline.loaders.chromadb_loader import ChromaDBLoader
 
             ctx = PipelineContext()
             loader = ChromaDBLoader()
@@ -173,9 +164,7 @@ class TestRedisGraphLoader:
             "backend.knowledge.pipeline.loaders.redis_graph_loader." "get_redis_client",
             return_value=mock_redis,
         ):
-            from backend.knowledge.pipeline.loaders.redis_graph_loader import (
-                RedisGraphLoader,
-            )
+            from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
 
             loader = RedisGraphLoader()
             await loader.load(context_with_data)
@@ -193,9 +182,7 @@ class TestRedisGraphLoader:
             "backend.knowledge.pipeline.loaders.redis_graph_loader." "get_redis_client",
             return_value=mock_redis,
         ):
-            from backend.knowledge.pipeline.loaders.redis_graph_loader import (
-                RedisGraphLoader,
-            )
+            from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
 
             loader = RedisGraphLoader()
             await loader.load(context_with_data)
@@ -216,9 +203,7 @@ class TestRedisGraphLoader:
             "backend.knowledge.pipeline.loaders.redis_graph_loader." "get_redis_client",
             return_value=mock_redis,
         ):
-            from backend.knowledge.pipeline.loaders.redis_graph_loader import (
-                RedisGraphLoader,
-            )
+            from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
 
             loader = RedisGraphLoader()
             await loader.load(context_with_data)
@@ -233,9 +218,7 @@ class TestRedisGraphLoader:
             "backend.knowledge.pipeline.loaders.redis_graph_loader." "get_redis_client",
             return_value=mock_redis,
         ):
-            from backend.knowledge.pipeline.loaders.redis_graph_loader import (
-                RedisGraphLoader,
-            )
+            from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
 
             ctx = PipelineContext()
             loader = RedisGraphLoader()
@@ -255,9 +238,7 @@ class TestRedisGraphLoader:
             "backend.knowledge.pipeline.loaders.redis_graph_loader." "get_redis_client",
             return_value=mock_redis,
         ):
-            from backend.knowledge.pipeline.loaders.redis_graph_loader import (
-                RedisGraphLoader,
-            )
+            from knowledge.pipeline.loaders.redis_graph_loader import RedisGraphLoader
 
             loader = RedisGraphLoader()
             await loader.load(context_with_data)
@@ -274,7 +255,7 @@ class TestSQLiteLoader:
 
     @pytest.mark.asyncio
     async def test_load_creates_tables(self, context_with_data, tmp_path):
-        from backend.knowledge.pipeline.loaders.sqlite_loader import SQLiteLoader
+        from knowledge.pipeline.loaders.sqlite_loader import SQLiteLoader
 
         db_path = str(tmp_path / "test.db")
         loader = SQLiteLoader(db_path=db_path)
@@ -293,7 +274,7 @@ class TestSQLiteLoader:
 
     @pytest.mark.asyncio
     async def test_saves_facts(self, context_with_data, tmp_path):
-        from backend.knowledge.pipeline.loaders.sqlite_loader import SQLiteLoader
+        from knowledge.pipeline.loaders.sqlite_loader import SQLiteLoader
 
         db_path = str(tmp_path / "test.db")
         loader = SQLiteLoader(db_path=db_path)
@@ -310,7 +291,7 @@ class TestSQLiteLoader:
 
     @pytest.mark.asyncio
     async def test_saves_pipeline_run(self, context_with_data, tmp_path):
-        from backend.knowledge.pipeline.loaders.sqlite_loader import SQLiteLoader
+        from knowledge.pipeline.loaders.sqlite_loader import SQLiteLoader
 
         db_path = str(tmp_path / "test.db")
         loader = SQLiteLoader(db_path=db_path, run_id="test-run-1")
@@ -327,7 +308,7 @@ class TestSQLiteLoader:
 
     @pytest.mark.asyncio
     async def test_empty_context(self, tmp_path):
-        from backend.knowledge.pipeline.loaders.sqlite_loader import SQLiteLoader
+        from knowledge.pipeline.loaders.sqlite_loader import SQLiteLoader
 
         db_path = str(tmp_path / "test.db")
         ctx = PipelineContext()

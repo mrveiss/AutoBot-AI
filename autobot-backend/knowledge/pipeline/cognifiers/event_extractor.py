@@ -12,21 +12,16 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from llm_interface_pkg import LLMInterface
-
-from backend.knowledge.pipeline.base import BaseCognifier, PipelineContext
-from backend.knowledge.pipeline.cognifiers.llm_utils import (
+from knowledge.pipeline.base import BaseCognifier, PipelineContext
+from knowledge.pipeline.cognifiers.llm_utils import (
     build_entity_map,
     parse_llm_json_response,
 )
-from backend.knowledge.pipeline.models.chunk import ProcessedChunk
-from backend.knowledge.pipeline.models.entity import Entity
-from backend.knowledge.pipeline.models.event import (
-    EventType,
-    TemporalEvent,
-    TemporalType,
-)
-from backend.knowledge.pipeline.registry import TaskRegistry
+from knowledge.pipeline.models.chunk import ProcessedChunk
+from knowledge.pipeline.models.entity import Entity
+from knowledge.pipeline.models.event import EventType, TemporalEvent, TemporalType
+from knowledge.pipeline.registry import TaskRegistry
+from llm_interface_pkg import LLMInterface
 
 logger = logging.getLogger(__name__)
 

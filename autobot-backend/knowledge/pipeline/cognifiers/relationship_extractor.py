@@ -10,17 +10,16 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 import logging
 from typing import Any, Dict, List
 
-from llm_interface_pkg import LLMInterface
-
-from backend.knowledge.pipeline.base import BaseCognifier, PipelineContext
-from backend.knowledge.pipeline.cognifiers.llm_utils import (
+from knowledge.pipeline.base import BaseCognifier, PipelineContext
+from knowledge.pipeline.cognifiers.llm_utils import (
     build_entity_map,
     parse_llm_json_response,
 )
-from backend.knowledge.pipeline.models.chunk import ProcessedChunk
-from backend.knowledge.pipeline.models.entity import Entity
-from backend.knowledge.pipeline.models.relationship import Relationship, RelationType
-from backend.knowledge.pipeline.registry import TaskRegistry
+from knowledge.pipeline.models.chunk import ProcessedChunk
+from knowledge.pipeline.models.entity import Entity
+from knowledge.pipeline.models.relationship import Relationship, RelationType
+from knowledge.pipeline.registry import TaskRegistry
+from llm_interface_pkg import LLMInterface
 
 logger = logging.getLogger(__name__)
 
