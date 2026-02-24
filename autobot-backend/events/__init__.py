@@ -29,8 +29,8 @@ Usage:
     events = await manager.get_latest(count=10)
 """
 
-from backend.events.stream_manager import EventStreamManager, RedisEventStreamManager
-from backend.events.types import (
+from events.stream_manager import EventStreamManager, RedisEventStreamManager
+from events.types import (
     ActionContent,
     AgentEvent,
     EventType,

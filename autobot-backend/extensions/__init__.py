@@ -40,9 +40,9 @@ Usage:
     await manager.invoke_hook(HookPoint.BEFORE_MESSAGE_PROCESS, ctx)
 """
 
-from backend.extensions.base import Extension, HookContext
-from backend.extensions.hooks import HOOK_METADATA, HookPoint, get_hook_metadata
-from backend.extensions.manager import (
+from extensions.base import Extension, HookContext
+from extensions.hooks import HOOK_METADATA, HookPoint, get_hook_metadata
+from extensions.manager import (
     ExtensionManager,
     get_extension_manager,
     reset_extension_manager,

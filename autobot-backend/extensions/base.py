@@ -12,7 +12,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from backend.extensions.hooks import HookPoint
+from extensions.hooks import HookPoint
 
 logger = logging.getLogger(__name__)
 

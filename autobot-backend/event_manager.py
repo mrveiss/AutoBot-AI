@@ -7,7 +7,7 @@ import logging
 from typing import Any, Awaitable, Callable, Dict, Optional
 
 import yaml
-from backend.constants.path_constants import PATH
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ if __name__ == "__main__":
 
     async def test_listener(event):
         """Example listener that prints received event data."""
-        print(f"Local Listener received: {event}")
+        print(f"Local Listener received: {event}")  # noqa: print
 
     async def main():
         """Main test function demonstrating EventManager usage."""
@@ -114,7 +114,7 @@ if __name__ == "__main__":
         # Simulate WebSocket broadcast callback
         async def mock_websocket_broadcast(event):
             """Mock callback that simulates WebSocket event broadcast."""
-            print(f"WebSocket Broadcast: {event}")
+            print(f"WebSocket Broadcast: {event}")  # noqa: print
 
         event_manager.register_websocket_broadcast(mock_websocket_broadcast)
 
