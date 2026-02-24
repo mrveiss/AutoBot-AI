@@ -23,8 +23,8 @@ from contextlib import asynccontextmanager
 from typing import Dict, Optional
 
 import httpx
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.threshold_constants import TimingConstants
+from constants.network_constants import NetworkConstants
+from constants.threshold_constants import TimingConstants
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind
 

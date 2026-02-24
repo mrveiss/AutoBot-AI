@@ -34,7 +34,7 @@ class TestTracingServiceSingleton:
 
     def test_singleton_returns_same_instance(self):
         """Test that TracingService returns same instance on multiple calls"""
-        from backend.services.tracing_service import TracingService
+        from services.tracing_service import TracingService
 
         # Get two instances
         instance1 = TracingService()
@@ -45,7 +45,7 @@ class TestTracingServiceSingleton:
 
     def test_concurrent_singleton_access(self):
         """Test that concurrent access returns same singleton instance"""
-        from backend.services.tracing_service import TracingService
+        from services.tracing_service import TracingService
 
         # Reset singleton for clean test
         TracingService._instance = None
@@ -83,7 +83,7 @@ class TestTracingServiceSingleton:
 
     def test_singleton_lock_exists(self):
         """Test that TracingService has a lock for thread safety"""
-        from backend.services.tracing_service import TracingService
+        from services.tracing_service import TracingService
 
         assert hasattr(TracingService, "_lock")
         assert isinstance(TracingService._lock, type(threading.Lock()))
@@ -166,14 +166,14 @@ class TestConfigServiceFileLocking:
 
     def test_config_write_lock_exists(self):
         """Test that ConfigService has write lock"""
-        from backend.services.config_service import ConfigService
+        from services.config_service import ConfigService
 
         assert hasattr(ConfigService, "_config_write_lock")
         assert isinstance(ConfigService._config_write_lock, type(threading.Lock()))
 
     def test_save_config_uses_lock(self):
         """Test that _save_config_to_file uses lock"""
-        from backend.services.config_service import ConfigService
+        from services.config_service import ConfigService
 
         # The lock should exist at class level
         assert ConfigService._config_write_lock is not None
@@ -184,8 +184,8 @@ class TestConfigServiceFileLocking:
         import tempfile
         from pathlib import Path
 
-        from backend.services.config_service import ConfigService
         from config import unified_config_manager
+        from services.config_service import ConfigService
 
         errors = []
         save_count = {"count": 0}
@@ -276,7 +276,7 @@ class TestDoubleCheckedLocking:
         """Test TracingService uses double-checked locking"""
         import inspect
 
-        from backend.services.tracing_service import TracingService
+        from services.tracing_service import TracingService
 
         # Get the source of __new__
         source = inspect.getsource(TracingService.__new__)

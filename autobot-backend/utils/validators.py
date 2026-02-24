@@ -28,7 +28,7 @@ BENEFITS:
 
 USAGE PATTERN:
 ==============
-from backend.utils.validators import (
+from utils.validators import (
     validate_non_empty_string,
     validate_string_length,
     validate_in_choices,
@@ -59,7 +59,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional, Set, Union
 from urllib.parse import urlparse
 
-from backend.utils.path_validation import contains_path_traversal
+from utils.path_validation import contains_path_traversal
 
 # Issue #380: Pre-compiled regex patterns for validation
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
