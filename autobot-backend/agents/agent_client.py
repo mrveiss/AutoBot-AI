@@ -13,10 +13,10 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import aiohttp
+from utils.service_registry import get_service_url
 
 from autobot_shared.http_client import get_http_client
 
-from ..utils.service_registry import get_service_url
 from .base_agent import (
     AgentHealth,
     AgentRequest,
