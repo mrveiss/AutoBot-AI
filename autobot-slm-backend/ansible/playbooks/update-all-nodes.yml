@@ -292,6 +292,16 @@
       when: "'01-Backend' in inventory_hostname"
       changed_when: true
 
+    - name: "[PLAY 2] Backend | Create backend package symlink"
+      file:
+        src: /opt/autobot/autobot-backend
+        dest: /opt/autobot/autobot-backend/backend
+        state: link
+        owner: autobot
+        group: autobot
+      become: true
+      when: "'01-Backend' in inventory_hostname"
+
     - name: "[PLAY 2] Backend | Restart service"
       systemd:
         name: autobot-backend

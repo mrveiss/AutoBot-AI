@@ -34,8 +34,9 @@
   gather_facts: false
 
   vars:
-    git_repo_root: "/home/kali/Desktop/AutoBot"
-    deploy_ref: "HEAD"
+    github_repo: "https://github.com/mrveiss/AutoBot-AI.git"
+    git_repo_root: "/opt/autobot/code_source"
+    deploy_ref: "Dev_new_gui"
     allowed_branches:
       - Dev_new_gui
       - main
@@ -43,18 +44,13 @@
     deploy_tmp: "/tmp/autobot-deploy"
 
   tasks:
-    - name: "[PRE-FLIGHT] Verify git repo exists"
-      stat:
-        path: "{{ git_repo_root }}/.git"
-      register: git_repo
-      tags: [always]
-
-    - name: "[PRE-FLIGHT] Abort if git repo missing"
-      fail:
-        msg: >-
-          Git repo not found at {{ git_repo_root }}.
-          This playbook must run from the dev machine (.20).
-      when: not git_repo.stat.exists
+    - name: "[PRE-FLIGHT] Sync code from GitHub"
+      git:
+        repo: "{{ github_repo }}"
+        dest: "{{ git_repo_root }}"
+        version: "{{ deploy_ref }}"
+        force: yes
+        depth: 1
       tags: [always]
 
     - name: "[PRE-FLIGHT] Get current git branch"
@@ -108,8 +104,7 @@
           Or deploy specific ref: -e deploy_ref=Dev_new_gui
       when:
         - not skip_branch_check | bool
-        - deploy_ref == 'HEAD'
-        - git_branch.stdout not in allowed_branches
+        - deploy_ref not in allowed_branches
       tags: [always]
 
     - name: "[PRE-FLIGHT] Create deploy archive directory"
@@ -325,6 +320,25 @@
       unarchive:
         src: "{{ deploy_tmp }}/backend.tar.gz"
         dest: "{{ code_base_dir }}/"
+      when: "'main' in group_names"
+      tags: [backend, user-backend]
+
+    - name: "[PLAY 2] Backend | Fix ownership"
+      file:
+        path: "{{ code_base_dir }}/autobot-backend"
+        owner: autobot
+        group: autobot
+        recurse: true
+      when: "'main' in group_names"
+      tags: [backend, user-backend]
+
+    - name: "[PLAY 2] Backend | Create backend package symlink"
+      file:
+        src: "{{ code_base_dir }}/autobot-backend"
+        dest: "{{ code_base_dir }}/autobot-backend/backend"
+        state: link
+        owner: autobot
+        group: autobot
       when: "'main' in group_names"
       tags: [backend, user-backend]
 
