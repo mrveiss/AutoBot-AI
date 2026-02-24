@@ -14,8 +14,8 @@ from urllib.parse import urlparse
 
 import aiohttp
 import yaml
-from backend.constants.path_constants import PATH
 from cachetools import TTLCache
+from constants.path_constants import PATH
 
 from autobot_shared.http_client import get_http_client
 

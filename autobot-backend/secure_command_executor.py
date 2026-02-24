@@ -14,8 +14,8 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-from backend.constants.network_constants import NetworkConstants
-from backend.security.command_patterns import (
+from constants.network_constants import NetworkConstants
+from security.command_patterns import (
     FORBIDDEN_COMMANDS,
     HIGH_RISK_COMMANDS,
     MODERATE_RISK_COMMANDS,
@@ -24,12 +24,12 @@ from backend.security.command_patterns import (
     SYSTEM_PATHS,
     check_dangerous_patterns,
 )
-from backend.utils.command_utils import execute_shell_command
+from utils.command_utils import execute_shell_command
 
 # Permission system imports (lazy to avoid circular imports)
 if TYPE_CHECKING:
-    from backend.services.approval_memory import ApprovalMemoryManager
-    from backend.services.permission_matcher import PermissionMatcher
+    from services.approval_memory import ApprovalMemoryManager
+    from services.permission_matcher import PermissionMatcher
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +205,7 @@ class SecureCommandExecutor:
 
         if self._permission_matcher is None:
             try:
-                from backend.services.permission_matcher import PermissionMatcher
+                from services.permission_matcher import PermissionMatcher
 
                 self._permission_matcher = PermissionMatcher(is_admin=self.is_admin)
             except ImportError as e:
@@ -231,7 +231,7 @@ class SecureCommandExecutor:
 
         if self._approval_memory is None:
             try:
-                from backend.services.approval_memory import ApprovalMemoryManager
+                from services.approval_memory import ApprovalMemoryManager
 
                 self._approval_memory = ApprovalMemoryManager()
             except ImportError as e:
@@ -287,7 +287,7 @@ class SecureCommandExecutor:
         Returns:
             Tuple of (action, rule_info)
         """
-        from backend.services.permission_matcher import MatchResult
+        from services.permission_matcher import MatchResult
 
         if result == MatchResult.DENY:
             return "deny", self._build_rule_info(
