@@ -16,8 +16,8 @@ This eliminates the need for a separate AutoBotMemoryGraph system.
 import logging
 from typing import List, Optional
 
-from backend.knowledge_factory import get_or_create_knowledge_base
 from fastapi import APIRouter, HTTPException, Query, Request
+from knowledge_factory import get_or_create_knowledge_base
 from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

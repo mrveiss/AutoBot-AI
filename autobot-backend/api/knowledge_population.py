@@ -23,10 +23,10 @@ import re
 from pathlib import Path as PathLib
 
 import aiofiles
-from backend.constants.threshold_constants import TimingConstants
-from backend.knowledge_factory import get_or_create_knowledge_base
-from backend.utils.template_loader import knowledge_data_exists, load_knowledge_data
+from constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, BackgroundTasks, Request
+from knowledge_factory import get_or_create_knowledge_base
+from utils.template_loader import knowledge_data_exists, load_knowledge_data
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -668,7 +668,7 @@ async def refresh_system_knowledge(request: dict, req: Request):
     logger.info("Starting comprehensive system knowledge refresh (background)...")
 
     # Import here to avoid circular dependency
-    from backend.tasks.knowledge_tasks import refresh_system_knowledge as refresh_task
+    from tasks.knowledge_tasks import refresh_system_knowledge as refresh_task
 
     # Start background Celery task
     task = refresh_task.apply_async()
@@ -1029,7 +1029,7 @@ async def populate_autobot_docs(request: dict, req: Request):
     Issue #281: Refactored from 145 lines to use extracted helper method.
     Issue #398: Further refactored to extract scanning, processing, and response logic.
     """
-    from backend.models.knowledge_import_tracking import ImportTracker
+    from models.knowledge_import_tracking import ImportTracker
 
     force_reindex = request.get("force", False) if request else False
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
@@ -1130,7 +1130,7 @@ async def _scan_and_store_man_pages(
 
     Issue #423: Uses ManPageParser for structured content extraction.
     """
-    from backend.services.fast_document_scanner import FastDocumentScanner
+    from services.fast_document_scanner import FastDocumentScanner
 
     from autobot_shared.redis_client import get_redis_client
 
@@ -1275,7 +1275,7 @@ async def scan_man_pages_changes(
     """Scan for changed man pages only (Issue #398: refactored)."""
     import socket
 
-    from backend.services.fast_document_scanner import FastDocumentScanner
+    from services.fast_document_scanner import FastDocumentScanner
 
     from autobot_shared.redis_client import get_redis_client
 
