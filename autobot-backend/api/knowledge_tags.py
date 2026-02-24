@@ -30,8 +30,7 @@ import logging
 import re
 from typing import Optional
 
-from auth_middleware import check_admin_permission
-from backend.api.knowledge_models import (
+from api.knowledge_models import (
     AddTagsRequest,
     BulkTagRequest,
     FactIdValidator,
@@ -41,9 +40,10 @@ from backend.api.knowledge_models import (
     SearchByTagsRequest,
     UpdateTagStyleRequest,
 )
-from backend.constants.threshold_constants import QueryDefaults
-from backend.knowledge_factory import get_or_create_knowledge_base
+from auth_middleware import check_admin_permission
+from constants.threshold_constants import QueryDefaults
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from knowledge_factory import get_or_create_knowledge_base
 from starlette.requests import Request
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

@@ -10,9 +10,9 @@ Provides runtime provider switching, provider listing, and per-provider testing.
 import logging
 
 from auth_middleware import check_admin_permission, get_current_user
-from backend.utils.advanced_cache_manager import cache_response
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
+from utils.advanced_cache_manager import cache_response
 
 logger = logging.getLogger(__name__)
 

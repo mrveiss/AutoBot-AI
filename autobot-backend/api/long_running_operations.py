@@ -16,8 +16,8 @@ import logging
 import sys
 from typing import Dict, List, Optional
 
-from backend.constants.path_constants import PATH
-from backend.constants.threshold_constants import TimingConstants
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 from fastapi import (
     APIRouter,
     BackgroundTasks,
