@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from backend.constants.path_constants import PATH
+from constants.path_constants import PATH
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -106,12 +106,20 @@ async def _validate_and_get_path(request: Optional[IndexCodebaseRequest]) -> str
         return source.clone_path
     if request and request.root_path:
         target_path = Path(request.root_path)
-        if not target_path.exists():
+        try:
+            path_exists = target_path.exists()
+            path_is_dir = target_path.is_dir() if path_exists else False
+        except OSError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot access path '{request.root_path}': {e}",
+            )
+        if not path_exists:
             raise HTTPException(
                 status_code=400,
                 detail=f"Path does not exist: {request.root_path}",
             )
-        if not target_path.is_dir():
+        if not path_is_dir:
             raise HTTPException(
                 status_code=400,
                 detail=f"Path is not a directory: {request.root_path}",

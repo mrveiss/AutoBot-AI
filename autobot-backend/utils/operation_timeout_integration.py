@@ -20,15 +20,15 @@ import logging
 from typing import Any, Callable, Dict, List, Optional
 
 import redis.asyncio as redis
-from backend.constants.network_constants import ServiceURLs
-from backend.constants.threshold_constants import TimingConstants
-from backend.utils.catalog_http_exceptions import (
+from constants.network_constants import ServiceURLs
+from constants.threshold_constants import TimingConstants
+from fastapi import APIRouter, BackgroundTasks, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
+from utils.catalog_http_exceptions import (
     raise_not_found_error,
     raise_server_error,
     raise_validation_error,
 )
-from fastapi import APIRouter, BackgroundTasks, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
 
 from .long_running_operations_framework import (
     LongRunningOperation,
@@ -443,9 +443,11 @@ class OperationIntegrationManager:
             """Execute codebase indexing with progress updates."""
             from pathlib import Path
 
+            from constants.path_constants import PATH
+
             from ..knowledge_base import KnowledgeBase
 
-            codebase_path = context.get("codebase_path", "/home/kali/Desktop/AutoBot")
+            codebase_path = context.get("codebase_path", str(PATH.PROJECT_ROOT))
             file_patterns = context.get(
                 "file_patterns", ["*.py", "*.js", "*.vue", "*.ts"]
             )
@@ -525,7 +527,9 @@ class OperationIntegrationManager:
 
         async def operation_func(exec_context):
             """Execute test suite with progress tracking."""
-            test_path = context.get("test_path", "/home/kali/Desktop/AutoBot/tests")
+            from constants.path_constants import PATH
+
+            test_path = context.get("test_path", str(PATH.PROJECT_ROOT / "tests"))
             test_patterns = context.get("test_patterns", ["test_*.py"])
 
             await exec_context.update_progress("Starting test suite", 0, 1)
@@ -745,7 +749,7 @@ if __name__ == "__main__":
 
             # Run migrated operation
             operation_id = await index_codebase()
-            print(f"Started operation: {operation_id}")
+            print(f"Started operation: {operation_id}")  # noqa: print
 
             # Monitor progress
             while True:
@@ -763,10 +767,12 @@ if __name__ == "__main__":
                 }:
                     break
 
-                print(f"Progress: {operation.progress.progress_percentage:.1f}%")
+                print(  # noqa: print
+                    f"Progress: {operation.progress.progress_percentage:.1f}%"
+                )  # noqa: print
                 await asyncio.sleep(1)
 
-            print("Operation completed!")
+            print("Operation completed!")  # noqa: print
 
         finally:
             await operation_integration_manager.shutdown()

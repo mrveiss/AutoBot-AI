@@ -2919,7 +2919,7 @@ interface CodeSource {
 // Load path from localStorage if available, otherwise use default
 const STORAGE_KEY_PATH = 'codebase-analytics-path'
 const savedPath = localStorage.getItem(STORAGE_KEY_PATH)
-const rootPath = ref(savedPath || '/home/kali/Desktop/AutoBot')
+const rootPath = ref(savedPath || '/opt/autobot')
 
 // Issue #1133: Source registry state
 const sources = ref<CodeSource[]>([])

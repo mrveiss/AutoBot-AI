@@ -31,8 +31,10 @@ class PatternExtractor:
     - Framework-specific patterns (FastAPI, Vue composables)
     """
 
-    def __init__(self, base_path: str = "/home/kali/Desktop/AutoBot"):
-        self.base_path = Path(base_path)
+    def __init__(self, base_path: str = None):
+        from constants.path_constants import PATH
+
+        self.base_path = Path(base_path) if base_path else PATH.PROJECT_ROOT
         self.redis_client = get_redis_client(async_client=False, database="main")
         self.patterns: Dict[str, List[Dict]] = defaultdict(list)
 
