@@ -6,7 +6,7 @@
 from unittest.mock import patch
 
 import pytest
-from backend.services.permission_matcher import (
+from services.permission_matcher import (
     MatchResult,
     PermissionMatcher,
     PermissionRule,

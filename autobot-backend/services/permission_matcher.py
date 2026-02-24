@@ -10,7 +10,7 @@ Supports Allow/Ask/Deny rules with wildcard patterns.
 Precedence: DENY > ASK > ALLOW > DEFAULT (risk-based)
 
 Usage:
-    from backend.services.permission_matcher import PermissionMatcher, MatchResult
+    from services.permission_matcher import PermissionMatcher, MatchResult
 
     matcher = PermissionMatcher()
     result, rule = matcher.match("Bash", "ls -la")
