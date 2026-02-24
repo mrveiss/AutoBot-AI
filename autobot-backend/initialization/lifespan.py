@@ -15,16 +15,16 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
-from backend.knowledge_factory import get_or_create_knowledge_base
-from backend.services.slm_client import init_slm_client, shutdown_slm_client
-from backend.type_defs.common import Metadata
-from backend.user_management.database import init_database
-from backend.utils.background_llm_sync import BackgroundLLMSync
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
 from config import ConfigManager
 from fastapi import FastAPI
+from knowledge_factory import get_or_create_knowledge_base
 from security_layer import SecurityLayer
+from services.slm_client import init_slm_client, shutdown_slm_client
+from type_defs.common import Metadata
+from user_management.database import init_database
+from utils.background_llm_sync import BackgroundLLMSync
 
 from autobot_shared.tracing import (
     instrument_aiohttp,
@@ -41,7 +41,7 @@ _executor: ThreadPoolExecutor | None = None
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for backend logger names
-_BACKEND_LOGGER_NAMES = ("backend", "backend.api", "backend.api.codebase_analytics")
+_BACKEND_LOGGER_NAMES = ("backend", "backend.api", "api.codebase_analytics")
 
 # Lock for thread-safe access to app_state
 _app_state_lock = asyncio.Lock()
@@ -114,7 +114,7 @@ async def _init_skills_tables() -> None:
 
 async def _init_skills_discovery() -> None:
     """Discover and register builtin skills at startup."""
-    from backend.api.skills import _get_manager
+    from api.skills import _get_manager
 
     manager = _get_manager()
     result = await manager.initialize()
@@ -224,7 +224,7 @@ async def _init_database() -> None:
     logger.info("✅ [ 16%] Database: Initializing PostgreSQL async engine...")
     logger.info("🔍 DEBUG: About to call get_deployment_config()")
     try:
-        from backend.user_management.config import get_deployment_config
+        from user_management.config import get_deployment_config
 
         config = get_deployment_config()
         logger.info(
@@ -370,7 +370,7 @@ async def _init_npu_worker_websocket():
     """
     logger.info("✅ [ 80%] NPU Workers: Initializing WebSocket event subscriptions...")
     try:
-        from backend.api.websockets import init_npu_worker_websocket
+        from api.websockets import init_npu_worker_websocket
 
         init_npu_worker_websocket()
         logger.info("✅ [ 80%] NPU Workers: WebSocket subscriptions initialized")
@@ -420,7 +420,7 @@ async def _init_documentation_watcher():
     """
     logger.info("✅ [ 84%] Doc Watcher: Initializing documentation watcher...")
     try:
-        from backend.services.documentation_watcher import start_documentation_watcher
+        from services.documentation_watcher import start_documentation_watcher
 
         success = await start_documentation_watcher()
 
@@ -444,7 +444,7 @@ async def _init_log_forwarding():
     """
     logger.info("✅ [ 86%] Log Forwarding: Checking auto-start configuration...")
     try:
-        from backend.api.log_forwarding import get_forwarder
+        from api.log_forwarding import get_forwarder
 
         forwarder = await get_forwarder()
 
@@ -507,9 +507,9 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
     """
     logger.info("✅ [ 87%] Graph-RAG: Initializing graph-aware RAG service...")
     try:
-        from backend.services.graph_rag_service import GraphRAGService
-        from backend.services.rag_config import RAGConfig
-        from backend.services.rag_service import RAGService
+        from services.graph_rag_service import GraphRAGService
+        from services.rag_config import RAGConfig
+        from services.rag_service import RAGService
 
         if app.state.knowledge_base:
             rag_config = RAGConfig(enable_advanced_rag=True, timeout_seconds=10.0)
@@ -635,7 +635,7 @@ async def _init_metrics_collection():
         # Import here to avoid circular dependency
         from datetime import datetime
 
-        from backend.api.analytics import analytics_controller
+        from api.analytics import analytics_controller
 
         # Initialize session tracking
         analytics_state = {}
@@ -666,7 +666,7 @@ async def _init_background_llm_sync(app: FastAPI):
     """
     logger.info("✅ [ 90%] Background LLM Sync: Initializing AI Stack integration...")
     try:
-        from backend.services.ai_stack_client import AIStackClient
+        from services.ai_stack_client import AIStackClient
 
         ai_stack_client = AIStackClient()
         app.state.ai_stack_client = ai_stack_client
@@ -757,9 +757,7 @@ async def cleanup_services(app: FastAPI):
 
         # Issue #165: Stop documentation watcher
         try:
-            from backend.services.documentation_watcher import (
-                stop_documentation_watcher,
-            )
+            from services.documentation_watcher import stop_documentation_watcher
 
             await stop_documentation_watcher()
         except ImportError:

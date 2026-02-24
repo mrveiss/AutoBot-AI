@@ -14,14 +14,13 @@ import logging
 from typing import List, Optional
 
 from config import ConfigManager
+from constants.network_constants import (  # noqa: F401 - used in docstring example
+    NetworkConstants,
+)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
-
-from backend.constants.network_constants import (  # noqa: F401 - used in docstring example
-    NetworkConstants,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +92,7 @@ def configure_service_auth(app: FastAPI):
     """
     # Try ENFORCEMENT MODE
     try:
-        from backend.middleware.service_auth_enforcement import (
+        from middleware.service_auth_enforcement import (
             enforce_service_auth,
             log_enforcement_status,
         )
@@ -108,7 +107,7 @@ def configure_service_auth(app: FastAPI):
 
     # Fallback to LOGGING MODE
     try:
-        from backend.middleware.service_auth_logging import ServiceAuthLoggingMiddleware
+        from middleware.service_auth_logging import ServiceAuthLoggingMiddleware
 
         app.add_middleware(ServiceAuthLoggingMiddleware)
         logger.info(
@@ -137,7 +136,7 @@ def configure_middleware(
 
     Example:
         ```python
-        from backend.initialization.middleware import configure_middleware
+        from initialization.middleware import configure_middleware
 
         app = FastAPI()
         configure_middleware(app)

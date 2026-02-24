@@ -12,8 +12,8 @@ import logging
 import threading
 from typing import Any, Dict, List, Optional, Type
 
-from backend.extensions.base import Extension, HookContext
-from backend.extensions.hooks import HookPoint
+from extensions.base import Extension, HookContext
+from extensions.hooks import HookPoint
 
 logger = logging.getLogger(__name__)
 
