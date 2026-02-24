@@ -7,7 +7,7 @@ Tests integration with workflow automation, validation dashboard, and other syst
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from backend.api.validation_dashboard import router as validation_router
+from api.validation_dashboard import router as validation_router
 from fastapi.testclient import TestClient
 
 
@@ -51,7 +51,7 @@ class TestJudgeIntegration:
         app.include_router(validation_router, prefix="/api/validation_dashboard")
         return TestClient(app)
 
-    @patch("backend.api.validation_dashboard.get_validation_judges")
+    @patch("api.validation_dashboard.get_validation_judges")
     def test_judge_workflow_step_api(self, mock_get_judges, mock_judges, test_client):
         """Test workflow step judgment API endpoint"""
         mock_get_judges.return_value = mock_judges
@@ -80,7 +80,7 @@ class TestJudgeIntegration:
         workflow_judge = mock_judges["workflow_step_judge"]
         workflow_judge.evaluate_workflow_step.assert_called_once()
 
-    @patch("backend.api.validation_dashboard.get_validation_judges")
+    @patch("api.validation_dashboard.get_validation_judges")
     def test_judge_agent_response_api(self, mock_get_judges, mock_judges, test_client):
         """Test agent response judgment API endpoint"""
         mock_get_judges.return_value = mock_judges
@@ -105,7 +105,7 @@ class TestJudgeIntegration:
         response_judge = mock_judges["agent_response_judge"]
         response_judge.evaluate_agent_response.assert_called_once()
 
-    @patch("backend.api.validation_dashboard.get_validation_judges")
+    @patch("api.validation_dashboard.get_validation_judges")
     def test_judge_status_api(self, mock_get_judges, mock_judges, test_client):
         """Test judge status API endpoint"""
         # Mock performance metrics
@@ -126,7 +126,7 @@ class TestJudgeIntegration:
         assert len(data["available_judges"]) == 4
         assert "workflow_step_judge" in data["judge_metrics"]
 
-    @patch("backend.api.validation_dashboard.get_validation_judges")
+    @patch("api.validation_dashboard.get_validation_judges")
     def test_judge_unavailable(self, mock_get_judges, test_client):
         """Test API behavior when judges are unavailable"""
         mock_get_judges.return_value = None
@@ -141,14 +141,14 @@ class TestJudgeIntegration:
 
     def test_workflow_automation_judge_integration(self, mock_judges):
         """Test integration with workflow automation system"""
-        with patch("backend.api.workflow_automation.JUDGES_AVAILABLE", True), patch(
-            "backend.api.workflow_automation.WorkflowStepJudge",
+        with patch("api.workflow_automation.JUDGES_AVAILABLE", True), patch(
+            "api.workflow_automation.WorkflowStepJudge",
             return_value=mock_judges["workflow_step_judge"],
         ), patch(
-            "backend.api.workflow_automation.SecurityRiskJudge",
+            "api.workflow_automation.SecurityRiskJudge",
             return_value=mock_judges["security_risk_judge"],
         ):
-            from backend.api.workflow_automation import WorkflowAutomationManager
+            from api.workflow_automation import WorkflowAutomationManager
 
             manager = WorkflowAutomationManager()
 
@@ -159,14 +159,14 @@ class TestJudgeIntegration:
     @pytest.mark.asyncio
     async def test_workflow_step_evaluation_integration(self, mock_judges):
         """Test workflow step evaluation in automation manager"""
-        with patch("backend.api.workflow_automation.JUDGES_AVAILABLE", True), patch(
-            "backend.api.workflow_automation.WorkflowStepJudge",
+        with patch("api.workflow_automation.JUDGES_AVAILABLE", True), patch(
+            "api.workflow_automation.WorkflowStepJudge",
             return_value=mock_judges["workflow_step_judge"],
         ), patch(
-            "backend.api.workflow_automation.SecurityRiskJudge",
+            "api.workflow_automation.SecurityRiskJudge",
             return_value=mock_judges["security_risk_judge"],
         ):
-            from backend.api.workflow_automation import (
+            from api.workflow_automation import (
                 ActiveWorkflow,
                 WorkflowAutomationManager,
                 WorkflowStep,
@@ -225,14 +225,14 @@ class TestJudgeIntegration:
             "security_risk_judge"
         ].evaluate_command_security.return_value = reject_judgment
 
-        with patch("backend.api.workflow_automation.JUDGES_AVAILABLE", True), patch(
-            "backend.api.workflow_automation.WorkflowStepJudge",
+        with patch("api.workflow_automation.JUDGES_AVAILABLE", True), patch(
+            "api.workflow_automation.WorkflowStepJudge",
             return_value=mock_judges["workflow_step_judge"],
         ), patch(
-            "backend.api.workflow_automation.SecurityRiskJudge",
+            "api.workflow_automation.SecurityRiskJudge",
             return_value=mock_judges["security_risk_judge"],
         ):
-            from backend.api.workflow_automation import (
+            from api.workflow_automation import (
                 ActiveWorkflow,
                 WorkflowAutomationManager,
                 WorkflowStep,
@@ -267,18 +267,18 @@ class TestJudgeIntegration:
 
     def test_judge_error_handling(self, mock_judges):
         """Test error handling in judge integration"""
-        from backend.api.workflow_automation import WorkflowAutomationManager
+        from api.workflow_automation import WorkflowAutomationManager
 
         # Configure judge to raise exception
         mock_judges[
             "workflow_step_judge"
         ].evaluate_workflow_step.side_effect = Exception("Judge error")
 
-        with patch("backend.api.workflow_automation.JUDGES_AVAILABLE", True), patch(
-            "backend.api.workflow_automation.WorkflowStepJudge",
+        with patch("api.workflow_automation.JUDGES_AVAILABLE", True), patch(
+            "api.workflow_automation.WorkflowStepJudge",
             return_value=mock_judges["workflow_step_judge"],
         ), patch(
-            "backend.api.workflow_automation.SecurityRiskJudge",
+            "api.workflow_automation.SecurityRiskJudge",
             return_value=mock_judges["security_risk_judge"],
         ):
             manager = WorkflowAutomationManager()
@@ -347,14 +347,14 @@ class TestJudgeIntegration:
         ].evaluate_workflow_step.return_value = detailed_judgment
 
         # Test that all criteria are evaluated
-        with patch("backend.api.workflow_automation.JUDGES_AVAILABLE", True), patch(
-            "backend.api.workflow_automation.WorkflowStepJudge",
+        with patch("api.workflow_automation.JUDGES_AVAILABLE", True), patch(
+            "api.workflow_automation.WorkflowStepJudge",
             return_value=mock_judges["workflow_step_judge"],
         ), patch(
-            "backend.api.workflow_automation.SecurityRiskJudge",
+            "api.workflow_automation.SecurityRiskJudge",
             return_value=mock_judges["security_risk_judge"],
         ):
-            from backend.api.workflow_automation import (
+            from api.workflow_automation import (
                 ActiveWorkflow,
                 WorkflowAutomationManager,
                 WorkflowStep,
@@ -408,9 +408,9 @@ class TestJudgeIntegration:
 
     def test_judge_context_preparation(self):
         """Test that judges receive proper context"""
-        from backend.api.workflow_automation import WorkflowAutomationManager
+        from api.workflow_automation import WorkflowAutomationManager
 
-        with patch("backend.api.workflow_automation.JUDGES_AVAILABLE", True):
+        with patch("api.workflow_automation.JUDGES_AVAILABLE", True):
             WorkflowAutomationManager()
 
             # Test context preparation for different scenarios
