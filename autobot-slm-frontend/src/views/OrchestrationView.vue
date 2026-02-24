@@ -225,12 +225,11 @@ async function confirmFleetServiceAction(): Promise<void> {
 const fleetServiceConfirmMessage = computed(() => {
   const pending = pendingFleetServiceAction.value
   if (!pending) return ''
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
   const nodeList = pending.affectedNodes
     .map((n) => `• ${n.hostname} <span class="text-gray-400">${n.nodeId}</span>`)
     .join('<br>')
   return (
-    `<strong>${cap(pending.action)}</strong> <code>${pending.serviceName}</code>` +
+    `<strong>${capitalize(pending.action)}</strong> <code>${pending.serviceName}</code>` +
     ` on ${pending.affectedNodes.length} node(s):<br><br>${nodeList}`
   )
 })
@@ -238,15 +237,13 @@ const fleetServiceConfirmMessage = computed(() => {
 const fleetServiceConfirmTitle = computed(() => {
   const pending = pendingFleetServiceAction.value
   if (!pending) return 'Confirm Action'
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
-  return `${cap(pending.action)} Fleet Service`
+  return `${capitalize(pending.action)} Fleet Service`
 })
 
 const fleetServiceConfirmButtonText = computed(() => {
   const pending = pendingFleetServiceAction.value
   if (!pending) return 'Confirm'
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
-  return cap(pending.action)
+  return capitalize(pending.action)
 })
 
 const filteredFleetServices = computed(() => {
