@@ -16,12 +16,11 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 import aiohttp
+from constants.network_constants import NetworkConstants
+from constants.path_constants import PATH
+from constants.threshold_constants import RetryConfig, ServiceDiscoveryConfig
 
 from autobot_shared.http_client import get_http_client
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.path_constants import PATH
-from backend.constants.threshold_constants import (RetryConfig,
-                                                   ServiceDiscoveryConfig)
 
 logger = logging.getLogger(__name__)
 
@@ -500,7 +499,7 @@ class ServiceDiscovery:
     async def _check_tcp_service(self, service: ServiceEndpoint) -> ServiceStatus:
         """Check TCP-based service health (e.g., Redis)
 
-        NOTE: This method uses direct redis.Redis() instantiation intentionally
+        NOTE: This method uses direct Redis instantiation intentionally
         for health check diagnostics. This is a monitoring/diagnostic function,
         NOT for production client creation. For production clients, use
         get_redis_client() from autobot_shared.redis_client.
@@ -517,7 +516,7 @@ class ServiceDiscovery:
                 import redis.asyncio as redis
 
                 # Direct instantiation for health check (intentional exception to canonical pattern)
-                client = redis.Redis(
+                client = redis.Redis(  # noqa: redis
                     host=service.host,
                     port=service.port,
                     socket_timeout=service.timeout,

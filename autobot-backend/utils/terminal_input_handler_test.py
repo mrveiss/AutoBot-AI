@@ -13,7 +13,7 @@ from unittest.mock import patch
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from backend.utils.terminal_input_handler import (
+from utils.terminal_input_handler import (
     InputTimeoutError,
     TerminalInputHandler,
     configure_testing_defaults,
@@ -32,11 +32,11 @@ class TestTerminalInputHandler:
 
     def test_environment_detection(self):
         """Test testing environment detection."""
-        print("Testing environment detection...")
+        print("Testing environment detection...")  # noqa: print
 
         # Test current environment detection
         is_testing = self.handler.is_testing
-        print(f"  Current environment detected as testing: {is_testing}")
+        print(f"  Current environment detected as testing: {is_testing}")  # noqa: print
 
         # Test with manual configuration
         handler2 = TerminalInputHandler()
@@ -57,7 +57,9 @@ class TestTerminalInputHandler:
             os.environ[env_var] = value
 
             handler3 = TerminalInputHandler()
-            print(f"    {env_var}={value} detected as testing: {handler3.is_testing}")
+            print(  # noqa: print
+                f"    {env_var}={value} detected as testing: {handler3.is_testing}"
+            )  # noqa: print
 
             # Restore environment
             if old_value is None:
@@ -65,12 +67,12 @@ class TestTerminalInputHandler:
             else:
                 os.environ[env_var] = old_value
 
-        print("✓ Environment detection working")
+        print("✓ Environment detection working")  # noqa: print
         return True
 
     def test_mock_responses(self):
         """Test mock response functionality."""
-        print("\nTesting mock responses...")
+        print("\nTesting mock responses...")  # noqa: print
 
         # Set mock responses
         test_responses = ["response1", "response2", "response3"]
@@ -82,19 +84,23 @@ class TestTerminalInputHandler:
         # Test sequential responses
         for i, expected in enumerate(test_responses):
             result = self.handler.get_input(f"Prompt {i+1}: ")
-            print(f"  Mock response {i+1}: '{result}' (expected: '{expected}')")
+            print(  # noqa: print
+                f"  Mock response {i+1}: '{result}' (expected: '{expected}')"
+            )  # noqa: print
             assert result == expected, f"Should return mock response {expected}"
 
         # Test exhausted responses (should use defaults)
         result = self.handler.get_input("Extra prompt: ", default="default_value")
-        print(f"  Exhausted mock responses: '{result}' (should be default)")
+        print(  # noqa: print
+            f"  Exhausted mock responses: '{result}' (should be default)"
+        )  # noqa: print
 
-        print("✓ Mock responses working")
+        print("✓ Mock responses working")  # noqa: print
         return True
 
     def test_default_responses(self):
         """Test default response patterns."""
-        print("\nTesting default response patterns...")
+        print("\nTesting default response patterns...")  # noqa: print
 
         self.handler.is_testing = True
         self.handler.set_mock_responses([])  # Clear mock responses
@@ -111,7 +117,7 @@ class TestTerminalInputHandler:
 
         for prompt, expected_pattern in test_cases:
             result = self.handler.get_input(prompt)
-            print(f"  '{prompt}' -> '{result}'")
+            print(f"  '{prompt}' -> '{result}'")  # noqa: print
 
             # Check if response matches expected pattern type
             if "y/n" in prompt.lower():
@@ -119,12 +125,12 @@ class TestTerminalInputHandler:
             elif "choice" in prompt.lower() and any(c.isdigit() for c in prompt):
                 assert result.isdigit(), "Should return digit for choice prompt"
 
-        print("✓ Default response patterns working")
+        print("✓ Default response patterns working")  # noqa: print
         return True
 
     def test_timeout_behavior(self):
         """Test timeout behavior in interactive mode."""
-        print("\nTesting timeout behavior...")
+        print("\nTesting timeout behavior...")  # noqa: print
 
         # Test with testing mode (should not timeout)
         self.handler.is_testing = True
@@ -132,7 +138,9 @@ class TestTerminalInputHandler:
         result = self.handler.get_input("Test prompt: ", timeout=0.1, default="quick")
         duration = time.time() - start_time
 
-        print(f"  Testing mode response time: {duration:.3f}s (result: '{result}')")
+        print(  # noqa: print
+            f"  Testing mode response time: {duration:.3f}s (result: '{result}')"
+        )  # noqa: print
         assert duration < 0.5, "Testing mode should be fast"
 
         # Test timeout with interactive mode (mock to avoid actual waiting)
@@ -148,23 +156,23 @@ class TestTerminalInputHandler:
                         "Timeout test: ", timeout=0.1, default="timeout_default"
                     )
                     duration = time.time() - start_time
-                    print(
+                    print(  # noqa: print
                         f"  Interactive timeout test: {duration:.3f}s (result: '{result}')"
                     )
                 except InputTimeoutError:
                     duration = time.time() - start_time
-                    print(
+                    print(  # noqa: print
                         f"  Interactive timeout raised exception after: {duration:.3f}s"
                     )
         except Exception as e:
-            print(f"  Timeout test skipped due to: {e}")
+            print(f"  Timeout test skipped due to: {e}")  # noqa: print
 
-        print("✓ Timeout behavior working")
+        print("✓ Timeout behavior working")  # noqa: print
         return True
 
     async def test_async_input(self):
         """Test asynchronous input functionality."""
-        print("\nTesting asynchronous input...")
+        print("\nTesting asynchronous input...")  # noqa: print
 
         self.handler.is_testing = True
         self.handler.set_mock_responses(["async1", "async2"])
@@ -173,8 +181,8 @@ class TestTerminalInputHandler:
         result1 = await self.handler.get_input_async("Async prompt 1: ")
         result2 = await self.handler.get_input_async("Async prompt 2: ")
 
-        print(f"  Async result 1: '{result1}'")
-        print(f"  Async result 2: '{result2}'")
+        print(f"  Async result 1: '{result1}'")  # noqa: print
+        print(f"  Async result 2: '{result2}'")  # noqa: print
 
         assert result1 == "async1", "Should return first async response"
         assert result2 == "async2", "Should return second async response"
@@ -186,16 +194,16 @@ class TestTerminalInputHandler:
         ]
 
         results = await asyncio.gather(*tasks)
-        print(f"  Concurrent results: {results}")
+        print(f"  Concurrent results: {results}")  # noqa: print
 
         assert len(results) == 3, "Should handle concurrent requests"
 
-        print("✓ Async input working")
+        print("✓ Async input working")  # noqa: print
         return True
 
     def test_context_manager(self):
         """Test context manager functionality."""
-        print("\nTesting context manager...")
+        print("\nTesting context manager...")  # noqa: print
 
         self.handler.is_testing = True
 
@@ -206,8 +214,8 @@ class TestTerminalInputHandler:
             result1 = self.handler.get_input("Context prompt 1: ")
             result2 = self.handler.get_input("Context prompt 2: ")
 
-            print(f"  Context result 1: '{result1}'")
-            print(f"  Context result 2: '{result2}'")
+            print(f"  Context result 1: '{result1}'")  # noqa: print
+            print(f"  Context result 2: '{result2}'")  # noqa: print
 
             assert result1 == "ctx1", "Should use context responses"
             assert result2 == "ctx2", "Should use sequential context responses"
@@ -216,14 +224,14 @@ class TestTerminalInputHandler:
         result3 = self.handler.get_input(
             "Post-context prompt: ", default="post_default"
         )
-        print(f"  Post-context result: '{result3}'")
+        print(f"  Post-context result: '{result3}'")  # noqa: print
 
-        print("✓ Context manager working")
+        print("✓ Context manager working")  # noqa: print
         return True
 
     def test_safe_input_functions(self):
         """Test the safe_input wrapper functions."""
-        print("\nTesting safe input wrapper functions...")
+        print("\nTesting safe input wrapper functions...")  # noqa: print
 
         # Configure for testing
         configure_testing_defaults()
@@ -233,35 +241,35 @@ class TestTerminalInputHandler:
             result1 = safe_input("Safe input test 1: ")
             result2 = safe_input("Safe input test 2: ")
 
-            print(f"  Safe input result 1: '{result1}'")
-            print(f"  Safe input result 2: '{result2}'")
+            print(f"  Safe input result 1: '{result1}'")  # noqa: print
+            print(f"  Safe input result 2: '{result2}'")  # noqa: print
 
             assert result1 == "wrapper1", "Should use wrapper mock responses"
             assert result2 == "wrapper2", "Should use sequential wrapper responses"
 
-        print("✓ Safe input wrapper working")
+        print("✓ Safe input wrapper working")  # noqa: print
         return True
 
     async def test_safe_input_async_function(self):
         """Test the async safe_input wrapper function."""
-        print("\nTesting async safe input wrapper...")
+        print("\nTesting async safe input wrapper...")  # noqa: print
 
         with mock_terminal_input(["async_wrapper1", "async_wrapper2"]):
             result1 = await safe_input_async("Async safe input 1: ")
             result2 = await safe_input_async("Async safe input 2: ")
 
-            print(f"  Async safe result 1: '{result1}'")
-            print(f"  Async safe result 2: '{result2}'")
+            print(f"  Async safe result 1: '{result1}'")  # noqa: print
+            print(f"  Async safe result 2: '{result2}'")  # noqa: print
 
             assert result1 == "async_wrapper1", "Should use async wrapper responses"
             assert result2 == "async_wrapper2", "Should use sequential async responses"
 
-        print("✓ Async safe input wrapper working")
+        print("✓ Async safe input wrapper working")  # noqa: print
         return True
 
     def test_builtin_patch(self):
         """Test built-in input function patching."""
-        print("\nTesting built-in input patching...")
+        print("\nTesting built-in input patching...")  # noqa: print
 
         # Save original input
         import builtins
@@ -278,8 +286,8 @@ class TestTerminalInputHandler:
                 result1 = input("Patched input test 1: ")
                 result2 = input("Patched input test 2: ")
 
-                print(f"  Patched input result 1: '{result1}'")
-                print(f"  Patched input result 2: '{result2}'")
+                print(f"  Patched input result 1: '{result1}'")  # noqa: print
+                print(f"  Patched input result 2: '{result2}'")  # noqa: print
 
                 assert result1 == "patched1", "Should use patched input"
                 assert result2 == "patched2", "Should use sequential patched responses"
@@ -288,12 +296,12 @@ class TestTerminalInputHandler:
             # Restore original input
             builtins.input = original_input
 
-        print("✓ Built-in input patching working")
+        print("✓ Built-in input patching working")  # noqa: print
         return True
 
     def test_intelligent_defaults(self):
         """Test intelligent default response generation."""
-        print("\nTesting intelligent default responses...")
+        print("\nTesting intelligent default responses...")  # noqa: print
 
         self.handler.is_testing = True
         self.handler.set_mock_responses([])  # Force use of defaults
@@ -311,15 +319,15 @@ class TestTerminalInputHandler:
         for prompt, validator in test_cases:
             result = self.handler.get_input(prompt)
             is_valid = validator(result)
-            print(f"  '{prompt}' -> '{result}' (valid: {is_valid})")
+            print(f"  '{prompt}' -> '{result}' (valid: {is_valid})")  # noqa: print
             assert is_valid, f"Should generate appropriate default for: {prompt}"
 
-        print("✓ Intelligent defaults working")
+        print("✓ Intelligent defaults working")  # noqa: print
         return True
 
     async def test_concurrent_safety(self):
         """Test thread and async safety."""
-        print("\nTesting concurrent safety...")
+        print("\nTesting concurrent safety...")  # noqa: print
 
         self.handler.is_testing = True
 
@@ -342,7 +350,7 @@ class TestTerminalInputHandler:
         for thread in threads:
             thread.join()
 
-        print(f"  Thread results: {results}")
+        print(f"  Thread results: {results}")  # noqa: print
         assert len(results) == 5, "Should handle concurrent thread access"
 
         # Test async concurrency
@@ -353,17 +361,17 @@ class TestTerminalInputHandler:
 
         async_results = await asyncio.gather(*[async_worker(i) for i in range(3)])
 
-        print(f"  Async results: {async_results}")
+        print(f"  Async results: {async_results}")  # noqa: print
         assert len(async_results) == 3, "Should handle concurrent async access"
 
-        print("✓ Concurrent safety working")
+        print("✓ Concurrent safety working")  # noqa: print
         return True
 
     async def run_all_tests(self):
         """Run all terminal input handler tests."""
-        print("=" * 70)
-        print("AutoBot Terminal Input Handler Test Suite")
-        print("=" * 70)
+        print("=" * 70)  # noqa: print
+        print("AutoBot Terminal Input Handler Test Suite")  # noqa: print
+        print("=" * 70)  # noqa: print
 
         try:
             # Test environment detection
@@ -399,27 +407,27 @@ class TestTerminalInputHandler:
             # Test concurrent safety
             await self.test_concurrent_safety()
 
-            print("\n" + "=" * 70)
-            print("✅ All Terminal Input Handler Tests Passed!")
-            print("=" * 70)
-            print("Summary:")
-            print("  - Environment detection: ✓")
-            print("  - Mock responses: ✓")
-            print("  - Default patterns: ✓")
-            print("  - Timeout handling: ✓")
-            print("  - Async support: ✓")
-            print("  - Context management: ✓")
-            print("  - Safe input wrappers: ✓")
-            print("  - Built-in patching: ✓")
-            print("  - Intelligent defaults: ✓")
-            print("  - Concurrent safety: ✓")
-            print("\n🎉 Terminal input handling is now test-safe!")
-            print("🔧 No more hanging tests due to input() calls!")
+            print("\n" + "=" * 70)  # noqa: print
+            print("✅ All Terminal Input Handler Tests Passed!")  # noqa: print
+            print("=" * 70)  # noqa: print
+            print("Summary:")  # noqa: print
+            print("  - Environment detection: ✓")  # noqa: print
+            print("  - Mock responses: ✓")  # noqa: print
+            print("  - Default patterns: ✓")  # noqa: print
+            print("  - Timeout handling: ✓")  # noqa: print
+            print("  - Async support: ✓")  # noqa: print
+            print("  - Context management: ✓")  # noqa: print
+            print("  - Safe input wrappers: ✓")  # noqa: print
+            print("  - Built-in patching: ✓")  # noqa: print
+            print("  - Intelligent defaults: ✓")  # noqa: print
+            print("  - Concurrent safety: ✓")  # noqa: print
+            print("\n🎉 Terminal input handling is now test-safe!")  # noqa: print
+            print("🔧 No more hanging tests due to input() calls!")  # noqa: print
 
             return True
 
         except Exception as e:
-            print(f"❌ Test failed: {e}")
+            print(f"❌ Test failed: {e}")  # noqa: print
             import traceback
 
             traceback.print_exc()
@@ -432,11 +440,11 @@ async def main():
     success = await tester.run_all_tests()
 
     if success:
-        print("\n🎯 Terminal input handler is working correctly!")
-        print("🚀 Automated tests will no longer hang on input!")
+        print("\n🎯 Terminal input handler is working correctly!")  # noqa: print
+        print("🚀 Automated tests will no longer hang on input!")  # noqa: print
         return 0
     else:
-        print("\n💥 Terminal input handler tests failed!")
+        print("\n💥 Terminal input handler tests failed!")  # noqa: print
         return 1
 
 
