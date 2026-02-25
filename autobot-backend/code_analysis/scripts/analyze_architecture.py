@@ -30,6 +30,32 @@ async def analyze_architectural_patterns():
 
     print("\n=== Architectural Pattern Analysis Results ===\n")  # noqa: print
 
+    _print_summary_metrics(results)
+    _analyze_patterns(results)
+    _analyze_component_dependencies(results)
+    # Save detailed report
+    report_path = Path("architectural_analysis_report.json")
+    with open(report_path, "w") as f:
+        json.dump(results, f, indent=2, default=str)
+
+    print(f"📋 Detailed report saved to: {report_path}")  # noqa: print
+
+    # Generate architecture recommendations
+    await generate_architecture_recommendations(results)
+
+    return results
+
+
+def _print_summary_metrics(results: dict) -> None:
+    """
+    Print analysis summary, quality metrics, and component breakdown.
+
+    Called by analyze_architectural_patterns to display the top-level results.
+
+    Args:
+        results: Analysis results dict from ArchitecturalPatternAnalyzer
+    """
+
     # Summary
     print(f"📊 **Analysis Summary:**")  # noqa: print
     print(f"   - Total components: {results['total_components']}")  # noqa: print
@@ -74,6 +100,17 @@ async def analyze_architectural_patterns():
         print(f"   - {comp_type.title()}s: {count}")  # noqa: print
     print()  # noqa: print
 
+
+def _analyze_patterns(results: dict) -> None:
+    """
+    Print detected design patterns and architectural issues.
+
+    Called by analyze_architectural_patterns to display pattern and issue sections.
+
+    Args:
+        results: Analysis results dict from ArchitecturalPatternAnalyzer
+    """
+
     # Design patterns detected
     if results["detected_patterns"]:
         pattern_counts = {}
@@ -116,6 +153,17 @@ async def analyze_architectural_patterns():
             if issue["pattern_violation"]:
                 print(f"      ❌ Violates: {issue['pattern_violation']}")  # noqa: print
 
+
+def _analyze_coupling(results: dict) -> None:
+    """
+    Print high-coupling component analysis.
+
+    Called by _analyze_component_dependencies as part of dependency quality output.
+
+    Args:
+        results: Analysis results dict from ArchitecturalPatternAnalyzer
+    """
+
     # High coupling analysis
     high_coupling_components = [
         c for c in results["components"] if c["coupling_score"] > 10
@@ -140,6 +188,17 @@ async def analyze_architectural_patterns():
                     f"     ... and {len(comp['dependencies']) - 5} more"
                 )  # noqa: print
         print()  # noqa: print
+
+
+def _analyze_cohesion_complexity(results: dict) -> None:
+    """
+    Print low-cohesion and high-complexity component analyses.
+
+    Called by _analyze_component_dependencies as part of dependency quality output.
+
+    Args:
+        results: Analysis results dict from ArchitecturalPatternAnalyzer
+    """
 
     # Low cohesion analysis
     low_cohesion_classes = [
@@ -176,34 +235,26 @@ async def analyze_architectural_patterns():
                 print(f"     Patterns: {', '.join(comp['patterns'])}")  # noqa: print
         print()  # noqa: print
 
-    # Save detailed report
-    report_path = Path("architectural_analysis_report.json")
-    with open(report_path, "w") as f:
-        json.dump(results, f, indent=2, default=str)
 
-    print(f"📋 Detailed report saved to: {report_path}")  # noqa: print
+def _analyze_component_dependencies(results: dict) -> None:
+    """
+    Orchestrate coupling, cohesion, and complexity analysis output.
 
-    # Generate architecture recommendations
-    await generate_architecture_recommendations(results)
+    Called by analyze_architectural_patterns to display all dependency quality sections.
 
-    return results
+    Args:
+        results: Analysis results dict from ArchitecturalPatternAnalyzer
+    """
+    _analyze_coupling(results)
+    _analyze_cohesion_complexity(results)
 
 
-async def generate_architecture_recommendations(results):
-    """Generate specific architectural improvement recommendations"""
+def _generate_layer_recommendations() -> None:
+    """
+    Print SOLID principles and layered architecture pattern examples.
 
-    print("\n=== Architectural Improvement Recommendations ===\n")  # noqa: print
-
-    recommendations = results["recommendations"]
-
-    if recommendations:
-        print("🏗️ **Priority Recommendations:**")  # noqa: print
-        for i, rec in enumerate(recommendations, 1):
-            print(f"{i}. {rec}")  # noqa: print
-        print()  # noqa: print
-
-    # Specific improvement patterns
-    print("🛠️ **Architectural Improvement Patterns:**\n")  # noqa: print
+    Called by generate_architecture_recommendations for improvement patterns output.
+    """
 
     # SOLID Principles
     print("**1. SOLID Principles Application:**")  # noqa: print
@@ -229,6 +280,28 @@ async def generate_architecture_recommendations(results):
     print("    def validate_data(self): pass")  # noqa: print
     print("```")  # noqa: print
     print()  # noqa: print
+
+    # Layered Architecture
+    print("**5. Layered Architecture Pattern:**")  # noqa: print
+    print("```")  # noqa: print
+    print("src/")  # noqa: print
+    print("├── presentation/     # Controllers, API endpoints")  # noqa: print
+    print("├── application/      # Use cases, application services")  # noqa: print
+    print("├── domain/          # Business logic, entities")  # noqa: print
+    print("└── infrastructure/  # Database, external services")  # noqa: print
+    print()  # noqa: print
+    print("# Dependency flow: Presentation -> Application -> Domain")  # noqa: print
+    print("# Infrastructure depends on Domain (Dependency Inversion)")  # noqa: print
+    print("```")  # noqa: print
+    print()  # noqa: print
+
+
+def _generate_dependency_recommendations() -> None:
+    """
+    Print dependency injection and observer pattern code examples.
+
+    Called by generate_architecture_recommendations for improvement patterns output.
+    """
 
     # Dependency Injection
     print("**2. Dependency Injection Pattern:**")  # noqa: print
@@ -285,6 +358,14 @@ async def generate_architecture_recommendations(results):
     print("```")  # noqa: print
     print()  # noqa: print
 
+
+def _generate_creational_recommendations() -> None:
+    """
+    Print factory and repository pattern code examples.
+
+    Called by generate_architecture_recommendations for improvement patterns output.
+    """
+
     # Factory Pattern
     print("**4. Factory Pattern for Object Creation:**")  # noqa: print
     print("```python")  # noqa: print
@@ -306,20 +387,6 @@ async def generate_architecture_recommendations(results):
     print(
         "            raise ValueError(f'Unknown config type: {config_type}')"
     )  # noqa: print
-    print("```")  # noqa: print
-    print()  # noqa: print
-
-    # Layered Architecture
-    print("**5. Layered Architecture Pattern:**")  # noqa: print
-    print("```")  # noqa: print
-    print("src/")  # noqa: print
-    print("├── presentation/     # Controllers, API endpoints")  # noqa: print
-    print("├── application/      # Use cases, application services")  # noqa: print
-    print("├── domain/          # Business logic, entities")  # noqa: print
-    print("└── infrastructure/  # Database, external services")  # noqa: print
-    print()  # noqa: print
-    print("# Dependency flow: Presentation -> Application -> Domain")  # noqa: print
-    print("# Infrastructure depends on Domain (Dependency Inversion)")  # noqa: print
     print("```")  # noqa: print
     print()  # noqa: print
 
@@ -352,14 +419,33 @@ async def generate_architecture_recommendations(results):
     print()  # noqa: print
 
 
-async def demonstrate_architecture_testing():
-    """Show how to add architectural tests"""
+async def generate_architecture_recommendations(results):
+    """Generate specific architectural improvement recommendations"""
 
-    print("=== Architectural Testing Setup ===\n")  # noqa: print
+    print("\n=== Architectural Improvement Recommendations ===\n")  # noqa: print
 
-    print("🧪 **Add Architectural Tests:**")  # noqa: print
-    print()  # noqa: print
+    recommendations = results["recommendations"]
 
+    if recommendations:
+        print("🏗️ **Priority Recommendations:**")  # noqa: print
+        for i, rec in enumerate(recommendations, 1):
+            print(f"{i}. {rec}")  # noqa: print
+        print()  # noqa: print
+
+    # Specific improvement patterns
+    print("🛠️ **Architectural Improvement Patterns:**\n")  # noqa: print
+
+    _generate_layer_recommendations()
+    _generate_dependency_recommendations()
+    _generate_creational_recommendations()
+
+
+def _demonstrate_dependency_rules_testing() -> None:
+    """
+    Print dependency rules testing example code.
+
+    Called by demonstrate_architecture_testing for the layer dependency test section.
+    """
     print("**1. Dependency Rules Testing:**")  # noqa: print
     print("```python")  # noqa: print
     print("import ast")  # noqa: print
@@ -388,6 +474,16 @@ async def demonstrate_architecture_testing():
     print("```")  # noqa: print
     print()  # noqa: print
 
+
+async def demonstrate_architecture_testing():
+    """Show how to add architectural tests"""
+
+    print("=== Architectural Testing Setup ===\n")  # noqa: print
+
+    print("🧪 **Add Architectural Tests:**")  # noqa: print
+    print()  # noqa: print
+
+    _demonstrate_dependency_rules_testing()
     print("**2. Complexity Monitoring:**")  # noqa: print
     print("```python")  # noqa: print
     print("def test_class_complexity():")  # noqa: print

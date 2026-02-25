@@ -20,91 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Tuple
 
-
-class DevLoggingFixer:
-    """Replaces console.log with environment-aware development logging."""
-
-    def __init__(self, project_root: str, backup_dir: str = None):
-        self.project_root = Path(project_root)
-        self.backup_dir = (
-            Path(backup_dir)
-            if backup_dir
-            else self.project_root / ".dev-logging-backups"
-        )
-        self.report = {
-            "timestamp": datetime.now().isoformat(),
-            "files_processed": 0,
-            "files_modified": 0,
-            "console_logs_converted": 0,
-            "errors": [],
-            "details": [],
-        }
-
-        # Directories to skip
-        self.skip_dirs = {
-            "node_modules",
-            "dist",
-            "build",
-            ".git",
-            "__pycache__",
-            "coverage",
-            ".next",
-            ".nuxt",
-            "out",
-            "tests",
-            "test",
-            "__tests__",
-            "e2e",
-            ".cache",
-            "temp",
-            "tmp",
-        }
-
-        # File extensions to process
-        self.target_extensions = {".js", ".jsx", ".ts", ".tsx", ".vue", ".mjs"}
-
-    def should_process_file(self, file_path: Path) -> bool:
-        """Check if file should be processed."""
-        # Skip if in excluded directory
-        for part in file_path.parts:
-            if part in self.skip_dirs:
-                return False
-
-        # Check file extension
-        if file_path.suffix not in self.target_extensions:
-            return False
-
-        # Skip test files
-        if any(
-            pattern in file_path.name.lower() for pattern in ["test", "spec", "mock"]
-        ):
-            return False
-
-        # Skip minified files
-        if ".min." in file_path.name:
-            return False
-
-        return True
-
-    def create_backup(self, file_path: Path) -> Path:
-        """Create backup of file before modification."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        relative_path = file_path.relative_to(self.project_root)
-        backup_path = self.backup_dir / timestamp / relative_path
-
-        backup_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(file_path, backup_path)
-
-        return backup_path
-
-    def create_dev_logger_utility(self, target_dir: Path) -> None:
-        """Create the development logger utility file."""
-        utils_dir = target_dir / "utils"
-        utils_dir.mkdir(exist_ok=True)
-
-        logger_file = utils_dir / "devLogger.js"
-
-        logger_code = """/**
+_DEV_LOGGER_JS_CODE = """/**
  * Development Logger Utility
  * Provides environment-aware logging that only outputs in development mode.
  */
@@ -237,10 +153,174 @@ export default devLog;
 export { devLog as logger };
 """
 
-        with open(logger_file, "w") as f:
-            f.write(logger_code)
 
+class DevLoggingFixer:
+    """Replaces console.log with environment-aware development logging."""
+
+    def __init__(self, project_root: str, backup_dir: str = None):
+        self.project_root = Path(project_root)
+        self.backup_dir = (
+            Path(backup_dir)
+            if backup_dir
+            else self.project_root / ".dev-logging-backups"
+        )
+        self.report = {
+            "timestamp": datetime.now().isoformat(),
+            "files_processed": 0,
+            "files_modified": 0,
+            "console_logs_converted": 0,
+            "errors": [],
+            "details": [],
+        }
+
+        # Directories to skip
+        self.skip_dirs = {
+            "node_modules",
+            "dist",
+            "build",
+            ".git",
+            "__pycache__",
+            "coverage",
+            ".next",
+            ".nuxt",
+            "out",
+            "tests",
+            "test",
+            "__tests__",
+            "e2e",
+            ".cache",
+            "temp",
+            "tmp",
+        }
+
+        # File extensions to process
+        self.target_extensions = {".js", ".jsx", ".ts", ".tsx", ".vue", ".mjs"}
+
+    def should_process_file(self, file_path: Path) -> bool:
+        """Check if file should be processed."""
+        # Skip if in excluded directory
+        for part in file_path.parts:
+            if part in self.skip_dirs:
+                return False
+
+        # Check file extension
+        if file_path.suffix not in self.target_extensions:
+            return False
+
+        # Skip test files
+        if any(
+            pattern in file_path.name.lower() for pattern in ["test", "spec", "mock"]
+        ):
+            return False
+
+        # Skip minified files
+        if ".min." in file_path.name:
+            return False
+
+        return True
+
+    def create_backup(self, file_path: Path) -> Path:
+        """Create backup of file before modification."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        relative_path = file_path.relative_to(self.project_root)
+        backup_path = self.backup_dir / timestamp / relative_path
+
+        backup_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(file_path, backup_path)
+
+        return backup_path
+
+    def _get_dev_logger_js_code(self) -> str:
+        """
+        Return the JavaScript source code for the devLogger utility.
+
+        Called by create_dev_logger_utility to obtain the JS code constant.
+        The JS source is stored in _DEV_LOGGER_JS_CODE module constant.
+
+        Returns:
+            str: Complete JavaScript source for devLogger.js
+        """
+        return _DEV_LOGGER_JS_CODE
+
+    def _write_logger_file(self, utils_dir: Path, js_code: str) -> None:
+        """
+        Write the devLogger.js file to the utils directory.
+
+        Called by create_dev_logger_utility to persist the JS code to disk.
+
+        Args:
+            utils_dir: Directory where devLogger.js will be written
+            js_code: JavaScript source content to write
+        """
+        logger_file = utils_dir / "devLogger.js"
+        with open(logger_file, "w") as f:
+            f.write(js_code)
         print(f"✅ Created development logger utility: {logger_file}")  # noqa: print
+
+    def create_dev_logger_utility(self, target_dir: Path) -> None:
+        """Create the development logger utility file."""
+        utils_dir = target_dir / "utils"
+        utils_dir.mkdir(exist_ok=True)
+        js_code = self._get_dev_logger_js_code()
+        self._write_logger_file(utils_dir, js_code)
+
+    def _process_console_match(
+        self, match, content: str, modified_content: str, conversion_details: list
+    ):
+        """
+        Process a single console.log regex match and apply the devLog replacement.
+
+        Called by convert_console_logs for each non-comment match found in the file.
+
+        Args:
+            match: re.Match object for the console.log occurrence
+            content: Original (unmodified) file content used for position arithmetic
+            modified_content: Accumulated modified content string to update
+            conversion_details: List to append conversion metadata to
+
+        Returns:
+            Tuple[str, int]: Updated modified_content and count increment (0 or 1)
+        """
+        start_pos = match.start()
+
+        # Find matching closing parenthesis
+        paren_count = 0
+        search_pos = match.end() - 1  # Start at opening parenthesis
+
+        while search_pos < len(content):
+            char = content[search_pos]
+            if char == "(":
+                paren_count += 1
+            elif char == ")":
+                paren_count -= 1
+                if paren_count == 0:
+                    break
+            search_pos += 1
+
+        if paren_count != 0:
+            return modified_content, 0
+
+        end_pos = search_pos + 1
+
+        # Extract the arguments
+        args_start = content.find("(", start_pos) + 1
+        args_end = search_pos
+        args = content[args_start:args_end].strip()
+
+        # Replace console.log with devLog.log
+        replacement = f"devLog.log({args})"
+        modified_content = (
+            modified_content[:start_pos] + replacement + modified_content[end_pos:]
+        )
+
+        conversion_details.append(
+            {
+                "line": content[:start_pos].count("\n") + 1,
+                "original": f"console.log({args})",
+                "converted": replacement,
+            }
+        )
+        return modified_content, 1
 
     def convert_console_logs(self, content: str, file_path: Path) -> Tuple[str, int]:
         """Convert console.log statements to use devLog."""
@@ -268,48 +348,10 @@ export { devLog as logger };
             # Check if it's inside a comment or string
             if self.is_in_comment_or_string(content, match.start()):
                 continue
-
-            # Find the complete console.log statement
-            start_pos = match.start()
-
-            # Find matching closing parenthesis
-            paren_count = 0
-            search_pos = match.end() - 1  # Start at opening parenthesis
-
-            while search_pos < len(content):
-                char = content[search_pos]
-                if char == "(":
-                    paren_count += 1
-                elif char == ")":
-                    paren_count -= 1
-                    if paren_count == 0:
-                        break
-                search_pos += 1
-
-            if paren_count == 0:
-                end_pos = search_pos + 1
-
-                # Extract the arguments
-                args_start = content.find("(", start_pos) + 1
-                args_end = search_pos
-                args = content[args_start:args_end].strip()
-
-                # Replace console.log with devLog.log
-                replacement = f"devLog.log({args})"
-                modified_content = (
-                    modified_content[:start_pos]
-                    + replacement
-                    + modified_content[end_pos:]
-                )
-
-                converted_count += 1
-                conversion_details.append(
-                    {
-                        "line": content[:start_pos].count("\n") + 1,
-                        "original": f"console.log({args})",
-                        "converted": replacement,
-                    }
-                )
+            modified_content, delta = self._process_console_match(
+                match, content, modified_content, conversion_details
+            )
+            converted_count += delta
 
         # Add import statement if we made conversions and don't have import
         if converted_count > 0 and not has_import:
@@ -437,9 +479,16 @@ export { devLog as logger };
 
         return self.report
 
-    def generate_report(self, output_file: str = None) -> None:
-        """Generate detailed conversion report."""
-        report_content = f"""
+    def _build_report_header(self) -> str:
+        """
+        Build the markdown report header with summary and usage sections.
+
+        Called by generate_report to produce the initial report content string.
+
+        Returns:
+            str: Formatted markdown header section
+        """
+        return f"""
 # Development Logging Conversion Report
 Generated: {self.report['timestamp']}
 
@@ -471,7 +520,18 @@ Import statement has been added: `import {{ devLog }} from '@/utils/devLogger.js
 ## Files Modified
 """
 
-        # Add details for each modified file
+    def _append_file_details(self, report_content: str) -> str:
+        """
+        Append per-file conversion details to the report content.
+
+        Called by generate_report to extend the report with file-level breakdown.
+
+        Args:
+            report_content: Current report markdown string
+
+        Returns:
+            str: Updated report content with file details appended
+        """
         for detail in sorted(
             self.report["details"], key=lambda x: x["converted_count"], reverse=True
         ):
@@ -484,14 +544,18 @@ Import statement has been added: `import {{ devLog }} from '@/utils/devLogger.js
                 report_content += f"  - Line {conv['line']}: `{conv['original']}` → `{conv['converted']}`\n"
             if len(detail["conversions"]) > 3:
                 report_content += f"  - ... and {len(detail['conversions']) - 3} more\n"
+        return report_content
 
-        # Add errors if any
-        if self.report["errors"]:
-            report_content += "\n## Errors\n"
-            for error in self.report["errors"]:
-                report_content += f"- **{error['file']}**: {error['error']}\n"
+    def _save_report_files(self, report_content: str, output_file: str) -> None:
+        """
+        Append next-steps section and save report as markdown and JSON.
 
-        # Add next steps
+        Called by generate_report to finalize and persist the report.
+
+        Args:
+            report_content: Complete report markdown string to finalize and save
+            output_file: Optional path override for the markdown report file
+        """
         report_content += """
 ## Next Steps
 1. **Test Development Mode**: Verify logs appear in browser console during development
@@ -510,23 +574,32 @@ All modified files have been backed up to: `{}`
             self.backup_dir
         )
 
-        # Save report
-        if output_file:
-            report_path = Path(output_file)
-        else:
-            report_path = self.project_root / "dev-logging-conversion-report.md"
-
+        report_path = (
+            Path(output_file)
+            if output_file
+            else (self.project_root / "dev-logging-conversion-report.md")
+        )
         with open(report_path, "w") as f:
             f.write(report_content)
-
         print(f"\n📄 Report saved to: {report_path}")  # noqa: print
 
-        # Also save JSON report
         json_report_path = report_path.with_suffix(".json")
         with open(json_report_path, "w") as f:
             json.dump(self.report, f, indent=2)
-
         print(f"📊 JSON report saved to: {json_report_path}")  # noqa: print
+
+    def generate_report(self, output_file: str = None) -> None:
+        """Generate detailed conversion report."""
+        report_content = self._build_report_header()
+        report_content = self._append_file_details(report_content)
+
+        # Add errors if any
+        if self.report["errors"]:
+            report_content += "\n## Errors\n"
+            for error in self.report["errors"]:
+                report_content += f"- **{error['file']}**: {error['error']}\n"
+
+        self._save_report_files(report_content, output_file)
 
 
 def main():

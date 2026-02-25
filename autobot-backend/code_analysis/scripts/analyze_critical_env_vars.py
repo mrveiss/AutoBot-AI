@@ -196,20 +196,15 @@ class CriticalEnvAnalyzer:
         return base
 
 
-async def main():
-    """Run focused critical environment variable analysis"""
+def _print_category_results(results: dict) -> None:
+    """
+    Print analysis results grouped by category.
 
-    print("🔍 Analyzing critical hardcoded values...")  # noqa: print
+    Called by main() to display per-category hardcoded value findings.
 
-    analyzer = CriticalEnvAnalyzer()
-    results = await analyzer.find_critical_hardcoded_values()
-
-    print("\n=== Critical Hardcoded Values Analysis ===\n")  # noqa: print
-
-    total_critical = sum(len(matches) for matches in results.values())
-    print(f"Found {total_critical} critical hardcoded values\n")  # noqa: print
-
-    # Show results by category
+    Args:
+        results: Dict mapping category names to lists of match dicts
+    """
     for category, matches in results.items():
         if matches:
             print(  # noqa: print
@@ -233,25 +228,16 @@ async def main():
                     print(f"     ... and {len(env_matches) - 5} more")  # noqa: print
                 print()  # noqa: print
 
-    # Generate practical configuration recommendations
-    print("\n=== Practical Configuration Updates ===\n")  # noqa: print
 
-    # High priority configs to add to config.py
-    high_priority = [
-        ("AUTOBOT_DATABASE_PATH", "data/knowledge_base.db", "Path to main database"),
-        ("AUTOBOT_REDIS_HOST", "localhost", "Redis server hostname"),
-        ("AUTOBOT_REDIS_PORT", "6379", "Redis server port"),
-        ("AUTOBOT_BACKEND_PORT", "8001", "Backend API port"),
-        ("AUTOBOT_FRONTEND_PORT", "5173", "Frontend dev server port"),
-        (
-            "AUTOBOT_API_BASE_URL",
-            f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}",
-            "Backend API base URL",
-        ),
-        ("AUTOBOT_LOG_FILE", "logs/autobot.log", "Main log file path"),
-        ("AUTOBOT_TIMEOUT", "30", "Default operation timeout (seconds)"),
-    ]
+def _print_config_recommendations(high_priority: list) -> None:
+    """
+    Print config.py snippet and .env file entries for high-priority configs.
 
+    Called by main() to display actionable configuration recommendations.
+
+    Args:
+        high_priority: List of (env_var, default, description) tuples
+    """
     print("🔧 **Add to src/config.py:**")  # noqa: print
     print("```python")  # noqa: print
     print("# Critical configuration from environment analysis")  # noqa: print
@@ -275,10 +261,18 @@ async def main():
         print(f"{env_var}={default}")  # noqa: print
     print("```\n")  # noqa: print
 
-    # Show example refactoring
+
+def _print_example_refactoring(results: dict) -> None:
+    """
+    Print example before/after refactoring snippets for database paths and ports.
+
+    Called by main() to display the Example Refactoring section.
+
+    Args:
+        results: Dict mapping category names to lists of match dicts
+    """
     print("=== Example Refactoring ===\n")  # noqa: print
 
-    # Find specific examples from results
     examples = []
     for category, matches in results.items():
         for match in matches:
@@ -319,6 +313,44 @@ async def main():
         print(f"After:  `{example['after']}`")  # noqa: print
         print(f"Env:    `{example['env_var']}`")  # noqa: print
         print()  # noqa: print
+
+
+async def main():
+    """Run focused critical environment variable analysis"""
+
+    print("🔍 Analyzing critical hardcoded values...")  # noqa: print
+
+    analyzer = CriticalEnvAnalyzer()
+    results = await analyzer.find_critical_hardcoded_values()
+
+    print("\n=== Critical Hardcoded Values Analysis ===\n")  # noqa: print
+
+    total_critical = sum(len(matches) for matches in results.values())
+    print(f"Found {total_critical} critical hardcoded values\n")  # noqa: print
+
+    _print_category_results(results)
+
+    # Generate practical configuration recommendations
+    print("\n=== Practical Configuration Updates ===\n")  # noqa: print
+
+    high_priority = [
+        ("AUTOBOT_DATABASE_PATH", "data/knowledge_base.db", "Path to main database"),
+        ("AUTOBOT_REDIS_HOST", "localhost", "Redis server hostname"),
+        ("AUTOBOT_REDIS_PORT", "6379", "Redis server port"),
+        ("AUTOBOT_BACKEND_PORT", "8001", "Backend API port"),
+        ("AUTOBOT_FRONTEND_PORT", "5173", "Frontend dev server port"),
+        (
+            "AUTOBOT_API_BASE_URL",
+            f"http://{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}",
+            "Backend API base URL",
+        ),
+        ("AUTOBOT_LOG_FILE", "logs/autobot.log", "Main log file path"),
+        ("AUTOBOT_TIMEOUT", "30", "Default operation timeout (seconds)"),
+    ]
+
+    _print_config_recommendations(high_priority)
+
+    _print_example_refactoring(results)
 
     return results
 
