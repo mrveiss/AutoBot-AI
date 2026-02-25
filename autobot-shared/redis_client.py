@@ -46,7 +46,7 @@ FEATURES (Consolidated from 8 implementations):
 
 MANDATORY USAGE PATTERN:
 ========================
-from backend.utils.redis_client import get_redis_client
+from utils.redis_client import get_redis_client
 
 # Synchronous client
 redis_client = get_redis_client(database="main")
@@ -85,13 +85,9 @@ from typing import Any, AsyncGenerator, Dict, Optional, Union
 
 import redis
 import redis.asyncio as async_redis
-from backend.utils.redis_management.config import (
-    PoolConfig,
-    RedisConfig,
-    RedisConfigLoader,
-)
-from backend.utils.redis_management.connection_manager import RedisConnectionManager
-from backend.utils.redis_management.statistics import (
+from utils.redis_management.config import PoolConfig, RedisConfig, RedisConfigLoader
+from utils.redis_management.connection_manager import RedisConnectionManager
+from utils.redis_management.statistics import (
     ConnectionMetrics,
     ManagerStats,
     PoolStatistics,
@@ -99,7 +95,7 @@ from backend.utils.redis_management.statistics import (
 )
 
 # Import all types, data models, and classes from the package (Issue #381 refactoring)
-from backend.utils.redis_management.types import (
+from utils.redis_management.types import (
     DATABASE_MAPPING,
     ConnectionState,
     RedisDatabase,

@@ -5,17 +5,17 @@ import asyncio
 import logging
 
 from auth_middleware import check_admin_permission, get_current_user
+from config import ConfigManager
 
 # Import unified configuration system - NO HARDCODED VALUES
-from backend.constants.model_constants import ModelConstants
-from backend.services.config_service import ConfigService
-
-# Import caching utilities from unified cache manager (P4 Cache Consolidation)
-from backend.utils.advanced_cache_manager import cache_response
-from backend.utils.connection_utils import ConnectionTester, ModelManager
-from config import ConfigManager
+from constants.model_constants import ModelConstants
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
+from services.config_service import ConfigService
+
+# Import caching utilities from unified cache manager (P4 Cache Consolidation)
+from utils.advanced_cache_manager import cache_response
+from utils.connection_utils import ConnectionTester, ModelManager
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -707,7 +707,7 @@ async def get_all_providers_health():
     """
     from datetime import datetime, timezone
 
-    from backend.services.provider_health import ProviderHealthManager
+    from services.provider_health import ProviderHealthManager
 
     try:
         results = await ProviderHealthManager.check_all_providers(
@@ -769,7 +769,7 @@ async def get_provider_health(provider_name: str, use_cache: bool = True):
     """
     from datetime import datetime, timezone
 
-    from backend.services.provider_health import ProviderHealthManager
+    from services.provider_health import ProviderHealthManager
 
     try:
         result = await ProviderHealthManager.check_provider_health(
@@ -831,7 +831,7 @@ async def clear_provider_health_cache(
     Returns:
         Confirmation of cache clear operation
     """
-    from backend.services.provider_health import ProviderHealthManager
+    from services.provider_health import ProviderHealthManager
 
     try:
         await ProviderHealthManager.clear_cache(provider_name)

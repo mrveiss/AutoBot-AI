@@ -16,7 +16,7 @@ import json
 import logging
 from typing import Dict, Optional
 
-from backend.dependencies import global_config_manager
+from dependencies import global_config_manager
 
 from autobot_shared.http_client import get_http_client
 

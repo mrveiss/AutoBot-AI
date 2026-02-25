@@ -10,7 +10,7 @@ Handles WebSocket communication for workflow status updates.
 import logging
 from typing import Any, Dict
 
-from backend.type_defs.common import Metadata
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 

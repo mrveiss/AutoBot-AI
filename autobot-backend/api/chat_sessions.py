@@ -8,16 +8,19 @@ from typing import Dict, List, Optional
 
 from auth_middleware import auth_middleware
 from autobot_memory_graph import AutoBotMemoryGraph
+from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 # CRITICAL SECURITY FIX: Import session ownership validation
-from backend.security.session_ownership import validate_session_ownership
-from backend.type_defs.common import Metadata
+from security.session_ownership import validate_session_ownership
+from type_defs.common import Metadata
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
-from backend.utils.chat_exceptions import get_exceptions_lazy
+from utils.chat_exceptions import get_exceptions_lazy
 
 # Import reusable chat utilities
-from backend.utils.chat_utils import (
+from utils.chat_utils import (
     create_success_response,
     generate_chat_session_id,
     generate_request_id,
@@ -25,9 +28,6 @@ from backend.utils.chat_utils import (
     log_chat_event,
     validate_chat_session_id,
 )
-from fastapi import APIRouter, Depends, Request, Response
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -478,7 +478,7 @@ async def _filter_user_sessions(sessions: list, username: str) -> list:
 
 def _build_ownership_validator(redis):
     """Build a SessionOwnershipValidator instance (#684)."""
-    from backend.security.session_ownership import SessionOwnershipValidator
+    from security.session_ownership import SessionOwnershipValidator
 
     return SessionOwnershipValidator(redis)
 
@@ -627,7 +627,7 @@ async def _list_shared_sessions(
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
 
     redis = await get_redis_mgr(async_client=True, database="main")
-    from backend.security.session_ownership import SessionOwnershipValidator
+    from security.session_ownership import SessionOwnershipValidator
 
     validator = SessionOwnershipValidator(redis)
     user_id = user_data.get("user_id", user_data.get("username"))
@@ -1888,7 +1888,7 @@ async def share_session(
     shared_by = user_data.get("username", "unknown")
 
     # Share session access
-    from backend.security.session_ownership import SessionOwnershipValidator
+    from security.session_ownership import SessionOwnershipValidator
 
     from autobot_shared.redis_client import get_redis_client as get_redis_mgr
 

@@ -21,9 +21,9 @@ from datetime import datetime
 from typing import Optional
 
 from auth_middleware import check_admin_permission, get_current_user
-from backend.services.user_behavior_analytics import UserEvent, get_behavior_analytics
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from services.user_behavior_analytics import UserEvent, get_behavior_analytics
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

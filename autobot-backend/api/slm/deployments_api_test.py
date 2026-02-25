@@ -8,17 +8,17 @@ Tests for SLM Deployments API.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from backend.api.slm.deployments import router
-from backend.models.infrastructure import DeploymentStrategy as DeploymentStrategyType
-from backend.services.slm.deployment_orchestrator import (
+from api.slm.deployments import router
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from models.infrastructure import DeploymentStrategy as DeploymentStrategyType
+from services.slm.deployment_orchestrator import (
     DeploymentContext,
     DeploymentOrchestrator,
     DeploymentStatus,
     DeploymentStep,
     DeploymentStepType,
 )
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 
 @pytest.fixture
@@ -61,7 +61,7 @@ class TestListDeployments:
     def test_list_empty(self, client, mock_orchestrator):
         """Test listing with no deployments."""
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.get("/v1/slm/deployments")
@@ -76,7 +76,7 @@ class TestListDeployments:
         mock_orchestrator.active_deployments = [sample_context]
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.get("/v1/slm/deployments")
@@ -92,7 +92,7 @@ class TestListDeployments:
         mock_orchestrator.active_deployments = [sample_context]
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.get("/v1/slm/deployments?status_filter=running")
@@ -109,7 +109,7 @@ class TestListDeployments:
         mock_orchestrator.active_deployments = [sample_context]
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.get("/v1/slm/deployments?status_filter=running")
@@ -127,7 +127,7 @@ class TestCreateDeployment:
         mock_orchestrator.create_deployment = AsyncMock(return_value=sample_context)
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.post(
@@ -149,7 +149,7 @@ class TestCreateDeployment:
     def test_create_deployment_invalid_strategy(self, client, mock_orchestrator):
         """Test create with invalid strategy."""
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.post(
@@ -182,7 +182,7 @@ class TestGetDeployment:
         mock_orchestrator.get_deployment.return_value = sample_context
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.get("/v1/slm/deployments/deploy-123")
@@ -196,7 +196,7 @@ class TestGetDeployment:
         mock_orchestrator.get_deployment.return_value = None
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.get("/v1/slm/deployments/nonexistent")
@@ -215,7 +215,7 @@ class TestExecuteDeployment:
         mock_orchestrator.get_deployment.return_value = sample_context
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.post("/v1/slm/deployments/deploy-123/execute")
@@ -231,7 +231,7 @@ class TestExecuteDeployment:
         mock_orchestrator.get_deployment.return_value = sample_context
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.post("/v1/slm/deployments/deploy-123/execute")
@@ -243,7 +243,7 @@ class TestExecuteDeployment:
         mock_orchestrator.get_deployment.return_value = None
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.post("/v1/slm/deployments/nonexistent/execute")
@@ -259,7 +259,7 @@ class TestCancelDeployment:
         mock_orchestrator.cancel_deployment = AsyncMock(return_value=True)
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.post("/v1/slm/deployments/deploy-123/cancel")
@@ -276,7 +276,7 @@ class TestCancelDeployment:
         mock_orchestrator.get_deployment.return_value = sample_context
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.post("/v1/slm/deployments/deploy-123/cancel")
@@ -289,7 +289,7 @@ class TestCancelDeployment:
         mock_orchestrator.get_deployment.return_value = None
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.post("/v1/slm/deployments/nonexistent/cancel")
@@ -308,7 +308,7 @@ class TestRollbackDeployment:
         mock_orchestrator.trigger_rollback = AsyncMock(return_value=True)
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.post("/v1/slm/deployments/deploy-123/rollback")
@@ -324,7 +324,7 @@ class TestRollbackDeployment:
         mock_orchestrator.trigger_rollback = AsyncMock(return_value=False)
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.post("/v1/slm/deployments/deploy-123/rollback")
@@ -336,7 +336,7 @@ class TestRollbackDeployment:
         mock_orchestrator.get_deployment.return_value = None
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.post("/v1/slm/deployments/nonexistent/rollback")
@@ -365,7 +365,7 @@ class TestDeploymentResponseFormat:
         mock_orchestrator.get_deployment.return_value = sample_context
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.get("/v1/slm/deployments/deploy-123")
@@ -386,7 +386,7 @@ class TestDeploymentResponseFormat:
         mock_orchestrator.get_deployment.return_value = sample_context
 
         with patch(
-            "backend.api.slm.deployments.get_orchestrator",
+            "api.slm.deployments.get_orchestrator",
             return_value=mock_orchestrator,
         ):
             response = client.get("/v1/slm/deployments/deploy-123")

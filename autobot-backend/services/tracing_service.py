@@ -30,7 +30,7 @@ import threading
 from contextlib import contextmanager
 from typing import Any, Dict, Optional
 
-from backend.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor

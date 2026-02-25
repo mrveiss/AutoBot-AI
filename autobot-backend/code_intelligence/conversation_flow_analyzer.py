@@ -27,7 +27,7 @@ DEPRECATED: Import directly from code_intelligence.conversation_analysis instead
 """
 
 # Re-export everything from the new package for backward compatibility
-from backend.code_intelligence.conversation_analysis import (  # Types; Classifiers; Analyzer; Convenience functions
+from code_intelligence.conversation_analysis import (  # Types; Classifiers; Analyzer; Convenience functions
     SATISFACTION_SIGNALS,
     AnalysisResult,
     Bottleneck,

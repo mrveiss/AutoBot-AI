@@ -112,7 +112,7 @@ class FileUploadAPITests(unittest.TestCase):
         """Test various allowed file formats"""
         test_cases = [
             ('{"test": "data"}', ".json", "application/json"),
-            ('print("Hello World")', ".py", "text/x-python"),
+            ('print("Hello World")', ".py", "text/x-python"),  # noqa: print
             ("# Test Markdown", ".md", "text/markdown"),
             ('console.log("test");', ".js", "application/javascript"),
             ("<html><body>Test</body></html>", ".html", "text/html"),
@@ -392,8 +392,8 @@ class FileUploadIntegrationTests(unittest.TestCase):
 
 def run_comprehensive_tests():
     """Run the complete file upload test suite"""
-    print("🧪 Running Comprehensive File Upload Tests")
-    print("=" * 60)
+    print("🧪 Running Comprehensive File Upload Tests")  # noqa: print
+    print("=" * 60)  # noqa: print
 
     # Create test suite
     suite = unittest.TestSuite()
@@ -413,24 +413,26 @@ def run_comprehensive_tests():
     result = runner.run(suite)
 
     # Summary
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 60)  # noqa: print
     if result.wasSuccessful():
-        print("✅ All File Upload Tests Passed!")
-        print(f"Ran {result.testsRun} tests successfully")
+        print("✅ All File Upload Tests Passed!")  # noqa: print
+        print(f"Ran {result.testsRun} tests successfully")  # noqa: print
         return 0
     else:
-        print(f"❌ {len(result.failures)} failures, {len(result.errors)} errors")
+        print(  # noqa: print
+            f"❌ {len(result.failures)} failures, {len(result.errors)} errors"
+        )  # noqa: print
 
         # Print failure details
         if result.failures:
-            print("\nFailures:")
+            print("\nFailures:")  # noqa: print
             for test, traceback in result.failures:
-                print(f"- {test}: {traceback}")
+                print(f"- {test}: {traceback}")  # noqa: print
 
         if result.errors:
-            print("\nErrors:")
+            print("\nErrors:")  # noqa: print
             for test, traceback in result.errors:
-                print(f"- {test}: {traceback}")
+                print(f"- {test}: {traceback}")  # noqa: print
 
         return 1
 

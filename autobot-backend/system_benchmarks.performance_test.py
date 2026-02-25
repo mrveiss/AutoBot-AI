@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import psutil
 import pytest
+from config.manager import ConfigManager as ConfigManager
 from enhanced_memory_manager import EnhancedMemoryManager
 from multimodal_processor import (
     ModalityType,
@@ -16,9 +17,7 @@ from multimodal_processor import (
     ProcessingIntent,
     UnifiedMultiModalProcessor,
 )
-
-from backend.config.manager import ConfigManager as ConfigManager
-from backend.services.config_service import ConfigService
+from services.config_service import ConfigService
 
 
 class TestSystemPerformanceBenchmarks:

@@ -12,7 +12,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from advanced_rag_optimizer import SearchResult
-from backend.services.rag_service import RAGService
+from services.rag_service import RAGService
 
 from autobot_shared.logging_manager import get_llm_logger
 

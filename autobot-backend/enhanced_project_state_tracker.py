@@ -103,8 +103,8 @@ if __name__ == "__main__":
         if handler:
             await handler(tracker)
         else:
-            print(f"Unknown command: {command}")
-            print(
+            print(f"Unknown command: {command}")  # noqa: print
+            print(  # noqa: print
                 "Available commands: snapshot, summary, report, metrics, test-tracking, export"
             )
 

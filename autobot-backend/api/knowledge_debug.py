@@ -9,7 +9,7 @@ This creates a completely new knowledge base instance for testing the fixes
 import asyncio
 import logging
 
-from backend.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, Request
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling

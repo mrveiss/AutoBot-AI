@@ -12,10 +12,10 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from backend.user_management.models.base import Base, TimestampMixin
 from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from user_management.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from user_management.models.role import Role

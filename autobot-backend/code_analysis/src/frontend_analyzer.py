@@ -18,9 +18,8 @@ autobot_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(autobot_root))
 
 try:
-    from config import config
-
     from autobot_shared.redis_client import get_redis_client
+    from config import config
 except ImportError:
     # Fallback for standalone usage
     def get_redis_client(async_client=False):
@@ -68,15 +67,10 @@ class FrontendIssue:
 class FrontendAnalyzer:
     """Analyzes frontend code for JavaScript, TypeScript, Vue, React, Angular"""
 
-    def __init__(self, redis_client=None):
-        self.redis_client = redis_client or get_redis_client(async_client=True)
-        self.config = config
-
-        # Caching key
-        self.FRONTEND_KEY = "frontend_analysis:results"
-
-        # Framework detection patterns
-        self.framework_patterns = {
+    @staticmethod
+    def _build_framework_patterns() -> dict:
+        """Return framework detection regex patterns. Issue #1183."""
+        return {
             "vue": [
                 r"<template>",
                 r"export\s+default\s*{",
@@ -100,8 +94,10 @@ class FrontendAnalyzer:
             "svelte": [r"<script>", r"\$:", r"export\s+let", r"\.svelte$"],
         }
 
-        # Frontend-specific issue patterns
-        self.frontend_issues = {
+    @staticmethod
+    def _build_security_and_perf_issues() -> dict:
+        """Return security and performance frontend issue patterns. Issue #1183."""
+        return {
             "security": [
                 (r"innerHTML\s*=.*?\+", "XSS via innerHTML concatenation", "high"),
                 (r"eval\s*\(", "Code injection via eval", "critical"),
@@ -129,6 +125,12 @@ class FrontendAnalyzer:
                 (r"\.\$forceUpdate\s*\(", "Vue: Avoid $forceUpdate", "medium"),
                 (r"componentWillMount", "React: Deprecated lifecycle method", "medium"),
             ],
+        }
+
+    @staticmethod
+    def _build_a11y_and_practices_issues() -> dict:
+        """Return accessibility and best-practices frontend issue patterns. Issue #1183."""
+        return {
             "accessibility": [
                 (r"<img(?![^>]*alt\s*=)", "Image without alt attribute", "medium"),
                 (
@@ -159,6 +161,12 @@ class FrontendAnalyzer:
                 ),
                 (r"catch\s*\(\s*\)\s*{", "Empty catch block", "medium"),
             ],
+        }
+
+    @staticmethod
+    def _build_framework_specific_issues() -> dict:
+        """Return Vue- and React-specific issue patterns. Issue #1183."""
+        return {
             "vue_specific": [
                 (r"v-html\s*=.*?\+", "Vue: XSS risk with v-html", "high"),
                 (r"\$refs\..*?\.focus\(\)", "Vue: Direct DOM manipulation", "low"),
@@ -189,16 +197,24 @@ class FrontendAnalyzer:
             ],
         }
 
+    def __init__(self, redis_client=None):
+        self.redis_client = redis_client or get_redis_client(async_client=True)
+        self.config = config
+        self.FRONTEND_KEY = "frontend_analysis:results"
+        self.framework_patterns = self._build_framework_patterns()
+        self.frontend_issues = {
+            **self._build_security_and_perf_issues(),
+            **self._build_a11y_and_practices_issues(),
+            **self._build_framework_specific_issues(),
+        }
         # Issue #510: Precompile frontend issue patterns at init time
-        # Reduces per-file work from O(categories * patterns) to O(categories)
-        self._compiled_issue_patterns = {}
-        for category, pattern_list in self.frontend_issues.items():
-            compiled_list = [
+        self._compiled_issue_patterns = {
+            category: [
                 (re.compile(pattern, re.MULTILINE | re.IGNORECASE), desc, severity)
                 for pattern, desc, severity in pattern_list
             ]
-            self._compiled_issue_patterns[category] = compiled_list
-
+            for category, pattern_list in self.frontend_issues.items()
+        }
         logger.info("Frontend Analyzer initialized")
 
     async def analyze_frontend_code(
@@ -846,26 +862,32 @@ async def main():
         patterns=["**/*.js", "**/*.ts", "**/*.vue", "**/*.jsx", "**/*.tsx"],
     )
 
-    print(f"\n=== Frontend Code Analysis Results ===")
-    print(f"Total components: {results['total_components']}")
-    print(f"Total issues: {results['total_issues']}")
-    print(f"Frameworks detected: {', '.join(results['frameworks_detected'])}")
-    print(f"Quality score: {results['quality_score']:.1f}/100")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    print(f"\n=== Frontend Code Analysis Results ===")  # noqa: print
+    print(f"Total components: {results['total_components']}")  # noqa: print
+    print(f"Total issues: {results['total_issues']}")  # noqa: print
+    print(
+        f"Frameworks detected: {', '.join(results['frameworks_detected'])}"
+    )  # noqa: print
+    print(f"Quality score: {results['quality_score']:.1f}/100")  # noqa: print
+    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Framework usage
-    print(f"\n=== Framework Usage ===")
+    print(f"\n=== Framework Usage ===")  # noqa: print
     for framework, usage in results["framework_usage"].items():
-        print(f"{framework}: {usage['count']} components ({usage['percentage']:.1f}%)")
+        print(
+            f"{framework}: {usage['count']} components ({usage['percentage']:.1f}%)"
+        )  # noqa: print
 
     # Issues by category
     categories = ["security", "performance", "accessibility", "best_practices"]
     for category in categories:
         category_issues = [i for i in results["issues"] if i["issue_type"] == category]
         if category_issues:
-            print(f"\n=== {category.replace('_', ' ').title()} Issues ===")
+            print(
+                f"\n=== {category.replace('_', ' ').title()} Issues ==="
+            )  # noqa: print
             for issue in category_issues[:5]:  # Show first 5
-                print(
+                print(  # noqa: print
                     f"• {issue['description']} ({issue['file_path']}:{issue['line_number']})"
                 )
 

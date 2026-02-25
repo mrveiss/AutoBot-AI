@@ -12,8 +12,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-
-from backend.knowledge.summary_search import SummarySearchService
+from knowledge.summary_search import SummarySearchService
 
 logger = logging.getLogger(__name__)
 

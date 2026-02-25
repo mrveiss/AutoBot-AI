@@ -19,12 +19,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from backend.constants.network_constants import NetworkConstants
-from backend.constants.path_constants import PATH
+from constants.network_constants import NetworkConstants
+from constants.path_constants import PATH
+from utils.service_registry import get_service_url
 
 from autobot_shared.logging_manager import get_logger
-
-from .utils.service_registry import get_service_url
 
 # Get centralized logger
 logger = get_logger(__name__, "backend")
@@ -1047,30 +1046,30 @@ if __name__ == "__main__":
     manager = ProjectStateManager()
 
     if args.validate:
-        print("🔍 Running phase validation...")
+        print("🔍 Running phase validation...")  # noqa: print
         results = manager.validate_all_phases()
-        print("✅ Validation completed")
+        print("✅ Validation completed")  # noqa: print
 
     if args.status:
         status = manager.get_project_status()
-        print(json.dumps(status, indent=2, default=str))
+        print(json.dumps(status, indent=2, default=str))  # noqa: print
 
     if args.report:
         report = manager.generate_validation_report()
-        print(report)
+        print(report)  # noqa: print
 
     if args.auto_progress:
-        print("🔄 Running automated phase progression...")
+        print("🔄 Running automated phase progression...")  # noqa: print
         result = manager.auto_progress_phases()
-        print(f"Changes made: {result['changes_made']}")
-        print(f"Current phase: {result['current_phase']}")
+        print(f"Changes made: {result['changes_made']}")  # noqa: print
+        print(f"Current phase: {result['current_phase']}")  # noqa: print
         if result["log"]:
-            print("Progression log:")
+            print("Progression log:")  # noqa: print
             for log_entry in result["log"]:
-                print(f"  {log_entry}")
+                print(f"  {log_entry}")  # noqa: print
         if result["next_suggested"]:
-            print(f"Next suggested phase: {result['next_suggested']}")
+            print(f"Next suggested phase: {result['next_suggested']}")  # noqa: print
 
     if not any([args.validate, args.status, args.report, args.auto_progress]):
-        print("AutoBot Project State Manager")
-        print("Use --help for options")
+        print("AutoBot Project State Manager")  # noqa: print
+        print("Use --help for options")  # noqa: print

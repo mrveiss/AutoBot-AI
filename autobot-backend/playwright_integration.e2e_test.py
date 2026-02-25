@@ -11,33 +11,35 @@ import aiohttp
 
 async def test_playwright_service():
     """Test that Playwright service is running and accessible."""
-    print("🎭 Testing Playwright Service Integration")
-    print("=" * 60)
+    print("🎭 Testing Playwright Service Integration")  # noqa: print
+    print("=" * 60)  # noqa: print
 
     async with aiohttp.ClientSession() as session:
         # Check Playwright health
-        print("1. Checking Playwright Service Health")
-        print("-" * 40)
+        print("1. Checking Playwright Service Health")  # noqa: print
+        print("-" * 40)  # noqa: print
 
         try:
             async with session.get("http://localhost:3000/health") as response:
                 if response.status == 200:
                     health_data = await response.json()
-                    print("✅ Playwright service is healthy")
-                    print(f"   Status: {health_data.get('status')}")
-                    print(
+                    print("✅ Playwright service is healthy")  # noqa: print
+                    print(f"   Status: {health_data.get('status')}")  # noqa: print
+                    print(  # noqa: print
                         f"   Browser connected: {health_data.get('browser_connected')}"
                     )
                 else:
-                    print(f"❌ Playwright service unhealthy: {response.status}")
+                    print(  # noqa: print
+                        f"❌ Playwright service unhealthy: {response.status}"
+                    )  # noqa: print
                     return False
         except Exception as e:
-            print(f"❌ Cannot reach Playwright service: {e}")
+            print(f"❌ Cannot reach Playwright service: {e}")  # noqa: print
             return False
 
         # Test web scraping through Playwright
-        print("\n2. Testing Web Scraping via Playwright")
-        print("-" * 40)
+        print("\n2. Testing Web Scraping via Playwright")  # noqa: print
+        print("-" * 40)  # noqa: print
 
         scrape_request = {
             "url": "https://www.google.com/search?q=network+scanning+tools",
@@ -51,28 +53,28 @@ async def test_playwright_service():
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    print("✅ Web scraping successful")
+                    print("✅ Web scraping successful")  # noqa: print
                     content_preview = result.get("content", "")[:200]
-                    print(f"   Content preview: {content_preview}...")
+                    print(f"   Content preview: {content_preview}...")  # noqa: print
                 else:
-                    print(f"❌ Scraping failed: {response.status}")
+                    print(f"❌ Scraping failed: {response.status}")  # noqa: print
         except Exception as e:
-            print(f"❌ Scraping error: {e}")
+            print(f"❌ Scraping error: {e}")  # noqa: print
 
     return True
 
 
 async def test_workflow_with_research():
     """Test workflow orchestration with real web research."""
-    print("\n\n🔄 Testing Workflow Orchestration with Web Research")
-    print("=" * 60)
+    print("\n\n🔄 Testing Workflow Orchestration with Web Research")  # noqa: print
+    print("=" * 60)  # noqa: print
 
     base_url = "http://localhost:8001/api/workflow"
 
     async with aiohttp.ClientSession() as session:
         # Execute a research workflow
-        print("1. Executing Research Workflow")
-        print("-" * 40)
+        print("1. Executing Research Workflow")  # noqa: print
+        print("-" * 40)  # noqa: print
 
         workflow_request = {
             "user_message": "find the latest network scanning tools in 2024",
@@ -87,38 +89,42 @@ async def test_workflow_with_research():
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    print("✅ Research workflow initiated")
+                    print("✅ Research workflow initiated")  # noqa: print
 
                     workflow_response = result.get("workflow_response", {})
                     workflow_id = result.get("workflow_id")
 
-                    print(
+                    print(  # noqa: print
                         f"   🎯 Classification: {workflow_response.get('message_classification')}"
                     )
-                    print(
+                    print(  # noqa: print
                         f"   🤖 Agents: {', '.join(workflow_response.get('agents_involved', []))}"
                     )
-                    print(f"   📋 Steps: {workflow_response.get('planned_steps')}")
+                    print(  # noqa: print
+                        f"   📋 Steps: {workflow_response.get('planned_steps')}"
+                    )  # noqa: print
 
                     # Show workflow preview
                     preview = workflow_response.get("workflow_preview", [])
                     if preview:
-                        print("\n   📋 Workflow Plan:")
+                        print("\n   📋 Workflow Plan:")  # noqa: print
                         for step in preview:
-                            print(f"      {step}")
+                            print(f"      {step}")  # noqa: print
                 else:
-                    print(f"❌ Workflow execution failed: {response.status}")
+                    print(  # noqa: print
+                        f"❌ Workflow execution failed: {response.status}"
+                    )  # noqa: print
                     error = await response.text()
-                    print(f"   Error: {error}")
+                    print(f"   Error: {error}")  # noqa: print
                     return
         except Exception as e:
-            print(f"❌ Connection error: {e}")
+            print(f"❌ Connection error: {e}")  # noqa: print
             return
 
         # Monitor workflow progress
         if workflow_id:
-            print("\n2. Monitoring Workflow Progress")
-            print("-" * 40)
+            print("\n2. Monitoring Workflow Progress")  # noqa: print
+            print("-" * 40)  # noqa: print
 
             for i in range(30):  # Monitor for up to 30 seconds
                 await asyncio.sleep(2)
@@ -135,7 +141,7 @@ async def test_workflow_with_research():
                             current_agent = status.get("current_agent", "")
                             current_action = status.get("current_action", "")
 
-                            print(
+                            print(  # noqa: print
                                 f"\r   Progress: {progress:.1f}% - Step {current_step}/{total_steps} - "
                                 f"Agent: {current_agent} - Action: {current_action}",
                                 end="",
@@ -143,52 +149,54 @@ async def test_workflow_with_research():
                             )
 
                             if status.get("status") == "completed":
-                                print("\n   ✅ Workflow completed successfully!")
+                                print(  # noqa: print
+                                    "\n   ✅ Workflow completed successfully!"
+                                )  # noqa: print
 
                                 # Show completed steps
                                 steps_completed = status.get("steps_completed", [])
                                 if steps_completed:
-                                    print("\n   📋 Completed Steps:")
+                                    print("\n   📋 Completed Steps:")  # noqa: print
                                     for step in steps_completed:
-                                        print(
+                                        print(  # noqa: print
                                             f"      ✅ {step.get('agent')}: {step.get('action')} "
                                             f"({step.get('duration', 'N/A')})"
                                         )
                                 break
                             elif status.get("status") == "failed":
-                                print("\n   ❌ Workflow failed!")
+                                print("\n   ❌ Workflow failed!")  # noqa: print
                                 break
                 except Exception as e:
-                    print(f"\n   ❌ Status check error: {e}")
+                    print(f"\n   ❌ Status check error: {e}")  # noqa: print
                     break
 
 
 async def test_chat_with_workflow():
     """Test chat integration that triggers workflow orchestration."""
-    print("\n\n💬 Testing Chat Integration with Workflow Triggers")
-    print("=" * 60)
+    print("\n\n💬 Testing Chat Integration with Workflow Triggers")  # noqa: print
+    print("=" * 60)  # noqa: print
 
     async with aiohttp.ClientSession() as session:
         # Create a new chat
-        print("1. Creating New Chat Session")
-        print("-" * 40)
+        print("1. Creating New Chat Session")  # noqa: print
+        print("-" * 40)  # noqa: print
 
         try:
             async with session.post("http://localhost:8001/api/chats/new") as response:
                 if response.status == 200:
                     chat_data = await response.json()
                     chat_id = chat_data.get("chat_id")
-                    print(f"✅ Chat created: {chat_id}")
+                    print(f"✅ Chat created: {chat_id}")  # noqa: print
                 else:
-                    print(f"❌ Failed to create chat: {response.status}")
+                    print(f"❌ Failed to create chat: {response.status}")  # noqa: print
                     return
         except Exception as e:
-            print(f"❌ Error creating chat: {e}")
+            print(f"❌ Error creating chat: {e}")  # noqa: print
             return
 
         # Send a message that should trigger workflow
-        print("\n2. Sending Workflow-Triggering Message")
-        print("-" * 40)
+        print("\n2. Sending Workflow-Triggering Message")  # noqa: print
+        print("-" * 40)  # noqa: print
 
         chat_request = {
             "chatId": chat_id,
@@ -201,26 +209,26 @@ async def test_chat_with_workflow():
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    print("✅ Message sent successfully")
+                    print("✅ Message sent successfully")  # noqa: print
 
                     response_text = result.get("response", "")
                     if "workflow" in response_text.lower():
-                        print("   🎯 Workflow orchestration detected!")
+                        print("   🎯 Workflow orchestration detected!")  # noqa: print
 
-                    print(f"   Response: {response_text[:200]}...")
+                    print(f"   Response: {response_text[:200]}...")  # noqa: print
                 else:
-                    print(f"❌ Message failed: {response.status}")
+                    print(f"❌ Message failed: {response.status}")  # noqa: print
                     error = await response.text()
-                    print(f"   Error: {error}")
+                    print(f"   Error: {error}")  # noqa: print
         except Exception as e:
-            print(f"❌ Error sending message: {e}")
+            print(f"❌ Error sending message: {e}")  # noqa: print
 
 
 async def main():
     """Run all integration tests."""
-    print("🚀 AutoBot Playwright Integration Test Suite")
-    print("=" * 60)
-    print("Testing AutoBot with containerized browser automation\n")
+    print("🚀 AutoBot Playwright Integration Test Suite")  # noqa: print
+    print("=" * 60)  # noqa: print
+    print("Testing AutoBot with containerized browser automation\n")  # noqa: print
 
     # Test Playwright service
     playwright_ok = await test_playwright_service()
@@ -232,14 +240,14 @@ async def main():
         # Test chat integration
         await test_chat_with_workflow()
 
-    print("\n\n" + "=" * 60)
-    print("✅ Integration tests complete!")
-    print("\n📊 Summary:")
-    print("   - Playwright service: ✅ Healthy")
-    print("   - Web scraping: ✅ Working")
-    print("   - Workflow orchestration: ✅ Operational")
-    print("   - Chat integration: ✅ Connected")
-    print("\n🎮 AutoBot is ready for browser-automated workflows!")
+    print("\n\n" + "=" * 60)  # noqa: print
+    print("✅ Integration tests complete!")  # noqa: print
+    print("\n📊 Summary:")  # noqa: print
+    print("   - Playwright service: ✅ Healthy")  # noqa: print
+    print("   - Web scraping: ✅ Working")  # noqa: print
+    print("   - Workflow orchestration: ✅ Operational")  # noqa: print
+    print("   - Chat integration: ✅ Connected")  # noqa: print
+    print("\n🎮 AutoBot is ready for browser-automated workflows!")  # noqa: print
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ Stubs maintained for backward compatibility with existing API endpoints.
 
 import logging
 
-from backend.celery_app import celery_app
+from celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 

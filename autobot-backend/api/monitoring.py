@@ -14,31 +14,20 @@ import time
 from typing import Any, Dict, List, Optional
 
 import aiohttp
-from auth_middleware import check_admin_permission
 
 # Import monitoring utility functions
-from backend.api.monitoring_utils import (
+from api.monitoring_utils import (
     _analyze_resource_utilization,
     _calculate_overall_health,
     _calculate_performance_score,
     _convert_metrics_to_csv,
     _identify_bottlenecks,
 )
+from auth_middleware import check_admin_permission
+from config import ConfigManager
 
 # Issue #474: Import ServiceURLs for AlertManager integration
-from backend.constants.network_constants import ServiceURLs
-from backend.type_defs.common import Metadata
-from backend.utils.performance_monitor import (
-    add_alert_callback,
-    collect_metrics,
-    get_optimization_recommendations,
-    get_performance_dashboard,
-    monitor_performance,
-    performance_monitor,
-    start_monitoring,
-    stop_monitoring,
-)
-from config import ConfigManager
+from constants.network_constants import ServiceURLs
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -50,6 +39,17 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from type_defs.common import Metadata
+from utils.performance_monitor import (
+    add_alert_callback,
+    collect_metrics,
+    get_optimization_recommendations,
+    get_performance_dashboard,
+    monitor_performance,
+    performance_monitor,
+    start_monitoring,
+    stop_monitoring,
+)
 
 # Import AutoBot monitoring system
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -380,7 +380,7 @@ async def get_services_health():
     ApiClient, api.ts) all call /api/monitoring/services/health expecting a
     ServicesSummary-shaped response.  Delegates to service_monitor helpers.
     """
-    from backend.api.service_monitor import _check_http_health, _check_redis_health
+    from api.service_monitor import _check_http_health, _check_redis_health
 
     npu_url, browser_url, ollama_url = _resolve_service_urls()
 
@@ -1003,7 +1003,7 @@ async def test_performance_monitoring(
 
 # ===== PROMETHEUS METRICS ENDPOINTS =====
 
-from backend.monitoring.prometheus_metrics import get_metrics_manager
+from monitoring.prometheus_metrics import get_metrics_manager
 
 
 @with_error_handling(

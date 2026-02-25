@@ -163,36 +163,36 @@ class NPUWorkerTester:
 
 async def main():
     """Main test runner"""
-    print("🧪 AutoBot NPU Worker Test Suite")
-    print("=" * 50)
+    print("🧪 AutoBot NPU Worker Test Suite")  # noqa: print
+    print("=" * 50)  # noqa: print
 
     try:
         async with NPUWorkerTester() as tester:
             results = await tester.run_all_tests()
 
-            print("\n📊 Test Results:")
-            print("-" * 30)
+            print("\n📊 Test Results:")  # noqa: print
+            print("-" * 30)  # noqa: print
 
             passed = 0
             total = len(results)
 
             for test_name, passed_test in results.items():
                 status = "✅ PASS" if passed_test else "❌ FAIL"
-                print(f"{test_name:<20} {status}")
+                print(f"{test_name:<20} {status}")  # noqa: print
                 if passed_test:
                     passed += 1
 
-            print(f"\nOverall: {passed}/{total} tests passed")
+            print(f"\nOverall: {passed}/{total} tests passed")  # noqa: print
 
             if passed == total:
-                print("🎉 All NPU worker tests passed!")
+                print("🎉 All NPU worker tests passed!")  # noqa: print
                 return 0
             else:
-                print("⚠️  Some NPU worker tests failed")
+                print("⚠️  Some NPU worker tests failed")  # noqa: print
                 return 1
 
     except Exception as e:
-        print(f"❌ Test suite failed: {e}")
+        print(f"❌ Test suite failed: {e}")  # noqa: print
         return 1
 
 

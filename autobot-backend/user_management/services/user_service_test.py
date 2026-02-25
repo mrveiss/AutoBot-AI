@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from backend.user_management.services.user_service import (
+from user_management.services.user_service import (
     InvalidCredentialsError,
     UserNotFoundError,
     UserService,

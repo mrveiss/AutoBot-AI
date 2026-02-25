@@ -21,8 +21,8 @@ sys.path.insert(
     0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 )
 
-from autobot_shared.error_boundaries import (  # noqa: E402
-    ErrorContext,
+from autobot_shared.error_boundaries import ErrorContext  # noqa: E402
+from autobot_shared.error_boundaries import (
     RecoveryStrategy,
     error_boundary,
     get_error_boundary_manager,
@@ -229,68 +229,68 @@ def integrate_with_llm_interface():
 # Example testing and demonstration functions
 async def run_examples():
     """Run all examples to demonstrate the error boundary system"""
-    print("🧪 Running Error Boundary Examples")
-    print("=" * 50)
+    print("🧪 Running Error Boundary Examples")  # noqa: print
+    print("=" * 50)  # noqa: print
 
     # Example 1: Decorator usage
-    print("\n1. Testing decorator with successful operation:")
+    print("\n1. Testing decorator with successful operation:")  # noqa: print
     result = risky_calculation(10, 2)
-    print(f"   Result: {result}")
+    print(f"   Result: {result}")  # noqa: print
 
-    print("\n2. Testing decorator with error (division by zero):")
+    print("\n2. Testing decorator with error (division by zero):")  # noqa: print
     try:
         result = risky_calculation(10, 0)
-        print(f"   Result: {result}")
+        print(f"   Result: {result}")  # noqa: print
     except Exception as e:
-        print(f"   Caught: {e}")
+        print(f"   Caught: {e}")  # noqa: print
 
     # Example 2: Async decorator
-    print("\n3. Testing async decorator:")
+    print("\n3. Testing async decorator:")  # noqa: print
     try:
         result = await fetch_external_data("https://api.example.com")
-        print(f"   Result: {result}")
+        print(f"   Result: {result}")  # noqa: print
     except Exception as e:
-        print(f"   Caught: {e}")
+        print(f"   Caught: {e}")  # noqa: print
 
     # Example 3: Context manager
-    print("\n4. Testing sync context manager:")
+    print("\n4. Testing sync context manager:")  # noqa: print
     try:
         result = database_operation("SELECT * FROM users")
-        print(f"   Result: {len(result)} records")
+        print(f"   Result: {len(result)} records")  # noqa: print
     except Exception as e:
-        print(f"   Caught: {e}")
+        print(f"   Caught: {e}")  # noqa: print
 
     # Example 4: Async context manager
-    print("\n5. Testing async context manager:")
+    print("\n5. Testing async context manager:")  # noqa: print
     try:
         result = await llm_request("What is Python?")
-        print(f"   Result: {result}")
+        print(f"   Result: {result}")  # noqa: print
     except Exception as e:
-        print(f"   Caught: {e}")
+        print(f"   Caught: {e}")  # noqa: print
 
     # Example 5: Service class
-    print("\n6. Testing service class:")
+    print("\n6. Testing service class:")  # noqa: print
     service = ExampleService()
     try:
         data = {"user_id": "test123", "data": "sample"}
         result = await service.complex_operation(data)
-        print(f"   Result: {result}")
+        print(f"   Result: {result}")  # noqa: print
     except Exception as e:
-        print(f"   Caught: {e}")
+        print(f"   Caught: {e}")  # noqa: print
 
     # Show error statistics
-    print("\n📊 Error Statistics:")
+    print("\n📊 Error Statistics:")  # noqa: print
     from autobot_shared.error_boundaries import get_error_statistics
 
     stats = get_error_statistics()
     if stats.get("total_errors", 0) > 0:
-        print(f"   Total Errors: {stats['total_errors']}")
-        print(f"   Categories: {stats.get('categories', {})}")
-        print(f"   Components: {stats.get('components', {})}")
+        print(f"   Total Errors: {stats['total_errors']}")  # noqa: print
+        print(f"   Categories: {stats.get('categories', {})}")  # noqa: print
+        print(f"   Components: {stats.get('components', {})}")  # noqa: print
     else:
-        print("   No errors recorded yet")
+        print("   No errors recorded yet")  # noqa: print
 
-    print("\n✅ Error boundary examples completed!")
+    print("\n✅ Error boundary examples completed!")  # noqa: print
 
 
 if __name__ == "__main__":

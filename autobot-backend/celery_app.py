@@ -16,9 +16,9 @@ import urllib.parse
 from pathlib import Path
 
 from celery import Celery
-from config import ConfigManager
 
 from autobot_shared.ssot_config import config as ssot_config
+from config import ConfigManager
 
 # Create singleton config instance for extended config values
 config = ConfigManager()
@@ -136,5 +136,5 @@ celery_app.conf.update(
     task_send_sent_event=True,
 )
 
-# Auto-discover tasks from backend.tasks module
-celery_app.autodiscover_tasks(["backend.tasks"])
+# Auto-discover tasks from tasks module
+celery_app.autodiscover_tasks(["tasks"])

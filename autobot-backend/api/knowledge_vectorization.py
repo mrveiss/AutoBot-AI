@@ -12,12 +12,12 @@ import uuid
 from datetime import datetime
 from typing import List
 
-from backend.background_vectorization import get_background_vectorizer
-from backend.knowledge_factory import get_or_create_knowledge_base
-from backend.type_defs.common import Metadata
+from background_vectorization import get_background_vectorizer
 from exceptions import InternalError
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from knowledge_factory import get_or_create_knowledge_base
 from redis.exceptions import RedisError
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

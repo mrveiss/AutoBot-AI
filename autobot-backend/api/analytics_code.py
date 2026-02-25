@@ -13,8 +13,8 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
+from api.analytics_models import CodeAnalysisRequest
 from auth_middleware import check_admin_permission
-from backend.api.analytics_models import CodeAnalysisRequest
 from fastapi import APIRouter, Depends, HTTPException
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -493,7 +493,7 @@ def _calculate_security_score(cached_analysis: dict) -> float:
         Security score (0-100)
     """
     try:
-        from backend.api.codebase_analytics.storage import get_code_collection
+        from api.codebase_analytics.storage import get_code_collection
 
         code_collection = get_code_collection()
         if not code_collection:

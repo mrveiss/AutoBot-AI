@@ -29,24 +29,24 @@ from datetime import datetime
 from typing import Awaitable, Callable, Dict, Optional
 
 # Import models from dedicated module (Issue #185)
-from backend.api.terminal_models import (
+from api.terminal_models import (
     MODERATE_RISK_PATTERNS,
     RISKY_COMMAND_PATTERNS,
     CommandRiskLevel,
     SecurityLevel,
 )
-from backend.constants.path_constants import PATH
-from backend.constants.threshold_constants import TimingConstants
-from backend.services.simple_pty import simple_pty_manager
+from chat_history import ChatHistoryManager
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
+from fastapi import WebSocket
+from services.simple_pty import simple_pty_manager
 
 # Import extracted modules (Issue #290)
-from backend.services.terminal_websocket import (
+from services.terminal_websocket import (
     HIGH_RISK_COMMAND_LEVELS,
     LOGGING_SECURITY_LEVELS,
     SHELL_OPERATORS,
 )
-from chat_history import ChatHistoryManager
-from fastapi import WebSocket
 
 # Issue #380: Module-level frozenset for terminal close event types
 _TERMINAL_CLOSE_EVENTS = frozenset({"eo", "close"})
@@ -198,7 +198,7 @@ class ConsolidatedTerminalWebSocket:
     def _init_pty_process(self):
         """Initialize PTY process using SimplePTY"""
         try:
-            from backend.services.simple_pty import simple_pty_manager
+            from services.simple_pty import simple_pty_manager
 
             # Create PTY session with SimplePTY manager
             self.pty_process = simple_pty_manager.create_session(
@@ -392,7 +392,7 @@ class ConsolidatedTerminalWebSocket:
             return
 
         try:
-            from backend.services.simple_pty import simple_pty_manager
+            from services.simple_pty import simple_pty_manager
 
             simple_pty_manager.close_session(self.session_id)
             self.pty_process = None

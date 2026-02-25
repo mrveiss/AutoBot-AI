@@ -12,10 +12,10 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-from backend.user_management.models.base import Base, TenantMixin, TimestampMixin
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from user_management.models.base import Base, TenantMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from user_management.models.api_key import APIKey

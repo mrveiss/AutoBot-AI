@@ -4,9 +4,9 @@
 from typing import List
 
 from auth_middleware import check_admin_permission
-from backend.services.analytics_service import get_analytics_service
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
+from services.analytics_service import get_analytics_service
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

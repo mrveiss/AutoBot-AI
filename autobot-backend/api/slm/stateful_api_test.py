@@ -8,16 +8,16 @@ Tests for SLM Stateful Services API.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from backend.api.slm.stateful import router
-from backend.services.slm.stateful_manager import (
+from api.slm.stateful import router
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from services.slm.stateful_manager import (
     BackupContext,
     BackupState,
     ReplicationContext,
     ReplicationState,
     StatefulServiceManager,
 )
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 
 @pytest.fixture
@@ -76,7 +76,7 @@ class TestListReplications:
     def test_list_empty(self, client, mock_manager):
         """Test listing with no replications."""
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.get("/v1/slm/stateful/replications")
@@ -91,7 +91,7 @@ class TestListReplications:
         mock_manager.active_replications = [sample_replication]
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.get("/v1/slm/stateful/replications")
@@ -110,7 +110,7 @@ class TestStartReplication:
         mock_manager.start_replication = AsyncMock(return_value=sample_replication)
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.post(
@@ -140,7 +140,7 @@ class TestStartReplication:
         mock_manager.start_replication = AsyncMock(return_value=failed_ctx)
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.post(
@@ -164,7 +164,7 @@ class TestGetReplication:
         mock_manager.check_replication_sync = AsyncMock(return_value=(False, 0.5))
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.get("/v1/slm/stateful/replications/rep-123")
@@ -178,7 +178,7 @@ class TestGetReplication:
         mock_manager.get_replication.return_value = None
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.get("/v1/slm/stateful/replications/nonexistent")
@@ -196,7 +196,7 @@ class TestPromoteReplica:
         mock_manager.promote_replica = AsyncMock(return_value=True)
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.post("/v1/slm/stateful/replications/rep-123/promote")
@@ -212,7 +212,7 @@ class TestPromoteReplica:
         mock_manager.get_replication.return_value = sample_replication
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.post("/v1/slm/stateful/replications/rep-123/promote")
@@ -225,7 +225,7 @@ class TestPromoteReplica:
         mock_manager.get_replication.return_value = None
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.post("/v1/slm/stateful/replications/nonexistent/promote")
@@ -239,7 +239,7 @@ class TestListBackups:
     def test_list_empty(self, client, mock_manager):
         """Test listing with no backups."""
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.get("/v1/slm/stateful/backups")
@@ -254,7 +254,7 @@ class TestListBackups:
         mock_manager.active_backups = [sample_backup]
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.get("/v1/slm/stateful/backups")
@@ -273,7 +273,7 @@ class TestCreateBackup:
         mock_manager.create_backup = AsyncMock(return_value=sample_backup)
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.post(
@@ -303,7 +303,7 @@ class TestCreateBackup:
         mock_manager.create_backup = AsyncMock(return_value=failed_ctx)
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.post(
@@ -325,7 +325,7 @@ class TestGetBackup:
         mock_manager.get_backup.return_value = sample_backup
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.get("/v1/slm/stateful/backups/bak-123")
@@ -339,7 +339,7 @@ class TestGetBackup:
         mock_manager.get_backup.return_value = None
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.get("/v1/slm/stateful/backups/nonexistent")
@@ -356,7 +356,7 @@ class TestRestoreBackup:
         mock_manager.restore_backup = AsyncMock(return_value=True)
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.post("/v1/slm/stateful/backups/bak-123/restore")
@@ -372,7 +372,7 @@ class TestRestoreBackup:
         mock_manager.get_backup.return_value = sample_backup
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.post("/v1/slm/stateful/backups/bak-123/restore")
@@ -385,7 +385,7 @@ class TestRestoreBackup:
         mock_manager.get_backup.return_value = None
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.post("/v1/slm/stateful/backups/nonexistent/restore")
@@ -410,7 +410,7 @@ class TestVerifyData:
         )
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.post(
@@ -438,7 +438,7 @@ class TestVerifyData:
         )
 
         with patch(
-            "backend.api.slm.stateful.get_stateful_manager",
+            "api.slm.stateful.get_stateful_manager",
             return_value=mock_manager,
         ):
             response = client.post(

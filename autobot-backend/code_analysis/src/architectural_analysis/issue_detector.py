@@ -57,9 +57,35 @@ class IssueDetector:
         Returns:
             List of identified ArchitecturalIssue objects
         """
-        issues = []
+        # Issue #1183: Delegate structural checks to extracted helper
+        issues = self._detect_structural_issues(components)
 
-        # Identify God classes
+        # Check for circular dependencies
+        circular_deps = self._deps.detect_circular_dependencies(dependencies)
+        if circular_deps:
+            affected = [c for c in components if c.name in circular_deps]
+            issues.append(
+                ArchitecturalIssue(
+                    issue_type="circular_dependency",
+                    severity="high",
+                    description=f"Found circular dependencies between {len(circular_deps)} components",
+                    affected_components=affected,
+                    suggestion="Break circular dependencies using interfaces or dependency injection",
+                    refactoring_effort="high",
+                    pattern_violation="Acyclic Dependencies Principle",
+                )
+            )
+
+        return issues
+
+    def _detect_structural_issues(
+        self, components: List[ArchitecturalComponent]
+    ) -> List[ArchitecturalIssue]:
+        """Detect god-class, tight-coupling, and low-cohesion structural issues.
+
+        Issue #1183: Extracted from identify_issues() to reduce function length.
+        """
+        issues: List[ArchitecturalIssue] = []
         god_classes = [
             c
             for c in components
@@ -78,8 +104,6 @@ class IssueDetector:
                     pattern_violation="Single Responsibility Principle",
                 )
             )
-
-        # Identify high coupling
         high_coupling = [
             c for c in components if c.coupling_score > self.HIGH_COUPLING_THRESHOLD
         ]
@@ -95,8 +119,6 @@ class IssueDetector:
                     pattern_violation="Dependency Inversion Principle",
                 )
             )
-
-        # Identify low cohesion
         low_cohesion = [
             c
             for c in components
@@ -115,23 +137,6 @@ class IssueDetector:
                     pattern_violation="Single Responsibility Principle",
                 )
             )
-
-        # Check for circular dependencies
-        circular_deps = self._deps.detect_circular_dependencies(dependencies)
-        if circular_deps:
-            affected = [c for c in components if c.name in circular_deps]
-            issues.append(
-                ArchitecturalIssue(
-                    issue_type="circular_dependency",
-                    severity="high",
-                    description=f"Found circular dependencies between {len(circular_deps)} components",
-                    affected_components=affected,
-                    suggestion="Break circular dependencies using interfaces or dependency injection",
-                    refactoring_effort="high",
-                    pattern_violation="Acyclic Dependencies Principle",
-                )
-            )
-
         return issues
 
     def calculate_metrics(
@@ -152,41 +157,16 @@ class IssueDetector:
         if not components:
             return ArchitecturalMetrics()
 
-        # Average coupling
-        avg_coupling = sum(c.coupling_score for c in components) / len(components)
-        coupling_score = max(0, 100 - (avg_coupling * 5))  # Lower coupling is better
+        # Issue #1183: Delegate score calculations to extracted helper
+        (
+            coupling_score,
+            cohesion_score,
+            pattern_adherence,
+            maintainability,
+            abstraction_score,
+            instability_score,
+        ) = self._calculate_intermediate_scores(components, issues)
 
-        # Average cohesion
-        class_components = [c for c in components if c.component_type == "class"]
-        avg_cohesion = (
-            sum(c.cohesion_score for c in class_components) / len(class_components)
-            if class_components
-            else 0
-        )
-        cohesion_score = avg_cohesion * 100
-
-        # Pattern adherence (fewer issues = better adherence)
-        critical_issues = len([i for i in issues if i.severity == "critical"])
-        high_issues = len([i for i in issues if i.severity == "high"])
-        pattern_adherence = max(0, 100 - (critical_issues * 20 + high_issues * 10))
-
-        # Maintainability index (simplified)
-        avg_complexity = sum(c.complexity_score for c in components) / len(components)
-        maintainability = max(0, 100 - (avg_complexity * 2))
-
-        # Abstraction score (ratio of abstract to concrete classes)
-        abstract_classes = len(
-            [c for c in components if c.component_type == "class" and c.is_abstract]
-        )
-        total_classes = len([c for c in components if c.component_type == "class"])
-        abstraction_score = (
-            (abstract_classes / total_classes * 100) if total_classes > 0 else 0
-        )
-
-        # Instability score (simplified calculation)
-        instability_score = min(100, avg_coupling * 10)
-
-        # Overall architecture score (weighted average)
         architecture_score = (
             coupling_score * 0.25
             + cohesion_score * 0.25
@@ -203,6 +183,48 @@ class IssueDetector:
             maintainability_index=round(maintainability, 2),
             abstraction_score=round(abstraction_score, 2),
             instability_score=round(instability_score, 2),
+        )
+
+    def _calculate_intermediate_scores(
+        self,
+        components: List[ArchitecturalComponent],
+        issues: List[ArchitecturalIssue],
+    ) -> tuple:
+        """Calculate coupling, cohesion, adherence, maintainability, abstraction, instability.
+
+        Issue #1183: Extracted from calculate_metrics() to reduce function length.
+        Returns (coupling_score, cohesion_score, pattern_adherence, maintainability,
+                 abstraction_score, instability_score).
+        """
+        avg_coupling = sum(c.coupling_score for c in components) / len(components)
+        coupling_score = max(0, 100 - (avg_coupling * 5))
+        class_components = [c for c in components if c.component_type == "class"]
+        avg_cohesion = (
+            sum(c.cohesion_score for c in class_components) / len(class_components)
+            if class_components
+            else 0
+        )
+        cohesion_score = avg_cohesion * 100
+        critical_issues = len([i for i in issues if i.severity == "critical"])
+        high_issues = len([i for i in issues if i.severity == "high"])
+        pattern_adherence = max(0, 100 - (critical_issues * 20 + high_issues * 10))
+        avg_complexity = sum(c.complexity_score for c in components) / len(components)
+        maintainability = max(0, 100 - (avg_complexity * 2))
+        abstract_classes = len(
+            [c for c in components if c.component_type == "class" and c.is_abstract]
+        )
+        total_classes = len([c for c in components if c.component_type == "class"])
+        abstraction_score = (
+            (abstract_classes / total_classes * 100) if total_classes > 0 else 0
+        )
+        instability_score = min(100, avg_coupling * 10)
+        return (
+            coupling_score,
+            cohesion_score,
+            pattern_adherence,
+            maintainability,
+            abstraction_score,
+            instability_score,
         )
 
     async def generate_recommendations(

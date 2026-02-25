@@ -135,9 +135,9 @@ class TestLLMInterfacePerformance:
             assert stats["max_memory_mb"] < 500, "Memory usage too high"
 
         # Log results for analysis
-        print("\nLLM Performance Results:")
+        print("\nLLM Performance Results:")  # noqa: print
         for prompt_type, stats in results.items():
-            print(
+            print(  # noqa: print
                 f"{prompt_type}: {stats['avg_duration']:.3f}s avg, {stats['max_duration']:.3f}s max"
             )
 
@@ -184,7 +184,7 @@ class TestLLMInterfacePerformance:
                 stats["avg_duration"] < 5.0
             ), "Individual request time too high under load"
 
-            print(
+            print(  # noqa: print
                 f"\nConcurrent {num_requests} requests: {total_time:.3f}s total, {stats['avg_duration']:.3f}s avg per request"
             )
 
@@ -252,7 +252,7 @@ class TestKnowledgeBasePerformance:
                 ), f"Search too slow for query: {query[:50]}..."
                 assert stats["max_duration"] < 2.0, "Maximum search time exceeded"
 
-                print(
+                print(  # noqa: print
                     f"\nKB Search '{query[:30]}...': {stats['avg_duration']:.3f}s avg"
                 )
 
@@ -293,7 +293,7 @@ class TestKnowledgeBasePerformance:
                     stats["avg_duration"] < 5.0
                 ), f"Indexing too slow for document {i}"
 
-                print(
+                print(  # noqa: print
                     f"\nIndexing doc {i} ({len(doc['content'])} chars): {stats['avg_duration']:.3f}s avg"
                 )
 
@@ -345,7 +345,7 @@ class TestOrchestratorPerformance:
                     stats["avg_duration"] < 3.0
                 ), f"Task planning too slow for: {request[:50]}..."
 
-                print(
+                print(  # noqa: print
                     f"\nTask planning '{request[:40]}...': {stats['avg_duration']:.3f}s avg"
                 )
 
@@ -388,7 +388,9 @@ class TestOrchestratorPerformance:
                 total_time < 15.0
             ), f"Concurrent workflows took too long: {total_time}s"
 
-            print(f"\nConcurrent {count} workflows: {total_time:.3f}s total")
+            print(  # noqa: print
+                f"\nConcurrent {count} workflows: {total_time:.3f}s total"
+            )  # noqa: print
 
 
 class TestMemorySystemPerformance:
@@ -442,7 +444,7 @@ class TestMemorySystemPerformance:
             # Performance assertions
             assert stats["avg_duration"] < 1.0, f"Memory storage too slow for entry {i}"
 
-            print(
+            print(  # noqa: print
                 f"\nMemory storage {i} ({len(entry['content'])} chars): {stats['avg_duration']:.3f}s avg"
             )
 
@@ -486,7 +488,9 @@ class TestMemorySystemPerformance:
                 stats["avg_duration"] < 1.0
             ), f"Memory retrieval too slow for: {query}"
 
-            print(f"\nMemory retrieval '{query}': {stats['avg_duration']:.3f}s avg")
+            print(  # noqa: print
+                f"\nMemory retrieval '{query}': {stats['avg_duration']:.3f}s avg"
+            )  # noqa: print
 
 
 class TestSystemIntegrationPerformance:
@@ -558,7 +562,7 @@ class TestSystemIntegrationPerformance:
                     stats["avg_duration"] < 5.0
                 ), f"Integration workflow too slow: {workflow[:50]}..."
 
-                print(
+                print(  # noqa: print
                     f"\nIntegration '{workflow[:40]}...': {stats['avg_duration']:.3f}s avg"
                 )
 
@@ -593,7 +597,7 @@ class TestSystemIntegrationPerformance:
         total_time = end_time - start_time
         assert total_time < 10.0, f"Load test took too long: {total_time}s"
 
-        print(
+        print(  # noqa: print
             f"\nLoad test: {total_time:.3f}s, Memory: {initial_memory:.1f}MB -> {final_memory:.1f}MB"
         )
 

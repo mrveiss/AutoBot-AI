@@ -16,7 +16,7 @@ Endpoints:
 
 import logging
 
-from backend.api.knowledge_models import (
+from api.knowledge_models import (
     CompareVersionsRequest,
     CreateMetadataTemplateRequest,
     RevertToVersionRequest,

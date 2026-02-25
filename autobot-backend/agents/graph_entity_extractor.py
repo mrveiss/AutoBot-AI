@@ -58,7 +58,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from agents.knowledge_extraction_agent import KnowledgeExtractionAgent
 from autobot_memory_graph import AutoBotMemoryGraph
-from backend.models.atomic_fact import AtomicFact, FactType, TemporalType
+from models.atomic_fact import AtomicFact, FactType, TemporalType
 
 from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.logging_manager import get_llm_logger

@@ -14,8 +14,8 @@ from unittest.mock import AsyncMock
 
 # Import system components
 try:
-    from backend.api.simple_terminal_websocket import SimpleTerminalSession
-    from backend.api.workflow_automation import (
+    from api.simple_terminal_websocket import SimpleTerminalSession
+    from api.workflow_automation import (
         AutomationMode,
         WorkflowAutomationManager,
         WorkflowStep,
@@ -171,7 +171,7 @@ class SessionTakeoverTestSuite:
         ), "First step should be waiting for approval"
 
         # Simulate user approving first step
-        from backend.api.workflow_automation import WorkflowControlRequest
+        from api.workflow_automation import WorkflowControlRequest
 
         control_request = WorkflowControlRequest(
             workflow_id=workflow_id, action="approve_step", step_id="confirm_1"
@@ -210,7 +210,7 @@ class SessionTakeoverTestSuite:
         await self.workflow_manager.start_workflow_execution(workflow_id)
 
         # Simulate user taking manual control during execution
-        from backend.api.workflow_automation import WorkflowControlRequest
+        from api.workflow_automation import WorkflowControlRequest
 
         pause_request = WorkflowControlRequest(workflow_id=workflow_id, action="pause")
 
@@ -297,7 +297,7 @@ class SessionTakeoverTestSuite:
         await self.workflow_manager.start_workflow_execution(workflow_id)
 
         # Test pause
-        from backend.api.workflow_automation import WorkflowControlRequest
+        from api.workflow_automation import WorkflowControlRequest
 
         pause_request = WorkflowControlRequest(workflow_id=workflow_id, action="pause")
         result = await self.workflow_manager.handle_workflow_control(pause_request)
@@ -516,7 +516,7 @@ class SessionTakeoverTestSuite:
         # Test invalid workflow operations
         try:
             # Try to control non-existent workflow
-            from backend.api.workflow_automation import WorkflowControlRequest
+            from api.workflow_automation import WorkflowControlRequest
 
             invalid_request = WorkflowControlRequest(
                 workflow_id="non_existent_workflow", action="pause"

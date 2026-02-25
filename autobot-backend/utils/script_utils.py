@@ -27,9 +27,9 @@ class ScriptFormatter:
             title: The title to display
             width: Width of the header (default: 60)
         """
-        print(f"\n{'=' * width}")
-        print(f"  {title}")
-        print("=" * width)
+        print(f"\n{'=' * width}")  # noqa: print
+        print(f"  {title}")  # noqa: print
+        print("=" * width)  # noqa: print
 
     @staticmethod
     def print_step(step: str, status: str = "info"):
@@ -49,7 +49,7 @@ class ScriptFormatter:
         }
 
         symbol = status_symbols.get(status, "📋")
-        print(f"{symbol} {step}")
+        print(f"{symbol} {step}")  # noqa: print
 
     @staticmethod
     def print_section(title: str, items: list, width: int = 60):
@@ -61,11 +61,11 @@ class ScriptFormatter:
             items: List of items to display
             width: Width of the section
         """
-        print(f"\n{'-' * width}")
-        print(f"  {title}")
-        print(f"{'-' * width}")
+        print(f"\n{'-' * width}")  # noqa: print
+        print(f"  {title}")  # noqa: print
+        print(f"{'-' * width}")  # noqa: print
         for item in items:
-            print(f"   • {item}")
+            print(f"   • {item}")  # noqa: print
 
     @staticmethod
     def print_config_summary(config_data: dict, title: str = "Configuration Summary"):
@@ -78,7 +78,7 @@ class ScriptFormatter:
         """
         ScriptFormatter.print_header(title)
         for key, value in config_data.items():
-            print(f"   {key}: {value}")
+            print(f"   {key}: {value}")  # noqa: print
 
     @staticmethod
     def print_error(message: str, exit_code: Optional[int] = None):
@@ -89,7 +89,7 @@ class ScriptFormatter:
             message: Error message
             exit_code: If provided, exit with this code
         """
-        print(f"❌ ERROR: {message}", file=sys.stderr)
+        print(f"❌ ERROR: {message}", file=sys.stderr)  # noqa: print
         if exit_code is not None:
             sys.exit(exit_code)
 
@@ -101,7 +101,7 @@ class ScriptFormatter:
         Args:
             message: Success message
         """
-        print(f"✅ SUCCESS: {message}")
+        print(f"✅ SUCCESS: {message}")  # noqa: print
 
     @staticmethod
     def print_warning(message: str):
@@ -111,13 +111,13 @@ class ScriptFormatter:
         Args:
             message: Warning message
         """
-        print(f"⚠️  WARNING: {message}")
+        print(f"⚠️  WARNING: {message}")  # noqa: print
 
     @staticmethod
     def print_timestamp():
         """Print current timestamp"""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"⏰ {timestamp}")
+        print(f"⏰ {timestamp}")  # noqa: print
 
     @staticmethod
     def print_separator(char: str = "-", width: int = 60):
@@ -128,7 +128,7 @@ class ScriptFormatter:
             char: Character to use for separator
             width: Width of the separator
         """
-        print(char * width)
+        print(char * width)  # noqa: print
 
 
 class ProgressIndicator:
@@ -148,17 +148,17 @@ class ProgressIndicator:
 
         step_info = f" - {message}" if message else ""
         progress = f"{percentage:.1f}% ({self.current_step}/{self.total_steps})"
-        print(
+        print(  # noqa: print
             f"\r🔄 {self.description}: [{progress_bar}] {progress}{step_info}",
             end="",
         )
 
         if self.current_step >= self.total_steps:
-            print()  # New line when complete
+            print()  # New line when complete  # noqa: print
 
     def complete(self, message: str = "Completed"):
         """Mark progress as complete"""
-        print(f"\n✅ {message}")
+        print(f"\n✅ {message}")  # noqa: print
 
 
 def validate_required_args(args: dict, required: list) -> bool:

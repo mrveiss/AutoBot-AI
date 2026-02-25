@@ -12,7 +12,7 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 import torch
-from backend.models.code_pattern import CodePattern
+from models.code_pattern import CodePattern
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from torch.utils.data import Dataset

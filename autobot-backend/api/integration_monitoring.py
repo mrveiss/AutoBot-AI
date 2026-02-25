@@ -12,12 +12,9 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from backend.integrations.base import IntegrationConfig
-from backend.integrations.monitoring_integration import (
-    DatadogIntegration,
-    NewRelicIntegration,
-)
 from fastapi import APIRouter, HTTPException, Query
+from integrations.base import IntegrationConfig
+from integrations.monitoring_integration import DatadogIntegration, NewRelicIntegration
 from pydantic import BaseModel, Field, validator
 
 logger = logging.getLogger(__name__)

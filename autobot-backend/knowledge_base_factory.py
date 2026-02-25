@@ -30,8 +30,7 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from config import ConfigManager
-
-from backend.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 if TYPE_CHECKING:
     from knowledge_base import KnowledgeBase

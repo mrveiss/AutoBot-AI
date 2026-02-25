@@ -26,8 +26,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
-from backend.type_defs.common import Metadata
 from secure_command_executor import CommandRisk
+from type_defs.common import Metadata
 
 # Permission system v2 imports (lazy to avoid circular imports)
 if TYPE_CHECKING:
@@ -532,7 +532,7 @@ class CommandApprovalManager:
             if not config.permission.enabled:
                 return None, None
 
-            from backend.services.permission_matcher import (  # noqa: F811
+            from services.permission_matcher import (  # noqa: F811
                 MatchResult,
                 PermissionMatcher,
             )
@@ -601,9 +601,7 @@ class CommandApprovalManager:
             ):
                 return False
 
-            from backend.services.approval_memory import (  # noqa: F811
-                ApprovalMemoryManager,
-            )
+            from services.approval_memory import ApprovalMemoryManager  # noqa: F811
 
             memory = ApprovalMemoryManager()
             return await memory.check_remembered(
@@ -653,9 +651,7 @@ class CommandApprovalManager:
             ):
                 return False
 
-            from backend.services.approval_memory import (  # noqa: F811
-                ApprovalMemoryManager,
-            )
+            from services.approval_memory import ApprovalMemoryManager  # noqa: F811
 
             memory = ApprovalMemoryManager()
             return await memory.remember_approval(

@@ -8,7 +8,7 @@ Provides an async client for the Pocket TTS worker.
 Returns raw WAV bytes for the caller to stream or play.
 
 Usage:
-    from backend.services.tts_client import get_tts_client
+    from services.tts_client import get_tts_client
 
     client = get_tts_client()
     if await client.is_available():

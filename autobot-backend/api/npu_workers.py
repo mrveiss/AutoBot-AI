@@ -36,7 +36,9 @@ import logging
 from typing import List, Optional
 
 from auth_middleware import check_admin_permission
-from backend.models.npu_models import (
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
+from models.npu_models import (
     LoadBalancingConfig,
     NPUWorkerConfig,
     NPUWorkerDetails,
@@ -44,9 +46,7 @@ from backend.models.npu_models import (
     WorkerHeartbeat,
     WorkerTestResult,
 )
-from backend.services.npu_worker_manager import get_worker_manager
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import JSONResponse
+from services.npu_worker_manager import get_worker_manager
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

@@ -156,10 +156,9 @@ async def analyze_command_execution_duplicates():
     return results
 
 
-async def create_command_utils_library():
-    """Create consolidated command utilities library"""
-
-    library_content = '''"""
+# Issue #1183: Module-level constant extracted from create_command_utils_library() to reduce
+# function length. Contains the source code of the consolidated command utilities module.
+_COMMAND_UTILS_LIBRARY_CONTENT = '''"""
 Consolidated Command Execution Utilities
 Provides consistent command execution across AutoBot
 """
@@ -352,9 +351,14 @@ run_command = execute_shell_command
 run_command_sync = execute_shell_command_sync
 '''
 
-    # Save the consolidated library
+
+async def create_command_utils_library():
+    """Create consolidated command utilities library.
+
+    Issue #1183: library content extracted to module-level constant to reduce function length.
+    """
     lib_path = Path("src/utils/command_utils_consolidated.py")
-    lib_path.write_text(library_content, encoding="utf-8")
+    lib_path.write_text(_COMMAND_UTILS_LIBRARY_CONTENT, encoding="utf-8")
     logger.info(f"Created consolidated command utilities at: {lib_path}")
 
 

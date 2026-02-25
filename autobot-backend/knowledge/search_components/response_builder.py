@@ -12,7 +12,7 @@ import logging
 import threading
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.models.task_context import SearchResponseContext
+from models.task_context import SearchResponseContext
 
 logger = logging.getLogger(__name__)
 

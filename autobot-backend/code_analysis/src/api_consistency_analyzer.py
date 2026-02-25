@@ -13,9 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from config import UnifiedConfig
-
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -926,36 +925,50 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== API Consistency Analysis Results ===")
-    print(f"Total endpoints: {results['total_endpoints']}")
-    print(f"Inconsistencies found: {results['inconsistencies_found']}")
-    print(f"Overall consistency score: {results['consistency_score']}/100")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    print(f"\n=== API Consistency Analysis Results ===")  # noqa: print
+    print(f"Total endpoints: {results['total_endpoints']}")  # noqa: print
+    print(f"Inconsistencies found: {results['inconsistencies_found']}")  # noqa: print
+    print(
+        f"Overall consistency score: {results['consistency_score']}/100"
+    )  # noqa: print
+    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Print detailed metrics
     metrics = results["metrics"]
-    print(f"\n=== Detailed Metrics ===")
-    print(f"Naming consistency: {metrics['naming_consistency']}/100")
-    print(f"Response format consistency: {metrics['response_format_consistency']}/100")
-    print(f"Error handling consistency: {metrics['error_handling_consistency']}/100")
-    print(f"Auth pattern consistency: {metrics['auth_pattern_consistency']}/100")
+    print(f"\n=== Detailed Metrics ===")  # noqa: print
+    print(f"Naming consistency: {metrics['naming_consistency']}/100")  # noqa: print
+    print(
+        f"Response format consistency: {metrics['response_format_consistency']}/100"
+    )  # noqa: print
+    print(
+        f"Error handling consistency: {metrics['error_handling_consistency']}/100"
+    )  # noqa: print
+    print(
+        f"Auth pattern consistency: {metrics['auth_pattern_consistency']}/100"
+    )  # noqa: print
 
     # Print found endpoints
-    print(f"\n=== API Endpoints Found ===")
+    print(f"\n=== API Endpoints Found ===")  # noqa: print
     for endpoint in results["endpoints"]:
-        print(f"{endpoint['method']} {endpoint['path']} -> {endpoint['function']}()")
         print(
+            f"{endpoint['method']} {endpoint['path']} -> {endpoint['function']}()"
+        )  # noqa: print
+        print(  # noqa: print
             f"  Auth: {endpoint['has_auth']}, Validation: {endpoint['has_validation']}, "
             f"Error Handling: {endpoint['has_error_handling']}"
         )
 
     # Print inconsistencies
     if results["inconsistencies"]:
-        print(f"\n=== Consistency Issues ===")
+        print(f"\n=== Consistency Issues ===")  # noqa: print
         for inc in results["inconsistencies"]:
-            print(f"{inc['type']} ({inc['severity']}): {inc['description']}")
-            print(f"  Affects {inc['affected_endpoints_count']} endpoints")
-            print(f"  Suggestion: {inc['suggestion']}")
+            print(
+                f"{inc['type']} ({inc['severity']}): {inc['description']}"
+            )  # noqa: print
+            print(
+                f"  Affects {inc['affected_endpoints_count']} endpoints"
+            )  # noqa: print
+            print(f"  Suggestion: {inc['suggestion']}")  # noqa: print
 
 
 if __name__ == "__main__":

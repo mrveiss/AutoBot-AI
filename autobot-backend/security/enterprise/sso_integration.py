@@ -21,7 +21,7 @@ from typing import Dict, List, Optional
 from uuid import uuid4
 
 import yaml
-from backend.constants.path_constants import PATH
+from constants.path_constants import PATH
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import (

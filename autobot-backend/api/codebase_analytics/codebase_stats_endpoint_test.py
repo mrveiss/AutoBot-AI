@@ -22,14 +22,14 @@ class TestIsTaskStale:
 
     def test_returns_false_when_no_started_at(self):
         """Task without started_at should not be considered stale."""
-        from backend.api.codebase_analytics.endpoints.stats import _is_task_stale
+        from api.codebase_analytics.endpoints.stats import _is_task_stale
 
         task_info = {"status": "running"}
         assert _is_task_stale(task_info) is False
 
     def test_returns_false_for_recent_task(self):
         """Task started recently should not be stale."""
-        from backend.api.codebase_analytics.endpoints.stats import _is_task_stale
+        from api.codebase_analytics.endpoints.stats import _is_task_stale
 
         task_info = {
             "status": "running",
@@ -39,7 +39,7 @@ class TestIsTaskStale:
 
     def test_returns_true_for_old_task(self):
         """Task started more than 1 hour ago should be stale."""
-        from backend.api.codebase_analytics.endpoints.stats import (
+        from api.codebase_analytics.endpoints.stats import (
             _STALE_TASK_TIMEOUT_SECONDS,
             _is_task_stale,
         )
@@ -53,7 +53,7 @@ class TestIsTaskStale:
 
     def test_handles_invalid_timestamp_gracefully(self):
         """Invalid timestamp should not crash, returns False."""
-        from backend.api.codebase_analytics.endpoints.stats import _is_task_stale
+        from api.codebase_analytics.endpoints.stats import _is_task_stale
 
         task_info = {
             "status": "running",
@@ -63,7 +63,7 @@ class TestIsTaskStale:
 
     def test_handles_none_timestamp(self):
         """None timestamp should return False."""
-        from backend.api.codebase_analytics.endpoints.stats import _is_task_stale
+        from api.codebase_analytics.endpoints.stats import _is_task_stale
 
         task_info = {
             "status": "running",
@@ -77,10 +77,8 @@ class TestGetActiveIndexingTask:
 
     def test_returns_none_when_no_tasks(self):
         """Should return None when no indexing tasks exist."""
-        from backend.api.codebase_analytics.endpoints import stats
-        from backend.api.codebase_analytics.endpoints.stats import (
-            _get_active_indexing_task,
-        )
+        from api.codebase_analytics.endpoints import stats
+        from api.codebase_analytics.endpoints.stats import _get_active_indexing_task
 
         with patch.object(stats, "indexing_tasks", {}):
             result = _get_active_indexing_task()
@@ -88,10 +86,8 @@ class TestGetActiveIndexingTask:
 
     def test_returns_none_when_all_tasks_completed(self):
         """Should return None when all tasks are completed."""
-        from backend.api.codebase_analytics.endpoints import stats
-        from backend.api.codebase_analytics.endpoints.stats import (
-            _get_active_indexing_task,
-        )
+        from api.codebase_analytics.endpoints import stats
+        from api.codebase_analytics.endpoints.stats import _get_active_indexing_task
 
         mock_tasks = {
             "task-1": {"status": "completed"},
@@ -103,10 +99,8 @@ class TestGetActiveIndexingTask:
 
     def test_returns_running_task(self):
         """Should return info for a running task."""
-        from backend.api.codebase_analytics.endpoints import stats
-        from backend.api.codebase_analytics.endpoints.stats import (
-            _get_active_indexing_task,
-        )
+        from api.codebase_analytics.endpoints import stats
+        from api.codebase_analytics.endpoints.stats import _get_active_indexing_task
 
         mock_tasks = {
             "task-1": {
@@ -125,8 +119,8 @@ class TestGetActiveIndexingTask:
 
     def test_ignores_stale_running_task(self):
         """Should ignore tasks that have been running too long."""
-        from backend.api.codebase_analytics.endpoints import stats
-        from backend.api.codebase_analytics.endpoints.stats import (
+        from api.codebase_analytics.endpoints import stats
+        from api.codebase_analytics.endpoints.stats import (
             _STALE_TASK_TIMEOUT_SECONDS,
             _get_active_indexing_task,
         )
@@ -147,8 +141,8 @@ class TestGetActiveIndexingTask:
 
     def test_returns_fresh_task_ignoring_stale(self):
         """Should return fresh running task, ignoring stale ones."""
-        from backend.api.codebase_analytics.endpoints import stats
-        from backend.api.codebase_analytics.endpoints.stats import (
+        from api.codebase_analytics.endpoints import stats
+        from api.codebase_analytics.endpoints.stats import (
             _STALE_TASK_TIMEOUT_SECONDS,
             _get_active_indexing_task,
         )
@@ -180,7 +174,7 @@ class TestParseStatsMetadata:
 
     def test_parses_numeric_fields(self):
         """Should parse all numeric fields correctly."""
-        from backend.api.codebase_analytics.endpoints.stats import _parse_stats_metadata
+        from api.codebase_analytics.endpoints.stats import _parse_stats_metadata
 
         metadata = {
             "total_files": "100",
@@ -199,7 +193,7 @@ class TestParseStatsMetadata:
 
     def test_parses_float_fields(self):
         """Should parse average_file_size as float."""
-        from backend.api.codebase_analytics.endpoints.stats import _parse_stats_metadata
+        from api.codebase_analytics.endpoints.stats import _parse_stats_metadata
 
         metadata = {"average_file_size": "123.45"}
         result = _parse_stats_metadata(metadata)
@@ -210,7 +204,7 @@ class TestParseStatsMetadata:
         """Should parse JSON-encoded category fields."""
         import json
 
-        from backend.api.codebase_analytics.endpoints.stats import _parse_stats_metadata
+        from api.codebase_analytics.endpoints.stats import _parse_stats_metadata
 
         metadata = {
             "lines_by_category": json.dumps({"code": 8000, "docs": 2000}),
@@ -223,7 +217,7 @@ class TestParseStatsMetadata:
 
     def test_handles_dict_category_fields(self):
         """Should handle category fields that are already dicts."""
-        from backend.api.codebase_analytics.endpoints.stats import _parse_stats_metadata
+        from api.codebase_analytics.endpoints.stats import _parse_stats_metadata
 
         metadata = {
             "lines_by_category": {"code": 5000},
@@ -234,7 +228,7 @@ class TestParseStatsMetadata:
 
     def test_parses_ratio_strings(self):
         """Should preserve ratio strings as-is."""
-        from backend.api.codebase_analytics.endpoints.stats import _parse_stats_metadata
+        from api.codebase_analytics.endpoints.stats import _parse_stats_metadata
 
         metadata = {
             "comment_ratio": "15.5%",
@@ -254,7 +248,7 @@ class TestClearChromaDBCollection:
     @pytest.mark.asyncio
     async def test_preserves_codebase_stats(self):
         """Should not delete codebase_stats document."""
-        from backend.api.codebase_analytics.scanner import _clear_chromadb_collection
+        from api.codebase_analytics.scanner import _clear_chromadb_collection
 
         mock_collection = MagicMock()
         mock_collection.get = MagicMock(
@@ -287,7 +281,7 @@ class TestClearChromaDBCollection:
     @pytest.mark.asyncio
     async def test_handles_empty_collection(self):
         """Should handle empty collection gracefully."""
-        from backend.api.codebase_analytics.scanner import _clear_chromadb_collection
+        from api.codebase_analytics.scanner import _clear_chromadb_collection
 
         mock_collection = MagicMock()
 
@@ -306,7 +300,7 @@ class TestClearChromaDBCollection:
     @pytest.mark.asyncio
     async def test_handles_only_stats_document(self):
         """Should not delete anything if only codebase_stats exists."""
-        from backend.api.codebase_analytics.scanner import _clear_chromadb_collection
+        from api.codebase_analytics.scanner import _clear_chromadb_collection
 
         mock_collection = MagicMock()
 
@@ -327,7 +321,7 @@ class TestNoDataResponse:
 
     def test_returns_json_response(self):
         """Should return JSONResponse with correct structure."""
-        from backend.api.codebase_analytics.endpoints.stats import _no_data_response
+        from api.codebase_analytics.endpoints.stats import _no_data_response
         from fastapi.responses import JSONResponse
 
         result = _no_data_response()
@@ -336,7 +330,7 @@ class TestNoDataResponse:
 
     def test_default_message(self):
         """Should use default message when none provided."""
-        from backend.api.codebase_analytics.endpoints.stats import _no_data_response
+        from api.codebase_analytics.endpoints.stats import _no_data_response
 
         result = _no_data_response()
         # JSONResponse body is bytes, need to decode
@@ -352,7 +346,7 @@ class TestNoDataResponse:
         """Should use custom message when provided."""
         import json
 
-        from backend.api.codebase_analytics.endpoints.stats import _no_data_response
+        from api.codebase_analytics.endpoints.stats import _no_data_response
 
         result = _no_data_response("Custom error message")
         body = json.loads(result.body)

@@ -3,9 +3,9 @@
 # Author: mrveiss
 import logging
 
-from backend.services.config_service import ConfigService
-from backend.utils.connection_utils import ConnectionTester
 from fastapi import APIRouter, HTTPException
+from services.config_service import ConfigService
+from utils.connection_utils import ConnectionTester
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

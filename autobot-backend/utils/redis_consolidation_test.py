@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
-from backend.utils.redis_client import (
+from utils.redis_client import (
     ConnectionState,
     ManagerStats,
     PoolStatistics,
@@ -276,9 +276,9 @@ def test_documentation_completeness():
 
 if __name__ == "__main__":
     # Run tests
-    print("=" * 80)
-    print("Redis Client Consolidation - Test Suite")
-    print("=" * 80)
+    print("=" * 80)  # noqa: print
+    print("Redis Client Consolidation - Test Suite")  # noqa: print
+    print("=" * 80)  # noqa: print
 
     test_classes = [
         TestPhase1Configuration,
@@ -294,8 +294,8 @@ if __name__ == "__main__":
     failed_tests = []
 
     for test_class in test_classes:
-        print(f"\n{test_class.__name__}:")
-        print("-" * 80)
+        print(f"\n{test_class.__name__}:")  # noqa: print
+        print("-" * 80)  # noqa: print
 
         for method_name in dir(test_class):
             if method_name.startswith("test_"):
@@ -304,35 +304,35 @@ if __name__ == "__main__":
                     test_instance = test_class()
                     method = getattr(test_instance, method_name)
                     method()
-                    print(f"  ✅ {method_name}")
+                    print(f"  ✅ {method_name}")  # noqa: print
                     passed_tests += 1
                 except Exception as e:
-                    print(f"  ❌ {method_name}: {e}")
+                    print(f"  ❌ {method_name}: {e}")  # noqa: print
                     failed_tests.append((test_class.__name__, method_name, str(e)))
 
     # Run module-level tests
-    print("\nModule Tests:")
-    print("-" * 80)
+    print("\nModule Tests:")  # noqa: print
+    print("-" * 80)  # noqa: print
     for func in [test_module_imports, test_documentation_completeness]:
         total_tests += 1
         try:
             func()
-            print(f"  ✅ {func.__name__}")
+            print(f"  ✅ {func.__name__}")  # noqa: print
             passed_tests += 1
         except Exception as e:
-            print(f"  ❌ {func.__name__}: {e}")
+            print(f"  ❌ {func.__name__}: {e}")  # noqa: print
             failed_tests.append(("Module", func.__name__, str(e)))
 
     # Summary
-    print("\n" + "=" * 80)
-    print(f"Test Results: {passed_tests}/{total_tests} passed")
-    print("=" * 80)
+    print("\n" + "=" * 80)  # noqa: print
+    print(f"Test Results: {passed_tests}/{total_tests} passed")  # noqa: print
+    print("=" * 80)  # noqa: print
 
     if failed_tests:
-        print("\nFailed Tests:")
+        print("\nFailed Tests:")  # noqa: print
         for class_name, method_name, error in failed_tests:
-            print(f"  - {class_name}.{method_name}: {error}")
+            print(f"  - {class_name}.{method_name}: {error}")  # noqa: print
         sys.exit(1)
     else:
-        print("\n✅ All tests passed!")
+        print("\n✅ All tests passed!")  # noqa: print
         sys.exit(0)

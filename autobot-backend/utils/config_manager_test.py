@@ -8,9 +8,8 @@ import tempfile
 from unittest.mock import patch
 
 import pytest
-
-from backend.config import get_config, get_config_section, is_feature_enabled
-from backend.config.manager import ConfigManager as ConfigManager
+from config import get_config, get_config_section, is_feature_enabled
+from config.manager import ConfigManager as ConfigManager
 
 
 class TestConfigManager:
@@ -282,7 +281,7 @@ redis:
 
     def test_backward_compatibility_wrapper(self):
         """Test backward compatibility Config class wrapper"""
-        from backend.config import Config
+        from config import Config
 
         config = Config()
 

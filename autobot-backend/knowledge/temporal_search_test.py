@@ -13,8 +13,7 @@ from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
-
-from backend.knowledge.temporal_search import TemporalSearchService
+from knowledge.temporal_search import TemporalSearchService
 
 logger = logging.getLogger(__name__)
 

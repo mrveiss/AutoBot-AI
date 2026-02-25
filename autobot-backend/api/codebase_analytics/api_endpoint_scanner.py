@@ -91,7 +91,7 @@ class BackendEndpointScanner:
 
     def __init__(self, project_root: Optional[Path] = None):
         self.project_root = project_root or get_project_root()
-        self.backend_path = self.project_root / "backend" / "api"
+        self.backend_path = self.project_root / "api"
         self._router_prefixes: Dict[str, str] = {}
         # Map module name to router prefix (e.g., "chat" -> "", "system" -> "/system")
         self._module_prefix_map: Dict[str, str] = {}
@@ -181,15 +181,15 @@ class BackendEndpointScanner:
         Returns:
             Tuple of (import_pattern, import_modules_pattern, include_pattern)
         """
-        # Pattern to detect: from backend.api.module import router as X_router
+        # Pattern to detect: from api.module import router as X_router
         import_pattern = re.compile(
-            r"from\s+backend\.api\.(\w+)\s+import\s+router\s+as\s+(\w+_router)",
+            r"from\s+api\.(\w+)\s+import\s+router\s+as\s+(\w+_router)",
             re.MULTILINE,
         )
 
-        # Pattern to detect: from backend.api import module1, module2
+        # Pattern to detect: from api import module1, module2
         import_modules_pattern = re.compile(
-            r"from\s+backend\.api\s+import\s+([^;\n]+)", re.MULTILINE
+            r"from\s+api\s+import\s+([^;\n]+)", re.MULTILINE
         )
 
         # Pattern to detect: router.include_router(X_router) or router.include_router(module.router)
@@ -225,7 +225,7 @@ class BackendEndpointScanner:
             router_var = match.group(2)  # e.g., "vectorization_router"
             imported_routers[router_var] = module_name
 
-        # Find all module imports (e.g., from backend.api import analytics_cost)
+        # Find all module imports (e.g., from api import analytics_cost)
         imported_modules: dict[str, str] = {}
         for match in import_modules_pattern.finditer(content):
             modules_str = match.group(1)
@@ -261,8 +261,8 @@ class BackendEndpointScanner:
             # Note: The child's own APIRouter(prefix=...) is handled separately
             # in _get_file_router_prefix during scanning
             self._module_prefix_map[child_module] = parent_prefix
-            self._module_prefix_map[f"backend/api/{child_module}.py"] = parent_prefix
-            self._module_prefix_map[f"backend.api.{child_module}"] = parent_prefix
+            self._module_prefix_map[f"api/{child_module}.py"] = parent_prefix
+            self._module_prefix_map[f"api.{child_module}"] = parent_prefix
             logger.debug(
                 "Nested router: %s -> %s (from %s)",
                 child_module,
@@ -359,7 +359,7 @@ class BackendEndpointScanner:
                 self._module_prefix_map[module_name] = full_prefix
 
                 # Also map the file name pattern
-                self._module_prefix_map[f"backend/api/{module_name}.py"] = full_prefix
+                self._module_prefix_map[f"api/{module_name}.py"] = full_prefix
 
         except Exception as e:
             logger.debug("Error parsing router registry %s: %s", file_path, e)
@@ -392,14 +392,14 @@ class BackendEndpointScanner:
         matched = False
         for match in five_element_pattern.finditer(content):
             matched = True
-            module_path = match.group(1)  # e.g., "backend.api.infrastructure"
+            module_path = match.group(1)  # e.g., "api.infrastructure"
             prefix = match.group(2)  # e.g., "/iac"
             self._register_module_prefix(module_path, prefix)
 
         # If no 5-element matches, try 4-element pattern
         if not matched:
             for match in four_element_pattern.finditer(content):
-                module_path = match.group(1)  # e.g., "backend.api.analytics"
+                module_path = match.group(1)  # e.g., "api.analytics"
                 prefix = match.group(2)  # e.g., "/analytics"
                 self._register_module_prefix(module_path, prefix)
 
@@ -416,7 +416,7 @@ class BackendEndpointScanner:
 
             # terminal_router -> terminal, agent_terminal_router -> agent_terminal
             module_name = router_var.replace("_router", "")
-            module_path = f"backend.api.{module_name}"
+            module_path = f"api.{module_name}"
             self._register_module_prefix(module_path, prefix)
             logger.debug(
                 "Dynamic router: %s -> %s%s", module_name, self.API_PREFIX, prefix
@@ -452,21 +452,21 @@ class BackendEndpointScanner:
         Issue #552: Extracted helper for consistent prefix registration.
 
         Args:
-            module_path: Python module path (e.g., "backend.api.infrastructure")
+            module_path: Python module path (e.g., "api.infrastructure")
             prefix: Router URL prefix (e.g., "/iac")
         """
         # Build full API prefix
         full_prefix = f"{self.API_PREFIX}{prefix}"
         self._module_prefix_map[module_path] = full_prefix
 
-        # Also derive file path mapping (backend.api.foo -> backend/api/foo)
+        # Also derive file path mapping (api.foo -> api/foo)
         file_path_str = module_path.replace(".", "/")
         self._module_prefix_map[file_path_str] = full_prefix
 
-        # Extract module name from path (backend.api.infrastructure -> infrastructure)
+        # Extract module name from path (api.infrastructure -> infrastructure)
         module_name = module_path.split(".")[-1]
         self._module_prefix_map[module_name] = full_prefix
-        self._module_prefix_map[f"backend/api/{module_name}.py"] = full_prefix
+        self._module_prefix_map[f"api/{module_name}.py"] = full_prefix
 
         logger.debug("Registered prefix: %s -> %s", module_name, full_prefix)
 
@@ -486,8 +486,8 @@ class BackendEndpointScanner:
         # Check if file is in codebase_analytics subdirectory
         if "codebase_analytics" in str(file_path):
             # Check for router prefix in parent
-            if "backend.api.codebase_analytics" in self._module_prefix_map:
-                base_prefix = self._module_prefix_map["backend.api.codebase_analytics"]
+            if "api.codebase_analytics" in self._module_prefix_map:
+                base_prefix = self._module_prefix_map["api.codebase_analytics"]
                 # Check for additional prefix from codebase/router.py
                 return f"{base_prefix}/codebase"
 

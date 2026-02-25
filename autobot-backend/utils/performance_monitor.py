@@ -23,7 +23,7 @@ FEATURES:
 
 USAGE:
 ======
-from backend.utils.performance_monitor import (
+from utils.performance_monitor import (
     PerformanceMonitor,
     GPUMetrics, NPUMetrics, SystemPerformanceMetrics,
     start_monitoring, stop_monitoring,
@@ -50,33 +50,30 @@ await stop_monitoring()
 import logging
 from typing import Any, Dict, List
 
-from backend.utils.performance_monitoring.analyzers import (
+from utils.performance_monitoring.analyzers import (
     AlertAnalyzer,
     RecommendationGenerator,
 )
-from backend.utils.performance_monitoring.collectors import (
+from utils.performance_monitoring.collectors import (
     GPUCollector,
     MultiModalCollector,
     NPUCollector,
     ServiceCollector,
     SystemCollector,
 )
-from backend.utils.performance_monitoring.decorator import (
-    monitor_performance,
-    set_redis_client,
-)
-from backend.utils.performance_monitoring.hardware import HardwareDetector
-from backend.utils.performance_monitoring.metrics import (
+from utils.performance_monitoring.decorator import monitor_performance, set_redis_client
+from utils.performance_monitoring.hardware import HardwareDetector
+from utils.performance_monitoring.metrics import (
     GPUMetrics,
     MultiModalMetrics,
     NPUMetrics,
     ServicePerformanceMetrics,
     SystemPerformanceMetrics,
 )
-from backend.utils.performance_monitoring.monitor import PerformanceMonitor
+from utils.performance_monitoring.monitor import PerformanceMonitor
 
 # Import all types, dataclasses, and classes from the package (Issue #381 refactoring)
-from backend.utils.performance_monitoring.types import (
+from utils.performance_monitoring.types import (
     AUTOBOT_PROCESS_KEYWORDS,
     CRITICAL_SERVICE_STATUSES,
     DEFAULT_COLLECTION_INTERVAL,
@@ -180,21 +177,27 @@ if __name__ == "__main__":
 
     async def test_monitoring():
         """Test performance monitoring with metrics and recommendations."""
-        print("Testing Performance Monitoring System...")
+        print("Testing Performance Monitoring System...")  # noqa: print
 
         # Collect metrics
         metrics = await performance_monitor.collect_all_metrics()
-        print(f"Collected metrics: {json.dumps(metrics, indent=2, default=str)}")
+        print(  # noqa: print
+            f"Collected metrics: {json.dumps(metrics, indent=2, default=str)}"
+        )  # noqa: print
 
         # Get dashboard
         dashboard = await performance_monitor.get_current_performance_dashboard()
-        print(f"Performance dashboard: {json.dumps(dashboard, indent=2, default=str)}")
+        print(  # noqa: print
+            f"Performance dashboard: {json.dumps(dashboard, indent=2, default=str)}"
+        )  # noqa: print
 
         # Get recommendations
         recommendations = (
             await performance_monitor.get_performance_optimization_recommendations()
         )
-        print(f"Optimization recommendations: {json.dumps(recommendations, indent=2)}")
+        print(  # noqa: print
+            f"Optimization recommendations: {json.dumps(recommendations, indent=2)}"
+        )  # noqa: print
 
     # Run test
     asyncio.run(test_monitoring())

@@ -8,17 +8,17 @@ import sys
 
 sys.path.append("/home/kali/Desktop/AutoBot")
 
-from backend.metrics.system_monitor import system_monitor
-from backend.metrics.workflow_metrics import workflow_metrics
+from metrics.system_monitor import system_monitor
+from metrics.workflow_metrics import workflow_metrics
 
 
 async def test_workflow_metrics():
     """Test workflow metrics collection"""
-    print("📊 TESTING WORKFLOW METRICS COLLECTION")
-    print("=" * 60)
+    print("📊 TESTING WORKFLOW METRICS COLLECTION")  # noqa: print
+    print("=" * 60)  # noqa: print
 
     # Test 1: Start workflow tracking
-    print("\n📝 Test 1: Workflow Tracking...")
+    print("\n📝 Test 1: Workflow Tracking...")  # noqa: print
 
     workflow_id = "test_workflow_123"
     workflow_data = {
@@ -29,10 +29,10 @@ async def test_workflow_metrics():
     }
 
     workflow_metrics.start_workflow_tracking(workflow_id, workflow_data)
-    print(f"✅ Started tracking workflow: {workflow_id}")
+    print(f"✅ Started tracking workflow: {workflow_id}")  # noqa: print
 
     # Test 2: Step timing
-    print("\n📝 Test 2: Step Execution Timing...")
+    print("\n📝 Test 2: Step Execution Timing...")  # noqa: print
 
     steps = [
         ("validate_target", "security_scanner"),
@@ -43,7 +43,7 @@ async def test_workflow_metrics():
     ]
 
     for step_id, agent_type in steps:
-        print(f"  Executing step: {step_id} ({agent_type})")
+        print(f"  Executing step: {step_id} ({agent_type})")  # noqa: print
 
         # Start step timing
         workflow_metrics.start_step_timing(workflow_id, step_id, agent_type)
@@ -53,10 +53,10 @@ async def test_workflow_metrics():
 
         # End step timing
         workflow_metrics.end_step_timing(workflow_id, step_id, success=True)
-        print("    ✅ Completed in ~500ms")
+        print("    ✅ Completed in ~500ms")  # noqa: print
 
     # Test 3: Resource usage recording
-    print("\n📝 Test 3: Resource Usage Recording...")
+    print("\n📝 Test 3: Resource Usage Recording...")  # noqa: print
 
     # Simulate resource usage data
     resource_data = {
@@ -67,26 +67,28 @@ async def test_workflow_metrics():
     }
 
     workflow_metrics.record_resource_usage(workflow_id, resource_data)
-    print("✅ Resource usage recorded")
+    print("✅ Resource usage recorded")  # noqa: print
 
     # Test 4: Approval wait time
-    print("\n📝 Test 4: Approval Wait Time...")
+    print("\n📝 Test 4: Approval Wait Time...")  # noqa: print
 
     wait_time_ms = 15000  # 15 seconds
     workflow_metrics.record_approval_wait_time(workflow_id, wait_time_ms)
-    print(f"✅ Approval wait time recorded: {wait_time_ms}ms")
+    print(f"✅ Approval wait time recorded: {wait_time_ms}ms")  # noqa: print
 
     # Test 5: Complete workflow tracking
-    print("\n📝 Test 5: Complete Workflow Tracking...")
+    print("\n📝 Test 5: Complete Workflow Tracking...")  # noqa: print
 
     final_stats = workflow_metrics.end_workflow_tracking(workflow_id, "completed")
 
     if final_stats:
-        print("✅ Workflow tracking completed")
-        print(f"  Total duration: {final_stats.total_duration_ms:.1f}ms")
-        print(f"  Average step duration: {final_stats.avg_step_duration_ms:.1f}ms")
-        print(f"  Success rate: {final_stats.success_rate:.1f}%")
-        print(
+        print("✅ Workflow tracking completed")  # noqa: print
+        print(f"  Total duration: {final_stats.total_duration_ms:.1f}ms")  # noqa: print
+        print(  # noqa: print
+            f"  Average step duration: {final_stats.avg_step_duration_ms:.1f}ms"
+        )  # noqa: print
+        print(f"  Success rate: {final_stats.success_rate:.1f}%")  # noqa: print
+        print(  # noqa: print
             f"  Steps completed: {final_stats.completed_steps}/{final_stats.total_steps}"
         )
 
@@ -95,77 +97,85 @@ async def test_workflow_metrics():
 
 async def test_system_monitoring():
     """Test system resource monitoring"""
-    print("\n\n🖥️ TESTING SYSTEM RESOURCE MONITORING")
-    print("=" * 60)
+    print("\n\n🖥️ TESTING SYSTEM RESOURCE MONITORING")  # noqa: print
+    print("=" * 60)  # noqa: print
 
     # Test 1: Current metrics
-    print("\n📝 Test 1: Current System Metrics...")
+    print("\n📝 Test 1: Current System Metrics...")  # noqa: print
 
     current_metrics = system_monitor.get_current_metrics()
-    print("✅ Current system metrics collected:")
-    print(f"  CPU: {current_metrics.get('cpu_percent', 0):.1f}%")
-    print(f"  Memory: {current_metrics.get('memory_percent', 0):.1f}%")
-    print(f"  Disk: {current_metrics.get('disk_percent', 0):.1f}%")
+    print("✅ Current system metrics collected:")  # noqa: print
+    print(f"  CPU: {current_metrics.get('cpu_percent', 0):.1f}%")  # noqa: print
+    print(f"  Memory: {current_metrics.get('memory_percent', 0):.1f}%")  # noqa: print
+    print(f"  Disk: {current_metrics.get('disk_percent', 0):.1f}%")  # noqa: print
 
     # Test 2: Detailed metrics collection
-    print("\n📝 Test 2: Detailed Metrics Collection...")
+    print("\n📝 Test 2: Detailed Metrics Collection...")  # noqa: print
 
     detailed_metrics = await system_monitor.collect_system_metrics()
-    print("✅ Detailed system metrics collected:")
-    print(f"  CPU cores: {detailed_metrics['cpu']['count']}")
-    print(f"  Memory total: {detailed_metrics['memory']['total_mb']:.0f} MB")
-    print(f"  Disk free: {detailed_metrics['disk']['free_gb']:.1f} GB")
-    print(f"  AutoBot processes: {len(detailed_metrics['autobot_processes'])}")
+    print("✅ Detailed system metrics collected:")  # noqa: print
+    print(f"  CPU cores: {detailed_metrics['cpu']['count']}")  # noqa: print
+    print(  # noqa: print
+        f"  Memory total: {detailed_metrics['memory']['total_mb']:.0f} MB"
+    )  # noqa: print
+    print(f"  Disk free: {detailed_metrics['disk']['free_gb']:.1f} GB")  # noqa: print
+    print(  # noqa: print
+        f"  AutoBot processes: {len(detailed_metrics['autobot_processes'])}"
+    )  # noqa: print
 
     # Test 3: Resource thresholds check
-    print("\n📝 Test 3: Resource Threshold Check...")
+    print("\n📝 Test 3: Resource Threshold Check...")  # noqa: print
 
     threshold_check = system_monitor.check_resource_thresholds()
-    print(f"✅ System health status: {threshold_check['status']}")
+    print(f"✅ System health status: {threshold_check['status']}")  # noqa: print
 
     if threshold_check["critical_alerts"]:
-        print("  🚨 Critical alerts:")
+        print("  🚨 Critical alerts:")  # noqa: print
         for alert in threshold_check["critical_alerts"]:
-            print(f"    • {alert}")
+            print(f"    • {alert}")  # noqa: print
 
     if threshold_check["warnings"]:
-        print("  ⚠️  Warnings:")
+        print("  ⚠️  Warnings:")  # noqa: print
         for warning in threshold_check["warnings"]:
-            print(f"    • {warning}")
+            print(f"    • {warning}")  # noqa: print
 
     if threshold_check["status"] == "ok":
-        print("  ✅ All resources within normal ranges")
+        print("  ✅ All resources within normal ranges")  # noqa: print
 
     # Test 4: Start monitoring briefly
-    print("\n📝 Test 4: Continuous Monitoring Test...")
+    print("\n📝 Test 4: Continuous Monitoring Test...")  # noqa: print
 
-    print("  Starting system monitoring...")
+    print("  Starting system monitoring...")  # noqa: print
     await system_monitor.start_monitoring()
 
     # Let it collect a few samples
     await asyncio.sleep(3)
 
-    print("  Stopping system monitoring...")
+    print("  Stopping system monitoring...")  # noqa: print
     await system_monitor.stop_monitoring()
 
     # Test 5: Resource summary
-    print("\n📝 Test 5: Resource Usage Summary...")
+    print("\n📝 Test 5: Resource Usage Summary...")  # noqa: print
 
     summary = system_monitor.get_resource_summary(1)  # Last 1 minute
-    print("✅ Resource summary generated:")
+    print("✅ Resource summary generated:")  # noqa: print
 
     if "system" in summary:
-        print(f"  CPU avg: {summary['system']['cpu']['avg_percent']:.1f}%")
-        print(f"  Memory avg: {summary['system']['memory']['avg_percent']:.1f}%")
-        print(f"  Data points: {summary['data_points']}")
+        print(  # noqa: print
+            f"  CPU avg: {summary['system']['cpu']['avg_percent']:.1f}%"
+        )  # noqa: print
+        print(  # noqa: print
+            f"  Memory avg: {summary['system']['memory']['avg_percent']:.1f}%"
+        )  # noqa: print
+        print(f"  Data points: {summary['data_points']}")  # noqa: print
 
     return True
 
 
 async def test_metrics_api_integration():
     """Test metrics API endpoints"""
-    print("\n\n🔗 TESTING METRICS API INTEGRATION")
-    print("=" * 60)
+    print("\n\n🔗 TESTING METRICS API INTEGRATION")  # noqa: print
+    print("=" * 60)  # noqa: print
 
     try:
         # Test API endpoints
@@ -185,26 +195,28 @@ async def test_metrics_api_integration():
                         f"http://localhost:8001{endpoint}"
                     ) as response:
                         if response.status == 200:
-                            print(f"✅ {endpoint}: OK")
+                            print(f"✅ {endpoint}: OK")  # noqa: print
                         else:
-                            print(f"⚠️  {endpoint}: {response.status}")
+                            print(f"⚠️  {endpoint}: {response.status}")  # noqa: print
                 except Exception:
-                    print(f"❌ {endpoint}: Connection failed")
+                    print(f"❌ {endpoint}: Connection failed")  # noqa: print
 
-        print("✅ API integration test completed")
+        print("✅ API integration test completed")  # noqa: print
 
     except ImportError:
-        print("⚠️  aiohttp not available - skipping API integration test")
+        print(  # noqa: print
+            "⚠️  aiohttp not available - skipping API integration test"
+        )  # noqa: print
     except Exception as e:
-        print(f"⚠️  API test failed: {e}")
+        print(f"⚠️  API test failed: {e}")  # noqa: print
 
     return True
 
 
 async def main():
     """Run all metrics system tests"""
-    print("📊 AUTOBOT METRICS AND MONITORING SYSTEM TEST")
-    print("=" * 70)
+    print("📊 AUTOBOT METRICS AND MONITORING SYSTEM TEST")  # noqa: print
+    print("=" * 70)  # noqa: print
 
     try:
         # Test workflow metrics
@@ -216,39 +228,39 @@ async def main():
         # Test API integration
         await test_metrics_api_integration()
 
-        print("\n" + "=" * 70)
-        print("📊 METRICS SYSTEM TESTING: COMPLETED")
-        print("=" * 70)
+        print("\n" + "=" * 70)  # noqa: print
+        print("📊 METRICS SYSTEM TESTING: COMPLETED")  # noqa: print
+        print("=" * 70)  # noqa: print
 
-        print("\n✅ TEST RESULTS:")
-        print("✅ Workflow metrics collection: Working")
-        print("✅ Step timing and tracking: Functional")
-        print("✅ Resource usage recording: Available")
-        print("✅ System monitoring: Operational")
-        print("✅ Performance analytics: Ready")
-        print("✅ Health threshold checking: Active")
-        print("✅ API endpoints: Integrated")
+        print("\n✅ TEST RESULTS:")  # noqa: print
+        print("✅ Workflow metrics collection: Working")  # noqa: print
+        print("✅ Step timing and tracking: Functional")  # noqa: print
+        print("✅ Resource usage recording: Available")  # noqa: print
+        print("✅ System monitoring: Operational")  # noqa: print
+        print("✅ Performance analytics: Ready")  # noqa: print
+        print("✅ Health threshold checking: Active")  # noqa: print
+        print("✅ API endpoints: Integrated")  # noqa: print
 
-        print("\n📈 MONITORING CAPABILITIES:")
-        print("• Workflow execution timing and performance")
-        print("• Step-by-step agent performance tracking")
-        print("• System resource utilization monitoring")
-        print("• Performance trend analysis")
-        print("• Resource threshold alerting")
-        print("• Comprehensive metrics export")
+        print("\n📈 MONITORING CAPABILITIES:")  # noqa: print
+        print("• Workflow execution timing and performance")  # noqa: print
+        print("• Step-by-step agent performance tracking")  # noqa: print
+        print("• System resource utilization monitoring")  # noqa: print
+        print("• Performance trend analysis")  # noqa: print
+        print("• Resource threshold alerting")  # noqa: print
+        print("• Comprehensive metrics export")  # noqa: print
 
-        print("\n🎯 PRODUCTION BENEFITS:")
-        print("• Real-time workflow performance insights")
-        print("• System health monitoring and alerting")
-        print("• Performance optimization guidance")
-        print("• Resource usage analytics")
-        print("• Automated threshold monitoring")
-        print("• Historical performance tracking")
+        print("\n🎯 PRODUCTION BENEFITS:")  # noqa: print
+        print("• Real-time workflow performance insights")  # noqa: print
+        print("• System health monitoring and alerting")  # noqa: print
+        print("• Performance optimization guidance")  # noqa: print
+        print("• Resource usage analytics")  # noqa: print
+        print("• Automated threshold monitoring")  # noqa: print
+        print("• Historical performance tracking")  # noqa: print
 
-        print("\n🚀 METRICS SYSTEM: PRODUCTION READY!")
+        print("\n🚀 METRICS SYSTEM: PRODUCTION READY!")  # noqa: print
 
     except Exception as e:
-        print(f"\n❌ Metrics system test failed: {e}")
+        print(f"\n❌ Metrics system test failed: {e}")  # noqa: print
         import traceback
 
         traceback.print_exc()

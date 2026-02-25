@@ -28,10 +28,10 @@ import logging
 from typing import List, Optional
 
 from auth_middleware import check_admin_permission
-from backend.services.approval_memory import get_approval_memory
-from backend.services.permission_matcher import get_permission_matcher
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from services.approval_memory import get_approval_memory
+from services.permission_matcher import get_permission_matcher
 
 from autobot_shared.ssot_config import PermissionAction, PermissionMode, config
 

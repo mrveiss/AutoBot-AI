@@ -12,8 +12,8 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from backend.type_defs.common import Metadata
 from pydantic import BaseModel
+from type_defs.common import Metadata
 
 
 class WorkflowStepStatus(Enum):

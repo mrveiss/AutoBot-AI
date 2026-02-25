@@ -11,9 +11,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-from config import UnifiedConfig
-
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -190,6 +189,36 @@ class AutomatedFixGenerator:
             ),
         ]
 
+    async def _collect_all_fixes(
+        self, analysis_results: Dict[str, Any]
+    ) -> List[CodeFix]:
+        """Collect fixes from all analysis result categories.
+
+        Issue #1183: Extracted from generate_fixes() to reduce function length.
+        """
+        all_fixes: List[CodeFix] = []
+        if analysis_results.get("security"):
+            all_fixes.extend(
+                await self._generate_security_fixes(analysis_results["security"])
+            )
+        if analysis_results.get("performance"):
+            all_fixes.extend(
+                await self._generate_performance_fixes(analysis_results["performance"])
+            )
+        if analysis_results.get("duplication"):
+            all_fixes.extend(
+                await self._generate_duplication_fixes(analysis_results["duplication"])
+            )
+        if analysis_results.get("environment"):
+            all_fixes.extend(
+                await self._generate_environment_fixes(analysis_results["environment"])
+            )
+        if analysis_results.get("api_consistency"):
+            all_fixes.extend(
+                await self._generate_api_fixes(analysis_results["api_consistency"])
+            )
+        return all_fixes
+
     async def generate_fixes(
         self, analysis_results: Dict[str, Any], generate_patches: bool = True
     ) -> Dict[str, Any]:
@@ -199,42 +228,8 @@ class AutomatedFixGenerator:
 
         logger.info("Generating automated fixes from analysis results...")
 
-        all_fixes = []
-
-        # Generate security fixes
-        if analysis_results.get("security"):
-            security_fixes = await self._generate_security_fixes(
-                analysis_results["security"]
-            )
-            all_fixes.extend(security_fixes)
-
-        # Generate performance fixes
-        if analysis_results.get("performance"):
-            performance_fixes = await self._generate_performance_fixes(
-                analysis_results["performance"]
-            )
-            all_fixes.extend(performance_fixes)
-
-        # Generate duplication fixes
-        if analysis_results.get("duplication"):
-            duplication_fixes = await self._generate_duplication_fixes(
-                analysis_results["duplication"]
-            )
-            all_fixes.extend(duplication_fixes)
-
-        # Generate environment fixes
-        if analysis_results.get("environment"):
-            env_fixes = await self._generate_environment_fixes(
-                analysis_results["environment"]
-            )
-            all_fixes.extend(env_fixes)
-
-        # Generate API consistency fixes
-        if analysis_results.get("api_consistency"):
-            api_fixes = await self._generate_api_fixes(
-                analysis_results["api_consistency"]
-            )
-            all_fixes.extend(api_fixes)
+        # Issue #1183: Delegate collection to extracted helper
+        all_fixes = await self._collect_all_fixes(analysis_results)
 
         # Prioritize fixes
         prioritized_fixes = self._prioritize_fixes(all_fixes)
@@ -787,32 +782,34 @@ async def main():
     # Generate fixes
     results = await generator.generate_fixes(mock_analysis)
 
-    print(f"\n=== Automated Fix Generation Results ===")
-    print(f"Total fixes generated: {results['total_fixes_generated']}")
-    print(f"High confidence fixes: {results['high_confidence_fixes']}")
-    print(f"Low risk fixes: {results['low_risk_fixes']}")
-    print(f"Generation time: {results['generation_time_seconds']:.2f}s")
+    print(f"\n=== Automated Fix Generation Results ===")  # noqa: print
+    print(f"Total fixes generated: {results['total_fixes_generated']}")  # noqa: print
+    print(f"High confidence fixes: {results['high_confidence_fixes']}")  # noqa: print
+    print(f"Low risk fixes: {results['low_risk_fixes']}")  # noqa: print
+    print(f"Generation time: {results['generation_time_seconds']:.2f}s")  # noqa: print
 
     # Print statistics
     stats = results["statistics"]
-    print(f"\n=== Fix Statistics ===")
-    print(f"By type: {stats['by_type']}")
-    print(f"By severity: {stats['by_severity']}")
-    print(f"By confidence: {stats['by_confidence']}")
-    print(f"By risk: {stats['by_risk']}")
-    print(f"Automated fixes: {stats['automated_fixes']}")
-    print(f"Manual review required: {stats['manual_review_required']}")
+    print(f"\n=== Fix Statistics ===")  # noqa: print
+    print(f"By type: {stats['by_type']}")  # noqa: print
+    print(f"By severity: {stats['by_severity']}")  # noqa: print
+    print(f"By confidence: {stats['by_confidence']}")  # noqa: print
+    print(f"By risk: {stats['by_risk']}")  # noqa: print
+    print(f"Automated fixes: {stats['automated_fixes']}")  # noqa: print
+    print(f"Manual review required: {stats['manual_review_required']}")  # noqa: print
 
     # Print recommendations
-    print(f"\n=== Recommendations ===")
+    print(f"\n=== Recommendations ===")  # noqa: print
     for rec in results["recommendations"]:
-        print(f"• {rec}")
+        print(f"• {rec}")  # noqa: print
 
     # Test safe fix application (dry run)
     if results["fixes"]:
-        print(f"\n=== Testing Safe Fix Application (Dry Run) ===")
+        print(f"\n=== Testing Safe Fix Application (Dry Run) ===")  # noqa: print
         application_results = await generator.apply_safe_fixes(results, dry_run=True)
-        print(f"Would apply: {application_results['total_applied']} fixes")
+        print(
+            f"Would apply: {application_results['total_applied']} fixes"
+        )  # noqa: print
 
 
 if __name__ == "__main__":

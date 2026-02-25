@@ -13,9 +13,9 @@ import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Dict
 
-from backend.constants.threshold_constants import TimingConstants
-from backend.monitoring.prometheus_metrics import get_metrics_manager
-from backend.type_defs.common import Metadata
+from constants.threshold_constants import TimingConstants
+from monitoring.prometheus_metrics import get_metrics_manager
+from type_defs.common import Metadata
 
 from .models import (
     ActiveWorkflow,

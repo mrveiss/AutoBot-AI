@@ -11,7 +11,7 @@ providing a consistent interface for the RAG service layer.
 
 from typing import Any, List, Protocol
 
-from backend.type_defs.common import Metadata
+from type_defs.common import Metadata
 
 from autobot_shared.logging_manager import get_llm_logger
 

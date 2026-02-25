@@ -21,10 +21,8 @@ import logging
 from datetime import datetime
 from pathlib import Path as PathLib
 
-from auth_middleware import check_admin_permission
-
 # Import Pydantic models from dedicated module
-from backend.api.knowledge_models import (
+from api.knowledge_models import (
     BackupRequest,
     BulkCategoryUpdateRequest,
     BulkDeleteRequest,
@@ -37,9 +35,10 @@ from backend.api.knowledge_models import (
     ScanHostChangesRequest,
     UpdateFactRequest,
 )
-from backend.constants.threshold_constants import QueryDefaults
-from backend.knowledge_factory import get_or_create_knowledge_base
+from auth_middleware import check_admin_permission
+from constants.threshold_constants import QueryDefaults
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from knowledge_factory import get_or_create_knowledge_base
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -620,7 +619,7 @@ def _perform_fast_scan(
     Returns:
         Tuple of (scanner instance, scan result dict)
     """
-    from backend.services.fast_document_scanner import FastDocumentScanner
+    from services.fast_document_scanner import FastDocumentScanner
 
     scanner = FastDocumentScanner(redis_client)
     result = scanner.scan_for_changes(
@@ -1037,7 +1036,7 @@ async def find_session_orphan_facts(
     if kb is None:
         raise HTTPException(status_code=500, detail="Knowledge base not initialized")
 
-    from backend.utils.chat_utils import get_chat_history_manager
+    from utils.chat_utils import get_chat_history_manager
 
     chat_manager = get_chat_history_manager(req)
     if chat_manager is None:
@@ -1202,7 +1201,7 @@ async def scan_for_unimported_files(
 
     Issue #744: Requires admin authentication.
     """
-    from backend.models.knowledge_import_tracking import ImportTracker
+    from models.knowledge_import_tracking import ImportTracker
 
     tracker = ImportTracker()
     # Use project-relative path instead of absolute path

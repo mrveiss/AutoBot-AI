@@ -18,7 +18,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 # Import communication protocol
-from backend.protocols.agent_communication import (
+from protocols.agent_communication import (
     AgentIdentity,
     MessageHeader,
     MessagePayload,

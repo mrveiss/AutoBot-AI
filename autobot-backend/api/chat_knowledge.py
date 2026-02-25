@@ -17,7 +17,6 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 import aiofiles
-from backend.type_defs.common import Metadata
 from chat_history import ChatHistoryManager
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
@@ -25,6 +24,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 from pydantic import BaseModel
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -130,7 +130,7 @@ class ChatKnowledgeManager:
         self.pending_decisions: Dict[str, List[Metadata]] = {}
 
         # Initialize storage directory using centralized path management
-        from backend.utils.paths_manager import ensure_data_directory, get_data_path
+        from utils.paths_manager import ensure_data_directory, get_data_path
 
         ensure_data_directory()
         self.storage_dir = str(get_data_path("chat_knowledge"))

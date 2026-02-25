@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 
-from backend.type_defs.common import Metadata
+from type_defs.common import Metadata
 
 
 class CommandState(Enum):

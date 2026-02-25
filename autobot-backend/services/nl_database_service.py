@@ -538,7 +538,7 @@ class NLDatabaseService:
             Extracted SQL string
         """
         try:
-            from backend.llm_multi_provider import UnifiedLLMInterface
+            from llm_multi_provider import UnifiedLLMInterface
 
             if self._llm is None:
                 self._llm = UnifiedLLMInterface()

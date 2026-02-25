@@ -13,8 +13,11 @@ import logging
 from typing import Any, Optional
 
 from auth_middleware import check_admin_permission
-from backend.services.security_tool_parsers import parse_tool_output
-from backend.services.security_workflow_manager import (
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+from services.security_tool_parsers import parse_tool_output
+from services.security_workflow_manager import (
     PHASE_DESCRIPTIONS,
     VALID_TRANSITIONS,
     AssessmentPhase,
@@ -23,10 +26,7 @@ from backend.services.security_workflow_manager import (
 )
 
 # Issue #756: Consolidated from src/utils/request_utils.py
-from backend.utils.request_utils import generate_request_id
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from utils.request_utils import generate_request_id
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

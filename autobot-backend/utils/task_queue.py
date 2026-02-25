@@ -27,7 +27,7 @@ except ImportError:
     RedisError = Exception  # Fallback if redis not available
     get_redis_client = None
 
-from backend.constants.threshold_constants import RetryConfig, TimingConstants
+from constants.threshold_constants import RetryConfig, TimingConstants
 
 # Temporary implementations until proper modules are created
 # try:

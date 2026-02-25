@@ -19,7 +19,7 @@ from typing import Dict, List, Optional
 from uuid import uuid4
 
 import yaml
-from backend.constants.path_constants import PATH
+from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 

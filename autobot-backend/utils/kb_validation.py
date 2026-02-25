@@ -15,8 +15,8 @@ import logging
 from functools import wraps
 from typing import Callable
 
-from backend.knowledge_factory import get_or_create_knowledge_base
 from fastapi import HTTPException, Request
+from knowledge_factory import get_or_create_knowledge_base
 
 logger = logging.getLogger(__name__)
 

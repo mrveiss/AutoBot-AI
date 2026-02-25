@@ -15,13 +15,13 @@ from typing import Any, Dict, List, Optional
 from api_consistency_analyzer import APIConsistencyAnalyzer
 from architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
 from code_analyzer import CodeAnalyzer
-from config import UnifiedConfig
 from env_analyzer import EnvironmentVariableAnalyzer
 from performance_analyzer import PerformanceAnalyzer
 from security_analyzer import SecurityAnalyzer
 from testing_coverage_analyzer import TestingCoverageAnalyzer
 
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -93,20 +93,10 @@ class CodeQualityDashboard:
 
         logger.info("Code Quality Dashboard initialized with all analyzers")
 
-    async def generate_comprehensive_report(
-        self,
-        root_path: str = ".",
-        patterns: List[str] = None,
-        include_trends: bool = True,
+    async def _gather_analysis_results(
+        self, root_path: str, patterns: List[str]
     ) -> Dict[str, Any]:
-        """Generate comprehensive code quality report"""
-
-        start_time = time.time()
-        patterns = patterns or ["src/**/*.py", "backend/**/*.py"]
-
-        logger.info("Starting comprehensive code quality analysis...")
-
-        # Run all analyses in parallel for better performance
+        """Run all analyses in parallel and return results dict. Issue #1183."""
         analyses = await asyncio.gather(
             self._run_duplication_analysis(root_path, patterns),
             self._run_environment_analysis(root_path, patterns),
@@ -117,80 +107,48 @@ class CodeQualityDashboard:
             self._run_architecture_analysis(root_path, patterns),
             return_exceptions=True,
         )
-
-        # Process results
-        (
-            duplication_results,
-            env_results,
-            performance_results,
-            security_results,
-            api_results,
-            testing_results,
-            architecture_results,
-        ) = analyses
-
-        # Handle any analysis failures
-        analysis_results = {
-            "duplication": duplication_results
-            if not isinstance(duplication_results, Exception)
-            else None,
-            "environment": env_results
-            if not isinstance(env_results, Exception)
-            else None,
-            "performance": performance_results
-            if not isinstance(performance_results, Exception)
-            else None,
-            "security": security_results
-            if not isinstance(security_results, Exception)
-            else None,
-            "api_consistency": api_results
-            if not isinstance(api_results, Exception)
-            else None,
-            "testing_coverage": testing_results
-            if not isinstance(testing_results, Exception)
-            else None,
-            "architecture": architecture_results
-            if not isinstance(architecture_results, Exception)
-            else None,
+        keys = [
+            "duplication",
+            "environment",
+            "performance",
+            "security",
+            "api_consistency",
+            "testing_coverage",
+            "architecture",
+        ]
+        return {
+            k: (v if not isinstance(v, Exception) else None)
+            for k, v in zip(keys, analyses)
         }
 
-        # Calculate overall quality metrics
-        quality_metrics = self._calculate_quality_metrics(analysis_results)
-
-        # Extract and prioritize issues
-        all_issues = self._extract_all_issues(analysis_results)
-        prioritized_issues = self._prioritize_issues(all_issues)
-
-        # Generate improvement recommendations
-        recommendations = self._generate_improvement_recommendations(
-            analysis_results, prioritized_issues
-        )
-
-        # Calculate technical debt
-        technical_debt = self._calculate_technical_debt(prioritized_issues)
-
-        analysis_time = time.time() - start_time
-
-        # Generate trend data if requested
-        trend_data = []
-        if include_trends:
-            trend_data = await self._get_quality_trends()
-
-        comprehensive_report = {
+    def _build_report_dict(
+        self,
+        analysis_results: Dict[str, Any],
+        quality_metrics: Any,
+        all_issues: list,
+        prioritized_issues: list,
+        recommendations: list,
+        technical_debt: dict,
+        trend_data: list,
+        analysis_time: float,
+    ) -> Dict[str, Any]:
+        """Assemble the final comprehensive report dictionary. Issue #1183."""
+        qm = quality_metrics
+        return {
             "timestamp": datetime.now().isoformat(),
             "analysis_time_seconds": analysis_time,
-            "overall_quality_score": quality_metrics.overall_score,
+            "overall_quality_score": qm.overall_score,
             "quality_metrics": {
-                "overall_score": quality_metrics.overall_score,
-                "code_duplication_score": quality_metrics.code_duplication_score,
-                "environment_config_score": quality_metrics.environment_config_score,
-                "performance_score": quality_metrics.performance_score,
-                "security_score": quality_metrics.security_score,
-                "api_consistency_score": quality_metrics.api_consistency_score,
-                "test_coverage_score": quality_metrics.test_coverage_score,
-                "architecture_score": quality_metrics.architecture_score,
-                "maintainability_index": quality_metrics.maintainability_index,
-                "technical_debt_ratio": quality_metrics.technical_debt_ratio,
+                "overall_score": qm.overall_score,
+                "code_duplication_score": qm.code_duplication_score,
+                "environment_config_score": qm.environment_config_score,
+                "performance_score": qm.performance_score,
+                "security_score": qm.security_score,
+                "api_consistency_score": qm.api_consistency_score,
+                "test_coverage_score": qm.test_coverage_score,
+                "architecture_score": qm.architecture_score,
+                "maintainability_index": qm.maintainability_index,
+                "technical_debt_ratio": qm.technical_debt_ratio,
             },
             "issue_summary": {
                 "total_issues": len(all_issues),
@@ -210,20 +168,46 @@ class CodeQualityDashboard:
             },
             "detailed_analyses": analysis_results,
             "prioritized_issues": [
-                self._serialize_issue(issue) for issue in prioritized_issues[:50]
-            ],  # Top 50 issues
+                self._serialize_issue(i) for i in prioritized_issues[:50]
+            ],
             "improvement_recommendations": recommendations,
             "technical_debt": technical_debt,
             "quality_trends": trend_data,
             "files_analyzed": self._count_analyzed_files(analysis_results),
         }
 
-        # Save current analysis for trend tracking
+    async def generate_comprehensive_report(
+        self,
+        root_path: str = ".",
+        patterns: List[str] = None,
+        include_trends: bool = True,
+    ) -> Dict[str, Any]:
+        """Generate comprehensive code quality report"""
+        start_time = time.time()
+        patterns = patterns or ["src/**/*.py", "backend/**/*.py"]
+        logger.info("Starting comprehensive code quality analysis...")
+        analysis_results = await self._gather_analysis_results(root_path, patterns)
+        quality_metrics = self._calculate_quality_metrics(analysis_results)
+        all_issues = self._extract_all_issues(analysis_results)
+        prioritized_issues = self._prioritize_issues(all_issues)
+        recommendations = self._generate_improvement_recommendations(
+            analysis_results, prioritized_issues
+        )
+        technical_debt = self._calculate_technical_debt(prioritized_issues)
+        analysis_time = time.time() - start_time
+        trend_data = await self._get_quality_trends() if include_trends else []
+        comprehensive_report = self._build_report_dict(
+            analysis_results,
+            quality_metrics,
+            all_issues,
+            prioritized_issues,
+            recommendations,
+            technical_debt,
+            trend_data,
+            analysis_time,
+        )
         await self._save_quality_trend(quality_metrics, len(all_issues))
-
-        # Cache comprehensive report
         await self._cache_dashboard_report(comprehensive_report)
-
         logger.info(
             f"Comprehensive code quality analysis complete in {analysis_time:.2f}s"
         )
@@ -735,7 +719,6 @@ class CodeQualityDashboard:
                     f"📊 High code duplication detected ({total_groups} groups) - consider major refactoring"
                 )
 
-        # Add general best practices
         recommendations.extend(
             [
                 "📈 Set up automated code quality monitoring in CI/CD pipeline",
@@ -744,7 +727,6 @@ class CodeQualityDashboard:
                 "📚 Create technical debt backlog for systematic improvement",
             ]
         )
-
         return recommendations[:10]  # Top 10 recommendations
 
     def _calculate_technical_debt(self, issues: List[QualityIssue]) -> Dict[str, Any]:
@@ -912,44 +894,46 @@ async def main():
     dashboard = CodeQualityDashboard()
 
     # Generate comprehensive report
-    print("🚀 Generating comprehensive code quality report...")
+    print("🚀 Generating comprehensive code quality report...")  # noqa: print
     report = await dashboard.generate_comprehensive_report(
         root_path=".", patterns=["src/**/*.py", "backend/**/*.py"], include_trends=True
     )
 
     # Print executive summary
     summary = await dashboard.generate_executive_summary(report)
-    print(summary)
+    print(summary)  # noqa: print
 
     # Print detailed metrics
     metrics = report["quality_metrics"]
-    print(f"\n=== Detailed Quality Metrics ===")
-    print(f"Overall Score: {metrics['overall_score']}/100")
-    print(f"Security: {metrics['security_score']}/100")
-    print(f"Performance: {metrics['performance_score']}/100")
-    print(f"Architecture: {metrics['architecture_score']}/100")
-    print(f"Test Coverage: {metrics['test_coverage_score']}/100")
-    print(f"API Consistency: {metrics['api_consistency_score']}/100")
-    print(f"Code Duplication: {metrics['code_duplication_score']}/100")
-    print(f"Environment Config: {metrics['environment_config_score']}/100")
+    print(f"\n=== Detailed Quality Metrics ===")  # noqa: print
+    print(f"Overall Score: {metrics['overall_score']}/100")  # noqa: print
+    print(f"Security: {metrics['security_score']}/100")  # noqa: print
+    print(f"Performance: {metrics['performance_score']}/100")  # noqa: print
+    print(f"Architecture: {metrics['architecture_score']}/100")  # noqa: print
+    print(f"Test Coverage: {metrics['test_coverage_score']}/100")  # noqa: print
+    print(f"API Consistency: {metrics['api_consistency_score']}/100")  # noqa: print
+    print(f"Code Duplication: {metrics['code_duplication_score']}/100")  # noqa: print
+    print(
+        f"Environment Config: {metrics['environment_config_score']}/100"
+    )  # noqa: print
 
     # Print top issues
-    print(f"\n=== Top Priority Issues ===")
+    print(f"\n=== Top Priority Issues ===")  # noqa: print
     for i, issue in enumerate(report["prioritized_issues"][:10], 1):
         severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
         emoji = severity_emoji.get(issue["severity"], "⚪")
-        print(f"{i}. {emoji} {issue['title']} ({issue['category']})")
-        print(f"   {issue['description']}")
-        print(f"   Fix: {issue['fix_suggestion']}")
-        print(f"   Effort: {issue['estimated_effort']}")
-        print()
+        print(f"{i}. {emoji} {issue['title']} ({issue['category']})")  # noqa: print
+        print(f"   {issue['description']}")  # noqa: print
+        print(f"   Fix: {issue['fix_suggestion']}")  # noqa: print
+        print(f"   Effort: {issue['estimated_effort']}")  # noqa: print
+        print()  # noqa: print
 
     # Save comprehensive report
     report_path = Path("comprehensive_quality_report.json")
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2, default=str)
 
-    print(f"📋 Comprehensive report saved to: {report_path}")
+    print(f"📋 Comprehensive report saved to: {report_path}")  # noqa: print
 
     return report
 

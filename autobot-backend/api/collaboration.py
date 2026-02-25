@@ -12,12 +12,12 @@ import logging
 import uuid
 from typing import List, Optional
 
-from backend.auth_middleware import get_current_user
-from backend.models.session_collaboration import PermissionLevel, SessionCollaboration
-from backend.user_management.database import get_async_session
+from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, HTTPException, status
+from models.session_collaboration import PermissionLevel, SessionCollaboration
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
+from user_management.database import get_async_session
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +155,7 @@ async def _fetch_and_validate_secret(
     secret_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession
 ):
     """Helper for share_secret_with_session. Ref: #1088."""
-    from backend.models.secret import Secret
+    from models.secret import Secret
     from sqlalchemy import select
 
     stmt = select(Secret).where(Secret.id == secret_id)

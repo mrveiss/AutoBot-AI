@@ -14,7 +14,9 @@ import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.voice_processing.constants import (
+from enhanced_memory_manager_async import TaskPriority
+from task_execution_tracker import task_tracker
+from voice_processing.constants import (
     APP_PATTERNS_RE,
     AUTOMATION_INTENT_PATTERNS,
     CONTEXT_DEPENDENT_INTENTS,
@@ -27,10 +29,8 @@ from backend.voice_processing.constants import (
     URL_RE,
     match_intent_from_patterns,
 )
-from backend.voice_processing.models import VoiceCommandAnalysis
-from backend.voice_processing.types import VoiceCommand
-from enhanced_memory_manager_async import TaskPriority
-from task_execution_tracker import task_tracker
+from voice_processing.models import VoiceCommandAnalysis
+from voice_processing.types import VoiceCommand
 
 logger = logging.getLogger(__name__)
 

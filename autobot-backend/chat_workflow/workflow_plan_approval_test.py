@@ -13,8 +13,8 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from backend.services.workflow_automation.executor import WorkflowExecutor
-from backend.services.workflow_automation.models import (
+from services.workflow_automation.executor import WorkflowExecutor
+from services.workflow_automation.models import (
     ActiveWorkflow,
     AutomationMode,
     PlanApprovalMode,

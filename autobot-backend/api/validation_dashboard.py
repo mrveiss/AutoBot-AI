@@ -15,16 +15,16 @@ from datetime import datetime
 from typing import Optional
 
 import aiofiles
-from backend.type_defs.common import Metadata
-from backend.utils.catalog_http_exceptions import (
+from fastapi import APIRouter, BackgroundTasks
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from pydantic import BaseModel
+from type_defs.common import Metadata
+from utils.catalog_http_exceptions import (
     raise_not_found_error,
     raise_server_error,
     raise_service_unavailable,
     raise_validation_error,
 )
-from fastapi import APIRouter, BackgroundTasks
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

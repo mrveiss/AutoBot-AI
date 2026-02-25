@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 try:
-    from backend.services.security_memory_integration import SecurityMemoryIntegration
+    from services.security_memory_integration import SecurityMemoryIntegration
 
     HAS_MEMORY_GRAPH = True
 except ImportError:

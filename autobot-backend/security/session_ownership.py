@@ -718,8 +718,8 @@ async def validate_session_ownership(session_id: str, request: Request) -> Dict:
     Raises:
         HTTPException: 401 if not authenticated, 403 if not authorized (ENFORCED mode)
     """
-    from backend.services.access_control_metrics import get_metrics_service
-    from backend.services.feature_flags import get_feature_flags
+    from services.access_control_metrics import get_metrics_service
+    from services.feature_flags import get_feature_flags
 
     from autobot_shared.redis_client import get_redis_client as get_redis_manager
 

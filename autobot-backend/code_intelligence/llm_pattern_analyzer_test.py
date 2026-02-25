@@ -24,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from backend.code_intelligence.llm_pattern_analyzer import (
+from code_intelligence.llm_pattern_analyzer import (
     AnalysisResult,
     BatchingAnalyzer,
     BatchingOpportunity,

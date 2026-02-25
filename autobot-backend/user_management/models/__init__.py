@@ -12,21 +12,16 @@ All models use UUID primary keys and include:
 
 # Issue #898: Import backend.models FIRST to ensure activity models
 # are registered before User relationships are configured
-import backend.models  # noqa: F401 - imports for side effects
-from backend.user_management.models.api_key import APIKey
-from backend.user_management.models.audit import AuditLog
-from backend.user_management.models.base import Base, TenantMixin, TimestampMixin
-from backend.user_management.models.mfa import UserMFA
-from backend.user_management.models.organization import Organization
-from backend.user_management.models.role import (
-    Permission,
-    Role,
-    RolePermission,
-    UserRole,
-)
-from backend.user_management.models.sso import SSOProvider, UserSSOLink
-from backend.user_management.models.team import Team, TeamMembership
-from backend.user_management.models.user import User
+import models  # noqa: F401 - imports for side effects
+from user_management.models.api_key import APIKey
+from user_management.models.audit import AuditLog
+from user_management.models.base import Base, TenantMixin, TimestampMixin
+from user_management.models.mfa import UserMFA
+from user_management.models.organization import Organization
+from user_management.models.role import Permission, Role, RolePermission, UserRole
+from user_management.models.sso import SSOProvider, UserSSOLink
+from user_management.models.team import Team, TeamMembership
+from user_management.models.user import User
 
 __all__ = [
     "Base",

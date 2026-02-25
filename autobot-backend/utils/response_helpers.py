@@ -17,12 +17,12 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from backend.type_defs.common import Metadata
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
+from type_defs.common import Metadata
 
 if TYPE_CHECKING:
-    from backend.services.ai_stack_client import AIStackError
+    from services.ai_stack_client import AIStackError
 
 logger = logging.getLogger(__name__)
 

@@ -18,9 +18,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
-from backend.constants.network_constants import NetworkConstants
-from backend.utils.command_validator import CommandValidator
+from constants.network_constants import NetworkConstants
 from llm_interface import LLMInterface
+from utils.command_validator import CommandValidator
 
 logger = logging.getLogger(__name__)
 
@@ -685,6 +685,6 @@ if __name__ == "__main__":
                     logger.info("... (limiting output for test)")
                     break
 
-            print()
+            print()  # noqa: print
 
     asyncio.run(test_executor())

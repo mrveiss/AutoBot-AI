@@ -10,7 +10,7 @@ LLM judge integration for evaluating workflow steps.
 import logging
 from typing import Set
 
-from backend.type_defs.common import Metadata
+from type_defs.common import Metadata
 
 from .models import ActiveWorkflow, WorkflowStep, WorkflowStepStatus
 

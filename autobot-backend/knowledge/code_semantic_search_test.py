@@ -116,7 +116,7 @@ class TestNPUCodeSearchAgent(unittest.TestCase):
 
             content = '''def hello():
     """Say hello."""
-    print("Hello")
+    print("Hello")  # noqa: print
     return True
 
 def world():
@@ -125,7 +125,7 @@ def world():
             result = agent._extract_element_code(content, 1, "function", max_lines=10)
 
             self.assertIn("def hello():", result)
-            self.assertIn('print("Hello")', result)
+            self.assertIn('print("Hello")', result)  # noqa: print
             self.assertIn("return True", result)
             self.assertNotIn("def world():", result)
 

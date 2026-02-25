@@ -11,8 +11,8 @@ import asyncio
 import logging
 from typing import Any, Dict, List
 
-from backend.constants.path_constants import PATH
 from config import config
+from constants.path_constants import PATH
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 

@@ -21,7 +21,7 @@ from datetime import datetime
 from typing import Optional
 
 from auth_middleware import check_admin_permission
-from backend.code_intelligence.merge_conflict_resolver import (
+from code_intelligence.merge_conflict_resolver import (
     ConflictBlock,
     ConflictParser,
     ConflictSeverity,

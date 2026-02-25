@@ -12,7 +12,7 @@ Issue #322: Updated to use TaskExecutionContext to eliminate data clump pattern.
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
-from backend.models.task_context import TaskExecutionContext
+from models.task_context import TaskExecutionContext
 
 
 class TaskHandler(ABC):

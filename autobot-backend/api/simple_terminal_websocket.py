@@ -13,7 +13,7 @@ from .base_terminal import BaseTerminalWebSocket
 
 # Import workflow automation for integration
 try:
-    from backend.api.workflow_automation import workflow_manager
+    from api.workflow_automation import workflow_manager
 
     WORKFLOW_AUTOMATION_AVAILABLE = True
 except ImportError:

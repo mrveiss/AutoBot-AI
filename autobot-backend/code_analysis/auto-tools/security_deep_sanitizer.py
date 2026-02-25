@@ -31,98 +31,8 @@ logger = logging.getLogger(__name__)
 # Issue #380: Module-level constant for HTML extensions (performance optimization)
 _HTML_EXTENSIONS = (".html", ".htm")
 
-import hashlib
-import json
-import os
-import re
-import shutil
-import sys
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
-
-class EnhancedSecurityFixAgent:
-    """
-    Enhanced automated security fix agent for comprehensive XSS vulnerability remediation.
-    """
-
-    def __init__(self):
-        self.fixes_applied = []
-        self.vulnerabilities_found = []
-        self.backup_dir = None
-        self.report = {
-            "timestamp": datetime.now().isoformat(),
-            "agent_version": "2.0.0",
-            "scan_summary": {},
-            "vulnerabilities": [],
-            "fixes_applied": [],
-            "security_enhancements": [],
-            "recommendations": [],
-        }
-
-        # Enhanced XSS vulnerability patterns with context awareness
-        self.xss_patterns = {
-            "direct_innerHTML": {
-                "pattern": r"(?<![\w\.])([\w\.]+)\.innerHTML\s*=\s*([^;]+);",
-                "severity": "HIGH",
-                "context_safe": [
-                    'element.innerHTML=""',
-                    "innerHTML=null",
-                    'innerHTML=""',
-                ],
-            },
-            "innerHTML_concat": {
-                "pattern": r"(?<![\w\.])([\w\.]+)\.innerHTML\s*\+=\s*([^;]+);",
-                "severity": "HIGH",
-                "context_safe": [],
-            },
-            "outerHTML_write": {
-                "pattern": r"(?<![\w\.])([\w\.]+)\.outerHTML\s*=\s*([^;]+);",
-                "severity": "HIGH",
-                "context_safe": [],
-            },
-            "insertAdjacentHTML_usage": {
-                "pattern": r'\.insertAdjacentHTML\s*\(\s*[\'"](\w+)[\'"]\s*,\s*([^)]+)\)',
-                "severity": "MEDIUM",
-                "context_safe": [],
-            },
-            "document_write_usage": {
-                "pattern": r"document\.write(?:ln)?\s*\(([^)]+)\)",
-                "severity": "HIGH",
-                "context_safe": [],
-            },
-            "eval_execution": {
-                "pattern": r"\beval\s*\(([^)]+)\)",
-                "severity": "CRITICAL",
-                "context_safe": [],
-            },
-            "function_constructor": {
-                "pattern": r"new\s+Function\s*\(([^)]+)\)",
-                "severity": "CRITICAL",
-                "context_safe": [],
-            },
-            "javascript_protocol": {
-                "pattern": r'(?:href|src)\s*=\s*[\'"]javascript:([^\'\"]+)[\'"]',
-                "severity": "HIGH",
-                "context_safe": [],
-            },
-            "data_uri_html": {
-                "pattern": r'(?:href|src)\s*=\s*[\'"]data:text/html[^\'\"]*[\'"]',
-                "severity": "MEDIUM",
-                "context_safe": [],
-            },
-            "react_dangerously_set": {
-                "pattern": r"dangerouslySetInnerHTML\s*=\s*\{\s*__html:\s*([^}]+)\s*\}",
-                "severity": "HIGH",
-                "context_safe": [],
-            },
-        }
-
-        # Security enhancement templates
-        self.security_enhancements = {
-            "csp_header": """<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; media-src 'self'; object-src 'none'; child-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self';">""",
-            "dom_purify_script": """
+# Issue #1183: Module-level constant extracted from _build_security_enhancements() to reduce function length
+_DOM_PURIFY_SCRIPT = """
 <script>
 // DOM Sanitization Helper - Enhanced Security
 (function() {
@@ -179,7 +89,96 @@ class EnhancedSecurityFixAgent:
         };
     }
 })();
-</script>""",
+</script>"""
+
+import hashlib
+import json
+import os
+import re
+import shutil
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+
+class EnhancedSecurityFixAgent:
+    """
+    Enhanced automated security fix agent for comprehensive XSS vulnerability remediation.
+    """
+
+    @staticmethod
+    def _build_xss_patterns() -> Dict[str, Any]:
+        """Return XSS vulnerability pattern definitions.
+
+        Issue #1183: Extracted from __init__() to reduce function length.
+        """
+        return {
+            "direct_innerHTML": {
+                "pattern": r"(?<![\w\.])([\w\.]+)\.innerHTML\s*=\s*([^;]+);",
+                "severity": "HIGH",
+                "context_safe": [
+                    'element.innerHTML=""',
+                    "innerHTML=null",
+                    'innerHTML=""',
+                ],
+            },
+            "innerHTML_concat": {
+                "pattern": r"(?<![\w\.])([\w\.]+)\.innerHTML\s*\+=\s*([^;]+);",
+                "severity": "HIGH",
+                "context_safe": [],
+            },
+            "outerHTML_write": {
+                "pattern": r"(?<![\w\.])([\w\.]+)\.outerHTML\s*=\s*([^;]+);",
+                "severity": "HIGH",
+                "context_safe": [],
+            },
+            "insertAdjacentHTML_usage": {
+                "pattern": r'\.insertAdjacentHTML\s*\(\s*[\'"](\w+)[\'"]\s*,\s*([^)]+)\)',
+                "severity": "MEDIUM",
+                "context_safe": [],
+            },
+            "document_write_usage": {
+                "pattern": r"document\.write(?:ln)?\s*\(([^)]+)\)",
+                "severity": "HIGH",
+                "context_safe": [],
+            },
+            "eval_execution": {
+                "pattern": r"\beval\s*\(([^)]+)\)",
+                "severity": "CRITICAL",
+                "context_safe": [],
+            },
+            "function_constructor": {
+                "pattern": r"new\s+Function\s*\(([^)]+)\)",
+                "severity": "CRITICAL",
+                "context_safe": [],
+            },
+            "javascript_protocol": {
+                "pattern": r'(?:href|src)\s*=\s*[\'"]javascript:([^\'\"]+)[\'"]',
+                "severity": "HIGH",
+                "context_safe": [],
+            },
+            "data_uri_html": {
+                "pattern": r'(?:href|src)\s*=\s*[\'"]data:text/html[^\'\"]*[\'"]',
+                "severity": "MEDIUM",
+                "context_safe": [],
+            },
+            "react_dangerously_set": {
+                "pattern": r"dangerouslySetInnerHTML\s*=\s*\{\s*__html:\s*([^}]+)\s*\}",
+                "severity": "HIGH",
+                "context_safe": [],
+            },
+        }
+
+    @staticmethod
+    def _build_security_enhancements() -> Dict[str, str]:
+        """Return security enhancement template strings.
+
+        Issue #1183: Extracted from __init__() to reduce function length.
+        """
+        return {
+            "csp_header": """<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; media-src 'self'; object-src 'none'; child-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self';">""",
+            "dom_purify_script": _DOM_PURIFY_SCRIPT,
             "security_meta_tags": """
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -188,6 +187,24 @@ class EnhancedSecurityFixAgent:
 <meta http-equiv="X-XSS-Protection" content="1; mode=block">
 <meta http-equiv="Strict-Transport-Security" content="max-age=31536000; includeSubDomains">""",
         }
+
+    def __init__(self):
+        self.fixes_applied = []
+        self.vulnerabilities_found = []
+        self.backup_dir = None
+        self.report = {
+            "timestamp": datetime.now().isoformat(),
+            "agent_version": "2.0.0",
+            "scan_summary": {},
+            "vulnerabilities": [],
+            "fixes_applied": [],
+            "security_enhancements": [],
+            "recommendations": [],
+        }
+
+        # Issue #1183: Delegate pattern/enhancement dicts to extracted static methods
+        self.xss_patterns = self._build_xss_patterns()
+        self.security_enhancements = self._build_security_enhancements()
 
     def analyze_context_safety(self, match: str, pattern_name: str) -> bool:
         """Analyze if a potential vulnerability is actually safe in context."""
@@ -467,39 +484,71 @@ class EnhancedSecurityFixAgent:
         except Exception:
             return False
 
+    @staticmethod
+    def _display_vuln_counts(vulnerabilities: List[Dict[str, Any]]) -> Tuple[int, int]:
+        """Log library vs direct vuln counts; return (library_vulns, direct_vulns).
+
+        Issue #1183: Extracted from fix_file() to reduce function length.
+        """
+        library_vulns = sum(1 for v in vulnerabilities if v["is_library_code"])
+        direct_vulns = len(vulnerabilities) - library_vulns
+        if library_vulns > 0:
+            logger.info(
+                f"   📚 {library_vulns} in library/framework code (will be mitigated with CSP)"
+            )
+        if direct_vulns > 0:
+            logger.info(
+                f"   🎯 {direct_vulns} in direct application code (will be fixed)"
+            )
+        return library_vulns, direct_vulns
+
+    def _apply_and_write_security(
+        self,
+        original_content: str,
+        vulnerabilities: List[Dict[str, Any]],
+        file_path: str,
+    ) -> Tuple[str, List[str], List[str], str]:
+        """Apply security layers, validate, write file; return (content, enhancements, fixes, hash).
+
+        Issue #1183: Extracted from fix_file() to reduce function length.
+        Raises ValueError if HTML structure validation fails.
+        """
+        logger.info("\n🔧 Applying security enhancements...")
+        enhanced_content, all_enhancements = original_content, []
+        enhanced_content, header_enh = self.inject_security_headers(enhanced_content)
+        all_enhancements.extend(header_enh)
+        enhanced_content, dom_enh = self.inject_dom_sanitization(enhanced_content)
+        all_enhancements.extend(dom_enh)
+        enhanced_content, fixes_applied = self.apply_targeted_fixes(
+            enhanced_content, vulnerabilities
+        )
+        if not self.validate_html_structure(enhanced_content):
+            raise ValueError("HTML structure validation failed")
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(enhanced_content)
+        enhanced_hash = hashlib.sha256(enhanced_content.encode()).hexdigest()
+        logger.info(
+            f"✅ Applied {len(fixes_applied)} direct fixes and {len(all_enhancements)} security enhancements"
+        )
+        return enhanced_content, all_enhancements, fixes_applied, enhanced_hash
+
     def fix_file(self, file_path: str) -> Dict[str, Any]:
         """Enhanced file fixing with multiple security layers."""
         try:
             logger.info("\n🔍 Analyzing file: {file_path}")
 
-            # Read file content
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 original_content = f.read()
 
-            # Calculate original file hash
             original_hash = hashlib.sha256(original_content.encode()).hexdigest()
-
-            # Scan for vulnerabilities
             vulnerabilities = self.scan_for_vulnerabilities(original_content, file_path)
-
             logger.warning(
                 "Found %slen(vulnerabilities)  potential XSS vulnerabilities"
             )
 
-            # Display vulnerabilities with library code indication
-            library_vulns = sum(1 for v in vulnerabilities if v["is_library_code"])
-            direct_vulns = len(vulnerabilities) - library_vulns
+            # Issue #1183: Delegate count display to extracted helper
+            library_vulns, direct_vulns = self._display_vuln_counts(vulnerabilities)
 
-            if library_vulns > 0:
-                logger.info(
-                    f"   📚 {library_vulns} in library/framework code (will be mitigated with CSP)"
-                )
-            if direct_vulns > 0:
-                logger.info(
-                    f"   🎯 {direct_vulns} in direct application code (will be fixed)"
-                )
-
-            # Create backup
             backup_path = self.create_backup(file_path)
             if not backup_path:
                 return {
@@ -508,49 +557,21 @@ class EnhancedSecurityFixAgent:
                     "error": "Failed to create backup",
                 }
 
-            # Apply security enhancements
-            logger.info("\n🔧 Applying security enhancements...")
-            enhanced_content = original_content
-            all_enhancements = []
-
-            # Inject security headers
-            enhanced_content, header_enhancements = self.inject_security_headers(
-                enhanced_content
-            )
-            all_enhancements.extend(header_enhancements)
-
-            # Inject DOM sanitization
-            enhanced_content, dom_enhancements = self.inject_dom_sanitization(
-                enhanced_content
-            )
-            all_enhancements.extend(dom_enhancements)
-
-            # Apply targeted fixes
-            enhanced_content, fixes_applied = self.apply_targeted_fixes(
-                enhanced_content, vulnerabilities
-            )
-
-            # Validate the enhanced content
-            if not self.validate_html_structure(enhanced_content):
+            try:
+                # Issue #1183: Delegate enhancement/write to extracted helper
+                (
+                    _,
+                    all_enhancements,
+                    fixes_applied,
+                    enhanced_hash,
+                ) = self._apply_and_write_security(
+                    original_content, vulnerabilities, file_path
+                )
+            except ValueError as ve:
                 logger.info("❌ Enhanced content failed HTML structure validation")
-                return {
-                    "file": file_path,
-                    "status": "error",
-                    "error": "HTML structure validation failed",
-                }
+                return {"file": file_path, "status": "error", "error": str(ve)}
 
-            # Write enhanced content
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(enhanced_content)
-
-            # Calculate enhanced file hash
-            enhanced_hash = hashlib.sha256(enhanced_content.encode()).hexdigest()
-
-            logger.info(
-                f"✅ Applied {len(fixes_applied)} direct fixes and {len(all_enhancements)} security enhancements"
-            )
-
-            result = {
+            return {
                 "file": file_path,
                 "status": "enhanced",
                 "backup_path": backup_path,
@@ -565,8 +586,6 @@ class EnhancedSecurityFixAgent:
                 "fixes": fixes_applied,
                 "enhancements": all_enhancements,
             }
-
-            return result
 
         except Exception as e:
             logger.error("Error processing file %sfile_path : %se ")

@@ -13,9 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from config import UnifiedConfig
-
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -55,6 +54,51 @@ class PerformanceRecommendation:
 class PerformanceAnalyzer:
     """Analyzes code for performance issues and memory leaks"""
 
+    @staticmethod
+    def _build_performance_patterns() -> Dict[str, List[str]]:
+        """Return the anti-pattern regex map used for performance scanning.
+
+        Issue #1183: Extracted from __init__() to reduce function length.
+        """
+        return {
+            "memory_leaks": [
+                r"open\s*\([^)]+\)(?!\s*(?:with|\.close\(\)|as\s+))",
+                r"subprocess\.Popen\([^)]+\)(?!\s*(?:\.wait\(\)|\.communicate\(\)|with\s+))",
+                r"requests\.(?:get|post|put|delete)\([^)]+\)(?!\s*\.close\(\))",
+                r"for\s+[^:]+:\s*\n\s*(?:.*\n)*?\s*[A-Z][a-zA-Z]+\([^)]*\)",
+                r"(?:sqlite3|psycopg2|pymongo)\.connect\([^)]+\)(?!\s*(?:with|\.close\(\)|as\s+))",
+            ],
+            "blocking_calls": [
+                r"async\s+def\s+[^:]+:(?:(?:\n|.)*?)(?:time\.sleep|requests\.|urllib\.)",
+                r"async\s+def\s+[^:]+:(?:(?:\n|.)*?)subprocess\.(?:run|call|check_output)",
+                r"(?:time\.sleep|threading\.Event\(\)\.wait)\s*\(\s*([1-9]\d*)\s*\)",
+                r"\.join\(\s*(?:[1-9]\d*|None)\s*\)",
+            ],
+            "inefficient_loops": [
+                r"for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*for\s+",
+                r'for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\+=\s*[\'"]',
+                r"for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*[a-zA-Z_][a-zA-Z0-9_]*\.append\(",
+                r'for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*[a-zA-Z_][a-zA-Z0-9_]*\[[\'"][^\'"]*[\'"]\]',
+            ],
+            "database_issues": [
+                r"for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*(?:cursor\.execute|session\.query|\.filter)",
+                r"(?:sqlite3|psycopg2|pymongo)\.connect\([^)]+\)(?!\s*(?:pool|Pool))",
+                r"SELECT\s+\*\s+FROM\s+\w+(?!\s+(?:WHERE|LIMIT))",
+                r'WHERE\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[?\'"]\w+[?\'"](?!\s*(?:INDEX|index))',
+            ],
+            "concurrency_issues": [
+                r"(?:threading\.Thread|multiprocessing\.Process)\([^)]*\)(?!\s*\.join\(\))",
+                r"(?:global\s+|self\.)[a-zA-Z_][a-zA-Z0-9_]*\s*(?:\+=|\-=|\*=|\/=)",
+                r"async\s+def\s+[^:]+:(?:(?:\n|.)*?)[a-zA-Z_][a-zA-Z0-9_]*\([^)]*\)(?!\s*(?:await|\.result\(\)))",
+            ],
+            "resource_waste": [
+                r"(?:logging|logger|log)\.\w+\([^)]*\).*(?:logging|logger|log)\.\w+\([^)]*\)",
+                r"(?:len|max|min|sum)\([^)]+\).*(?:len|max|min|sum)\(\1\)",
+                r"[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[^=\n]+(?:\n(?!.*\1).*)*$",
+                r"\.read\(\)(?!\s*(?:\.decode|\.split|\.strip))",
+            ],
+        }
+
     def __init__(self, redis_client=None):
         self.redis_client = redis_client or get_redis_client(async_client=True)
         self.config = config
@@ -63,65 +107,8 @@ class PerformanceAnalyzer:
         self.PERFORMANCE_KEY = "perf_analysis:issues"
         self.RECOMMENDATIONS_KEY = "perf_analysis:recommendations"
 
-        # Performance anti-patterns
-        self.performance_patterns = {
-            "memory_leaks": [
-                # Unclosed resources
-                r"open\s*\([^)]+\)(?!\s*(?:with|\.close\(\)|as\s+))",
-                r"subprocess\.Popen\([^)]+\)(?!\s*(?:\.wait\(\)|\.communicate\(\)|with\s+))",
-                r"requests\.(?:get|post|put|delete)\([^)]+\)(?!\s*\.close\(\))",
-                # Large object creation in loops
-                r"for\s+[^:]+:\s*\n\s*(?:.*\n)*?\s*[A-Z][a-zA-Z]+\([^)]*\)",
-                # Unmanaged database connections
-                r"(?:sqlite3|psycopg2|pymongo)\.connect\([^)]+\)(?!\s*(?:with|\.close\(\)|as\s+))",
-            ],
-            "blocking_calls": [
-                # Synchronous calls in async functions
-                r"async\s+def\s+[^:]+:(?:(?:\n|.)*?)(?:time\.sleep|requests\.|urllib\.)",
-                r"async\s+def\s+[^:]+:(?:(?:\n|.)*?)subprocess\.(?:run|call|check_output)",
-                # Long synchronous operations
-                r"(?:time\.sleep|threading\.Event\(\)\.wait)\s*\(\s*([1-9]\d*)\s*\)",
-                r"\.join\(\s*(?:[1-9]\d*|None)\s*\)",
-            ],
-            "inefficient_loops": [
-                # Nested loops with high complexity
-                r"for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*for\s+",
-                # String concatenation in loops
-                r'for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*[a-zA-Z_][a-zA-Z0-9_]*\s*\+=\s*[\'"]',
-                # List operations in loops
-                r"for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*[a-zA-Z_][a-zA-Z0-9_]*\.append\(",
-                # Dictionary lookups in loops without caching
-                r'for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*[a-zA-Z_][a-zA-Z0-9_]*\[[\'"][^\'"]*[\'"]\]',
-            ],
-            "database_issues": [
-                # N+1 queries
-                r"for\s+[^:]+:\s*\n(?:\s*.*\n)*?\s*(?:cursor\.execute|session\.query|\.filter)",
-                # Missing connection pooling
-                r"(?:sqlite3|psycopg2|pymongo)\.connect\([^)]+\)(?!\s*(?:pool|Pool))",
-                # Unbounded queries
-                r"SELECT\s+\*\s+FROM\s+\w+(?!\s+(?:WHERE|LIMIT))",
-                # Missing indexes on frequent lookups
-                r'WHERE\s+[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[?\'"]\w+[?\'"](?!\s*(?:INDEX|index))',
-            ],
-            "concurrency_issues": [
-                # Race conditions
-                r"(?:threading\.Thread|multiprocessing\.Process)\([^)]*\)(?!\s*\.join\(\))",
-                # Missing locks on shared resources
-                r"(?:global\s+|self\.)[a-zA-Z_][a-zA-Z0-9_]*\s*(?:\+=|\-=|\*=|\/=)",
-                # Async without proper awaiting
-                r"async\s+def\s+[^:]+:(?:(?:\n|.)*?)[a-zA-Z_][a-zA-Z0-9_]*\([^)]*\)(?!\s*(?:await|\.result\(\)))",
-            ],
-            "resource_waste": [
-                # Excessive logging
-                r"(?:logging|logger|log)\.\w+\([^)]*\).*(?:logging|logger|log)\.\w+\([^)]*\)",
-                # Redundant computations
-                r"(?:len|max|min|sum)\([^)]+\).*(?:len|max|min|sum)\(\1\)",
-                # Unused variables
-                r"[a-zA-Z_][a-zA-Z0-9_]*\s*=\s*[^=\n]+(?:\n(?!.*\1).*)*$",
-                # Memory-intensive operations without need
-                r"\.read\(\)(?!\s*(?:\.decode|\.split|\.strip))",
-            ],
-        }
+        # Issue #1183: Delegate pattern dict to extracted static method
+        self.performance_patterns = self._build_performance_patterns()
 
         logger.info("Performance Analyzer initialized")
 

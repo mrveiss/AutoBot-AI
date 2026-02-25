@@ -60,10 +60,10 @@ class AutoBotSystemValidator:
 
         # Console output
         status_icon = {"pass": "✅", "fail": "❌", "warning": "⚠️", "skip": "⏭️"}
-        print(f"{status_icon.get(status, '?')} {test_name}: {message}")
+        print(f"{status_icon.get(status, '?')} {test_name}: {message}")  # noqa: print
         if details:
             for key, value in details.items():
-                print(f"    {key}: {value}")
+                print(f"    {key}: {value}")  # noqa: print
 
     def check_port_connectivity(
         self, host: str, port: int, service_name: str, timeout: int = 3
@@ -102,7 +102,7 @@ class AutoBotSystemValidator:
 
     def test_infrastructure_connectivity(self):
         """Test distributed VM infrastructure connectivity"""
-        print("\n=== INFRASTRUCTURE CONNECTIVITY TESTS ===")
+        print("\n=== INFRASTRUCTURE CONNECTIVITY TESTS ===")  # noqa: print
 
         services = [
             (self.backend_host, self.backend_port, "Backend API"),
@@ -146,7 +146,7 @@ class AutoBotSystemValidator:
 
     def test_api_endpoints(self):
         """Test critical API endpoints"""
-        print("\n=== API ENDPOINT VALIDATION ===")
+        print("\n=== API ENDPOINT VALIDATION ===")  # noqa: print
 
         base_url = f"http://{self.backend_host}:{self.backend_port}"
 
@@ -243,10 +243,10 @@ class AutoBotSystemValidator:
 
     def test_router_registry(self):
         """Test router registry and loading"""
-        print("\n=== ROUTER REGISTRY VALIDATION ===")
+        print("\n=== ROUTER REGISTRY VALIDATION ===")  # noqa: print
 
         try:
-            from backend.api.registry import registry
+            from api.registry import registry
 
             enabled = registry.get_enabled_routers()
             disabled = {
@@ -317,7 +317,7 @@ class AutoBotSystemValidator:
 
     def test_knowledge_base_functionality(self):
         """Test knowledge base functionality"""
-        print("\n=== KNOWLEDGE BASE VALIDATION ===")
+        print("\n=== KNOWLEDGE BASE VALIDATION ===")  # noqa: print
 
         # Check if backend is accessible
         if not self.check_port_connectivity(
@@ -421,7 +421,7 @@ class AutoBotSystemValidator:
 
     def test_llm_integration(self):
         """Test LLM integration and model availability"""
-        print("\n=== LLM INTEGRATION VALIDATION ===")
+        print("\n=== LLM INTEGRATION VALIDATION ===")  # noqa: print
 
         # Check if backend is accessible
         if not self.check_port_connectivity(
@@ -510,7 +510,7 @@ class AutoBotSystemValidator:
 
     def test_system_resources(self):
         """Test system resources and performance"""
-        print("\n=== SYSTEM RESOURCE VALIDATION ===")
+        print("\n=== SYSTEM RESOURCE VALIDATION ===")  # noqa: print
 
         try:
             # CPU usage
@@ -563,7 +563,7 @@ class AutoBotSystemValidator:
 
     def test_docker_services(self):
         """Test Docker services status"""
-        print("\n=== DOCKER SERVICES VALIDATION ===")
+        print("\n=== DOCKER SERVICES VALIDATION ===")  # noqa: print
 
         try:
             result = subprocess.run(
@@ -671,9 +671,11 @@ class AutoBotSystemValidator:
 
     def run_comprehensive_validation(self):
         """Run complete system validation suite"""
-        print("🚀 AutoBot Phase 9 Comprehensive System Validation")
-        print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print("=" * 60)
+        print("🚀 AutoBot Phase 9 Comprehensive System Validation")  # noqa: print
+        print(  # noqa: print
+            f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )  # noqa: print
+        print("=" * 60)  # noqa: print
 
         # Run all test categories
         self.test_infrastructure_connectivity()
@@ -685,30 +687,30 @@ class AutoBotSystemValidator:
         self.test_docker_services()
 
         # Generate summary
-        print("\n" + "=" * 60)
-        print("📊 VALIDATION SUMMARY")
-        print("=" * 60)
+        print("\n" + "=" * 60)  # noqa: print
+        print("📊 VALIDATION SUMMARY")  # noqa: print
+        print("=" * 60)  # noqa: print
 
         summary = self.generate_summary_report()
 
         # Console summary
-        print(f"Total Tests: {summary['test_summary']['total_tests']}")
-        print(f"✅ Passed: {summary['test_summary']['passed']}")
-        print(f"❌ Failed: {summary['test_summary']['failed']}")
-        print(f"⚠️ Warnings: {summary['test_summary']['warnings']}")
-        print(f"⏭️ Skipped: {summary['test_summary']['skipped']}")
-        print(f"Success Rate: {summary['test_summary']['success_rate']}")
-        print(f"Duration: {summary['execution_info']['total_duration']}")
+        print(f"Total Tests: {summary['test_summary']['total_tests']}")  # noqa: print
+        print(f"✅ Passed: {summary['test_summary']['passed']}")  # noqa: print
+        print(f"❌ Failed: {summary['test_summary']['failed']}")  # noqa: print
+        print(f"⚠️ Warnings: {summary['test_summary']['warnings']}")  # noqa: print
+        print(f"⏭️ Skipped: {summary['test_summary']['skipped']}")  # noqa: print
+        print(f"Success Rate: {summary['test_summary']['success_rate']}")  # noqa: print
+        print(f"Duration: {summary['execution_info']['total_duration']}")  # noqa: print
 
         if summary["critical_issues"]:
-            print("\n❌ CRITICAL ISSUES:")
+            print("\n❌ CRITICAL ISSUES:")  # noqa: print
             for issue in summary["critical_issues"]:
-                print(f"  - {issue}")
+                print(f"  - {issue}")  # noqa: print
 
         if summary["warnings"]:
-            print("\n⚠️ WARNINGS:")
+            print("\n⚠️ WARNINGS:")  # noqa: print
             for warning in summary["warnings"]:
-                print(f"  - {warning}")
+                print(f"  - {warning}")  # noqa: print
 
         # Save detailed results
         self.save_results(summary)
@@ -742,7 +744,7 @@ class AutoBotSystemValidator:
         with open(json_file, "w") as f:
             json.dump(full_report, f, indent=2)
 
-        print(f"\n💾 Detailed results saved to: {json_file}")
+        print(f"\n💾 Detailed results saved to: {json_file}")  # noqa: print
 
         # Save summary report
         summary_file = results_dir / f"validation_summary_{timestamp}.txt"
@@ -772,7 +774,7 @@ class AutoBotSystemValidator:
                 for warning in summary["warnings"]:
                     f.write(f"  - {warning}\n")
 
-        print(f"📋 Summary report saved to: {summary_file}")
+        print(f"📋 Summary report saved to: {summary_file}")  # noqa: print
 
 
 def main():
@@ -784,24 +786,24 @@ def main():
 
         # Exit code based on results
         if summary["test_summary"]["failed"] > 0:
-            print(
+            print(  # noqa: print
                 f"\n❌ Validation completed with {summary['test_summary']['failed']} critical issues"
             )
             sys.exit(1)
         elif summary["test_summary"]["warnings"] > 0:
-            print(
+            print(  # noqa: print
                 f"\n⚠️ Validation completed with {summary['test_summary']['warnings']} warnings"
             )
             sys.exit(2)
         else:
-            print("\n✅ All validation tests passed successfully!")
+            print("\n✅ All validation tests passed successfully!")  # noqa: print
             sys.exit(0)
 
     except KeyboardInterrupt:
-        print("\n⚠️ Validation interrupted by user")
+        print("\n⚠️ Validation interrupted by user")  # noqa: print
         sys.exit(130)
     except Exception as e:
-        print(f"\n❌ Validation failed with error: {str(e)}")
+        print(f"\n❌ Validation failed with error: {str(e)}")  # noqa: print
         sys.exit(1)
 
 

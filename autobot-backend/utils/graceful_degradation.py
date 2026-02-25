@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiofiles
-from backend.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -707,7 +707,7 @@ async def main():
         # Test normal requests
         requests = [
             "Explain Python decorators",
-            "Analyze this code: def hello(): print('world')",
+            "Analyze this code: def hello(): print('world')",  # noqa: print
             "What is the error in this code?",
             "How do I create a file in Python?",
         ]

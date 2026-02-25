@@ -13,7 +13,7 @@ Issue #322: Updated to use TaskExecutionContext for cleaner handler interface.
 import logging
 from typing import TYPE_CHECKING, Any, Dict
 
-from backend.models.task_context import TaskExecutionContext
+from models.task_context import TaskExecutionContext
 
 from .communication_handlers import (
     AskUserCommandApprovalHandler,

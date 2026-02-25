@@ -13,7 +13,6 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from backend.type_defs.common import Metadata
 from enhanced_memory_manager_async import (
     AsyncEnhancedMemoryManager,
     TaskEntry,
@@ -25,6 +24,7 @@ from fastapi import APIRouter, HTTPException, Query
 from markdown_reference_system import MarkdownReferenceSystem
 from pydantic import BaseModel
 from task_execution_tracker import task_tracker
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

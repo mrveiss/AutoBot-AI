@@ -75,4 +75,4 @@ def discover_tools():
 
 if __name__ == "__main__":
     available_tools = discover_tools()
-    print(json.dumps(available_tools, indent=2))
+    print(json.dumps(available_tools, indent=2))  # noqa: print

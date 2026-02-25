@@ -398,7 +398,7 @@ async def store_commands_in_knowledge_base(
         Number of new commands added (currently always 0)
     """
     try:
-        from backend.services.knowledge_base import get_knowledge_base_service
+        from services.knowledge_base import get_knowledge_base_service
 
         get_knowledge_base_service()  # noqa: F841 - Verify import works
     except ImportError:
@@ -456,7 +456,7 @@ async def search_commands(
         List of matching commands with metadata
     """
     try:
-        from backend.services.knowledge_base import get_knowledge_base_service
+        from services.knowledge_base import get_knowledge_base_service
 
         kb_service = get_knowledge_base_service()
 

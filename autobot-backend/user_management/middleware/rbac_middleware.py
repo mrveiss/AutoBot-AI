@@ -13,10 +13,10 @@ import uuid
 from functools import wraps
 from typing import Callable, List, Optional, Set
 
-from backend.user_management.config import get_deployment_config
-from backend.user_management.database import db_session_context
-from backend.user_management.services import TenantContext, UserService
 from fastapi import HTTPException, Request, status
+from user_management.config import get_deployment_config
+from user_management.database import db_session_context
+from user_management.services import TenantContext, UserService
 
 logger = logging.getLogger(__name__)
 

@@ -13,11 +13,11 @@ Provides developer mode functionality including:
 import logging
 from typing import Dict, List
 
-from backend.services.config_service import ConfigService
-from backend.type_defs.common import Metadata
 from config import unified_config_manager
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
+from services.config_service import ConfigService
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

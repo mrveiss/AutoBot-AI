@@ -5,12 +5,55 @@
       <div class="header-content">
         <h2><i class="fas fa-code"></i> Real-time Codebase Analytics</h2>
         <div class="header-controls">
+          <!-- Issue #1133: Source selector row -->
+          <div class="source-selector-row">
+            <div class="source-selector-wrapper">
+              <select
+                class="source-select"
+                :value="selectedSource ? selectedSource.id : '__custom__'"
+                @change="(e) => {
+                  const val = (e.target as HTMLSelectElement).value
+                  if (val === '__custom__') {
+                    handleClearSource()
+                  } else {
+                    const found = sources.find(s => s.id === val)
+                    if (found) handleSelectSource(found)
+                  }
+                }"
+              >
+                <option value="__custom__">Custom path...</option>
+                <option v-for="src in sources" :key="src.id" :value="src.id">
+                  {{ src.name }} ({{ src.source_type === 'github' ? src.repo : 'local' }})
+                </option>
+              </select>
+              <i class="fas fa-chevron-down select-chevron"></i>
+            </div>
+            <button class="btn-manage-sources" @click="showSourceManager = true">
+              <i class="fas fa-code-branch"></i>
+              Manage Sources
+            </button>
+          </div>
+
+          <!-- Path input shown when no source selected -->
           <input
+            v-if="!selectedSource"
             v-model="rootPath"
             placeholder="/path/to/analyze"
             class="path-input"
             @keyup.enter="runFullAnalysis"
           />
+
+          <!-- Selected source bar -->
+          <div v-if="selectedSource" class="selected-source-bar">
+            <i :class="selectedSource.source_type === 'github' ? 'fab fa-github' : 'fas fa-folder'"></i>
+            <span class="selected-source-name">{{ selectedSource.name }}</span>
+            <span class="selected-source-path">{{ selectedSource.repo ?? selectedSource.clone_path ?? '' }}</span>
+            <span class="selected-source-status" :class="`status--${selectedSource.status}`">{{ selectedSource.status }}</span>
+            <button class="btn-clear-source" @click="handleClearSource" title="Use custom path">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+
           <button @click="indexCodebase" :disabled="analyzing" class="btn-primary">
             <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-database'"></i>
             {{ analyzing ? 'Indexing...' : 'Index Codebase' }}
@@ -19,7 +62,7 @@
             <i class="fas fa-stop-circle"></i>
             Cancel
           </button>
-          <button @click="runFullAnalysis" :disabled="analyzing || !rootPath" class="btn-secondary">
+          <button @click="runFullAnalysis" :disabled="analyzing || (!rootPath && !selectedSource)" class="btn-secondary">
             <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-chart-bar'"></i>
             {{ analyzing ? 'Analyzing...' : 'Analyze All' }}
           </button>
@@ -2654,6 +2697,58 @@
         />
       </div>
     </div>
+
+    <!-- Issue #1133: Knowledge Base Opt-in Banner -->
+    <div v-if="showKnowledgeBaseOptIn" class="kb-optin-banner">
+      <div class="kb-optin-content">
+        <i class="fas fa-book"></i>
+        <div class="kb-optin-text">
+          <strong>Indexing complete!</strong>
+          Add this codebase to the knowledge base so AutoBot can answer questions about it.
+        </div>
+        <button
+          class="kb-optin-btn"
+          @click="addToKnowledgeBase"
+          :disabled="knowledgeBaseAdding"
+        >
+          <i :class="knowledgeBaseAdding ? 'fas fa-spinner fa-spin' : 'fas fa-plus'"></i>
+          {{ knowledgeBaseAdding ? 'Adding...' : 'Add to Knowledge Base' }}
+        </button>
+        <button class="kb-optin-dismiss" @click="showKnowledgeBaseOptIn = false" aria-label="Dismiss">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Issue #1133: Source Manager Panel -->
+    <SourceManager
+      v-if="showSourceManager"
+      :selected-source-id="selectedSource?.id ?? null"
+      :visible="showSourceManager"
+      @select-source="handleSelectSource"
+      @open-add-source="showAddSourceModal = true; showSourceManager = false"
+      @edit-source="handleEditSource"
+      @share-source="handleShareSource"
+      @close="showSourceManager = false"
+    />
+
+    <!-- Issue #1133: Add / Edit Source Modal -->
+    <AddSourceModal
+      v-if="showAddSourceModal"
+      :visible="showAddSourceModal"
+      :source="editTargetSource"
+      @saved="handleSourceSaved"
+      @close="showAddSourceModal = false; editTargetSource = null"
+    />
+
+    <!-- Issue #1133: Share Source Modal -->
+    <ShareSourceModal
+      v-if="showShareSourceModal"
+      :visible="showShareSourceModal"
+      :source="shareTargetSource"
+      @saved="handleShareSaved"
+      @close="showShareSourceModal = false; shareTargetSource = null"
+    />
   </div>
 </template>
 
@@ -2668,6 +2763,10 @@ import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
 import { useToast } from '@/composables/useToast'
 import { useCodeIntelligence } from '@/composables/useCodeIntelligence'
 import { createLogger } from '@/utils/debugUtils'
+// Issue #1133: Code Source Registry Components
+import SourceManager from '@/components/analytics/SourceManager.vue'
+import AddSourceModal from '@/components/analytics/AddSourceModal.vue'
+import ShareSourceModal from '@/components/analytics/ShareSourceModal.vue'
 // Issue #566: Code Intelligence Dashboard Components
 import SecurityFindingsPanel from '@/components/analytics/code-intelligence/SecurityFindingsPanel.vue'
 import PerformanceFindingsPanel from '@/components/analytics/code-intelligence/PerformanceFindingsPanel.vue'
@@ -2798,11 +2897,41 @@ const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' 
   showToast(message, type, type === 'error' ? 5000 : 3000)
 }
 
+// Issue #1133: CodeSource type
+interface CodeSource {
+  id: string
+  name: string
+  source_type: 'github' | 'local'
+  repo: string | null
+  branch: string
+  credential_id: string | null
+  clone_path: string | null
+  last_synced: string | null
+  status: 'configured' | 'syncing' | 'ready' | 'error'
+  error_message: string | null
+  owner_id: string | null
+  access: 'private' | 'shared' | 'public'
+  shared_with: string[]
+  created_at: string
+}
+
 // Reactive data
 // Load path from localStorage if available, otherwise use default
 const STORAGE_KEY_PATH = 'codebase-analytics-path'
 const savedPath = localStorage.getItem(STORAGE_KEY_PATH)
-const rootPath = ref(savedPath || '/home/kali/Desktop/AutoBot')
+const rootPath = ref(savedPath || '/opt/autobot')
+
+// Issue #1133: Source registry state
+const sources = ref<CodeSource[]>([])
+const selectedSource = ref<CodeSource | null>(null)
+const showSourceManager = ref(false)
+const showAddSourceModal = ref(false)
+const showShareSourceModal = ref(false)
+const editTargetSource = ref<CodeSource | null>(null)
+const shareTargetSource = ref<CodeSource | null>(null)
+const showKnowledgeBaseOptIn = ref(false)
+const knowledgeBaseAdding = ref(false)
+
 const analyzing = ref(false)
 const progressPercent = ref(0)
 const progressStatus = ref('Ready')
@@ -3654,7 +3783,87 @@ onMounted(async () => {
 
   // Load unified analytics report for category filtering
   loadUnifiedReport()
+
+  // Issue #1133: Load registered code sources
+  loadSources()
 })
+
+// Issue #1133: Source registry functions
+
+async function loadSources() {
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/sources`)
+    if (!response.ok) return
+    const data = await response.json()
+    sources.value = data.sources ?? []
+  } catch (err: unknown) {
+    logger.warn('Failed to load sources:', err instanceof Error ? err.message : String(err))
+  }
+}
+
+function handleSelectSource(source: CodeSource) {
+  selectedSource.value = source
+  if (source.clone_path) {
+    rootPath.value = source.clone_path
+    localStorage.setItem(STORAGE_KEY_PATH, source.clone_path)
+  }
+  showSourceManager.value = false
+  notify(`Selected source: ${source.name}`, 'info')
+}
+
+function handleClearSource() {
+  selectedSource.value = null
+}
+
+async function handleSourceSaved(source: CodeSource) {
+  showAddSourceModal.value = false
+  editTargetSource.value = null
+  await loadSources()
+  notify(`Source "${source.name}" saved successfully`, 'success')
+}
+
+async function handleShareSaved(source: CodeSource) {
+  showShareSourceModal.value = false
+  shareTargetSource.value = null
+  await loadSources()
+  notify(`Access updated for "${source.name}"`, 'success')
+}
+
+function handleEditSource(source: CodeSource) {
+  editTargetSource.value = source
+  showAddSourceModal.value = true
+  showSourceManager.value = false
+}
+
+function handleShareSource(source: CodeSource) {
+  shareTargetSource.value = source
+  showShareSourceModal.value = true
+}
+
+async function addToKnowledgeBase() {
+  if (!rootPath.value) return
+  knowledgeBaseAdding.value = true
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetchWithAuth(`${backendUrl}/api/knowledge/index`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: rootPath.value })
+    })
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`HTTP ${response.status}: ${text}`)
+    }
+    showKnowledgeBaseOptIn.value = false
+    notify('Codebase added to knowledge base', 'success')
+  } catch (err: unknown) {
+    logger.error('Failed to add to knowledge base:', err instanceof Error ? err.message : String(err))
+    notify('Failed to add to knowledge base', 'error')
+  } finally {
+    knowledgeBaseAdding.value = false
+  }
+}
 
 // Check if there's a running indexing job
 const checkCurrentIndexingJob = async () => {
@@ -3772,6 +3981,9 @@ const pollJobStatus = async () => {
           progressStatus.value = 'Indexing completed!'
           progressPercent.value = 100
           notify('Codebase indexing completed', 'success')
+
+          // Issue #1133: Show knowledge base opt-in after indexing
+          showKnowledgeBaseOptIn.value = true
 
           // Refresh data
           await loadCodebaseAnalyticsData()
@@ -4799,7 +5011,11 @@ const indexCodebase = async () => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ root_path: rootPath.value })
+      body: JSON.stringify(
+        selectedSource.value
+          ? { source_id: selectedSource.value.id }
+          : { root_path: rootPath.value }
+      )
     })
 
     if (!response.ok) {
@@ -11217,5 +11433,215 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .code-intel-tabs .tabs-content {
   min-height: 200px;
+}
+
+/* Issue #1133: Source Registry Styles */
+.source-selector-row {
+  display: flex;
+  gap: var(--spacing-2);
+  align-items: center;
+  width: 100%;
+}
+
+.source-selector-wrapper {
+  position: relative;
+  flex: 2;
+}
+
+.source-select {
+  width: 100%;
+  padding: 10px 32px 10px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  appearance: none;
+  cursor: pointer;
+  transition: border-color var(--duration-200);
+}
+
+.source-select:focus {
+  outline: none;
+  border-color: var(--color-info);
+}
+
+.select-chevron {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.btn-manage-sources {
+  padding: 10px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: all var(--duration-200);
+}
+
+.btn-manage-sources:hover {
+  border-color: var(--color-info);
+  color: var(--color-info);
+}
+
+.selected-source-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: var(--radius-lg);
+  padding: 8px 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.selected-source-bar > i {
+  color: var(--color-info);
+  flex-shrink: 0;
+}
+
+.selected-source-name {
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.selected-source-path {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.selected-source-status {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  text-transform: capitalize;
+  flex-shrink: 0;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.btn-clear-source {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 11px;
+  transition: color var(--duration-200);
+}
+
+.btn-clear-source:hover {
+  color: var(--color-error);
+}
+
+/* Knowledge Base Opt-in Banner */
+.kb-optin-banner {
+  position: fixed;
+  bottom: var(--spacing-6);
+  right: var(--spacing-6);
+  z-index: 900;
+  max-width: 480px;
+  width: 100%;
+}
+
+.kb-optin-content {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  background: var(--bg-card);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-4) var(--spacing-5);
+  box-shadow: var(--shadow-lg);
+}
+
+.kb-optin-content > i {
+  font-size: var(--text-xl);
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+
+.kb-optin-text {
+  flex: 1;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  min-width: 0;
+}
+
+.kb-optin-text strong {
+  display: block;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.kb-optin-btn {
+  padding: 8px 14px;
+  background: var(--color-success);
+  border: none;
+  border-radius: var(--radius-lg);
+  color: white;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity var(--duration-200);
+}
+
+.kb-optin-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.kb-optin-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.kb-optin-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  flex-shrink: 0;
+  transition: color var(--duration-200);
+}
+
+.kb-optin-dismiss:hover {
+  color: var(--text-primary);
 }
 </style>

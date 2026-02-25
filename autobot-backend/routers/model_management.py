@@ -13,8 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from backend.models.ml_model import MLModel
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from models.ml_model import MLModel
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -48,7 +48,7 @@ def _get_session():
 
 def _get_trainer_class():
     """Lazy import CompletionTrainer to avoid torchmetrics at module load."""
-    from backend.training.completion_trainer import CompletionTrainer
+    from training.completion_trainer import CompletionTrainer
 
     return CompletionTrainer
 

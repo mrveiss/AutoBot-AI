@@ -16,7 +16,7 @@ import threading
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from backend.constants.threshold_constants import StringParsingConstants
+from constants.threshold_constants import StringParsingConstants
 
 logger = logging.getLogger(__name__)
 

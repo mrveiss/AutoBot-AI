@@ -12,8 +12,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
-from backend.services.workflow_automation import WorkflowStep
-from backend.type_defs.common import Metadata
+from services.workflow_automation import WorkflowStep
+from type_defs.common import Metadata
 
 # Performance optimization: O(1) lookup for dangerous command patterns (Issue #326)
 CRITICAL_RISK_PATTERNS = {"rm -r", "dd ", "mkfs"}

@@ -15,7 +15,7 @@ Functions:
 - Dependency Injection: get_chat_history_manager (FastAPI)
 
 Usage:
-    from backend.utils.chat_utils import (
+    from utils.chat_utils import (
         generate_request_id,
         create_success_response,
         get_chat_history_manager
@@ -30,16 +30,16 @@ import re
 from typing import Any, Optional
 from uuid import uuid4
 
-from backend.type_defs.common import Metadata
-from backend.utils.path_validation import contains_injection_patterns
-
-# Issue #756: Consolidated from utils/request_utils.py
-from backend.utils.request_utils import generate_request_id
-from backend.utils.response_helpers import (
-    create_error_response as _canonical_create_error_response,
-)
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from type_defs.common import Metadata
+from utils.path_validation import contains_injection_patterns
+
+# Issue #756: Consolidated from utils/request_utils.py
+from utils.request_utils import generate_request_id
+from utils.response_helpers import (
+    create_error_response as _canonical_create_error_response,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ def generate_chat_session_id() -> str:
 
     Example:
         >>> session_id = generate_chat_session_id()
-        >>> print(session_id)
+        >>> print(session_id)  # noqa: print
         'b2c3d4e5-f6a7-8901-bcde-f12345678901'
     """
     return str(uuid4())
@@ -79,7 +79,7 @@ def generate_message_id() -> str:
 
     Example:
         >>> message_id = generate_message_id()
-        >>> print(message_id)
+        >>> print(message_id)  # noqa: print
         'c3d4e5f6-a7b8-9012-cdef-123456789012'
     """
     return str(uuid4())

@@ -26,7 +26,7 @@ def _get_feedback_tracker():
     """Get or create FeedbackTracker instance on first use."""
     global _feedback_tracker
     if _feedback_tracker is None:
-        from backend.services.feedback_tracker import FeedbackTracker
+        from services.feedback_tracker import FeedbackTracker
 
         _feedback_tracker = FeedbackTracker()
     return _feedback_tracker
@@ -34,7 +34,7 @@ def _get_feedback_tracker():
 
 def _get_incremental_trainer():
     """Lazy import IncrementalTrainer to avoid torchmetrics at module load."""
-    from backend.services.incremental_trainer import IncrementalTrainer
+    from services.incremental_trainer import IncrementalTrainer
 
     return IncrementalTrainer()
 

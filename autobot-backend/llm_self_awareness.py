@@ -697,23 +697,23 @@ if __name__ == "__main__":
 
         # Get system context
         context = await awareness.get_system_context(include_detailed=True)
-        print(json.dumps(context, indent=2, default=str))
+        print(json.dumps(context, indent=2, default=str))  # noqa: print
 
         # Create capability summary
         summary = awareness.create_capability_summary()
-        print("\n" + summary)
+        print("\n" + summary)  # noqa: print
 
         # Test prompt injection
         original_prompt = "How can I use the workflow system?"
         aware_prompt = await awareness.inject_awareness_context(original_prompt)
-        print("\n--- Awareness-Injected Prompt ---")
-        print(aware_prompt)
+        print("\n--- Awareness-Injected Prompt ---")  # noqa: print
+        print(aware_prompt)  # noqa: print
 
         # Test phase-aware response
         response = await awareness.get_phase_aware_response(
             "What capabilities do I have for AI tasks?"
         )
-        print("\n--- Phase-Aware Response ---")
-        print(json.dumps(response, indent=2))
+        print("\n--- Phase-Aware Response ---")  # noqa: print
+        print(json.dumps(response, indent=2))  # noqa: print
 
     asyncio.run(main())

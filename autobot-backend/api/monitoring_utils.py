@@ -12,7 +12,7 @@ import io
 import logging
 from typing import Dict, List
 
-from backend.type_defs.common import Metadata
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 

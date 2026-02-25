@@ -9,7 +9,7 @@ Tests for static type analysis.
 
 import ast
 
-from backend.services.type_inference import TypeInferencer
+from services.type_inference import TypeInferencer
 
 
 def test_type_inferencer_initialization():
@@ -139,7 +139,7 @@ def test_infer_function_return_type():
     assert inferencer.infer_function_return_type(func) == "int"
 
     # No return
-    code = "def test():\n    print('hello')"
+    code = "def test():\n    print('hello')"  # noqa: print
     tree = ast.parse(code)
     func = tree.body[0]
     assert inferencer.infer_function_return_type(func) == "None"

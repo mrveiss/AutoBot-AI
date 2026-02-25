@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime, timedelta
 
 import pytest
-from backend.models.secret import Secret, SecretScope, SecretType
+from models.secret import Secret, SecretScope, SecretType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

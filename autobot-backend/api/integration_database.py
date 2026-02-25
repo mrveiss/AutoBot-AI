@@ -12,13 +12,13 @@ and executing read-only queries.
 import logging
 from typing import Any, Dict, List, Optional
 
-from backend.integrations.base import IntegrationConfig
-from backend.integrations.database_integration import (
+from fastapi import APIRouter, HTTPException
+from integrations.base import IntegrationConfig
+from integrations.database_integration import (
     MongoDBIntegration,
     MySQLIntegration,
     PostgreSQLIntegration,
 )
-from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)

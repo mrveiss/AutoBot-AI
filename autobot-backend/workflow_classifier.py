@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 import redis
 from autobot_types import TaskComplexity
-from backend.constants.threshold_constants import StringParsingConstants
+from constants.threshold_constants import StringParsingConstants
 
 from autobot_shared.redis_client import get_redis_client
 
@@ -341,25 +341,27 @@ if __name__ == "__main__":
 
     if args.action == "stats":
         stats = classifier.get_classification_stats()
-        print("Classification Statistics:")
-        print(f"Total Categories: {stats['total_categories']}")
-        print(f"Total Keywords: {stats['total_keywords']}")
-        print(f"Total Rules: {stats['total_rules']}")
-        print("\nCategories:")
+        print("Classification Statistics:")  # noqa: print
+        print(f"Total Categories: {stats['total_categories']}")  # noqa: print
+        print(f"Total Keywords: {stats['total_keywords']}")  # noqa: print
+        print(f"Total Rules: {stats['total_rules']}")  # noqa: print
+        print("\nCategories:")  # noqa: print
         for cat, count in stats["categories"].items():
-            print(f"  {cat}: {count} keywords")
+            print(f"  {cat}: {count} keywords")  # noqa: print
 
     elif args.action == "add-keyword":
         if args.category and args.keyword:
             classifier.add_keywords(args.category, [args.keyword])
-            print(f"Added '{args.keyword}' to category '{args.category}'")
+            print(  # noqa: print
+                f"Added '{args.keyword}' to category '{args.category}'"
+            )  # noqa: print
         else:
-            print("Error: --category and --keyword required")
+            print("Error: --category and --keyword required")  # noqa: print
 
     elif args.action == "test":
         if args.message:
             complexity = classifier.classify_request(args.message)
-            print(f"Message: '{args.message}'")
-            print(f"Classification: {complexity.value}")
+            print(f"Message: '{args.message}'")  # noqa: print
+            print(f"Classification: {complexity.value}")  # noqa: print
         else:
-            print("Error: --message required")
+            print("Error: --message required")  # noqa: print

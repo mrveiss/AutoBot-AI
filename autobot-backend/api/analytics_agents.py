@@ -17,9 +17,9 @@ import logging
 from typing import Optional
 
 from auth_middleware import check_admin_permission
-from backend.services.agent_analytics import AgentType, TaskStatus, get_agent_analytics
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from services.agent_analytics import AgentType, TaskStatus, get_agent_analytics
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

@@ -9,9 +9,9 @@ for the AutoBot backend.
 """
 
 from fastapi import FastAPI
+from services.ai_stack_client import get_ai_stack_client
 
 from autobot_shared.logging_manager import get_logger
-from backend.services.ai_stack_client import get_ai_stack_client
 
 logger = get_logger(__name__, "backend")
 

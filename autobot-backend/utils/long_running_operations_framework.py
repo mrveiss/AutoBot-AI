@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # Re-export all public API from the package
-from backend.utils.long_running_operations import (  # Types and dataclasses; Managers
+from utils.long_running_operations import (  # Types and dataclasses; Managers
     LongRunningOperation,
     LongRunningOperationManager,
     LongRunningTimeoutConfig,
@@ -492,11 +492,11 @@ if __name__ == "__main__":
                 test_op = await manager.get_operation(test_op_id)
 
                 if indexing_op and test_op:
-                    print(
+                    print(  # noqa: print
                         f"Indexing: {indexing_op.status.value} - "
                         f"{indexing_op.progress.progress_percent:.1f}%"
                     )
-                    print(
+                    print(  # noqa: print
                         f"Testing: {test_op.status.value} - "
                         f"{test_op.progress.progress_percent:.1f}%"
                     )
@@ -512,7 +512,7 @@ if __name__ == "__main__":
 
                 await asyncio.sleep(5)
 
-            print("All operations completed!")
+            print("All operations completed!")  # noqa: print
 
         finally:
             await manager.stop_background_processor()

@@ -332,6 +332,7 @@ function formatDate(dateStr: string | null): string {
 
 .modal-content {
   background: var(--bg-secondary, #1e1e2e);
+  color: var(--text-primary, #fff);
   border-radius: 8px;
   width: 600px;
   max-width: 90vw;
@@ -351,6 +352,7 @@ function formatDate(dateStr: string | null): string {
 .modal-header h3 {
   margin: 0;
   flex: 1;
+  color: var(--text-primary, #fff);
 }
 
 .hostname {
@@ -411,6 +413,7 @@ function formatDate(dateStr: string | null): string {
 
 .role-name {
   font-weight: 500;
+  color: var(--text-primary, #fff);
 }
 
 .role-badge {
@@ -440,6 +443,10 @@ function formatDate(dateStr: string | null): string {
   padding: 8px 12px;
   text-align: left;
   border-bottom: 1px solid var(--border-color, #333);
+}
+
+.role-table td {
+  color: var(--text-primary, #fff);
 }
 
 .role-table th {
@@ -499,6 +506,7 @@ function formatDate(dateStr: string | null): string {
 .port-badge {
   padding: 4px 8px;
   background: var(--bg-tertiary, #2a2a3e);
+  color: var(--text-primary, #fff);
   border-radius: 4px;
   font-family: monospace;
 }

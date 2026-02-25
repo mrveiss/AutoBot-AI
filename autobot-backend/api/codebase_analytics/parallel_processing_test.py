@@ -16,7 +16,7 @@ Tests the following functionality:
 from pathlib import Path
 
 import pytest
-from backend.api.codebase_analytics.types import (
+from api.codebase_analytics.types import (
     AnalysisBatchResult,
     FileAnalysisResult,
     ParallelProcessingStats,
@@ -240,7 +240,7 @@ class TestDetermineAnalyzerType:
 
     def test_python_extension(self):
         """Test Python file detection."""
-        from backend.api.codebase_analytics.scanner import _determine_analyzer_type
+        from api.codebase_analytics.scanner import _determine_analyzer_type
 
         analyzer_type, stat_key = _determine_analyzer_type(".py")
 
@@ -249,7 +249,7 @@ class TestDetermineAnalyzerType:
 
     def test_javascript_extension(self):
         """Test JavaScript file detection."""
-        from backend.api.codebase_analytics.scanner import _determine_analyzer_type
+        from api.codebase_analytics.scanner import _determine_analyzer_type
 
         analyzer_type, stat_key = _determine_analyzer_type(".js")
 
@@ -258,7 +258,7 @@ class TestDetermineAnalyzerType:
 
     def test_vue_extension(self):
         """Test Vue file detection."""
-        from backend.api.codebase_analytics.scanner import _determine_analyzer_type
+        from api.codebase_analytics.scanner import _determine_analyzer_type
 
         analyzer_type, stat_key = _determine_analyzer_type(".vue")
 
@@ -267,7 +267,7 @@ class TestDetermineAnalyzerType:
 
     def test_markdown_extension(self):
         """Test Markdown (doc) file detection."""
-        from backend.api.codebase_analytics.scanner import _determine_analyzer_type
+        from api.codebase_analytics.scanner import _determine_analyzer_type
 
         analyzer_type, stat_key = _determine_analyzer_type(".md")
 
@@ -276,7 +276,7 @@ class TestDetermineAnalyzerType:
 
     def test_unknown_extension(self):
         """Test unknown extension returns None analyzer."""
-        from backend.api.codebase_analytics.scanner import _determine_analyzer_type
+        from api.codebase_analytics.scanner import _determine_analyzer_type
 
         analyzer_type, stat_key = _determine_analyzer_type(".xyz")
 
@@ -289,7 +289,7 @@ class TestEnrichItemsWithMetadata:
 
     def test_adds_file_path_and_category(self):
         """Test items are enriched with file_path and file_category."""
-        from backend.api.codebase_analytics.scanner import _enrich_items_with_metadata
+        from api.codebase_analytics.scanner import _enrich_items_with_metadata
 
         items = [{"name": "func1"}, {"name": "func2"}]
         enriched = _enrich_items_with_metadata(items, "src/module.py", "code")
@@ -302,7 +302,7 @@ class TestEnrichItemsWithMetadata:
 
     def test_does_not_modify_original(self):
         """Test original items are not modified."""
-        from backend.api.codebase_analytics.scanner import _enrich_items_with_metadata
+        from api.codebase_analytics.scanner import _enrich_items_with_metadata
 
         items = [{"name": "func1"}]
         enriched = _enrich_items_with_metadata(items, "test.py", "code")
@@ -312,7 +312,7 @@ class TestEnrichItemsWithMetadata:
 
     def test_empty_list(self):
         """Test empty list returns empty list."""
-        from backend.api.codebase_analytics.scanner import _enrich_items_with_metadata
+        from api.codebase_analytics.scanner import _enrich_items_with_metadata
 
         enriched = _enrich_items_with_metadata([], "test.py", "code")
 
@@ -324,7 +324,7 @@ class TestAggregateFromFileResult:
 
     def test_skips_unprocessed_files(self):
         """Test that unprocessed files are skipped."""
-        from backend.api.codebase_analytics.scanner import (
+        from api.codebase_analytics.scanner import (
             _aggregate_from_file_result,
             _create_empty_analysis_results,
         )
@@ -345,7 +345,7 @@ class TestAggregateFromFileResult:
 
     def test_aggregates_processed_file(self):
         """Test processed file is aggregated correctly."""
-        from backend.api.codebase_analytics.scanner import (
+        from api.codebase_analytics.scanner import (
             _aggregate_from_file_result,
             _create_empty_analysis_results,
         )
@@ -376,7 +376,7 @@ class TestAggregateFromFileResult:
 
     def test_updates_category_stats(self):
         """Test file category stats are updated."""
-        from backend.api.codebase_analytics.scanner import (
+        from api.codebase_analytics.scanner import (
             _aggregate_from_file_result,
             _create_empty_analysis_results,
         )
@@ -405,7 +405,7 @@ class TestAggregateAllResults:
 
     def test_aggregates_multiple_results(self):
         """Test multiple results are aggregated."""
-        from backend.api.codebase_analytics.scanner import _aggregate_all_results
+        from api.codebase_analytics.scanner import _aggregate_all_results
 
         results = [
             FileAnalysisResult(
@@ -439,7 +439,7 @@ class TestAggregateAllResults:
 
     def test_skips_unprocessed_in_aggregation(self):
         """Test unprocessed results are skipped during aggregation."""
-        from backend.api.codebase_analytics.scanner import _aggregate_all_results
+        from api.codebase_analytics.scanner import _aggregate_all_results
 
         results = [
             FileAnalysisResult(
@@ -468,7 +468,7 @@ class TestAggregateAllResults:
 
     def test_empty_results_list(self):
         """Test empty results list returns valid empty structure."""
-        from backend.api.codebase_analytics.scanner import _aggregate_all_results
+        from api.codebase_analytics.scanner import _aggregate_all_results
 
         aggregated = _aggregate_all_results([])
 
@@ -482,14 +482,14 @@ class TestParallelProcessingConfig:
 
     def test_parallel_file_concurrency_default(self):
         """Test default parallel file concurrency value."""
-        from backend.api.codebase_analytics.scanner import PARALLEL_FILE_CONCURRENCY
+        from api.codebase_analytics.scanner import PARALLEL_FILE_CONCURRENCY
 
         # Default is 50, should be between 1-200
         assert 1 <= PARALLEL_FILE_CONCURRENCY <= 200
 
     def test_parallel_mode_enabled_default(self):
         """Test parallel mode is enabled by default."""
-        from backend.api.codebase_analytics.scanner import PARALLEL_MODE_ENABLED
+        from api.codebase_analytics.scanner import PARALLEL_MODE_ENABLED
 
         # Default is True
         assert PARALLEL_MODE_ENABLED is True
@@ -501,7 +501,7 @@ class TestProcessFilesParallel:
 
     async def test_empty_file_list(self):
         """Test processing empty file list returns empty results."""
-        from backend.api.codebase_analytics.scanner import _process_files_parallel
+        from api.codebase_analytics.scanner import _process_files_parallel
 
         results = await _process_files_parallel(
             all_files=[],
@@ -513,7 +513,7 @@ class TestProcessFilesParallel:
 
     async def test_processes_files_returns_results(self):
         """Test files are processed and results returned."""
-        from backend.api.codebase_analytics.scanner import _process_files_parallel
+        from api.codebase_analytics.scanner import _process_files_parallel
 
         # Use actual files from the project
         project_root = Path("/home/kali/Desktop/AutoBot")
@@ -538,7 +538,7 @@ class TestAnalyzeSingleFile:
 
     async def test_returns_file_analysis_result(self):
         """Test _analyze_single_file returns FileAnalysisResult."""
-        from backend.api.codebase_analytics.scanner import _analyze_single_file
+        from api.codebase_analytics.scanner import _analyze_single_file
 
         project_root = Path("/home/kali/Desktop/AutoBot")
         test_file = project_root / "backend" / "api" / "codebase_analytics" / "types.py"
@@ -559,7 +559,7 @@ class TestAnalyzeSingleFile:
 
     async def test_nonexistent_file_returns_base_result(self):
         """Test nonexistent file returns base result without processing."""
-        from backend.api.codebase_analytics.scanner import _analyze_single_file
+        from api.codebase_analytics.scanner import _analyze_single_file
 
         project_root = Path("/home/kali/Desktop/AutoBot")
         fake_file = project_root / "nonexistent_file_12345.py"

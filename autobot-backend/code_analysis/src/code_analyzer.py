@@ -11,14 +11,14 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
-from config import UnifiedConfig
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -340,44 +340,46 @@ class CodeAnalyzer:
                 )
                 processed.update(f"{f.file_path}:{f.name}" for f in group)
 
-        # Second pass: Find similar functions by embedding similarity
-        if any(f.embedding is not None for f in functions):
-            embeddings = np.array(
-                [f.embedding for f in functions if f.embedding is not None]
-            )
-            similarities = cosine_similarity(embeddings)
-
-            for i in range(len(functions)):
-                if f"{functions[i].file_path}:{functions[i].name}" in processed:
-                    continue
-
-                similar_indices = np.where(similarities[i] > self.similarity_threshold)[
-                    0
-                ]
-                if len(similar_indices) > 1:
-                    similar_funcs = [functions[j] for j in similar_indices]
-
-                    # Skip if already processed
-                    if any(
-                        f"{f.file_path}:{f.name}" in processed for f in similar_funcs
-                    ):
-                        continue
-
-                    duplicate_groups.append(
-                        DuplicateGroup(
-                            functions=similar_funcs,
-                            similarity_score=float(
-                                np.mean(similarities[i][similar_indices])
-                            ),
-                            refactoring_suggestion="Consider extracting common logic",
-                            estimated_lines_saved=self._estimate_lines_saved(
-                                similar_funcs
-                            ),
-                        )
-                    )
-                    processed.update(f"{f.file_path}:{f.name}" for f in similar_funcs)
+        # Issue #1183: Delegate embedding similarity pass to extracted helper
+        self._find_similar_functions(functions, processed, duplicate_groups)
 
         return duplicate_groups
+
+    def _find_similar_functions(
+        self,
+        functions: List[CodeFunction],
+        processed: Set[str],
+        duplicate_groups: List[DuplicateGroup],
+    ) -> None:
+        """Append embedding-similar function groups into duplicate_groups (in-place).
+
+        Issue #1183: Extracted from _find_duplicates() to reduce function length.
+        """
+        if not any(f.embedding is not None for f in functions):
+            return
+        embeddings = np.array(
+            [f.embedding for f in functions if f.embedding is not None]
+        )
+        similarities = cosine_similarity(embeddings)
+        for i in range(len(functions)):
+            if f"{functions[i].file_path}:{functions[i].name}" in processed:
+                continue
+            similar_indices = np.where(similarities[i] > self.similarity_threshold)[0]
+            if len(similar_indices) > 1:
+                similar_funcs = [functions[j] for j in similar_indices]
+                if any(f"{f.file_path}:{f.name}" in processed for f in similar_funcs):
+                    continue
+                duplicate_groups.append(
+                    DuplicateGroup(
+                        functions=similar_funcs,
+                        similarity_score=float(
+                            np.mean(similarities[i][similar_indices])
+                        ),
+                        refactoring_suggestion="Consider extracting common logic",
+                        estimated_lines_saved=self._estimate_lines_saved(similar_funcs),
+                    )
+                )
+                processed.update(f"{f.file_path}:{f.name}" for f in similar_funcs)
 
     def _estimate_lines_saved(self, functions: List[CodeFunction]) -> int:
         """Estimate lines that could be saved by refactoring"""
@@ -437,7 +439,7 @@ class CodeAnalyzer:
 {func.source_code}
 
 # In original files, replace with:
-from backend.utils.{module_name}_utils import {func.name}
+from utils.{module_name}_utils import {func.name}
 """
 
         return example.strip()
@@ -603,30 +605,36 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== Code Analysis Results ===")
-    print(f"Total functions analyzed: {results['total_functions']}")
-    print(f"Duplicate groups found: {results['duplicate_groups']}")
-    print(f"Total duplicate functions: {results['total_duplicates']}")
-    print(f"Lines that could be saved: {results['lines_that_could_be_saved']}")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    print(f"\n=== Code Analysis Results ===")  # noqa: print
+    print(f"Total functions analyzed: {results['total_functions']}")  # noqa: print
+    print(f"Duplicate groups found: {results['duplicate_groups']}")  # noqa: print
+    print(f"Total duplicate functions: {results['total_duplicates']}")  # noqa: print
+    print(
+        f"Lines that could be saved: {results['lines_that_could_be_saved']}"
+    )  # noqa: print
+    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Print top duplicates
-    print(f"\n=== Top Duplicate Groups ===")
+    print(f"\n=== Top Duplicate Groups ===")  # noqa: print
     for i, group in enumerate(results["duplicate_details"][:5], 1):
-        print(f"\n{i}. Similarity: {group['similarity_score']:.0%}")
-        print(f"   Suggestion: {group['refactoring_suggestion']}")
-        print(f"   Lines saved: {group['estimated_lines_saved']}")
-        print("   Functions:")
+        print(f"\n{i}. Similarity: {group['similarity_score']:.0%}")  # noqa: print
+        print(f"   Suggestion: {group['refactoring_suggestion']}")  # noqa: print
+        print(f"   Lines saved: {group['estimated_lines_saved']}")  # noqa: print
+        print("   Functions:")  # noqa: print
         for func in group["functions"]:
-            print(f"   - {func['file']}:{func['line_range']} - {func['name']}")
+            print(
+                f"   - {func['file']}:{func['line_range']} - {func['name']}"
+            )  # noqa: print
 
     # Print refactoring suggestions
-    print(f"\n=== Refactoring Suggestions ===")
+    print(f"\n=== Refactoring Suggestions ===")  # noqa: print
     for i, suggestion in enumerate(results["refactoring_suggestions"][:5], 1):
-        print(f"\n{i}. {suggestion['type']} ({suggestion['priority']} priority)")
-        print(f"   {suggestion['description']}")
-        print(f"   Action: {suggestion['action']}")
-        print(f"   Files: {', '.join(suggestion['affected_files'])}")
+        print(
+            f"\n{i}. {suggestion['type']} ({suggestion['priority']} priority)"
+        )  # noqa: print
+        print(f"   {suggestion['description']}")  # noqa: print
+        print(f"   Action: {suggestion['action']}")  # noqa: print
+        print(f"   Files: {', '.join(suggestion['affected_files'])}")  # noqa: print
 
 
 if __name__ == "__main__":

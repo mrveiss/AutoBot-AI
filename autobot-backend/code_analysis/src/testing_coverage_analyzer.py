@@ -13,9 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from config import UnifiedConfig
-
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -563,34 +562,16 @@ class TestingCoverageAnalyzer:
             indicator in function_content.lower() for indicator in edge_case_indicators
         )
 
-    async def _analyze_coverage_gaps(
-        self, functions: List[CodeFunction], tests: List[TestFunction]
+    def _create_untested_gaps(
+        self,
+        critical_untested: List[CodeFunction],
+        high_priority_untested: List[CodeFunction],
     ) -> List[CoverageGap]:
-        """Analyze coverage gaps between functions and tests"""
+        """Build CoverageGap entries for critical and high-priority untested functions.
 
-        gaps = []
-
-        # Create mapping of tested functions
-        tested_functions = set()
-        for test in tests:
-            if test.target_function:
-                tested_functions.add(test.target_function)
-
-        # Find untested functions
-        untested_functions = []
-        for func in functions:
-            if func.name not in tested_functions and func.is_public:
-                untested_functions.append(func)
-
-        # Categorize untested functions by severity
-        critical_untested = [
-            f for f in untested_functions if self._is_critical_function(f)
-        ]
-        high_priority_untested = [
-            f for f in untested_functions if self._is_high_priority_function(f)
-        ]
-
-        # Create coverage gaps
+        Issue #1183: Extracted from _analyze_coverage_gaps() to reduce function length.
+        """
+        gaps: List[CoverageGap] = []
         if critical_untested:
             gaps.append(
                 CoverageGap(
@@ -604,7 +585,6 @@ class TestingCoverageAnalyzer:
                     priority_score=100,
                 )
             )
-
         if high_priority_untested:
             gaps.append(
                 CoverageGap(
@@ -618,34 +598,35 @@ class TestingCoverageAnalyzer:
                     priority_score=80,
                 )
             )
+        return gaps
 
-        # Check for missing integration tests
-        functions_needing_integration_tests = [
+    def _create_integration_and_edge_gaps(
+        self, functions: List[CodeFunction], tests: List[TestFunction]
+    ) -> List[CoverageGap]:
+        """Build CoverageGap entries for missing integration and edge-case tests.
+
+        Issue #1183: Extracted from _analyze_coverage_gaps() to reduce function length.
+        """
+        gaps: List[CoverageGap] = []
+        need_integration = [
             f
             for f in functions
             if (f.calls_external_apis or f.has_database_operations) and f.is_public
         ]
-
         integration_tests = [t for t in tests if t.test_type == "integration"]
-
-        if len(functions_needing_integration_tests) > len(integration_tests):
+        if len(need_integration) > len(integration_tests):
             gaps.append(
                 CoverageGap(
                     gap_type="missing_integration_tests",
                     severity="high",
-                    description=f"Missing integration tests for {len(functions_needing_integration_tests)} functions with external dependencies",
-                    affected_functions=functions_needing_integration_tests,
-                    suggested_tests=self._suggest_integration_tests(
-                        functions_needing_integration_tests
-                    ),
+                    description=f"Missing integration tests for {len(need_integration)} functions with external dependencies",
+                    affected_functions=need_integration,
+                    suggested_tests=self._suggest_integration_tests(need_integration),
                     priority_score=75,
                 )
             )
-
-        # Check for missing edge case tests
         complex_functions = [f for f in functions if f.complexity > 5 and f.is_public]
         edge_case_tests = [t for t in tests if t.covers_edge_cases]
-
         if len(complex_functions) > len(edge_case_tests):
             gaps.append(
                 CoverageGap(
@@ -657,6 +638,34 @@ class TestingCoverageAnalyzer:
                     priority_score=60,
                 )
             )
+        return gaps
+
+    async def _analyze_coverage_gaps(
+        self, functions: List[CodeFunction], tests: List[TestFunction]
+    ) -> List[CoverageGap]:
+        """Analyze coverage gaps between functions and tests"""
+
+        # Create mapping of tested functions
+        tested_functions = {
+            test.target_function for test in tests if test.target_function
+        }
+
+        # Find untested public functions
+        untested_functions = [
+            f for f in functions if f.name not in tested_functions and f.is_public
+        ]
+
+        # Categorize untested functions by severity
+        critical_untested = [
+            f for f in untested_functions if self._is_critical_function(f)
+        ]
+        high_priority_untested = [
+            f for f in untested_functions if self._is_high_priority_function(f)
+        ]
+
+        # Issue #1183: Delegate gap creation to extracted helpers
+        gaps = self._create_untested_gaps(critical_untested, high_priority_untested)
+        gaps.extend(self._create_integration_and_edge_gaps(functions, tests))
 
         return gaps
 
@@ -911,35 +920,45 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== Testing Coverage Analysis Results ===")
-    print(f"Total functions: {results['total_functions']}")
-    print(f"Total tests: {results['total_tests']}")
-    print(f"Test coverage: {results['test_coverage_percentage']}%")
-    print(f"Coverage gaps found: {results['coverage_gaps']}")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    print(f"\n=== Testing Coverage Analysis Results ===")  # noqa: print
+    print(f"Total functions: {results['total_functions']}")  # noqa: print
+    print(f"Total tests: {results['total_tests']}")  # noqa: print
+    print(f"Test coverage: {results['test_coverage_percentage']}%")  # noqa: print
+    print(f"Coverage gaps found: {results['coverage_gaps']}")  # noqa: print
+    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Print detailed metrics
     metrics = results["metrics"]
-    print(f"\n=== Detailed Metrics ===")
-    print(f"Tested functions: {metrics['tested_functions']}")
-    print(f"Untested functions: {metrics['untested_functions']}")
-    print(f"Critical untested functions: {metrics['critical_untested_functions']}")
-    print(f"Missing integration tests: {metrics['missing_integration_tests']}")
-    print(f"Missing edge case tests: {metrics['missing_edge_case_tests']}")
+    print(f"\n=== Detailed Metrics ===")  # noqa: print
+    print(f"Tested functions: {metrics['tested_functions']}")  # noqa: print
+    print(f"Untested functions: {metrics['untested_functions']}")  # noqa: print
+    print(
+        f"Critical untested functions: {metrics['critical_untested_functions']}"
+    )  # noqa: print
+    print(
+        f"Missing integration tests: {metrics['missing_integration_tests']}"
+    )  # noqa: print
+    print(
+        f"Missing edge case tests: {metrics['missing_edge_case_tests']}"
+    )  # noqa: print
 
     # Print coverage gaps
     if results["coverage_gaps"]:
-        print(f"\n=== Coverage Gaps ===")
+        print(f"\n=== Coverage Gaps ===")  # noqa: print
         for gap in results["coverage_gaps"]:
-            print(f"{gap['type']} ({gap['severity']}): {gap['description']}")
-            print(f"  Affects {gap['affected_functions_count']} functions")
-            print(f"  Priority score: {gap['priority_score']}")
+            print(
+                f"{gap['type']} ({gap['severity']}): {gap['description']}"
+            )  # noqa: print
+            print(
+                f"  Affects {gap['affected_functions_count']} functions"
+            )  # noqa: print
+            print(f"  Priority score: {gap['priority_score']}")  # noqa: print
 
     # Print recommendations
     if results["recommendations"]:
-        print(f"\n=== Testing Recommendations ===")
+        print(f"\n=== Testing Recommendations ===")  # noqa: print
         for i, rec in enumerate(results["recommendations"], 1):
-            print(f"{i}. {rec}")
+            print(f"{i}. {rec}")  # noqa: print
 
 
 if __name__ == "__main__":

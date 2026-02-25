@@ -12,7 +12,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from backend.api.terminal_models import SecurityLevel
+from api.terminal_models import SecurityLevel
 
 logger = logging.getLogger(__name__)
 

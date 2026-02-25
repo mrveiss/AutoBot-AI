@@ -11,19 +11,19 @@ import logging
 import uuid
 from typing import List, Optional
 
-from backend.api.user_management.dependencies import (
+from api.user_management.dependencies import (
     get_team_service,
     require_org_context,
     require_user_management_enabled,
 )
-from backend.user_management.services import TeamService, TenantContext
-from backend.user_management.services.team_service import (
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+from user_management.services import TeamService, TenantContext
+from user_management.services.team_service import (
     DuplicateTeamError,
     MembershipError,
     TeamNotFoundError,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
 logger = logging.getLogger(__name__)

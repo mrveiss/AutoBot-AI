@@ -11,8 +11,8 @@ import asyncio
 import logging
 from typing import Any, Dict
 
-from backend.models.task_context import TaskExecutionContext
-from backend.utils.command_validator import command_validator
+from models.task_context import TaskExecutionContext
+from utils.command_validator import command_validator
 
 from .base import TaskHandler
 

@@ -9,7 +9,7 @@ in codebase indexing. Uses NPU/GPU offloading with fallback to local semantic
 chunker when NPU worker is unavailable.
 
 Usage:
-    from backend.api.codebase_analytics.npu_embeddings import (
+    from api.codebase_analytics.npu_embeddings import (
         generate_codebase_embeddings_batch,
         get_embedding_stats,
     )
@@ -161,7 +161,7 @@ async def _get_npu_client_cached() -> Tuple[Optional[Any], bool]:
 
         # Refresh cache
         try:
-            from backend.services.npu_client import get_npu_client
+            from services.npu_client import get_npu_client
 
             _npu_client_cache = get_npu_client()
             _npu_available_cache = await _npu_client_cache.is_available()

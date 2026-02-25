@@ -7,13 +7,13 @@
 import logging
 from typing import Any, Dict, List, Literal, Optional
 
-from backend.integrations.base import IntegrationConfig
-from backend.integrations.cicd_integration import (
+from fastapi import APIRouter, HTTPException, Query
+from integrations.base import IntegrationConfig
+from integrations.cicd_integration import (
     CircleCIIntegration,
     GitLabCIIntegration,
     JenkinsIntegration,
 )
-from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)

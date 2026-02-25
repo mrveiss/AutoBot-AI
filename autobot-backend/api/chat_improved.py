@@ -9,9 +9,6 @@ import logging
 from typing import Optional
 
 from auth_middleware import get_current_user
-
-# Issue #756: Consolidated from src/utils/request_utils.py
-from backend.utils.request_utils import generate_request_id
 from error_handler import log_error, safe_api_error, with_error_handling
 from exceptions import (
     AutoBotError,
@@ -24,6 +21,9 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
+
+# Issue #756: Consolidated from src/utils/request_utils.py
+from utils.request_utils import generate_request_id
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

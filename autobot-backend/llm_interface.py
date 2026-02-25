@@ -61,10 +61,7 @@ except ImportError:
 
 # LLM Pattern Analyzer integration (Issue #229)
 try:
-    from backend.api.analytics_llm_patterns import (
-        UsageRecordRequest,
-        get_pattern_analyzer,
-    )
+    from api.analytics_llm_patterns import UsageRecordRequest, get_pattern_analyzer
 
     PATTERN_ANALYZER_AVAILABLE = True
 except ImportError:
@@ -82,7 +79,7 @@ except ImportError:
     openai = None
 
 # Re-export get_llm_interface from resource_factory for backward compatibility
-from backend.utils.resource_factory import ResourceFactory
+from utils.resource_factory import ResourceFactory
 
 get_llm_interface = ResourceFactory.get_llm_interface
 

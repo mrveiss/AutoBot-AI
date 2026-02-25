@@ -20,8 +20,8 @@ from typing import Dict
 import yaml
 
 # Legacy import for backward compatibility - these now read from SSOT
-from backend.constants.network_constants import NetworkConstants
-from backend.type_defs.common import Metadata
+from constants.network_constants import NetworkConstants
+from type_defs.common import Metadata
 
 # SSOT Migration (Issue #602): Import SSOT config as primary source
 from autobot_shared.ssot_config import get_config as get_ssot_config

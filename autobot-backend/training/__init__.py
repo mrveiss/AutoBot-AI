@@ -7,10 +7,10 @@ Training Module (Issue #904)
 ML model training infrastructure for code completion.
 """
 
-from backend.training.completion_model import CompletionModel
-from backend.training.completion_trainer import CompletionTrainer
-from backend.training.data_loader import PatternDataset, Tokenizer, create_dataloaders
-from backend.training.evaluator import CompletionEvaluator
+from training.completion_model import CompletionModel
+from training.completion_trainer import CompletionTrainer
+from training.data_loader import PatternDataset, Tokenizer, create_dataloaders
+from training.evaluator import CompletionEvaluator
 
 __all__ = [
     "CompletionModel",

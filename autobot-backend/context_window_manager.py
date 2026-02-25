@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import yaml
-from backend.constants.model_constants import ModelConfig, ModelConstants
+from constants.model_constants import ModelConfig, ModelConstants
 
 logger = logging.getLogger(__name__)
 

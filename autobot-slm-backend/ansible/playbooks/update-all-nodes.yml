@@ -1,15 +1,14 @@
 ---
 # AutoBot - Update All Fleet Nodes (Git-Based Deploy)
-# Deploys committed code from a specific git ref to all fleet VMs.
-# Uses git archive to ensure only committed code is deployed (#1056).
+# Deploys committed code from a specific branch to all fleet VMs.
+# Pulls directly from GitHub to /opt/autobot/code_source on the SLM node (.19),
+# then uses git archive to create deploy tarballs. (#1170)
 #
-# Previously used rsync from the working tree, which could deploy
-# uncommitted or feature-branch code to production (caused #1047).
+# Runs FROM: 172.16.168.19 (SLM Manager) — NOT from the dev machine.
 #
 # Usage:
 #   ansible-playbook playbooks/update-all-nodes.yml
-#   ansible-playbook playbooks/update-all-nodes.yml -e deploy_ref=Dev_new_gui
-#   ansible-playbook playbooks/update-all-nodes.yml -e deploy_ref=abc1234
+#   ansible-playbook playbooks/update-all-nodes.yml -e deploy_ref=main
 #   ansible-playbook playbooks/update-all-nodes.yml -e skip_branch_check=true
 
 # =============================================================================
@@ -20,8 +19,9 @@
   gather_facts: false
 
   vars:
-    git_repo_root: "/home/kali/Desktop/AutoBot"
-    deploy_ref: "HEAD"
+    github_repo: "https://github.com/mrveiss/AutoBot-AI.git"
+    git_repo_root: "/opt/autobot/code_source"
+    deploy_ref: "Dev_new_gui"
     allowed_branches:
       - Dev_new_gui
       - main
@@ -29,17 +29,13 @@
     deploy_tmp: "/tmp/autobot-deploy"
 
   tasks:
-    - name: "[PRE-FLIGHT] Verify git repo exists"
-      stat:
-        path: "{{ git_repo_root }}/.git"
-      register: git_repo
-
-    - name: "[PRE-FLIGHT] Abort if git repo missing"
-      fail:
-        msg: >-
-          Git repo not found at {{ git_repo_root }}.
-          This playbook must run from the dev machine (.20).
-      when: not git_repo.stat.exists
+    - name: "[PRE-FLIGHT] Sync code from GitHub"
+      git:
+        repo: "{{ github_repo }}"
+        dest: "{{ git_repo_root }}"
+        version: "{{ deploy_ref }}"
+        force: yes
+        depth: 1
 
     - name: "[PRE-FLIGHT] Get current git branch"
       command: git -C {{ git_repo_root }} branch --show-current
@@ -62,27 +58,24 @@
       debug:
         msg:
           - "======================================================="
-          - "  AutoBot Fleet Code Update (Git-Based Deploy)"
+          - "  AutoBot Fleet Code Update (GitHub Pull)"
           - "======================================================="
           - ""
-          - "  Branch:  {{ git_branch.stdout }}"
-          - "  Ref:     {{ deploy_ref }}"
+          - "  Source:  {{ github_repo }}"
+          - "  Branch:  {{ deploy_ref }}"
           - "  Commit:  {{ deploy_info.stdout }}"
-          - "  Dirty:   {{ 'YES (ignored - only committed code deployed)' if git_dirty.stdout else 'Clean' }}"
-          - "  Method:  git archive"
+          - "  Method:  git pull → git archive"
           - ""
 
     - name: "[PRE-FLIGHT] ABORT - Not on allowed branch"
       fail:
         msg: >-
-          Branch '{{ git_branch.stdout }}' not in allowed list
+          Branch '{{ deploy_ref }}' not in allowed list
           ({{ allowed_branches | join(', ') }}).
           Override: -e skip_branch_check=true
-          Or deploy specific ref: -e deploy_ref=Dev_new_gui
       when:
         - not skip_branch_check | bool
-        - deploy_ref == 'HEAD'
-        - git_branch.stdout not in allowed_branches
+        - deploy_ref not in allowed_branches
 
     - name: "[PRE-FLIGHT] Create deploy archive directory"
       file:
@@ -108,7 +101,33 @@
 
     - name: "[PRE-FLIGHT] Archives ready"
       debug:
-        msg: "7 deploy archives created from {{ deploy_ref }}"
+        msg: "7 deploy archives created from {{ deploy_ref }} ({{ deploy_info.stdout }})"
+
+    - name: "[PRE-FLIGHT] Get full commit hash"
+      command: git -C {{ git_repo_root }} log -1 --format='%H'
+      register: deploy_commit_full
+      changed_when: false
+
+    - name: "[PRE-FLIGHT] Get commit subject"
+      command: git -C {{ git_repo_root }} log -1 --format='%s'
+      register: deploy_commit_subject
+      changed_when: false
+
+    - name: "[PRE-FLIGHT] Notify SLM of new commit"
+      uri:
+        url: "https://localhost/api/code-source/notify"
+        method: POST
+        body_format: json
+        body:
+          node_id: "00-SLM-Manager"
+          commit: "{{ deploy_commit_full.stdout }}"
+          branch: "{{ deploy_ref }}"
+          message: "{{ deploy_commit_subject.stdout }}"
+          is_code_source: true
+          changed_roles: []
+        validate_certs: false
+        status_code: [200, 404]
+      ignore_errors: true
 
 # =============================================================================
 # PLAY 1: Update SLM Server First
@@ -268,11 +287,15 @@
       when: "'01-Backend' in inventory_hostname"
 
     - name: "[PLAY 2] Backend | Fix ownership"
+      command: chown --no-dereference -R autobot:autobot /opt/autobot/autobot-backend
+      become: true
+      when: "'01-Backend' in inventory_hostname"
+      changed_when: true
+
+    - name: "[PLAY 2] Backend | Remove legacy backend symlink"
       file:
-        path: /opt/autobot/autobot-backend
-        owner: autobot
-        group: autobot
-        recurse: true
+        path: /opt/autobot/autobot-backend/backend
+        state: absent
       become: true
       when: "'01-Backend' in inventory_hostname"
 
@@ -396,7 +419,7 @@
           - "  Fleet Update Complete (Git-Based Deploy)"
           - "======================================================="
           - ""
-          - "  Method:  git archive (only committed code)"
+          - "  Method:  GitHub pull → git archive"
           - "  SLM:     {{ slm_health.json.status | default('Check manually') }}"
           - "  Nodes:   {{ slm_health.json.nodes_online | default('?') }}/{{ slm_health.json.nodes_total | default('9') }}"
           - ""

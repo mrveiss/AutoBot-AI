@@ -16,9 +16,9 @@ import asyncio
 
 import pytest
 from agents.hierarchical_agent import HierarchicalAgent
-from backend.chat_workflow.models import AgentContext
-from backend.tools.delegate_tool import DelegateTool
-from backend.utils.errors import RepairableException
+from chat_workflow.models import AgentContext
+from tools.delegate_tool import DelegateTool
+from utils.errors import RepairableException
 
 
 class TestAgentContext:

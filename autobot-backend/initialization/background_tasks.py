@@ -10,10 +10,10 @@ including Redis, knowledge base, chat workflow, LLM sync, AI Stack, and distribu
 
 import asyncio
 
-from backend.initialization.ai_stack_init import initialize_ai_stack
-from backend.utils.background_llm_sync import background_llm_sync
 from chat_workflow import ChatWorkflowManager
 from fastapi import FastAPI
+from initialization.ai_stack_init import initialize_ai_stack
+from utils.background_llm_sync import background_llm_sync
 
 from autobot_shared.logging_manager import get_logger
 
@@ -33,7 +33,7 @@ async def get_or_create_knowledge_base(app: FastAPI, force_refresh: bool = False
     Get or create a properly initialized knowledge base instance for the app.
     Enhanced with AI Stack integration awareness.
     """
-    from backend.knowledge_factory import get_or_create_knowledge_base as factory_kb
+    from knowledge_factory import get_or_create_knowledge_base as factory_kb
 
     # Import status functions from parent module (will be passed as parameters)
     try:
@@ -161,7 +161,7 @@ async def _init_distributed_tracing(app: FastAPI, update_status_fn):
     """
     try:
         # Lazy import to avoid circular dependency
-        from backend.services.tracing_service import get_tracing_service
+        from services.tracing_service import get_tracing_service
 
         tracing = get_tracing_service()
         success = tracing.initialize(

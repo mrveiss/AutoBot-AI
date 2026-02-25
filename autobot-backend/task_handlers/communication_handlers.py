@@ -10,8 +10,8 @@ Issue #322: Refactored to use TaskExecutionContext to eliminate data clump patte
 import logging
 from typing import Any, Dict
 
-from backend.models.task_context import TaskExecutionContext
 from event_manager import event_manager
+from models.task_context import TaskExecutionContext
 
 from .base import TaskHandler
 

@@ -29,7 +29,7 @@ DEPRECATED: Import directly from code_intelligence.performance_analysis instead.
 """
 
 # Re-export everything from the new package for backward compatibility
-from backend.code_intelligence.performance_analysis import (  # Types; Pattern constants; AST visitor; Analyzer
+from code_intelligence.performance_analysis import (  # Types; Pattern constants; AST visitor; Analyzer
     BLOCKING_IO_FALSE_POSITIVES,
     BLOCKING_IO_OPERATIONS,
     BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE,

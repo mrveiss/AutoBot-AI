@@ -15,13 +15,13 @@ from datetime import datetime
 from typing import Optional
 
 from auth_middleware import check_admin_permission
-from backend.constants.model_constants import ModelConstants
-from backend.services.config_service import ConfigService
-from backend.services.slm_client import get_slm_client
-from backend.utils.connection_utils import ModelManager
+from constants.model_constants import ModelConstants
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from services.config_service import ConfigService
+from services.slm_client import get_slm_client
+from utils.connection_utils import ModelManager
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -909,7 +909,7 @@ async def _check_provider_availability(agent_id: str) -> tuple:
     start_time = datetime.now()
 
     try:
-        from backend.services.provider_health import ProviderHealthManager
+        from services.provider_health import ProviderHealthManager
 
         provider_config = DEFAULT_AGENT_CONFIGS[agent_id].get("provider", "ollama")
         health_result = await ProviderHealthManager.check_provider_health(

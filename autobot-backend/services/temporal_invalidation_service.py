@@ -15,9 +15,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.models.atomic_fact import AtomicFact, FactType, TemporalType
-from backend.services.fact_extraction_service import FactExtractionService
 from config import config_manager
+from models.atomic_fact import AtomicFact, FactType, TemporalType
+from services.fact_extraction_service import FactExtractionService
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_redis_client

@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from backend.code_intelligence.bug_predictor import (
+from code_intelligence.bug_predictor import (
     BugPredictor,
     FileRiskAssessment,
     PredictionResult,
@@ -56,7 +56,7 @@ def complex_function(x, y, z):
             if z > 0:
                 for i in range(10):
                     for j in range(10):
-                        print(i, j)
+                        print(i, j)  # noqa: print
             else:
                 return -1
         else:

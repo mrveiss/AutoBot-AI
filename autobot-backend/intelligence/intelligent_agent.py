@@ -14,28 +14,28 @@ import time
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Dict, FrozenSet, List, Optional
 
-from backend.intelligence.goal_processor import GoalProcessor, ProcessedGoal
+from intelligence.goal_processor import GoalProcessor, ProcessedGoal
 
 # Issue #380: Module-level frozenset for package managers requiring sudo
 _SUDO_PACKAGE_MANAGERS: FrozenSet[str] = frozenset(
     {"apt", "yum", "dn", "pacman", "zypper"}
 )
 
-from backend.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 # Import our new intelligent agent components
-from backend.intelligence.os_detector import OSDetector, OSInfo, get_os_detector
-from backend.intelligence.streaming_executor import (
+from intelligence.os_detector import OSDetector, OSInfo, get_os_detector
+from intelligence.streaming_executor import (
     ChunkType,
     StreamChunk,
     StreamingCommandExecutor,
 )
-from backend.intelligence.tool_selector import OSAwareToolSelector
-from backend.utils.command_validator import CommandValidator
+from intelligence.tool_selector import OSAwareToolSelector
 from knowledge_base import KnowledgeBase
 
 # Import existing AutoBot components
 from llm_interface import LLMInterface
+from utils.command_validator import CommandValidator
 from worker_node import WorkerNode
 
 logger = logging.getLogger(__name__)
@@ -891,7 +891,7 @@ if __name__ == "__main__":
         logger.info("Status: %s", init_result["status"])
         logger.info("OS: %s", init_result["os_info"]["os_type"])
         logger.info("Capabilities: %s", init_result["capabilities"]["total_count"])
-        print()
+        print()  # noqa: print
 
         # Test natural language processing
         test_goals = [
@@ -913,6 +913,6 @@ if __name__ == "__main__":
                 if chunk.chunk_type == ChunkType.COMPLETE:
                     break
 
-            print()
+            print()  # noqa: print
 
     asyncio.run(test_agent())

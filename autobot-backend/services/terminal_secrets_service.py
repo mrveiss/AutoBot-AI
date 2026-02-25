@@ -18,7 +18,7 @@ Related Issues:
 - #211 - Secrets Management System - Missing Features
 
 Usage:
-    from backend.services.terminal_secrets_service import get_terminal_secrets_service
+    from services.terminal_secrets_service import get_terminal_secrets_service
 
     service = get_terminal_secrets_service()
 
@@ -38,7 +38,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from backend.services.agent_secrets_integration import (
+from services.agent_secrets_integration import (
     AgentSecretsIntegration,
     get_agent_secrets_integration,
 )

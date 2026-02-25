@@ -22,9 +22,9 @@ INSTALLATION:
 import logging
 from typing import Dict, List
 
-from backend.security.prompt_injection_detector import get_prompt_injection_detector
-from backend.security.secure_llm_command_parser import get_secure_llm_parser
 from enhanced_security_layer import EnhancedSecurityLayer
+from security.prompt_injection_detector import get_prompt_injection_detector
+from security.secure_llm_command_parser import get_secure_llm_parser
 
 logger = logging.getLogger(__name__)
 

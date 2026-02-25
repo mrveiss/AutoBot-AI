@@ -17,14 +17,9 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from backend.models.atomic_fact import (
-    AtomicFact,
-    FactExtractionResult,
-    FactType,
-    TemporalType,
-)
 from config import config_manager
 from llm_interface import LLMType, get_llm_interface
+from models.atomic_fact import AtomicFact, FactExtractionResult, FactType, TemporalType
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import (

@@ -107,20 +107,36 @@ class ConsoleLogCleaner:
 
         return backup_path
 
+    def _resolve_console_log_match(
+        self, content: str, line: str, line_start_pos: int, match: "re.Match"
+    ) -> Optional[Tuple[int, int, str]]:
+        """Resolve a single console.log match to its full (start, end, text) span. Issue #1183."""
+        start_pos = line_start_pos + match.start()
+        paren_count = 1
+        search_pos = match.end()
+        while search_pos < len(line) and paren_count > 0:
+            char = line[search_pos]
+            if char == "(":
+                paren_count += 1
+            elif char == ")":
+                paren_count -= 1
+            search_pos += 1
+        if paren_count == 0:
+            end_pos = line_start_pos + search_pos
+            if search_pos < len(line) and line[search_pos] == ";":
+                end_pos += 1
+            return (start_pos, end_pos, content[start_pos:end_pos])
+        multiline = self.find_multiline_console_log(content, start_pos)
+        return multiline
+
     def find_console_logs(self, content: str) -> List[Tuple[int, int, str]]:
         """Find all console.log statements in content."""
         console_logs = []
-
-        # More comprehensive pattern that handles complex nesting
-        # Using a more robust approach with balanced parentheses
         lines = content.split("\n")
         current_pos = 0
-
         for line_num, line in enumerate(lines):
             line_start_pos = current_pos
             current_pos += len(line) + 1  # +1 for newline
-
-            # Skip if line is in comments
             stripped = line.strip()
             if (
                 stripped.startswith("//")
@@ -128,52 +144,15 @@ class ConsoleLogCleaner:
                 or stripped.startswith("/*")
             ):
                 continue
-
-            # Find console.log occurrences in this line
-            console_log_matches = list(re.finditer(r"console\s*\.\s*log\s*\(", line))
-
-            for match in console_log_matches:
-                # Check if it's inside a string or comment
+            for match in re.finditer(r"console\s*\.\s*log\s*\(", line):
                 before_match = line[: match.start()]
                 if self.is_in_string_or_comment_on_line(before_match, line):
                     continue
-
-                # Find the matching closing parenthesis
-                start_pos = line_start_pos + match.start()
-                paren_start = line_start_pos + match.end() - 1  # Position of opening (
-
-                # Find the complete statement
-                paren_count = 1
-                search_pos = match.end()
-                len(line)
-
-                # Look for closing parenthesis, handling nested parentheses
-                while search_pos < len(line) and paren_count > 0:
-                    char = line[search_pos]
-                    if char == "(":
-                        paren_count += 1
-                    elif char == ")":
-                        paren_count -= 1
-                    search_pos += 1
-
-                if paren_count == 0:
-                    # Found complete statement on same line
-                    end_pos = line_start_pos + search_pos
-                    # Check if there's a semicolon right after
-                    if search_pos < len(line) and line[search_pos] == ";":
-                        end_pos += 1
-
-                    full_match = content[start_pos:end_pos]
-                    console_logs.append((start_pos, end_pos, full_match))
-                else:
-                    # Multiline statement - use simpler approach for now
-                    # Look for the end of the statement in subsequent lines
-                    multiline_match = self.find_multiline_console_log(
-                        content, start_pos
-                    )
-                    if multiline_match:
-                        console_logs.append(multiline_match)
-
+                result = self._resolve_console_log_match(
+                    content, line, line_start_pos, match
+                )
+                if result:
+                    console_logs.append(result)
         return console_logs
 
     def is_in_string_or_comment_on_line(self, before_text: str, full_line: str) -> bool:
@@ -368,8 +347,8 @@ class ConsoleLogCleaner:
         """Clean console.logs from entire project or specific directory."""
         search_root = Path(target_dir) if target_dir else self.project_root
 
-        print(f"🔍 Scanning for console.log statements in: {search_root}")
-        print(f"📁 Backups will be saved to: {self.backup_dir}")
+        print(f"🔍 Scanning for console.log statements in: {search_root}")  # noqa: print
+        print(f"📁 Backups will be saved to: {self.backup_dir}")  # noqa: print
 
         # Find all files to process
         files_to_process = []
@@ -378,11 +357,11 @@ class ConsoleLogCleaner:
                 if self.should_process_file(file_path):
                     files_to_process.append(file_path)
 
-        print(f"\n📊 Found {len(files_to_process)} files to analyze")
+        print(f"\n📊 Found {len(files_to_process)} files to analyze")  # noqa: print
 
         # Process each file
         for i, file_path in enumerate(files_to_process, 1):
-            print(
+            print(  # noqa: print
                 f"\r⚡ Processing file {i}/{len(files_to_process)}: {file_path.name}",
                 end="",
                 flush=True,
@@ -392,83 +371,66 @@ class ConsoleLogCleaner:
             if self.process_file(file_path):
                 self.report["files_modified"] += 1
 
-        print("\n✅ Console.log cleanup completed!")
+        print("\n✅ Console.log cleanup completed!")  # noqa: print
 
         return self.report
 
-    def generate_report(self, output_file: str = None) -> None:
-        """Generate detailed cleanup report."""
-        report_content = f"""
-# Console.log Cleanup Report
-Generated: {self.report['timestamp']}
-
-## Summary
-- **Files Processed**: {self.report['files_processed']}
-- **Files Modified**: {self.report['files_modified']}
-- **Console.logs Removed**: {self.report['console_logs_removed']}
-- **Errors**: {len(self.report['errors'])}
-
-## Performance Impact
-- **Estimated Size Reduction**: ~{self.report['console_logs_removed'] * 50} bytes
-- **Runtime Performance**: Improved (no console output overhead)
-- **Production Build**: Cleaner, more professional
-
-## Files Modified
-"""
-
-        # Add details for each modified file
+    def _build_files_and_errors_section(self) -> str:
+        """Build the modified-files and errors sections of the report. Issue #1183."""
+        content = ""
         for detail in sorted(
             self.report["details"], key=lambda x: x["removed_count"], reverse=True
         ):
-            report_content += f"\n### {detail['file']}\n"
-            report_content += (
-                f"- Removed {detail['removed_count']} console.log statements\n"
-            )
-            report_content += "- Locations:\n"
-            for log in detail["removed_logs"][:5]:  # Show first 5
-                report_content += f"  - Line {log['line']}: `{log['content']}`\n"
+            content += f"\n### {detail['file']}\n"
+            content += f"- Removed {detail['removed_count']} console.log statements\n"
+            content += "- Locations:\n"
+            for log in detail["removed_logs"][:5]:
+                content += f"  - Line {log['line']}: `{log['content']}`\n"
             if len(detail["removed_logs"]) > 5:
-                report_content += (
-                    f"  - ... and {len(detail['removed_logs']) - 5} more\n"
-                )
-
-        # Add errors if any
+                content += f"  - ... and {len(detail['removed_logs']) - 5} more\n"
         if self.report["errors"]:
-            report_content += "\n## Errors\n"
+            content += "\n## Errors\n"
             for error in self.report["errors"]:
-                report_content += f"- **{error['file']}**: {error['error']}\n"
+                content += f"- **{error['file']}**: {error['error']}\n"
+        return content
 
-        # Add recommendations
-        report_content += """
-## Recommendations
-1. **Use a Logger**: Consider using a proper logging library with levels
-2. **Environment-based Logging**: Use conditional logging based on NODE_ENV
-3. **ESLint Rule**: Add `no-console` rule to prevent future console.logs
-4. **Build-time Removal**: Consider using webpack/rollup plugins for automatic removal
-
-## Backup Location
-All modified files have been backed up to: `{}`
-""".format(
-            self.backup_dir
+    def generate_report(self, output_file: str = None) -> None:
+        """Generate detailed cleanup report."""
+        r = self.report
+        report_content = (
+            f"\n# Console.log Cleanup Report\nGenerated: {r['timestamp']}\n\n"
+            f"## Summary\n"
+            f"- **Files Processed**: {r['files_processed']}\n"
+            f"- **Files Modified**: {r['files_modified']}\n"
+            f"- **Console.logs Removed**: {r['console_logs_removed']}\n"
+            f"- **Errors**: {len(r['errors'])}\n\n"
+            f"## Performance Impact\n"
+            f"- **Estimated Size Reduction**: ~{r['console_logs_removed'] * 50} bytes\n"
+            f"- **Runtime Performance**: Improved (no console output overhead)\n"
+            f"- **Production Build**: Cleaner, more professional\n\n"
+            f"## Files Modified\n"
         )
-
-        # Save report
-        if output_file:
-            report_path = Path(output_file)
-        else:
-            report_path = self.project_root / "console-cleanup-report.md"
-
-        with open(report_path, "w") as f:
+        report_content += self._build_files_and_errors_section()
+        report_content += (
+            "\n## Recommendations\n"
+            "1. **Use a Logger**: Consider using a proper logging library with levels\n"
+            "2. **Environment-based Logging**: Use conditional logging based on NODE_ENV\n"
+            "3. **ESLint Rule**: Add `no-console` rule to prevent future console.logs\n"
+            "4. **Build-time Removal**: Consider using webpack/rollup plugins\n\n"
+            f"## Backup Location\nAll modified files have been backed up to: `{self.backup_dir}`\n"
+        )
+        report_path = (
+            Path(output_file)
+            if output_file
+            else self.project_root / "console-cleanup-report.md"
+        )
+        with open(report_path, "w", encoding="utf-8") as f:
             f.write(report_content)
-
-        print(f"\n📄 Report saved to: {report_path}")
-
-        # Also save JSON report
+        print(f"\n📄 Report saved to: {report_path}")  # noqa: print
         json_report_path = report_path.with_suffix(".json")
-        with open(json_report_path, "w") as f:
+        with open(json_report_path, "w", encoding="utf-8") as f:
             json.dump(self.report, f, indent=2)
-
-        print(f"📊 JSON report saved to: {json_report_path}")
+        print(f"📊 JSON report saved to: {json_report_path}")  # noqa: print
 
 
 def main():
@@ -516,10 +478,12 @@ def main():
     cleaner.generate_report(args.report)
 
     # Print summary
-    print(f"\n🎉 Cleanup Complete!")
-    print(f"   - Removed {report['console_logs_removed']} console.log statements")
-    print(f"   - Modified {report['files_modified']} files")
-    print(f"   - Backups saved to: {cleaner.backup_dir}")
+    print(f"\n🎉 Cleanup Complete!")  # noqa: print
+    print(
+        f"   - Removed {report['console_logs_removed']} console.log statements"
+    )  # noqa: print
+    print(f"   - Modified {report['files_modified']} files")  # noqa: print
+    print(f"   - Backups saved to: {cleaner.backup_dir}")  # noqa: print
 
 
 if __name__ == "__main__":
@@ -531,8 +495,8 @@ if __name__ == "__main__":
         project_root = "/home/kali/Desktop/AutoBot"
         target_dir = "autobot-vue/src"
 
-        print("🚀 AutoBot Console.log Performance Fix Agent")
-        print("=" * 50)
+        print("🚀 AutoBot Console.log Performance Fix Agent")  # noqa: print
+        print("=" * 50)  # noqa: print
 
         cleaner = ConsoleLogCleaner(project_root)
         report = cleaner.clean_project(os.path.join(project_root, target_dir))

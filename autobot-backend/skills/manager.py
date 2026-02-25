@@ -12,7 +12,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from backend.skills.registry import SkillRegistry, get_skill_registry
+from skills.registry import SkillRegistry, get_skill_registry
 
 logger = logging.getLogger(__name__)
 

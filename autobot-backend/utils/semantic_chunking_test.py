@@ -10,7 +10,7 @@ import sys
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from backend.utils.semantic_chunker import AutoBotSemanticChunker, SemanticChunk
+from utils.semantic_chunker import AutoBotSemanticChunker, SemanticChunk
 
 
 class TestSemanticChunking:
@@ -26,7 +26,7 @@ class TestSemanticChunking:
 
     async def test_basic_chunking(self):
         """Test basic semantic chunking functionality."""
-        print("Testing basic semantic chunking...")
+        print("Testing basic semantic chunking...")  # noqa: print
 
         test_text = """
         AutoBot is an intelligent automation platform. It uses advanced AI techniques to process information.
@@ -41,14 +41,14 @@ class TestSemanticChunking:
 
         chunks = await self.chunker.chunk_text(test_text)
 
-        print(f"✓ Created {len(chunks)} semantic chunks")
+        print(f"✓ Created {len(chunks)} semantic chunks")  # noqa: print
 
         for i, chunk in enumerate(chunks):
-            print(
+            print(  # noqa: print
                 f"  Chunk {i+1}: {len(chunk.content)} chars, "
                 f"coherence: {chunk.semantic_score:.3f}"
             )
-            print(f"    Preview: {chunk.content[:100]}...")
+            print(f"    Preview: {chunk.content[:100]}...")  # noqa: print
 
         assert len(chunks) > 1, "Should create multiple chunks"
         assert all(
@@ -59,13 +59,13 @@ class TestSemanticChunking:
 
     async def test_small_text_handling(self):
         """Test handling of small text that shouldn't be chunked."""
-        print("Testing small text handling...")
+        print("Testing small text handling...")  # noqa: print
 
         small_text = "This is a short piece of text that should remain as one chunk."
 
         chunks = await self.chunker.chunk_text(small_text)
 
-        print(f"✓ Small text created {len(chunks)} chunk(s)")
+        print(f"✓ Small text created {len(chunks)} chunk(s)")  # noqa: print
         assert len(chunks) == 1, "Small text should create only one chunk"
         assert (
             chunks[0].content.strip() == small_text.strip()
@@ -75,7 +75,7 @@ class TestSemanticChunking:
 
     async def test_large_text_splitting(self):
         """Test handling of large text that exceeds max chunk size."""
-        print("Testing large text splitting...")
+        print("Testing large text splitting...")  # noqa: print
 
         # Create text that will definitely exceed max_chunk_size (500)
         large_text = " ".join(
@@ -87,7 +87,7 @@ class TestSemanticChunking:
 
         chunks = await self.chunker.chunk_text(large_text)
 
-        print(f"✓ Large text created {len(chunks)} chunks")
+        print(f"✓ Large text created {len(chunks)} chunks")  # noqa: print
 
         for chunk in chunks:
             assert (
@@ -98,7 +98,7 @@ class TestSemanticChunking:
 
     async def test_document_format_compatibility(self):
         """Test LlamaIndex document format compatibility."""
-        print("Testing document format compatibility...")
+        print("Testing document format compatibility...")  # noqa: print
 
         test_content = """
         This is a test document for compatibility testing.
@@ -112,7 +112,9 @@ class TestSemanticChunking:
 
         documents = await self.chunker.chunk_document(test_content, metadata)
 
-        print(f"✓ Created {len(documents)} LlamaIndex-compatible documents")
+        print(
+            f"✓ Created {len(documents)} LlamaIndex-compatible documents"
+        )  # noqa: print
 
         for doc in documents:
             assert "text" in doc, "Document should have text field"
@@ -124,7 +126,7 @@ class TestSemanticChunking:
 
     async def test_chunking_coherence(self):
         """Test that semantic chunking creates coherent chunks."""
-        print("Testing chunking coherence...")
+        print("Testing chunking coherence...")  # noqa: print
 
         coherent_text = """
         Machine learning is a subset of artificial intelligence. It focuses on algorithms that learn from data.
@@ -139,11 +141,11 @@ class TestSemanticChunking:
 
         chunks = await self.chunker.chunk_text(coherent_text)
 
-        print(f"✓ Coherent text created {len(chunks)} chunks")
+        print(f"✓ Coherent text created {len(chunks)} chunks")  # noqa: print
 
         # Check that chunks have reasonable coherence scores
         avg_coherence = sum(chunk.semantic_score for chunk in chunks) / len(chunks)
-        print(f"  Average coherence score: {avg_coherence:.3f}")
+        print(f"  Average coherence score: {avg_coherence:.3f}")  # noqa: print
 
         assert avg_coherence > 0.3, f"Average coherence {avg_coherence} seems too low"
 
@@ -151,66 +153,72 @@ class TestSemanticChunking:
 
     async def test_error_handling(self):
         """Test error handling and fallback mechanisms."""
-        print("Testing error handling...")
+        print("Testing error handling...")  # noqa: print
 
         # Test with empty text
         empty_chunks = await self.chunker.chunk_text("")
-        print(f"✓ Empty text handled: {len(empty_chunks)} chunks")
+        print(f"✓ Empty text handled: {len(empty_chunks)} chunks")  # noqa: print
 
         # Test with very short text
         short_chunks = await self.chunker.chunk_text("Short.")
-        print(f"✓ Very short text handled: {len(short_chunks)} chunks")
+        print(f"✓ Very short text handled: {len(short_chunks)} chunks")  # noqa: print
 
         # Test with special characters
         special_text = "Text with émojis 🚀 and spëcial characters: @#$%^&*()!"
         special_chunks = await self.chunker.chunk_text(special_text)
-        print(f"✓ Special characters handled: {len(special_chunks)} chunks")
+        print(
+            f"✓ Special characters handled: {len(special_chunks)} chunks"
+        )  # noqa: print
 
         return True
 
     async def run_all_tests(self):
         """Run all semantic chunking tests."""
-        print("=" * 60)
-        print("AutoBot Semantic Chunking Test Suite")
-        print("=" * 60)
+        print("=" * 60)  # noqa: print
+        print("AutoBot Semantic Chunking Test Suite")  # noqa: print
+        print("=" * 60)  # noqa: print
 
         try:
             # Test basic functionality
             basic_chunks = await self.test_basic_chunking()
-            print()
+            print()  # noqa: print
 
             # Test edge cases
             await self.test_small_text_handling()
-            print()
+            print()  # noqa: print
 
             await self.test_large_text_splitting()
-            print()
+            print()  # noqa: print
 
             # Test compatibility
             documents = await self.test_document_format_compatibility()
-            print()
+            print()  # noqa: print
 
             # Test quality
             coherent_chunks, coherence = await self.test_chunking_coherence()
-            print()
+            print()  # noqa: print
 
             # Test error handling
             error_handling = await self.test_error_handling()
-            print()
+            print()  # noqa: print
 
-            print("=" * 60)
-            print("✅ All Semantic Chunking Tests Passed!")
-            print("=" * 60)
-            print("Summary:")
-            print(f"  - Basic chunking: {len(basic_chunks)} chunks")
-            print(f"  - Document compatibility: {len(documents)} documents")
-            print(f"  - Average coherence: {coherence:.3f}")
-            print(f"  - Error handling: {'✓' if error_handling else '✗'}")
+            print("=" * 60)  # noqa: print
+            print("✅ All Semantic Chunking Tests Passed!")  # noqa: print
+            print("=" * 60)  # noqa: print
+            print("Summary:")  # noqa: print
+            print(f"  - Basic chunking: {len(basic_chunks)} chunks")  # noqa: print
+            print(
+                f"  - Document compatibility: {len(documents)} documents"
+            )  # noqa: print
+            print(f"  - Average coherence: {coherence:.3f}")  # noqa: print
+            print(
+                f"  - Error handling: {'✓' if error_handling else '✗'}"
+            )  # noqa: print
 
             return True
 
         except Exception as e:
-            print(f"❌ Test failed: {e}")
+            print(f"❌ Test failed: {e}")  # noqa: print
             import traceback
 
             traceback.print_exc()
@@ -223,10 +231,12 @@ async def main():
     success = await tester.run_all_tests()
 
     if success:
-        print("\n🎉 Semantic chunking implementation is working correctly!")
+        print(
+            "\n🎉 Semantic chunking implementation is working correctly!"
+        )  # noqa: print
         return 0
     else:
-        print("\n💥 Semantic chunking tests failed!")
+        print("\n💥 Semantic chunking tests failed!")  # noqa: print
         return 1
 
 

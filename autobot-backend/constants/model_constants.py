@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from typing import Optional
 
-from backend.config.registry import ConfigRegistry
+from config.registry import ConfigRegistry
 
 # =============================================================================
 # FALLBACK DEFAULTS - DEFINED ONCE, USED EVERYWHERE

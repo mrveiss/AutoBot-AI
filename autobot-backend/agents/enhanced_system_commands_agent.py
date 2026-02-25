@@ -14,7 +14,7 @@ import re
 import shlex
 from typing import Any, Dict, FrozenSet, List, Optional
 
-from backend.constants.threshold_constants import LLMDefaults
+from constants.threshold_constants import LLMDefaults
 from llm_interface import LLMInterface
 
 from autobot_shared.ssot_config import (

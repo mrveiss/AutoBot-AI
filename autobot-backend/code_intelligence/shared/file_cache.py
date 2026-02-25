@@ -42,8 +42,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Optional
 
-from backend.constants.path_constants import PATH
-from backend.utils.file_categorization import SKIP_DIRS
+from constants.path_constants import PATH
+from utils.file_categorization import SKIP_DIRS
 
 logger = logging.getLogger(__name__)
 

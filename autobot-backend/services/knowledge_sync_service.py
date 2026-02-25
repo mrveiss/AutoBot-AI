@@ -21,11 +21,11 @@ from datetime import datetime
 from typing import Any, Dict
 
 from advanced_rag_optimizer import get_rag_optimizer
-from backend.constants.threshold_constants import TimingConstants
-from backend.utils.catalog_http_exceptions import raise_kb_error
+from constants.threshold_constants import TimingConstants
 from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import JSONResponse
 from knowledge_sync_incremental import IncrementalKnowledgeSync
+from utils.catalog_http_exceptions import raise_kb_error
 
 from autobot_shared.logging_manager import get_llm_logger
 

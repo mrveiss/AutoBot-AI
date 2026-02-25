@@ -13,7 +13,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict
 
-from backend.constants.threshold_constants import RetryConfig
+from constants.threshold_constants import RetryConfig
 
 from .types import ErrorContext
 

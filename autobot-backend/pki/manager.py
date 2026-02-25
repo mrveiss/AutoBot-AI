@@ -17,10 +17,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
-from backend.pki.config import VM_DEFINITIONS, TLSConfig, TLSMode
-from backend.pki.configurator import ServiceConfigurator
-from backend.pki.distributor import CertificateDistributor
-from backend.pki.generator import CertificateGenerator
+from pki.config import VM_DEFINITIONS, TLSConfig, TLSMode
+from pki.configurator import ServiceConfigurator
+from pki.distributor import CertificateDistributor
+from pki.generator import CertificateGenerator
 
 logger = logging.getLogger(__name__)
 

@@ -78,7 +78,7 @@ This is the body content."""
 
 ```python
 def hello():
-    print("Hello, world!")
+    print("Hello, world!")  # noqa: print
 ```
 
 Some text after."""
@@ -124,7 +124,7 @@ End of examples."""
         content = """Example:
 
 ```python
-print("test")
+print("test")  # noqa: print
 ```"""
 
         processed, blocks_removed = self.optimizer._strip_code_blocks_from_content(
@@ -145,13 +145,13 @@ print("test")
         content = """Example:
 
 ```python
-print("test")
+print("test")  # noqa: print
 ```"""
 
         processed, blocks_removed = optimizer._strip_code_blocks_from_content(content)
 
         self.assertEqual(blocks_removed, 0)
-        self.assertIn('print("test")', processed)
+        self.assertIn('print("test")', processed)  # noqa: print
 
     def test_optimize_agent_file_complete(self):
         """Test complete agent file optimization."""
@@ -411,7 +411,7 @@ class TestAgentOptimizerEdgeCases(unittest.TestCase):
 ```markdown
 Some markdown with code:
 ```python
-print("nested")
+print("nested")  # noqa: print
 ```
 end markdown
 ```"""

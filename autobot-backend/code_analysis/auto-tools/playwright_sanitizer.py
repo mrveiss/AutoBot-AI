@@ -29,6 +29,80 @@ logger = logging.getLogger(__name__)
 # Issue #380: Module-level constant for HTML extensions (performance optimization)
 _HTML_EXTENSIONS = (".html", ".htm")
 
+# Issue #1183: Module-level constant extracted from inject_runtime_protection()
+_PLAYWRIGHT_RUNTIME_PROTECTION_SCRIPT = """
+<script>
+// AutoBot XSS Protection for Playwright Reports
+(function() {
+    'use strict';
+
+    // Safe logging function for potential XSS attempts
+    function logSecurityEvent(event, details) {
+        if (window.console && console.warn) {
+            console.warn('[AutoBot Security]', event, details);
+        }
+    }
+
+    // Monitor for potentially dangerous content insertions
+    const originalCreateElement = document.createElement;
+    document.createElement = function(tagName) {
+        const element = originalCreateElement.call(this, tagName);
+
+        if (tagName.toLowerCase() === 'script') {
+            logSecurityEvent('Script element created', { tag: tagName });
+        }
+
+        return element;
+    };
+
+    // Enhanced innerHTML monitoring (non-breaking for React)
+    const ElementPrototype = Element.prototype;
+    const originalInnerHTMLDesc = Object.getOwnPropertyDescriptor(ElementPrototype, 'innerHTML');
+
+    if (originalInnerHTMLDesc) {
+        Object.defineProperty(ElementPrototype, 'innerHTML', {
+            get: originalInnerHTMLDesc.get,
+            set: function(value) {
+                // Log suspicious patterns but don't block (to preserve Playwright functionality)
+                if (typeof value === 'string') {
+                    if (value.includes('<script') || value.includes('javascript:')) {
+                        logSecurityEvent('Suspicious innerHTML detected', value.substring(0, 100));
+                    }
+                }
+                return originalInnerHTMLDesc.set.call(this, value);
+            },
+            configurable: true
+        });
+    }
+
+    // Safe content utilities for any custom scripts
+    window.AutoBotSecurity = {
+        sanitizeText: function(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        },
+
+        createSafeElement: function(tag, textContent, attributes) {
+            const element = document.createElement(tag);
+            if (textContent) element.textContent = textContent;
+            if (attributes) {
+                Object.keys(attributes).forEach(key => {
+                    if (key !== 'innerHTML') {
+                        element.setAttribute(key, attributes[key]);
+                    }
+                });
+            }
+            return element;
+        }
+    };
+
+    logSecurityEvent('AutoBot XSS Protection initialized', 'Playwright report security active');
+
+})();
+</script>
+"""
+
 
 class PlaywrightSecurityFixer:
     """
@@ -174,79 +248,8 @@ class PlaywrightSecurityFixer:
         """Inject runtime XSS protection suitable for Playwright reports."""
         enhancements = []
 
-        # XSS protection script that won't interfere with Playwright functionality
-        protection_script = """
-<script>
-// AutoBot XSS Protection for Playwright Reports
-(function() {
-    'use strict';
-
-    // Safe logging function for potential XSS attempts
-    function logSecurityEvent(event, details) {
-        if (window.console && console.warn) {
-            console.warn('[AutoBot Security]', event, details);
-        }
-    }
-
-    // Monitor for potentially dangerous content insertions
-    const originalCreateElement = document.createElement;
-    document.createElement = function(tagName) {
-        const element = originalCreateElement.call(this, tagName);
-
-        if (tagName.toLowerCase() === 'script') {
-            logSecurityEvent('Script element created', { tag: tagName });
-        }
-
-        return element;
-    };
-
-    // Enhanced innerHTML monitoring (non-breaking for React)
-    const ElementPrototype = Element.prototype;
-    const originalInnerHTMLDesc = Object.getOwnPropertyDescriptor(ElementPrototype, 'innerHTML');
-
-    if (originalInnerHTMLDesc) {
-        Object.defineProperty(ElementPrototype, 'innerHTML', {
-            get: originalInnerHTMLDesc.get,
-            set: function(value) {
-                // Log suspicious patterns but don't block (to preserve Playwright functionality)
-                if (typeof value === 'string') {
-                    if (value.includes('<script') || value.includes('javascript:')) {
-                        logSecurityEvent('Suspicious innerHTML detected', value.substring(0, 100));
-                    }
-                }
-                return originalInnerHTMLDesc.set.call(this, value);
-            },
-            configurable: true
-        });
-    }
-
-    // Safe content utilities for any custom scripts
-    window.AutoBotSecurity = {
-        sanitizeText: function(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        },
-
-        createSafeElement: function(tag, textContent, attributes) {
-            const element = document.createElement(tag);
-            if (textContent) element.textContent = textContent;
-            if (attributes) {
-                Object.keys(attributes).forEach(key => {
-                    if (key !== 'innerHTML') {
-                        element.setAttribute(key, attributes[key]);
-                    }
-                });
-            }
-            return element;
-        }
-    };
-
-    logSecurityEvent('AutoBot XSS Protection initialized', 'Playwright report security active');
-
-})();
-</script>
-"""
+        # Issue #1183: Use module-level constant instead of inline multi-line string
+        protection_script = _PLAYWRIGHT_RUNTIME_PROTECTION_SCRIPT
 
         # Find a good injection point (before first script or before </head>)
         injection_points = [r"</head>", r"<script[^>]*>", r"<body[^>]*>"]
@@ -277,83 +280,82 @@ class PlaywrightSecurityFixer:
 
         return content, enhancements
 
+    @staticmethod
+    def _log_vuln_severity_summary(vulnerabilities: List[Dict[str, Any]]) -> None:
+        """Log vulnerability severity counts.
+
+        Issue #1183: Extracted from fix_playwright_report() to reduce function length.
+        """
+        severity_counts: Dict[str, int] = {}
+        for vuln in vulnerabilities:
+            severity_counts[vuln["severity"]] = (
+                severity_counts.get(vuln["severity"], 0) + 1
+            )
+        severity_icons = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
+        for severity, count in severity_counts.items():
+            icon = severity_icons.get(severity, "⚪")
+            logger.info("   %s %s: %d patterns", icon, severity, count)
+
+    def _apply_and_write_html(
+        self, original_content: str, original_size: int, file_path: str
+    ) -> Tuple[str, List[str], str]:
+        """Apply security enhancements and write result; return (enhanced_content, enhancements, hash).
+
+        Issue #1183: Extracted from fix_playwright_report() to reduce function length.
+        Returns (enhanced_content, all_enhancements, enhanced_hash) or raises on failure.
+        """
+        enhanced_content = original_content
+        all_enhancements: List[str] = []
+        logger.info("🛡️  Applying security enhancements...")
+        enhanced_content, header_enh = self.inject_security_headers(enhanced_content)
+        all_enhancements.extend(header_enh)
+        enhanced_content, runtime_enh = self.inject_runtime_protection(enhanced_content)
+        all_enhancements.extend(runtime_enh)
+        if len(enhanced_content) < original_size * 0.9:
+            raise ValueError("Content validation failed")
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(enhanced_content)
+        enhanced_hash = hashlib.sha256(enhanced_content.encode()).hexdigest()
+        logger.info("Applied %s security enhancements", len(all_enhancements))
+        for enhancement in all_enhancements:
+            logger.info("   • %s", enhancement)
+        return enhanced_content, all_enhancements, enhanced_hash
+
     def fix_playwright_report(self, file_path: str) -> Dict[str, Any]:
         """Fix XSS vulnerabilities in a Playwright report file."""
         try:
             logger.info("Processing Playwright report: %s", file_path)
 
-            # Read original content
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 original_content = f.read()
 
             original_size = len(original_content)
             original_hash = hashlib.sha256(original_content.encode()).hexdigest()
 
-            # Scan for vulnerabilities
             vulnerabilities = self.scan_for_xss_patterns(original_content, file_path)
             logger.info(
                 "Found %d potential XSS vulnerability patterns", len(vulnerabilities)
             )
 
-            # Display vulnerability summary
-            severity_counts = {}
-            for vuln in vulnerabilities:
-                severity_counts[vuln["severity"]] = (
-                    severity_counts.get(vuln["severity"], 0) + 1
-                )
+            # Issue #1183: Delegate severity logging to extracted helper
+            self._log_vuln_severity_summary(vulnerabilities)
 
-            for severity, count in severity_counts.items():
-                severity_icons = {
-                    "CRITICAL": "🔴",
-                    "HIGH": "🟠",
-                    "MEDIUM": "🟡",
-                    "LOW": "🟢",
-                }
-                icon = severity_icons.get(severity, "⚪")
-                logger.info("   %s %s: %d patterns", icon, severity, count)
-
-            # Create backup
             backup_path = self.create_backup(file_path)
             if not backup_path:
                 return {"file": file_path, "status": "error", "error": "Backup failed"}
 
-            # Apply security enhancements
-            logger.info("🛡️  Applying security enhancements...")
-            enhanced_content = original_content
-            all_enhancements = []
-
-            # Inject security headers
-            enhanced_content, header_enhancements = self.inject_security_headers(
-                enhanced_content
-            )
-            all_enhancements.extend(header_enhancements)
-
-            # Inject runtime protection
-            enhanced_content, runtime_enhancements = self.inject_runtime_protection(
-                enhanced_content
-            )
-            all_enhancements.extend(runtime_enhancements)
-
-            # Basic validation
-            if (
-                len(enhanced_content) < original_size * 0.9
-            ):  # Content shouldn't shrink significantly
+            try:
+                # Issue #1183: Delegate enhancement/write to extracted helper
+                (
+                    enhanced_content,
+                    all_enhancements,
+                    enhanced_hash,
+                ) = self._apply_and_write_html(
+                    original_content, original_size, file_path
+                )
+            except ValueError as ve:
                 logger.info("❌ Enhanced content appears corrupted")
-                return {
-                    "file": file_path,
-                    "status": "error",
-                    "error": "Content validation failed",
-                }
-
-            # Write enhanced content
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(enhanced_content)
-
-            enhanced_hash = hashlib.sha256(enhanced_content.encode()).hexdigest()
-
-            logger.info("Applied %s security enhancements", len(all_enhancements))
-            for enhancement in all_enhancements:
-                logger.info("   • %s", enhancement)
+                return {"file": file_path, "status": "error", "error": str(ve)}
 
             return {
                 "file": file_path,

@@ -6,7 +6,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from backend.services.terminal_completion_service import TerminalCompletionService
+from services.terminal_completion_service import TerminalCompletionService
 
 
 class TestTerminalCompletionService:

@@ -13,10 +13,10 @@ import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from backend.monitoring.prometheus_metrics import get_metrics_manager
-from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
+from monitoring.prometheus_metrics import get_metrics_manager
 from pydantic import BaseModel
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -245,7 +245,7 @@ def setup_rum_logger():
     rum_logger.setLevel(getattr(logging, rum_config["log_level"].upper(), logging.INFO))
 
     # Use centralized path management
-    from backend.utils.paths_manager import ensure_log_directory, get_rum_log_path
+    from utils.paths_manager import ensure_log_directory, get_rum_log_path
 
     # Ensure logs directory exists
     ensure_log_directory()

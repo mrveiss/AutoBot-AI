@@ -93,7 +93,7 @@ def test_function():
     return "Hello from test file"
 
 if __name__ == "__main__":
-    print(test_function())
+    print(test_function())  # noqa: print
 """
             )
             test_file_path = f.name

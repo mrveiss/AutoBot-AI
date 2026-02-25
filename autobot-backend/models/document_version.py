@@ -15,7 +15,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from backend.type_defs.common import Metadata
+from type_defs.common import Metadata
 
 
 class ChangeType(str, Enum):

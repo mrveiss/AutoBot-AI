@@ -33,7 +33,7 @@ from memory import (
 
 def test_1_import_verification():
     """Test 1: Verify all components can be imported"""
-    print("\n[TEST 1] Import verification...")
+    print("\n[TEST 1] Import verification...")  # noqa: print
 
     # Verify classes
     assert UnifiedMemoryManager is not None
@@ -50,12 +50,12 @@ def test_1_import_verification():
     assert TaskExecutionRecord is not None
     assert MemoryEntry is not None
 
-    print("✅ PASSED: All components imported successfully")
+    print("✅ PASSED: All components imported successfully")  # noqa: print
 
 
 async def test_2_task_execution_logging():
     """Test 2: Task execution history (enhanced_memory features)"""
-    print("\n[TEST 2] Task execution logging...")
+    print("\n[TEST 2] Task execution logging...")  # noqa: print
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_tasks.db"
@@ -87,12 +87,12 @@ async def test_2_task_execution_logging():
         assert history[0].task_id == "test-001"
         assert history[0].status == TaskStatus.IN_PROGRESS
 
-    print("✅ PASSED: Task execution logging works correctly")
+    print("✅ PASSED: Task execution logging works correctly")  # noqa: print
 
 
 async def test_3_general_memory_storage():
     """Test 3: General purpose memory (memory_manager features)"""
-    print("\n[TEST 3] General memory storage...")
+    print("\n[TEST 3] General memory storage...")  # noqa: print
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_memory.db"
@@ -122,12 +122,12 @@ async def test_3_general_memory_storage():
         states = await manager.retrieve_memories(MemoryCategory.STATE, limit=10)
         assert len(states) == 1, f"Expected 1 state, got {len(states)}"
 
-    print("✅ PASSED: General memory storage works correctly")
+    print("✅ PASSED: General memory storage works correctly")  # noqa: print
 
 
 def test_4_lru_caching():
     """Test 4: LRU cache (optimized_memory features)"""
-    print("\n[TEST 4] LRU caching...")
+    print("\n[TEST 4] LRU caching...")  # noqa: print
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_cache.db"
@@ -149,12 +149,12 @@ def test_4_lru_caching():
         assert stats["enabled"] is True
         assert stats["size"] == 3
 
-    print("✅ PASSED: LRU caching works correctly")
+    print("✅ PASSED: LRU caching works correctly")  # noqa: print
 
 
 async def test_5_strategy_pattern():
     """Test 5: Unified storage with different strategies"""
-    print("\n[TEST 5] Strategy pattern...")
+    print("\n[TEST 5] Strategy pattern...")  # noqa: print
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_strategy.db"
@@ -188,12 +188,12 @@ async def test_5_strategy_pattern():
         assert cache_key is not None
         assert manager.cache_get(cache_key) == {"data": "test"}
 
-    print("✅ PASSED: Strategy pattern works correctly")
+    print("✅ PASSED: Strategy pattern works correctly")  # noqa: print
 
 
 def test_6_backward_compatibility_enhanced():
     """Test 6: EnhancedMemoryManager compatibility wrapper"""
-    print("\n[TEST 6] EnhancedMemoryManager backward compatibility...")
+    print("\n[TEST 6] EnhancedMemoryManager backward compatibility...")  # noqa: print
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_enhanced.db"
@@ -228,12 +228,12 @@ def test_6_backward_compatibility_enhanced():
         task_id2 = manager.log_task_execution(record2)
         assert task_id2 == "bc-002"
 
-    print("✅ PASSED: EnhancedMemoryManager backward compatibility works")
+    print("✅ PASSED: EnhancedMemoryManager backward compatibility works")  # noqa: print
 
 
 async def test_7_backward_compatibility_longterm():
     """Test 7: LongTermMemoryManager compatibility wrapper"""
-    print("\n[TEST 7] LongTermMemoryManager backward compatibility...")
+    print("\n[TEST 7] LongTermMemoryManager backward compatibility...")  # noqa: print
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_longterm.db"
@@ -254,12 +254,12 @@ async def test_7_backward_compatibility_longterm():
         assert len(memories) == 1
         assert memories[0].content == "Test content"
 
-    print("✅ PASSED: LongTermMemoryManager backward compatibility works")
+    print("✅ PASSED: LongTermMemoryManager backward compatibility works")  # noqa: print
 
 
 def test_8_sync_wrappers():
     """Test 8: Sync wrappers for backward compatibility"""
-    print("\n[TEST 8] Sync wrappers...")
+    print("\n[TEST 8] Sync wrappers...")  # noqa: print
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_sync.db"
@@ -279,12 +279,12 @@ def test_8_sync_wrappers():
         task_id = manager.log_task_sync(record)
         assert task_id == "sync-001"
 
-    print("✅ PASSED: Sync wrappers work correctly")
+    print("✅ PASSED: Sync wrappers work correctly")  # noqa: print
 
 
 async def test_9_statistics():
     """Test 9: Comprehensive statistics"""
-    print("\n[TEST 9] Statistics...")
+    print("\n[TEST 9] Statistics...")  # noqa: print
 
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_stats.db"
@@ -316,12 +316,12 @@ async def test_9_statistics():
         assert stats["cache"]["enabled"] is True
         assert stats["cache"]["size"] >= 1
 
-    print("✅ PASSED: Statistics work correctly")
+    print("✅ PASSED: Statistics work correctly")  # noqa: print
 
 
 def test_10_all_features_preserved():
     """Test 10: Verify all features from 3 managers preserved"""
-    print("\n[TEST 10] All features preserved...")
+    print("\n[TEST 10] All features preserved...")  # noqa: print
 
     manager = UnifiedMemoryManager(enable_cache=True, enable_monitoring=False)
 
@@ -350,14 +350,14 @@ def test_10_all_features_preserved():
     assert EnhancedMemoryManager is not None
     assert LongTermMemoryManager is not None
 
-    print("✅ PASSED: All features from 3 managers preserved")
+    print("✅ PASSED: All features from 3 managers preserved")  # noqa: print
 
 
 def run_all_tests():
     """Run all tests"""
-    print("=" * 80)
-    print("TESTING P5 UNIFIED MEMORY MANAGER")
-    print("=" * 80)
+    print("=" * 80)  # noqa: print
+    print("TESTING P5 UNIFIED MEMORY MANAGER")  # noqa: print
+    print("=" * 80)  # noqa: print
 
     try:
         # Test 1: Imports (sync)
@@ -390,26 +390,26 @@ def run_all_tests():
         # Test 10: Feature completeness (sync)
         test_10_all_features_preserved()
 
-        print("\n" + "=" * 80)
-        print("ALL TESTS PASSED! ✅")
-        print("=" * 80)
-        print("\nResults: 10/10 tests passed")
-        print("- Enhanced memory features: ✅")
-        print("- General memory features: ✅")
-        print("- Optimized memory features: ✅")
-        print("- Strategy pattern: ✅")
-        print("- Backward compatibility: ✅")
-        print("- Sync wrappers: ✅")
-        print("- Statistics: ✅")
-        print("- All features preserved: ✅")
+        print("\n" + "=" * 80)  # noqa: print
+        print("ALL TESTS PASSED! ✅")  # noqa: print
+        print("=" * 80)  # noqa: print
+        print("\nResults: 10/10 tests passed")  # noqa: print
+        print("- Enhanced memory features: ✅")  # noqa: print
+        print("- General memory features: ✅")  # noqa: print
+        print("- Optimized memory features: ✅")  # noqa: print
+        print("- Strategy pattern: ✅")  # noqa: print
+        print("- Backward compatibility: ✅")  # noqa: print
+        print("- Sync wrappers: ✅")  # noqa: print
+        print("- Statistics: ✅")  # noqa: print
+        print("- All features preserved: ✅")  # noqa: print
 
         return True
 
     except AssertionError as e:
-        print(f"\n❌ TEST FAILED: {e}")
+        print(f"\n❌ TEST FAILED: {e}")  # noqa: print
         return False
     except Exception as e:
-        print(f"\n❌ ERROR: {e}")
+        print(f"\n❌ ERROR: {e}")  # noqa: print
         import traceback
 
         traceback.print_exc()

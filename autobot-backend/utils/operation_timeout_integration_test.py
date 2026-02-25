@@ -7,12 +7,12 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from backend.utils.long_running_operations_framework import (
+from utils.long_running_operations_framework import (
     OperationPriority,
     OperationStatus,
     OperationType,
 )
-from backend.utils.operation_timeout_integration import (
+from utils.operation_timeout_integration import (
     CreateOperationRequest,
     OperationIntegrationManager,
     OperationMigrator,

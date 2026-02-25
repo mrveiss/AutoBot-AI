@@ -41,7 +41,7 @@ def clean_ansi_escape_sequences(text: str) -> str:
 
 def test_ansi_escape_sequences():
     """Test cleaning of ANSI escape sequences."""
-    print("Testing ANSI escape sequence cleaning...")
+    print("Testing ANSI escape sequence cleaning...")  # noqa: print
 
     # Test cases with common ANSI escape sequences
     test_cases = [
@@ -90,22 +90,22 @@ def test_ansi_escape_sequences():
     for test_case in test_cases:
         result = clean_ansi_escape_sequences(test_case["input"])
         if result == test_case["expected"]:
-            print(f"✓ {test_case['name']}: PASSED")
+            print(f"✓ {test_case['name']}: PASSED")  # noqa: print
             passed += 1
         else:
-            print(f"✗ {test_case['name']}: FAILED")
-            print(f"  Input: {repr(test_case['input'])}")
-            print(f"  Expected: {repr(test_case['expected'])}")
-            print(f"  Got: {repr(result)}")
+            print(f"✗ {test_case['name']}: FAILED")  # noqa: print
+            print(f"  Input: {repr(test_case['input'])}")  # noqa: print
+            print(f"  Expected: {repr(test_case['expected'])}")  # noqa: print
+            print(f"  Got: {repr(result)}")  # noqa: print
             failed += 1
 
-    print(f"\nResults: {passed} passed, {failed} failed")
+    print(f"\nResults: {passed} passed, {failed} failed")  # noqa: print
     return failed == 0
 
 
 def test_real_command_output():
     """Test with real command output that contains escape sequences."""
-    print("\nTesting with real command output...")
+    print("\nTesting with real command output...")  # noqa: print
 
     import subprocess
 
@@ -122,38 +122,46 @@ def test_real_command_output():
             raw_output = result.stdout
             cleaned_output = clean_ansi_escape_sequences(raw_output)
 
-            print(f"Raw output length: {len(raw_output)}")
-            print(f"Cleaned output length: {len(cleaned_output)}")
+            print(f"Raw output length: {len(raw_output)}")  # noqa: print
+            print(f"Cleaned output length: {len(cleaned_output)}")  # noqa: print
 
             # Check if escape sequences were removed
             ansi_pattern = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
             has_ansi_before = bool(ansi_pattern.search(raw_output))
             has_ansi_after = bool(ansi_pattern.search(cleaned_output))
 
-            print(f"Had ANSI sequences before: {has_ansi_before}")
-            print(f"Has ANSI sequences after: {has_ansi_after}")
+            print(f"Had ANSI sequences before: {has_ansi_before}")  # noqa: print
+            print(f"Has ANSI sequences after: {has_ansi_after}")  # noqa: print
 
             if has_ansi_before and not has_ansi_after:
-                print("✓ Real command test: PASSED - ANSI sequences removed")
+                print(
+                    "✓ Real command test: PASSED - ANSI sequences removed"
+                )  # noqa: print
                 return True
             elif not has_ansi_before:
-                print("✓ Real command test: PASSED - No ANSI sequences to remove")
+                print(
+                    "✓ Real command test: PASSED - No ANSI sequences to remove"
+                )  # noqa: print
                 return True
             else:
-                print("✗ Real command test: FAILED - ANSI sequences still present")
+                print(
+                    "✗ Real command test: FAILED - ANSI sequences still present"
+                )  # noqa: print
                 return False
         else:
-            print("✗ Real command test: FAILED - Command execution failed")
+            print(
+                "✗ Real command test: FAILED - Command execution failed"
+            )  # noqa: print
             return False
 
     except Exception as e:
-        print(f"✗ Real command test: FAILED - Exception: {e}")
+        print(f"✗ Real command test: FAILED - Exception: {e}")  # noqa: print
         return False
 
 
 def test_preserve_useful_formatting():
     """Test that useful formatting is preserved while removing escape sequences."""
-    print("\nTesting preservation of useful formatting...")
+    print("\nTesting preservation of useful formatting...")  # noqa: print
 
     test_cases = [
         {
@@ -190,37 +198,43 @@ def test_preserve_useful_formatting():
     for test_case in test_cases:
         result = clean_ansi_escape_sequences(test_case["input"])
         if result == test_case["expected"]:
-            print(f"✓ {test_case['name']}: PASSED")
+            print(f"✓ {test_case['name']}: PASSED")  # noqa: print
             passed += 1
         else:
-            print(f"✗ {test_case['name']}: FAILED")
-            print(f"  Expected: {repr(test_case['expected'])}")
-            print(f"  Got: {repr(result)}")
+            print(f"✗ {test_case['name']}: FAILED")  # noqa: print
+            print(f"  Expected: {repr(test_case['expected'])}")  # noqa: print
+            print(f"  Got: {repr(result)}")  # noqa: print
             failed += 1
 
-    print(f"\nFormatting preservation results: {passed} passed, {failed} failed")
+    print(
+        f"\nFormatting preservation results: {passed} passed, {failed} failed"
+    )  # noqa: print
     return failed == 0
 
 
 def main():
     """Run all escape character handling tests."""
-    print("=" * 60)
-    print("ESCAPE CHARACTER HANDLING TESTS")
-    print("=" * 60)
+    print("=" * 60)  # noqa: print
+    print("ESCAPE CHARACTER HANDLING TESTS")  # noqa: print
+    print("=" * 60)  # noqa: print
 
     test1_passed = test_ansi_escape_sequences()
     test2_passed = test_real_command_output()
     test3_passed = test_preserve_useful_formatting()
 
-    print("\n" + "=" * 60)
-    print("FINAL RESULTS")
-    print("=" * 60)
+    print("\n" + "=" * 60)  # noqa: print
+    print("FINAL RESULTS")  # noqa: print
+    print("=" * 60)  # noqa: print
 
     if test1_passed and test2_passed and test3_passed:
-        print("✅ ALL TESTS PASSED - Escape character handling is working correctly")
+        print(
+            "✅ ALL TESTS PASSED - Escape character handling is working correctly"
+        )  # noqa: print
         return 0
     else:
-        print("❌ SOME TESTS FAILED - Escape character handling needs improvement")
+        print(
+            "❌ SOME TESTS FAILED - Escape character handling needs improvement"
+        )  # noqa: print
         return 1
 
 

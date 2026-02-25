@@ -7,7 +7,7 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from backend.services.approval_memory import (
+from services.approval_memory import (
     ApprovalMemoryManager,
     ApprovalRecord,
     get_approval_memory,

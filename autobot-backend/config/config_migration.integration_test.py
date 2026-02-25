@@ -7,9 +7,8 @@ import os
 from unittest.mock import patch
 
 import pytest
-
-from backend.config.manager import UnifiedConfigManager as ConfigManager
-from backend.config.manager import get_unified_config_manager
+from config.manager import UnifiedConfigManager as ConfigManager
+from config.manager import get_unified_config_manager
 
 config_manager = get_unified_config_manager()
 
@@ -117,7 +116,7 @@ class TestConfigurationMigration:
         test_config.set("security.secrets_key", "test_secrets_key")
 
         # Mock the config manager import
-        with patch("backend.services.secrets_service.config_manager", test_config):
+        with patch("services.secrets_service.config_manager", test_config):
             pass
 
             # Create secrets service - should use config for key

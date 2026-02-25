@@ -21,20 +21,17 @@ from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 from auth_middleware import check_admin_permission
-from backend.code_intelligence.anti_pattern_detector import (
+from code_intelligence.anti_pattern_detector import (
     AntiPatternDetector,
     AntiPatternSeverity,
 )
-from backend.code_intelligence.performance_analyzer import (
+from code_intelligence.performance_analyzer import (
     PerformanceAnalyzer,
     PerformanceSeverity,
     get_performance_issue_types,
 )
-from backend.code_intelligence.redis_optimizer import (
-    OptimizationSeverity,
-    RedisOptimizer,
-)
-from backend.code_intelligence.security_analyzer import (
+from code_intelligence.redis_optimizer import OptimizationSeverity, RedisOptimizer
+from code_intelligence.security_analyzer import (
     SecurityAnalyzer,
     SecuritySeverity,
     get_vulnerability_types,
@@ -1844,7 +1841,7 @@ async def get_performance_report(
 
 # Issue #243: Code Evolution Mining Endpoints
 
-from backend.code_intelligence.code_evolution_miner import CodeEvolutionMiner
+from code_intelligence.code_evolution_miner import CodeEvolutionMiner
 
 
 @with_error_handling(

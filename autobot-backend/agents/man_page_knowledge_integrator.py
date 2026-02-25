@@ -17,8 +17,8 @@ from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple
 
 import aiofiles
 import yaml
-from backend.intelligence.os_detector import get_os_detector
-from backend.utils.command_utils import execute_command
+from intelligence.os_detector import get_os_detector
+from utils.command_utils import execute_command
 
 logger = logging.getLogger(__name__)
 
@@ -691,47 +691,49 @@ if __name__ == "__main__":
         """Run integration tests for man page extraction and caching."""
         integrator = await get_man_page_integrator()
 
-        print("=== Man Page Integration Test ===")
+        print("=== Man Page Integration Test ===")  # noqa: print
 
         # Test single command extraction
-        print("\n1. Testing single command extraction (ls)...")
+        print("\n1. Testing single command extraction (ls)...")  # noqa: print
         man_info = await integrator.extract_man_page("ls")
         if man_info:
-            print(f"✓ Extracted man page for {man_info.command}")
-            print(f"  Title: {man_info.title}")
-            print(f"  Description: {man_info.description[:100]}...")
-            print(f"  Options: {len(man_info.options)}")
-            print(f"  Examples: {len(man_info.examples)}")
+            print(f"✓ Extracted man page for {man_info.command}")  # noqa: print
+            print(f"  Title: {man_info.title}")  # noqa: print
+            print(f"  Description: {man_info.description[:100]}...")  # noqa: print
+            print(f"  Options: {len(man_info.options)}")  # noqa: print
+            print(f"  Examples: {len(man_info.examples)}")  # noqa: print
         else:
-            print("✗ Failed to extract man page for ls")
+            print("✗ Failed to extract man page for ls")  # noqa: print
 
         # Test caching
-        print("\n2. Testing caching...")
+        print("\n2. Testing caching...")  # noqa: print
         if man_info:
             cache_file = await integrator.cache_man_page(man_info)
-            print(f"✓ Cached to {cache_file}")
+            print(f"✓ Cached to {cache_file}")  # noqa: print
 
             # Test loading from cache
             loaded_info = await integrator.load_cached_man_page("ls")
             if loaded_info:
-                print("✓ Successfully loaded from cache")
+                print("✓ Successfully loaded from cache")  # noqa: print
             else:
-                print("✗ Failed to load from cache")
+                print("✗ Failed to load from cache")  # noqa: print
 
         # Test priority commands integration
-        print("\n3. Testing priority commands integration...")
+        print("\n3. Testing priority commands integration...")  # noqa: print
         results = await integrator.integrate_priority_commands()
-        print("✓ Integration results:")
-        print(f"  Processed: {results['processed']}")
-        print(f"  Successful: {results['successful']}")
-        print(f"  Failed: {results['failed']}")
-        print(f"  Cached: {results['cached']}")
+        print("✓ Integration results:")  # noqa: print
+        print(f"  Processed: {results['processed']}")  # noqa: print
+        print(f"  Successful: {results['successful']}")  # noqa: print
+        print(f"  Failed: {results['failed']}")  # noqa: print
+        print(f"  Cached: {results['cached']}")  # noqa: print
 
         # Show some successful commands
         successful_commands = [
             cmd for cmd, status in results["commands"].items() if status == "success"
         ][:5]
         if successful_commands:
-            print(f"  Sample successful commands: {', '.join(successful_commands)}")
+            print(  # noqa: print
+                f"  Sample successful commands: {', '.join(successful_commands)}"
+            )  # noqa: print
 
     asyncio.run(test_integration())

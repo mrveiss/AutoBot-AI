@@ -57,14 +57,14 @@ def _get_core_system_routers() -> Dict[str, RouterConfig]:
     return {
         "system": RouterConfig(
             name="system",
-            module_path="backend.api.system",
+            module_path="api.system",
             prefix="/api/system",
             tags=["system", "health"],
             description="System health, metrics, and information",
         ),
         "chat_consolidated": RouterConfig(
             name="chat_consolidated",
-            module_path="backend.api.chat_consolidated",
+            module_path="api.chat_consolidated",
             prefix="/api",
             tags=["chat", "consolidated", "all"],
             description=(
@@ -75,35 +75,35 @@ def _get_core_system_routers() -> Dict[str, RouterConfig]:
         ),
         "settings": RouterConfig(
             name="settings",
-            module_path="backend.api.settings",
+            module_path="api.settings",
             prefix="/api/settings",
             tags=["settings", "config"],
             description="Application settings and configuration",
         ),
         "cache": RouterConfig(
             name="cache",
-            module_path="backend.api.cache",
+            module_path="api.cache",
             prefix="/api/cache",
             tags=["cache", "management"],
             description="Cache management and clearing operations",
         ),
         "rum": RouterConfig(
             name="rum",
-            module_path="backend.api.rum",
+            module_path="api.rum",
             prefix="/api/rum",
             tags=["rum", "monitoring", "developer"],
             description="Real User Monitoring (RUM) for frontend event tracking",
         ),
         "developer": RouterConfig(
             name="developer",
-            module_path="backend.api.developer",
+            module_path="api.developer",
             prefix="/api/developer",
             tags=["developer", "debug", "config"],
             description="Developer mode configuration and debugging utilities",
         ),
         "websockets": RouterConfig(
             name="websockets",
-            module_path="backend.api.websockets",
+            module_path="api.websockets",
             prefix="",  # WebSocket routes don't use prefix
             tags=["websockets", "realtime"],
             description="WebSocket endpoints for real-time communication",
@@ -124,7 +124,7 @@ def _get_knowledge_and_ai_routers() -> Dict[str, RouterConfig]:
     return {
         "knowledge": RouterConfig(
             name="knowledge",
-            module_path="backend.api.knowledge",
+            module_path="api.knowledge",
             prefix="/api/knowledge_base",
             tags=["knowledge", "search"],
             status=RouterStatus.ENABLED,
@@ -132,21 +132,21 @@ def _get_knowledge_and_ai_routers() -> Dict[str, RouterConfig]:
         ),
         "agent_config": RouterConfig(
             name="agent_config",
-            module_path="backend.api.agent_config",
+            module_path="api.agent_config",
             prefix="/api/agent-config",
             tags=["agent", "config"],
             description="Agent configuration and management",
         ),
         "prompts": RouterConfig(
             name="prompts",
-            module_path="backend.api.prompts",
+            module_path="api.prompts",
             prefix="/api/prompts",
             tags=["prompts", "ai"],
             description="Prompt templates and management",
         ),
         "llm": RouterConfig(
             name="llm",
-            module_path="backend.api.llm",
+            module_path="api.llm",
             prefix="/api/llm",
             tags=["llm", "ai"],
             status=RouterStatus.LAZY_LOAD,
@@ -154,7 +154,7 @@ def _get_knowledge_and_ai_routers() -> Dict[str, RouterConfig]:
         ),
         "intelligent_agent": RouterConfig(
             name="intelligent_agent",
-            module_path="backend.api.intelligent_agent",
+            module_path="api.intelligent_agent",
             prefix="/api/intelligent-agent",
             tags=["ai", "agent", "intelligence"],
             status=RouterStatus.LAZY_LOAD,  # Lazy load to avoid startup blocking
@@ -162,7 +162,7 @@ def _get_knowledge_and_ai_routers() -> Dict[str, RouterConfig]:
         ),
         "knowledge_mcp": RouterConfig(
             name="knowledge_mcp",
-            module_path="backend.api.knowledge_mcp",
+            module_path="api.knowledge_mcp",
             prefix="/api/knowledge",
             tags=["knowledge", "mcp", "llm"],
             status=RouterStatus.ENABLED,
@@ -184,21 +184,21 @@ def _get_file_and_security_routers() -> Dict[str, RouterConfig]:
     return {
         "files": RouterConfig(
             name="files",
-            module_path="backend.api.files",
+            module_path="api.files",
             prefix="/api/files",
             tags=["files", "upload"],
             description="File operations and management",
         ),
         "templates": RouterConfig(
             name="templates",
-            module_path="backend.api.templates",
+            module_path="api.templates",
             prefix="/api/templates",
             tags=["templates"],
             description="Template management and rendering",
         ),
         "secrets": RouterConfig(
             name="secrets",
-            module_path="backend.api.secrets",
+            module_path="api.secrets",
             prefix="/api/secrets",
             tags=["secrets", "security"],
             requires_auth=True,
@@ -215,14 +215,14 @@ def _get_dev_tool_routers() -> Dict[str, RouterConfig]:
     return {
         "playwright": RouterConfig(
             name="playwright",
-            module_path="backend.api.playwright",
+            module_path="api.playwright",
             prefix="/api/playwright",
             tags=["automation", "browser"],
             description="Browser automation via Playwright",
         ),
         "terminal": RouterConfig(
             name="terminal",
-            module_path="backend.api.terminal",
+            module_path="api.terminal",
             prefix="/api/terminal",
             tags=["terminal", "execution"],
             status=RouterStatus.ENABLED,  # Enable for fast backend
@@ -230,7 +230,7 @@ def _get_dev_tool_routers() -> Dict[str, RouterConfig]:
         ),
         "logs": RouterConfig(
             name="logs",
-            module_path="backend.api.logs",
+            module_path="api.logs",
             prefix="/api/logs",
             tags=["logs", "monitoring"],
             status=RouterStatus.ENABLED,
@@ -247,7 +247,7 @@ def _get_dev_workflow_routers() -> Dict[str, RouterConfig]:
     return {
         "workflow": RouterConfig(
             name="workflow",
-            module_path="backend.api.workflow",
+            module_path="api.workflow",
             prefix="/api/workflow",
             tags=["workflow", "automation"],
             status=RouterStatus.DISABLED,  # Not in fast backend
@@ -255,14 +255,14 @@ def _get_dev_workflow_routers() -> Dict[str, RouterConfig]:
         ),
         "batch": RouterConfig(
             name="batch",
-            module_path="backend.api.batch",
+            module_path="api.batch",
             prefix="/api/batch",
             tags=["batch", "optimization"],
             description="Batch API endpoints for optimized initial loading",
         ),
         "research_browser": RouterConfig(
             name="research_browser",
-            module_path="backend.api.research_browser",
+            module_path="api.research_browser",
             prefix="/api/research",
             tags=["research", "browser", "automation"],
             status=RouterStatus.ENABLED,
@@ -270,7 +270,7 @@ def _get_dev_workflow_routers() -> Dict[str, RouterConfig]:
         ),
         "hot_reload": RouterConfig(
             name="hot_reload",
-            module_path="backend.api.hot_reload",
+            module_path="api.hot_reload",
             prefix="/api/hot-reload",
             tags=["development", "hot-reload"],
             status=RouterStatus.ENABLED,
@@ -305,14 +305,14 @@ def _get_monitoring_routers() -> Dict[str, RouterConfig]:
     return {
         "service_monitor": RouterConfig(
             name="service_monitor",
-            module_path="backend.api.service_monitor",
+            module_path="api.service_monitor",
             prefix="/api/monitoring",
             tags=["monitoring", "services"],
             description="Real-time service monitoring and health checks",
         ),
         "infrastructure_monitor": RouterConfig(
             name="infrastructure_monitor",
-            module_path="backend.api.infrastructure_monitor",
+            module_path="api.infrastructure_monitor",
             prefix="/api/infrastructure",
             tags=["monitoring", "infrastructure", "multi-machine"],
             status=RouterStatus.ENABLED,
@@ -322,7 +322,7 @@ def _get_monitoring_routers() -> Dict[str, RouterConfig]:
         # Alerts now handled via alertmanager_webhook (Issue #346)
         "monitoring": RouterConfig(
             name="monitoring",
-            module_path="backend.api.monitoring",
+            module_path="api.monitoring",
             prefix="/api/monitoring",
             tags=["monitoring", "gpu", "npu", "performance"],
             status=RouterStatus.ENABLED,
@@ -333,14 +333,14 @@ def _get_monitoring_routers() -> Dict[str, RouterConfig]:
         ),
         "system_validation": RouterConfig(
             name="system_validation",
-            module_path="backend.api.system_validation",
+            module_path="api.system_validation",
             prefix="/api/system_validation",
             tags=["validation", "system", "testing"],
             description="Comprehensive system validation and integration testing",
         ),
         "validation_dashboard": RouterConfig(
             name="validation_dashboard",
-            module_path="backend.api.validation_dashboard",
+            module_path="api.validation_dashboard",
             prefix="/api/validation-dashboard",
             tags=["validation", "testing"],
             status=RouterStatus.ENABLED,  # Enable for fast backend
@@ -348,7 +348,7 @@ def _get_monitoring_routers() -> Dict[str, RouterConfig]:
         ),
         "startup": RouterConfig(
             name="startup",
-            module_path="backend.api.startup",
+            module_path="api.startup",
             prefix="/api/startup",
             tags=["startup", "status", "websockets"],
             status=RouterStatus.DISABLED,
@@ -369,7 +369,7 @@ def _get_user_management_routers() -> Dict[str, RouterConfig]:
     return {
         "user_management": RouterConfig(
             name="user_management",
-            module_path="backend.api.user_management",
+            module_path="api.user_management",
             prefix="/api",
             tags=["users", "teams", "organizations", "auth"],
             status=RouterStatus.ENABLED,
@@ -381,7 +381,7 @@ def _get_user_management_routers() -> Dict[str, RouterConfig]:
         ),
         "auth": RouterConfig(
             name="auth",
-            module_path="backend.api.auth",
+            module_path="api.auth",
             prefix="/api/auth",
             tags=["auth", "security"],
             status=RouterStatus.ENABLED,

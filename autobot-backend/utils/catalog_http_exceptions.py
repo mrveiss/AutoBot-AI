@@ -11,8 +11,8 @@ Makes migration from hardcoded errors to catalog-based errors straightforward
 import logging
 from typing import Optional
 
-from backend.utils.error_catalog import get_error
 from fastapi import HTTPException
+from utils.error_catalog import get_error
 
 logger = logging.getLogger(__name__)
 

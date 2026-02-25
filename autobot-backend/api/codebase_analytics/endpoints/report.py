@@ -15,20 +15,22 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from backend.code_intelligence.bug_predictor import BugPredictor, PredictionResult
+from code_intelligence.bug_predictor import BugPredictor, PredictionResult
 
 # Issue #244: Cross-Language Pattern Detection
-from backend.code_intelligence.cross_language_patterns import (
+from code_intelligence.cross_language_patterns import (
     CrossLanguageAnalysis,
     CrossLanguagePatternDetector,
 )
 
 # Issue #208: Code Pattern Detection & Optimization
-from backend.code_intelligence.pattern_analysis import (
+from code_intelligence.pattern_analysis import (
     CodePatternAnalyzer,
     PatternAnalysisReport,
 )
-from backend.utils.file_categorization import (
+from fastapi import APIRouter
+from fastapi.responses import PlainTextResponse
+from utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
     FILE_CATEGORY_ASSETS,
     FILE_CATEGORY_BACKUP,
@@ -39,8 +41,6 @@ from backend.utils.file_categorization import (
     FILE_CATEGORY_LOGS,
     FILE_CATEGORY_TEST,
 )
-from fastapi import APIRouter
-from fastapi.responses import PlainTextResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -473,7 +473,7 @@ def _generate_bug_risk_section(prediction: PredictionResult) -> List[str]:
 
 
 # Import from SSOT configuration (Issue #554)
-from backend.constants.threshold_constants import AnalyticsConfig
+from constants.threshold_constants import AnalyticsConfig
 
 # Maximum files to analyze for bug prediction - from SSOT
 BUG_PREDICTION_FILE_LIMIT = AnalyticsConfig.BUG_PREDICTION_FILE_LIMIT

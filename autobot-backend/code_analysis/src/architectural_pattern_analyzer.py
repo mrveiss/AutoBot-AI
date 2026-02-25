@@ -18,9 +18,8 @@ import logging
 import time
 from typing import Any, Dict, List
 
-from config import UnifiedConfig
-
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 # Issue #394: Import from architectural_analysis package
 from .architectural_analysis import (
@@ -124,7 +123,36 @@ class ArchitecturalPatternAnalyzer:
 
         analysis_time = time.time() - start_time
 
-        results = {
+        # Issue #1183: Delegate result building to extracted helper
+        results = self._build_architecture_results(
+            components,
+            issues,
+            detected_patterns,
+            recommendations,
+            metrics,
+            analysis_time,
+        )
+
+        # Cache results
+        await self._cache_results(results)
+
+        logger.info(f"Architectural analysis complete in {analysis_time:.2f}s")
+        return results
+
+    @staticmethod
+    def _build_architecture_results(
+        components: List[ArchitecturalComponent],
+        issues: List[ArchitecturalIssue],
+        detected_patterns: List[Any],
+        recommendations: List[Any],
+        metrics: ArchitecturalMetrics,
+        analysis_time: float,
+    ) -> Dict[str, Any]:
+        """Build the architecture analysis results dictionary.
+
+        Issue #1183: Extracted from analyze_architecture() to reduce function length.
+        """
+        return {
             "total_components": len(components),
             "architectural_issues": len(issues),
             "design_patterns_found": len(detected_patterns),
@@ -136,12 +164,6 @@ class ArchitecturalPatternAnalyzer:
             "recommendations": recommendations,
             "metrics": metrics.to_dict(),
         }
-
-        # Cache results
-        await self._cache_results(results)
-
-        logger.info(f"Architectural analysis complete in {analysis_time:.2f}s")
-        return results
 
     async def _analyze_dependencies(
         self, components: List[ArchitecturalComponent]
@@ -195,20 +217,24 @@ async def main():
     )
 
     # Print summary
-    print("\n=== Architectural Pattern Analysis Results ===")
-    print(f"Total components: {results['total_components']}")
-    print(f"Architectural issues: {results['architectural_issues']}")
-    print(f"Design patterns found: {results['design_patterns_found']}")
-    print(f"Architecture score: {results['architecture_score']}/100")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    print("\n=== Architectural Pattern Analysis Results ===")  # noqa: print
+    print(f"Total components: {results['total_components']}")  # noqa: print
+    print(f"Architectural issues: {results['architectural_issues']}")  # noqa: print
+    print(f"Design patterns found: {results['design_patterns_found']}")  # noqa: print
+    print(f"Architecture score: {results['architecture_score']}/100")  # noqa: print
+    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Print detailed metrics
     metrics = results["metrics"]
-    print("\n=== Architectural Metrics ===")
-    print(f"Coupling score: {metrics['coupling_score']}/100 (lower is better)")
-    print(f"Cohesion score: {metrics['cohesion_score']}/100")
-    print(f"Pattern adherence: {metrics['pattern_adherence_score']}/100")
-    print(f"Maintainability index: {metrics['maintainability_index']}/100")
+    print("\n=== Architectural Metrics ===")  # noqa: print
+    print(
+        f"Coupling score: {metrics['coupling_score']}/100 (lower is better)"
+    )  # noqa: print
+    print(f"Cohesion score: {metrics['cohesion_score']}/100")  # noqa: print
+    print(f"Pattern adherence: {metrics['pattern_adherence_score']}/100")  # noqa: print
+    print(
+        f"Maintainability index: {metrics['maintainability_index']}/100"
+    )  # noqa: print
 
 
 if __name__ == "__main__":

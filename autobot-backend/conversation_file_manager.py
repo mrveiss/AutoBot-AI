@@ -29,8 +29,8 @@ from typing import Any, Dict, List, Optional
 import aiofiles
 import aiosqlite
 import redis.asyncio as async_redis
-from backend.constants.threshold_constants import TimingConstants
 from config import unified_config_manager
+from constants.threshold_constants import TimingConstants
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import RedisError
 from redis.exceptions import TimeoutError as RedisTimeoutError

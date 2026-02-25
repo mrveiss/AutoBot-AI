@@ -34,8 +34,9 @@
   gather_facts: false
 
   vars:
-    git_repo_root: "/home/kali/Desktop/AutoBot"
-    deploy_ref: "HEAD"
+    github_repo: "https://github.com/mrveiss/AutoBot-AI.git"
+    git_repo_root: "/opt/autobot/code_source"
+    deploy_ref: "Dev_new_gui"
     allowed_branches:
       - Dev_new_gui
       - main
@@ -43,18 +44,36 @@
     deploy_tmp: "/tmp/autobot-deploy"
 
   tasks:
-    - name: "[PRE-FLIGHT] Verify git repo exists"
+    - name: "[PRE-FLIGHT] Verify code_source exists"
       stat:
         path: "{{ git_repo_root }}/.git"
-      register: git_repo
+      register: code_source_stat
       tags: [always]
 
-    - name: "[PRE-FLIGHT] Abort if git repo missing"
+    - name: "[PRE-FLIGHT] Abort if code_source missing"
       fail:
         msg: >-
-          Git repo not found at {{ git_repo_root }}.
-          This playbook must run from the dev machine (.20).
-      when: not git_repo.stat.exists
+          Code source not found at {{ git_repo_root }}.
+          Initialize with: git clone {{ github_repo }} {{ git_repo_root }}
+      when: not code_source_stat.stat.exists
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Sync latest code from GitHub (if reachable)"
+      git:
+        repo: "{{ github_repo }}"
+        dest: "{{ git_repo_root }}"
+        version: "{{ deploy_ref }}"
+        update: yes
+      ignore_errors: yes
+      register: github_sync
+      tags: [always]
+
+    - name: "[PRE-FLIGHT] Warn if GitHub sync skipped"
+      debug:
+        msg: >-
+          WARNING: GitHub sync failed (no internet access?).
+          Deploying from existing code_source at {{ git_repo_root }}.
+      when: github_sync is failed
       tags: [always]
 
     - name: "[PRE-FLIGHT] Get current git branch"
@@ -108,8 +127,7 @@
           Or deploy specific ref: -e deploy_ref=Dev_new_gui
       when:
         - not skip_branch_check | bool
-        - deploy_ref == 'HEAD'
-        - git_branch.stdout not in allowed_branches
+        - deploy_ref not in allowed_branches
       tags: [always]
 
     - name: "[PRE-FLIGHT] Create deploy archive directory"
@@ -328,6 +346,20 @@
       when: "'main' in group_names"
       tags: [backend, user-backend]
 
+    - name: "[PLAY 2] Backend | Fix ownership"
+      command: chown --no-dereference -R autobot:autobot {{ code_base_dir }}/autobot-backend
+      become: true
+      when: "'main' in group_names"
+      tags: [backend, user-backend]
+
+    - name: "[PLAY 2] Backend | Remove legacy backend symlink"
+      file:
+        path: "{{ code_base_dir }}/autobot-backend/backend"
+        state: absent
+      become: true
+      when: "'main' in group_names"
+      tags: [backend, user-backend]
+
     - name: "[PLAY 2] Backend | Restart autobot-backend service"
       systemd:
         name: autobot-backend
@@ -348,11 +380,8 @@
       tags: [frontend, user-frontend]
 
     - name: "[PLAY 2] Frontend | Fix ownership before build"
-      file:
-        path: "{{ code_base_dir }}/autobot-frontend"
-        owner: autobot
-        group: autobot
-        recurse: true
+      command: chown --no-dereference -R autobot:autobot {{ code_base_dir }}/autobot-frontend
+      become: true
       when: "'frontend' in group_names"
       tags: [frontend, user-frontend]
 

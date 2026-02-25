@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List
 
 from agents.advanced_web_research import AdvancedWebResearcher
-from backend.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -363,29 +363,35 @@ if __name__ == "__main__":
                 max_results=3,
             )
 
-            print("🔍 Testing Research Agent")
-            print("=" * 40)
+            print("🔍 Testing Research Agent")  # noqa: print
+            print("=" * 40)  # noqa: print
 
             # Test general research
             result = await research_agent.perform_research(request)
-            print(f"Query: {result.query}")
-            print(f"Results: {result.sources_count}")
-            print(f"Summary: {result.summary}")
-            print()
+            print(f"Query: {result.query}")  # noqa: print
+            print(f"Results: {result.sources_count}")  # noqa: print
+            print(f"Summary: {result.summary}")  # noqa: print
+            print()  # noqa: print
 
             # Test tool-specific research
             tools_result = await research_agent.research_specific_tools(request)
-            print("Tool-specific research:")
-            print(f"Tools found: {tools_result.get('tools_found', [])}")
-            print(f"Recommendation: {tools_result.get('recommendation', 'N/A')}")
-            print()
+            print("Tool-specific research:")  # noqa: print
+            print(f"Tools found: {tools_result.get('tools_found', [])}")  # noqa: print
+            print(  # noqa: print
+                f"Recommendation: {tools_result.get('recommendation', 'N/A')}"
+            )  # noqa: print
+            print()  # noqa: print
 
             # Test installation guide
             install_guide = await research_agent.get_tool_installation_guide("nmap")
-            print("Installation guide for nmap:")
-            print(f"Command: {install_guide.get('installation_command', 'N/A')}")
-            print(f"Usage: {install_guide.get('usage_example', 'N/A')}")
-            print(f"Prerequisites: {install_guide.get('prerequisites', [])}")
+            print("Installation guide for nmap:")  # noqa: print
+            print(  # noqa: print
+                f"Command: {install_guide.get('installation_command', 'N/A')}"
+            )  # noqa: print
+            print(f"Usage: {install_guide.get('usage_example', 'N/A')}")  # noqa: print
+            print(  # noqa: print
+                f"Prerequisites: {install_guide.get('prerequisites', [])}"
+            )  # noqa: print
 
         asyncio.run(test_research())
     else:

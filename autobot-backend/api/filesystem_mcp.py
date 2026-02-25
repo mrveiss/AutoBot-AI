@@ -32,8 +32,8 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 import aiofiles
-from backend.type_defs.common import JSONObject, Metadata
-from backend.utils.io_executor import run_in_file_executor
+from type_defs.common import JSONObject, Metadata
+from utils.io_executor import run_in_file_executor
 
 # Issue #514: Per-file locking to prevent concurrent write corruption
 _file_locks: Dict[str, asyncio.Lock] = {}

@@ -14,11 +14,7 @@ Provides integrations with external tools and services:
 - Monitoring (Datadog, New Relic)
 """
 
-from backend.integrations.base import (
-    BaseIntegration,
-    IntegrationConfig,
-    IntegrationStatus,
-)
+from integrations.base import BaseIntegration, IntegrationConfig, IntegrationStatus
 
 __all__ = [
     "BaseIntegration",

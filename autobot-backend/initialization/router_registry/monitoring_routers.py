@@ -21,11 +21,11 @@ logger = logging.getLogger(__name__)
 # Issue #281: Centralized router configuration for maintainability
 # Issue #729: Removed infrastructure routers - now served by slm-server
 MONITORING_ROUTER_CONFIGS = [
-    ("backend.api.monitoring", "router", "/monitoring", ["monitoring"], "monitoring"),
-    ("backend.api.metrics", "router", "/metrics", ["metrics"], "metrics"),
+    ("api.monitoring", "router", "/monitoring", ["monitoring"], "monitoring"),
+    ("api.metrics", "router", "/metrics", ["metrics"], "metrics"),
     # Prometheus scrape endpoint at /api/metrics (no auth, used by Prometheus server)
     (
-        "backend.api.prometheus_endpoint",
+        "api.prometheus_endpoint",
         "router",
         "/metrics",
         ["metrics"],
@@ -34,16 +34,16 @@ MONITORING_ROUTER_CONFIGS = [
     # Issue #69: monitoring_alerts removed - replaced by Prometheus AlertManager
     # Alerts now handled via alertmanager_webhook router (Issue #346)
     (
-        "backend.api.error_monitoring",
+        "api.error_monitoring",
         "router",
         "/errors",
         ["errors"],
         "error_monitoring",
     ),
-    ("backend.api.rum", "router", "/rum", ["rum"], "rum"),
+    ("api.rum", "router", "/rum", ["rum"], "rum"),
     # Issue #925: service-monitor re-added for frontend health status widget
     (
-        "backend.api.service_monitor",
+        "api.service_monitor",
         "router",
         "/service-monitor",
         ["service-monitor"],
@@ -52,7 +52,7 @@ MONITORING_ROUTER_CONFIGS = [
     # Issue #729: vm_services removed - VM service monitoring now in slm-server
     # AlertManager webhook integration (Issue #346)
     (
-        "backend.api.alertmanager_webhook",
+        "api.alertmanager_webhook",
         "router",
         "",  # Router already has /webhook prefix
         ["webhooks", "alertmanager"],

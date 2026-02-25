@@ -9,7 +9,7 @@ Provides singleton-like behavior with app.state integration for optimal performa
 
 import logging
 
-from backend.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 from fastapi import Request
 
 logger = logging.getLogger(__name__)
@@ -126,6 +126,7 @@ class ResourceFactory:
 
             # Fallback to module-level import and creation
             from chat_history import ChatHistoryManager
+
             from config import config as global_config_manager
 
             logger.info(
@@ -169,7 +170,7 @@ class ResourceFactory:
                     return wam
 
             # Fallback to module-level import and creation
-            from backend.api.workflow_automation import WorkflowAutomationManager
+            from api.workflow_automation import WorkflowAutomationManager
 
             logger.info(
                 "Creating new WorkflowAutomationManager instance (expensive operation)"

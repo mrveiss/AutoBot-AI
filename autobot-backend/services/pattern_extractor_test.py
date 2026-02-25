@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from backend.services.pattern_extractor import PatternExtractor
+from services.pattern_extractor import PatternExtractor
 
 
 @pytest.fixture

@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import aiohttp
-from backend.constants.network_constants import ServiceURLs
+from constants.network_constants import ServiceURLs
 
 # Configure logging
 logging.basicConfig(
@@ -843,17 +843,19 @@ class KnowledgePerformanceTest:
 
     def print_summary_report(self, report: Dict[str, Any], report_file: Path):
         """Print human-readable summary"""
-        print("\n" + "=" * 80)
-        print("📊 KNOWLEDGE MANAGER PERFORMANCE SUMMARY")
-        print("=" * 80)
-        print("GitHub Issue: #163 - Task 4.3")
-        print(f"Total Tests: {report['total_tests']}")
-        print(f"Total Requests: {report['summary']['total_requests']}")
-        print(f"Success Rate: {report['summary']['overall_success_rate']:.1f}%")
+        print("\n" + "=" * 80)  # noqa: print
+        print("📊 KNOWLEDGE MANAGER PERFORMANCE SUMMARY")  # noqa: print
+        print("=" * 80)  # noqa: print
+        print("GitHub Issue: #163 - Task 4.3")  # noqa: print
+        print(f"Total Tests: {report['total_tests']}")  # noqa: print
+        print(f"Total Requests: {report['summary']['total_requests']}")  # noqa: print
         print(
+            f"Success Rate: {report['summary']['overall_success_rate']:.1f}%"
+        )  # noqa: print
+        print(  # noqa: print
             f"Tests Passed: {report['summary']['tests_passed']}/{report['total_tests']}"
         )
-        print()
+        print()  # noqa: print
 
         # Category Filter Performance
         cat_result = next(
@@ -861,15 +863,19 @@ class KnowledgePerformanceTest:
         )
         if cat_result:
             status = "✅ PASS" if cat_result.passed else "❌ FAIL"
-            print(f"1. Category Filter Performance: {status}")
-            print(f"   Target: <{self.CATEGORY_FILTER_TARGET_MS}ms (p95)")
-            print(f"   Actual: {cat_result.p95_latency_ms:.0f}ms (p95)")
+            print(f"1. Category Filter Performance: {status}")  # noqa: print
             print(
+                f"   Target: <{self.CATEGORY_FILTER_TARGET_MS}ms (p95)"
+            )  # noqa: print
+            print(f"   Actual: {cat_result.p95_latency_ms:.0f}ms (p95)")  # noqa: print
+            print(  # noqa: print
                 f"   Margin: {self.CATEGORY_FILTER_TARGET_MS - cat_result.p95_latency_ms:+.0f}ms"
             )
             if cat_result.cache_hit_ratio:
-                print(f"   Cache Hit Ratio: {cat_result.cache_hit_ratio:.1%}")
-            print()
+                print(
+                    f"   Cache Hit Ratio: {cat_result.cache_hit_ratio:.1%}"
+                )  # noqa: print
+            print()  # noqa: print
 
         # Vectorization Status Load
         vec_result = next(
@@ -877,13 +883,15 @@ class KnowledgePerformanceTest:
         )
         if vec_result:
             status = "✅ PASS" if vec_result.passed else "❌ FAIL"
-            print(f"2. Vectorization Status Load: {status}")
-            print(f"   Target: <{self.STATUS_LOAD_TARGET_MS}ms (p95) for 1000 facts")
-            print(f"   Actual: {vec_result.p95_latency_ms:.0f}ms (p95)")
+            print(f"2. Vectorization Status Load: {status}")  # noqa: print
             print(
+                f"   Target: <{self.STATUS_LOAD_TARGET_MS}ms (p95) for 1000 facts"
+            )  # noqa: print
+            print(f"   Actual: {vec_result.p95_latency_ms:.0f}ms (p95)")  # noqa: print
+            print(  # noqa: print
                 f"   Margin: {self.STATUS_LOAD_TARGET_MS - vec_result.p95_latency_ms:+.0f}ms"
             )
-            print()
+            print()  # noqa: print
 
         # Rapid Sequential Filtering
         rapid_result = next(
@@ -891,13 +899,15 @@ class KnowledgePerformanceTest:
         )
         if rapid_result:
             status = "✅ PASS" if rapid_result.passed else "❌ FAIL"
-            print(f"3. Rapid Sequential Filtering: {status}")
-            print(f"   Target: <{self.RAPID_FILTER_TARGET_MS}ms (p95)")
-            print(f"   Actual: {rapid_result.p95_latency_ms:.0f}ms (p95)")
+            print(f"3. Rapid Sequential Filtering: {status}")  # noqa: print
+            print(f"   Target: <{self.RAPID_FILTER_TARGET_MS}ms (p95)")  # noqa: print
             print(
+                f"   Actual: {rapid_result.p95_latency_ms:.0f}ms (p95)"
+            )  # noqa: print
+            print(  # noqa: print
                 f"   Margin: {self.RAPID_FILTER_TARGET_MS - rapid_result.p95_latency_ms:+.0f}ms"
             )
-            print()
+            print()  # noqa: print
 
         # Concurrent Mixed Operations
         mixed_result = next(
@@ -905,28 +915,34 @@ class KnowledgePerformanceTest:
         )
         if mixed_result:
             status = "✅ PASS" if mixed_result.passed else "❌ FAIL"
-            print(f"4. Concurrent Mixed Operations: {status}")
-            print("   Target: <500ms (p95)")
-            print(f"   Actual: {mixed_result.p95_latency_ms:.0f}ms (p95)")
-            print(f"   Throughput: {mixed_result.requests_per_second:.1f} req/sec")
-            print()
+            print(f"4. Concurrent Mixed Operations: {status}")  # noqa: print
+            print("   Target: <500ms (p95)")  # noqa: print
+            print(
+                f"   Actual: {mixed_result.p95_latency_ms:.0f}ms (p95)"
+            )  # noqa: print
+            print(
+                f"   Throughput: {mixed_result.requests_per_second:.1f} req/sec"
+            )  # noqa: print
+            print()  # noqa: print
 
         # Overall verdict
-        print("=" * 80)
+        print("=" * 80)  # noqa: print
         if report["pass_fail_summary"]["overall_passed"]:
-            print("🎉 OVERALL RESULT: ALL PERFORMANCE TARGETS MET ✅")
+            print("🎉 OVERALL RESULT: ALL PERFORMANCE TARGETS MET ✅")  # noqa: print
         else:
-            print("⚠️  OVERALL RESULT: SOME PERFORMANCE TARGETS NOT MET ❌")
-            print("\nFailed Tests:")
+            print(
+                "⚠️  OVERALL RESULT: SOME PERFORMANCE TARGETS NOT MET ❌"
+            )  # noqa: print
+            print("\nFailed Tests:")  # noqa: print
             for result in self.results:
                 if not result.passed:
-                    print(
+                    print(  # noqa: print
                         f"  - {result.test_name}: {result.p95_latency_ms:.0f}ms vs {result.target_ms}ms target"
                     )
 
-        print("=" * 80)
-        print(f"📄 Full report: {report_file}")
-        print("=" * 80)
+        print("=" * 80)  # noqa: print
+        print(f"📄 Full report: {report_file}")  # noqa: print
+        print("=" * 80)  # noqa: print
 
 
 async def main():

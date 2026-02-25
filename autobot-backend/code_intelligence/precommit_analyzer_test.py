@@ -18,7 +18,7 @@ Parent Epic: #217 - Advanced Code Intelligence
 import textwrap
 
 import pytest
-from backend.code_intelligence.precommit_analyzer import (
+from code_intelligence.precommit_analyzer import (
     CheckCategory,
     CheckDefinition,
     CheckSeverity,
@@ -169,7 +169,7 @@ class TestDebugChecks:
             """
             def process_data(items):
                 for item in items:
-                    print(f"Processing: {item}")
+                    print(f"Processing: {item}")  # noqa: print
                 return items
         """
         )
@@ -366,7 +366,7 @@ class TestFilePatternMatching:
 
     def test_python_only_checks(self):
         """Test that Python-specific checks only apply to .py files."""
-        code = "print('hello')"
+        code = "print('hello')"  # noqa: print
 
         analyzer = PrecommitAnalyzer()
 
@@ -550,7 +550,7 @@ class TestSummary:
         code = textwrap.dedent(
             """
             PASSWORD = "secret123"
-            print("debug")
+            print("debug")  # noqa: print
             # TODO: Fix this
         """
         )

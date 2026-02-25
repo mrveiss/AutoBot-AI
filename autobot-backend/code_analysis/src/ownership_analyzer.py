@@ -21,7 +21,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # Issue #542: Handle imports for both standalone execution and backend import
 _project_root = Path(__file__).resolve().parents[3]
@@ -29,9 +29,8 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 try:
-    from config import UnifiedConfig
-
     from autobot_shared.redis_client import get_redis_client
+    from config import UnifiedConfig
 
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
@@ -216,7 +215,35 @@ class OwnershipAnalyzer:
 
         analysis_time = time.time() - start_time
 
-        results = {
+        # Issue #1183: Delegate result building to extracted helper
+        results = self._build_ownership_results(
+            file_ownerships,
+            directory_ownerships,
+            expertise_scores,
+            knowledge_gaps,
+            metrics,
+            analysis_time,
+        )
+
+        await self._cache_results(results)
+        logger.info(f"Ownership analysis complete in {analysis_time:.2f}s")
+
+        return results
+
+    def _build_ownership_results(
+        self,
+        file_ownerships: List["FileOwnership"],
+        directory_ownerships: List["DirectoryOwnership"],
+        expertise_scores: List["ExpertiseScore"],
+        knowledge_gaps: List["KnowledgeGap"],
+        metrics: Dict[str, Any],
+        analysis_time: float,
+    ) -> Dict[str, Any]:
+        """Build the ownership analysis result dictionary.
+
+        Issue #1183: Extracted from analyze_ownership() to reduce function length.
+        """
+        return {
             "status": "success",
             "analysis_time_seconds": analysis_time,
             "summary": {
@@ -244,11 +271,6 @@ class OwnershipAnalyzer:
             "metrics": metrics,
         }
 
-        await self._cache_results(results)
-        logger.info(f"Ownership analysis complete in {analysis_time:.2f}s")
-
-        return results
-
     async def _analyze_file_ownership(
         self, root_path: str, patterns: List[str]
     ) -> List[FileOwnership]:
@@ -269,6 +291,71 @@ class OwnershipAnalyzer:
         file_ownerships.sort(key=lambda x: x.total_lines, reverse=True)
         return file_ownerships
 
+    @staticmethod
+    def _parse_blame_output(
+        stdout_text: str,
+    ) -> Tuple[int, Dict[str, Dict[str, Any]]]:
+        """Parse git blame --line-porcelain output into author_lines and total_lines.
+
+        Issue #1183: Extracted from _get_file_ownership() to reduce function length.
+        Returns (total_lines, author_lines) where author_lines maps author → stats.
+        """
+        author_lines: Dict[str, Dict[str, Any]] = defaultdict(
+            lambda: {"lines": 0, "email": "", "dates": []}
+        )
+        total_lines = 0
+        current_author = ""
+        current_email = ""
+        current_date = None
+        for line in stdout_text.splitlines():
+            if line.startswith("author "):
+                current_author = line[7:].strip()
+            elif line.startswith("author-mail "):
+                current_email = line[12:].strip().strip("<>")
+            elif line.startswith("author-time "):
+                try:
+                    current_date = datetime.fromtimestamp(int(line[12:].strip()))
+                except (ValueError, OSError):
+                    current_date = None
+            elif line.startswith("\t") and current_author not in (
+                "",
+                "Not Committed Yet",
+            ):
+                author_lines[current_author]["lines"] += 1
+                author_lines[current_author]["email"] = current_email
+                if current_date:
+                    author_lines[current_author]["dates"].append(current_date)
+                total_lines += 1
+        return total_lines, author_lines
+
+    @staticmethod
+    def _build_file_contributors(
+        author_lines: Dict[str, Dict[str, Any]],
+        total_lines: int,
+        relative_path: str,
+    ) -> List["AuthorContribution"]:
+        """Build a sorted list of AuthorContribution for a file.
+
+        Issue #1183: Extracted from _get_file_ownership() to reduce function length.
+        """
+        contributors = []
+        for author_name, data in author_lines.items():
+            lines_count = data["lines"]
+            dates = data["dates"]
+            contrib = AuthorContribution(
+                author_name=author_name,
+                author_email=data["email"],
+                lines_count=lines_count,
+                lines_percentage=round((lines_count / total_lines) * 100, 1),
+                commits_count=len(set(dates)) if dates else 1,
+                first_commit_date=min(dates) if dates else None,
+                last_commit_date=max(dates) if dates else None,
+                files_touched=[relative_path],
+            )
+            contributors.append(contrib)
+        contributors.sort(key=lambda x: x.lines_count, reverse=True)
+        return contributors
+
     async def _get_file_ownership(
         self, file_path: Path, root: Path
     ) -> Optional[FileOwnership]:
@@ -276,7 +363,6 @@ class OwnershipAnalyzer:
         try:
             relative_path = str(file_path.relative_to(root))
 
-            # Run git blame to get line-by-line authorship
             result = subprocess.run(
                 ["git", "blame", "--line-porcelain", str(file_path)],
                 capture_output=True,
@@ -288,57 +374,15 @@ class OwnershipAnalyzer:
             if result.returncode != 0:
                 return None
 
-            # Parse git blame output
-            author_lines: Dict[str, Dict[str, Any]] = defaultdict(
-                lambda: {"lines": 0, "email": "", "dates": []}
-            )
-            total_lines = 0
-            current_author = ""
-            current_email = ""
-            current_date = None
-
-            for line in result.stdout.splitlines():
-                if line.startswith("author "):
-                    current_author = line[7:].strip()
-                elif line.startswith("author-mail "):
-                    current_email = line[12:].strip().strip("<>")
-                elif line.startswith("author-time "):
-                    try:
-                        timestamp = int(line[12:].strip())
-                        current_date = datetime.fromtimestamp(timestamp)
-                    except (ValueError, OSError):
-                        current_date = None
-                elif line.startswith("\t"):  # Actual code line
-                    if current_author and current_author != "Not Committed Yet":
-                        author_lines[current_author]["lines"] += 1
-                        author_lines[current_author]["email"] = current_email
-                        if current_date:
-                            author_lines[current_author]["dates"].append(current_date)
-                        total_lines += 1
+            # Issue #1183: Delegate parsing and contributor building to helpers
+            total_lines, author_lines = self._parse_blame_output(result.stdout)
 
             if total_lines == 0:
                 return None
 
-            # Build contributor list
-            contributors = []
-            for author_name, data in author_lines.items():
-                lines_count = data["lines"]
-                dates = data["dates"]
-
-                contrib = AuthorContribution(
-                    author_name=author_name,
-                    author_email=data["email"],
-                    lines_count=lines_count,
-                    lines_percentage=round((lines_count / total_lines) * 100, 1),
-                    commits_count=len(set(dates)) if dates else 1,  # Approximate
-                    first_commit_date=min(dates) if dates else None,
-                    last_commit_date=max(dates) if dates else None,
-                    files_touched=[relative_path],
-                )
-                contributors.append(contrib)
-
-            # Sort by lines authored
-            contributors.sort(key=lambda x: x.lines_count, reverse=True)
+            contributors = self._build_file_contributors(
+                author_lines, total_lines, relative_path
+            )
 
             # Determine primary owner
             primary_owner = contributors[0].author_name if contributors else None
@@ -355,12 +399,8 @@ class OwnershipAnalyzer:
                 bus_factor, contributors, total_lines
             )
 
-            # Get last modified date
-            last_modified = None
-            for contrib in contributors:
-                if contrib.last_commit_date:
-                    if not last_modified or contrib.last_commit_date > last_modified:
-                        last_modified = contrib.last_commit_date
+            # Issue #1183: Delegate last_modified computation to helper
+            last_modified = self._get_last_modified(contributors)
 
             return FileOwnership(
                 file_path=relative_path,
@@ -379,6 +419,21 @@ class OwnershipAnalyzer:
         except Exception as e:
             logger.warning(f"Failed to analyze {file_path}: {e}")
             return None
+
+    @staticmethod
+    def _get_last_modified(
+        contributors: List["AuthorContribution"],
+    ) -> Optional[datetime]:
+        """Return the most recent last_commit_date across all contributors.
+
+        Issue #1183: Extracted from _get_file_ownership() to reduce function length.
+        """
+        last_modified = None
+        for contrib in contributors:
+            if contrib.last_commit_date:
+                if last_modified is None or contrib.last_commit_date > last_modified:
+                    last_modified = contrib.last_commit_date
+        return last_modified
 
     def _aggregate_directory_ownership(
         self, file_ownerships: List[FileOwnership]
@@ -414,12 +469,22 @@ class OwnershipAnalyzer:
                     fo.file_path
                 )
 
-        # Build directory ownership objects
+        # Issue #1183: Delegate directory object building to extracted helper
+        directory_ownerships = self._build_dir_ownership_objects(dir_data)
+        directory_ownerships.sort(key=lambda x: x.total_lines, reverse=True)
+        return directory_ownerships
+
+    def _build_dir_ownership_objects(
+        self, dir_data: Dict[str, Dict[str, Any]]
+    ) -> List[DirectoryOwnership]:
+        """Build DirectoryOwnership objects from aggregated dir_data.
+
+        Issue #1183: Extracted from _aggregate_directory_ownership() to reduce function length.
+        """
         directory_ownerships = []
         for dir_path, data in dir_data.items():
             total_lines = data["lines"]
             contributors = []
-
             for author_name, author_data in data["author_lines"].items():
                 contrib = AuthorContribution(
                     author_name=author_name,
@@ -434,21 +499,16 @@ class OwnershipAnalyzer:
                     files_touched=list(author_data["files"]),
                 )
                 contributors.append(contrib)
-
             contributors.sort(key=lambda x: x.lines_count, reverse=True)
-
             primary_owner = contributors[0].author_name if contributors else None
             ownership_pct = contributors[0].lines_percentage if contributors else 0.0
-
             significant_contributors = [
                 c for c in contributors if c.lines_percentage >= 10
             ]
             bus_factor = max(1, len(significant_contributors))
-
             knowledge_risk = self._calculate_knowledge_risk(
                 bus_factor, contributors, total_lines
             )
-
             directory_ownerships.append(
                 DirectoryOwnership(
                     directory_path=dir_path,
@@ -461,9 +521,6 @@ class OwnershipAnalyzer:
                     knowledge_risk=knowledge_risk,
                 )
             )
-
-        # Sort by total lines descending
-        directory_ownerships.sort(key=lambda x: x.total_lines, reverse=True)
         return directory_ownerships
 
     def _calculate_expertise_scores(
@@ -515,45 +572,52 @@ class OwnershipAnalyzer:
         max_lines = max((d["lines"] for d in author_data.values()), default=1)
         max_commits = max((d["commits"] for d in author_data.values()), default=1)
 
-        expertise_scores = []
-        for author_name, data in author_data.items():
-            # Recency score (0-100)
-            recency_score = 0.0
-            if data["last_activity"]:
-                if data["last_activity"] >= recency_cutoff:
-                    days_ago = (now - data["last_activity"]).days
-                    recency_score = 100 * (1 - days_ago / days_for_recency)
-                else:
-                    recency_score = 0.0
-
-            # Impact score (0-100) - weighted combination of lines and commits
-            lines_score = (data["lines"] / max_lines) * 100 if max_lines > 0 else 0
-            commits_score = (
-                (data["commits"] / max_commits) * 100 if max_commits > 0 else 0
+        # Issue #1183: Delegate per-author calculation to extracted helper
+        expertise_scores = [
+            self._compute_expertise_score(
+                author_name, data, max_lines, max_commits, days_for_recency, now
             )
-            impact_score = lines_score * 0.6 + commits_score * 0.4
-
-            # Overall score - weighted combination
-            overall_score = impact_score * 0.7 + recency_score * 0.3
-
-            expertise_scores.append(
-                ExpertiseScore(
-                    author_name=author_name,
-                    author_email=data["email"],
-                    total_lines_authored=data["lines"],
-                    total_commits=data["commits"],
-                    files_owned=data["files_owned"],
-                    directories_owned=data["dirs_owned"],
-                    expertise_areas=sorted(data["areas"])[:5],
-                    recency_score=round(recency_score, 1),
-                    impact_score=round(impact_score, 1),
-                    overall_score=round(overall_score, 1),
-                )
-            )
-
-        # Sort by overall score
+            for author_name, data in author_data.items()
+        ]
         expertise_scores.sort(key=lambda x: x.overall_score, reverse=True)
         return expertise_scores
+
+    @staticmethod
+    def _compute_expertise_score(
+        author_name: str,
+        data: Dict[str, Any],
+        max_lines: int,
+        max_commits: int,
+        days_for_recency: int,
+        now: datetime,
+    ) -> "ExpertiseScore":
+        """Compute a single ExpertiseScore for one contributor.
+
+        Issue #1183: Extracted from _calculate_expertise_scores() to reduce function length.
+        """
+        recency_cutoff = now - timedelta(days=days_for_recency)
+        recency_score = 0.0
+        if data["last_activity"] and data["last_activity"] >= recency_cutoff:
+            days_ago = (now - data["last_activity"]).days
+            recency_score = 100 * (1 - days_ago / days_for_recency)
+
+        lines_score = (data["lines"] / max_lines) * 100 if max_lines > 0 else 0
+        commits_score = (data["commits"] / max_commits) * 100 if max_commits > 0 else 0
+        impact_score = lines_score * 0.6 + commits_score * 0.4
+        overall_score = impact_score * 0.7 + recency_score * 0.3
+
+        return ExpertiseScore(
+            author_name=author_name,
+            author_email=data["email"],
+            total_lines_authored=data["lines"],
+            total_commits=data["commits"],
+            files_owned=data["files_owned"],
+            directories_owned=data["dirs_owned"],
+            expertise_areas=sorted(data["areas"])[:5],
+            recency_score=round(recency_score, 1),
+            impact_score=round(impact_score, 1),
+            overall_score=round(overall_score, 1),
+        )
 
     def _detect_knowledge_gaps(
         self,
@@ -819,29 +883,35 @@ async def main():
         patterns=["src/**/*.py", "backend/**/*.py", "autobot-vue/src/**/*.vue"],
     )
 
-    print("\n=== Code Ownership Analysis Results ===")
-    print(f"Total files analyzed: {results['summary']['total_files']}")
-    print(f"Total contributors: {results['summary']['total_contributors']}")
-    print(f"Knowledge gaps detected: {results['summary']['knowledge_gaps_count']}")
-    print(f"Critical gaps: {results['summary']['critical_gaps']}")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    print("\n=== Code Ownership Analysis Results ===")  # noqa: print
+    print(f"Total files analyzed: {results['summary']['total_files']}")  # noqa: print
+    print(
+        f"Total contributors: {results['summary']['total_contributors']}"
+    )  # noqa: print
+    print(
+        f"Knowledge gaps detected: {results['summary']['knowledge_gaps_count']}"
+    )  # noqa: print
+    print(f"Critical gaps: {results['summary']['critical_gaps']}")  # noqa: print
+    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
-    print("\n=== Top Contributors ===")
+    print("\n=== Top Contributors ===")  # noqa: print
     for i, contrib in enumerate(results["metrics"]["top_contributors"][:5], 1):
-        print(
+        print(  # noqa: print
             f"{i}. {contrib['name']}: {contrib['lines']} lines (score: {contrib['score']})"
         )
 
-    print("\n=== Knowledge Gaps ===")
+    print("\n=== Knowledge Gaps ===")  # noqa: print
     for gap in results["knowledge_gaps"][:5]:
-        print(f"- [{gap['risk_level'].upper()}] {gap['area']}")
-        print(f"  {gap['description']}")
+        print(f"- [{gap['risk_level'].upper()}] {gap['area']}")  # noqa: print
+        print(f"  {gap['description']}")  # noqa: print
 
-    print("\n=== Metrics ===")
+    print("\n=== Metrics ===")  # noqa: print
     metrics = results["metrics"]
-    print(f"Overall bus factor: {metrics['overall_bus_factor']}")
-    print(f"Ownership concentration: {metrics['ownership_concentration']}%")
-    print(f"Team coverage: {metrics['team_coverage']}%")
+    print(f"Overall bus factor: {metrics['overall_bus_factor']}")  # noqa: print
+    print(
+        f"Ownership concentration: {metrics['ownership_concentration']}%"
+    )  # noqa: print
+    print(f"Team coverage: {metrics['team_coverage']}%")  # noqa: print
 
 
 if __name__ == "__main__":

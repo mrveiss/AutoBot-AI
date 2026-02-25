@@ -17,11 +17,11 @@ EnvironmentFile={{ backend_code_dir | default(backend_install_dir) }}/.env
 EnvironmentFile=-{{ service_auth_keys_dir | default('/etc/autobot/service-keys') }}/{{ service_auth_service_id | default('main-backend') }}.env
 
 # Celery worker command
-# -A backend.celery_app: Application instance
+# -A celery_app: Application instance
 # worker: Start worker process
 # --loglevel=info: Logging level
 # --concurrency=4: Number of worker processes (adjust based on CPU)
-ExecStart={{ backend_code_dir | default(backend_install_dir) }}/venv/bin/celery -A backend.celery_app worker \
+ExecStart={{ backend_code_dir | default(backend_install_dir) }}/venv/bin/celery -A celery_app worker \
     --loglevel=info \
     --concurrency={{ celery_concurrency | default(4) }} \
     --max-tasks-per-child={{ celery_max_tasks_per_child | default(1000) }}

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 import asyncssh
-from backend.pki.config import VM_DEFINITIONS, TLSConfig
+from pki.config import VM_DEFINITIONS, TLSConfig
 
 logger = logging.getLogger(__name__)
 

@@ -176,7 +176,9 @@ class TestKnowledgeBaseRedisIntegration:
         # Verify no connection pool exhaustion
         assert all("fact_id" in r for r in successes)
 
-        print(f"\n✓ {num_concurrent} concurrent stores completed in {duration:.2f}s")
+        print(
+            f"\n✓ {num_concurrent} concurrent stores completed in {duration:.2f}s"
+        )  # noqa: print
 
     @pytest.mark.asyncio
     async def test_concurrent_get_operations(self, kb):
@@ -212,7 +214,9 @@ class TestKnowledgeBaseRedisIntegration:
         # Verify all returned data
         assert all(isinstance(r, list) for r in results)
 
-        print(f"\n✓ {num_concurrent} concurrent gets completed in {duration:.2f}s")
+        print(
+            f"\n✓ {num_concurrent} concurrent gets completed in {duration:.2f}s"
+        )  # noqa: print
 
     @pytest.mark.asyncio
     async def test_mixed_concurrent_operations(self, kb):
@@ -242,7 +246,9 @@ class TestKnowledgeBaseRedisIntegration:
         store_results = [r for i, r in enumerate(results) if i % 2 == 0]
         assert all(r["status"] == "success" for r in store_results)
 
-        print(f"\n✓ {num_operations} mixed operations completed in {duration:.2f}s")
+        print(
+            f"\n✓ {num_operations} mixed operations completed in {duration:.2f}s"
+        )  # noqa: print
 
     @pytest.mark.asyncio
     async def test_performance_p95_latency(self, kb):
@@ -272,8 +278,8 @@ class TestKnowledgeBaseRedisIntegration:
         store_p95 = statistics.quantiles(store_latencies, n=20)[18]  # 95th percentile
         get_p95 = statistics.quantiles(get_latencies, n=20)[18]
 
-        print(f"\n✓ Store P95 latency: {store_p95:.2f}ms")
-        print(f"✓ Get P95 latency: {get_p95:.2f}ms")
+        print(f"\n✓ Store P95 latency: {store_p95:.2f}ms")  # noqa: print
+        print(f"✓ Get P95 latency: {get_p95:.2f}ms")  # noqa: print
 
         # Verify targets (<2000ms)
         assert store_p95 < 2000, f"Store P95 {store_p95:.2f}ms exceeds 2000ms target"
@@ -363,7 +369,7 @@ class TestKnowledgeBaseRedisIntegration:
         # Verify connection pool is still healthy
         assert await kb.aioredis_client.ping() is True
 
-        print(
+        print(  # noqa: print
             f"\n✓ {num_operations} operations completed without pool exhaustion in {duration:.2f}s"
         )
 
@@ -504,7 +510,9 @@ class TestKnowledgeBasePerformanceIntegration:
         duration = time.time() - start_time
         rate = num_facts / duration
 
-        print(f"\n✓ Stored {num_facts} facts in {duration:.2f}s ({rate:.1f} facts/sec)")
+        print(
+            f"\n✓ Stored {num_facts} facts in {duration:.2f}s ({rate:.1f} facts/sec)"
+        )  # noqa: print
 
         # Should achieve reasonable throughput
         assert rate > 10, f"Store rate {rate:.1f} facts/sec is too slow"
@@ -527,7 +535,7 @@ class TestKnowledgeBasePerformanceIntegration:
 
         rate = num_retrievals / duration
 
-        print(
+        print(  # noqa: print
             f"\n✓ Performed {num_retrievals} retrievals in {duration:.2f}s ({rate:.1f} ops/sec)"
         )
 

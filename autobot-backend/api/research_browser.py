@@ -13,8 +13,8 @@ from datetime import datetime
 from typing import Optional
 
 import aiofiles
-from backend.constants.network_constants import NetworkConstants
 from config import ConfigManager
+from constants.network_constants import NetworkConstants
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel

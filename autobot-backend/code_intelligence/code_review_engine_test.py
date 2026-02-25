@@ -13,7 +13,7 @@ Tests the AI-powered code review automation functionality including:
 """
 
 import pytest
-from backend.code_intelligence.code_review_engine import (
+from code_intelligence.code_review_engine import (
     BUILTIN_PATTERNS,
     CodeReviewEngine,
     DiffFile,
@@ -72,9 +72,9 @@ class MyClass:
                 if True:
                     if True:
                         if True:
-                            print("deep nesting")
+                            print("deep nesting")  # noqa: print
 
-print("debug output")
+print("debug output")  # noqa: print
 
 # TODO: fix this later
 """
@@ -93,7 +93,7 @@ new file mode 100644
 +password = "mysecret"
 +
 +def greet(name):
-+    print(f"Hello {name}")
++    print(f"Hello {name}")  # noqa: print
 +
 +if x == None:
 +    pass
@@ -481,7 +481,7 @@ class TestFileReview:
 
     def test_review_file_with_print(self, engine_with_tmp, tmp_path):
         """Test detecting print statements."""
-        code = 'print("debug")'
+        code = 'print("debug")'  # noqa: print
         file_path = tmp_path / "test.py"
         file_path.write_text(code)
 
@@ -919,7 +919,7 @@ class TestIntegration:
 password = "mysecret"
 
 def greet(name):
-    print(f"Hello {name}")
+    print(f"Hello {name}")  # noqa: print
 
 if x == None:
     pass

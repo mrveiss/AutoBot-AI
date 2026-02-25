@@ -143,6 +143,9 @@ for file in $PY_FILES; do
             continue
         fi
 
+        # Skip noqa exemption
+        echo "$line_content" | grep -qE '# noqa(: print)?($| )' && continue
+
         report_violation "$file" "$line_num" "$line_content" \
             "Use logger.info/debug/warning/error() instead of print()"
 

@@ -33,7 +33,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from backend.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -363,9 +363,7 @@ class StatusCommand(Command):
         """Execute /status command - show system status."""
         # Import here to avoid circular dependencies
         try:
-            from backend.services.consolidated_health_service import (
-                ConsolidatedHealthService,
-            )
+            from services.consolidated_health_service import ConsolidatedHealthService
 
             health_service = ConsolidatedHealthService()
             status = await health_service.get_health_status()
@@ -417,9 +415,7 @@ class ScanCommand(Command):
         scan_params = self._parse_scan_params(self.args)
 
         try:
-            from backend.services.security_workflow_manager import (
-                get_security_workflow_manager,
-            )
+            from services.security_workflow_manager import get_security_workflow_manager
 
             manager = get_security_workflow_manager()
             assessment = await manager.create_assessment(
@@ -551,7 +547,7 @@ class SecurityCommand(Command):
         sub_args = parts[1] if len(parts) > 1 else None
 
         try:
-            from backend.services.security_workflow_manager import (
+            from services.security_workflow_manager import (
                 PHASE_DESCRIPTIONS,
                 get_security_workflow_manager,
             )
@@ -928,7 +924,7 @@ class SecretsCommand(Command):
 
     def _get_subcommand_handlers(self, sub_args: Optional[str]) -> dict:
         """Get subcommand handler mapping. Issue #620."""
-        from backend.api.secrets import secrets_manager
+        from api.secrets import secrets_manager
 
         return {
             "list": lambda: SecretsListSubcommand(
@@ -1170,7 +1166,7 @@ class SecretsAddSubcommand(Command):
 
         Issue #620: Extracted from execute to reduce function length.
         """
-        from backend.api.secrets import SecretScope
+        from api.secrets import SecretScope
 
         scope_text = "chat-scoped 💬" if scope == SecretScope.CHAT else "general 🌐"
         return SlashCommandResult(
@@ -1197,7 +1193,7 @@ Your secret has been securely encrypted and stored.
             return validation_error
 
         try:
-            from backend.api.secrets import SecretCreateRequest, SecretScope, SecretType
+            from api.secrets import SecretCreateRequest, SecretScope, SecretType
 
             scope = SecretScope.CHAT if self.chat_id else SecretScope.GENERAL
             request = SecretCreateRequest(
@@ -1424,7 +1420,7 @@ class SecretsTransferSubcommand(Command):
         Returns:
             Tuple of (SecretTransferRequest, scope_display_text)
         """
-        from backend.api.secrets import SecretScope, SecretTransferRequest
+        from api.secrets import SecretScope, SecretTransferRequest
 
         if target_scope_str == "to-general":
             new_scope = SecretScope.GENERAL

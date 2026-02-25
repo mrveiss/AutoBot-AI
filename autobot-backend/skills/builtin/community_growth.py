@@ -15,7 +15,7 @@ import logging
 from typing import Any, Dict, List, Tuple
 
 import aiohttp
-from backend.skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
+from skills.base_skill import BaseSkill, SkillConfigField, SkillManifest
 
 try:
     import praw

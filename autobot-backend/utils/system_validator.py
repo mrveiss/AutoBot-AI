@@ -21,7 +21,7 @@ from autobot_shared.http_client import get_http_client
 
 # Create singleton config instance
 config = ConfigManager()
-from backend.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 
 # Issue #380: Module-level tuple for expected system metrics
 _EXPECTED_SYSTEM_METRICS = ("cpu_percent", "memory_percent", "disk_usage")

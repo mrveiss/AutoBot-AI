@@ -13,8 +13,7 @@ from typing import Any, Dict, Optional
 
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout, TCPConnector
-
-from backend.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 

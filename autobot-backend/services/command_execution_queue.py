@@ -17,7 +17,7 @@ import json
 import logging
 from typing import List, Optional
 
-from backend.models.command_execution import CommandExecution, CommandState
+from models.command_execution import CommandExecution, CommandState
 
 from autobot_shared.redis_client import get_redis_client
 

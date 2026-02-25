@@ -17,10 +17,10 @@ import logging
 
 import aiohttp
 from auth_middleware import get_current_user
-from backend.constants.network_constants import NetworkConstants
-from backend.type_defs.common import Metadata
+from constants.network_constants import NetworkConstants
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client

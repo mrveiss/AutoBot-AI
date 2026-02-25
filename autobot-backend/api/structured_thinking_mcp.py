@@ -27,9 +27,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
-from backend.type_defs.common import Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

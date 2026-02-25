@@ -9,8 +9,8 @@ Provides strongly-typed API response structures to replace Dict[str, Any] patter
 
 from typing import Generic, List, Optional, TypeVar, Union
 
-from backend.type_defs.common import Metadata, MetricsDict, TimestampStr
 from pydantic import BaseModel, Field
+from type_defs.common import Metadata, MetricsDict, TimestampStr
 
 # Generic type variable for response data
 T = TypeVar("T")

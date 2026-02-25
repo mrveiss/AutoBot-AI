@@ -31,9 +31,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Optional
 
-from backend.type_defs.common import JSONObject, Metadata
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
+from type_defs.common import JSONObject, Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

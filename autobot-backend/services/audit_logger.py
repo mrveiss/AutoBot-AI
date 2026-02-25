@@ -41,9 +41,9 @@ from typing import Any, Dict, List, Literal, Optional
 
 import aiofiles
 import redis.asyncio as async_redis
-from backend.constants.network_constants import NetworkConstants
-from backend.models.task_context import AuditQueryContext
-from backend.type_defs.common import Metadata
+from constants.network_constants import NetworkConstants
+from models.task_context import AuditQueryContext
+from type_defs.common import Metadata
 
 from autobot_shared.redis_client import get_redis_client
 

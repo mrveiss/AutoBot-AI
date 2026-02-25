@@ -11,23 +11,23 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from backend.models.command_execution import CommandExecution, CommandState, RiskLevel
-from backend.services.command_execution_queue import get_command_queue
+from models.command_execution import CommandExecution, CommandState, RiskLevel
+from services.command_execution_queue import get_command_queue
 
 
 async def test_queue_integration():
     """Test complete command lifecycle through the queue"""
 
-    print("=" * 80)
-    print("COMMAND QUEUE INTEGRATION TEST")
-    print("=" * 80)
-    print()
+    print("=" * 80)  # noqa: print
+    print("COMMAND QUEUE INTEGRATION TEST")  # noqa: print
+    print("=" * 80)  # noqa: print
+    print()  # noqa: print
 
     # Get queue instance
     queue = get_command_queue()
 
     # Test 1: Create a command
-    print("✅ TEST 1: Creating command in queue...")
+    print("✅ TEST 1: Creating command in queue...")  # noqa: print
     cmd = CommandExecution(
         terminal_session_id="test_terminal_123",
         chat_id="test_chat_456",
@@ -40,40 +40,42 @@ async def test_queue_integration():
 
     success = await queue.add_command(cmd)
     assert success, "Failed to add command to queue"
-    print(f"   Command created: {cmd.command_id}")
-    print(f"   Terminal: {cmd.terminal_session_id}")
-    print(f"   Chat: {cmd.chat_id}")
-    print(f"   State: {cmd.state.value}")
-    print()
+    print(f"   Command created: {cmd.command_id}")  # noqa: print
+    print(f"   Terminal: {cmd.terminal_session_id}")  # noqa: print
+    print(f"   Chat: {cmd.chat_id}")  # noqa: print
+    print(f"   State: {cmd.state.value}")  # noqa: print
+    print()  # noqa: print
 
     # Test 2: Retrieve command
-    print("✅ TEST 2: Retrieving command from queue...")
+    print("✅ TEST 2: Retrieving command from queue...")  # noqa: print
     retrieved_cmd = await queue.get_command(cmd.command_id)
     assert retrieved_cmd is not None, "Failed to retrieve command"
     assert retrieved_cmd.command == "whoami", "Command mismatch"
     assert retrieved_cmd.state == CommandState.PENDING_APPROVAL, "State mismatch"
-    print(f"   Retrieved command: {retrieved_cmd.command}")
-    print(f"   State matches: {retrieved_cmd.state == cmd.state}")
-    print()
+    print(f"   Retrieved command: {retrieved_cmd.command}")  # noqa: print
+    print(f"   State matches: {retrieved_cmd.state == cmd.state}")  # noqa: print
+    print()  # noqa: print
 
     # Test 3: Query by chat
-    print("✅ TEST 3: Querying commands by chat_id...")
+    print("✅ TEST 3: Querying commands by chat_id...")  # noqa: print
     chat_commands = await queue.get_chat_commands("test_chat_456")
     assert len(chat_commands) >= 1, "Failed to find command by chat_id"
-    print(f"   Found {len(chat_commands)} command(s) for chat test_chat_456")
-    print()
+    print(  # noqa: print
+        f"   Found {len(chat_commands)} command(s) for chat test_chat_456"
+    )  # noqa: print
+    print()  # noqa: print
 
     # Test 4: Query pending approvals
-    print("✅ TEST 4: Querying pending approvals...")
+    print("✅ TEST 4: Querying pending approvals...")  # noqa: print
     pending = await queue.get_pending_approvals()
     pending_ids = [c.command_id for c in pending]
     assert cmd.command_id in pending_ids, "Command not in pending approvals"
-    print(f"   Found {len(pending)} pending approval(s)")
-    print("   Our command is in pending list: True")
-    print()
+    print(f"   Found {len(pending)} pending approval(s)")  # noqa: print
+    print("   Our command is in pending list: True")  # noqa: print
+    print()  # noqa: print
 
     # Test 5: Approve command
-    print("✅ TEST 5: Approving command...")
+    print("✅ TEST 5: Approving command...")  # noqa: print
     success = await queue.approve_command(
         command_id=cmd.command_id, user_id="test_user", comment="Approved for testing"
     )
@@ -81,13 +83,13 @@ async def test_queue_integration():
 
     approved_cmd = await queue.get_command(cmd.command_id)
     assert approved_cmd.state == CommandState.APPROVED, "State not updated to APPROVED"
-    print(f"   Command approved by: {approved_cmd.approved_by_user_id}")
-    print(f"   State: {approved_cmd.state.value}")
-    print(f"   Comment: {approved_cmd.approval_comment}")
-    print()
+    print(f"   Command approved by: {approved_cmd.approved_by_user_id}")  # noqa: print
+    print(f"   State: {approved_cmd.state.value}")  # noqa: print
+    print(f"   Comment: {approved_cmd.approval_comment}")  # noqa: print
+    print()  # noqa: print
 
     # Test 6: Start execution
-    print("✅ TEST 6: Starting execution...")
+    print("✅ TEST 6: Starting execution...")  # noqa: print
     success = await queue.start_execution(cmd.command_id)
     assert success, "Failed to start execution"
 
@@ -95,12 +97,14 @@ async def test_queue_integration():
     assert (
         executing_cmd.state == CommandState.EXECUTING
     ), "State not updated to EXECUTING"
-    print(f"   State: {executing_cmd.state.value}")
-    print(f"   Execution started at: {executing_cmd.execution_started_at}")
-    print()
+    print(f"   State: {executing_cmd.state.value}")  # noqa: print
+    print(  # noqa: print
+        f"   Execution started at: {executing_cmd.execution_started_at}"
+    )  # noqa: print
+    print()  # noqa: print
 
     # Test 7: Complete execution
-    print("✅ TEST 7: Completing execution...")
+    print("✅ TEST 7: Completing execution...")  # noqa: print
     success = await queue.complete_command(
         command_id=cmd.command_id,
         output="kali",  # Simulated whoami output
@@ -114,22 +118,24 @@ async def test_queue_integration():
         completed_cmd.state == CommandState.COMPLETED
     ), "State not updated to COMPLETED"
     assert completed_cmd.output == "kali", "Output mismatch"
-    print(f"   State: {completed_cmd.state.value}")
-    print(f"   Output: {completed_cmd.output}")
-    print(f"   Return code: {completed_cmd.return_code}")
-    print(f"   Execution completed at: {completed_cmd.execution_completed_at}")
-    print()
+    print(f"   State: {completed_cmd.state.value}")  # noqa: print
+    print(f"   Output: {completed_cmd.output}")  # noqa: print
+    print(f"   Return code: {completed_cmd.return_code}")  # noqa: print
+    print(  # noqa: print
+        f"   Execution completed at: {completed_cmd.execution_completed_at}"
+    )  # noqa: print
+    print()  # noqa: print
 
     # Test 8: Verify no longer in pending
-    print("✅ TEST 8: Verifying command removed from pending...")
+    print("✅ TEST 8: Verifying command removed from pending...")  # noqa: print
     pending_after = await queue.get_pending_approvals()
     pending_ids_after = [c.command_id for c in pending_after]
     assert cmd.command_id not in pending_ids_after, "Command still in pending list"
-    print("   Command removed from pending approvals: True")
-    print()
+    print("   Command removed from pending approvals: True")  # noqa: print
+    print()  # noqa: print
 
     # Test 9: Test denial flow
-    print("✅ TEST 9: Testing denial flow...")
+    print("✅ TEST 9: Testing denial flow...")  # noqa: print
     denied_cmd = CommandExecution(
         terminal_session_id="test_terminal_789",
         chat_id="test_chat_456",
@@ -148,28 +154,28 @@ async def test_queue_integration():
 
     denied = await queue.get_command(denied_cmd.command_id)
     assert denied.state == CommandState.DENIED, "State not updated to DENIED"
-    print(f"   Command denied by: {denied.approved_by_user_id}")
-    print(f"   State: {denied.state.value}")
-    print(f"   Comment: {denied.approval_comment}")
-    print()
+    print(f"   Command denied by: {denied.approved_by_user_id}")  # noqa: print
+    print(f"   State: {denied.state.value}")  # noqa: print
+    print(f"   Comment: {denied.approval_comment}")  # noqa: print
+    print()  # noqa: print
 
-    print("=" * 80)
-    print("✅ ALL TESTS PASSED - QUEUE INTEGRATION WORKING PERFECTLY!")
-    print("=" * 80)
-    print()
-    print("Summary:")
-    print("  ✅ Commands can be created and added to queue")
-    print("  ✅ Commands can be retrieved by ID")
-    print("  ✅ Commands can be queried by chat_id")
-    print("  ✅ Pending approvals can be queried")
-    print("  ✅ Commands can be approved")
-    print("  ✅ Commands can be marked as executing")
-    print("  ✅ Commands can be completed with output")
-    print("  ✅ Commands can be denied")
-    print("  ✅ State transitions work correctly")
-    print()
-    print("🎯 The queue is ready for frontend integration!")
-    print()
+    print("=" * 80)  # noqa: print
+    print("✅ ALL TESTS PASSED - QUEUE INTEGRATION WORKING PERFECTLY!")  # noqa: print
+    print("=" * 80)  # noqa: print
+    print()  # noqa: print
+    print("Summary:")  # noqa: print
+    print("  ✅ Commands can be created and added to queue")  # noqa: print
+    print("  ✅ Commands can be retrieved by ID")  # noqa: print
+    print("  ✅ Commands can be queried by chat_id")  # noqa: print
+    print("  ✅ Pending approvals can be queried")  # noqa: print
+    print("  ✅ Commands can be approved")  # noqa: print
+    print("  ✅ Commands can be marked as executing")  # noqa: print
+    print("  ✅ Commands can be completed with output")  # noqa: print
+    print("  ✅ Commands can be denied")  # noqa: print
+    print("  ✅ State transitions work correctly")  # noqa: print
+    print()  # noqa: print
+    print("🎯 The queue is ready for frontend integration!")  # noqa: print
+    print()  # noqa: print
 
 
 if __name__ == "__main__":

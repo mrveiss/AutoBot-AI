@@ -24,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from backend.constants.path_constants import PATH
+from constants.path_constants import PATH
 
 # Add AutoBot paths
 sys.path.append(str(PATH.PROJECT_ROOT))
@@ -1037,10 +1037,10 @@ if __name__ == "__main__":
             test_op = await migrator.migrate_comprehensive_test_suite()
             security_op = await migrator.migrate_security_scan_operation()
 
-            print("Migrated operations:")
-            print(f"  - Indexing: {indexing_op}")
-            print(f"  - Testing: {test_op}")
-            print(f"  - Security: {security_op}")
+            print("Migrated operations:")  # noqa: print
+            print(f"  - Indexing: {indexing_op}")  # noqa: print
+            print(f"  - Testing: {test_op}")  # noqa: print
+            print(f"  - Security: {security_op}")  # noqa: print
 
             # Example of decorator-based migration
             @migrate_timeout_operation(OperationType.CODE_ANALYSIS, estimated_items=100)
@@ -1052,11 +1052,11 @@ if __name__ == "__main__":
 
             # Call the migrated function
             result = await analyze_codebase(f"{PATH.PROJECT_ROOT}/src", ["*.py"])
-            print(f"Analysis result: {result}")
+            print(f"Analysis result: {result}")  # noqa: print
 
             await operation_integration_manager.shutdown()
         else:
-            print("Operation integration manager not available")
+            print("Operation integration manager not available")  # noqa: print
 
     # Run demonstration
     asyncio.run(demonstration())

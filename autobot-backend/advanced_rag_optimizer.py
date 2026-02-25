@@ -21,8 +21,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.constants.model_constants import model_config
-from backend.utils.semantic_chunker_gpu import get_gpu_semantic_chunker
+from constants.model_constants import model_config
+from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 from autobot_shared.logging_manager import get_llm_logger
 
@@ -781,15 +781,15 @@ if __name__ == "__main__":
         """Run CLI query against optimized RAG search."""
         if args.context:
             context = await get_optimized_knowledge_context(args.query)
-            print("=== Optimized Context ===")
-            print(context)
+            print("=== Optimized Context ===")  # noqa: print
+            print(context)  # noqa: print
         else:
             results = await advanced_knowledge_search(args.query, args.max_results)
-            print(f"=== Search Results for: {args.query} ===")
+            print(f"=== Search Results for: {args.query} ===")  # noqa: print
             for i, result in enumerate(results, 1):
-                print(f"\nResult {i}:")
-                print(f"  Source: {result.source_path}")
-                print(f"  Hybrid Score: {result.hybrid_score:.3f}")
-                print(f"  Content: {result.content[:200]}...")
+                print(f"\nResult {i}:")  # noqa: print
+                print(f"  Source: {result.source_path}")  # noqa: print
+                print(f"  Hybrid Score: {result.hybrid_score:.3f}")  # noqa: print
+                print(f"  Content: {result.content[:200]}...")  # noqa: print
 
     asyncio.run(main())

@@ -20,6 +20,7 @@ Each anti-pattern includes:
 
 import ast
 import logging
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -33,6 +34,30 @@ logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for complexity calculation
 _COMPLEXITY_BRANCH_TYPES = (ast.If, ast.While, ast.For, ast.ExceptHandler)
+
+# Issue #1183: Module-level defaults extracted from analyze() to reduce function length
+_DEFAULT_EXCLUDE_PATTERNS = [
+    "__pycache__",
+    ".git",
+    "node_modules",
+    ".venv",
+    "venv",
+    "test_",
+    "_test.py",
+    "tests/",
+    "migrations/",
+]
+
+# Issue #1183: Entry-point suffixes extracted from _detect_dead_code() to reduce function length
+_ENTRY_POINT_SUFFIXES = (
+    "Test",
+    "Tests",
+    "TestCase",
+    "Handler",
+    "View",
+    "API",
+    "Router",
+)
 
 
 class Severity(Enum):
@@ -275,22 +300,11 @@ class AntiPatternDetector:
         Returns:
             AntiPatternReport with all detected issues
         """
-        import time
-
         start_time = time.time()
 
         patterns = patterns or ["**/*.py"]
-        exclude_patterns = exclude_patterns or [
-            "__pycache__",
-            ".git",
-            "node_modules",
-            ".venv",
-            "venv",
-            "test_",
-            "_test.py",
-            "tests/",
-            "migrations/",
-        ]
+        # Issue #1183: Use module-level constant
+        exclude_patterns = exclude_patterns or _DEFAULT_EXCLUDE_PATTERNS
 
         logger.info(f"Starting anti-pattern analysis in {root_path}")
 
@@ -424,6 +438,32 @@ class AntiPatternDetector:
             logger.error(f"Error parsing {file_path}: {e}")
             return None
 
+    @staticmethod
+    def _extract_method_call_data(
+        methods: List[ast.FunctionDef],
+    ) -> Tuple[Dict[str, List[str]], Dict[str, int]]:
+        """Extract method calls and external references from a list of AST methods.
+
+        Issue #1183: Extracted from _analyze_class() to reduce function length.
+        """
+        method_calls: Dict[str, List[str]] = {}
+        external_references: Dict[str, int] = {}
+        for method in methods:
+            calls = []
+            for child in ast.walk(method):
+                if isinstance(child, ast.Attribute):
+                    if isinstance(child.value, ast.Name):
+                        if child.value.id == "self":
+                            calls.append(f"self.{child.attr}")
+                        else:
+                            ref_name = child.value.id
+                            external_references[ref_name] = (
+                                external_references.get(ref_name, 0) + 1
+                            )
+                            calls.append(f"{ref_name}.{child.attr}")
+            method_calls[method.name] = calls
+        return method_calls, external_references
+
     def _analyze_class(
         self, node: ast.ClassDef, file_path: str, content: str
     ) -> Optional[ClassInfo]:
@@ -452,25 +492,8 @@ class AntiPatternDetector:
                 elif isinstance(base, ast.Attribute):
                     base_classes.append(base.attr)
 
-            # Analyze method calls and external references
-            method_calls = {}
-            external_references: Dict[str, int] = {}
-
-            for method in methods:
-                calls = []
-                for child in ast.walk(method):
-                    if isinstance(child, ast.Attribute):
-                        if isinstance(child.value, ast.Name):
-                            if child.value.id == "self":
-                                calls.append(f"self.{child.attr}")
-                            else:
-                                # External reference
-                                ref_name = child.value.id
-                                external_references[ref_name] = (
-                                    external_references.get(ref_name, 0) + 1
-                                )
-                                calls.append(f"{ref_name}.{child.attr}")
-                method_calls[method.name] = calls
+            # Issue #1183: Delegate to extracted helper to reduce function length
+            method_calls, external_references = self._extract_method_call_data(methods)
 
             # Calculate lines of code
             start_line = node.lineno
@@ -900,17 +923,6 @@ class AntiPatternDetector:
         """
         issues = []
 
-        # Pre-compute entry point suffixes as tuple for faster endswith check
-        _ENTRY_POINT_SUFFIXES = (
-            "Test",
-            "Tests",
-            "TestCase",
-            "Handler",
-            "View",
-            "API",
-            "Router",
-        )
-
         # Collect all referenced names efficiently using set operations
         # Issue #372: Use cls_info.get_referenced_class_names() to reduce feature envy
         referenced_names: Set[str] = set()
@@ -1176,41 +1188,43 @@ if __name__ == "__main__":
             root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
         )
 
-        print(f"\n{'='*60}")
-        print("ANTI-PATTERN ANALYSIS REPORT")
-        print(f"{'='*60}")
-        print(f"Total Issues: {report.total_issues}")
-        print(f"  Critical: {report.critical_count}")
-        print(f"  High: {report.high_count}")
-        print(f"  Medium: {report.medium_count}")
-        print(f"  Low: {report.low_count}")
-        print(f"\nHealth Score: {report.health_score}/100")
-        print(f"Analysis Time: {report.analysis_time_seconds:.2f}s")
+        print(f"\n{'='*60}")  # noqa: print
+        print("ANTI-PATTERN ANALYSIS REPORT")  # noqa: print
+        print(f"{'='*60}")  # noqa: print
+        print(f"Total Issues: {report.total_issues}")  # noqa: print
+        print(f"  Critical: {report.critical_count}")  # noqa: print
+        print(f"  High: {report.high_count}")  # noqa: print
+        print(f"  Medium: {report.medium_count}")  # noqa: print
+        print(f"  Low: {report.low_count}")  # noqa: print
+        print(f"\nHealth Score: {report.health_score}/100")  # noqa: print
+        print(f"Analysis Time: {report.analysis_time_seconds:.2f}s")  # noqa: print
 
-        print(f"\n{'='*60}")
-        print("SUMMARY BY TYPE")
-        print(f"{'='*60}")
+        print(f"\n{'='*60}")  # noqa: print
+        print("SUMMARY BY TYPE")  # noqa: print
+        print(f"{'='*60}")  # noqa: print
         for pattern_type, count in sorted(report.summary_by_type.items()):
-            print(f"  {pattern_type}: {count}")
+            print(f"  {pattern_type}: {count}")  # noqa: print
 
-        print(f"\n{'='*60}")
-        print("RECOMMENDATIONS")
-        print(f"{'='*60}")
+        print(f"\n{'='*60}")  # noqa: print
+        print("RECOMMENDATIONS")  # noqa: print
+        print(f"{'='*60}")  # noqa: print
         for rec in report.recommendations:
-            print(f"  {rec}")
+            print(f"  {rec}")  # noqa: print
 
         if report.anti_patterns:
-            print(f"\n{'='*60}")
-            print("TOP ISSUES (by severity)")
-            print(f"{'='*60}")
+            print(f"\n{'='*60}")  # noqa: print
+            print("TOP ISSUES (by severity)")  # noqa: print
+            print(f"{'='*60}")  # noqa: print
             sorted_patterns = sorted(
                 report.anti_patterns, key=lambda x: x.severity.score(), reverse=True
             )
             for ap in sorted_patterns[:10]:
-                print(f"\n[{ap.severity.value.upper()}] {ap.pattern_type.value}")
-                print(f"  Entity: {ap.entity_name}")
-                print(f"  File: {ap.file_path}:{ap.line_number}")
-                print(f"  {ap.description}")
-                print(f"  Suggestion: {ap.suggestion}")
+                print(
+                    f"\n[{ap.severity.value.upper()}] {ap.pattern_type.value}"
+                )  # noqa: print
+                print(f"  Entity: {ap.entity_name}")  # noqa: print
+                print(f"  File: {ap.file_path}:{ap.line_number}")  # noqa: print
+                print(f"  {ap.description}")  # noqa: print
+                print(f"  Suggestion: {ap.suggestion}")  # noqa: print
 
     asyncio.run(main())

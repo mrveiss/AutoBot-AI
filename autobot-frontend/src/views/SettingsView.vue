@@ -23,37 +23,47 @@ Issue #753: User preference management interface
         </div>
       </div>
 
-      <!-- Settings Sections -->
-      <div class="settings-sections">
-        <!-- Appearance Section -->
-        <section class="settings-section">
+      <!-- Tab Bar -->
+      <div class="settings-tabs">
+        <button
+          @click="activeTab = 'appearance'"
+          :class="['settings-tab', { active: activeTab === 'appearance' }]"
+        >
+          <i class="fas fa-paint-brush"></i>
+          Appearance
+        </button>
+        <button
+          @click="activeTab = 'voice'"
+          :class="['settings-tab', { active: activeTab === 'voice' }]"
+        >
+          <i class="fas fa-microphone"></i>
+          Voice
+        </button>
+      </div>
+
+      <!-- Tab Content -->
+      <div class="settings-tab-content">
+        <section v-if="activeTab === 'appearance'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
               <i class="fas fa-paint-brush"></i>
               Appearance
             </h2>
-            <p class="section-description">
-              Customize the look and feel of your workspace
-            </p>
+            <p class="section-description">Customize the look and feel of your workspace</p>
           </div>
-
           <div class="section-content">
             <PreferencesPanel />
           </div>
         </section>
 
-        <!-- Voice Section -->
-        <section class="settings-section">
+        <section v-if="activeTab === 'voice'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
               <i class="fas fa-microphone"></i>
               Voice
             </h2>
-            <p class="section-description">
-              Configure text-to-speech voice and voice profiles
-            </p>
+            <p class="section-description">Configure text-to-speech voice and voice profiles</p>
           </div>
-
           <div class="section-content">
             <VoiceSettingsPanel />
           </div>
@@ -66,11 +76,15 @@ Issue #753: User preference management interface
 <script setup lang="ts">
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
+import { ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SettingsView')
 
 logger.debug('Settings view initialized')
+
+type PreferenceTab = 'appearance' | 'voice'
+const activeTab = ref<PreferenceTab>('appearance')
 </script>
 
 <style scoped>
@@ -127,12 +141,6 @@ logger.debug('Settings view initialized')
  * SETTINGS SECTIONS
  * ============================================ */
 
-.settings-sections {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2xl);
-}
-
 .settings-section {
   background: var(--bg-secondary);
   border-radius: var(--radius-lg);
@@ -178,6 +186,46 @@ logger.debug('Settings view initialized')
 
 .section-content {
   padding: var(--spacing-xl);
+}
+
+/* ============================================
+ * TAB NAVIGATION
+ * ============================================ */
+
+.settings-tabs {
+  display: flex;
+  gap: var(--spacing-2);
+  border-bottom: 2px solid var(--border-default);
+  margin-bottom: var(--spacing-xl);
+}
+
+.settings-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3) var(--spacing-4);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.settings-tab:hover {
+  color: var(--text-primary);
+}
+
+.settings-tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.settings-tab-content {
+  min-height: 300px;
 }
 
 /* ============================================

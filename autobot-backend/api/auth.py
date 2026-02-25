@@ -14,10 +14,10 @@ from typing import Dict, List, Optional
 
 import jwt as pyjwt
 from auth_middleware import auth_middleware
-from backend.user_management.database import db_session_context
-from backend.user_management.services.user_service import UserService
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, validator
+from user_management.database import db_session_context
+from user_management.services.user_service import UserService
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

@@ -16,7 +16,7 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from backend.utils.gpu_acceleration_optimizer import (
+from utils.gpu_acceleration_optimizer import (
     benchmark_gpu,
     get_gpu_capabilities,
     gpu_optimizer,
@@ -26,7 +26,7 @@ from backend.utils.gpu_acceleration_optimizer import (
 )
 
 # Import Phase 9 monitoring components
-from backend.utils.hardware_metrics import (
+from utils.hardware_metrics import (
     add_phase9_alert_callback,
     collect_phase9_metrics,
     get_phase9_performance_dashboard,
@@ -679,49 +679,57 @@ class Phase9MonitoringSystemTest:
         }
 
         # Print summary
-        print()
-        print("🎯 TEST SUMMARY")
-        print("=" * 50)
-        print(f"Total Tests: {total_tests}")
-        print(f"Successful: {successful_tests}")
-        print(f"Failed: {total_tests - successful_tests}")
-        print(f"Success Rate: {report['success_rate']}%")
-        print(f"Duration: {test_duration:.2f} seconds")
-        print(f"Overall Status: {report['overall_status']}")
-        print()
+        print()  # noqa: print
+        print("🎯 TEST SUMMARY")  # noqa: print
+        print("=" * 50)  # noqa: print
+        print(f"Total Tests: {total_tests}")  # noqa: print
+        print(f"Successful: {successful_tests}")  # noqa: print
+        print(f"Failed: {total_tests - successful_tests}")  # noqa: print
+        print(f"Success Rate: {report['success_rate']}%")  # noqa: print
+        print(f"Duration: {test_duration:.2f} seconds")  # noqa: print
+        print(f"Overall Status: {report['overall_status']}")  # noqa: print
+        print()  # noqa: print
 
         # Print individual test results
-        print("📊 INDIVIDUAL TEST RESULTS")
-        print("=" * 50)
+        print("📊 INDIVIDUAL TEST RESULTS")  # noqa: print
+        print("=" * 50)  # noqa: print
         for test_name, result in self.test_results.items():
             status = "✅ PASS" if result.get("success", False) else "❌ FAIL"
-            print(f"{test_name}: {status}")
+            print(f"{test_name}: {status}")  # noqa: print
             if not result.get("success", False) and "error" in result:
-                print(f"   Error: {result['error']}")
-        print()
+                print(f"   Error: {result['error']}")  # noqa: print
+        print()  # noqa: print
 
         # Hardware summary
-        print("🔧 HARDWARE SUMMARY")
-        print("=" * 50)
-        print(f"GPU Available: {'✓' if phase9_monitor.gpu_available else '✗'}")
-        print(f"NPU Available: {'✓' if phase9_monitor.npu_available else '✗'}")
-        print(f"Monitoring Active: {'✓' if phase9_monitor.monitoring_active else '✗'}")
-        print()
+        print("🔧 HARDWARE SUMMARY")  # noqa: print
+        print("=" * 50)  # noqa: print
+        print(  # noqa: print
+            f"GPU Available: {'✓' if phase9_monitor.gpu_available else '✗'}"
+        )  # noqa: print
+        print(  # noqa: print
+            f"NPU Available: {'✓' if phase9_monitor.npu_available else '✗'}"
+        )  # noqa: print
+        print(  # noqa: print
+            f"Monitoring Active: {'✓' if phase9_monitor.monitoring_active else '✗'}"
+        )  # noqa: print
+        print()  # noqa: print
 
         # Recommendations
-        print("💡 RECOMMENDATIONS")
-        print("=" * 50)
+        print("💡 RECOMMENDATIONS")  # noqa: print
+        print("=" * 50)  # noqa: print
         if report["overall_status"] == "PASS":
-            print("✅ All tests passed! Phase 9 monitoring system is fully operational.")
-            print("   • GPU/NPU monitoring is working correctly")
-            print("   • Performance optimization is functional")
-            print("   • Real-time dashboard is operational")
-            print("   • Alert system is configured properly")
+            print(  # noqa: print
+                "✅ All tests passed! Phase 9 monitoring system is fully operational."
+            )  # noqa: print
+            print("   • GPU/NPU monitoring is working correctly")  # noqa: print
+            print("   • Performance optimization is functional")  # noqa: print
+            print("   • Real-time dashboard is operational")  # noqa: print
+            print("   • Alert system is configured properly")  # noqa: print
         else:
-            print("⚠️  Some tests failed. Review the following:")
+            print("⚠️  Some tests failed. Review the following:")  # noqa: print
             for test_name, result in self.test_results.items():
                 if not result.get("success", False):
-                    print(
+                    print(  # noqa: print
                         f"   • Fix {test_name}: {result.get('error', 'Unknown error')}"
                     )
 
@@ -730,17 +738,17 @@ class Phase9MonitoringSystemTest:
         with open(report_file, "w") as f:
             json.dump(report, f, indent=2, default=str)
 
-        print(f"📄 Detailed report saved to: {report_file}")
-        print()
+        print(f"📄 Detailed report saved to: {report_file}")  # noqa: print
+        print()  # noqa: print
 
         return report
 
 
 async def main():
     """Main test execution function"""
-    print("🚀 AutoBot Phase 9 Monitoring System Validation")
-    print(f"Started at: {datetime.now().isoformat()}")
-    print("=" * 80)
+    print("🚀 AutoBot Phase 9 Monitoring System Validation")  # noqa: print
+    print(f"Started at: {datetime.now().isoformat()}")  # noqa: print
+    print("=" * 80)  # noqa: print
 
     # Initialize and run test suite
     test_suite = Phase9MonitoringSystemTest()

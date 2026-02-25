@@ -10,7 +10,7 @@ AI-driven workflow optimization strategies.
 import logging
 from typing import List
 
-from backend.type_defs.common import Metadata
+from type_defs.common import Metadata
 
 from .models import SmartWorkflowStep, WorkflowIntent
 

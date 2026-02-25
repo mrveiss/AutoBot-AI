@@ -14,10 +14,10 @@ import time
 from typing import Any, Dict, List
 
 import numpy as np
-from backend.voice_processing.models import AudioInput, SpeechRecognitionResult
-from backend.voice_processing.types import SpeechQuality
 from enhanced_memory_manager_async import TaskPriority
 from task_execution_tracker import task_tracker
+from voice_processing.models import AudioInput, SpeechRecognitionResult
+from voice_processing.types import SpeechQuality
 
 logger = logging.getLogger(__name__)
 

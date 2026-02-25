@@ -27,11 +27,11 @@ from typing import Dict, List, Optional
 
 from agents.graph_entity_extractor import ExtractionResult, GraphEntityExtractor
 from auth_middleware import get_current_user
-from backend.type_defs.common import Metadata
-from backend.utils.request_utils import generate_request_id
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
+from type_defs.common import Metadata
+from utils.request_utils import generate_request_id
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

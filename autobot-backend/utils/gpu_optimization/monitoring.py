@@ -12,7 +12,7 @@ import logging
 import time
 from typing import Any, Dict, List
 
-from backend.utils.performance_monitor import performance_monitor
+from utils.performance_monitor import performance_monitor
 
 from .types import DEFAULT_PERFORMANCE_BASELINES, GPUCapabilities
 

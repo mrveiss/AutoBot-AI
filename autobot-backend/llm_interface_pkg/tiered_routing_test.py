@@ -8,7 +8,7 @@ Issue #748: Tiered Model Distribution Implementation.
 """
 
 import pytest
-from backend.llm_interface_pkg.tiered_routing import (
+from llm_interface_pkg.tiered_routing import (
     ComplexityResult,
     TaskComplexityScorer,
     TierConfig,
@@ -181,7 +181,7 @@ class TestTaskComplexityScorer:
                 "content": """
                 ```python
                 def hello_world():
-                    print("Hello, World!")
+                    print("Hello, World!")  # noqa: print
                 ```
                 """,
             }

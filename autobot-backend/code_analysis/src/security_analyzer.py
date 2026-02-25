@@ -13,9 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from config import UnifiedConfig
-
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -57,16 +56,10 @@ class SecurityRecommendation:
 class SecurityAnalyzer:
     """Analyzes code for security vulnerabilities"""
 
-    def __init__(self, redis_client=None):
-        self.redis_client = redis_client or get_redis_client(async_client=True)
-        self.config = config
-
-        # Caching keys
-        self.SECURITY_KEY = "security_analysis:vulnerabilities"
-        self.RECOMMENDATIONS_KEY = "security_analysis:recommendations"
-
-        # Security vulnerability patterns
-        self.security_patterns = {
+    @staticmethod
+    def _build_injection_and_path_patterns() -> dict:
+        """Return SQL injection, command injection, and path traversal patterns. Issue #1183."""
+        return {
             "sql_injection": [
                 (
                     r'execute\s*\(\s*[\'"].*?\%s.*?[\'"]\s*%',
@@ -120,6 +113,12 @@ class SecurityAnalyzer:
                     "CWE-22",
                 ),
             ],
+        }
+
+    @staticmethod
+    def _build_crypto_auth_patterns() -> dict:
+        """Return insecure crypto, hardcoded secrets, and weak auth patterns. Issue #1183."""
+        return {
             "insecure_crypto": [
                 (r"hashlib\.md5\s*\(", "Weak hash algorithm MD5", "CWE-327"),
                 (r"hashlib\.sha1\s*\(", "Weak hash algorithm SHA1", "CWE-327"),
@@ -162,6 +161,12 @@ class SecurityAnalyzer:
                     "CWE-613",
                 ),
             ],
+        }
+
+    @staticmethod
+    def _build_xss_disclosure_patterns() -> dict:
+        """Return XSS, information disclosure, deserialization, timing attack patterns. Issue #1183."""
+        return {
             "xss_vulnerabilities": [
                 (
                     r"render_template_string\s*\([^)]*\+[^)]*\)",
@@ -208,6 +213,16 @@ class SecurityAnalyzer:
             ],
         }
 
+    def __init__(self, redis_client=None):
+        self.redis_client = redis_client or get_redis_client(async_client=True)
+        self.config = config
+        self.SECURITY_KEY = "security_analysis:vulnerabilities"
+        self.RECOMMENDATIONS_KEY = "security_analysis:recommendations"
+        self.security_patterns = {
+            **self._build_injection_and_path_patterns(),
+            **self._build_crypto_auth_patterns(),
+            **self._build_xss_disclosure_patterns(),
+        }
         logger.info("Security Analyzer initialized")
 
     async def analyze_security(
@@ -856,28 +871,30 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== Security Analysis Results ===")
-    print(f"Total vulnerabilities: {results['total_vulnerabilities']}")
-    print(f"Critical vulnerabilities: {results['critical_vulnerabilities']}")
-    print(f"High severity count: {results['high_severity_count']}")
-    print(f"Security score: {results['metrics']['security_score']}/100")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    print(f"\n=== Security Analysis Results ===")  # noqa: print
+    print(f"Total vulnerabilities: {results['total_vulnerabilities']}")  # noqa: print
+    print(
+        f"Critical vulnerabilities: {results['critical_vulnerabilities']}"
+    )  # noqa: print
+    print(f"High severity count: {results['high_severity_count']}")  # noqa: print
+    print(f"Security score: {results['metrics']['security_score']}/100")  # noqa: print
+    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Print category breakdown
-    print(f"\n=== Vulnerability Categories ===")
+    print(f"\n=== Vulnerability Categories ===")  # noqa: print
     for category, count in results["categories"].items():
-        print(f"{category}: {count}")
+        print(f"{category}: {count}")  # noqa: print
 
     # Print critical vulnerabilities
-    print(f"\n=== Critical Security Vulnerabilities ===")
+    print(f"\n=== Critical Security Vulnerabilities ===")  # noqa: print
     critical_vulns = [
         v for v in results["vulnerability_details"] if v["severity"] == "critical"
     ]
     for i, vuln in enumerate(critical_vulns[:5], 1):
-        print(f"\n{i}. {vuln['type']} in {vuln['file']}:{vuln['line']}")
-        print(f"   {vuln['description']}")
-        print(f"   CWE: {vuln['cwe_id']}")
-        print(f"   Fix: {vuln['fix_suggestion']}")
+        print(f"\n{i}. {vuln['type']} in {vuln['file']}:{vuln['line']}")  # noqa: print
+        print(f"   {vuln['description']}")  # noqa: print
+        print(f"   CWE: {vuln['cwe_id']}")  # noqa: print
+        print(f"   Fix: {vuln['fix_suggestion']}")  # noqa: print
 
 
 if __name__ == "__main__":

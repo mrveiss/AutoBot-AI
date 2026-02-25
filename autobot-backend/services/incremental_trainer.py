@@ -13,10 +13,10 @@ from typing import Optional
 
 import torch
 import torch.optim as optim
-from backend.models.completion_feedback import CompletionFeedback
-from backend.training.completion_trainer import CompletionTrainer
+from models.completion_feedback import CompletionFeedback
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from training.completion_trainer import CompletionTrainer
 
 from autobot_shared.ssot_config import config
 

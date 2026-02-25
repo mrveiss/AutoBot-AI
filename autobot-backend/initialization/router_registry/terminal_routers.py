@@ -25,7 +25,7 @@ def load_terminal_routers():
 
     # Terminal router
     try:
-        from backend.api.terminal import router as terminal_router
+        from api.terminal import router as terminal_router
 
         optional_routers.append(
             (terminal_router, "/terminal", ["terminal"], "terminal")
@@ -36,7 +36,7 @@ def load_terminal_routers():
 
     # Agent Terminal router
     try:
-        from backend.api.agent_terminal import router as agent_terminal_router
+        from api.agent_terminal import router as agent_terminal_router
 
         optional_routers.append(
             (agent_terminal_router, "", ["agent-terminal"], "agent_terminal")

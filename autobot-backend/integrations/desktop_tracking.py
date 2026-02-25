@@ -13,8 +13,8 @@ import logging
 import uuid
 from typing import Optional
 
-from backend.utils.activity_tracker import track_desktop_activity
 from sqlalchemy.ext.asyncio import AsyncSession
+from utils.activity_tracker import track_desktop_activity
 
 logger = logging.getLogger(__name__)
 

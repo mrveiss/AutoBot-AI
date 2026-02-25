@@ -12,8 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from backend.constants.path_constants import PATH
-from backend.constants.threshold_constants import TimingConstants
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -135,9 +135,143 @@ class ConversationFilesMigration:
         finally:
             cursor.close()
 
+    def _validate_tables(self, cursor: sqlite3.Cursor, expected_tables: set) -> bool:
+        """
+        Validate that all expected tables exist in the database.
+
+        Called by _validate_schema to check table presence.
+
+        Args:
+            cursor: Active database cursor
+            expected_tables: Set of table names that must exist
+
+        Returns:
+            bool: True if all tables are present, False otherwise
+        """
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        actual_tables = {row[0] for row in cursor.fetchall()}
+        missing_tables = expected_tables - actual_tables
+        if missing_tables:
+            logger.error(f"Missing tables: {missing_tables}")
+            return False
+        logger.info(f"✓ All {len(expected_tables)} tables created")
+        return True
+
+    def _validate_views(self, cursor: sqlite3.Cursor, expected_views: set) -> bool:
+        """
+        Validate that all expected views exist in the database.
+
+        Called by _validate_schema to check view presence.
+
+        Args:
+            cursor: Active database cursor
+            expected_views: Set of view names that must exist
+
+        Returns:
+            bool: True if all views are present, False otherwise
+        """
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='view'")
+        actual_views = {row[0] for row in cursor.fetchall()}
+        missing_views = expected_views - actual_views
+        if missing_views:
+            logger.error(f"Missing views: {missing_views}")
+            return False
+        logger.info(f"✓ All {len(expected_views)} views created")
+        return True
+
+    def _validate_indexes(self, cursor: sqlite3.Cursor, expected_indexes: set) -> bool:
+        """
+        Validate that all expected indexes exist in the database.
+
+        Called by _validate_schema to check index presence.
+
+        Args:
+            cursor: Active database cursor
+            expected_indexes: Set of index names that must exist
+
+        Returns:
+            bool: True if all indexes are present, False otherwise
+        """
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_autoindex_%'"
+        )
+        actual_indexes = {row[0] for row in cursor.fetchall()}
+        missing_indexes = expected_indexes - actual_indexes
+        if missing_indexes:
+            logger.error(f"Missing indexes: {missing_indexes}")
+            return False
+        logger.info(f"✓ All {len(expected_indexes)} indexes created")
+        return True
+
+    def _validate_triggers(
+        self, cursor: sqlite3.Cursor, expected_triggers: set
+    ) -> bool:
+        """
+        Validate that all expected triggers exist in the database.
+
+        Called by _validate_schema to check trigger presence.
+
+        Args:
+            cursor: Active database cursor
+            expected_triggers: Set of trigger names that must exist
+
+        Returns:
+            bool: True if all triggers are present, False otherwise
+        """
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='trigger'")
+        actual_triggers = {row[0] for row in cursor.fetchall()}
+        missing_triggers = expected_triggers - actual_triggers
+        if missing_triggers:
+            logger.error(f"Missing triggers: {missing_triggers}")
+            return False
+        logger.info(f"✓ All {len(expected_triggers)} triggers created")
+        return True
+
+    def _get_expected_schema_objects(self):
+        """
+        Return the expected sets of tables, views, indexes, and triggers.
+
+        Called by _validate_schema to obtain the canonical schema object names.
+
+        Returns:
+            Tuple[set, set, set, set]: expected_tables, expected_views,
+                expected_indexes, expected_triggers
+        """
+        expected_tables = {
+            "conversation_files",
+            "file_metadata",
+            "session_file_associations",
+            "file_access_log",
+            "file_cleanup_queue",
+        }
+        expected_views = {
+            "v_active_files",
+            "v_session_file_summary",
+            "v_pending_cleanups",
+        }
+        expected_indexes = {
+            "idx_conversation_files_session",
+            "idx_conversation_files_hash",
+            "idx_conversation_files_uploaded_at",
+            "idx_file_metadata_file_id",
+            "idx_session_associations_session",
+            "idx_session_associations_file",
+            "idx_file_access_log_file",
+            "idx_cleanup_queue_processed",
+        }
+        expected_triggers = {
+            "trg_conversation_files_soft_delete",
+            "trg_conversation_files_upload_log",
+            "trg_session_association_cleanup_schedule",
+        }
+        return expected_tables, expected_views, expected_indexes, expected_triggers
+
     def _validate_schema(self) -> bool:
         """
         Validate that all expected tables, indexes, triggers, and views were created.
+
+        Orchestrates _validate_tables, _validate_views, _validate_indexes,
+        and _validate_triggers helpers.
 
         Returns:
             bool: True if schema is valid, False otherwise
@@ -148,86 +282,21 @@ class ConversationFilesMigration:
         cursor = self.connection.cursor()
 
         try:
-            # Expected tables
-            expected_tables = {
-                "conversation_files",
-                "file_metadata",
-                "session_file_associations",
-                "file_access_log",
-                "file_cleanup_queue",
-            }
+            (
+                expected_tables,
+                expected_views,
+                expected_indexes,
+                expected_triggers,
+            ) = self._get_expected_schema_objects()
 
-            # Expected views
-            expected_views = {
-                "v_active_files",
-                "v_session_file_summary",
-                "v_pending_cleanups",
-            }
-
-            # Expected indexes
-            expected_indexes = {
-                "idx_conversation_files_session",
-                "idx_conversation_files_hash",
-                "idx_conversation_files_uploaded_at",
-                "idx_file_metadata_file_id",
-                "idx_session_associations_session",
-                "idx_session_associations_file",
-                "idx_file_access_log_file",
-                "idx_cleanup_queue_processed",
-            }
-
-            # Expected triggers
-            expected_triggers = {
-                "trg_conversation_files_soft_delete",
-                "trg_conversation_files_upload_log",
-                "trg_session_association_cleanup_schedule",
-            }
-
-            # Validate tables
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            actual_tables = {row[0] for row in cursor.fetchall()}
-
-            missing_tables = expected_tables - actual_tables
-            if missing_tables:
-                logger.error(f"Missing tables: {missing_tables}")
+            if not self._validate_tables(cursor, expected_tables):
                 return False
-
-            logger.info(f"✓ All {len(expected_tables)} tables created")
-
-            # Validate views
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='view'")
-            actual_views = {row[0] for row in cursor.fetchall()}
-
-            missing_views = expected_views - actual_views
-            if missing_views:
-                logger.error(f"Missing views: {missing_views}")
+            if not self._validate_views(cursor, expected_views):
                 return False
-
-            logger.info(f"✓ All {len(expected_views)} views created")
-
-            # Validate indexes
-            cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_autoindex_%'"
-            )
-            actual_indexes = {row[0] for row in cursor.fetchall()}
-
-            missing_indexes = expected_indexes - actual_indexes
-            if missing_indexes:
-                logger.error(f"Missing indexes: {missing_indexes}")
+            if not self._validate_indexes(cursor, expected_indexes):
                 return False
-
-            logger.info(f"✓ All {len(expected_indexes)} indexes created")
-
-            # Validate triggers
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='trigger'")
-            actual_triggers = {row[0] for row in cursor.fetchall()}
-
-            missing_triggers = expected_triggers - actual_triggers
-            if missing_triggers:
-                logger.error(f"Missing triggers: {missing_triggers}")
+            if not self._validate_triggers(cursor, expected_triggers):
                 return False
-
-            logger.info(f"✓ All {len(expected_triggers)} triggers created")
 
             # Validate foreign key constraints are enabled
             cursor.execute("PRAGMA foreign_keys")
@@ -237,7 +306,6 @@ class ConversationFilesMigration:
                 return False
 
             logger.info("✓ Foreign keys enabled")
-
             return True
 
         except sqlite3.Error as e:

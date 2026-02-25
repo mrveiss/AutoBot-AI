@@ -18,7 +18,7 @@ Standard Response Format:
 }
 
 Usage:
-    from backend.utils.response_builder import success_response, error_response
+    from utils.response_builder import success_response, error_response
 
     @router.get("/items")
     async def get_items():
@@ -39,8 +39,8 @@ Usage:
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypeVar, Union
 
-from backend.type_defs.common import Metadata
 from fastapi.responses import JSONResponse
+from type_defs.common import Metadata
 
 T = TypeVar("T")
 

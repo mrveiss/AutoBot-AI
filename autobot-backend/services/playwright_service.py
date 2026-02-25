@@ -13,9 +13,9 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import aiohttp
-from backend.constants.network_constants import NetworkConstants, ServiceURLs
-from backend.type_defs.common import Metadata
-from backend.utils.chat_exceptions import ServiceUnavailableError
+from constants.network_constants import NetworkConstants, ServiceURLs
+from type_defs.common import Metadata
+from utils.chat_exceptions import ServiceUnavailableError
 
 from autobot_shared.http_client import get_http_client
 

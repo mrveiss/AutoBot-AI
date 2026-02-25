@@ -386,7 +386,7 @@ class UnifiedKnowledgeManager:
         Example:
             >>> await manager.initialize_machine_aware_knowledge()
             >>> machine_info = await manager.get_machine_info()
-            >>> print(f"OS: {machine_info['os_type']}")
+            >>> print(f"OS: {machine_info['os_type']}")  # noqa: print
         """
         if not self.enable_machine_aware:
             raise RuntimeError(
@@ -415,8 +415,8 @@ class UnifiedKnowledgeManager:
         Example:
             >>> info = await manager.get_machine_info()
             >>> if info:
-            ...     print(f"Machine ID: {info['machine_id']}")
-            ...     print(f"Available tools: {len(info['available_tools'])}")
+            ...     print(f"Machine ID: {info['machine_id']}")  # noqa: print
+            ...     print(f"Available tools: {len(info['available_tools'])}")  # noqa: print
         """
         if not self.enable_machine_aware:
             logger.warning("Machine awareness not enabled")
@@ -446,7 +446,7 @@ class UnifiedKnowledgeManager:
 
         Example:
             >>> machines = await manager.list_supported_machines()
-            >>> print(f"Known machines: {machines}")
+            >>> print(f"Known machines: {machines}")  # noqa: print
         """
         if not self.enable_machine_aware:
             raise RuntimeError(
@@ -485,7 +485,7 @@ class UnifiedKnowledgeManager:
         Example:
             >>> results = await manager.search_man_page_knowledge("grep")
             >>> for result in results:
-            ...     print(f"{result['command']}: {result['description']}")
+            ...     print(f"{result['command']}: {result['description']}")  # noqa: print
         """
         if not self.enable_machine_aware:
             raise RuntimeError(
@@ -563,7 +563,7 @@ class UnifiedKnowledgeManager:
             ...     {"category": "tools", "relative_path": "tools/steghide.yaml"},
             ...     content_hash
             ... )
-            >>> print(f"Priority: {meta.priority.value}, TTL: {meta.ttl_hours}h")
+            >>> print(f"Priority: {meta.priority.value}, TTL: {meta.ttl_hours}h")  # noqa: print
         """
         if not content_id or not content_id.strip():
             raise ValueError("content_id cannot be empty")
@@ -633,9 +633,9 @@ class UnifiedKnowledgeManager:
 
         Example:
             >>> jobs = await manager.scan_for_expired_content()
-            >>> print(f"Found {len(jobs)} invalidation jobs")
+            >>> print(f"Found {len(jobs)} invalidation jobs")  # noqa: print
             >>> for job in jobs:
-            ...     print(f"Priority {job.priority.value}: {len(job.content_ids)} items")
+            ...     print(f"Priority {job.priority.value}: {len(job.content_ids)} items")  # noqa: print
         """
         if not self._temporal_manager:
             return []
@@ -683,9 +683,9 @@ class UnifiedKnowledgeManager:
 
         Example:
             >>> analytics = await manager.get_temporal_analytics()
-            >>> print(f"Total content: {analytics['total_content']}")
-            >>> print(f"Stale content: {analytics['status_distribution']['stale']}")
-            >>> print(f"Avg age: {analytics['averages']['age_hours']:.1f}h")
+            >>> print(f"Total content: {analytics['total_content']}")  # noqa: print
+            >>> print(f"Stale content: {analytics['status_distribution']['stale']}")  # noqa: print
+            >>> print(f"Avg age: {analytics['averages']['age_hours']:.1f}h")  # noqa: print
         """
         if not self._temporal_manager:
             return {
@@ -764,9 +764,9 @@ class UnifiedKnowledgeManager:
         Example:
             >>> status = manager.get_content_status("tool:steghide")
             >>> if status:
-            ...     print(f"Status: {status['freshness_status']}")
-            ...     print(f"Age: {status['age_hours']:.1f}h")
-            ...     print(f"Accessed: {status['access_count']} times")
+            ...     print(f"Status: {status['freshness_status']}")  # noqa: print
+            ...     print(f"Age: {status['age_hours']:.1f}h")  # noqa: print
+            ...     print(f"Accessed: {status['access_count']} times")  # noqa: print
         """
         if not content_id or not content_id.strip():
             raise ValueError("content_id cannot be empty")
@@ -896,11 +896,11 @@ class UnifiedKnowledgeManager:
 
         Example:
             >>> status = await manager.get_knowledge_status()
-            >>> print(f"System categories: {status['system_knowledge']['categories']}")
+            >>> print(f"System categories: {status['system_knowledge']['categories']}")  # noqa: print
             >>> if 'temporal_analytics' in status:
-            ...     print(f"Tracked content: {status['temporal_analytics']['total_content']}")
+            ...     print(f"Tracked content: {status['temporal_analytics']['total_content']}")  # noqa: print
             >>> if 'machine_profile' in status:
-            ...     print(f"Machine: {status['machine_profile']['machine_id']}")
+            ...     print(f"Machine: {status['machine_profile']['machine_id']}")  # noqa: print
         """
         await self._ensure_initialized()
 
@@ -1054,7 +1054,7 @@ class UnifiedKnowledgeManager:
 
         Example:
             >>> backup_info = await manager.backup_knowledge()
-            >>> print(f"Backup created at: {backup_info['backup_path']}")
+            >>> print(f"Backup created at: {backup_info['backup_path']}")  # noqa: print
         """
         await self._ensure_initialized()
 
@@ -1077,7 +1077,7 @@ class UnifiedKnowledgeManager:
 
         Example:
             >>> summary = await manager.cleanup_expired_content()
-            >>> print(f"Removed {sum(summary.values())} expired items")
+            >>> print(f"Removed {sum(summary.values())} expired items")  # noqa: print
         """
         if not self._temporal_manager:
             return {"message": "Temporal tracking not enabled"}

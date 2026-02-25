@@ -19,13 +19,13 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 from auth_middleware import check_admin_permission
-from backend.services.analytics_service import (
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
+from services.analytics_service import (
     MaintenancePriority,
     ResourceType,
     get_analytics_service,
 )
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 

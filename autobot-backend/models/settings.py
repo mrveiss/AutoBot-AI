@@ -12,12 +12,12 @@ import logging
 import os
 from typing import Dict, List, Optional
 
-from backend.type_defs.common import Metadata
+from type_defs.common import Metadata
 
 logger = logging.getLogger(__name__)
 import yaml
-from backend.constants.model_constants import Models
-from backend.constants.network_constants import NetworkConstants, ServiceURLs
+from constants.model_constants import Models
+from constants.network_constants import NetworkConstants, ServiceURLs
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

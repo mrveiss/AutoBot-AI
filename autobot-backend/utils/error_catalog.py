@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import yaml
-from backend.constants.path_constants import PATH
+from constants.path_constants import PATH
 
 from autobot_shared.error_boundaries import ErrorCategory
 

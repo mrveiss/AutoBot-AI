@@ -16,13 +16,13 @@ for issues, cards, and tasks.
 import logging
 from typing import Any, Dict, List, Optional
 
-from backend.integrations.base import IntegrationConfig, IntegrationHealth
-from backend.integrations.project_management_integration import (
+from fastapi import APIRouter, HTTPException, Query
+from integrations.base import IntegrationConfig, IntegrationHealth
+from integrations.project_management_integration import (
     AsanaIntegration,
     JiraIntegration,
     TrelloIntegration,
 )
-from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)

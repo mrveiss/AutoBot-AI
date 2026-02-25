@@ -22,8 +22,8 @@ from pathlib import Path
 import pytest
 
 # Import MCP bridges
-from backend.api.filesystem_mcp import ALLOWED_DIRECTORIES, is_path_allowed
-from backend.app_factory import create_app
+from api.filesystem_mcp import ALLOWED_DIRECTORIES, is_path_allowed
+from app_factory import create_app
 from fastapi.testclient import TestClient
 
 

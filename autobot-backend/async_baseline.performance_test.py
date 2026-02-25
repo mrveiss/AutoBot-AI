@@ -32,10 +32,10 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import aiohttp
-from backend.constants.network_constants import NetworkConstants, ServiceURLs
+from constants.network_constants import NetworkConstants, ServiceURLs
 
 # Import canonical Redis client pattern
-from backend.utils.redis_client import get_redis_client
+from utils.redis_client import get_redis_client
 
 # Configure logging
 logging.basicConfig(
@@ -610,44 +610,48 @@ class AsyncBaselineTest:
         logger.info(f"📊 Baseline report saved: {report_file}")
 
         # Print summary
-        print("\n" + "=" * 80)
-        print("📊 BASELINE PERFORMANCE SUMMARY")
-        print("=" * 80)
-        print(f"Total Tests: {report['total_tests']}")
-        print(f"Total Requests: {total_requests}")
-        print(f"Success Rate: {report['summary']['overall_success_rate']:.1f}%")
-        print()
+        print("\n" + "=" * 80)  # noqa: print
+        print("📊 BASELINE PERFORMANCE SUMMARY")  # noqa: print
+        print("=" * 80)  # noqa: print
+        print(f"Total Tests: {report['total_tests']}")  # noqa: print
+        print(f"Total Requests: {total_requests}")  # noqa: print
+        print(  # noqa: print
+            f"Success Rate: {report['summary']['overall_success_rate']:.1f}%"
+        )  # noqa: print
+        print()  # noqa: print
 
         if chat_test:
-            print("Chat Performance (50 concurrent users):")
-            print(f"  P95 Latency: {chat_test.p95_latency_ms:.0f}ms")
-            print("  Target After Async: <2000ms")
-            print(
+            print("Chat Performance (50 concurrent users):")  # noqa: print
+            print(f"  P95 Latency: {chat_test.p95_latency_ms:.0f}ms")  # noqa: print
+            print("  Target After Async: <2000ms")  # noqa: print
+            print(  # noqa: print
                 f"  Status: {'✅ MEETS TARGET' if chat_test.p95_latency_ms < 2000 else '❌ NEEDS ASYNC OPTIMIZATION'}"
             )
-            print()
+            print()  # noqa: print
 
         if redis_test:
-            print("Redis Performance (100 concurrent ops):")
-            print(f"  Throughput: {redis_test.requests_per_second:.0f} ops/sec")
-            print(f"  P95 Latency: {redis_test.p95_latency_ms:.0f}ms")
-            print(
+            print("Redis Performance (100 concurrent ops):")  # noqa: print
+            print(  # noqa: print
+                f"  Throughput: {redis_test.requests_per_second:.0f} ops/sec"
+            )  # noqa: print
+            print(f"  P95 Latency: {redis_test.p95_latency_ms:.0f}ms")  # noqa: print
+            print(  # noqa: print
                 f"  Status: {'✅ GOOD' if redis_test.requests_per_second > 500 else '⚠️ COULD BE FASTER'}"
             )
-            print()
+            print()  # noqa: print
 
         if cross_vm_test:
-            print("Cross-VM Latency:")
-            print(f"  P95 Latency: {cross_vm_test.p95_latency_ms:.0f}ms")
-            print("  Target: <100ms")
-            print(
+            print("Cross-VM Latency:")  # noqa: print
+            print(f"  P95 Latency: {cross_vm_test.p95_latency_ms:.0f}ms")  # noqa: print
+            print("  Target: <100ms")  # noqa: print
+            print(  # noqa: print
                 f"  Status: {'✅ MEETS TARGET' if cross_vm_test.p95_latency_ms < 100 else '❌ HIGH LATENCY'}"
             )
-            print()
+            print()  # noqa: print
 
-        print("=" * 80)
-        print(f"📄 Full report: {report_file}")
-        print("=" * 80)
+        print("=" * 80)  # noqa: print
+        print(f"📄 Full report: {report_file}")  # noqa: print
+        print("=" * 80)  # noqa: print
 
         return report
 

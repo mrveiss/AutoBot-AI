@@ -230,7 +230,7 @@ def with_if(x):
         loop_code = """
 def with_loop(items):
     for item in items:
-        print(item)
+        print(item)  # noqa: print
 """
         tree = ast.parse(loop_code)
         func = tree.body[0]

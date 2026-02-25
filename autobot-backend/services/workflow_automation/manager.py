@@ -11,9 +11,9 @@ import logging
 import uuid
 from typing import Dict, List, Optional
 
-from backend.type_defs.common import Metadata
 from enhanced_orchestrator import EnhancedOrchestrator
 from orchestrator import Orchestrator
+from type_defs.common import Metadata
 
 from .controller import WorkflowController
 from .executor import WorkflowExecutor

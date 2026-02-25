@@ -10,15 +10,18 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import threading
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from backend.constants.path_constants import PATH
-from backend.type_defs.common import Metadata
-from backend.utils.file_categorization import (
+from constants.path_constants import PATH
+from fastapi import HTTPException
+from type_defs.common import Metadata
+from utils.file_categorization import (
     ALL_CODE_EXTENSIONS,
     CONFIG_EXTENSIONS,
     CSS_EXTENSIONS,
@@ -39,10 +42,9 @@ from backend.utils.file_categorization import (
     TS_EXTENSIONS,
     VUE_EXTENSIONS,
 )
-from backend.utils.file_categorization import (
+from utils.file_categorization import (
     get_file_category as _get_file_category,  # Category constants; Extension sets; Directory sets; Functions
 )
-from fastapi import HTTPException
 
 from .analyzers import (
     analyze_documentation_file,
@@ -228,7 +230,7 @@ async def _generate_batch_embeddings(
 
     # Issue #681: Use NPU-accelerated embeddings with automatic fallback
     try:
-        from backend.api.codebase_analytics.npu_embeddings import (
+        from api.codebase_analytics.npu_embeddings import (
             generate_codebase_embeddings_batch,
         )
 
@@ -557,6 +559,47 @@ _tasks_lock = asyncio.Lock()
 _tasks_sync_lock = threading.Lock()
 
 _current_indexing_task_id: Optional[str] = None
+
+# FIFO queue of pending indexing jobs (#1133)
+# Each item: {"source_id": str, "root_path": str, "queued_at": str, "requested_by": str}
+_index_queue: deque = deque()
+
+# Redis key prefix for task state (#1179: cross-worker visibility)
+_TASK_REDIS_PREFIX = "indexing_task:"
+_TASK_REDIS_TTL = 86400  # 24 hours
+
+
+async def _save_task_to_redis(task_id: str) -> None:
+    """Persist task state to Redis so all uvicorn workers can read it (#1179)."""
+    try:
+        redis = await get_redis_connection_async()
+        if redis:
+            state = indexing_tasks.get(task_id)
+            if state:
+                await redis.set(
+                    f"{_TASK_REDIS_PREFIX}{task_id}",
+                    json.dumps(state, default=str),
+                    ex=_TASK_REDIS_TTL,
+                )
+    except Exception as e:
+        logger.debug(
+            "[Task %s] Redis task state save failed (non-fatal): %s", task_id, e
+        )
+
+
+async def _load_task_from_redis(task_id: str) -> Optional[Dict]:
+    """Load task state from Redis (#1179: cross-worker visibility)."""
+    try:
+        redis = await get_redis_connection_async()
+        if redis:
+            data = await redis.get(f"{_TASK_REDIS_PREFIX}{task_id}")
+            if data:
+                return json.loads(data)
+    except Exception as e:
+        logger.debug(
+            "[Task %s] Redis task state load failed (non-fatal): %s", task_id, e
+        )
+    return None
 
 
 # =============================================================================
@@ -2726,6 +2769,8 @@ def _create_progress_updater(task_id: str, update_phase, update_batch_info):
             total,
             percent,
         )
+        # #1179: Persist state to Redis so other workers can read it
+        await _save_task_to_redis(task_id)
 
     return update_progress
 
@@ -2788,6 +2833,58 @@ async def _run_indexing_phases(
     return analysis_results, hardcodes_stored
 
 
+async def _handle_subprocess_crash(task_id: str, returncode: int) -> None:
+    """Mark indexing task failed in Redis after subprocess crash (#1180).
+
+    Only updates state if the subprocess did not already write a terminal
+    status (completed/failed/cancelled) before crashing.
+    """
+    logger.error(
+        "[Task %s] Indexing subprocess crashed (exit code %d)", task_id, returncode
+    )
+    task_data = await _load_task_from_redis(task_id) or {}
+    if task_data.get("status") not in ("completed", "failed", "cancelled"):
+        _mark_task_failed(
+            task_id,
+            RuntimeError(f"Indexing subprocess crashed (exit code {returncode})"),
+        )
+        await _save_task_to_redis(task_id)
+
+
+async def _run_indexing_subprocess(task_id: str, root_path: str) -> None:
+    """Launch isolated indexing subprocess to prevent ChromaDB SIGSEGV (#1180).
+
+    The subprocess runs do_indexing_with_progress in its own process so its
+    ChromaDB PersistentClient does not conflict with the KB's concurrent
+    client. If the subprocess crashes (SIGSEGV), this coroutine catches the
+    non-zero exit code and marks the task failed in Redis.
+
+    Designed as a drop-in async replacement for asyncio.create_task usage of
+    do_indexing_with_progress — wrap in asyncio.create_task() as before.
+    """
+    worker_script = Path(__file__).parent / "indexing_worker.py"
+
+    # Write initial state to Redis before subprocess starts so status polls
+    # return "running" not "not_found" during process launch latency (#1179).
+    async with _tasks_lock:
+        indexing_tasks[task_id] = _create_initial_task_state()
+        await _save_task_to_redis(task_id)
+
+    logger.info("[Task %s] Launching isolated indexing subprocess (#1180)", task_id)
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        str(worker_script),
+        task_id,
+        root_path,
+    )
+    returncode = await proc.wait()
+
+    if returncode != 0:
+        await _handle_subprocess_crash(task_id, returncode)
+    else:
+        logger.info("[Task %s] Subprocess completed successfully (rc=0)", task_id)
+
+
 async def do_indexing_with_progress(task_id: str, root_path: str):
     """
     Background task: Index codebase with real-time progress updates.
@@ -2803,6 +2900,8 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
 
         async with _tasks_lock:
             indexing_tasks[task_id] = _create_initial_task_state()
+            # #1179: Persist initial state so other workers can see task as "running"
+            await _save_task_to_redis(task_id)
 
         # Create task-specific helper closures
         def update_phase(phase_id, status):
@@ -2830,8 +2929,12 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
         update_phase("finalize", "running")
         _mark_task_completed(task_id, analysis_results, hardcodes_stored, "chromadb")
         update_phase("finalize", "completed")
+        # #1179: Persist final completed state to Redis
+        await _save_task_to_redis(task_id)
         logger.info("[Task %s] ✅ Indexing completed successfully", task_id)
 
     except Exception as e:
         logger.error("[Task %s] ❌ Indexing failed: %s", task_id, e, exc_info=True)
         _mark_task_failed(task_id, e)
+        # #1179: Persist failed state to Redis
+        await _save_task_to_redis(task_id)

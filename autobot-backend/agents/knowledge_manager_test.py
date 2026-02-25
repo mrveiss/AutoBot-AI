@@ -167,7 +167,7 @@ class MockMachineAwareSystemKnowledgeManager(MockSystemKnowledgeManager):
 
 def test_1_import_verification():
     """Test 1: Verify all components can be imported"""
-    print("\n[TEST 1] Import verification...")
+    print("\n[TEST 1] Import verification...")  # noqa: print
 
     # Verify main class
     assert UnifiedKnowledgeManager is not None
@@ -188,12 +188,12 @@ def test_1_import_verification():
     # Verify global instance function
     assert get_unified_knowledge_manager is not None
 
-    print("✅ PASSED: All components imported successfully")
+    print("✅ PASSED: All components imported successfully")  # noqa: print
 
 
 async def test_2_temporal_manager_features():
     """Test 2: Temporal manager features (register, access tracking, expiry)"""
-    print("\n[TEST 2] Temporal manager features...")
+    print("\n[TEST 2] Temporal manager features...")  # noqa: print
 
     kb = MockKnowledgeBase()
     manager = UnifiedKnowledgeManager(
@@ -221,12 +221,12 @@ async def test_2_temporal_manager_features():
     new_hash = hashlib.md5(b"updated content").hexdigest()
     manager.update_content_modification("tool:steghide", new_hash)
 
-    print("✅ PASSED: Temporal manager features work correctly")
+    print("✅ PASSED: Temporal manager features work correctly")  # noqa: print
 
 
 async def test_3_system_knowledge_features():
     """Test 3: System knowledge features (import, templates, change detection)"""
-    print("\n[TEST 3] System knowledge features...")
+    print("\n[TEST 3] System knowledge features...")  # noqa: print
 
     kb = MockKnowledgeBase()
     mock_system = MockSystemKnowledgeManager(kb)
@@ -251,12 +251,12 @@ async def test_3_system_knowledge_features():
     assert "documentation" in categories["categories"]
     assert "system" in categories["categories"]
 
-    print("✅ PASSED: System knowledge features work correctly")
+    print("✅ PASSED: System knowledge features work correctly")  # noqa: print
 
 
 async def test_4_machine_aware_features():
     """Test 4: Machine-aware features (detection, adaptation, man pages)"""
-    print("\n[TEST 4] Machine-aware features...")
+    print("\n[TEST 4] Machine-aware features...")  # noqa: print
 
     kb = MockKnowledgeBase()
     mock_machine = MockMachineAwareSystemKnowledgeManager(kb)
@@ -288,12 +288,12 @@ async def test_4_machine_aware_features():
     summary = await manager.get_man_page_summary()
     assert summary["total_pages"] == 150
 
-    print("✅ PASSED: Machine-aware features work correctly")
+    print("✅ PASSED: Machine-aware features work correctly")  # noqa: print
 
 
 async def test_5_unified_operations():
     """Test 5: Unified operations (import_with_tracking, search, status)"""
-    print("\n[TEST 5] Unified operations...")
+    print("\n[TEST 5] Unified operations...")  # noqa: print
 
     kb = MockKnowledgeBase()
     mock_system = MockSystemKnowledgeManager(kb)
@@ -335,12 +335,12 @@ async def test_5_unified_operations():
     search_results = await manager.search_knowledge("test", include_man_pages=False)
     assert search_results["query"] == "test"
 
-    print("✅ PASSED: Unified operations work correctly")
+    print("✅ PASSED: Unified operations work correctly")  # noqa: print
 
 
 async def test_6_optional_components():
     """Test 6: Optional components (temporal disabled, machine-aware disabled)"""
-    print("\n[TEST 6] Optional components...")
+    print("\n[TEST 6] Optional components...")  # noqa: print
 
     kb = MockKnowledgeBase()
 
@@ -366,12 +366,12 @@ async def test_6_optional_components():
     except RuntimeError as e:
         assert "not enabled" in str(e)
 
-    print("✅ PASSED: Optional components work correctly")
+    print("✅ PASSED: Optional components work correctly")  # noqa: print
 
 
 async def test_7_backward_compatibility():
     """Test 7: Backward compatibility (individual managers still work)"""
-    print("\n[TEST 7] Backward compatibility...")
+    print("\n[TEST 7] Backward compatibility...")  # noqa: print
 
     kb = MockKnowledgeBase()
 
@@ -390,12 +390,12 @@ async def test_7_backward_compatibility():
     await mock_system.initialize_system_knowledge()
     assert mock_system.initialized
 
-    print("✅ PASSED: Backward compatibility preserved")
+    print("✅ PASSED: Backward compatibility preserved")  # noqa: print
 
 
 async def test_8_singleton_pattern():
     """Test 8: Singleton pattern (get_unified_knowledge_manager)"""
-    print("\n[TEST 8] Singleton pattern...")
+    print("\n[TEST 8] Singleton pattern...")  # noqa: print
 
     # Reset global instance (for testing only)
     import unified_knowledge_manager as ukm_module
@@ -422,12 +422,12 @@ async def test_8_singleton_pattern():
     except ValueError as e:
         assert "knowledge_base required" in str(e)
 
-    print("✅ PASSED: Singleton pattern works correctly")
+    print("✅ PASSED: Singleton pattern works correctly")  # noqa: print
 
 
 async def test_9_input_validation():
     """Test 9: Input validation (invalid parameters rejected)"""
-    print("\n[TEST 9] Input validation...")
+    print("\n[TEST 9] Input validation...")  # noqa: print
 
     kb = MockKnowledgeBase()
     mock_system = MockSystemKnowledgeManager(kb)
@@ -474,12 +474,12 @@ async def test_9_input_validation():
     except ValueError as e:
         assert "cannot be empty" in str(e)
 
-    print("✅ PASSED: Input validation works correctly")
+    print("✅ PASSED: Input validation works correctly")  # noqa: print
 
 
 async def test_10_thread_safety():
     """Test 10: Thread safety (concurrent initialization)"""
-    print("\n[TEST 10] Thread safety...")
+    print("\n[TEST 10] Thread safety...")  # noqa: print
 
     kb = MockKnowledgeBase()
     mock_system = MockSystemKnowledgeManager(kb)
@@ -502,12 +502,12 @@ async def test_10_thread_safety():
     # Should only initialize once
     assert manager._initialized is True
 
-    print("✅ PASSED: Thread safety works correctly")
+    print("✅ PASSED: Thread safety works correctly")  # noqa: print
 
 
 async def test_11_integration():
     """Test 11: Integration (temporal + system + machine)"""
-    print("\n[TEST 11] Full integration...")
+    print("\n[TEST 11] Full integration...")  # noqa: print
 
     kb = MockKnowledgeBase()
     mock_machine = MockMachineAwareSystemKnowledgeManager(kb)
@@ -537,12 +537,12 @@ async def test_11_integration():
     assert "machine_profile" in status
     assert "system_knowledge" in status
 
-    print("✅ PASSED: Full integration works correctly")
+    print("✅ PASSED: Full integration works correctly")  # noqa: print
 
 
 async def test_12_analytics():
     """Test 12: Analytics (temporal analytics, knowledge status)"""
-    print("\n[TEST 12] Analytics...")
+    print("\n[TEST 12] Analytics...")  # noqa: print
 
     kb = MockKnowledgeBase()
     mock_system = MockSystemKnowledgeManager(kb)
@@ -572,12 +572,12 @@ async def test_12_analytics():
     assert "temporal_analytics" in status
     assert status["temporal_analytics"]["total_content"] == 5
 
-    print("✅ PASSED: Analytics work correctly")
+    print("✅ PASSED: Analytics work correctly")  # noqa: print
 
 
 async def test_13_background_processing():
     """Test 13: Background processing (start/stop temporal task)"""
-    print("\n[TEST 13] Background processing...")
+    print("\n[TEST 13] Background processing...")  # noqa: print
 
     kb = MockKnowledgeBase()
     mock_system = MockSystemKnowledgeManager(kb)
@@ -610,12 +610,12 @@ async def test_13_background_processing():
     # Test stop (should not raise even if not started)
     await manager.stop_temporal_background_processing()
 
-    print("✅ PASSED: Background processing works correctly")
+    print("✅ PASSED: Background processing works correctly")  # noqa: print
 
 
 async def test_14_error_handling():
     """Test 14: Error handling (graceful failures)"""
-    print("\n[TEST 14] Error handling...")
+    print("\n[TEST 14] Error handling...")  # noqa: print
 
     kb = MockKnowledgeBase()
     mock_system = MockSystemKnowledgeManager(kb)
@@ -655,12 +655,12 @@ async def test_14_error_handling():
     except ValueError as e:
         assert "cannot be None" in str(e)
 
-    print("✅ PASSED: Error handling works correctly")
+    print("✅ PASSED: Error handling works correctly")  # noqa: print
 
 
 async def test_15_feature_completeness():
     """Test 15: Feature completeness (all methods work)"""
-    print("\n[TEST 15] Feature completeness...")
+    print("\n[TEST 15] Feature completeness...")  # noqa: print
 
     kb = MockKnowledgeBase()
     mock_machine = MockMachineAwareSystemKnowledgeManager(kb)
@@ -725,14 +725,14 @@ async def test_15_feature_completeness():
     status = await manager.get_knowledge_status()
     assert "initialized" in status
 
-    print("✅ PASSED: All features complete and working")
+    print("✅ PASSED: All features complete and working")  # noqa: print
 
 
 def run_all_tests():
     """Run all tests"""
-    print("=" * 80)
-    print("TESTING P6 UNIFIED KNOWLEDGE MANAGER")
-    print("=" * 80)
+    print("=" * 80)  # noqa: print
+    print("TESTING P6 UNIFIED KNOWLEDGE MANAGER")  # noqa: print
+    print("=" * 80)  # noqa: print
 
     try:
         # Test 1: Imports (sync)
@@ -780,36 +780,36 @@ def run_all_tests():
         # Test 15: Feature completeness (async)
         asyncio.run(test_15_feature_completeness())
 
-        print("\n" + "=" * 80)
-        print("ALL TESTS PASSED! ✅")
-        print("=" * 80)
-        print("\nResults: 15/15 tests passed")
-        print("- Import verification: ✅")
-        print("- Temporal manager features: ✅")
-        print("- System knowledge features: ✅")
-        print("- Machine-aware features: ✅")
-        print("- Unified operations: ✅")
-        print("- Optional components: ✅")
-        print("- Backward compatibility: ✅")
-        print("- Singleton pattern: ✅")
-        print("- Input validation: ✅")
-        print("- Thread safety: ✅")
-        print("- Integration: ✅")
-        print("- Analytics: ✅")
-        print("- Background processing: ✅")
-        print("- Error handling: ✅")
-        print("- Feature completeness: ✅")
+        print("\n" + "=" * 80)  # noqa: print
+        print("ALL TESTS PASSED! ✅")  # noqa: print
+        print("=" * 80)  # noqa: print
+        print("\nResults: 15/15 tests passed")  # noqa: print
+        print("- Import verification: ✅")  # noqa: print
+        print("- Temporal manager features: ✅")  # noqa: print
+        print("- System knowledge features: ✅")  # noqa: print
+        print("- Machine-aware features: ✅")  # noqa: print
+        print("- Unified operations: ✅")  # noqa: print
+        print("- Optional components: ✅")  # noqa: print
+        print("- Backward compatibility: ✅")  # noqa: print
+        print("- Singleton pattern: ✅")  # noqa: print
+        print("- Input validation: ✅")  # noqa: print
+        print("- Thread safety: ✅")  # noqa: print
+        print("- Integration: ✅")  # noqa: print
+        print("- Analytics: ✅")  # noqa: print
+        print("- Background processing: ✅")  # noqa: print
+        print("- Error handling: ✅")  # noqa: print
+        print("- Feature completeness: ✅")  # noqa: print
 
         return True
 
     except AssertionError as e:
-        print(f"\n❌ TEST FAILED: {e}")
+        print(f"\n❌ TEST FAILED: {e}")  # noqa: print
         import traceback
 
         traceback.print_exc()
         return False
     except Exception as e:
-        print(f"\n❌ ERROR: {e}")
+        print(f"\n❌ ERROR: {e}")  # noqa: print
         import traceback
 
         traceback.print_exc()

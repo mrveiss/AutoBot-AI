@@ -13,16 +13,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from backend.user_management.models import Team, TeamMembership
-from backend.user_management.models.audit import (
-    AuditAction,
-    AuditLog,
-    AuditResourceType,
-)
-from backend.user_management.services.base_service import BaseService, TenantContext
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from user_management.models import Team, TeamMembership
+from user_management.models.audit import AuditAction, AuditLog, AuditResourceType
+from user_management.services.base_service import BaseService, TenantContext
 
 logger = logging.getLogger(__name__)
 

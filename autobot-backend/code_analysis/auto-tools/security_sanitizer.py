@@ -278,19 +278,52 @@ class SecurityFixAgent:
         except Exception:
             return False
 
+    @staticmethod
+    def _log_vulnerability_details(vulnerabilities: List[Dict[str, Any]]) -> None:
+        """Log each vulnerability with severity icon and location.
+
+        Issue #1183: Extracted from fix_file() to reduce function length.
+        """
+        severity_icon = {"CRITICAL": "🔴", "HIGH": "🟠", "MEDIUM": "🟡", "LOW": "🟢"}
+        for vuln in vulnerabilities:
+            icon = severity_icon.get(vuln["severity"], "⚪")
+            logger.info(
+                f"  {icon} Line {vuln['line']}: {vuln['type']} ({vuln['severity']})"
+            )
+            logger.info("     Match: {vuln['match'][:100]}")
+
+    def _apply_fixes_and_write(
+        self,
+        original_content: str,
+        vulnerabilities: List[Dict[str, Any]],
+        file_path: str,
+    ) -> Tuple[List[str], str]:
+        """Apply security fixes, validate, write file; return (fixes_applied, fixed_hash).
+
+        Issue #1183: Extracted from fix_file() to reduce function length.
+        Raises ValueError if HTML structure validation fails.
+        """
+        logger.info("\n🔧 Applying security fixes...")
+        fixed_content, fixes_applied = self.apply_security_fixes(
+            original_content, vulnerabilities
+        )
+        if not self.validate_html_structure(fixed_content):
+            raise ValueError("HTML structure validation failed")
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(fixed_content)
+        fixed_hash = hashlib.sha256(fixed_content.encode()).hexdigest()
+        logger.info("Applied %slen(fixes_applied)  security fixes")
+        return fixes_applied, fixed_hash
+
     def fix_file(self, file_path: str) -> Dict[str, Any]:
         """Fix XSS vulnerabilities in a single file."""
         try:
             logger.info("\n🔍 Analyzing file: {file_path}")
 
-            # Read file content
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 original_content = f.read()
 
-            # Calculate original file hash
             original_hash = hashlib.sha256(original_content.encode()).hexdigest()
-
-            # Scan for vulnerabilities
             vulnerabilities = self.scan_for_vulnerabilities(original_content, file_path)
 
             if not vulnerabilities:
@@ -306,21 +339,9 @@ class SecurityFixAgent:
                 "Found %slen(vulnerabilities)  potential XSS vulnerabilities:"
             )
 
-            # Display vulnerabilities
-            for vuln in vulnerabilities:
-                severity_icon = {
-                    "CRITICAL": "🔴",
-                    "HIGH": "🟠",
-                    "MEDIUM": "🟡",
-                    "LOW": "🟢",
-                }
-                icon = severity_icon.get(vuln["severity"], "⚪")
-                logger.info(
-                    f"  {icon} Line {vuln['line']}: {vuln['type']} ({vuln['severity']})"
-                )
-                logger.info("     Match: {vuln['match'][:100]}")
+            # Issue #1183: Delegate vuln logging to extracted helper
+            self._log_vulnerability_details(vulnerabilities)
 
-            # Create backup
             backup_path = self.create_backup(file_path)
             if not backup_path:
                 return {
@@ -329,31 +350,16 @@ class SecurityFixAgent:
                     "error": "Failed to create backup",
                 }
 
-            # Apply fixes
-            logger.info("\n🔧 Applying security fixes...")
-            fixed_content, fixes_applied = self.apply_security_fixes(
-                original_content, vulnerabilities
-            )
-
-            # Validate the fixed content
-            if not self.validate_html_structure(fixed_content):
+            try:
+                # Issue #1183: Delegate fix/write to extracted helper
+                fixes_applied, fixed_hash = self._apply_fixes_and_write(
+                    original_content, vulnerabilities, file_path
+                )
+            except ValueError as ve:
                 logger.info("❌ Fixed content failed HTML structure validation")
-                return {
-                    "file": file_path,
-                    "status": "error",
-                    "error": "HTML structure validation failed",
-                }
+                return {"file": file_path, "status": "error", "error": str(ve)}
 
-            # Write fixed content
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(fixed_content)
-
-            # Calculate fixed file hash
-            fixed_hash = hashlib.sha256(fixed_content.encode()).hexdigest()
-
-            logger.info("Applied %slen(fixes_applied)  security fixes")
-
-            result = {
+            return {
                 "file": file_path,
                 "status": "fixed",
                 "backup_path": backup_path,
@@ -364,8 +370,6 @@ class SecurityFixAgent:
                 "vulnerabilities": vulnerabilities,
                 "fixes": fixes_applied,
             }
-
-            return result
 
         except Exception as e:
             logger.error("Error processing file %sfile_path : %se ")
