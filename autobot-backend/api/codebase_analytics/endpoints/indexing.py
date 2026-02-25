@@ -38,9 +38,9 @@ from ..scanner import (
     _current_indexing_task_id,
     _index_queue,
     _load_task_from_redis,
+    _run_indexing_subprocess,
     _tasks_lock,
     _tasks_sync_lock,
-    do_indexing_with_progress,
     indexing_tasks,
 )
 
@@ -139,7 +139,7 @@ def _start_next_queued_job() -> None:
     next_task_id = str(uuid.uuid4())
     _current_indexing_task_id = next_task_id
     task = asyncio.get_event_loop().create_task(
-        do_indexing_with_progress(next_task_id, next_path)
+        _run_indexing_subprocess(next_task_id, next_path)
     )
     _active_tasks[next_task_id] = task
     task.add_done_callback(_create_cleanup_callback(next_task_id))
@@ -196,7 +196,7 @@ async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
         _current_indexing_task_id = task_id
 
         logger.info("🔄 About to create_task")
-        task = asyncio.create_task(do_indexing_with_progress(task_id, root_path))
+        task = asyncio.create_task(_run_indexing_subprocess(task_id, root_path))
         logger.info("✅ Task created: %s", task)
         _active_tasks[task_id] = task
         logger.info("💾 Task stored in _active_tasks")
