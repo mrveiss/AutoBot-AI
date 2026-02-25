@@ -1,6 +1,14 @@
 <template>
   <div class="knowledge-citations">
-    <div class="citations-header" @click="toggleExpanded">
+    <div
+      class="citations-header"
+      role="button"
+      tabindex="0"
+      :aria-expanded="isExpanded"
+      @click="toggleExpanded"
+      @keydown.enter.prevent="toggleExpanded"
+      @keydown.space.prevent="toggleExpanded"
+    >
       <div class="citations-header-left">
         <i class="fas fa-layer-group text-autobot-primary" aria-hidden="true"></i>
         <span class="citations-label">Sources</span>
@@ -17,7 +25,11 @@
           v-for="(citation, idx) in citations"
           :key="citation.id || idx"
           class="citation-item"
+          role="button"
+          tabindex="0"
           @click="$emit('citation-click', citation)"
+          @keydown.enter.prevent="$emit('citation-click', citation)"
+          @keydown.space.prevent="$emit('citation-click', citation)"
         >
           <div class="citation-rank">
             <i :class="sourceIcon(citation)" aria-hidden="true"></i>
@@ -25,7 +37,7 @@
           <div class="citation-content">
             <div class="citation-text">
               <a
-                v-if="citation.type === 'web' && citation.url"
+                v-if="citation.type === 'web' && citation.url && isSafeUrl(citation.url)"
                 :href="citation.url"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -56,10 +68,10 @@
               <span
                 v-if="citation.type === 'knowledge_base' && citation.score != null"
                 class="citation-score"
-                :class="getScoreClass(citation.score)"
+                :class="getScoreClass(citation.score!)"
               >
                 <i class="fas fa-chart-line" aria-hidden="true"></i>
-                {{ formatScore(citation.score) }}%
+                {{ formatScore(citation.score!) }}%
               </span>
               <span
                 v-if="citation.type === 'knowledge_base' && citation.source"
@@ -178,6 +190,15 @@ const reliabilityClass = (reliability: string | undefined): string => {
 const reliabilityLabel = (reliability: string | undefined): string => {
   if (!reliability) return 'Medium'
   return reliability.charAt(0).toUpperCase() + reliability.slice(1)
+}
+
+const isSafeUrl = (url: string): boolean => {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+  } catch {
+    return false
+  }
 }
 
 const citationTitle = (citation: Citation): string => {
