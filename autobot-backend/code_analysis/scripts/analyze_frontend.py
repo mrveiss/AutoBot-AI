@@ -325,11 +325,8 @@ async def analyze_frontend_code():
     return results
 
 
-async def generate_frontend_fix_examples():
-    """Generate examples of common frontend fixes"""
-
-    print("\n=== 🛠️ Common Frontend Fix Examples ===\n")  # noqa: print
-
+def _print_examples_xss_perf_a11y() -> None:
+    """Print examples 1-3: XSS, DOM performance, accessibility. Issue #1183."""
     print("**1. XSS Prevention:**")  # noqa: print
     print("```javascript")  # noqa: print
     print("// ❌ Dangerous - XSS vulnerability")  # noqa: print
@@ -339,9 +336,7 @@ async def generate_frontend_fix_examples():
     print("element.textContent = userInput;")  # noqa: print
     print("// or use a sanitization library")  # noqa: print
     print("element.innerHTML = DOMPurify.sanitize(userInput);")  # noqa: print
-    print("```")  # noqa: print
-    print()  # noqa: print
-
+    print("```\n")  # noqa: print
     print("**2. Performance - DOM Query Optimization:**")  # noqa: print
     print("```javascript")  # noqa: print
     print("// ❌ Inefficient - DOM query in loop")  # noqa: print
@@ -356,9 +351,7 @@ async def generate_frontend_fix_examples():
     print("for (let i = 0; i < items.length; i++) {")  # noqa: print
     print("    container.appendChild(items[i]);")  # noqa: print
     print("}")  # noqa: print
-    print("```")  # noqa: print
-    print()  # noqa: print
-
+    print("```\n")  # noqa: print
     print("**3. Accessibility - Image Alt Text:**")  # noqa: print
     print("```html")  # noqa: print
     print("<!-- ❌ Missing alt attribute -->")  # noqa: print
@@ -368,9 +361,11 @@ async def generate_frontend_fix_examples():
     print(
         '<img src="chart.png" alt="Sales chart showing 25% growth in Q3 2024">'
     )  # noqa: print
-    print("```")  # noqa: print
-    print()  # noqa: print
+    print("```\n")  # noqa: print
 
+
+def _print_examples_vue_react_events() -> None:
+    """Print examples 4-6: Vue v-html, React innerHTML, event cleanup. Issue #1183."""
     print("**4. Vue.js - Safe v-html Usage:**")  # noqa: print
     print("```vue")  # noqa: print
     print("<!-- ❌ Dangerous - Direct HTML binding -->")  # noqa: print
@@ -378,9 +373,7 @@ async def generate_frontend_fix_examples():
     print()  # noqa: print
     print("<!-- ✅ Safe - Sanitized content -->")  # noqa: print
     print('<div v-html="$sanitize(userContent)"></div>')  # noqa: print
-    print("```")  # noqa: print
-    print()  # noqa: print
-
+    print("```\n")  # noqa: print
     print("**5. React - Safe dangerouslySetInnerHTML:**")  # noqa: print
     print("```jsx")  # noqa: print
     print("// ❌ Dangerous - Unsanitized content")  # noqa: print
@@ -398,9 +391,7 @@ async def generate_frontend_fix_examples():
         "    return <div dangerouslySetInnerHTML={{__html: sanitized}} />;"
     )  # noqa: print
     print("}")  # noqa: print
-    print("```")  # noqa: print
-    print()  # noqa: print
-
+    print("```\n")  # noqa: print
     print("**6. Event Listener Cleanup:**")  # noqa: print
     print("```javascript")  # noqa: print
     print("// ❌ Memory leak - No cleanup")  # noqa: print
@@ -411,6 +402,13 @@ async def generate_frontend_fix_examples():
     print("// Later, when component unmounts:")  # noqa: print
     print("window.removeEventListener('resize', handler);")  # noqa: print
     print("```")  # noqa: print
+
+
+async def generate_frontend_fix_examples():
+    """Generate examples of common frontend fixes. Issue #1183."""
+    print("\n=== 🛠️ Common Frontend Fix Examples ===\n")  # noqa: print
+    _print_examples_xss_perf_a11y()
+    _print_examples_vue_react_events()
 
 
 async def main():

@@ -10,22 +10,11 @@ from pathlib import Path
 from performance_analyzer import PerformanceAnalyzer
 
 
-async def analyze_performance_issues():
-    """Analyze codebase for performance and memory issues"""
-
-    print("🚀 Starting performance and memory leak analysis...")  # noqa: print
-
-    analyzer = PerformanceAnalyzer()
-
-    # Run analysis
-    results = await analyzer.analyze_performance(
-        root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
-    )
-
+def _print_perf_summary(results: dict) -> None:
+    """Print performance analysis summary and category breakdown. Issue #1183."""
     print("\n=== Performance Analysis Results ===\n")  # noqa: print
-
-    # Summary
-    print(f"📊 **Analysis Summary:**")  # noqa: print
+    m = results["metrics"]
+    print("📊 **Analysis Summary:**")  # noqa: print
     print(
         f"   - Total performance issues: {results['total_performance_issues']}"
     )  # noqa: print
@@ -33,17 +22,11 @@ async def analyze_performance_issues():
     print(
         f"   - High priority issues: {results['high_priority_issues']}"
     )  # noqa: print
-    print(
-        f"   - Files with issues: {results['metrics']['files_with_issues']}"
-    )  # noqa: print
-    print(  # noqa: print
-        f"   - Performance debt score: {results['metrics']['performance_debt_score']}"
-    )
+    print(f"   - Files with issues: {m['files_with_issues']}")  # noqa: print
+    print(f"   - Performance debt score: {m['performance_debt_score']}")  # noqa: print
     print(
         f"   - Analysis time: {results['analysis_time_seconds']:.2f}s\n"
     )  # noqa: print
-
-    # Category breakdown
     print("🏷️  **Issue Categories:**")  # noqa: print
     for category, count in results["categories"].items():
         print(
@@ -51,206 +34,140 @@ async def analyze_performance_issues():
         )  # noqa: print
     print()  # noqa: print
 
-    # Critical issues (Memory leaks and blocking calls)
-    critical_issues = [
-        item
-        for item in results["performance_details"]
-        if item["severity"] == "critical"
-    ]
-    if critical_issues:
+
+def _print_critical_and_high_issues(details: list) -> None:
+    """Print critical and high-priority performance issues. Issue #1183."""
+    critical = [i for i in details if i["severity"] == "critical"]
+    if critical:
         print("🚨 **Critical Performance Issues:**")  # noqa: print
-        for issue in critical_issues[:10]:  # Show top 10
+        for issue in critical[:10]:
             print(
                 f"   - {issue['file']}:{issue['line']} - {issue['type']}"
             )  # noqa: print
             print(f"     💡 {issue['description']}")  # noqa: print
             print(f"     🔧 Suggestion: {issue['suggestion']}")  # noqa: print
             print()  # noqa: print
-
-    # High priority issues
-    high_issues = [
-        item for item in results["performance_details"] if item["severity"] == "high"
-    ]
-    if high_issues:
+    high = [i for i in details if i["severity"] == "high"]
+    if high:
         print("⚠️  **High Priority Performance Issues:**")  # noqa: print
-        for issue in high_issues[:5]:  # Show top 5
+        for issue in high[:5]:
             print(
                 f"   - {issue['file']}:{issue['line']} - {issue['type']}"
             )  # noqa: print
             print(f"     {issue['description']}")  # noqa: print
         print()  # noqa: print
 
-    # Memory leak specific analysis
-    memory_issues = [
-        item
-        for item in results["performance_details"]
-        if item["type"] == "memory_leaks"
-    ]
-    if memory_issues:
-        print("💾 **Memory Leak Analysis:**")  # noqa: print
-        print(f"   Found {len(memory_issues)} potential memory leaks:")  # noqa: print
-        for issue in memory_issues[:5]:
-            print(f"   - {issue['file']}:{issue['line']}")  # noqa: print
-            print(  # noqa: print
-                f"     Code: {issue['code_snippet'].split()[0] if issue['code_snippet'] else 'N/A'}"
-            )
-        print()  # noqa: print
 
-    # Blocking call analysis
-    blocking_issues = [
-        item
-        for item in results["performance_details"]
-        if item["type"] == "blocking_calls"
-    ]
-    if blocking_issues:
+def _print_memory_blocking_db_issues(details: list) -> None:
+    """Print memory leak, blocking call, and database issue breakdowns. Issue #1183."""
+    memory = [i for i in details if i["type"] == "memory_leaks"]
+    if memory:
+        print("💾 **Memory Leak Analysis:**")  # noqa: print
+        print(f"   Found {len(memory)} potential memory leaks:")  # noqa: print
+        for issue in memory[:5]:
+            snippet = (
+                issue["code_snippet"].split()[0] if issue["code_snippet"] else "N/A"
+            )
+            print(f"   - {issue['file']}:{issue['line']}")  # noqa: print
+            print(f"     Code: {snippet}")  # noqa: print
+        print()  # noqa: print
+    blocking = [i for i in details if i["type"] == "blocking_calls"]
+    if blocking:
         print("🔒 **Blocking Call Analysis:**")  # noqa: print
         print(
-            f"   Found {len(blocking_issues)} blocking calls in async functions:"
+            f"   Found {len(blocking)} blocking calls in async functions:"
         )  # noqa: print
-        for issue in blocking_issues[:5]:
+        for issue in blocking[:5]:
             print(f"   - {issue['file']}:{issue['line']}")  # noqa: print
             print(f"     Function: {issue['function'] or 'N/A'}")  # noqa: print
         print()  # noqa: print
-
-    # Database performance issues
-    db_issues = [
-        item for item in results["performance_details"] if "database" in item["type"]
-    ]
-    if db_issues:
+    db = [i for i in details if "database" in i["type"]]
+    if db:
         print("🗄️  **Database Performance Issues:**")  # noqa: print
-        print(
-            f"   Found {len(db_issues)} database-related performance issues:"
-        )  # noqa: print
-        for issue in db_issues[:3]:
+        print(f"   Found {len(db)} database-related performance issues:")  # noqa: print
+        for issue in db[:3]:
             print(f"   - {issue['file']}:{issue['line']}")  # noqa: print
             print(f"     {issue['description']}")  # noqa: print
         print()  # noqa: print
 
-    # Save detailed report
+
+async def analyze_performance_issues():
+    """Analyze codebase for performance and memory issues"""
+    print("🚀 Starting performance and memory leak analysis...")  # noqa: print
+    analyzer = PerformanceAnalyzer()
+    results = await analyzer.analyze_performance(
+        root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
+    )
+    _print_perf_summary(results)
+    details = results["performance_details"]
+    _print_critical_and_high_issues(details)
+    _print_memory_blocking_db_issues(details)
     report_path = Path("performance_analysis_report.json")
-    with open(report_path, "w") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, default=str)
-
     print(f"📋 Detailed report saved to: {report_path}")  # noqa: print
-
-    # Generate optimization recommendations
     await generate_performance_fixes(results)
-
     return results
+
+
+def _print_common_fix_patterns() -> None:
+    """Print 5 common performance fix code examples. Issue #1183."""
+    print("🛠️  **Common Performance Patterns to Fix:**\n")  # noqa: print
+    print("**1. Memory Leak Prevention:**\n```python")  # noqa: print
+    print(
+        "# ❌ Bad - Resource leak\nf = open('file.txt', 'r')\ndata = f.read()\n"
+    )  # noqa: print
+    print(
+        "# ✅ Good - Proper resource management\nwith open('file.txt', 'r') as f:\n    data = f.read()\n```\n"
+    )  # noqa: print
+    print("**2. Async Function Optimization:**\n```python")  # noqa: print
+    print(
+        "# ❌ Bad - Blocking call in async function\nasync def fetch_data():\n    time.sleep(1)  # Blocks event loop\n    return requests.get(url)  # Blocking\n"
+    )  # noqa: print
+    print(
+        "# ✅ Good - Non-blocking async operations\nasync def fetch_data():\n    await asyncio.sleep(1)\n    async with aiohttp.ClientSession() as session:\n        async with session.get(url) as response:\n            return await response.text()\n```\n"
+    )  # noqa: print
+    print("**3. Database Query Optimization:**\n```python")  # noqa: print
+    print(
+        "# ❌ Bad - N+1 query problem\nfor user in users:\n    profile = db.query(Profile).filter(Profile.user_id == user.id).first()\n"
+    )  # noqa: print
+    print(
+        "# ✅ Good - Bulk query\nuser_ids = [user.id for user in users]\nprofiles = db.query(Profile).filter(Profile.user_id.in_(user_ids)).all()\nprofile_dict = {p.user_id: p for p in profiles}\n```\n"
+    )  # noqa: print
+    print("**4. Loop Performance Optimization:**\n```python")  # noqa: print
+    print(
+        "# ❌ Bad - Inefficient loop\nresult = ''\nfor item in large_list:\n    result += str(item)\n"
+    )  # noqa: print
+    print(
+        "# ✅ Good - List comprehension and join\nresult = ''.join(str(item) for item in large_list)\n```\n"
+    )  # noqa: print
+    print("**5. Efficient Caching Patterns:**\n```python")  # noqa: print
+    print(
+        "# ❌ Bad - No caching\ndef get_user_data(user_id):\n    return expensive_database_query(user_id)\n"
+    )  # noqa: print
+    print(
+        "# ✅ Good - Redis caching with TTL\nasync def get_user_data(user_id):\n    cache_key = f'user:{user_id}'\n    cached = await redis_client.get(cache_key)\n    if cached:\n        return json.loads(cached)\n    data = expensive_database_query(user_id)\n    await redis_client.setex(cache_key, 300, json.dumps(data))\n    return data\n```\n"
+    )  # noqa: print
 
 
 async def generate_performance_fixes(results):
     """Generate specific performance fix recommendations"""
-
     print("\n=== Performance Optimization Recommendations ===\n")  # noqa: print
-
     recommendations = results["optimization_recommendations"]
-
     if recommendations:
         print("🔧 **Priority Fixes:**")  # noqa: print
-
         for rec in recommendations:
             print(f"\n**{rec['title']}** ({rec['priority']} priority)")  # noqa: print
             print(f"   Description: {rec['description']}")  # noqa: print
             print(f"   Affected files: {len(rec['affected_files'])}")  # noqa: print
-
-            if rec["code_examples"]:
-                for example in rec["code_examples"]:
-                    print(f"   \n   Before:")  # noqa: print
-                    print(f"   ```python")  # noqa: print
-                    print(f"   {example.get('before', 'N/A')}")  # noqa: print
-                    print(f"   ```")  # noqa: print
-                    print(f"   \n   After:")  # noqa: print
-                    print(f"   ```python")  # noqa: print
-                    print(f"   {example.get('after', 'N/A')}")  # noqa: print
-                    print(f"   ```")  # noqa: print
+            for example in rec.get("code_examples", []):
+                print("   \n   Before:\n   ```python")  # noqa: print
+                print(f"   {example.get('before', 'N/A')}")  # noqa: print
+                print("   ```\n   \n   After:\n   ```python")  # noqa: print
+                print(f"   {example.get('after', 'N/A')}")  # noqa: print
+                print("   ```")  # noqa: print
         print()  # noqa: print
-
-    # Generate specific common fixes
-    print("🛠️  **Common Performance Patterns to Fix:**\n")  # noqa: print
-
-    # Memory leak fixes
-    print("**1. Memory Leak Prevention:**")  # noqa: print
-    print("```python")  # noqa: print
-    print("# ❌ Bad - Resource leak")  # noqa: print
-    print("f = open('file.txt', 'r')")  # noqa: print
-    print("data = f.read()")  # noqa: print
-    print()  # noqa: print
-    print("# ✅ Good - Proper resource management")  # noqa: print
-    print("with open('file.txt', 'r') as f:")  # noqa: print
-    print("    data = f.read()")  # noqa: print
-    print("```")  # noqa: print
-    print()  # noqa: print
-
-    # Async/await fixes
-    print("**2. Async Function Optimization:**")  # noqa: print
-    print("```python")  # noqa: print
-    print("# ❌ Bad - Blocking call in async function")  # noqa: print
-    print("async def fetch_data():")  # noqa: print
-    print("    time.sleep(1)  # Blocks event loop")  # noqa: print
-    print("    return requests.get(url)  # Blocking")  # noqa: print
-    print()  # noqa: print
-    print("# ✅ Good - Non-blocking async operations")  # noqa: print
-    print("async def fetch_data():")  # noqa: print
-    print("    await asyncio.sleep(1)  # Non-blocking")  # noqa: print
-    print("    async with aiohttp.ClientSession() as session:")  # noqa: print
-    print("        async with session.get(url) as response:")  # noqa: print
-    print("            return await response.text()")  # noqa: print
-    print("```")  # noqa: print
-    print()  # noqa: print
-
-    # Database optimization
-    print("**3. Database Query Optimization:**")  # noqa: print
-    print("```python")  # noqa: print
-    print("# ❌ Bad - N+1 query problem")  # noqa: print
-    print("for user in users:")  # noqa: print
-    print(
-        "    profile = db.query(Profile).filter(Profile.user_id == user.id).first()"
-    )  # noqa: print
-    print()  # noqa: print
-    print("# ✅ Good - Bulk query")  # noqa: print
-    print("user_ids = [user.id for user in users]")  # noqa: print
-    print(
-        "profiles = db.query(Profile).filter(Profile.user_id.in_(user_ids)).all()"
-    )  # noqa: print
-    print("profile_dict = {p.user_id: p for p in profiles}")  # noqa: print
-    print("```")  # noqa: print
-    print()  # noqa: print
-
-    # Loop optimization
-    print("**4. Loop Performance Optimization:**")  # noqa: print
-    print("```python")  # noqa: print
-    print("# ❌ Bad - Inefficient loop with string concatenation")  # noqa: print
-    print("result = ''")  # noqa: print
-    print("for item in large_list:")  # noqa: print
-    print("    result += str(item)  # Creates new string each time")  # noqa: print
-    print()  # noqa: print
-    print("# ✅ Good - Efficient list comprehension and join")  # noqa: print
-    print("result = ''.join(str(item) for item in large_list)")  # noqa: print
-    print("```")  # noqa: print
-    print()  # noqa: print
-
-    # Redis caching patterns
-    print("**5. Efficient Caching Patterns:**")  # noqa: print
-    print("```python")  # noqa: print
-    print("# ❌ Bad - No caching, repeated expensive operations")  # noqa: print
-    print("def get_user_data(user_id):")  # noqa: print
-    print("    return expensive_database_query(user_id)")  # noqa: print
-    print()  # noqa: print
-    print("# ✅ Good - Redis caching with TTL")  # noqa: print
-    print("async def get_user_data(user_id):")  # noqa: print
-    print("    cache_key = f'user:{user_id}'")  # noqa: print
-    print("    cached = await redis_client.get(cache_key)")  # noqa: print
-    print("    if cached:")  # noqa: print
-    print("        return json.loads(cached)")  # noqa: print
-    print("    ")  # noqa: print
-    print("    data = expensive_database_query(user_id)")  # noqa: print
-    print(
-        "    await redis_client.setex(cache_key, 300, json.dumps(data))"
-    )  # noqa: print
-    print("    return data")  # noqa: print
-    print("```")  # noqa: print
-    print()  # noqa: print
+    _print_common_fix_patterns()
 
 
 async def demonstrate_monitoring_setup():

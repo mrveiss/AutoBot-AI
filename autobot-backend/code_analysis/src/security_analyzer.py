@@ -56,16 +56,10 @@ class SecurityRecommendation:
 class SecurityAnalyzer:
     """Analyzes code for security vulnerabilities"""
 
-    def __init__(self, redis_client=None):
-        self.redis_client = redis_client or get_redis_client(async_client=True)
-        self.config = config
-
-        # Caching keys
-        self.SECURITY_KEY = "security_analysis:vulnerabilities"
-        self.RECOMMENDATIONS_KEY = "security_analysis:recommendations"
-
-        # Security vulnerability patterns
-        self.security_patterns = {
+    @staticmethod
+    def _build_injection_and_path_patterns() -> dict:
+        """Return SQL injection, command injection, and path traversal patterns. Issue #1183."""
+        return {
             "sql_injection": [
                 (
                     r'execute\s*\(\s*[\'"].*?\%s.*?[\'"]\s*%',
@@ -119,6 +113,12 @@ class SecurityAnalyzer:
                     "CWE-22",
                 ),
             ],
+        }
+
+    @staticmethod
+    def _build_crypto_auth_patterns() -> dict:
+        """Return insecure crypto, hardcoded secrets, and weak auth patterns. Issue #1183."""
+        return {
             "insecure_crypto": [
                 (r"hashlib\.md5\s*\(", "Weak hash algorithm MD5", "CWE-327"),
                 (r"hashlib\.sha1\s*\(", "Weak hash algorithm SHA1", "CWE-327"),
@@ -161,6 +161,12 @@ class SecurityAnalyzer:
                     "CWE-613",
                 ),
             ],
+        }
+
+    @staticmethod
+    def _build_xss_disclosure_patterns() -> dict:
+        """Return XSS, information disclosure, deserialization, timing attack patterns. Issue #1183."""
+        return {
             "xss_vulnerabilities": [
                 (
                     r"render_template_string\s*\([^)]*\+[^)]*\)",
@@ -207,6 +213,16 @@ class SecurityAnalyzer:
             ],
         }
 
+    def __init__(self, redis_client=None):
+        self.redis_client = redis_client or get_redis_client(async_client=True)
+        self.config = config
+        self.SECURITY_KEY = "security_analysis:vulnerabilities"
+        self.RECOMMENDATIONS_KEY = "security_analysis:recommendations"
+        self.security_patterns = {
+            **self._build_injection_and_path_patterns(),
+            **self._build_crypto_auth_patterns(),
+            **self._build_xss_disclosure_patterns(),
+        }
         logger.info("Security Analyzer initialized")
 
     async def analyze_security(

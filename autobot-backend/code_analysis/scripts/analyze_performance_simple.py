@@ -175,87 +175,73 @@ class SimplePerformanceAnalyzer:
         }
 
 
-def main():
-    """Run simple performance analysis"""
-
-    print("🚀 Running simple performance analysis...")  # noqa: print
-
-    analyzer = SimplePerformanceAnalyzer()
-    results = analyzer.analyze_directory(".")
-
-    print(f"\n=== Performance Analysis Results ===")  # noqa: print
-    print(f"Files analyzed: {results['files_analyzed']}")  # noqa: print
-    print(f"Total issues found: {results['total_issues']}")  # noqa: print
-
-    # Show by severity
-    print(f"\n=== Issues by Severity ===")  # noqa: print
+def _print_severity_and_category(results: dict) -> None:
+    """Print issues grouped by severity and category. Issue #1183."""
+    print("\n=== Issues by Severity ===")  # noqa: print
     for severity in ["critical", "high", "medium", "low"]:
         if severity in results["by_severity"]:
-            issues = results["by_severity"][severity]
-            print(f"{severity.title()}: {len(issues)} issues")  # noqa: print
-
-    # Show by category
-    print(f"\n=== Issues by Category ===")  # noqa: print
+            print(
+                f"{severity.title()}: {len(results['by_severity'][severity])} issues"
+            )  # noqa: print
+    print("\n=== Issues by Category ===")  # noqa: print
     for category, issues in results["by_category"].items():
         print(
             f"{category.replace('_', ' ').title()}: {len(issues)} issues"
         )  # noqa: print
 
-    # Show critical issues
-    if "critical" in results["by_severity"]:
-        print(f"\n🚨 Critical Issues (Memory Leaks & Blocking Calls):")  # noqa: print
-        critical_issues = results["by_severity"]["critical"]
 
-        for issue in critical_issues[:10]:  # Show first 10
+def _print_issues_and_recommendations(results: dict) -> None:
+    """Print critical/DB issues and optimization recommendations. Issue #1183."""
+    if "critical" in results["by_severity"]:
+        print("\n🚨 Critical Issues (Memory Leaks & Blocking Calls):")  # noqa: print
+        for issue in results["by_severity"]["critical"][:10]:
             print(f"  - {issue['file']}:{issue['line']}")  # noqa: print
             print(f"    {issue['description']}")  # noqa: print
             print(f"    Code: {issue['context']}")  # noqa: print
             print()  # noqa: print
-
-    # Show database issues
     if "database_issues" in results["by_category"]:
-        print(f"🗄️ Database Performance Issues:")  # noqa: print
-        db_issues = results["by_category"]["database_issues"]
-
-        for issue in db_issues[:5]:  # Show first 5
+        print("🗄️ Database Performance Issues:")  # noqa: print
+        for issue in results["by_category"]["database_issues"][:5]:
             print(f"  - {issue['file']}:{issue['line']}")  # noqa: print
             print(f"    {issue['description']}")  # noqa: print
             print()  # noqa: print
-
-    # Generate recommendations
-    print(f"\n=== Optimization Recommendations ===")  # noqa: print
-
-    if "memory_leaks" in results["by_category"]:
-        leaks = len(results["by_category"]["memory_leaks"])
-        print(  # noqa: print
-            f"1. Fix {leaks} memory leaks by using 'with' statements for file operations"
-        )
-
-    if "blocking_calls" in results["by_category"]:
-        blocking = len(results["by_category"]["blocking_calls"])
-        print(  # noqa: print
-            f"2. Replace {blocking} blocking calls with async equivalents (asyncio.sleep, aiohttp)"
-        )
-
-    if "database_issues" in results["by_category"]:
-        db = len(results["by_category"]["database_issues"])
+    print("\n=== Optimization Recommendations ===")  # noqa: print
+    cats = results["by_category"]
+    if "memory_leaks" in cats:
         print(
-            f"3. Optimize {db} database operations to avoid N+1 queries"
+            f"1. Fix {len(cats['memory_leaks'])} memory leaks by using 'with' statements"
         )  # noqa: print
-
-    if "inefficient_loops" in results["by_category"]:
-        loops = len(results["by_category"]["inefficient_loops"])
-        print(  # noqa: print
-            f"4. Refactor {loops} inefficient loops using list comprehensions or vectorization"
-        )
-
-    print(f"\n=== Quick Fixes ===")  # noqa: print
-    print(f"Replace: time.sleep() → await asyncio.sleep()")  # noqa: print
+    if "blocking_calls" in cats:
+        print(
+            f"2. Replace {len(cats['blocking_calls'])} blocking calls with async equivalents"
+        )  # noqa: print
+    if "database_issues" in cats:
+        print(
+            f"3. Optimize {len(cats['database_issues'])} database operations to avoid N+1 queries"
+        )  # noqa: print
+    if "inefficient_loops" in cats:
+        print(
+            f"4. Refactor {len(cats['inefficient_loops'])} inefficient loops using list comprehensions"
+        )  # noqa: print
+    print("\n=== Quick Fixes ===")  # noqa: print
+    print("Replace: time.sleep() → await asyncio.sleep()")  # noqa: print
     print(
-        f"Replace: requests.get() → async with aiohttp.ClientSession():"
+        "Replace: requests.get() → async with aiohttp.ClientSession():"
     )  # noqa: print
-    print(f"Replace: open() → with open() as f:")  # noqa: print
-    print(f"Replace: for...+=string → ''.join(list)")  # noqa: print
+    print("Replace: open() → with open() as f:")  # noqa: print
+    print("Replace: for...+=string → ''.join(list)")  # noqa: print
+
+
+def main():
+    """Run simple performance analysis"""
+    print("🚀 Running simple performance analysis...")  # noqa: print
+    analyzer = SimplePerformanceAnalyzer()
+    results = analyzer.analyze_directory(".")
+    print(f"\n=== Performance Analysis Results ===")  # noqa: print
+    print(f"Files analyzed: {results['files_analyzed']}")  # noqa: print
+    print(f"Total issues found: {results['total_issues']}")  # noqa: print
+    _print_severity_and_category(results)
+    _print_issues_and_recommendations(results)
 
 
 if __name__ == "__main__":
