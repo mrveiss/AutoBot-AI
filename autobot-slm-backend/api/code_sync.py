@@ -315,6 +315,39 @@ async def _rsync_component(
         return False, f"rsync error for {component}: {exc}"
 
 
+async def _rsync_component_local(
+    source_path: str,
+    component: str,
+    excludes: List[str],
+) -> Tuple[bool, str]:
+    """Rsync a component locally when code source is on the same host (#1191).
+
+    Used when source_ip matches the SLM server's own IP — no SSH needed.
+    """
+    cmd = ["rsync", "-avz", "--delete"]
+    for exc in excludes:
+        cmd.append(f"--exclude={exc}")
+    cmd.append(f"{source_path}/{component}/")
+    cmd.append(f"/opt/autobot/{component}/")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120.0)
+        output = stdout.decode("utf-8", errors="replace")
+        if proc.returncode != 0:
+            logger.error("local rsync failed for %s: %s", component, output[:500])
+            return False, f"local rsync failed for {component}: {output[:200]}"
+        logger.info("local rsync succeeded for %s", component)
+        return True, ""
+    except asyncio.TimeoutError:
+        return False, f"local rsync timed out for {component}"
+    except Exception as exc:
+        return False, f"local rsync error for {component}: {exc}"
+
+
 async def _restart_slm_service(service: str) -> None:
     """Restart a systemd service on the local SLM server.
 
@@ -416,21 +449,32 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
         return
     source_ip, source_user, repo_path, last_known_commit = conn_info
 
-    ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
-    if not Path(ssh_key).exists():
-        logger.error("SLM self-sync failed: SSH key not found at %s", ssh_key)
-        return
+    # Detect if code source is on the same host — skip SSH entirely (#1191)
+    own_ip = urlparse(settings.external_url).hostname or ""
+    is_local_source = source_ip in {"127.0.0.1", "localhost", own_ip}
 
-    logger.info(
-        "SLM self-sync: pulling from %s@%s:%s", source_user, source_ip, repo_path
-    )
+    if is_local_source:
+        logger.info(
+            "SLM self-sync: code source is local at %s, using direct rsync", repo_path
+        )
+    else:
+        ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
+        if not Path(ssh_key).exists():
+            logger.error("SLM self-sync failed: SSH key not found at %s", ssh_key)
+            return
+        logger.info(
+            "SLM self-sync: pulling from %s@%s:%s", source_user, source_ip, repo_path
+        )
 
     # --- Phase 2: rsync components ---
     all_ok = True
     for component, excludes in _SLM_COMPONENTS:
-        ok, msg = await _rsync_component(
-            source_user, source_ip, repo_path, component, excludes, ssh_key
-        )
+        if is_local_source:
+            ok, msg = await _rsync_component_local(repo_path, component, excludes)
+        else:
+            ok, msg = await _rsync_component(
+                source_user, source_ip, repo_path, component, excludes, ssh_key
+            )
         if not ok:
             logger.error("SLM self-sync component %s failed: %s", component, msg)
             all_ok = False
