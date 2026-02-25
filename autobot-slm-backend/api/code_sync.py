@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from config import settings
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from models.database import (
@@ -50,12 +49,14 @@ from pydantic import BaseModel
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
-from services.git_tracker import get_git_tracker
+from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
 from services.playbook_executor import get_playbook_executor
 from services.sync_orchestrator import get_sync_orchestrator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -96,6 +97,19 @@ _fleet_sync_jobs: Dict[str, FleetSyncJob] = {}
 _running_tasks: Dict[str, asyncio.Task] = {}
 
 
+async def _get_tracker_for_db(db: AsyncSession):
+    """Return a GitTracker configured from the active CodeSource DB record.
+
+    Falls back to DEFAULT_REPO_PATH / DEFAULT_BRANCH when no active
+    source is configured.  Issue #1185.
+    """
+    result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+    source = result.scalar_one_or_none()
+    repo_path = source.repo_path if source else DEFAULT_REPO_PATH
+    branch = source.branch if source else DEFAULT_BRANCH
+    return get_git_tracker(repo_path=repo_path, branch=branch)
+
+
 @router.get("/status", response_model=CodeSyncStatusResponse)
 async def get_sync_status(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -106,7 +120,7 @@ async def get_sync_status(
 
     Returns the latest version, local version, and count of outdated nodes.
     """
-    tracker = get_git_tracker()
+    tracker = await _get_tracker_for_db(db)
 
     # Get latest version from settings
     result = await db.execute(
@@ -152,7 +166,7 @@ async def refresh_version(
     """
     Manually trigger a git fetch and update the latest version.
     """
-    tracker = get_git_tracker()
+    tracker = await _get_tracker_for_db(db)
 
     try:
         result = await tracker.check_for_updates(fetch=True)
