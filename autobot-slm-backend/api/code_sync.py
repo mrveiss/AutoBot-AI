@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from config import settings
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from models.database import (
@@ -50,12 +49,14 @@ from pydantic import BaseModel
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
-from services.git_tracker import get_git_tracker
+from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
 from services.playbook_executor import get_playbook_executor
 from services.sync_orchestrator import get_sync_orchestrator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -96,6 +97,19 @@ _fleet_sync_jobs: Dict[str, FleetSyncJob] = {}
 _running_tasks: Dict[str, asyncio.Task] = {}
 
 
+async def _get_tracker_for_db(db: AsyncSession):
+    """Return a GitTracker configured from the active CodeSource DB record.
+
+    Falls back to DEFAULT_REPO_PATH / DEFAULT_BRANCH when no active
+    source is configured.  Issue #1185.
+    """
+    result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+    source = result.scalar_one_or_none()
+    repo_path = source.repo_path if source else DEFAULT_REPO_PATH
+    branch = source.branch if source else DEFAULT_BRANCH
+    return get_git_tracker(repo_path=repo_path, branch=branch)
+
+
 @router.get("/status", response_model=CodeSyncStatusResponse)
 async def get_sync_status(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -106,7 +120,7 @@ async def get_sync_status(
 
     Returns the latest version, local version, and count of outdated nodes.
     """
-    tracker = get_git_tracker()
+    tracker = await _get_tracker_for_db(db)
 
     # Get latest version from settings
     result = await db.execute(
@@ -152,7 +166,7 @@ async def refresh_version(
     """
     Manually trigger a git fetch and update the latest version.
     """
-    tracker = get_git_tracker()
+    tracker = await _get_tracker_for_db(db)
 
     try:
         result = await tracker.check_for_updates(fetch=True)
@@ -301,6 +315,39 @@ async def _rsync_component(
         return False, f"rsync error for {component}: {exc}"
 
 
+async def _rsync_component_local(
+    source_path: str,
+    component: str,
+    excludes: List[str],
+) -> Tuple[bool, str]:
+    """Rsync a component locally when code source is on the same host (#1191).
+
+    Used when source_ip matches the SLM server's own IP — no SSH needed.
+    """
+    cmd = ["rsync", "-avz", "--delete"]
+    for exc in excludes:
+        cmd.append(f"--exclude={exc}")
+    cmd.append(f"{source_path}/{component}/")
+    cmd.append(f"/opt/autobot/{component}/")
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120.0)
+        output = stdout.decode("utf-8", errors="replace")
+        if proc.returncode != 0:
+            logger.error("local rsync failed for %s: %s", component, output[:500])
+            return False, f"local rsync failed for {component}: {output[:200]}"
+        logger.info("local rsync succeeded for %s", component)
+        return True, ""
+    except asyncio.TimeoutError:
+        return False, f"local rsync timed out for {component}"
+    except Exception as exc:
+        return False, f"local rsync error for {component}: {exc}"
+
+
 async def _restart_slm_service(service: str) -> None:
     """Restart a systemd service on the local SLM server.
 
@@ -402,21 +449,32 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
         return
     source_ip, source_user, repo_path, last_known_commit = conn_info
 
-    ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
-    if not Path(ssh_key).exists():
-        logger.error("SLM self-sync failed: SSH key not found at %s", ssh_key)
-        return
+    # Detect if code source is on the same host — skip SSH entirely (#1191)
+    own_ip = urlparse(settings.external_url).hostname or ""
+    is_local_source = source_ip in {"127.0.0.1", "localhost", own_ip}
 
-    logger.info(
-        "SLM self-sync: pulling from %s@%s:%s", source_user, source_ip, repo_path
-    )
+    if is_local_source:
+        logger.info(
+            "SLM self-sync: code source is local at %s, using direct rsync", repo_path
+        )
+    else:
+        ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
+        if not Path(ssh_key).exists():
+            logger.error("SLM self-sync failed: SSH key not found at %s", ssh_key)
+            return
+        logger.info(
+            "SLM self-sync: pulling from %s@%s:%s", source_user, source_ip, repo_path
+        )
 
     # --- Phase 2: rsync components ---
     all_ok = True
     for component, excludes in _SLM_COMPONENTS:
-        ok, msg = await _rsync_component(
-            source_user, source_ip, repo_path, component, excludes, ssh_key
-        )
+        if is_local_source:
+            ok, msg = await _rsync_component_local(repo_path, component, excludes)
+        else:
+            ok, msg = await _rsync_component(
+                source_user, source_ip, repo_path, component, excludes, ssh_key
+            )
         if not ok:
             logger.error("SLM self-sync component %s failed: %s", component, msg)
             all_ok = False

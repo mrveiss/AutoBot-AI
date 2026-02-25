@@ -177,11 +177,9 @@ const fleetCategoryFilter = ref<'autobot' | 'system' | 'all'>('all')
 const expandedFleetServices = ref<Set<string>>(new Set())
 
 function toggleFleetService(serviceName: string): void {
-  if (expandedFleetServices.value.has(serviceName)) {
-    expandedFleetServices.value.delete(serviceName)
-  } else {
-    expandedFleetServices.value.add(serviceName)
-  }
+  const next = new Set(expandedFleetServices.value)
+  next.has(serviceName) ? next.delete(serviceName) : next.add(serviceName)
+  expandedFleetServices.value = next
 }
 
 function getNodeHostname(nodeId: string): string {
@@ -429,12 +427,14 @@ async function confirmRestartAll(): Promise<void> {
 }
 
 function toggleNode(nodeId: string): void {
-  if (expandedNodes.value.has(nodeId)) {
-    expandedNodes.value.delete(nodeId)
+  const next = new Set(expandedNodes.value)
+  if (next.has(nodeId)) {
+    next.delete(nodeId)
   } else {
-    expandedNodes.value.add(nodeId)
+    next.add(nodeId)
     loadRolesForNode(nodeId)
   }
+  expandedNodes.value = next
 }
 
 async function loadRolesForNode(nodeId: string): Promise<void> {
@@ -451,13 +451,11 @@ async function loadRolesForNode(nodeId: string): Promise<void> {
 }
 
 function expandAll(): void {
-  for (const node of servicesByNode.value) {
-    expandedNodes.value.add(node.nodeId)
-  }
+  expandedNodes.value = new Set(servicesByNode.value.map((n) => n.nodeId))
 }
 
 function collapseAll(): void {
-  expandedNodes.value.clear()
+  expandedNodes.value = new Set()
 }
 
 // =============================================================================

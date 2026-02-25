@@ -13,7 +13,7 @@ import os
 from datetime import datetime
 from typing import Optional, Tuple
 
-from models.database import Setting
+from models.database import CodeSource, Setting
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,7 +28,8 @@ except ImportError:
 
 # Configuration
 VERSION_CHECK_INTERVAL = 300  # 5 minutes
-DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot")
+DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot/code_source")
+DEFAULT_BRANCH = os.environ.get("SLM_REPO_BRANCH", "Dev_new_gui")
 
 
 class GitTracker:
@@ -215,22 +216,66 @@ class GitTracker:
 _tracker_instance: Optional[GitTracker] = None
 
 
-def get_git_tracker(repo_path: str = DEFAULT_REPO_PATH) -> GitTracker:
+def get_git_tracker(
+    repo_path: str = DEFAULT_REPO_PATH,
+    branch: str = DEFAULT_BRANCH,
+) -> GitTracker:
     """
     Get or create the GitTracker singleton instance.
 
+    Resets the singleton when repo_path or branch changes so that
+    version_check_task always tracks the active CodeSource config.
+
+    Issue #1185: accept branch param and reset on config change.
+
     Args:
-        repo_path: Path to the repository
+        repo_path: Path to the git repository
+        branch: Branch to track (default: Dev_new_gui)
 
     Returns:
         GitTracker instance
     """
     global _tracker_instance
 
-    if _tracker_instance is None:
-        _tracker_instance = GitTracker(repo_path=repo_path)
+    config_changed = _tracker_instance is not None and (
+        _tracker_instance.repo_path != repo_path or _tracker_instance.branch != branch
+    )
+
+    if _tracker_instance is None or config_changed:
+        if config_changed:
+            logger.info(
+                "GitTracker config changed: %s@%s -> %s@%s",
+                _tracker_instance.repo_path,  # type: ignore[union-attr]
+                _tracker_instance.branch,  # type: ignore[union-attr]
+                repo_path,
+                branch,
+            )
+        _tracker_instance = GitTracker(repo_path=repo_path, branch=branch)
 
     return _tracker_instance
+
+
+async def _get_active_code_source_config() -> Tuple[str, str]:
+    """Read repo_path and branch from the active CodeSource DB record.
+
+    Falls back to DEFAULT_REPO_PATH / DEFAULT_BRANCH when no active
+    source exists or DB is unavailable.
+
+    Issue #1185: ensures version_check_task uses dynamic config.
+    """
+    if db_service is None:
+        return DEFAULT_REPO_PATH, DEFAULT_BRANCH
+    try:
+        async with db_service.session() as db:
+            result = await db.execute(
+                select(CodeSource).where(CodeSource.is_active.is_(True))
+            )
+            source = result.scalar_one_or_none()
+            if source:
+                return source.repo_path, source.branch
+    except Exception as e:
+        logger.debug("Failed to read CodeSource config from DB: %s", e)
+    return DEFAULT_REPO_PATH, DEFAULT_BRANCH
 
 
 async def update_latest_version_setting(
@@ -263,21 +308,25 @@ async def update_latest_version_setting(
 
 
 async def version_check_task(
-    repo_path: str = DEFAULT_REPO_PATH,
     interval: int = VERSION_CHECK_INTERVAL,
 ) -> None:
     """
     Background task that periodically checks for code updates.
 
+    Reads repo_path and branch from the active CodeSource DB record on
+    each iteration so config changes take effect without restart.
+
+    Issue #1185: use dynamic CodeSource config instead of static env var.
+
     Args:
-        repo_path: Path to the git repository
         interval: Check interval in seconds (default: 300 = 5 min)
     """
-    tracker = get_git_tracker(repo_path)
     logger.info("Starting version check task (interval: %ds)", interval)
 
     while True:
         try:
+            repo_path, branch = await _get_active_code_source_config()
+            tracker = get_git_tracker(repo_path=repo_path, branch=branch)
             result = await tracker.check_for_updates()
 
             if result["remote_commit"]:
@@ -302,17 +351,18 @@ async def version_check_task(
 
 
 def start_version_checker(
-    repo_path: str = DEFAULT_REPO_PATH,
     interval: int = VERSION_CHECK_INTERVAL,
 ) -> asyncio.Task:
     """
     Start the version checker background task.
 
+    Repo path and branch are read from the active CodeSource DB record
+    on each check iteration (issue #1185).
+
     Args:
-        repo_path: Path to the git repository
         interval: Check interval in seconds
 
     Returns:
         The asyncio Task object
     """
-    return asyncio.create_task(version_check_task(repo_path, interval))
+    return asyncio.create_task(version_check_task(interval))

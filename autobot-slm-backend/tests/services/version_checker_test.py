@@ -13,12 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 # Import git_tracker module directly
-git_tracker_path = (
-    Path(__file__).parent.parent.parent.parent
-    / "slm-server"
-    / "services"
-    / "git_tracker.py"
-)
+git_tracker_path = Path(__file__).parent.parent.parent / "services" / "git_tracker.py"
 spec = __import__("importlib.util").util.spec_from_file_location(
     "git_tracker", git_tracker_path
 )
@@ -282,12 +277,14 @@ class TestStartVersionChecker:
 
     @pytest.mark.asyncio
     async def test_start_accepts_custom_params(self):
-        """Test that start_version_checker accepts custom parameters."""
+        """Test that start_version_checker accepts custom interval parameter.
+
+        Issue #1185: repo_path removed — config now comes from CodeSource DB.
+        """
         start_fn = git_tracker_module.start_version_checker
 
-        custom_repo = "/custom/path"
         custom_interval = 600
-        task = start_fn(repo_path=custom_repo, interval=custom_interval)
+        task = start_fn(interval=custom_interval)
 
         assert isinstance(task, asyncio.Task)
         # Clean up

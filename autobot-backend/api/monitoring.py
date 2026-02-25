@@ -15,6 +15,9 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 
+# Hardware monitor moved to monitoring_hardware.py (Issue #213)
+from api.monitoring_hardware import hardware_monitor
+
 # Import monitoring utility functions
 from api.monitoring_utils import (
     _analyze_resource_utilization,
@@ -24,7 +27,6 @@ from api.monitoring_utils import (
     _identify_bottlenecks,
 )
 from auth_middleware import check_admin_permission
-from config import ConfigManager
 
 # Issue #474: Import ServiceURLs for AlertManager integration
 from constants.network_constants import ServiceURLs
@@ -53,8 +55,7 @@ from utils.performance_monitor import (
 
 # Import AutoBot monitoring system
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-
-# Hardware monitor moved to monitoring_hardware.py (Issue #213)
+from config import ConfigManager
 
 logger = logging.getLogger(__name__)
 config = ConfigManager()
@@ -1089,3 +1090,43 @@ async def metrics_health_check(
             "autobot_task_retries_total",
         ],
     }
+
+
+# Issue #1190: Hardware stub endpoints for analytics dashboard
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_hardware_npu",
+    error_code_prefix="MONITORING",
+)
+@router.get("/hardware/npu")
+async def get_hardware_npu_status(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get NPU hardware status. Issue #729: infrastructure monitoring on SLM server."""
+    return await hardware_monitor.get_npu_status()
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_hardware_gpu",
+    error_code_prefix="MONITORING",
+)
+@router.get("/hardware/gpu")
+async def get_hardware_gpu_status(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get GPU hardware status. Issue #729: infrastructure monitoring on SLM server."""
+    return await hardware_monitor.get_gpu_status()
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_hardware_system",
+    error_code_prefix="MONITORING",
+)
+@router.get("/hardware/system")
+async def get_hardware_system_status(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get system resource metrics (CPU, memory, disk)."""
+    return await hardware_monitor.get_system_resources()

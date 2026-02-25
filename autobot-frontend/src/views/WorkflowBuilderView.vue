@@ -583,6 +583,9 @@ const {
   removeNode,
   updateNodePosition,
   connectNodes,
+  clearCanvas,
+  exportCanvasToSteps,
+  getWorkflowStatus,
   connectWebSocket,
   disconnectWebSocket,
 } = useWorkflowBuilder();
@@ -750,19 +753,54 @@ function handleNodesConnected(sourceId: string, targetId: string): void {
 }
 
 async function handleSaveWorkflow(name: string, description: string): Promise<void> {
-  // Export canvas nodes to steps and create workflow
-  showToast('Workflow saved', 'success');
+  const steps = exportCanvasToSteps();
+  if (steps.length === 0) {
+    showToast('Add at least one step before saving', 'warning');
+    return;
+  }
+  const template: WorkflowTemplate = {
+    id: `canvas_${Date.now()}`,
+    name,
+    description,
+    category: 'custom',
+    icon: 'fas fa-project-diagram',
+    steps,
+  };
+  const workflowId = await createWorkflowFromTemplate(template, sessionId.value);
+  if (workflowId) {
+    showToast(`Workflow "${name}" saved`, 'success');
+    activeSection.value = 'runner';
+  } else {
+    showToast('Failed to save workflow', 'error');
+  }
 }
 
 async function handleTemplateSelected(template: WorkflowTemplate | WorkflowTemplateSummary): Promise<void> {
-  // Load template into canvas
-  logger.debug('Template selected:', template);
+  const full = template as WorkflowTemplate;
+  if (!full.steps?.length) {
+    showToast('Template has no steps to load', 'warning');
+    return;
+  }
+  clearCanvas();
+  full.steps.forEach((step, index) => {
+    const node: WorkflowNode = {
+      id: `node_${Date.now()}_${index}`,
+      type: 'step',
+      position: { x: 100 + (index % 3) * 300, y: 100 + Math.floor(index / 3) * 180 },
+      data: { ...step, step_id: '', status: 'pending' as const },
+      connections: [],
+    };
+    addNode(node);
+  });
+  activeSection.value = 'canvas';
+  showToast(`Template "${template.name}" loaded into canvas`, 'success');
 }
 
 async function handleRunTemplate(template: WorkflowTemplate | WorkflowTemplateSummary): Promise<void> {
   const workflowId = await createWorkflowFromTemplate(template as WorkflowTemplate, sessionId.value);
   if (workflowId) {
-    showToast(`Workflow "${template.name}" created`, 'success');
+    await startWorkflow(workflowId);
+    showToast(`Workflow "${template.name}" started`, 'success');
     activeSection.value = 'runner';
   }
 }
@@ -815,8 +853,37 @@ function handleViewWorkflow(workflowId: string): void {
 }
 
 async function handleReRunWorkflow(workflowId: string): Promise<void> {
-  // Re-run a workflow from history
-  showToast('Re-running workflow...', 'info');
+  const existing =
+    activeWorkflows.value.find((wf) => wf.workflow_id === workflowId) ??
+    (await getWorkflowStatus(workflowId));
+  if (!existing) {
+    showToast('Could not find workflow to re-run', 'error');
+    return;
+  }
+  const template: WorkflowTemplate = {
+    id: existing.workflow_id,
+    name: existing.name,
+    description: existing.description,
+    category: 'custom',
+    icon: 'fas fa-redo',
+    steps: existing.steps.map(({ command, description, explanation, requires_confirmation, risk_level, estimated_duration, dependencies }) => ({
+      command,
+      description,
+      explanation,
+      requires_confirmation,
+      risk_level,
+      estimated_duration,
+      dependencies,
+    })),
+  };
+  const newId = await createWorkflowFromTemplate(template, `session_${Date.now()}`);
+  if (newId) {
+    await startWorkflow(newId);
+    showToast(`Re-running "${existing.name}"`, 'success');
+    activeSection.value = 'runner';
+  } else {
+    showToast('Failed to re-run workflow', 'error');
+  }
 }
 
 // Lifecycle

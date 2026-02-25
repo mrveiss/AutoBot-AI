@@ -1,9 +1,17 @@
 <template>
   <div class="knowledge-citations">
-    <div class="citations-header" @click="toggleExpanded">
+    <div
+      class="citations-header"
+      role="button"
+      tabindex="0"
+      :aria-expanded="isExpanded"
+      @click="toggleExpanded"
+      @keydown.enter.prevent="toggleExpanded"
+      @keydown.space.prevent="toggleExpanded"
+    >
       <div class="citations-header-left">
-        <i class="fas fa-brain text-autobot-primary" aria-hidden="true"></i>
-        <span class="citations-label">Knowledge Sources</span>
+        <i class="fas fa-layer-group text-autobot-primary" aria-hidden="true"></i>
+        <span class="citations-label">Sources</span>
         <span class="citations-count">{{ citations.length }}</span>
       </div>
       <i
@@ -17,17 +25,58 @@
           v-for="(citation, idx) in citations"
           :key="citation.id || idx"
           class="citation-item"
+          role="button"
+          tabindex="0"
           @click="$emit('citation-click', citation)"
+          @keydown.enter.prevent="$emit('citation-click', citation)"
+          @keydown.space.prevent="$emit('citation-click', citation)"
         >
-          <div class="citation-rank">[{{ citation.rank || idx + 1 }}]</div>
+          <div class="citation-rank">
+            <i :class="sourceIcon(citation)" aria-hidden="true"></i>
+          </div>
           <div class="citation-content">
-            <div class="citation-text">{{ truncateContent(citation.content) }}</div>
+            <div class="citation-text">
+              <a
+                v-if="citation.type === 'web' && citation.url && isSafeUrl(citation.url)"
+                :href="citation.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="citation-link"
+                @click.stop
+              >{{ citationTitle(citation) }}</a>
+              <span v-else>{{ citationTitle(citation) }}</span>
+            </div>
+            <div
+              v-if="citation.type === 'knowledge_base' && citation.content"
+              class="citation-excerpt"
+            >
+              {{ truncateContent(citation.content) }}
+            </div>
+            <div
+              v-if="citation.type === 'llm_training' && citation.model"
+              class="citation-excerpt"
+            >
+              Model: {{ citation.model }}
+            </div>
             <div class="citation-meta">
-              <span class="citation-score" :class="getScoreClass(citation.score)">
-                <i class="fas fa-chart-line" aria-hidden="true"></i>
-                {{ formatScore(citation.score) }}%
+              <span
+                class="citation-reliability"
+                :class="reliabilityClass(citation.reliability)"
+              >
+                {{ reliabilityLabel(citation.reliability) }}
               </span>
-              <span v-if="citation.source" class="citation-source">
+              <span
+                v-if="citation.type === 'knowledge_base' && citation.score != null"
+                class="citation-score"
+                :class="getScoreClass(citation.score!)"
+              >
+                <i class="fas fa-chart-line" aria-hidden="true"></i>
+                {{ formatScore(citation.score!) }}%
+              </span>
+              <span
+                v-if="citation.type === 'knowledge_base' && citation.source"
+                class="citation-source"
+              >
                 <i class="fas fa-file-alt" aria-hidden="true"></i>
                 {{ formatSourcePath(citation.source) }}
               </span>
@@ -52,6 +101,7 @@
  * Issue #184: Split oversized Vue components
  * Issue #249: Knowledge Base Citations Display
  * Issue #704: Migrated to design tokens
+ * Issue #1186: Always-Visible Source Attribution — extended for type/reliability/web
  */
 
 import { ref } from 'vue'
@@ -59,9 +109,15 @@ import { ref } from 'vue'
 interface Citation {
   id?: string
   rank?: number
-  content: string
-  score: number
+  content?: string
+  score?: number
   source?: string
+  // New fields (Issue #1186)
+  type?: 'knowledge_base' | 'llm_training' | 'web'
+  reliability?: 'verified' | 'high' | 'medium' | 'low'
+  title?: string
+  model?: string
+  url?: string
 }
 
 interface Props {
@@ -110,6 +166,46 @@ const formatSourcePath = (sourcePath: string): string => {
   if (!sourcePath) return 'Unknown'
   const parts = sourcePath.split('/')
   return parts[parts.length - 1] || sourcePath
+}
+
+const sourceIcon = (citation: Citation): string => {
+  switch (citation.type) {
+    case 'knowledge_base': return 'fas fa-book'
+    case 'llm_training':   return 'fas fa-robot'
+    case 'web':            return 'fas fa-globe'
+    default:               return 'fas fa-file-alt'
+  }
+}
+
+const reliabilityClass = (reliability: string | undefined): string => {
+  switch (reliability) {
+    case 'verified':
+    case 'high':   return 'reliability-high'
+    case 'medium': return 'reliability-medium'
+    case 'low':    return 'reliability-low'
+    default:       return 'reliability-medium'
+  }
+}
+
+const reliabilityLabel = (reliability: string | undefined): string => {
+  if (!reliability) return 'Medium'
+  return reliability.charAt(0).toUpperCase() + reliability.slice(1)
+}
+
+const isSafeUrl = (url: string): boolean => {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
+const citationTitle = (citation: Citation): string => {
+  if (citation.title) return citation.title
+  if (citation.type === 'llm_training') return 'AI Training Data'
+  if (citation.type === 'web') return citation.url || 'Web Source'
+  return citation.source ? formatSourcePath(citation.source) : 'Knowledge Base'
 }
 </script>
 
@@ -245,6 +341,47 @@ const formatSourcePath = (sourcePath: string): string => {
 
 .citation-source {
   color: var(--text-tertiary);
+}
+
+.citation-link {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.citation-link:hover {
+  color: var(--color-primary);
+}
+
+.citation-excerpt {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: var(--leading-normal);
+  margin-bottom: var(--spacing-1-5);
+}
+
+.citation-reliability {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--spacing-1-5);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+}
+
+.reliability-high {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--chart-green);
+}
+
+.reliability-medium {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--color-warning);
+}
+
+.reliability-low {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-danger, #ef4444);
 }
 
 /* Transition */

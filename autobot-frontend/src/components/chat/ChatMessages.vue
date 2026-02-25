@@ -144,7 +144,7 @@
 
           <!-- Issue #249: Knowledge Base Citations Display -->
           <div
-            v-if="message.sender === 'assistant' && message.metadata?.used_knowledge && message.metadata?.citations?.length > 0"
+            v-if="message.sender === 'assistant' && message.metadata?.citations?.length > 0"
             class="knowledge-citations"
           >
             <div class="citations-header" @click="toggleCitations(message.id)">

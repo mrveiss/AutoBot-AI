@@ -307,9 +307,44 @@ class ChatWorkflowManager(
                 "streaming": True,
                 "terminal_session_id": terminal_session_id,
                 "used_knowledge": used_knowledge,
-                "citations": rag_citations if used_knowledge else [],
+                "citations": self._build_source_list(
+                    used_knowledge, rag_citations, selected_model
+                ),
             },
         )
+
+    def _build_source_list(
+        self,
+        used_knowledge: bool,
+        rag_citations: List[Dict[str, Any]],
+        selected_model: str,
+    ) -> List[Dict[str, Any]]:
+        """Build citation list always containing >=1 entry. Issue #1186.
+
+        When KB was used, KB citations come first.
+        LLM training data entry is always appended last so users
+        always see what the response is based on.
+        """
+        sources: List[Dict[str, Any]] = []
+        if used_knowledge and not rag_citations:
+            logger.warning(
+                "_build_source_list: used_knowledge=True but rag_citations is empty"
+            )
+        if used_knowledge and rag_citations:
+            for c in rag_citations:
+                sources.append({**c, "type": "knowledge_base", "reliability": "high"})
+        sources.append(
+            {
+                "type": "llm_training",
+                "title": "AI Training Data",
+                "model": selected_model,
+                "reliability": "medium",
+                "source": "LLM",
+                "content": "Response generated using LLM training data.",
+                "score": 0.5,
+            }
+        )
+        return sources
 
     def _parse_stream_chunk(self, line: bytes) -> Optional[Dict[str, Any]]:
         """Parse a single stream chunk line (Issue #315: depth reduction).
@@ -458,7 +493,9 @@ class ChatWorkflowManager(
                 "streaming": True,
                 "terminal_session_id": terminal_session_id,
                 "used_knowledge": used_knowledge,
-                "citations": rag_citations if used_knowledge else [],
+                "citations": self._build_source_list(
+                    used_knowledge, rag_citations, selected_model
+                ),
                 "message_id": current_message_id,
             },
         )
@@ -498,7 +535,9 @@ class ChatWorkflowManager(
                 "model": selected_model,
                 "terminal_session_id": terminal_session_id,
                 "used_knowledge": used_knowledge,
-                "citations": rag_citations if used_knowledge else [],
+                "citations": self._build_source_list(
+                    used_knowledge, rag_citations, selected_model
+                ),
             }
         )
         return streaming_msg

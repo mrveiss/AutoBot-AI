@@ -11,12 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 # Import git_tracker module directly without triggering services/__init__.py
-git_tracker_path = (
-    Path(__file__).parent.parent.parent.parent
-    / "slm-server"
-    / "services"
-    / "git_tracker.py"
-)
+git_tracker_path = Path(__file__).parent.parent.parent / "services" / "git_tracker.py"
 spec = __import__("importlib.util").util.spec_from_file_location(
     "git_tracker", git_tracker_path
 )

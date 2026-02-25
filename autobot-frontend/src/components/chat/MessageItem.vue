@@ -258,7 +258,6 @@ const showMetadata = computed(() => {
 const hasCitations = computed(() => {
   return (
     props.message.sender === 'assistant' &&
-    props.message.metadata?.used_knowledge &&
     (props.message.metadata?.citations?.length || 0) > 0
   )
 })
