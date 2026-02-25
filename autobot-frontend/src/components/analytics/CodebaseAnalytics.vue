@@ -6986,6 +6986,16 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
   border: 1px solid var(--border-default);
 }
 
+/* Issue #1190: Idle state — lighter styling when showing last-known status */
+.progress-container--idle {
+  opacity: 0.85;
+  border-color: var(--border-subtle, var(--border-default));
+}
+
+.progress-container--idle .progress-title {
+  color: var(--text-secondary);
+}
+
 .progress-header {
   display: flex;
   justify-content: space-between;
