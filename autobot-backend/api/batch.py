@@ -108,7 +108,7 @@ async def batch_load(batch_request: BatchRequest):
     """
     import time
 
-    from backend.fast_app_factory_fix import app
+    from fast_app_factory_fix import app
 
     responses = {}
     errors = {}
@@ -219,7 +219,7 @@ async def batch_chat_initialization():
 async def get_chat_sessions():
     """Get chat sessions list using async file operations"""
 
-    from backend.fast_app_factory_fix import app
+    from fast_app_factory_fix import app
 
     if hasattr(app.state, "chat_history_manager") and app.state.chat_history_manager:
         try:
@@ -283,7 +283,7 @@ async def get_service_health():
 async def get_settings():
     """Get user settings"""
     try:
-        from backend.fast_app_factory_fix import app
+        from fast_app_factory_fix import app
 
         # Try to get settings from app state or return defaults
         if hasattr(app.state, "settings"):

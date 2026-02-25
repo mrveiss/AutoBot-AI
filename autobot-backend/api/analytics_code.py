@@ -493,7 +493,7 @@ def _calculate_security_score(cached_analysis: dict) -> float:
         Security score (0-100)
     """
     try:
-        from backend.api.codebase_analytics.storage import get_code_collection
+        from api.codebase_analytics.storage import get_code_collection
 
         code_collection = get_code_collection()
         if not code_collection:

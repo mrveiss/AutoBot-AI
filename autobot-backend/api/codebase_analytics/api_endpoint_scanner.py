@@ -181,15 +181,15 @@ class BackendEndpointScanner:
         Returns:
             Tuple of (import_pattern, import_modules_pattern, include_pattern)
         """
-        # Pattern to detect: from backend.api.module import router as X_router
+        # Pattern to detect: from api.module import router as X_router
         import_pattern = re.compile(
-            r"from\s+backend\.api\.(\w+)\s+import\s+router\s+as\s+(\w+_router)",
+            r"from\s+api\.(\w+)\s+import\s+router\s+as\s+(\w+_router)",
             re.MULTILINE,
         )
 
-        # Pattern to detect: from backend.api import module1, module2
+        # Pattern to detect: from api import module1, module2
         import_modules_pattern = re.compile(
-            r"from\s+backend\.api\s+import\s+([^;\n]+)", re.MULTILINE
+            r"from\s+api\s+import\s+([^;\n]+)", re.MULTILINE
         )
 
         # Pattern to detect: router.include_router(X_router) or router.include_router(module.router)
@@ -225,7 +225,7 @@ class BackendEndpointScanner:
             router_var = match.group(2)  # e.g., "vectorization_router"
             imported_routers[router_var] = module_name
 
-        # Find all module imports (e.g., from backend.api import analytics_cost)
+        # Find all module imports (e.g., from api import analytics_cost)
         imported_modules: dict[str, str] = {}
         for match in import_modules_pattern.finditer(content):
             modules_str = match.group(1)
@@ -261,7 +261,7 @@ class BackendEndpointScanner:
             # Note: The child's own APIRouter(prefix=...) is handled separately
             # in _get_file_router_prefix during scanning
             self._module_prefix_map[child_module] = parent_prefix
-            self._module_prefix_map[f"backend/api/{child_module}.py"] = parent_prefix
+            self._module_prefix_map[f"api/{child_module}.py"] = parent_prefix
             self._module_prefix_map[f"api.{child_module}"] = parent_prefix
             logger.debug(
                 "Nested router: %s -> %s (from %s)",
@@ -359,7 +359,7 @@ class BackendEndpointScanner:
                 self._module_prefix_map[module_name] = full_prefix
 
                 # Also map the file name pattern
-                self._module_prefix_map[f"backend/api/{module_name}.py"] = full_prefix
+                self._module_prefix_map[f"api/{module_name}.py"] = full_prefix
 
         except Exception as e:
             logger.debug("Error parsing router registry %s: %s", file_path, e)
@@ -466,7 +466,7 @@ class BackendEndpointScanner:
         # Extract module name from path (api.infrastructure -> infrastructure)
         module_name = module_path.split(".")[-1]
         self._module_prefix_map[module_name] = full_prefix
-        self._module_prefix_map[f"backend/api/{module_name}.py"] = full_prefix
+        self._module_prefix_map[f"api/{module_name}.py"] = full_prefix
 
         logger.debug("Registered prefix: %s -> %s", module_name, full_prefix)
 

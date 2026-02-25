@@ -121,9 +121,9 @@ class ChatWorkflowManager(
     async def _init_knowledge_service(self) -> None:
         """Initialize knowledge service for RAG (Issue #249)."""
         try:
-            from backend.knowledge_factory import get_knowledge_base_async
-            from backend.services.chat_knowledge_service import ChatKnowledgeService
-            from backend.services.rag_service import RAGService
+            from knowledge_factory import get_knowledge_base_async
+            from services.chat_knowledge_service import ChatKnowledgeService
+            from services.rag_service import RAGService
 
             kb = await get_knowledge_base_async()
             if kb:

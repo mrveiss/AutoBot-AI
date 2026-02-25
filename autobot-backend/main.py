@@ -95,7 +95,7 @@ if __name__ == "__main__":
     try:
         # Build uvicorn config
         uvicorn_config = {
-            "app": "backend.main:app",
+            "app": "main:app",
             "host": host,
             "port": port,
             "reload": reload,

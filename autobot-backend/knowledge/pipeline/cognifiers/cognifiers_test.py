@@ -403,7 +403,7 @@ class TestEventExtractorConversion:
     """Tests for EventExtractor._convert_to_events."""
 
     def test_valid_event(self, event_extractor, sample_chunk):
-        from backend.knowledge.pipeline.base import PipelineContext
+        from knowledge.pipeline.base import PipelineContext
 
         ctx = PipelineContext()
         ctx.document_id = sample_chunk.document_id
@@ -424,7 +424,7 @@ class TestEventExtractorConversion:
         assert events[0].timestamp == datetime(2024, 6, 1)
 
     def test_invalid_temporal_type_defaults(self, event_extractor, sample_chunk):
-        from backend.knowledge.pipeline.base import PipelineContext
+        from knowledge.pipeline.base import PipelineContext
 
         ctx = PipelineContext()
         ctx.document_id = sample_chunk.document_id
@@ -434,7 +434,7 @@ class TestEventExtractorConversion:
         assert events[0].temporal_type == "point"
 
     def test_invalid_event_type_defaults(self, event_extractor, sample_chunk):
-        from backend.knowledge.pipeline.base import PipelineContext
+        from knowledge.pipeline.base import PipelineContext
 
         ctx = PipelineContext()
         ctx.document_id = sample_chunk.document_id
@@ -444,7 +444,7 @@ class TestEventExtractorConversion:
         assert events[0].event_type == "occurrence"
 
     def test_participants_resolved(self, event_extractor, sample_chunk):
-        from backend.knowledge.pipeline.base import PipelineContext
+        from knowledge.pipeline.base import PipelineContext
 
         ctx = PipelineContext()
         ctx.document_id = sample_chunk.document_id

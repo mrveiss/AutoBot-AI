@@ -136,5 +136,5 @@ celery_app.conf.update(
     task_send_sent_event=True,
 )
 
-# Auto-discover tasks from backend.tasks module
-celery_app.autodiscover_tasks(["backend.tasks"])
+# Auto-discover tasks from tasks module
+celery_app.autodiscover_tasks(["tasks"])

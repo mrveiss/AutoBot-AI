@@ -139,8 +139,8 @@ class SessionManager:
         Returns:
             PTY session ID if successful, None otherwise
         """
-        from backend.services.simple_pty import simple_pty_manager
         from constants.path_constants import PATH
+        from services.simple_pty import simple_pty_manager
 
         existing_pty = simple_pty_manager.get_session(pty_session_id)
 
@@ -185,7 +185,7 @@ class SessionManager:
             conversation_id: Conversation ID for logging linkage
         """
         try:
-            from backend.api.terminal import session_manager
+            from api.terminal import session_manager
 
             session_manager.session_configs[pty_session_id] = {
                 "security_level": "standard",

@@ -909,7 +909,7 @@ async def _check_provider_availability(agent_id: str) -> tuple:
     start_time = datetime.now()
 
     try:
-        from backend.services.provider_health import ProviderHealthManager
+        from services.provider_health import ProviderHealthManager
 
         provider_config = DEFAULT_AGENT_CONFIGS[agent_id].get("provider", "ollama")
         health_result = await ProviderHealthManager.check_provider_health(

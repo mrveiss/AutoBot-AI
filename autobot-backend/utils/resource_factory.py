@@ -170,7 +170,7 @@ class ResourceFactory:
                     return wam
 
             # Fallback to module-level import and creation
-            from backend.api.workflow_automation import WorkflowAutomationManager
+            from api.workflow_automation import WorkflowAutomationManager
 
             logger.info(
                 "Creating new WorkflowAutomationManager instance (expensive operation)"

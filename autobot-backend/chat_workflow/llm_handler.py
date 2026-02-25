@@ -115,7 +115,7 @@ class LLMHandlerMixin:
         Issue #964: Personality profile injection.
         """
         try:
-            from backend.services.personality_service import get_personality_manager
+            from services.personality_service import get_personality_manager
 
             profile = get_personality_manager().get_active_profile()
             if profile is None:

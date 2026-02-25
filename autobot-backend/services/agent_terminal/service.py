@@ -141,7 +141,7 @@ class AgentTerminalService:
         pty_alive = False
         if session.has_pty_session():
             try:
-                from backend.services.simple_pty import simple_pty_manager
+                from services.simple_pty import simple_pty_manager
 
                 pty = simple_pty_manager.get_session(session.pty_session_id)
                 pty_alive = pty is not None and pty.is_alive()

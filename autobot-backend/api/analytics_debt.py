@@ -538,10 +538,7 @@ async def calculate_technical_debt(
     Analyzes code quality issues and estimates remediation cost.
     """
     try:
-        from backend.api.codebase_analytics import (
-            get_code_collection,
-            get_redis_connection,
-        )
+        from api.codebase_analytics import get_code_collection, get_redis_connection
 
         code_collection = get_code_collection()
         redis_client = await get_redis_connection()

@@ -128,7 +128,7 @@ class CommandExecutor:
         Returns:
             True if closed successfully, False otherwise
         """
-        from backend.services.simple_pty import simple_pty_manager
+        from services.simple_pty import simple_pty_manager
 
         try:
             simple_pty_manager.close_session(pty_session_id)
@@ -192,7 +192,7 @@ class CommandExecutor:
             return False
 
         try:
-            from backend.services.simple_pty import simple_pty_manager
+            from services.simple_pty import simple_pty_manager
 
             pty = simple_pty_manager.get_session(session.pty_session_id)
             logger.info(
@@ -249,7 +249,7 @@ class CommandExecutor:
             return False
 
         try:
-            from backend.services.simple_pty import simple_pty_manager
+            from services.simple_pty import simple_pty_manager
 
             pty = simple_pty_manager.get_session(session.pty_session_id)
             if not pty or not pty.is_alive():

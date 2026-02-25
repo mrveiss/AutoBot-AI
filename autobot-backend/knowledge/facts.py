@@ -120,7 +120,7 @@ async def warmup_npu_connection() -> Dict[str, Any]:
     result = _init_warmup_result()
 
     try:
-        from backend.services.npu_client import get_npu_client
+        from services.npu_client import get_npu_client
 
         client = get_npu_client()
         if not await client.is_available(force_check=True):
@@ -197,7 +197,7 @@ async def _get_npu_client_cached() -> tuple:
 
     # Refresh cache
     try:
-        from backend.services.npu_client import get_npu_client
+        from services.npu_client import get_npu_client
 
         _npu_client_cache = get_npu_client()
         _npu_available_cache = await _npu_client_cache.is_available()
@@ -597,8 +597,9 @@ class FactsMixin:
             return
 
         # Import sanitization utility
-        from knowledge.utils import \
-            sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb
+        from knowledge.utils import (
+            sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb,
+        )
 
         # Sanitize metadata for ChromaDB
         sanitized_metadata = _sanitize_metadata_for_chromadb(metadata)

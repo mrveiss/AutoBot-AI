@@ -432,7 +432,7 @@ async def list_operation_types(
     audited and filtered.
     """
     try:
-        from backend.services.audit_logger import OPERATION_CATEGORIES
+        from services.audit_logger import OPERATION_CATEGORIES
 
         # Group operations by category
         categories = {}

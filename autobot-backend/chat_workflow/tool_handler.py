@@ -100,10 +100,8 @@ def _detect_and_store_security_output(
         if not _SECURITY_TOOL_PATTERN.search(command):
             return
 
-        from backend.services.security_tool_parsers import parse_tool_output
-        from backend.services.security_workflow_manager import (
-            get_security_workflow_manager,
-        )
+        from services.security_tool_parsers import parse_tool_output
+        from services.security_workflow_manager import get_security_workflow_manager
 
         parsed = parse_tool_output(output)
         if not parsed or not parsed.get("hosts"):
@@ -203,7 +201,7 @@ class ToolHandlerMixin:
             # CRITICAL: Access the global singleton instance directly
             # This ensures sessions created here are visible to the approval API
             if agent_terminal_api._agent_terminal_service_instance is None:
-                from backend.services.agent_terminal import AgentTerminalService
+                from services.agent_terminal import AgentTerminalService
 
                 # Pass self to prevent circular initialization loop
                 agent_terminal_api._agent_terminal_service_instance = (

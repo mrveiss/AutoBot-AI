@@ -17,7 +17,6 @@ from contextlib import asynccontextmanager
 
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
-from config import ConfigManager
 from fastapi import FastAPI
 from knowledge_factory import get_or_create_knowledge_base
 from security_layer import SecurityLayer
@@ -31,6 +30,7 @@ from autobot_shared.tracing import (
     instrument_redis,
     shutdown_tracing,
 )
+from config import ConfigManager
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -41,7 +41,7 @@ _executor: ThreadPoolExecutor | None = None
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for backend logger names
-_BACKEND_LOGGER_NAMES = ("backend", "backend.api", "api.codebase_analytics")
+_BACKEND_LOGGER_NAMES = ("api", "api.codebase_analytics")
 
 # Lock for thread-safe access to app_state
 _app_state_lock = asyncio.Lock()

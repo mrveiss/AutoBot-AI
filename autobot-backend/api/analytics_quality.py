@@ -227,7 +227,7 @@ async def _get_problems_from_chromadb() -> tuple[list[dict], dict[str, Any]]:
     stats = {}
 
     try:
-        from backend.api.codebase_analytics.storage import get_code_collection_async
+        from api.codebase_analytics.storage import get_code_collection_async
 
         collection = await get_code_collection_async()
         if not collection:

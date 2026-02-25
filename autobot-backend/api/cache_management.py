@@ -263,7 +263,7 @@ async def _warm_templates_cache() -> bool:
 
 async def _warm_system_status_cache() -> bool:
     """Warm cache for system health status."""
-    from backend.utils.connection_utils import ConnectionTester
+    from utils.connection_utils import ConnectionTester
 
     try:
         # Issue #379: Fetch fast and detailed status in parallel

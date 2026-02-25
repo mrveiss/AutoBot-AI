@@ -42,7 +42,7 @@ from .types import (
 
 # Import PTY manager for terminal integration
 try:
-    from backend.services.simple_pty import simple_pty_manager
+    from services.simple_pty import simple_pty_manager
 
     PTY_AVAILABLE = True
 except ImportError:
@@ -232,9 +232,7 @@ class StepExecutorAgent:
         """Get or create the command executor."""
         if self._command_executor is None:
             try:
-                from backend.services.agent_terminal.command_executor import (
-                    CommandExecutor,
-                )
+                from services.agent_terminal.command_executor import CommandExecutor
 
                 self._command_executor = CommandExecutor()
             except ImportError:

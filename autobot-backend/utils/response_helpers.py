@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse
 from type_defs.common import Metadata
 
 if TYPE_CHECKING:
-    from backend.services.ai_stack_client import AIStackError
+    from services.ai_stack_client import AIStackError
 
 logger = logging.getLogger(__name__)
 

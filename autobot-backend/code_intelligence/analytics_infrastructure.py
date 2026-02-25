@@ -187,8 +187,9 @@ class AnalyticsInfrastructureMixin:
             async with self._infra_lock:
                 if self._chromadb_collection is None:
                     try:
-                        from utils.async_chromadb_client import \
-                            get_async_chromadb_client
+                        from utils.async_chromadb_client import (
+                            get_async_chromadb_client,
+                        )
 
                         self._chromadb_client = await get_async_chromadb_client()
                         self._chromadb_collection = await self._chromadb_client.get_or_create_collection(
@@ -217,8 +218,7 @@ class AnalyticsInfrastructureMixin:
             async with self._infra_lock:
                 if self._redis_client is None:
                     try:
-                        from autobot_shared.redis_client import \
-                            get_redis_client
+                        from autobot_shared.redis_client import get_redis_client
 
                         self._redis_client = await get_redis_client(
                             async_client=True, database=self._redis_database
@@ -321,7 +321,7 @@ class AnalyticsInfrastructureMixin:
                 return None  # Skip NPU - recently confirmed unavailable
 
         try:
-            from backend.services.npu_client import get_npu_client
+            from services.npu_client import get_npu_client
 
             client = get_npu_client()
 
@@ -447,7 +447,7 @@ class AnalyticsInfrastructureMixin:
                 return None
 
         try:
-            from backend.services.npu_client import get_npu_client
+            from services.npu_client import get_npu_client
 
             client = get_npu_client()
 

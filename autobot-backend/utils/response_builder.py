@@ -18,7 +18,7 @@ Standard Response Format:
 }
 
 Usage:
-    from backend.utils.response_builder import success_response, error_response
+    from utils.response_builder import success_response, error_response
 
     @router.get("/items")
     async def get_items():
