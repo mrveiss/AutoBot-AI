@@ -13,8 +13,8 @@ import logging
 import uuid
 from typing import Dict, List, Optional
 
-from backend.services.command_approval_manager import AgentRole
-from backend.type_defs.common import Metadata
+from services.command_approval_manager import AgentRole
+from type_defs.common import Metadata
 
 from .models import AgentSessionState, AgentTerminalSession
 

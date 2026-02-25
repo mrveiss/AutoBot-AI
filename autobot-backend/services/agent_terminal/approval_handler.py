@@ -12,8 +12,8 @@ import logging
 import time
 from typing import Dict, Optional
 
-from backend.services.command_approval_manager import CommandApprovalManager
 from secure_command_executor import CommandRisk
+from services.command_approval_manager import CommandApprovalManager
 
 from .models import AgentTerminalSession
 

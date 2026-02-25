@@ -661,16 +661,16 @@ if __name__ == "__main__":
         for i in range(10):
             try:
                 result = await flaky_service_call()
-                print(f"Call {i+1}: Success - {result}")
+                print(f"Call {i+1}: Success - {result}")  # noqa: print
             except (ConnectionError, CircuitBreakerOpenError) as e:
-                print(f"Call {i+1}: Failed - {type(e).__name__}: {e}")
+                print(f"Call {i+1}: Failed - {type(e).__name__}: {e}")  # noqa: print
 
             await asyncio.sleep(1)
 
         # Check circuit breaker state
         cb_state = flaky_service_call.circuit_breaker.get_state()
-        print(f"\\nCircuit breaker state: {cb_state['state']}")
-        print(
+        print(f"\\nCircuit breaker state: {cb_state['state']}")  # noqa: print
+        print(  # noqa: print
             f"Success rate: {cb_state['recent_performance'].get('success_rate', 0):.1%}"
         )
 

@@ -10,7 +10,7 @@ Helper functions for agent terminal operations.
 import re
 from typing import TYPE_CHECKING, Optional
 
-from backend.models.command_execution import CommandExecution, CommandState, RiskLevel
+from models.command_execution import CommandExecution, CommandState, RiskLevel
 from secure_command_executor import CommandRisk
 
 if TYPE_CHECKING:

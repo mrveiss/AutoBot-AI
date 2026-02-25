@@ -39,8 +39,8 @@ Usage:
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TypeVar, Union
 
-from backend.type_defs.common import Metadata
 from fastapi.responses import JSONResponse
+from type_defs.common import Metadata
 
 T = TypeVar("T")
 

@@ -12,16 +12,9 @@ import time
 from typing import Any, Dict, Optional
 
 from async_chat_workflow import AsyncChatWorkflow
-from backend.conversation_context import (
-    ConversationContext,
-    ConversationContextAnalyzer,
-)
-from backend.conversation_safety import ConversationSafetyGuards, SafetyCheckResult
-from backend.intent_classifier import (
-    ConversationIntent,
-    IntentClassification,
-    IntentClassifier,
-)
+from conversation_context import ConversationContext, ConversationContextAnalyzer
+from conversation_safety import ConversationSafetyGuards, SafetyCheckResult
+from intent_classifier import ConversationIntent, IntentClassification, IntentClassifier
 
 from autobot_shared.error_boundaries import error_boundary
 

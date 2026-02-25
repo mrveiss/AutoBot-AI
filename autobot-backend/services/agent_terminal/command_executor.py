@@ -14,10 +14,10 @@ import time
 import uuid
 from typing import Optional
 
-from backend.constants.path_constants import PATH
-from backend.constants.threshold_constants import TimingConstants
-from backend.type_defs.common import Metadata
-from backend.utils.encoding_utils import strip_ansi_codes
+from constants.path_constants import PATH
+from constants.threshold_constants import TimingConstants
+from type_defs.common import Metadata
+from utils.encoding_utils import strip_ansi_codes
 
 from .models import AgentTerminalSession
 

@@ -11,7 +11,7 @@ from datetime import datetime
 from uuid import uuid4
 
 import pytest
-from backend.knowledge.pipeline.base import (
+from knowledge.pipeline.base import (
     BaseCognifier,
     BaseExtractor,
     BaseLoader,

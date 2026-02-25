@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
-from backend.constants.threshold_constants import TimingConstants
+from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
 
@@ -758,8 +758,8 @@ async def main():
     try:
         # Submit multiple requests
         requests = [
-            "Analyze this code snippet: def hello(): print('world')",
-            "Check for syntax errors in: print('test'",
+            "Analyze this code snippet: def hello(): print('world')",  # noqa: print
+            "Check for syntax errors in: print('test'",  # noqa: print
             "Explain this function: lambda x: x * 2",
             "Review this Python code: class Test: pass",
         ]

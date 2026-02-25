@@ -28,10 +28,8 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
-from autobot_shared.error_boundaries import error_boundary
-
 # Import components from the search_components package
-from backend.knowledge.search_components import (
+from knowledge.search_components import (
     KeywordSearcher,
     QueryProcessor,
     ResponseBuilder,
@@ -39,14 +37,16 @@ from backend.knowledge.search_components import (
     get_analytics,
     get_reranker,
 )
-from backend.knowledge.search_components.helpers import (
+from knowledge.search_components.helpers import (
     build_search_result,
     decode_redis_hash,
     matches_category,
     score_fact_by_terms,
 )
-from backend.knowledge.search_components.hybrid_search import HybridSearcher
-from backend.models.task_context import EnhancedSearchContext
+from knowledge.search_components.hybrid_search import HybridSearcher
+from models.task_context import EnhancedSearchContext
+
+from autobot_shared.error_boundaries import error_boundary
 
 if TYPE_CHECKING:
     import aioredis

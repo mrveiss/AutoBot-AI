@@ -23,9 +23,9 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from backend.services.agent_analytics import AgentAnalytics, get_agent_analytics
-from backend.services.llm_cost_tracker import LLMCostTracker, get_cost_tracker
-from backend.services.user_behavior_analytics import (
+from services.agent_analytics import AgentAnalytics, get_agent_analytics
+from services.llm_cost_tracker import LLMCostTracker, get_cost_tracker
+from services.user_behavior_analytics import (
     UserBehaviorAnalytics,
     get_behavior_analytics,
 )

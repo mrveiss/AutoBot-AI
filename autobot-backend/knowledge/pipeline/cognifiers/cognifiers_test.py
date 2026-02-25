@@ -21,21 +21,17 @@ _mock_llm = ModuleType("llm_interface_pkg")
 _mock_llm.LLMInterface = MagicMock
 sys.modules["llm_interface_pkg"] = _mock_llm
 
-from backend.knowledge.pipeline.cognifiers.entity_extractor import (  # noqa: E402
-    EntityExtractor,
-)
-from backend.knowledge.pipeline.cognifiers.event_extractor import (  # noqa: E402
-    EventExtractor,
-)
-from backend.knowledge.pipeline.cognifiers.relationship_extractor import (  # noqa: E402
+from knowledge.pipeline.cognifiers.entity_extractor import EntityExtractor  # noqa: E402
+from knowledge.pipeline.cognifiers.event_extractor import EventExtractor  # noqa: E402
+from knowledge.pipeline.cognifiers.relationship_extractor import (  # noqa: E402
     SYMMETRIC_RELATIONS,
     RelationshipExtractor,
 )
-from backend.knowledge.pipeline.cognifiers.summarizer import (  # noqa: E402
+from knowledge.pipeline.cognifiers.summarizer import (  # noqa: E402
     HierarchicalSummarizer,
 )
-from backend.knowledge.pipeline.models.chunk import ProcessedChunk  # noqa: E402
-from backend.knowledge.pipeline.models.entity import Entity  # noqa: E402
+from knowledge.pipeline.models.chunk import ProcessedChunk  # noqa: E402
+from knowledge.pipeline.models.entity import Entity  # noqa: E402
 
 # --- Fixtures ---
 

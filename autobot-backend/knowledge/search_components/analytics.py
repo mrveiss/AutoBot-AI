@@ -12,7 +12,7 @@ import logging
 import threading
 from typing import List, Optional
 
-from backend.models.task_context import SearchAnalyticsContext
+from models.task_context import SearchAnalyticsContext
 
 logger = logging.getLogger(__name__)
 

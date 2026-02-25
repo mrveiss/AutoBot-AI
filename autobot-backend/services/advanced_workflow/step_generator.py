@@ -11,8 +11,8 @@ import logging
 from typing import List, Optional
 
 from autobot_types import TaskComplexity
-from backend.type_defs.common import Metadata
 from enhanced_orchestrator import EnhancedOrchestrator
+from type_defs.common import Metadata
 
 from .models import SmartWorkflowStep, WorkflowIntent
 

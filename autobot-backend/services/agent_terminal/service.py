@@ -11,13 +11,13 @@ import logging
 import time
 from typing import Optional
 
-from backend.autobot_logging.terminal_logger import TerminalLogger
-from backend.monitoring.prometheus_metrics import get_metrics_manager
-from backend.services.command_approval_manager import AgentRole, CommandApprovalManager
-from backend.services.command_execution_queue import get_command_queue
-from backend.type_defs.common import Metadata
+from autobot_logging.terminal_logger import TerminalLogger
 from chat_history import ChatHistoryManager
+from monitoring.prometheus_metrics import get_metrics_manager
 from secure_command_executor import SecureCommandExecutor, SecurityPolicy
+from services.command_approval_manager import AgentRole, CommandApprovalManager
+from services.command_execution_queue import get_command_queue
+from type_defs.common import Metadata
 
 from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor

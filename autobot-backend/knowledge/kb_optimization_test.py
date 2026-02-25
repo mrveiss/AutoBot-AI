@@ -66,22 +66,22 @@ The architecture supports distributed deployment scenarios where multiple AutoBo
 
 async def test_knowledge_base_optimization():
     """Test knowledge base with GPU optimization."""
-    print("🧪 Testing AutoBot Knowledge Base with GPU Optimization")
-    print("=" * 60)
+    print("🧪 Testing AutoBot Knowledge Base with GPU Optimization")  # noqa: print
+    print("=" * 60)  # noqa: print
 
     # Initialize knowledge base
-    print("📚 Initializing knowledge base...")
+    print("📚 Initializing knowledge base...")  # noqa: print
     kb = get_knowledge_base()
 
     # Check if GPU optimization is active
-    print("\n🔍 Checking optimization status...")
+    print("\n🔍 Checking optimization status...")  # noqa: print
     stats = await kb.get_stats()
-    print(f"Redis Connected: {stats.get('redis_connected', False)}")
-    print(f"Index Available: {stats.get('index_available', False)}")
+    print(f"Redis Connected: {stats.get('redis_connected', False)}")  # noqa: print
+    print(f"Index Available: {stats.get('index_available', False)}")  # noqa: print
 
     # Test document processing with performance measurement
-    print("\n⚡ Testing GPU-optimized document processing...")
-    print(f"Document length: {len(TEST_DOCUMENT_CONTENT)} characters")
+    print("\n⚡ Testing GPU-optimized document processing...")  # noqa: print
+    print(f"Document length: {len(TEST_DOCUMENT_CONTENT)} characters")  # noqa: print
 
     start_time = time.time()
 
@@ -94,7 +94,7 @@ async def test_knowledge_base_optimization():
         with open(test_file, "w") as f:
             f.write(TEST_DOCUMENT_CONTENT)
 
-        print(f"📄 Processing test document: {test_file}")
+        print(f"📄 Processing test document: {test_file}")  # noqa: print
 
         # Process with GPU-optimized chunking
         results = await kb.add_documents_from_directory(
@@ -103,54 +103,60 @@ async def test_knowledge_base_optimization():
 
         processing_time = time.time() - start_time
 
-        print("\n📊 Processing Results:")
-        print(f"  ⏱️  Processing Time: {processing_time:.2f}s")
-        print(f"  📁 Files Processed: {results['processed_files']}")
-        print(f"  📦 Chunks Created: {results['total_chunks']}")
-        print(f"  ❌ Errors: {len(results['errors'])}")
+        print("\n📊 Processing Results:")  # noqa: print
+        print(f"  ⏱️  Processing Time: {processing_time:.2f}s")  # noqa: print
+        print(f"  📁 Files Processed: {results['processed_files']}")  # noqa: print
+        print(f"  📦 Chunks Created: {results['total_chunks']}")  # noqa: print
+        print(f"  ❌ Errors: {len(results['errors'])}")  # noqa: print
 
         if results["total_chunks"] > 0:
             chunks_per_second = results["total_chunks"] / processing_time
-            print(f"  ⚡ Performance: {chunks_per_second:.1f} chunks/sec")
+            print(f"  ⚡ Performance: {chunks_per_second:.1f} chunks/sec")  # noqa: print
 
         # Test search functionality
-        print("\n🔍 Testing search with processed document...")
+        print("\n🔍 Testing search with processed document...")  # noqa: print
         search_start = time.time()
 
         search_results = await kb.search_documents("AutoBot architecture", limit=3)
 
         search_time = time.time() - search_start
 
-        print(f"  🔍 Search completed in {search_time:.3f}s")
-        print(f"  📋 Results found: {len(search_results)}")
+        print(f"  🔍 Search completed in {search_time:.3f}s")  # noqa: print
+        print(f"  📋 Results found: {len(search_results)}")  # noqa: print
 
         if search_results:
             for i, result in enumerate(search_results[:2], 1):
-                print(f"    {i}. Score: {result['score']:.3f}")
-                print(f"       Content: {result['content'][:100]}...")
+                print(f"    {i}. Score: {result['score']:.3f}")  # noqa: print
+                print(f"       Content: {result['content'][:100]}...")  # noqa: print
 
         # Performance analysis
-        print("\n📈 Performance Analysis:")
+        print("\n📈 Performance Analysis:")  # noqa: print
 
         # Estimate performance improvement based on previous benchmarks
         estimated_original_time = processing_time * 5.4  # Based on our 5.4x improvement
-        print(f"  🐌 Estimated original processing time: {estimated_original_time:.2f}s")
-        print(f"  🚀 GPU-optimized time: {processing_time:.2f}s")
         print(
+            f"  🐌 Estimated original processing time: {estimated_original_time:.2f}s"
+        )  # noqa: print
+        print(f"  🚀 GPU-optimized time: {processing_time:.2f}s")  # noqa: print
+        print(  # noqa: print
             f"  📊 Speed improvement: ~{estimated_original_time/processing_time:.1f}x faster"
         )
 
         # Memory and resource efficiency
         if processing_time < 5.0:
-            print("  ✅ Excellent performance: <5 seconds for document processing")
-        elif processing_time < 10.0:
-            print("  👍 Good performance: <10 seconds for document processing")
-        else:
             print(
+                "  ✅ Excellent performance: <5 seconds for document processing"
+            )  # noqa: print
+        elif processing_time < 10.0:
+            print(
+                "  👍 Good performance: <10 seconds for document processing"
+            )  # noqa: print
+        else:
+            print(  # noqa: print
                 f"  ⚠️  Performance needs optimization: >{processing_time:.1f} seconds"
             )
 
-    print("\n🏁 Knowledge Base Optimization Test Complete")
+    print("\n🏁 Knowledge Base Optimization Test Complete")  # noqa: print
     return {
         "processing_time": processing_time,
         "chunks_created": results["total_chunks"],
@@ -161,7 +167,7 @@ async def test_knowledge_base_optimization():
 
 async def test_chunker_optimization_status():
     """Test which semantic chunker is being used."""
-    print("\n🔧 Testing Semantic Chunker Status...")
+    print("\n🔧 Testing Semantic Chunker Status...")  # noqa: print
 
     try:
         # Try to import both chunkers and check which one is active
@@ -170,34 +176,34 @@ async def test_chunker_optimization_status():
         chunker = get_semantic_chunker()
         chunker_type = type(chunker).__name__
 
-        print(f"  📦 Active chunker: {chunker_type}")
+        print(f"  📦 Active chunker: {chunker_type}")  # noqa: print
 
         # Check if it's the optimized version
         if hasattr(chunker, "get_performance_stats"):
-            print("  🚀 GPU optimization: ✅ ACTIVE")
+            print("  🚀 GPU optimization: ✅ ACTIVE")  # noqa: print
             if hasattr(chunker, "gpu_batch_size"):
-                print(f"  ⚙️  GPU batch size: {chunker.gpu_batch_size}")
+                print(f"  ⚙️  GPU batch size: {chunker.gpu_batch_size}")  # noqa: print
             if hasattr(chunker, "_gpu_optimized"):
-                print(f"  🎮 GPU flag: {chunker._gpu_optimized}")
+                print(f"  🎮 GPU flag: {chunker._gpu_optimized}")  # noqa: print
         else:
-            print("  🚀 GPU optimization: ❌ NOT ACTIVE")
+            print("  🚀 GPU optimization: ❌ NOT ACTIVE")  # noqa: print
 
         # Check chunker module location
         chunker_module = chunker.__class__.__module__
-        print(f"  📍 Module: {chunker_module}")
+        print(f"  📍 Module: {chunker_module}")  # noqa: print
 
         return chunker_type
 
     except Exception as e:
-        print(f"  ❌ Error checking chunker status: {e}")
+        print(f"  ❌ Error checking chunker status: {e}")  # noqa: print
         return None
 
 
 if __name__ == "__main__":
 
     async def main():
-        print("🚀 AutoBot Knowledge Base GPU Optimization Test")
-        print("=" * 70)
+        print("🚀 AutoBot Knowledge Base GPU Optimization Test")  # noqa: print
+        print("=" * 70)  # noqa: print
 
         # Test chunker status
         chunker_type = await test_chunker_optimization_status()
@@ -206,20 +212,22 @@ if __name__ == "__main__":
         results = await test_knowledge_base_optimization()
 
         # Final summary
-        print("\n" + "=" * 70)
-        print("📋 OPTIMIZATION TEST SUMMARY")
-        print("=" * 70)
+        print("\n" + "=" * 70)  # noqa: print
+        print("📋 OPTIMIZATION TEST SUMMARY")  # noqa: print
+        print("=" * 70)  # noqa: print
 
         if chunker_type and "Optimized" in chunker_type:
-            print("✅ GPU-optimized semantic chunker is ACTIVE")
+            print("✅ GPU-optimized semantic chunker is ACTIVE")  # noqa: print
         else:
-            print("⚠️  GPU-optimized semantic chunker may not be active")
+            print("⚠️  GPU-optimized semantic chunker may not be active")  # noqa: print
 
-        print("📊 Performance Metrics:")
-        print(f"  - Document processing: {results['processing_time']:.2f}s")
-        print(f"  - Chunks created: {results['chunks_created']}")
-        print(f"  - Search performance: {results['search_time']:.3f}s")
-        print(f"  - Search results: {results['search_results']}")
+        print("📊 Performance Metrics:")  # noqa: print
+        print(
+            f"  - Document processing: {results['processing_time']:.2f}s"
+        )  # noqa: print
+        print(f"  - Chunks created: {results['chunks_created']}")  # noqa: print
+        print(f"  - Search performance: {results['search_time']:.3f}s")  # noqa: print
+        print(f"  - Search results: {results['search_results']}")  # noqa: print
 
         # Success criteria
         success = all(
@@ -232,9 +240,11 @@ if __name__ == "__main__":
         )
 
         if success:
-            print("\n🎉 SUCCESS: Knowledge base GPU optimization is working correctly!")
+            print(
+                "\n🎉 SUCCESS: Knowledge base GPU optimization is working correctly!"
+            )  # noqa: print
         else:
-            print("\n⚠️  ATTENTION: Some optimization issues detected")
+            print("\n⚠️  ATTENTION: Some optimization issues detected")  # noqa: print
 
         return results
 

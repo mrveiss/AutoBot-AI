@@ -18,7 +18,7 @@ from typing import Any, Dict, List
 import pytest
 
 # Import test subjects
-from backend.knowledge.search_quality import (
+from knowledge.search_quality import (
     AdvancedFilter,
     QueryExpander,
     RelevanceScorer,

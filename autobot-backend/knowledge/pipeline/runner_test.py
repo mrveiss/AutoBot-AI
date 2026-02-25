@@ -12,18 +12,17 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
-
-from backend.knowledge.pipeline.base import (
+from knowledge.pipeline.base import (
     BaseCognifier,
     BaseExtractor,
     BaseLoader,
     PipelineContext,
     PipelineResult,
 )
-from backend.knowledge.pipeline.models.chunk import ProcessedChunk
-from backend.knowledge.pipeline.models.entity import Entity
-from backend.knowledge.pipeline.registry import TaskRegistry
-from backend.knowledge.pipeline.runner import PipelineRunner
+from knowledge.pipeline.models.chunk import ProcessedChunk
+from knowledge.pipeline.models.entity import Entity
+from knowledge.pipeline.registry import TaskRegistry
+from knowledge.pipeline.runner import PipelineRunner
 
 logger = logging.getLogger(__name__)
 
