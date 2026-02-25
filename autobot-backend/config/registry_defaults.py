@@ -25,8 +25,8 @@ REGISTRY_DEFAULTS = {
     "vm.browser": "172.16.168.25",
     "vm.slm": "172.16.168.19",  # Issue #768: SLM admin server
     "vm.ollama": "127.0.0.1",
-    # Provider-agnostic LLM service (defaults to Ollama endpoint)
-    "vm.llm": "172.16.168.24",  # AI stack host
+    # Provider-agnostic LLM service — autobot-llm-gpu (.20) hosts Ollama for GPU (#1193)
+    "vm.llm": "172.16.168.20",  # autobot-llm-gpu (Main Backend, RTX 4070)
     # Convenience aliases
     "redis.host": "172.16.168.23",
     "redis.port": "6379",

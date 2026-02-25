@@ -298,7 +298,7 @@ def _resolve_service_urls() -> tuple:
     except Exception:
         npu_url = "http://172.16.168.22:8081/health"
         browser_url = "http://172.16.168.25:3000/health"
-        ollama_url = "http://172.16.168.24:11434/api/version"
+        ollama_url = "http://172.16.168.20:11434/api/version"  # autobot-llm-gpu (#1193)
     return npu_url, browser_url, ollama_url
 
 
@@ -334,7 +334,9 @@ def _build_service_list(results: list) -> list:
         _to_service("Backend API", "172.16.168.20", 8443, "online", "Running"),
         _to_service("Redis", "172.16.168.23", 6379, redis_s, redis_m),
         _to_service("NPU Worker", "172.16.168.22", 8081, npu_s, npu_m),
-        _to_service("Ollama", "172.16.168.24", 11434, ollama_s, ollama_m),
+        _to_service(
+            "Ollama", "172.16.168.20", 11434, ollama_s, ollama_m
+        ),  # autobot-llm-gpu (#1193)
         _to_service("Browser", "172.16.168.25", 3000, browser_s, browser_m),
     ]
 

@@ -135,6 +135,7 @@ class ModelConfigMixin:
             Ollama endpoint URL string.
         Issue #620.
         """
+        # Check old nested format (legacy: backend.llm.local.providers.ollama.endpoint)
         ollama_endpoint = (
             backend_llm.get("local", {})
             .get("providers", {})
@@ -142,7 +143,11 @@ class ModelConfigMixin:
             .get("endpoint")
         )
 
-        # If not explicitly configured, construct from infrastructure config
+        # Check new flat format (current: backend.llm.ollama.endpoint in config.yaml) (#1193)
+        if not ollama_endpoint:
+            ollama_endpoint = backend_llm.get("ollama", {}).get("endpoint")
+
+        # Fall back to infrastructure host registry
         if not ollama_endpoint:
             ollama_host = self.get_host("ollama")
             ollama_port = self.get_port("ollama")
