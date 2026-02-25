@@ -11,7 +11,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -340,44 +340,46 @@ class CodeAnalyzer:
                 )
                 processed.update(f"{f.file_path}:{f.name}" for f in group)
 
-        # Second pass: Find similar functions by embedding similarity
-        if any(f.embedding is not None for f in functions):
-            embeddings = np.array(
-                [f.embedding for f in functions if f.embedding is not None]
-            )
-            similarities = cosine_similarity(embeddings)
-
-            for i in range(len(functions)):
-                if f"{functions[i].file_path}:{functions[i].name}" in processed:
-                    continue
-
-                similar_indices = np.where(similarities[i] > self.similarity_threshold)[
-                    0
-                ]
-                if len(similar_indices) > 1:
-                    similar_funcs = [functions[j] for j in similar_indices]
-
-                    # Skip if already processed
-                    if any(
-                        f"{f.file_path}:{f.name}" in processed for f in similar_funcs
-                    ):
-                        continue
-
-                    duplicate_groups.append(
-                        DuplicateGroup(
-                            functions=similar_funcs,
-                            similarity_score=float(
-                                np.mean(similarities[i][similar_indices])
-                            ),
-                            refactoring_suggestion="Consider extracting common logic",
-                            estimated_lines_saved=self._estimate_lines_saved(
-                                similar_funcs
-                            ),
-                        )
-                    )
-                    processed.update(f"{f.file_path}:{f.name}" for f in similar_funcs)
+        # Issue #1183: Delegate embedding similarity pass to extracted helper
+        self._find_similar_functions(functions, processed, duplicate_groups)
 
         return duplicate_groups
+
+    def _find_similar_functions(
+        self,
+        functions: List[CodeFunction],
+        processed: Set[str],
+        duplicate_groups: List[DuplicateGroup],
+    ) -> None:
+        """Append embedding-similar function groups into duplicate_groups (in-place).
+
+        Issue #1183: Extracted from _find_duplicates() to reduce function length.
+        """
+        if not any(f.embedding is not None for f in functions):
+            return
+        embeddings = np.array(
+            [f.embedding for f in functions if f.embedding is not None]
+        )
+        similarities = cosine_similarity(embeddings)
+        for i in range(len(functions)):
+            if f"{functions[i].file_path}:{functions[i].name}" in processed:
+                continue
+            similar_indices = np.where(similarities[i] > self.similarity_threshold)[0]
+            if len(similar_indices) > 1:
+                similar_funcs = [functions[j] for j in similar_indices]
+                if any(f"{f.file_path}:{f.name}" in processed for f in similar_funcs):
+                    continue
+                duplicate_groups.append(
+                    DuplicateGroup(
+                        functions=similar_funcs,
+                        similarity_score=float(
+                            np.mean(similarities[i][similar_indices])
+                        ),
+                        refactoring_suggestion="Consider extracting common logic",
+                        estimated_lines_saved=self._estimate_lines_saved(similar_funcs),
+                    )
+                )
+                processed.update(f"{f.file_path}:{f.name}" for f in similar_funcs)
 
     def _estimate_lines_saved(self, functions: List[CodeFunction]) -> int:
         """Estimate lines that could be saved by refactoring"""

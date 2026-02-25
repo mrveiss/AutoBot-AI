@@ -20,6 +20,7 @@ Each anti-pattern includes:
 
 import ast
 import logging
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -33,6 +34,30 @@ logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level tuple for complexity calculation
 _COMPLEXITY_BRANCH_TYPES = (ast.If, ast.While, ast.For, ast.ExceptHandler)
+
+# Issue #1183: Module-level defaults extracted from analyze() to reduce function length
+_DEFAULT_EXCLUDE_PATTERNS = [
+    "__pycache__",
+    ".git",
+    "node_modules",
+    ".venv",
+    "venv",
+    "test_",
+    "_test.py",
+    "tests/",
+    "migrations/",
+]
+
+# Issue #1183: Entry-point suffixes extracted from _detect_dead_code() to reduce function length
+_ENTRY_POINT_SUFFIXES = (
+    "Test",
+    "Tests",
+    "TestCase",
+    "Handler",
+    "View",
+    "API",
+    "Router",
+)
 
 
 class Severity(Enum):
@@ -275,22 +300,11 @@ class AntiPatternDetector:
         Returns:
             AntiPatternReport with all detected issues
         """
-        import time
-
         start_time = time.time()
 
         patterns = patterns or ["**/*.py"]
-        exclude_patterns = exclude_patterns or [
-            "__pycache__",
-            ".git",
-            "node_modules",
-            ".venv",
-            "venv",
-            "test_",
-            "_test.py",
-            "tests/",
-            "migrations/",
-        ]
+        # Issue #1183: Use module-level constant
+        exclude_patterns = exclude_patterns or _DEFAULT_EXCLUDE_PATTERNS
 
         logger.info(f"Starting anti-pattern analysis in {root_path}")
 
@@ -424,6 +438,32 @@ class AntiPatternDetector:
             logger.error(f"Error parsing {file_path}: {e}")
             return None
 
+    @staticmethod
+    def _extract_method_call_data(
+        methods: List[ast.FunctionDef],
+    ) -> Tuple[Dict[str, List[str]], Dict[str, int]]:
+        """Extract method calls and external references from a list of AST methods.
+
+        Issue #1183: Extracted from _analyze_class() to reduce function length.
+        """
+        method_calls: Dict[str, List[str]] = {}
+        external_references: Dict[str, int] = {}
+        for method in methods:
+            calls = []
+            for child in ast.walk(method):
+                if isinstance(child, ast.Attribute):
+                    if isinstance(child.value, ast.Name):
+                        if child.value.id == "self":
+                            calls.append(f"self.{child.attr}")
+                        else:
+                            ref_name = child.value.id
+                            external_references[ref_name] = (
+                                external_references.get(ref_name, 0) + 1
+                            )
+                            calls.append(f"{ref_name}.{child.attr}")
+            method_calls[method.name] = calls
+        return method_calls, external_references
+
     def _analyze_class(
         self, node: ast.ClassDef, file_path: str, content: str
     ) -> Optional[ClassInfo]:
@@ -452,25 +492,8 @@ class AntiPatternDetector:
                 elif isinstance(base, ast.Attribute):
                     base_classes.append(base.attr)
 
-            # Analyze method calls and external references
-            method_calls = {}
-            external_references: Dict[str, int] = {}
-
-            for method in methods:
-                calls = []
-                for child in ast.walk(method):
-                    if isinstance(child, ast.Attribute):
-                        if isinstance(child.value, ast.Name):
-                            if child.value.id == "self":
-                                calls.append(f"self.{child.attr}")
-                            else:
-                                # External reference
-                                ref_name = child.value.id
-                                external_references[ref_name] = (
-                                    external_references.get(ref_name, 0) + 1
-                                )
-                                calls.append(f"{ref_name}.{child.attr}")
-                method_calls[method.name] = calls
+            # Issue #1183: Delegate to extracted helper to reduce function length
+            method_calls, external_references = self._extract_method_call_data(methods)
 
             # Calculate lines of code
             start_line = node.lineno
@@ -899,17 +922,6 @@ class AntiPatternDetector:
         3. Use tuple for entry point suffixes (O(1) vs list iteration)
         """
         issues = []
-
-        # Pre-compute entry point suffixes as tuple for faster endswith check
-        _ENTRY_POINT_SUFFIXES = (
-            "Test",
-            "Tests",
-            "TestCase",
-            "Handler",
-            "View",
-            "API",
-            "Router",
-        )
 
         # Collect all referenced names efficiently using set operations
         # Issue #372: Use cls_info.get_referenced_class_names() to reduce feature envy

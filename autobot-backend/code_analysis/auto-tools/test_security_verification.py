@@ -151,6 +151,37 @@ def test_file_integrity(file_path: str) -> bool:
         return False
 
 
+def _print_test_results_summary(results: list, passed: int, total: int) -> None:
+    """Print test verification summary and enhancement list.
+
+    Issue #1183: Extracted from main() to reduce function length.
+    """
+    logger.info("=" * 50)
+    logger.info("🎯 VERIFICATION SUMMARY")
+    logger.info("=" * 50)
+    logger.info("Tests Run: {total}")
+    logger.info("Tests Passed: {passed}")
+    logger.info("Tests Failed: {total - passed}")
+    logger.info("Success Rate: {passed/total*100:.1f}%")
+    if passed == total:
+        logger.info("\n🎉 All security fixes verified successfully!")
+        logger.info("🛡️  The file is now protected against XSS attacks")
+    else:
+        logger.info(
+            f"\n⚠️  {total - passed} test(s) failed - security fixes may be incomplete"
+        )
+        logger.info("Failed tests:")
+        for test_name, result in results:
+            if not result:
+                logger.info("   • {test_name}")
+    logger.info("\n📄 Original report security enhancements:")
+    logger.info("   • Content Security Policy (CSP)")
+    logger.info("   • Security meta headers")
+    logger.info("   • Runtime XSS monitoring")
+    logger.info("   • Safe DOM manipulation APIs")
+    logger.info("   • Automatic backup creation")
+
+
 def main():
     """Run comprehensive security fix verification."""
     if len(sys.argv) != 2:
@@ -190,36 +221,9 @@ def main():
         results.append((test_name, result))
         logger.info("Result: {'✅ PASS' if result else '❌ FAIL'}")
 
-    # Summary
+    # Issue #1183: Delegate summary printing to extracted helper
     passed = sum(1 for _, result in results if result)
-    total = len(results)
-
-    logger.info("=" * 50)
-    logger.info("🎯 VERIFICATION SUMMARY")
-    logger.info("=" * 50)
-    logger.info("Tests Run: {total}")
-    logger.info("Tests Passed: {passed}")
-    logger.info("Tests Failed: {total - passed}")
-    logger.info("Success Rate: {passed/total*100:.1f}%")
-
-    if passed == total:
-        logger.info("\n🎉 All security fixes verified successfully!")
-        logger.info("🛡️  The file is now protected against XSS attacks")
-    else:
-        logger.info(
-            f"\n⚠️  {total - passed} test(s) failed - security fixes may be incomplete"
-        )
-        logger.info("Failed tests:")
-        for test_name, result in results:
-            if not result:
-                logger.info("   • {test_name}")
-
-    logger.info("\n📄 Original report security enhancements:")
-    logger.info("   • Content Security Policy (CSP)")
-    logger.info("   • Security meta headers")
-    logger.info("   • Runtime XSS monitoring")
-    logger.info("   • Safe DOM manipulation APIs")
-    logger.info("   • Automatic backup creation")
+    _print_test_results_summary(results, passed, len(results))
 
 
 if __name__ == "__main__":

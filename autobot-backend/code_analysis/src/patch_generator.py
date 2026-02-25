@@ -189,6 +189,36 @@ class AutomatedFixGenerator:
             ),
         ]
 
+    async def _collect_all_fixes(
+        self, analysis_results: Dict[str, Any]
+    ) -> List[CodeFix]:
+        """Collect fixes from all analysis result categories.
+
+        Issue #1183: Extracted from generate_fixes() to reduce function length.
+        """
+        all_fixes: List[CodeFix] = []
+        if analysis_results.get("security"):
+            all_fixes.extend(
+                await self._generate_security_fixes(analysis_results["security"])
+            )
+        if analysis_results.get("performance"):
+            all_fixes.extend(
+                await self._generate_performance_fixes(analysis_results["performance"])
+            )
+        if analysis_results.get("duplication"):
+            all_fixes.extend(
+                await self._generate_duplication_fixes(analysis_results["duplication"])
+            )
+        if analysis_results.get("environment"):
+            all_fixes.extend(
+                await self._generate_environment_fixes(analysis_results["environment"])
+            )
+        if analysis_results.get("api_consistency"):
+            all_fixes.extend(
+                await self._generate_api_fixes(analysis_results["api_consistency"])
+            )
+        return all_fixes
+
     async def generate_fixes(
         self, analysis_results: Dict[str, Any], generate_patches: bool = True
     ) -> Dict[str, Any]:
@@ -198,42 +228,8 @@ class AutomatedFixGenerator:
 
         logger.info("Generating automated fixes from analysis results...")
 
-        all_fixes = []
-
-        # Generate security fixes
-        if analysis_results.get("security"):
-            security_fixes = await self._generate_security_fixes(
-                analysis_results["security"]
-            )
-            all_fixes.extend(security_fixes)
-
-        # Generate performance fixes
-        if analysis_results.get("performance"):
-            performance_fixes = await self._generate_performance_fixes(
-                analysis_results["performance"]
-            )
-            all_fixes.extend(performance_fixes)
-
-        # Generate duplication fixes
-        if analysis_results.get("duplication"):
-            duplication_fixes = await self._generate_duplication_fixes(
-                analysis_results["duplication"]
-            )
-            all_fixes.extend(duplication_fixes)
-
-        # Generate environment fixes
-        if analysis_results.get("environment"):
-            env_fixes = await self._generate_environment_fixes(
-                analysis_results["environment"]
-            )
-            all_fixes.extend(env_fixes)
-
-        # Generate API consistency fixes
-        if analysis_results.get("api_consistency"):
-            api_fixes = await self._generate_api_fixes(
-                analysis_results["api_consistency"]
-            )
-            all_fixes.extend(api_fixes)
+        # Issue #1183: Delegate collection to extracted helper
+        all_fixes = await self._collect_all_fixes(analysis_results)
 
         # Prioritize fixes
         prioritized_fixes = self._prioritize_fixes(all_fixes)

@@ -27,9 +27,8 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 try:
-    from config import UnifiedConfig
-
     from autobot_shared.redis_client import get_redis_client
+    from config import UnifiedConfig
 
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
@@ -730,6 +729,18 @@ class EnvironmentAnalyzer:
 
         return self._create_hardcoded_value(file_path, lineno, var_name, value, lines)
 
+    @staticmethod
+    def _extract_match_value(match: "re.Match") -> Optional[str]:
+        """Return the first non-None captured group, or the full match.
+
+        Issue #1183: Extracted from _regex_scan_file() to reduce function length.
+        """
+        if match.groups():
+            for g in match.groups():
+                if g is not None:
+                    return g
+        return match.group(0)
+
     async def _regex_scan_file(
         self, file_path: str, content: str, lines: List[str]
     ) -> List[HardcodedValue]:
@@ -767,15 +778,8 @@ class EnvironmentAnalyzer:
                     if self._is_config_access_line(line):
                         continue
 
-                # Find the first non-None group
-                value = None
-                if match.groups():
-                    for g in match.groups():
-                        if g is not None:
-                            value = g
-                            break
-                if value is None:
-                    value = match.group(0)
+                # Issue #1183: Delegate to extracted helper
+                value = self._extract_match_value(match)
 
                 # Skip None or empty values
                 if not value:

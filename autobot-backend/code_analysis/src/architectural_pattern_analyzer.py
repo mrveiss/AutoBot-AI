@@ -123,7 +123,36 @@ class ArchitecturalPatternAnalyzer:
 
         analysis_time = time.time() - start_time
 
-        results = {
+        # Issue #1183: Delegate result building to extracted helper
+        results = self._build_architecture_results(
+            components,
+            issues,
+            detected_patterns,
+            recommendations,
+            metrics,
+            analysis_time,
+        )
+
+        # Cache results
+        await self._cache_results(results)
+
+        logger.info(f"Architectural analysis complete in {analysis_time:.2f}s")
+        return results
+
+    @staticmethod
+    def _build_architecture_results(
+        components: List[ArchitecturalComponent],
+        issues: List[ArchitecturalIssue],
+        detected_patterns: List[Any],
+        recommendations: List[Any],
+        metrics: ArchitecturalMetrics,
+        analysis_time: float,
+    ) -> Dict[str, Any]:
+        """Build the architecture analysis results dictionary.
+
+        Issue #1183: Extracted from analyze_architecture() to reduce function length.
+        """
+        return {
             "total_components": len(components),
             "architectural_issues": len(issues),
             "design_patterns_found": len(detected_patterns),
@@ -135,12 +164,6 @@ class ArchitecturalPatternAnalyzer:
             "recommendations": recommendations,
             "metrics": metrics.to_dict(),
         }
-
-        # Cache results
-        await self._cache_results(results)
-
-        logger.info(f"Architectural analysis complete in {analysis_time:.2f}s")
-        return results
 
     async def _analyze_dependencies(
         self, components: List[ArchitecturalComponent]

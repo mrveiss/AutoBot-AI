@@ -180,9 +180,8 @@ def _print_analysis_alerts(report: dict) -> None:
         print()  # noqa: print
 
 
-async def run_comprehensive_quality_analysis():
-    """Run comprehensive code quality analysis"""
-
+def _print_analysis_intro() -> None:
+    """Print the analyzer startup banner. Issue #1183: Extracted from run_comprehensive_quality_analysis()."""
     print("🎯 Starting comprehensive code quality analysis...")  # noqa: print
     print("This will run all available analyzers:")  # noqa: print
     print("  • Code Duplication Analyzer")  # noqa: print
@@ -193,6 +192,112 @@ async def run_comprehensive_quality_analysis():
     print("  • Testing Coverage Gap Analyzer")  # noqa: print
     print("  • Architectural Pattern Analyzer")  # noqa: print
     print()  # noqa: print
+
+
+def _print_quality_trends(report: dict) -> None:
+    """Print the quality trends section. Issue #1183: Extracted from run_comprehensive_quality_analysis()."""
+    if not report.get("quality_trends"):
+        return
+    print("📈 **Quality Trends:**")  # noqa: print
+    trends = report["quality_trends"]
+    if len(trends) > 1:
+        latest = trends[0]
+        previous = trends[1]
+        score_change = latest["overall_score"] - previous["overall_score"]
+        trend_emoji = "📈" if score_change > 0 else "📉" if score_change < 0 else "➡️"
+        print(
+            f"   {trend_emoji} Score change: {score_change:+.1f} points"
+        )  # noqa: print
+        issue_change = latest["issue_count"] - previous["issue_count"]
+        issue_emoji = "📉" if issue_change < 0 else "📈" if issue_change > 0 else "➡️"
+        print(f"   {issue_emoji} Issue count change: {issue_change:+d}")  # noqa: print
+    else:
+        print("   📊 Baseline measurement established")  # noqa: print
+    print()  # noqa: print
+
+
+# Issue #1183: Module-level constant extracted from _print_detailed_summaries() to reduce function length
+_ANALYSIS_FORMATS = {
+    "duplication": {
+        "name": "Code Duplication",
+        "emoji": "♻️",
+        "fields": [
+            ("total_duplicate_groups", "Found {} duplicate code groups"),
+            ("total_lines_saved", "Potential lines saved: {}"),
+        ],
+    },
+    "environment": {
+        "name": "Environment Variables",
+        "emoji": "⚙️",
+        "fields": [
+            ("total_hardcoded_values", "Found {} hardcoded values"),
+            ("critical_hardcoded_values", "Critical values: {}"),
+        ],
+    },
+    "security": {
+        "name": "Security",
+        "emoji": "🛡️",
+        "fields": [
+            ("total_vulnerabilities", "Found {} potential vulnerabilities"),
+            ("critical_vulnerabilities", "Critical vulnerabilities: {}"),
+        ],
+    },
+    "performance": {
+        "name": "Performance",
+        "emoji": "⚡",
+        "fields": [
+            ("total_performance_issues", "Found {} performance issues"),
+            ("critical_issues", "Critical issues: {}"),
+        ],
+    },
+    "api_consistency": {
+        "name": "API Consistency",
+        "emoji": "🔗",
+        "fields": [
+            ("total_endpoints", "Analyzed {} API endpoints"),
+            ("inconsistencies_found", "Found {} consistency issues"),
+        ],
+    },
+    "testing_coverage": {
+        "name": "Testing Coverage",
+        "emoji": "🧪",
+        "fields": [
+            ("total_functions", "Analyzed {} functions"),
+            ("test_coverage_percentage", "Test coverage: {}%"),
+        ],
+    },
+    "architecture": {
+        "name": "Architecture",
+        "emoji": "🏗️",
+        "fields": [
+            ("total_components", "Analyzed {} architectural components"),
+            ("architectural_issues", "Found {} architectural issues"),
+        ],
+    },
+}
+
+
+def _print_detailed_summaries(report: dict) -> None:
+    """Print per-analyzer summary blocks.
+
+    Issue #1183: Extracted from run_comprehensive_quality_analysis();
+    analysis_formats dict further extracted to _ANALYSIS_FORMATS constant.
+    """
+    print("📊 **Detailed Analysis Summaries:**")  # noqa: print
+    for analysis_type, fmt in _ANALYSIS_FORMATS.items():
+        data = report["detailed_analyses"].get(analysis_type)
+        if data:
+            print(f"\n{fmt['emoji']} **{fmt['name']} Analysis:**")  # noqa: print
+            for field_key, field_fmt in fmt["fields"]:
+                value = data.get(field_key, 0)
+                print(f"   • {field_fmt.format(value)}")  # noqa: print
+
+
+async def run_comprehensive_quality_analysis():
+    """Run comprehensive code quality analysis"""
+
+    # Issue #1183: Delegate intro printing to extracted helper
+    _print_analysis_intro()
 
     dashboard = CodeQualityDashboard()
 
@@ -226,98 +331,9 @@ async def run_comprehensive_quality_analysis():
         print(f"{i}. {recommendation}")  # noqa: print
     print()  # noqa: print
 
-    # Quality trends (if available)
-    if report.get("quality_trends"):
-        print("📈 **Quality Trends:**")  # noqa: print
-        trends = report["quality_trends"]
-        if len(trends) > 1:
-            latest = trends[0]
-            previous = trends[1]
-            score_change = latest["overall_score"] - previous["overall_score"]
-            trend_emoji = "📈" if score_change > 0 else "📉" if score_change < 0 else "➡️"
-            print(
-                f"   {trend_emoji} Score change: {score_change:+.1f} points"
-            )  # noqa: print
-
-            issue_change = latest["issue_count"] - previous["issue_count"]
-            issue_emoji = "📉" if issue_change < 0 else "📈" if issue_change > 0 else "➡️"
-            print(
-                f"   {issue_emoji} Issue count change: {issue_change:+d}"
-            )  # noqa: print
-        else:
-            print("   📊 Baseline measurement established")  # noqa: print
-        print()  # noqa: print
-
-    # Detailed analysis summaries
-    print("📊 **Detailed Analysis Summaries:**")  # noqa: print
-
-    # Issue #315: Refactored with data-driven formatting instead of elif chain
-    analysis_formats = {
-        "duplication": {
-            "name": "Code Duplication",
-            "emoji": "♻️",
-            "fields": [
-                ("total_duplicate_groups", "Found {} duplicate code groups"),
-                ("total_lines_saved", "Potential lines saved: {}"),
-            ],
-        },
-        "environment": {
-            "name": "Environment Variables",
-            "emoji": "⚙️",
-            "fields": [
-                ("total_hardcoded_values", "Found {} hardcoded values"),
-                ("critical_hardcoded_values", "Critical values: {}"),
-            ],
-        },
-        "security": {
-            "name": "Security",
-            "emoji": "🛡️",
-            "fields": [
-                ("total_vulnerabilities", "Found {} potential vulnerabilities"),
-                ("critical_vulnerabilities", "Critical vulnerabilities: {}"),
-            ],
-        },
-        "performance": {
-            "name": "Performance",
-            "emoji": "⚡",
-            "fields": [
-                ("total_performance_issues", "Found {} performance issues"),
-                ("critical_issues", "Critical issues: {}"),
-            ],
-        },
-        "api_consistency": {
-            "name": "API Consistency",
-            "emoji": "🔗",
-            "fields": [
-                ("total_endpoints", "Analyzed {} API endpoints"),
-                ("inconsistencies_found", "Found {} consistency issues"),
-            ],
-        },
-        "testing_coverage": {
-            "name": "Testing Coverage",
-            "emoji": "🧪",
-            "fields": [
-                ("total_functions", "Analyzed {} functions"),
-                ("test_coverage_percentage", "Test coverage: {}%"),
-            ],
-        },
-        "architecture": {
-            "name": "Architecture",
-            "emoji": "🏗️",
-            "fields": [
-                ("total_components", "Analyzed {} architectural components"),
-                ("architectural_issues", "Found {} architectural issues"),
-            ],
-        },
-    }
-
-    for analysis_type, fmt in analysis_formats.items():
-        data = report["detailed_analyses"].get(analysis_type)
-        if data:
-            print(f"\n{fmt['emoji']} **{fmt['name']} Analysis:**")  # noqa: print
-            for field_key, field_fmt in fmt["fields"]:
-                value = data.get(field_key, 0)
-                print(f"   • {field_fmt.format(value)}")  # noqa: print
+    # Issue #1183: Delegate trends/summaries to extracted helpers
+    _print_quality_trends(report)
+    _print_detailed_summaries(report)
 
     # Save comprehensive report
     report_path = Path("comprehensive_quality_report.json")
