@@ -142,44 +142,11 @@
             </div>
           </div>
 
-          <!-- Issue #249: Knowledge Base Citations Display -->
-          <div
-            v-if="message.sender === 'assistant' && message.metadata?.citations?.length > 0"
-            class="knowledge-citations"
-          >
-            <div class="citations-header" @click="toggleCitations(message.id)">
-              <div class="citations-header-left">
-                <i class="fas fa-brain text-autobot-primary" aria-hidden="true"></i>
-                <span class="citations-label">Knowledge Sources</span>
-                <span class="citations-count">{{ message.metadata.citations.length }}</span>
-              </div>
-              <i :class="expandedCitations.has(message.id) ? 'fas fa-chevron-up' : 'fas fa-chevron-down'" aria-hidden="true"></i>
-            </div>
-            <Transition name="slide-fade">
-              <div v-if="expandedCitations.has(message.id)" class="citations-list">
-                <div
-                  v-for="(citation, idx) in message.metadata.citations"
-                  :key="citation.id || idx"
-                  class="citation-item"
-                >
-                  <div class="citation-rank">[{{ citation.rank || idx + 1 }}]</div>
-                  <div class="citation-content">
-                    <div class="citation-text">{{ truncateCitation(citation.content) }}</div>
-                    <div class="citation-meta">
-                      <span class="citation-score" :class="getScoreClass(citation.score)">
-                        <i class="fas fa-chart-line" aria-hidden="true"></i>
-                        {{ (citation.score * 100).toFixed(0) }}%
-                      </span>
-                      <span v-if="citation.source" class="citation-source">
-                        <i class="fas fa-file-alt" aria-hidden="true"></i>
-                        {{ formatSourcePath(citation.source) }}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Transition>
-          </div>
+          <!-- Issue #249, #1186: Source Attribution Display -->
+          <CitationsDisplay
+            v-if="message.sender === 'assistant' && (message.metadata?.citations?.length || 0) > 0"
+            :citations="message.metadata.citations || []"
+          />
 
           <!-- Attachments -->
           <div v-if="message.attachments && message.attachments.length > 0" class="message-attachments">
@@ -516,6 +483,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
+import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
 import appConfig from '@/config/AppConfig.js'
 import { formatFileSize, formatTime } from '@/utils/formatHelpers'
 import { useToast } from '@/composables/useToast'
