@@ -151,9 +151,11 @@ class TestRAGQueryBenchmarks:
             metadata={"max_tokens": 2048, "num_docs": 10},
         )
 
-        print("\nContext Assembly Benchmark:")  # noqa: print
-        print(f"  Avg: {result.avg_time_ms:.4f}ms")  # noqa: print
-        print(f"  Ops/sec: {result.ops_per_second:.2f}")  # noqa: print
+        logger.info(
+            "Context Assembly Benchmark: Avg=%.4fms Ops/sec=%.2f",
+            result.avg_time_ms,
+            result.ops_per_second,
+        )
 
         assert result.passed
         # Context assembly should be very fast
@@ -181,9 +183,11 @@ class TestRAGQueryBenchmarks:
             metadata={"doc_size": len(long_document), "chunk_size": 500, "overlap": 50},
         )
 
-        print("\nDocument Chunking Benchmark:")  # noqa: print
-        print(f"  Avg: {result.avg_time_ms:.4f}ms")  # noqa: print
-        print(f"  Ops/sec: {result.ops_per_second:.2f}")  # noqa: print
+        logger.info(
+            "Document Chunking Benchmark: Avg=%.4fms Ops/sec=%.2f",
+            result.avg_time_ms,
+            result.ops_per_second,
+        )
 
         assert result.passed
 
@@ -204,9 +208,11 @@ class TestRAGQueryBenchmarks:
             metadata={"num_documents": 1000, "filter_type": "source"},
         )
 
-        print("\nMetadata Filtering Benchmark:")  # noqa: print
-        print(f"  Avg: {result.avg_time_ms:.4f}ms")  # noqa: print
-        print(f"  Ops/sec: {result.ops_per_second:.2f}")  # noqa: print
+        logger.info(
+            "Metadata Filtering Benchmark: Avg=%.4fms Ops/sec=%.2f",
+            result.avg_time_ms,
+            result.ops_per_second,
+        )
 
         assert result.passed
 
@@ -247,9 +253,11 @@ class TestEmbeddingBenchmarks:
             metadata={"text_length": len(sample_text)},
         )
 
-        print("\nText Preprocessing Benchmark:")  # noqa: print
-        print(f"  Avg: {result.avg_time_ms:.4f}ms")  # noqa: print
-        print(f"  Ops/sec: {result.ops_per_second:.2f}")  # noqa: print
+        logger.info(
+            "Text Preprocessing Benchmark: Avg=%.4fms Ops/sec=%.2f",
+            result.avg_time_ms,
+            result.ops_per_second,
+        )
 
         assert result.passed
 
@@ -273,9 +281,11 @@ class TestEmbeddingBenchmarks:
             metadata={"batch_size": 32, "embedding_dim": 384},
         )
 
-        print("\nBatch Embedding Generation Benchmark (batch=32):")  # noqa: print
-        print(f"  Avg: {result.avg_time_ms:.2f}ms")  # noqa: print
-        print(f"  P95: {result.p95_time_ms:.2f}ms")  # noqa: print
+        logger.info(
+            "Batch Embedding Generation Benchmark (batch=32): Avg=%.2fms P95=%.2fms",
+            result.avg_time_ms,
+            result.p95_time_ms,
+        )
 
         assert result.passed
 
@@ -322,10 +332,12 @@ class TestRAGPipelineBenchmarks:
             metadata={"stages": ["embed", "search", "rerank", "assemble", "prompt"]},
         )
 
-        print("\nFull RAG Pipeline Benchmark (simulated):")  # noqa: print
-        print(f"  Avg: {result.avg_time_ms:.2f}ms")  # noqa: print
-        print(f"  P95: {result.p95_time_ms:.2f}ms")  # noqa: print
-        print(f"  Ops/sec: {result.ops_per_second:.2f}")  # noqa: print
+        logger.info(
+            "Full RAG Pipeline Benchmark (simulated): Avg=%.2fms P95=%.2fms Ops/sec=%.2f",
+            result.avg_time_ms,
+            result.p95_time_ms,
+            result.ops_per_second,
+        )
 
         assert result.passed
         # Full pipeline should complete in reasonable time
@@ -356,9 +368,11 @@ class TestRAGPipelineBenchmarks:
             metadata={"method": "synonym_based"},
         )
 
-        print("\nQuery Expansion Benchmark:")  # noqa: print
-        print(f"  Avg: {result.avg_time_ms:.4f}ms")  # noqa: print
-        print(f"  Ops/sec: {result.ops_per_second:.2f}")  # noqa: print
+        logger.info(
+            "Query Expansion Benchmark: Avg=%.4fms Ops/sec=%.2f",
+            result.avg_time_ms,
+            result.ops_per_second,
+        )
 
         assert result.passed
 
