@@ -10,6 +10,7 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import threading
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -2830,6 +2831,58 @@ async def _run_indexing_phases(
         analysis_results.get("all_hardcodes", []), task_id
     )
     return analysis_results, hardcodes_stored
+
+
+async def _handle_subprocess_crash(task_id: str, returncode: int) -> None:
+    """Mark indexing task failed in Redis after subprocess crash (#1180).
+
+    Only updates state if the subprocess did not already write a terminal
+    status (completed/failed/cancelled) before crashing.
+    """
+    logger.error(
+        "[Task %s] Indexing subprocess crashed (exit code %d)", task_id, returncode
+    )
+    task_data = await _load_task_from_redis(task_id) or {}
+    if task_data.get("status") not in ("completed", "failed", "cancelled"):
+        _mark_task_failed(
+            task_id,
+            RuntimeError(f"Indexing subprocess crashed (exit code {returncode})"),
+        )
+        await _save_task_to_redis(task_id)
+
+
+async def _run_indexing_subprocess(task_id: str, root_path: str) -> None:
+    """Launch isolated indexing subprocess to prevent ChromaDB SIGSEGV (#1180).
+
+    The subprocess runs do_indexing_with_progress in its own process so its
+    ChromaDB PersistentClient does not conflict with the KB's concurrent
+    client. If the subprocess crashes (SIGSEGV), this coroutine catches the
+    non-zero exit code and marks the task failed in Redis.
+
+    Designed as a drop-in async replacement for asyncio.create_task usage of
+    do_indexing_with_progress — wrap in asyncio.create_task() as before.
+    """
+    worker_script = Path(__file__).parent / "indexing_worker.py"
+
+    # Write initial state to Redis before subprocess starts so status polls
+    # return "running" not "not_found" during process launch latency (#1179).
+    async with _tasks_lock:
+        indexing_tasks[task_id] = _create_initial_task_state()
+        await _save_task_to_redis(task_id)
+
+    logger.info("[Task %s] Launching isolated indexing subprocess (#1180)", task_id)
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable,
+        str(worker_script),
+        task_id,
+        root_path,
+    )
+    returncode = await proc.wait()
+
+    if returncode != 0:
+        await _handle_subprocess_crash(task_id, returncode)
+    else:
+        logger.info("[Task %s] Subprocess completed successfully (rc=0)", task_id)
 
 
 async def do_indexing_with_progress(task_id: str, root_path: str):
