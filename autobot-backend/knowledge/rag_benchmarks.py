@@ -8,6 +8,7 @@ Issue #58 - Performance Benchmarking Suite
 Author: mrveiss
 """
 
+import logging
 import random
 import sys
 from pathlib import Path
@@ -18,6 +19,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from tests.benchmarks.benchmark_base import BenchmarkRunner, assert_performance
+
+logger = logging.getLogger(__name__)
 
 
 class TestRAGQueryBenchmarks:
@@ -68,9 +71,11 @@ class TestRAGQueryBenchmarks:
             metadata={"num_documents": 50, "vector_dim": 384},
         )
 
-        print("\nVector Similarity Benchmark (50 docs):")  # noqa: print
-        print(f"  Avg: {result.avg_time_ms:.4f}ms")  # noqa: print
-        print(f"  Ops/sec: {result.ops_per_second:.2f}")  # noqa: print
+        logger.info(
+            "Vector Similarity Benchmark (50 docs): Avg=%.4fms Ops/sec=%.2f",
+            result.avg_time_ms,
+            result.ops_per_second,
+        )
 
         assert result.passed
         # Vector similarity should be fast
@@ -105,9 +110,11 @@ class TestRAGQueryBenchmarks:
             metadata={"num_documents": 1000, "top_k": 5},
         )
 
-        print("\nTop-K Retrieval Benchmark (1000 docs, k=5):")  # noqa: print
-        print(f"  Avg: {result.avg_time_ms:.2f}ms")  # noqa: print
-        print(f"  P95: {result.p95_time_ms:.2f}ms")  # noqa: print
+        logger.info(
+            "Top-K Retrieval Benchmark (1000 docs, k=5): Avg=%.2fms P95=%.2fms",
+            result.avg_time_ms,
+            result.p95_time_ms,
+        )
 
         assert result.passed
 
