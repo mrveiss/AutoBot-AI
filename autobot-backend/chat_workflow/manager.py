@@ -326,6 +326,10 @@ class ChatWorkflowManager(
         always see what the response is based on.
         """
         sources: List[Dict[str, Any]] = []
+        if used_knowledge and not rag_citations:
+            logger.warning(
+                "_build_source_list: used_knowledge=True but rag_citations is empty"
+            )
         if used_knowledge and rag_citations:
             for c in rag_citations:
                 sources.append({**c, "type": "knowledge_base", "reliability": "high"})
