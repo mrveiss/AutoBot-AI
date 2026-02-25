@@ -347,11 +347,8 @@
       tags: [backend, user-backend]
 
     - name: "[PLAY 2] Backend | Fix ownership"
-      file:
-        path: "{{ code_base_dir }}/autobot-backend"
-        owner: autobot
-        group: autobot
-        recurse: true
+      command: chown --no-dereference -R autobot:autobot {{ code_base_dir }}/autobot-backend
+      become: true
       when: "'main' in group_names"
       tags: [backend, user-backend]
 
@@ -383,11 +380,8 @@
       tags: [frontend, user-frontend]
 
     - name: "[PLAY 2] Frontend | Fix ownership before build"
-      file:
-        path: "{{ code_base_dir }}/autobot-frontend"
-        owner: autobot
-        group: autobot
-        recurse: true
+      command: chown --no-dereference -R autobot:autobot {{ code_base_dir }}/autobot-frontend
+      become: true
       when: "'frontend' in group_names"
       tags: [frontend, user-frontend]
 
