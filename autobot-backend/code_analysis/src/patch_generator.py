@@ -11,9 +11,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-from config import UnifiedConfig
-
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -787,32 +786,34 @@ async def main():
     # Generate fixes
     results = await generator.generate_fixes(mock_analysis)
 
-    print(f"\n=== Automated Fix Generation Results ===")
-    print(f"Total fixes generated: {results['total_fixes_generated']}")
-    print(f"High confidence fixes: {results['high_confidence_fixes']}")
-    print(f"Low risk fixes: {results['low_risk_fixes']}")
-    print(f"Generation time: {results['generation_time_seconds']:.2f}s")
+    print(f"\n=== Automated Fix Generation Results ===")  # noqa: print
+    print(f"Total fixes generated: {results['total_fixes_generated']}")  # noqa: print
+    print(f"High confidence fixes: {results['high_confidence_fixes']}")  # noqa: print
+    print(f"Low risk fixes: {results['low_risk_fixes']}")  # noqa: print
+    print(f"Generation time: {results['generation_time_seconds']:.2f}s")  # noqa: print
 
     # Print statistics
     stats = results["statistics"]
-    print(f"\n=== Fix Statistics ===")
-    print(f"By type: {stats['by_type']}")
-    print(f"By severity: {stats['by_severity']}")
-    print(f"By confidence: {stats['by_confidence']}")
-    print(f"By risk: {stats['by_risk']}")
-    print(f"Automated fixes: {stats['automated_fixes']}")
-    print(f"Manual review required: {stats['manual_review_required']}")
+    print(f"\n=== Fix Statistics ===")  # noqa: print
+    print(f"By type: {stats['by_type']}")  # noqa: print
+    print(f"By severity: {stats['by_severity']}")  # noqa: print
+    print(f"By confidence: {stats['by_confidence']}")  # noqa: print
+    print(f"By risk: {stats['by_risk']}")  # noqa: print
+    print(f"Automated fixes: {stats['automated_fixes']}")  # noqa: print
+    print(f"Manual review required: {stats['manual_review_required']}")  # noqa: print
 
     # Print recommendations
-    print(f"\n=== Recommendations ===")
+    print(f"\n=== Recommendations ===")  # noqa: print
     for rec in results["recommendations"]:
-        print(f"• {rec}")
+        print(f"• {rec}")  # noqa: print
 
     # Test safe fix application (dry run)
     if results["fixes"]:
-        print(f"\n=== Testing Safe Fix Application (Dry Run) ===")
+        print(f"\n=== Testing Safe Fix Application (Dry Run) ===")  # noqa: print
         application_results = await generator.apply_safe_fixes(results, dry_run=True)
-        print(f"Would apply: {application_results['total_applied']} fixes")
+        print(
+            f"Would apply: {application_results['total_applied']} fixes"
+        )  # noqa: print
 
 
 if __name__ == "__main__":

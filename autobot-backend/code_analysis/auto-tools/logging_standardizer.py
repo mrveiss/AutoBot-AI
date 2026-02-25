@@ -240,7 +240,7 @@ export { devLog as logger };
         with open(logger_file, "w") as f:
             f.write(logger_code)
 
-        print(f"✅ Created development logger utility: {logger_file}")
+        print(f"✅ Created development logger utility: {logger_file}")  # noqa: print
 
     def convert_console_logs(self, content: str, file_path: Path) -> Tuple[str, int]:
         """Convert console.log statements to use devLog."""
@@ -404,8 +404,10 @@ export { devLog as logger };
         """Convert console.logs in entire project or specific directory."""
         search_root = Path(target_dir) if target_dir else self.project_root
 
-        print(f"🔧 Converting console.log to development logging in: {search_root}")
-        print(f"📁 Backups will be saved to: {self.backup_dir}")
+        print(
+            f"🔧 Converting console.log to development logging in: {search_root}"
+        )  # noqa: print
+        print(f"📁 Backups will be saved to: {self.backup_dir}")  # noqa: print
 
         # Create development logger utility
         self.create_dev_logger_utility(search_root)
@@ -417,11 +419,11 @@ export { devLog as logger };
                 if self.should_process_file(file_path):
                     files_to_process.append(file_path)
 
-        print(f"\n📊 Found {len(files_to_process)} files to analyze")
+        print(f"\n📊 Found {len(files_to_process)} files to analyze")  # noqa: print
 
         # Process each file
         for i, file_path in enumerate(files_to_process, 1):
-            print(
+            print(  # noqa: print
                 f"\r⚡ Processing file {i}/{len(files_to_process)}: {file_path.name}",
                 end="",
                 flush=True,
@@ -431,7 +433,7 @@ export { devLog as logger };
             if self.process_file(file_path):
                 self.report["files_modified"] += 1
 
-        print("\n✅ Development logging conversion completed!")
+        print("\n✅ Development logging conversion completed!")  # noqa: print
 
         return self.report
 
@@ -517,14 +519,14 @@ All modified files have been backed up to: `{}`
         with open(report_path, "w") as f:
             f.write(report_content)
 
-        print(f"\n📄 Report saved to: {report_path}")
+        print(f"\n📄 Report saved to: {report_path}")  # noqa: print
 
         # Also save JSON report
         json_report_path = report_path.with_suffix(".json")
         with open(json_report_path, "w") as f:
             json.dump(self.report, f, indent=2)
 
-        print(f"📊 JSON report saved to: {json_report_path}")
+        print(f"📊 JSON report saved to: {json_report_path}")  # noqa: print
 
 
 def main():
@@ -557,11 +559,13 @@ def main():
     converter.generate_report(args.report)
 
     # Print summary
-    print(f"\n🎉 Conversion Complete!")
-    print(f"   - Converted {report['console_logs_converted']} console.log statements")
-    print(f"   - Modified {report['files_modified']} files")
-    print(f"   - Created development logger utility")
-    print(f"   - Backups saved to: {converter.backup_dir}")
+    print(f"\n🎉 Conversion Complete!")  # noqa: print
+    print(
+        f"   - Converted {report['console_logs_converted']} console.log statements"
+    )  # noqa: print
+    print(f"   - Modified {report['files_modified']} files")  # noqa: print
+    print(f"   - Created development logger utility")  # noqa: print
+    print(f"   - Backups saved to: {converter.backup_dir}")  # noqa: print
 
 
 if __name__ == "__main__":
@@ -574,8 +578,8 @@ if __name__ == "__main__":
         project_root = str(Path(__file__).parent.parent.parent.parent)
         target_dir = "autobot-vue/src"
 
-        print("🚀 AutoBot Development Logging Conversion Agent")
-        print("=" * 50)
+        print("🚀 AutoBot Development Logging Conversion Agent")  # noqa: print
+        print("=" * 50)  # noqa: print
 
         converter = DevLoggingFixer(project_root)
         report = converter.convert_project(os.path.join(project_root, target_dir))

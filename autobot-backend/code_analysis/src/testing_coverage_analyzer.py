@@ -13,9 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from config import UnifiedConfig
-
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -911,35 +910,45 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== Testing Coverage Analysis Results ===")
-    print(f"Total functions: {results['total_functions']}")
-    print(f"Total tests: {results['total_tests']}")
-    print(f"Test coverage: {results['test_coverage_percentage']}%")
-    print(f"Coverage gaps found: {results['coverage_gaps']}")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    print(f"\n=== Testing Coverage Analysis Results ===")  # noqa: print
+    print(f"Total functions: {results['total_functions']}")  # noqa: print
+    print(f"Total tests: {results['total_tests']}")  # noqa: print
+    print(f"Test coverage: {results['test_coverage_percentage']}%")  # noqa: print
+    print(f"Coverage gaps found: {results['coverage_gaps']}")  # noqa: print
+    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Print detailed metrics
     metrics = results["metrics"]
-    print(f"\n=== Detailed Metrics ===")
-    print(f"Tested functions: {metrics['tested_functions']}")
-    print(f"Untested functions: {metrics['untested_functions']}")
-    print(f"Critical untested functions: {metrics['critical_untested_functions']}")
-    print(f"Missing integration tests: {metrics['missing_integration_tests']}")
-    print(f"Missing edge case tests: {metrics['missing_edge_case_tests']}")
+    print(f"\n=== Detailed Metrics ===")  # noqa: print
+    print(f"Tested functions: {metrics['tested_functions']}")  # noqa: print
+    print(f"Untested functions: {metrics['untested_functions']}")  # noqa: print
+    print(
+        f"Critical untested functions: {metrics['critical_untested_functions']}"
+    )  # noqa: print
+    print(
+        f"Missing integration tests: {metrics['missing_integration_tests']}"
+    )  # noqa: print
+    print(
+        f"Missing edge case tests: {metrics['missing_edge_case_tests']}"
+    )  # noqa: print
 
     # Print coverage gaps
     if results["coverage_gaps"]:
-        print(f"\n=== Coverage Gaps ===")
+        print(f"\n=== Coverage Gaps ===")  # noqa: print
         for gap in results["coverage_gaps"]:
-            print(f"{gap['type']} ({gap['severity']}): {gap['description']}")
-            print(f"  Affects {gap['affected_functions_count']} functions")
-            print(f"  Priority score: {gap['priority_score']}")
+            print(
+                f"{gap['type']} ({gap['severity']}): {gap['description']}"
+            )  # noqa: print
+            print(
+                f"  Affects {gap['affected_functions_count']} functions"
+            )  # noqa: print
+            print(f"  Priority score: {gap['priority_score']}")  # noqa: print
 
     # Print recommendations
     if results["recommendations"]:
-        print(f"\n=== Testing Recommendations ===")
+        print(f"\n=== Testing Recommendations ===")  # noqa: print
         for i, rec in enumerate(results["recommendations"], 1):
-            print(f"{i}. {rec}")
+            print(f"{i}. {rec}")  # noqa: print
 
 
 if __name__ == "__main__":

@@ -18,9 +18,8 @@ autobot_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(autobot_root))
 
 try:
-    from config import config
-
     from autobot_shared.redis_client import get_redis_client
+    from config import config
 except ImportError:
     # Fallback for standalone usage
     def get_redis_client(async_client=False):
@@ -846,26 +845,32 @@ async def main():
         patterns=["**/*.js", "**/*.ts", "**/*.vue", "**/*.jsx", "**/*.tsx"],
     )
 
-    print(f"\n=== Frontend Code Analysis Results ===")
-    print(f"Total components: {results['total_components']}")
-    print(f"Total issues: {results['total_issues']}")
-    print(f"Frameworks detected: {', '.join(results['frameworks_detected'])}")
-    print(f"Quality score: {results['quality_score']:.1f}/100")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    print(f"\n=== Frontend Code Analysis Results ===")  # noqa: print
+    print(f"Total components: {results['total_components']}")  # noqa: print
+    print(f"Total issues: {results['total_issues']}")  # noqa: print
+    print(
+        f"Frameworks detected: {', '.join(results['frameworks_detected'])}"
+    )  # noqa: print
+    print(f"Quality score: {results['quality_score']:.1f}/100")  # noqa: print
+    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Framework usage
-    print(f"\n=== Framework Usage ===")
+    print(f"\n=== Framework Usage ===")  # noqa: print
     for framework, usage in results["framework_usage"].items():
-        print(f"{framework}: {usage['count']} components ({usage['percentage']:.1f}%)")
+        print(
+            f"{framework}: {usage['count']} components ({usage['percentage']:.1f}%)"
+        )  # noqa: print
 
     # Issues by category
     categories = ["security", "performance", "accessibility", "best_practices"]
     for category in categories:
         category_issues = [i for i in results["issues"] if i["issue_type"] == category]
         if category_issues:
-            print(f"\n=== {category.replace('_', ' ').title()} Issues ===")
+            print(
+                f"\n=== {category.replace('_', ' ').title()} Issues ==="
+            )  # noqa: print
             for issue in category_issues[:5]:  # Show first 5
-                print(
+                print(  # noqa: print
                     f"• {issue['description']} ({issue['file_path']}:{issue['line_number']})"
                 )
 

@@ -15,13 +15,13 @@ from typing import Any, Dict, List, Optional
 from api_consistency_analyzer import APIConsistencyAnalyzer
 from architectural_pattern_analyzer import ArchitecturalPatternAnalyzer
 from code_analyzer import CodeAnalyzer
-from config import UnifiedConfig
 from env_analyzer import EnvironmentVariableAnalyzer
 from performance_analyzer import PerformanceAnalyzer
 from security_analyzer import SecurityAnalyzer
 from testing_coverage_analyzer import TestingCoverageAnalyzer
 
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -912,44 +912,46 @@ async def main():
     dashboard = CodeQualityDashboard()
 
     # Generate comprehensive report
-    print("🚀 Generating comprehensive code quality report...")
+    print("🚀 Generating comprehensive code quality report...")  # noqa: print
     report = await dashboard.generate_comprehensive_report(
         root_path=".", patterns=["src/**/*.py", "backend/**/*.py"], include_trends=True
     )
 
     # Print executive summary
     summary = await dashboard.generate_executive_summary(report)
-    print(summary)
+    print(summary)  # noqa: print
 
     # Print detailed metrics
     metrics = report["quality_metrics"]
-    print(f"\n=== Detailed Quality Metrics ===")
-    print(f"Overall Score: {metrics['overall_score']}/100")
-    print(f"Security: {metrics['security_score']}/100")
-    print(f"Performance: {metrics['performance_score']}/100")
-    print(f"Architecture: {metrics['architecture_score']}/100")
-    print(f"Test Coverage: {metrics['test_coverage_score']}/100")
-    print(f"API Consistency: {metrics['api_consistency_score']}/100")
-    print(f"Code Duplication: {metrics['code_duplication_score']}/100")
-    print(f"Environment Config: {metrics['environment_config_score']}/100")
+    print(f"\n=== Detailed Quality Metrics ===")  # noqa: print
+    print(f"Overall Score: {metrics['overall_score']}/100")  # noqa: print
+    print(f"Security: {metrics['security_score']}/100")  # noqa: print
+    print(f"Performance: {metrics['performance_score']}/100")  # noqa: print
+    print(f"Architecture: {metrics['architecture_score']}/100")  # noqa: print
+    print(f"Test Coverage: {metrics['test_coverage_score']}/100")  # noqa: print
+    print(f"API Consistency: {metrics['api_consistency_score']}/100")  # noqa: print
+    print(f"Code Duplication: {metrics['code_duplication_score']}/100")  # noqa: print
+    print(
+        f"Environment Config: {metrics['environment_config_score']}/100"
+    )  # noqa: print
 
     # Print top issues
-    print(f"\n=== Top Priority Issues ===")
+    print(f"\n=== Top Priority Issues ===")  # noqa: print
     for i, issue in enumerate(report["prioritized_issues"][:10], 1):
         severity_emoji = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
         emoji = severity_emoji.get(issue["severity"], "⚪")
-        print(f"{i}. {emoji} {issue['title']} ({issue['category']})")
-        print(f"   {issue['description']}")
-        print(f"   Fix: {issue['fix_suggestion']}")
-        print(f"   Effort: {issue['estimated_effort']}")
-        print()
+        print(f"{i}. {emoji} {issue['title']} ({issue['category']})")  # noqa: print
+        print(f"   {issue['description']}")  # noqa: print
+        print(f"   Fix: {issue['fix_suggestion']}")  # noqa: print
+        print(f"   Effort: {issue['estimated_effort']}")  # noqa: print
+        print()  # noqa: print
 
     # Save comprehensive report
     report_path = Path("comprehensive_quality_report.json")
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2, default=str)
 
-    print(f"📋 Comprehensive report saved to: {report_path}")
+    print(f"📋 Comprehensive report saved to: {report_path}")  # noqa: print
 
     return report
 

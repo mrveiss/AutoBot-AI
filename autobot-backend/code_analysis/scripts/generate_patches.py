@@ -19,13 +19,19 @@ def _print_fix_summary_stats(fix_results: dict) -> None:
     Issue #281: Extracted from generate_comprehensive_fixes to reduce
     function length and improve readability.
     """
-    print(f"📊 **Fix Generation Summary:**")
-    print(f"   • Total fixes generated: {fix_results['total_fixes_generated']}")
-    print(f"   • High confidence fixes: {fix_results['high_confidence_fixes']}")
-    print(f"   • Low risk fixes: {fix_results['low_risk_fixes']}")
-    print(f"   • Patches generated: {len(fix_results['patches'])}")
-    print(f"   • Generation time: {fix_results['generation_time_seconds']:.2f} seconds")
-    print()
+    print(f"📊 **Fix Generation Summary:**")  # noqa: print
+    print(
+        f"   • Total fixes generated: {fix_results['total_fixes_generated']}"
+    )  # noqa: print
+    print(
+        f"   • High confidence fixes: {fix_results['high_confidence_fixes']}"
+    )  # noqa: print
+    print(f"   • Low risk fixes: {fix_results['low_risk_fixes']}")  # noqa: print
+    print(f"   • Patches generated: {len(fix_results['patches'])}")  # noqa: print
+    print(
+        f"   • Generation time: {fix_results['generation_time_seconds']:.2f} seconds"
+    )  # noqa: print
+    print()  # noqa: print
 
 
 def _print_fix_categories(stats: dict) -> None:
@@ -35,30 +41,42 @@ def _print_fix_categories(stats: dict) -> None:
     Issue #281: Extracted from generate_comprehensive_fixes to reduce
     function length and improve readability.
     """
-    print("🏷️ **Fix Categories:**")
+    print("🏷️ **Fix Categories:**")  # noqa: print
     for fix_type, count in stats["by_type"].items():
         fix_name = fix_type.replace("_", " ").title()
-        print(f"   • {fix_name}: {count} fixes")
-    print()
+        print(f"   • {fix_name}: {count} fixes")  # noqa: print
+    print()  # noqa: print
 
-    print("🎯 **Fix Confidence Distribution:**")
+    print("🎯 **Fix Confidence Distribution:**")  # noqa: print
     conf_stats = stats["by_confidence"]
-    print(f"   • High confidence (>80%): {conf_stats['high']} fixes")
-    print(f"   • Medium confidence (60-80%): {conf_stats['medium']} fixes")
-    print(f"   • Low confidence (<60%): {conf_stats['low']} fixes")
-    print()
+    print(f"   • High confidence (>80%): {conf_stats['high']} fixes")  # noqa: print
+    print(
+        f"   • Medium confidence (60-80%): {conf_stats['medium']} fixes"
+    )  # noqa: print
+    print(f"   • Low confidence (<60%): {conf_stats['low']} fixes")  # noqa: print
+    print()  # noqa: print
 
-    print("⚠️ **Risk Assessment:**")
+    print("⚠️ **Risk Assessment:**")  # noqa: print
     risk_stats = stats["by_risk"]
-    print(f"   • Low risk: {risk_stats['low']} fixes (safe to auto-apply)")
-    print(f"   • Medium risk: {risk_stats['medium']} fixes (review recommended)")
-    print(f"   • High risk: {risk_stats['high']} fixes (manual review required)")
-    print()
+    print(
+        f"   • Low risk: {risk_stats['low']} fixes (safe to auto-apply)"
+    )  # noqa: print
+    print(
+        f"   • Medium risk: {risk_stats['medium']} fixes (review recommended)"
+    )  # noqa: print
+    print(
+        f"   • High risk: {risk_stats['high']} fixes (manual review required)"
+    )  # noqa: print
+    print()  # noqa: print
 
-    print(f"🤖 **Automation Readiness:**")
-    print(f"   • Can be applied automatically: {stats['automated_fixes']} fixes")
-    print(f"   • Require manual review: {stats['manual_review_required']} fixes")
-    print()
+    print(f"🤖 **Automation Readiness:**")  # noqa: print
+    print(
+        f"   • Can be applied automatically: {stats['automated_fixes']} fixes"
+    )  # noqa: print
+    print(
+        f"   • Require manual review: {stats['manual_review_required']} fixes"
+    )  # noqa: print
+    print()  # noqa: print
 
 
 def _print_high_priority_fixes(fix_results: dict) -> None:
@@ -68,7 +86,7 @@ def _print_high_priority_fixes(fix_results: dict) -> None:
     Issue #281: Extracted from generate_comprehensive_fixes to reduce
     function length and improve readability.
     """
-    print("🚨 **Top Priority Fixes (Immediate Action):**")
+    print("🚨 **Top Priority Fixes (Immediate Action):**")  # noqa: print
 
     high_priority_fixes = [
         fix
@@ -82,22 +100,28 @@ def _print_high_priority_fixes(fix_results: dict) -> None:
         confidence_icon = "🎯" if fix["confidence"] > 0.8 else "🤔"
         risk_icon = {"low": "✅", "medium": "⚠️", "high": "🚨"}[fix["risk_level"]]
 
-        print(f"\n{i}. {emoji} **{fix['description']}** ({fix['severity'].upper()})")
-        print(f"   🏷️ Type: {fix['fix_type'].replace('_', ' ').title()}")
+        print(
+            f"\n{i}. {emoji} **{fix['description']}** ({fix['severity'].upper()})"
+        )  # noqa: print
+        print(f"   🏷️ Type: {fix['fix_type'].replace('_', ' ').title()}")  # noqa: print
         if fix["file_path"] != "Multiple files":
-            print(f"   📄 Location: {fix['file_path']}:{fix['line_number']}")
-        print(f"   {confidence_icon} Confidence: {fix['confidence']:.0%}")
-        print(f"   {risk_icon} Risk Level: {fix['risk_level'].title()}")
-        print(f"   📝 Explanation: {fix['explanation']}")
+            print(
+                f"   📄 Location: {fix['file_path']}:{fix['line_number']}"
+            )  # noqa: print
+        print(
+            f"   {confidence_icon} Confidence: {fix['confidence']:.0%}"
+        )  # noqa: print
+        print(f"   {risk_icon} Risk Level: {fix['risk_level'].title()}")  # noqa: print
+        print(f"   📝 Explanation: {fix['explanation']}")  # noqa: print
 
         if fix["original_code"] and fix["fixed_code"]:
-            print(f"   \n   🔧 **Fix Preview:**")
-            print(f"   ```python")
-            print(f"   # Before:")
-            print(f"   {fix['original_code']}")
-            print(f"   # After:")
-            print(f"   {fix['fixed_code']}")
-            print(f"   ```")
+            print(f"   \n   🔧 **Fix Preview:**")  # noqa: print
+            print(f"   ```python")  # noqa: print
+            print(f"   # Before:")  # noqa: print
+            print(f"   {fix['original_code']}")  # noqa: print
+            print(f"   # After:")  # noqa: print
+            print(f"   {fix['fixed_code']}")  # noqa: print
+            print(f"   ```")  # noqa: print
 
 
 def _print_patches_and_security(fix_results: dict) -> None:
@@ -109,20 +133,22 @@ def _print_patches_and_security(fix_results: dict) -> None:
     """
     # Show automated patches
     if fix_results["patches"]:
-        print(f"\n📋 **Generated Patches (Ready to Apply):**")
-        print(
+        print(f"\n📋 **Generated Patches (Ready to Apply):**")  # noqa: print
+        print(  # noqa: print
             f"Found {len(fix_results['patches'])} high-confidence patches that can be applied automatically.\n"
         )
 
         for i, patch in enumerate(fix_results["patches"][:5], 1):
-            print(f"{i}. **{patch['description']}**")
-            print(f"   File: {patch['file_path']}:{patch['line_number']}")
+            print(f"{i}. **{patch['description']}**")  # noqa: print
             print(
+                f"   File: {patch['file_path']}:{patch['line_number']}"
+            )  # noqa: print
+            print(  # noqa: print
                 f"   Confidence: {patch['confidence']:.0%}, Risk: {patch['risk_level']}"
             )
-            print("   ```diff")
-            print(patch["patch_content"])
-            print("   ```")
+            print("   ```diff")  # noqa: print
+            print(patch["patch_content"])  # noqa: print
+            print("   ```")  # noqa: print
 
     # Security-specific fixes
     security_fixes = [
@@ -131,16 +157,18 @@ def _print_patches_and_security(fix_results: dict) -> None:
         if "security" in f["fix_type"] or "injection" in f["fix_type"]
     ]
     if security_fixes:
-        print(f"🛡️ **Critical Security Fixes:**")
-        print(
+        print(f"🛡️ **Critical Security Fixes:**")  # noqa: print
+        print(  # noqa: print
             f"Found {len(security_fixes)} security-related fixes that should be applied immediately:"
         )
 
         for fix in security_fixes[:3]:
-            print(f"   • {fix['description']}")
-            print(f"     Location: {fix['file_path']}:{fix['line_number']}")
-            print(f"     Fix: {fix['explanation']}")
-        print()
+            print(f"   • {fix['description']}")  # noqa: print
+            print(
+                f"     Location: {fix['file_path']}:{fix['line_number']}"
+            )  # noqa: print
+            print(f"     Fix: {fix['explanation']}")  # noqa: print
+        print()  # noqa: print
 
     # Performance-specific fixes
     performance_fixes = [
@@ -149,13 +177,15 @@ def _print_patches_and_security(fix_results: dict) -> None:
         if "performance" in f["fix_type"] or "memory" in f["fix_type"]
     ]
     if performance_fixes:
-        print(f"⚡ **Performance Optimization Fixes:**")
-        print(f"Found {len(performance_fixes)} performance-related fixes:")
+        print(f"⚡ **Performance Optimization Fixes:**")  # noqa: print
+        print(
+            f"Found {len(performance_fixes)} performance-related fixes:"
+        )  # noqa: print
 
         for fix in performance_fixes[:3]:
-            print(f"   • {fix['description']}")
-            print(f"     Impact: {fix['explanation']}")
-        print()
+            print(f"   • {fix['description']}")  # noqa: print
+            print(f"     Impact: {fix['explanation']}")  # noqa: print
+        print()  # noqa: print
 
 
 async def generate_comprehensive_fixes():
@@ -165,19 +195,21 @@ async def generate_comprehensive_fixes():
     Issue #281: Print sections extracted to helper functions to reduce
     function length from 187 to ~60 lines.
     """
-    print("🔧 Starting automated fix generation...")
-    print("This will analyze the codebase and generate specific code fixes for:")
-    print("  • Security vulnerabilities")
-    print("  • Performance issues")
-    print("  • Code duplication")
-    print("  • Environment configuration")
-    print("  • API consistency issues")
-    print()
+    print("🔧 Starting automated fix generation...")  # noqa: print
+    print(
+        "This will analyze the codebase and generate specific code fixes for:"
+    )  # noqa: print
+    print("  • Security vulnerabilities")  # noqa: print
+    print("  • Performance issues")  # noqa: print
+    print("  • Code duplication")  # noqa: print
+    print("  • Environment configuration")  # noqa: print
+    print("  • API consistency issues")  # noqa: print
+    print()  # noqa: print
 
     # First run comprehensive analysis
     dashboard = CodeQualityDashboard()
 
-    print("📊 Running comprehensive code quality analysis...")
+    print("📊 Running comprehensive code quality analysis...")  # noqa: print
     analysis_results = await dashboard.generate_comprehensive_report(
         root_path=".", patterns=["src/**/*.py", "backend/**/*.py"], include_trends=False
     )
@@ -185,20 +217,20 @@ async def generate_comprehensive_fixes():
     # Extract detailed analysis results for fix generation
     detailed_analyses = analysis_results.get("detailed_analyses", {})
 
-    print(
+    print(  # noqa: print
         f"✅ Analysis complete. Found {analysis_results['issue_summary']['total_issues']} issues."
     )
-    print()
+    print()  # noqa: print
 
     # Generate fixes
     generator = AutomatedFixGenerator()
 
-    print("🛠️ Generating automated fixes...")
+    print("🛠️ Generating automated fixes...")  # noqa: print
     fix_results = await generator.generate_fixes(
         detailed_analyses, generate_patches=True
     )
 
-    print("=== Automated Fix Generation Results ===\n")
+    print("=== Automated Fix Generation Results ===\n")  # noqa: print
 
     # Issue #281: Use extracted helpers for output sections
     _print_fix_summary_stats(fix_results)
@@ -207,24 +239,26 @@ async def generate_comprehensive_fixes():
     _print_patches_and_security(fix_results)
 
     # Show fix recommendations
-    print("📋 **Fix Application Recommendations:**")
+    print("📋 **Fix Application Recommendations:**")  # noqa: print
     for i, recommendation in enumerate(fix_results["recommendations"], 1):
-        print(f"{i}. {recommendation}")
-    print()
+        print(f"{i}. {recommendation}")  # noqa: print
+    print()  # noqa: print
 
     # Test automated fix application (dry run)
-    print("🧪 **Testing Automated Fix Application (Dry Run):**")
+    print("🧪 **Testing Automated Fix Application (Dry Run):**")  # noqa: print
 
     application_results = await generator.apply_safe_fixes(fix_results, dry_run=True)
 
-    print(f"   ✅ Can apply automatically: {application_results['total_applied']} fixes")
-    print(f"   🔍 Would require verification after application")
-    print()
+    print(
+        f"   ✅ Can apply automatically: {application_results['total_applied']} fixes"
+    )  # noqa: print
+    print(f"   🔍 Would require verification after application")  # noqa: print
+    print()  # noqa: print
 
     if application_results["applied_fixes"]:
-        print("   **Fixes that would be applied automatically:**")
+        print("   **Fixes that would be applied automatically:**")  # noqa: print
         for fix in application_results["applied_fixes"][:5]:  # Show first 5
-            print(f"   • {fix['description']} ({fix['file_path']})")
+            print(f"   • {fix['description']} ({fix['file_path']})")  # noqa: print
 
     # Save results
     fixes_path = Path("automated_fixes_report.json")
@@ -244,11 +278,11 @@ async def generate_comprehensive_fixes():
                 f.write(patch["patch_content"])
                 f.write("\n")
 
-    print(f"📋 **Generated Reports:**")
-    print(f"   • Detailed fixes: {fixes_path}")
+    print(f"📋 **Generated Reports:**")  # noqa: print
+    print(f"   • Detailed fixes: {fixes_path}")  # noqa: print
     if fix_results["patches"]:
-        print(f"   • Patch file: {patches_path}")
-    print()
+        print(f"   • Patch file: {patches_path}")  # noqa: print
+    print()  # noqa: print
 
     return fix_results
 
@@ -256,61 +290,63 @@ async def generate_comprehensive_fixes():
 async def demonstrate_fix_application():
     """Demonstrate how to apply fixes safely"""
 
-    print("=== Safe Fix Application Guide ===\n")
+    print("=== Safe Fix Application Guide ===\n")  # noqa: print
 
-    print("🔧 **How to Apply Automated Fixes Safely:**\n")
+    print("🔧 **How to Apply Automated Fixes Safely:**\n")  # noqa: print
 
-    print("**1. Review High-Confidence Fixes:**")
-    print("   • Only apply fixes with >80% confidence and low risk")
-    print("   • Review the before/after code changes")
-    print("   • Ensure you understand what each fix does")
-    print()
+    print("**1. Review High-Confidence Fixes:**")  # noqa: print
+    print("   • Only apply fixes with >80% confidence and low risk")  # noqa: print
+    print("   • Review the before/after code changes")  # noqa: print
+    print("   • Ensure you understand what each fix does")  # noqa: print
+    print()  # noqa: print
 
-    print("**2. Apply Patches in Stages:**")
-    print("   ```bash")
-    print("   # Apply security fixes first (highest priority)")
-    print("   git checkout -b security-fixes")
-    print("   patch -p1 < security_fixes.patch")
-    print("   ")
-    print("   # Run tests after each batch")
-    print("   python -m pytest tests/")
-    print("   flake8 src/ backend/")
-    print("   ")
-    print("   # Commit and test before next batch")
-    print("   git add -A && git commit -m 'Apply automated security fixes'")
-    print("   ```")
-    print()
+    print("**2. Apply Patches in Stages:**")  # noqa: print
+    print("   ```bash")  # noqa: print
+    print("   # Apply security fixes first (highest priority)")  # noqa: print
+    print("   git checkout -b security-fixes")  # noqa: print
+    print("   patch -p1 < security_fixes.patch")  # noqa: print
+    print("   ")  # noqa: print
+    print("   # Run tests after each batch")  # noqa: print
+    print("   python -m pytest tests/")  # noqa: print
+    print("   flake8 src/ backend/")  # noqa: print
+    print("   ")  # noqa: print
+    print("   # Commit and test before next batch")  # noqa: print
+    print(
+        "   git add -A && git commit -m 'Apply automated security fixes'"
+    )  # noqa: print
+    print("   ```")  # noqa: print
+    print()  # noqa: print
 
-    print("**3. Verification Steps:**")
-    print("   • Run full test suite after applying fixes")
-    print("   • Check for syntax errors: `python -m py_compile file.py`")
-    print("   • Verify application still starts correctly")
-    print("   • Review logs for any new errors")
-    print()
+    print("**3. Verification Steps:**")  # noqa: print
+    print("   • Run full test suite after applying fixes")  # noqa: print
+    print("   • Check for syntax errors: `python -m py_compile file.py`")  # noqa: print
+    print("   • Verify application still starts correctly")  # noqa: print
+    print("   • Review logs for any new errors")  # noqa: print
+    print()  # noqa: print
 
-    print("**4. Manual Review Required For:**")
-    print("   • High-risk fixes (may change behavior)")
-    print("   • Low-confidence fixes (<60%)")
-    print("   • Complex refactoring suggestions")
-    print("   • Architectural changes")
-    print()
+    print("**4. Manual Review Required For:**")  # noqa: print
+    print("   • High-risk fixes (may change behavior)")  # noqa: print
+    print("   • Low-confidence fixes (<60%)")  # noqa: print
+    print("   • Complex refactoring suggestions")  # noqa: print
+    print("   • Architectural changes")  # noqa: print
+    print()  # noqa: print
 
-    print("**5. Rollback Plan:**")
-    print("   ```bash")
-    print("   # If issues arise, rollback easily")
-    print("   git reset --hard HEAD~1")
-    print("   ")
-    print("   # Or revert specific files")
-    print("   git checkout HEAD~1 -- src/problematic_file.py")
-    print("   ```")
-    print()
+    print("**5. Rollback Plan:**")  # noqa: print
+    print("   ```bash")  # noqa: print
+    print("   # If issues arise, rollback easily")  # noqa: print
+    print("   git reset --hard HEAD~1")  # noqa: print
+    print("   ")  # noqa: print
+    print("   # Or revert specific files")  # noqa: print
+    print("   git checkout HEAD~1 -- src/problematic_file.py")  # noqa: print
+    print("   ```")  # noqa: print
+    print()  # noqa: print
 
-    print("**6. Integration with CI/CD:**")
-    print("   • Set up pre-commit hooks for code quality")
-    print("   • Run automated fix generation in CI")
-    print("   • Create pull requests for fix review")
-    print("   • Automate safe fix application in staging")
-    print()
+    print("**6. Integration with CI/CD:**")  # noqa: print
+    print("   • Set up pre-commit hooks for code quality")  # noqa: print
+    print("   • Run automated fix generation in CI")  # noqa: print
+    print("   • Create pull requests for fix review")  # noqa: print
+    print("   • Automate safe fix application in staging")  # noqa: print
+    print()  # noqa: print
 
 
 async def main():
@@ -322,13 +358,15 @@ async def main():
     # Show how to apply fixes safely
     await demonstrate_fix_application()
 
-    print("=== 🎯 Automated Fix Generation Complete ===")
-    print("Next steps:")
-    print("1. Review automated_fixes_report.json for all generated fixes")
-    print("2. Apply high-confidence, low-risk fixes first")
-    print("3. Test thoroughly after each batch of fixes")
-    print("4. Use generated patches for easy application")
-    print("5. Set up automated fix generation in your CI/CD pipeline")
+    print("=== 🎯 Automated Fix Generation Complete ===")  # noqa: print
+    print("Next steps:")  # noqa: print
+    print(
+        "1. Review automated_fixes_report.json for all generated fixes"
+    )  # noqa: print
+    print("2. Apply high-confidence, low-risk fixes first")  # noqa: print
+    print("3. Test thoroughly after each batch of fixes")  # noqa: print
+    print("4. Use generated patches for easy application")  # noqa: print
+    print("5. Set up automated fix generation in your CI/CD pipeline")  # noqa: print
 
 
 if __name__ == "__main__":

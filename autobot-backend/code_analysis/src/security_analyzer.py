@@ -13,9 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from config import UnifiedConfig
-
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -856,28 +855,30 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== Security Analysis Results ===")
-    print(f"Total vulnerabilities: {results['total_vulnerabilities']}")
-    print(f"Critical vulnerabilities: {results['critical_vulnerabilities']}")
-    print(f"High severity count: {results['high_severity_count']}")
-    print(f"Security score: {results['metrics']['security_score']}/100")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    print(f"\n=== Security Analysis Results ===")  # noqa: print
+    print(f"Total vulnerabilities: {results['total_vulnerabilities']}")  # noqa: print
+    print(
+        f"Critical vulnerabilities: {results['critical_vulnerabilities']}"
+    )  # noqa: print
+    print(f"High severity count: {results['high_severity_count']}")  # noqa: print
+    print(f"Security score: {results['metrics']['security_score']}/100")  # noqa: print
+    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Print category breakdown
-    print(f"\n=== Vulnerability Categories ===")
+    print(f"\n=== Vulnerability Categories ===")  # noqa: print
     for category, count in results["categories"].items():
-        print(f"{category}: {count}")
+        print(f"{category}: {count}")  # noqa: print
 
     # Print critical vulnerabilities
-    print(f"\n=== Critical Security Vulnerabilities ===")
+    print(f"\n=== Critical Security Vulnerabilities ===")  # noqa: print
     critical_vulns = [
         v for v in results["vulnerability_details"] if v["severity"] == "critical"
     ]
     for i, vuln in enumerate(critical_vulns[:5], 1):
-        print(f"\n{i}. {vuln['type']} in {vuln['file']}:{vuln['line']}")
-        print(f"   {vuln['description']}")
-        print(f"   CWE: {vuln['cwe_id']}")
-        print(f"   Fix: {vuln['fix_suggestion']}")
+        print(f"\n{i}. {vuln['type']} in {vuln['file']}:{vuln['line']}")  # noqa: print
+        print(f"   {vuln['description']}")  # noqa: print
+        print(f"   CWE: {vuln['cwe_id']}")  # noqa: print
+        print(f"   Fix: {vuln['fix_suggestion']}")  # noqa: print
 
 
 if __name__ == "__main__":

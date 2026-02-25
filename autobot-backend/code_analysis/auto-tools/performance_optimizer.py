@@ -368,8 +368,8 @@ class ConsoleLogCleaner:
         """Clean console.logs from entire project or specific directory."""
         search_root = Path(target_dir) if target_dir else self.project_root
 
-        print(f"🔍 Scanning for console.log statements in: {search_root}")
-        print(f"📁 Backups will be saved to: {self.backup_dir}")
+        print(f"🔍 Scanning for console.log statements in: {search_root}")  # noqa: print
+        print(f"📁 Backups will be saved to: {self.backup_dir}")  # noqa: print
 
         # Find all files to process
         files_to_process = []
@@ -378,11 +378,11 @@ class ConsoleLogCleaner:
                 if self.should_process_file(file_path):
                     files_to_process.append(file_path)
 
-        print(f"\n📊 Found {len(files_to_process)} files to analyze")
+        print(f"\n📊 Found {len(files_to_process)} files to analyze")  # noqa: print
 
         # Process each file
         for i, file_path in enumerate(files_to_process, 1):
-            print(
+            print(  # noqa: print
                 f"\r⚡ Processing file {i}/{len(files_to_process)}: {file_path.name}",
                 end="",
                 flush=True,
@@ -392,7 +392,7 @@ class ConsoleLogCleaner:
             if self.process_file(file_path):
                 self.report["files_modified"] += 1
 
-        print("\n✅ Console.log cleanup completed!")
+        print("\n✅ Console.log cleanup completed!")  # noqa: print
 
         return self.report
 
@@ -461,14 +461,14 @@ All modified files have been backed up to: `{}`
         with open(report_path, "w") as f:
             f.write(report_content)
 
-        print(f"\n📄 Report saved to: {report_path}")
+        print(f"\n📄 Report saved to: {report_path}")  # noqa: print
 
         # Also save JSON report
         json_report_path = report_path.with_suffix(".json")
         with open(json_report_path, "w") as f:
             json.dump(self.report, f, indent=2)
 
-        print(f"📊 JSON report saved to: {json_report_path}")
+        print(f"📊 JSON report saved to: {json_report_path}")  # noqa: print
 
 
 def main():
@@ -516,10 +516,12 @@ def main():
     cleaner.generate_report(args.report)
 
     # Print summary
-    print(f"\n🎉 Cleanup Complete!")
-    print(f"   - Removed {report['console_logs_removed']} console.log statements")
-    print(f"   - Modified {report['files_modified']} files")
-    print(f"   - Backups saved to: {cleaner.backup_dir}")
+    print(f"\n🎉 Cleanup Complete!")  # noqa: print
+    print(
+        f"   - Removed {report['console_logs_removed']} console.log statements"
+    )  # noqa: print
+    print(f"   - Modified {report['files_modified']} files")  # noqa: print
+    print(f"   - Backups saved to: {cleaner.backup_dir}")  # noqa: print
 
 
 if __name__ == "__main__":
@@ -531,8 +533,8 @@ if __name__ == "__main__":
         project_root = "/home/kali/Desktop/AutoBot"
         target_dir = "autobot-vue/src"
 
-        print("🚀 AutoBot Console.log Performance Fix Agent")
-        print("=" * 50)
+        print("🚀 AutoBot Console.log Performance Fix Agent")  # noqa: print
+        print("=" * 50)  # noqa: print
 
         cleaner = ConsoleLogCleaner(project_root)
         report = cleaner.clean_project(os.path.join(project_root, target_dir))

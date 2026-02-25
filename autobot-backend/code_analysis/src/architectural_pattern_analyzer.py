@@ -18,9 +18,8 @@ import logging
 import time
 from typing import Any, Dict, List
 
-from config import UnifiedConfig
-
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 # Issue #394: Import from architectural_analysis package
 from .architectural_analysis import (
@@ -195,20 +194,24 @@ async def main():
     )
 
     # Print summary
-    print("\n=== Architectural Pattern Analysis Results ===")
-    print(f"Total components: {results['total_components']}")
-    print(f"Architectural issues: {results['architectural_issues']}")
-    print(f"Design patterns found: {results['design_patterns_found']}")
-    print(f"Architecture score: {results['architecture_score']}/100")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    print("\n=== Architectural Pattern Analysis Results ===")  # noqa: print
+    print(f"Total components: {results['total_components']}")  # noqa: print
+    print(f"Architectural issues: {results['architectural_issues']}")  # noqa: print
+    print(f"Design patterns found: {results['design_patterns_found']}")  # noqa: print
+    print(f"Architecture score: {results['architecture_score']}/100")  # noqa: print
+    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Print detailed metrics
     metrics = results["metrics"]
-    print("\n=== Architectural Metrics ===")
-    print(f"Coupling score: {metrics['coupling_score']}/100 (lower is better)")
-    print(f"Cohesion score: {metrics['cohesion_score']}/100")
-    print(f"Pattern adherence: {metrics['pattern_adherence_score']}/100")
-    print(f"Maintainability index: {metrics['maintainability_index']}/100")
+    print("\n=== Architectural Metrics ===")  # noqa: print
+    print(
+        f"Coupling score: {metrics['coupling_score']}/100 (lower is better)"
+    )  # noqa: print
+    print(f"Cohesion score: {metrics['cohesion_score']}/100")  # noqa: print
+    print(f"Pattern adherence: {metrics['pattern_adherence_score']}/100")  # noqa: print
+    print(
+        f"Maintainability index: {metrics['maintainability_index']}/100"
+    )  # noqa: print
 
 
 if __name__ == "__main__":

@@ -1176,41 +1176,43 @@ if __name__ == "__main__":
             root_path=".", patterns=["src/**/*.py", "backend/**/*.py"]
         )
 
-        print(f"\n{'='*60}")
-        print("ANTI-PATTERN ANALYSIS REPORT")
-        print(f"{'='*60}")
-        print(f"Total Issues: {report.total_issues}")
-        print(f"  Critical: {report.critical_count}")
-        print(f"  High: {report.high_count}")
-        print(f"  Medium: {report.medium_count}")
-        print(f"  Low: {report.low_count}")
-        print(f"\nHealth Score: {report.health_score}/100")
-        print(f"Analysis Time: {report.analysis_time_seconds:.2f}s")
+        print(f"\n{'='*60}")  # noqa: print
+        print("ANTI-PATTERN ANALYSIS REPORT")  # noqa: print
+        print(f"{'='*60}")  # noqa: print
+        print(f"Total Issues: {report.total_issues}")  # noqa: print
+        print(f"  Critical: {report.critical_count}")  # noqa: print
+        print(f"  High: {report.high_count}")  # noqa: print
+        print(f"  Medium: {report.medium_count}")  # noqa: print
+        print(f"  Low: {report.low_count}")  # noqa: print
+        print(f"\nHealth Score: {report.health_score}/100")  # noqa: print
+        print(f"Analysis Time: {report.analysis_time_seconds:.2f}s")  # noqa: print
 
-        print(f"\n{'='*60}")
-        print("SUMMARY BY TYPE")
-        print(f"{'='*60}")
+        print(f"\n{'='*60}")  # noqa: print
+        print("SUMMARY BY TYPE")  # noqa: print
+        print(f"{'='*60}")  # noqa: print
         for pattern_type, count in sorted(report.summary_by_type.items()):
-            print(f"  {pattern_type}: {count}")
+            print(f"  {pattern_type}: {count}")  # noqa: print
 
-        print(f"\n{'='*60}")
-        print("RECOMMENDATIONS")
-        print(f"{'='*60}")
+        print(f"\n{'='*60}")  # noqa: print
+        print("RECOMMENDATIONS")  # noqa: print
+        print(f"{'='*60}")  # noqa: print
         for rec in report.recommendations:
-            print(f"  {rec}")
+            print(f"  {rec}")  # noqa: print
 
         if report.anti_patterns:
-            print(f"\n{'='*60}")
-            print("TOP ISSUES (by severity)")
-            print(f"{'='*60}")
+            print(f"\n{'='*60}")  # noqa: print
+            print("TOP ISSUES (by severity)")  # noqa: print
+            print(f"{'='*60}")  # noqa: print
             sorted_patterns = sorted(
                 report.anti_patterns, key=lambda x: x.severity.score(), reverse=True
             )
             for ap in sorted_patterns[:10]:
-                print(f"\n[{ap.severity.value.upper()}] {ap.pattern_type.value}")
-                print(f"  Entity: {ap.entity_name}")
-                print(f"  File: {ap.file_path}:{ap.line_number}")
-                print(f"  {ap.description}")
-                print(f"  Suggestion: {ap.suggestion}")
+                print(
+                    f"\n[{ap.severity.value.upper()}] {ap.pattern_type.value}"
+                )  # noqa: print
+                print(f"  Entity: {ap.entity_name}")  # noqa: print
+                print(f"  File: {ap.file_path}:{ap.line_number}")  # noqa: print
+                print(f"  {ap.description}")  # noqa: print
+                print(f"  Suggestion: {ap.suggestion}")  # noqa: print
 
     asyncio.run(main())

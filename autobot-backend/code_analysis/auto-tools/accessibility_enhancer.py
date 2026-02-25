@@ -398,27 +398,29 @@ class AccessibilityFixAgent:
                     str(file_path.relative_to(self.root_path))
                 )
 
-                print(
+                print(  # noqa: print
                     f"✅ Fixed {len(all_fixes)} accessibility issues in {file_path.name}"
                 )
                 for fix in all_fixes[:3]:  # Show first 3 fixes
-                    print(f"   • {fix}")
+                    print(f"   • {fix}")  # noqa: print
                 if len(all_fixes) > 3:
-                    print(f"   • ... and {len(all_fixes) - 3} more")
-                print(f"   • Accessibility score: {initial_score} → {final_score}")
+                    print(f"   • ... and {len(all_fixes) - 3} more")  # noqa: print
+                print(
+                    f"   • Accessibility score: {initial_score} → {final_score}"
+                )  # noqa: print
 
                 return True
 
             return False
 
         except Exception as e:
-            print(f"❌ Error fixing {file_path}: {e}")
+            print(f"❌ Error fixing {file_path}: {e}")  # noqa: print
             return False
 
     def scan_and_fix(self) -> None:
         """Scan and fix accessibility issues in Vue components"""
-        print("🔍 Starting accessibility scan and fix...")
-        print(f"📁 Scanning directory: {self.root_path}")
+        print("🔍 Starting accessibility scan and fix...")  # noqa: print
+        print(f"📁 Scanning directory: {self.root_path}")  # noqa: print
 
         # Find Vue files
         vue_files = list(self.root_path.rglob("*.vue"))
@@ -431,7 +433,7 @@ class AccessibilityFixAgent:
             if not any(skip_dir in vue_file.parts for skip_dir in skip_dirs):
                 filtered_files.append(vue_file)
 
-        print(f"📄 Found {len(filtered_files)} Vue components to analyze")
+        print(f"📄 Found {len(filtered_files)} Vue components to analyze")  # noqa: print
 
         fixed_count = 0
         total_fixes = 0
@@ -455,11 +457,11 @@ class AccessibilityFixAgent:
             ),
         }
 
-        print(f"\n🎯 Accessibility Fix Summary:")
-        print(f"   📊 Files scanned: {len(filtered_files)}")
-        print(f"   ✅ Files modified: {fixed_count}")
-        print(f"   🔧 Total fixes applied: {total_fixes}")
-        print(
+        print(f"\n🎯 Accessibility Fix Summary:")  # noqa: print
+        print(f"   📊 Files scanned: {len(filtered_files)}")  # noqa: print
+        print(f"   ✅ Files modified: {fixed_count}")  # noqa: print
+        print(f"   🔧 Total fixes applied: {total_fixes}")  # noqa: print
+        print(  # noqa: print
             f"   📈 Accessibility score improvement: +{self.report_data['summary']['accessibility_improvements']} points"
         )
 
@@ -575,8 +577,8 @@ Recommended tools for ongoing accessibility validation:
         with open(report_path, "w") as f:
             f.write(report_content)
 
-        print(f"📋 Generated detailed report: {report_path}")
-        print(f"📊 Generated JSON report: {json_report_path}")
+        print(f"📋 Generated detailed report: {report_path}")  # noqa: print
+        print(f"📊 Generated JSON report: {json_report_path}")  # noqa: print
 
 
 if __name__ == "__main__":
@@ -590,9 +592,9 @@ if __name__ == "__main__":
     agent.scan_and_fix()
     agent.generate_report()
 
-    print(
+    print(  # noqa: print
         "\n🎉 Accessibility fix complete! Your AutoBot frontend is now more accessible."
     )
-    print(
+    print(  # noqa: print
         "📋 Check the generated report for detailed information about the improvements made."
     )

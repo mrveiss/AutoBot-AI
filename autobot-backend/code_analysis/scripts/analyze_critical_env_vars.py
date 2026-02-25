@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
-from backend.constants.network_constants import NetworkConstants
+from constants.network_constants import NetworkConstants
 
 logger = logging.getLogger(__name__)
 
@@ -199,20 +199,20 @@ class CriticalEnvAnalyzer:
 async def main():
     """Run focused critical environment variable analysis"""
 
-    print("🔍 Analyzing critical hardcoded values...")
+    print("🔍 Analyzing critical hardcoded values...")  # noqa: print
 
     analyzer = CriticalEnvAnalyzer()
     results = await analyzer.find_critical_hardcoded_values()
 
-    print("\n=== Critical Hardcoded Values Analysis ===\n")
+    print("\n=== Critical Hardcoded Values Analysis ===\n")  # noqa: print
 
     total_critical = sum(len(matches) for matches in results.values())
-    print(f"Found {total_critical} critical hardcoded values\n")
+    print(f"Found {total_critical} critical hardcoded values\n")  # noqa: print
 
     # Show results by category
     for category, matches in results.items():
         if matches:
-            print(
+            print(  # noqa: print
                 f"🏷️  **{category.replace('_', ' ').title()} ({len(matches)} found):**"
             )
 
@@ -223,18 +223,18 @@ async def main():
                 by_env_var.setdefault(match["suggestion"], []).append(match)
 
             for env_var, env_matches in by_env_var.items():
-                print(f"   → {env_var}:")
+                print(f"   → {env_var}:")  # noqa: print
                 for match in env_matches[:5]:  # Show first 5
-                    print(
+                    print(  # noqa: print
                         f"     • {match['file']}:{match['line']} = '{match['value']}'"
                     )
-                    print(f"       Context: {match['context']}")
+                    print(f"       Context: {match['context']}")  # noqa: print
                 if len(env_matches) > 5:
-                    print(f"     ... and {len(env_matches) - 5} more")
-                print()
+                    print(f"     ... and {len(env_matches) - 5} more")  # noqa: print
+                print()  # noqa: print
 
     # Generate practical configuration recommendations
-    print("\n=== Practical Configuration Updates ===\n")
+    print("\n=== Practical Configuration Updates ===\n")  # noqa: print
 
     # High priority configs to add to config.py
     high_priority = [
@@ -252,27 +252,31 @@ async def main():
         ("AUTOBOT_TIMEOUT", "30", "Default operation timeout (seconds)"),
     ]
 
-    print("🔧 **Add to src/config.py:**")
-    print("```python")
-    print("# Critical configuration from environment analysis")
+    print("🔧 **Add to src/config.py:**")  # noqa: print
+    print("```python")  # noqa: print
+    print("# Critical configuration from environment analysis")  # noqa: print
     for env_var, default, description in high_priority:
         config_key = env_var.lower().replace("autobot_", "").replace("_", ".")
-        print(f"# {description}")
+        print(f"# {description}")  # noqa: print
         if default.isdigit():
-            print(f'        "{config_key}": int(os.getenv("{env_var}", {default})),')
+            print(
+                f'        "{config_key}": int(os.getenv("{env_var}", {default})),'
+            )  # noqa: print
         else:
-            print(f'        "{config_key}": os.getenv("{env_var}", "{default}"),')
-    print("```\n")
+            print(
+                f'        "{config_key}": os.getenv("{env_var}", "{default}"),'
+            )  # noqa: print
+    print("```\n")  # noqa: print
 
-    print("🌍 **Add to .env file:**")
-    print("```bash")
+    print("🌍 **Add to .env file:**")  # noqa: print
+    print("```bash")  # noqa: print
     for env_var, default, description in high_priority:
-        print(f"# {description}")
-        print(f"{env_var}={default}")
-    print("```\n")
+        print(f"# {description}")  # noqa: print
+        print(f"{env_var}={default}")  # noqa: print
+    print("```\n")  # noqa: print
 
     # Show example refactoring
-    print("=== Example Refactoring ===\n")
+    print("=== Example Refactoring ===\n")  # noqa: print
 
     # Find specific examples from results
     examples = []
@@ -309,12 +313,12 @@ async def main():
                 break
 
     for example in examples:
-        print(f"**{example['title']}:**")
-        print(f"File: {example['file']}")
-        print(f"Before: `{example['before']}`")
-        print(f"After:  `{example['after']}`")
-        print(f"Env:    `{example['env_var']}`")
-        print()
+        print(f"**{example['title']}:**")  # noqa: print
+        print(f"File: {example['file']}")  # noqa: print
+        print(f"Before: `{example['before']}`")  # noqa: print
+        print(f"After:  `{example['after']}`")  # noqa: print
+        print(f"Env:    `{example['env_var']}`")  # noqa: print
+        print()  # noqa: print
 
     return results
 

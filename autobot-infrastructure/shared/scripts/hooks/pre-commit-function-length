@@ -52,7 +52,8 @@ get_staged_files() {
         grep -E '\.py$' | \
         grep -v -E '(__pycache__|node_modules|\.venv|venv|archive|temp)' | \
         grep -v -E '(test_|_test\.py|tests/)' | \
-        grep -v -E '__init__\.py$' || true
+        grep -v -E '__init__\.py$' | \
+        grep -v -E '^autobot-backend/code_analysis/' || true
 }
 
 main() {

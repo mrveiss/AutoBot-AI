@@ -14,11 +14,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
-from config import UnifiedConfig
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from autobot_shared.redis_client import get_redis_client
+from config import UnifiedConfig
 
 # Initialize unified config
 config = UnifiedConfig()
@@ -437,7 +437,7 @@ class CodeAnalyzer:
 {func.source_code}
 
 # In original files, replace with:
-from backend.utils.{module_name}_utils import {func.name}
+from utils.{module_name}_utils import {func.name}
 """
 
         return example.strip()
@@ -603,30 +603,36 @@ async def main():
     )
 
     # Print summary
-    print(f"\n=== Code Analysis Results ===")
-    print(f"Total functions analyzed: {results['total_functions']}")
-    print(f"Duplicate groups found: {results['duplicate_groups']}")
-    print(f"Total duplicate functions: {results['total_duplicates']}")
-    print(f"Lines that could be saved: {results['lines_that_could_be_saved']}")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    print(f"\n=== Code Analysis Results ===")  # noqa: print
+    print(f"Total functions analyzed: {results['total_functions']}")  # noqa: print
+    print(f"Duplicate groups found: {results['duplicate_groups']}")  # noqa: print
+    print(f"Total duplicate functions: {results['total_duplicates']}")  # noqa: print
+    print(
+        f"Lines that could be saved: {results['lines_that_could_be_saved']}"
+    )  # noqa: print
+    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
     # Print top duplicates
-    print(f"\n=== Top Duplicate Groups ===")
+    print(f"\n=== Top Duplicate Groups ===")  # noqa: print
     for i, group in enumerate(results["duplicate_details"][:5], 1):
-        print(f"\n{i}. Similarity: {group['similarity_score']:.0%}")
-        print(f"   Suggestion: {group['refactoring_suggestion']}")
-        print(f"   Lines saved: {group['estimated_lines_saved']}")
-        print("   Functions:")
+        print(f"\n{i}. Similarity: {group['similarity_score']:.0%}")  # noqa: print
+        print(f"   Suggestion: {group['refactoring_suggestion']}")  # noqa: print
+        print(f"   Lines saved: {group['estimated_lines_saved']}")  # noqa: print
+        print("   Functions:")  # noqa: print
         for func in group["functions"]:
-            print(f"   - {func['file']}:{func['line_range']} - {func['name']}")
+            print(
+                f"   - {func['file']}:{func['line_range']} - {func['name']}"
+            )  # noqa: print
 
     # Print refactoring suggestions
-    print(f"\n=== Refactoring Suggestions ===")
+    print(f"\n=== Refactoring Suggestions ===")  # noqa: print
     for i, suggestion in enumerate(results["refactoring_suggestions"][:5], 1):
-        print(f"\n{i}. {suggestion['type']} ({suggestion['priority']} priority)")
-        print(f"   {suggestion['description']}")
-        print(f"   Action: {suggestion['action']}")
-        print(f"   Files: {', '.join(suggestion['affected_files'])}")
+        print(
+            f"\n{i}. {suggestion['type']} ({suggestion['priority']} priority)"
+        )  # noqa: print
+        print(f"   {suggestion['description']}")  # noqa: print
+        print(f"   Action: {suggestion['action']}")  # noqa: print
+        print(f"   Files: {', '.join(suggestion['affected_files'])}")  # noqa: print
 
 
 if __name__ == "__main__":

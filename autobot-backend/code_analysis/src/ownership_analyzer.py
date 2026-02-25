@@ -29,9 +29,8 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 try:
-    from config import UnifiedConfig
-
     from autobot_shared.redis_client import get_redis_client
+    from config import UnifiedConfig
 
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
@@ -819,29 +818,35 @@ async def main():
         patterns=["src/**/*.py", "backend/**/*.py", "autobot-vue/src/**/*.vue"],
     )
 
-    print("\n=== Code Ownership Analysis Results ===")
-    print(f"Total files analyzed: {results['summary']['total_files']}")
-    print(f"Total contributors: {results['summary']['total_contributors']}")
-    print(f"Knowledge gaps detected: {results['summary']['knowledge_gaps_count']}")
-    print(f"Critical gaps: {results['summary']['critical_gaps']}")
-    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")
+    print("\n=== Code Ownership Analysis Results ===")  # noqa: print
+    print(f"Total files analyzed: {results['summary']['total_files']}")  # noqa: print
+    print(
+        f"Total contributors: {results['summary']['total_contributors']}"
+    )  # noqa: print
+    print(
+        f"Knowledge gaps detected: {results['summary']['knowledge_gaps_count']}"
+    )  # noqa: print
+    print(f"Critical gaps: {results['summary']['critical_gaps']}")  # noqa: print
+    print(f"Analysis time: {results['analysis_time_seconds']:.2f}s")  # noqa: print
 
-    print("\n=== Top Contributors ===")
+    print("\n=== Top Contributors ===")  # noqa: print
     for i, contrib in enumerate(results["metrics"]["top_contributors"][:5], 1):
-        print(
+        print(  # noqa: print
             f"{i}. {contrib['name']}: {contrib['lines']} lines (score: {contrib['score']})"
         )
 
-    print("\n=== Knowledge Gaps ===")
+    print("\n=== Knowledge Gaps ===")  # noqa: print
     for gap in results["knowledge_gaps"][:5]:
-        print(f"- [{gap['risk_level'].upper()}] {gap['area']}")
-        print(f"  {gap['description']}")
+        print(f"- [{gap['risk_level'].upper()}] {gap['area']}")  # noqa: print
+        print(f"  {gap['description']}")  # noqa: print
 
-    print("\n=== Metrics ===")
+    print("\n=== Metrics ===")  # noqa: print
     metrics = results["metrics"]
-    print(f"Overall bus factor: {metrics['overall_bus_factor']}")
-    print(f"Ownership concentration: {metrics['ownership_concentration']}%")
-    print(f"Team coverage: {metrics['team_coverage']}%")
+    print(f"Overall bus factor: {metrics['overall_bus_factor']}")  # noqa: print
+    print(
+        f"Ownership concentration: {metrics['ownership_concentration']}%"
+    )  # noqa: print
+    print(f"Team coverage: {metrics['team_coverage']}%")  # noqa: print
 
 
 if __name__ == "__main__":
