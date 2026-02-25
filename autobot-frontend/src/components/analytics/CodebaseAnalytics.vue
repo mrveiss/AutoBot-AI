@@ -102,18 +102,22 @@
       </div>
     </div>
 
-    <!-- Progress Indicator -->
-    <div v-if="analyzing" class="progress-container">
+    <!-- Progress Indicator — Issue #1190: shown during indexing AND after so status persists -->
+    <div
+      v-if="analyzing || (progressStatus && progressStatus !== 'Ready' && progressStatus !== 'Ready (state reset)')"
+      class="progress-container"
+      :class="{ 'progress-container--idle': !analyzing }"
+    >
       <div class="progress-header">
         <div class="progress-title">
-          <i class="fas fa-spinner fa-spin"></i>
-          Indexing in Progress
+          <i :class="analyzing ? 'fas fa-spinner fa-spin' : progressStatus.includes('completed') || progressStatus.includes('complete') ? 'fas fa-check-circle' : progressStatus.includes('failed') || progressStatus.includes('cancelled') ? 'fas fa-times-circle' : 'fas fa-info-circle'"></i>
+          {{ analyzing ? 'Indexing in Progress' : 'Indexing Status' }}
         </div>
-        <div v-if="currentJobId" class="job-id">Job: {{ currentJobId.substring(0, 8) }}...</div>
+        <div v-if="currentJobId && analyzing" class="job-id">Job: {{ currentJobId.substring(0, 8) }}...</div>
       </div>
 
-      <!-- Phase Progress -->
-      <div v-if="jobPhases" class="phase-progress">
+      <!-- Phase Progress (active indexing only) -->
+      <div v-if="analyzing && jobPhases" class="phase-progress">
         <div
           v-for="phase in jobPhases.phase_list"
           :key="phase.id"
@@ -135,8 +139,8 @@
       </div>
       <div class="progress-status">{{ progressStatus }}</div>
 
-      <!-- Batch Progress -->
-      <div v-if="jobBatches && jobBatches.total_batches > 0" class="batch-progress">
+      <!-- Batch Progress (active indexing only) -->
+      <div v-if="analyzing && jobBatches && jobBatches.total_batches > 0" class="batch-progress">
         <div class="batch-header">
           <span class="batch-label">Batch Progress:</span>
           <span class="batch-count">{{ jobBatches.completed_batches }} / {{ jobBatches.total_batches }}</span>
@@ -149,8 +153,8 @@
         </div>
       </div>
 
-      <!-- Live Stats -->
-      <div v-if="jobStats" class="live-stats">
+      <!-- Live Stats (active indexing only) -->
+      <div v-if="analyzing && jobStats" class="live-stats">
         <div class="stat-item">
           <i class="fas fa-file-code"></i>
           <span>{{ jobStats.files_scanned }} files</span>
@@ -4686,6 +4690,11 @@ const loadPerformanceScore = async () => {
 // Issue #538: Load Redis health score from code intelligence
 const loadRedisHealth = async () => {
   if (!rootPath.value) return
+  // Issue #1190: /opt/autobot is too large for real-time scan (504 timeout). Skip it.
+  if (rootPath.value === '/opt/autobot' || rootPath.value.includes('/data/code-sources/')) {
+    logger.debug('Skipping Redis health scan for large/remote path:', rootPath.value)
+    return
+  }
   loadingRedisHealth.value = true
   redisHealthError.value = ''
   try {
@@ -5524,14 +5533,22 @@ const resetState = () => {
 }
 
 // Issue #1007: NPU health check via backend proxy (avoids CORS/mixed content)
+// Issue #1190: Fixed — was using undefined ApiClient, now uses fetchWithAuth
 const testNpuConnection = async () => {
   const startTime = Date.now()
 
   try {
-    const data = await ApiClient.get('/api/npu/health')
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const response = await fetchWithAuth(`${backendUrl}/api/npu/status`)
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const data = await response.json()
     const responseTime = Date.now() - startTime
-    const npuStatus = data.available || data.status === 'ok' ? 'Available' : 'Not Available'
-    notify(`NPU: ${npuStatus} (${responseTime}ms)`, data.available || data.status === 'ok' ? 'success' : 'warning')
+    const available = data.available || data.status === 'ok' || data.workers_connected > 0
+    const workerCount = data.workers_connected ?? data.total_workers ?? 0
+    notify(
+      `NPU: ${available ? 'Available' : 'Not Available'} (${workerCount} workers, ${responseTime}ms)`,
+      available ? 'success' : 'warning'
+    )
   } catch (error: unknown) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -5578,9 +5595,9 @@ const testAllEndpoints = async () => {
       results.push(`Hardcodes: ❌ (${msg})`)
     }
 
-    // Test NPU
+    // Test NPU (Issue #1190: was /api/monitoring/hardware/npu which returned 404)
     try {
-      const npuEndpoint = `${backendUrl}/api/monitoring/hardware/npu`
+      const npuEndpoint = `${backendUrl}/api/npu/status`
       const response = await fetchWithAuth(npuEndpoint)
       results.push(`NPU: ${response.ok ? '✅' : '❌'} (${response.status})`)
     } catch (err) {
@@ -5617,6 +5634,19 @@ const testAllEndpoints = async () => {
 const runCodeSmellAnalysis = async () => {
   const startTime = Date.now()
   codeSmellsAnalysisType.value = 'smells'
+
+  // Issue #1190: Code sources are cloned on SLM server (.19), not the analysis backend (.20).
+  // When rootPath is a code-source UUID path, the analysis server returns 400.
+  // Show a clear error rather than crashing.
+  const analysisPath = rootPath.value
+  if (analysisPath.includes('/data/code-sources/')) {
+    notify(
+      'Code intelligence analysis requires a local path. Code sources are stored on the SLM server — use a custom path on the analysis backend.',
+      'warning'
+    )
+    return
+  }
+
   analyzingCodeSmells.value = true
   progressStatus.value = 'Scanning for code smells and anti-patterns...'
 
@@ -5630,7 +5660,7 @@ const runCodeSmellAnalysis = async () => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        path: rootPath.value,
+        path: analysisPath,
         exclude_dirs: ['node_modules', '.venv', '__pycache__', '.git', 'archives'],
         min_severity: 'low'  // Show low and above
       })
@@ -5661,12 +5691,23 @@ const runCodeSmellAnalysis = async () => {
 const getCodeHealthScore = async () => {
   const startTime = Date.now()
   codeSmellsAnalysisType.value = 'health'
+
+  // Issue #1190: Code sources are on SLM server — guard against invalid path
+  const analysisPath = rootPath.value
+  if (analysisPath.includes('/data/code-sources/')) {
+    notify(
+      'Health score requires a local path. Code sources are stored on the SLM server — use a custom path on the analysis backend.',
+      'warning'
+    )
+    return
+  }
+
   analyzingCodeSmells.value = true
   progressStatus.value = 'Calculating codebase health score...'
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const healthEndpoint = `${backendUrl}/api/code-intelligence/health-score?path=${encodeURIComponent(rootPath.value)}`
+    const healthEndpoint = `${backendUrl}/api/code-intelligence/health-score?path=${encodeURIComponent(analysisPath)}`
     const response = await fetchWithAuth(healthEndpoint, {
       method: 'GET',
       headers: {
