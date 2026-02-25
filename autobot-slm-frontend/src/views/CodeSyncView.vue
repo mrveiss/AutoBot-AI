@@ -20,7 +20,7 @@ import {
   type ScheduleCreateRequest,
 } from '@/composables/useCodeSync'
 import { createLogger } from '@/utils/debugUtils'
-import { getCommitHashDisplay } from '@/utils/commitHashUtils'
+import { getCommitHashDisplay, getCommitUrl } from '@/utils/commitHashUtils'
 import ScheduleModal from '@/components/ScheduleModal.vue'
 import CodeSourceModal from '@/components/CodeSourceModal.vue'
 import { useCodeSource } from '@/composables/useCodeSource'
@@ -386,9 +386,19 @@ onMounted(async () => {
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div>
           <span class="text-sm text-gray-500 block mb-1">Latest Version</span>
+          <a
+            v-if="getCommitUrl(codeSync.latestVersion.value)"
+            :href="getCommitUrl(codeSync.latestVersion.value)!"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-lg font-semibold font-mono text-primary-600 hover:text-primary-800 hover:underline cursor-pointer"
+            :title="codeSync.latestVersion.value || 'View commit on GitHub'"
+          >
+            {{ formatVersion(codeSync.latestVersion.value) }}
+          </a>
           <span
-            class="text-lg font-semibold font-mono text-gray-900 cursor-help"
-            :title="codeSync.latestVersion.value || 'Full commit hash unavailable'"
+            v-else
+            class="text-lg font-semibold font-mono text-gray-900"
           >
             {{ formatVersion(codeSync.latestVersion.value) }}
           </span>
@@ -467,7 +477,18 @@ onMounted(async () => {
           <p class="text-sm text-gray-500">{{ codeSourceData.repo_path }} ({{ codeSourceData.branch }})</p>
           <p class="text-sm text-gray-500">
             Last commit:
+            <a
+              v-if="getCommitUrl(codeSourceCommit.full)"
+              :href="getCommitUrl(codeSourceCommit.full)!"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="font-mono text-primary-600 hover:text-primary-800 hover:underline"
+              :title="codeSourceCommit.full || 'View commit on GitHub'"
+            >
+              {{ codeSourceCommit.display }}
+            </a>
             <span
+              v-else
               class="font-mono cursor-help"
               :title="codeSourceCommit.full || 'Full commit hash unavailable'"
             >
@@ -635,11 +656,20 @@ onMounted(async () => {
             <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">
               {{ node.ip_address }}
             </td>
-            <td
-              class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500 cursor-help"
-              :title="node.current_version || 'Full commit hash unavailable'"
-            >
-              {{ formatVersion(node.current_version) }}
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-500">
+              <a
+                v-if="getCommitUrl(node.current_version)"
+                :href="getCommitUrl(node.current_version)!"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-primary-600 hover:text-primary-800 hover:underline"
+                :title="node.current_version || 'View commit on GitHub'"
+              >
+                {{ formatVersion(node.current_version) }}
+              </a>
+              <span v-else :title="node.current_version || 'Full commit hash unavailable'">
+                {{ formatVersion(node.current_version) }}
+              </span>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
               <span class="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">

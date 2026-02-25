@@ -71,3 +71,26 @@ export function isFullHash(hash: string | null | undefined): boolean {
   if (!hash) return false
   return /^[0-9a-f]{40}$/i.test(hash.trim())
 }
+
+/**
+ * Build the GitHub URL for a specific commit.
+ *
+ * Base repo URL is read from VITE_GITHUB_REPO_URL env var (Issue #1185).
+ * Falls back to the known AutoBot repo if env var is not set.
+ *
+ * @param hash - Full or partial commit hash
+ * @returns GitHub commit URL, or null if hash is invalid
+ *
+ * @example
+ * getCommitUrl('0811b8f83140a432514eb763581a5313d2c77668')
+ * // 'https://github.com/mrveiss/AutoBot-AI/commit/0811b8f83140a432514eb763581a5313d2c77668'
+ */
+export function getCommitUrl(hash: string | null | undefined): string | null {
+  if (!hash || hash.trim() === '') return null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const envBase = (import.meta as Record<string, any>).env?.VITE_GITHUB_REPO_URL as
+    | string
+    | undefined
+  const base = envBase || 'https://github.com/mrveiss/AutoBot-AI'
+  return `${base.replace(/\/$/, '')}/commit/${hash.trim()}`
+}
