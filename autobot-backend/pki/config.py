@@ -19,6 +19,8 @@ from typing import Dict, List, Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from autobot_shared.ssot_config import TLSMode  # noqa: F401 — canonical enum
+
 
 def _find_project_root() -> Path:
     """Find the project root directory containing .env file."""
@@ -30,14 +32,6 @@ def _find_project_root() -> Path:
 
 
 PROJECT_ROOT = _find_project_root()
-
-
-class TLSMode(str, Enum):
-    """TLS operation modes."""
-
-    DISABLED = "disabled"  # No TLS (development only)
-    OPTIONAL = "optional"  # TLS available but not required
-    REQUIRED = "required"  # TLS mandatory for all connections
 
 
 class CertificateType(str, Enum):

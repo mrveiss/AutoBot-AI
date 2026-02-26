@@ -78,6 +78,7 @@ class NetworkConstants:
     REDIS_VM_IP: str = ConfigRegistry.get("vm.redis", "172.16.168.23")
     AI_STACK_VM_IP: str = ConfigRegistry.get("vm.aistack", "172.16.168.24")
     BROWSER_VM_IP: str = ConfigRegistry.get("vm.browser", "172.16.168.25")
+    SLM_VM_IP: str = ConfigRegistry.get("vm.slm", "172.16.168.19")
 
     # Backward compatibility aliases
     AI_STACK_HOST: str = ConfigRegistry.get("vm.aistack", "172.16.168.24")
@@ -120,6 +121,7 @@ class NetworkConstants:
     BROWSER_SERVICE_PORT: int = int(ConfigRegistry.get("port.browser", "3000"))
     AI_STACK_PORT: int = int(ConfigRegistry.get("port.aistack", "8080"))
     NPU_WORKER_PORT: int = int(ConfigRegistry.get("port.npu", "8081"))
+    SLM_PORT: int = int(ConfigRegistry.get("port.slm", "8000"))
     NPU_WORKER_WINDOWS_PORT: int = int(ConfigRegistry.get("port.npu_windows", "8081"))
     CHROME_DEBUGGER_PORT: int = 9222  # Chrome DevTools Protocol port (static)
 
@@ -144,8 +146,20 @@ class NetworkConstants:
 
     @classmethod
     def get_host_configs(cls) -> list:
-        """Get list of host configurations for frontend (Issue #372 - reduces feature envy)."""
+        """Get list of host configurations for all AutoBot VMs.
+
+        Returns all infrastructure machines so that features like CORS
+        can iterate the full fleet without cherry-picking.
+        (Issue #372 - reduces feature envy, Issue #815 - dynamic CORS)
+        """
         return [
+            {
+                "id": "slm",
+                "name": "SLM Server",
+                "ip": cls.SLM_VM_IP,
+                "port": cls.SLM_PORT,
+                "description": "System Lifecycle Manager",
+            },
             {
                 "id": "main",
                 "name": "Main (WSL Backend)",
@@ -381,6 +395,7 @@ class NetworkConfig:
     def _vm_map(self) -> dict:
         """Issue #380: Cache VM map to avoid repeated dict creation."""
         return {
+            "slm": NetworkConstants.SLM_VM_IP,
             "main": NetworkConstants.MAIN_MACHINE_IP,
             "frontend": NetworkConstants.FRONTEND_VM_IP,
             "npu_worker": NetworkConstants.NPU_WORKER_VM_IP,
