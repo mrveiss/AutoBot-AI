@@ -937,27 +937,39 @@ async def _clear_chromadb_collection(code_collection, task_id: str) -> None:
     """
     Clear existing entries from ChromaDB collection, preserving codebase_stats.
 
-    Issue #398: Extracted from _initialize_chromadb_collection to reduce method length.
-    Issue #540: Preserve codebase_stats document during clearing so stats remain
-                available while indexing is in progress.
+    Issue #398: Extracted from _initialize_chromadb_collection.
+    Issue #540: Preserve codebase_stats during clearing.
+
+    Uses paginated get + batch delete to avoid SQLite "too many SQL
+    variables" limit that occurs when get() or delete() exceeds ~10k IDs.
     """
     try:
-        existing_data = await code_collection.get()
-        existing_ids = existing_data["ids"]
-        if existing_ids:
-            # Issue #540: Preserve codebase_stats so stats endpoint returns data during indexing
-            ids_to_delete = [id for id in existing_ids if id != "codebase_stats"]
+        total_count = await code_collection.count()
+        if total_count == 0:
+            return
+
+        page_size = 4000
+        total_deleted = 0
+        while True:
+            # Always offset=0: we delete each page, so next page is always first
+            page = await code_collection.get(limit=page_size, include=[])
+            page_ids = page["ids"]
+            if not page_ids:
+                break
+            # Issue #540: Preserve codebase_stats
+            ids_to_delete = [id for id in page_ids if id != "codebase_stats"]
             if ids_to_delete:
-                # Delete in batches to avoid SQLite "too many SQL variables" limit
-                batch_size = 5000
-                for i in range(0, len(ids_to_delete), batch_size):
-                    batch = ids_to_delete[i : i + batch_size]
-                    await code_collection.delete(ids=batch)
-                logger.info(
-                    "[Task %s] Cleared %s existing items from ChromaDB (preserved codebase_stats)",
-                    task_id,
-                    len(ids_to_delete),
-                )
+                await code_collection.delete(ids=ids_to_delete)
+                total_deleted += len(ids_to_delete)
+            if not ids_to_delete or len(page_ids) < page_size:
+                break
+        if total_deleted:
+            logger.info(
+                "[Task %s] Cleared %s items from ChromaDB "
+                "(preserved codebase_stats)",
+                task_id,
+                total_deleted,
+            )
     except Exception as e:
         logger.warning("[Task %s] Error clearing collection: %s", task_id, e)
 
