@@ -43,6 +43,9 @@ TIER_2_MODEL = os.getenv("AUTOBOT_TIER2_MODEL", "llama3.2:3b")  # Processing
 TIER_3_MODEL = os.getenv("AUTOBOT_TIER3_MODEL", DEFAULT_LLM_MODEL)  # Specialized
 TIER_4_MODEL = os.getenv("AUTOBOT_TIER4_MODEL", DEFAULT_LLM_MODEL)  # Advanced
 
+# Gemma model for classification agents (SSOT: agents.yaml llm.models.classification)
+GEMMA_CLASSIFICATION_MODEL = os.getenv("AUTOBOT_CLASSIFICATION_MODEL", "gemma2:2b")
+
 router = APIRouter()
 
 
@@ -149,7 +152,7 @@ DEFAULT_AGENT_CONFIGS = {
     "classification": {
         "name": "Classification Agent",
         "description": "Classifies incoming requests by type and complexity. Invoked by Orchestrator to determine routing strategy. Uses GemmaClassificationAgent for advanced intent detection.",
-        "default_model": TIER_1_MODEL,
+        "default_model": GEMMA_CLASSIFICATION_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 1,
@@ -455,7 +458,7 @@ DEFAULT_AGENT_CONFIGS = {
     "gemma_classification": {
         "name": "Gemma Classification Agent",
         "description": "Ultra-fast classification using Google's Gemma models. Extends StandardizedAgent with Redis caching and WorkflowClassifier for keyword-based pre-filtering. Used by Orchestrator for advanced intent detection and multi-label tagging.",
-        "default_model": TIER_4_MODEL,
+        "default_model": GEMMA_CLASSIFICATION_MODEL,
         "provider": "ollama",
         "enabled": True,
         "priority": 4,
