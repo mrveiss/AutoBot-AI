@@ -698,7 +698,7 @@ async def _store_problems_batch_to_chromadb(
             documents.append(problem_doc)
             metadatas.append(metadata)
 
-        await collection.add(ids=ids, documents=documents, metadatas=metadatas)
+        await collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
         logger.debug("Batch stored %s problems to ChromaDB", len(problems))
     except Exception as e:
         logger.debug("Failed to batch store problems: %s", e)
@@ -948,7 +948,11 @@ async def _clear_chromadb_collection(code_collection, task_id: str) -> None:
             # Issue #540: Preserve codebase_stats so stats endpoint returns data during indexing
             ids_to_delete = [id for id in existing_ids if id != "codebase_stats"]
             if ids_to_delete:
-                await code_collection.delete(ids=ids_to_delete)
+                # Delete in batches to avoid SQLite "too many SQL variables" limit
+                batch_size = 5000
+                for i in range(0, len(ids_to_delete), batch_size):
+                    batch = ids_to_delete[i : i + batch_size]
+                    await code_collection.delete(ids=batch)
                 logger.info(
                     "[Task %s] Cleared %s existing items from ChromaDB (preserved codebase_stats)",
                     task_id,
