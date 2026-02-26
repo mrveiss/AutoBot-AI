@@ -26,7 +26,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.12'
+        python-version: '3.10'
 
     - name: Free disk space and set up venv
       run: |
@@ -44,6 +44,7 @@ jobs:
 
         echo "Installing CI-safe requirements..."
         python3 -m pip install -r requirements-ci.txt --prefer-binary
+        python3 -m pip install --no-deps llama-index-readers-file==0.4.11
 
         echo "Installing testing dependencies..."
         python3 -m pip install pytest pytest-asyncio pytest-cov flake8 black isort mypy bandit
@@ -214,7 +215,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.12'
+        python-version: '3.10'
 
     - name: Free disk space and set up venv
       run: |
@@ -230,6 +231,7 @@ jobs:
         source .venv/bin/activate
         python3 -m pip install --upgrade pip setuptools wheel
         python3 -m pip install -r requirements-ci.txt --prefer-binary
+        python3 -m pip install --no-deps llama-index-readers-file==0.4.11
 
     - name: Create necessary directories and config files
       run: |

@@ -34,7 +34,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.12'
+        python-version: '3.10'
 
     - name: Set up Python virtual environment
       run: |
@@ -55,6 +55,7 @@ jobs:
         python3 -m pip install -r requirements-ci.txt --prefer-binary || {
           echo "⚠️ Some dependencies failed to install - continuing with available tools"
         }
+        python3 -m pip install --no-deps llama-index-readers-file==0.4.11
 
     - name: Python Dependency Audit
       run: |
@@ -114,7 +115,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.12'
+        python-version: '3.10'
 
     - name: Set up Python virtual environment
       run: |
