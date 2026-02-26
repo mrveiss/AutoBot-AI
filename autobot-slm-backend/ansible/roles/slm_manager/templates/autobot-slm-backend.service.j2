@@ -24,7 +24,7 @@ StandardError=append:{{ slm_log_dir }}/slm-backend-error.log
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths={{ slm_base_dir }}
+ReadWritePaths={{ slm_base_dir }} /var/lib/slm
 
 [Install]
 WantedBy=multi-user.target
