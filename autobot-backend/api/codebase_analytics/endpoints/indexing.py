@@ -276,11 +276,11 @@ async def get_indexing_status(task_id: str):
     - result: Final indexing results (if completed)
     - error: Error message (if failed)
     """
-    # #1179: With --workers N, this worker may not have the task in local memory.
-    # Fall back to Redis where the owning worker persists task state.
-    task_data = indexing_tasks.get(task_id)
+    # #1179/#1210: Subprocess writes progress to Redis, not parent memory.
+    # Prefer Redis (fresh) over in-memory (stale initial state).
+    task_data = await _load_task_from_redis(task_id)
     if task_data is None:
-        task_data = await _load_task_from_redis(task_id)
+        task_data = indexing_tasks.get(task_id)
 
     if task_data is None:
         return JSONResponse(
@@ -339,8 +339,10 @@ async def get_current_indexing_job():
         # Check if task is still running
         existing_task = _active_tasks.get(current_task_id)
         if existing_task is None or existing_task.done():
-            # Task finished or was cleaned up
-            task_data = dict(indexing_tasks.get(current_task_id, {}))
+            # Task finished — load final state from Redis (#1210)
+            task_data = await _load_task_from_redis(current_task_id)
+            if not task_data:
+                task_data = dict(indexing_tasks.get(current_task_id, {}))
             return JSONResponse(
                 {
                     "has_active_job": False,
@@ -352,8 +354,15 @@ async def get_current_indexing_job():
                 }
             )
 
-        # Task is still running - get a copy of task data
+        # Task is still running — prefer Redis state (subprocess writes there)
+        # because the subprocess has its own in-memory indexing_tasks (#1210).
         task_data = dict(indexing_tasks.get(current_task_id, {}))
+
+    # Subprocess updates Redis, not parent's in-memory dict.
+    # Load fresh state from Redis so progress actually advances (#1210).
+    redis_state = await _load_task_from_redis(current_task_id)
+    if redis_state:
+        task_data = redis_state
 
     return JSONResponse(
         {
