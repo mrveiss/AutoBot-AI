@@ -11,14 +11,16 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from .base_terminal import BaseTerminalWebSocket
 
-# Import workflow automation for integration
-try:
-    from api.workflow_automation import workflow_manager
 
-    WORKFLOW_AUTOMATION_AVAILABLE = True
-except ImportError:
-    workflow_manager = None
-    WORKFLOW_AUTOMATION_AVAILABLE = False
+def _get_workflow_manager():
+    """Deferred import to avoid circular dependency (#1210)."""
+    try:
+        from api.workflow_automation import workflow_manager
+
+        return workflow_manager
+    except ImportError:
+        return None
+
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +90,8 @@ class SimpleTerminalSession(BaseTerminalWebSocket):
 
     async def handle_workflow_control(self, data: Dict):
         """Handle workflow automation control messages"""
-        if not WORKFLOW_AUTOMATION_AVAILABLE or not workflow_manager:
+        workflow_manager = _get_workflow_manager()
+        if not workflow_manager:
             await self.send_message(
                 {"type": "error", "message": "Workflow automation not available"}
             )

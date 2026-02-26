@@ -14,9 +14,6 @@ For new code, import directly from llm_interface_pkg:
     from llm_interface_pkg import LLMInterface, LLMSettings, ProviderType
 """
 
-# Import additional dependencies that may be expected by consumers
-from config import ConfigManager
-
 # Re-export everything from the refactored package
 from llm_interface_pkg import (  # Types; Models; Hardware; Streaming; Mock providers; Main interface; Providers
     TORCH_AVAILABLE,
@@ -40,6 +37,9 @@ from llm_interface_pkg import (  # Types; Models; Hardware; Streaming; Mock prov
     local_llm,
     palm,
 )
+
+# Import additional dependencies that may be expected by consumers
+from config import ConfigManager
 
 # Create singleton config instance for backward compatibility
 config = ConfigManager()
@@ -78,10 +78,16 @@ except ImportError:
     OPENAI_AVAILABLE = False
     openai = None
 
-# Re-export get_llm_interface from resource_factory for backward compatibility
-from utils.resource_factory import ResourceFactory
 
-get_llm_interface = ResourceFactory.get_llm_interface
+# Lazy re-export to avoid circular dependency (#1210)
+# resource_factory imports back into this module's consumers
+def __getattr__(name):
+    if name == "get_llm_interface":
+        from utils.resource_factory import ResourceFactory
+
+        return ResourceFactory.get_llm_interface
+    raise AttributeError(f"module 'llm_interface' has no attribute {name}")
+
 
 __all__ = [
     # Types
@@ -120,5 +126,4 @@ __all__ = [
     "get_pattern_analyzer",
     "OPENAI_AVAILABLE",
     "openai",
-    "get_llm_interface",
 ]

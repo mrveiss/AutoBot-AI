@@ -14,7 +14,7 @@ import ast
 import os
 from typing import List, Optional, Set, Union
 
-from code_intelligence.doc_generation import helpers
+import code_intelligence.doc_generation.helpers as helpers  # direct submodule (#1210)
 from code_intelligence.doc_generation.docstring_parser import DocstringParser
 from code_intelligence.doc_generation.models import (
     ClassDoc,

@@ -72,19 +72,32 @@ def _get_type_checking_lines(tree: ast.AST) -> Set[int]:
 
 
 def _extract_runtime_imports(tree: ast.AST) -> List[str]:
-    """Extract runtime imports, excluding TYPE_CHECKING and stdlib (#1197)."""
+    """Extract module-level imports only, excluding deferred/function-scoped.
+
+    Walks the AST but skips FunctionDef/AsyncFunctionDef bodies, since
+    imports inside functions are deferred and don't create circular
+    dependency risks at module-load time. (#1197, #1210)
+    """
     tc_lines = _get_type_checking_lines(tree)
     imports: List[str] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                top = alias.name.split(".")[0]
-                if node.lineno not in tc_lines and top not in _EXTERNAL_MODULES:
-                    imports.append(alias.name)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            top = node.module.split(".")[0]
-            if node.lineno not in tc_lines and top not in _EXTERNAL_MODULES:
-                imports.append(node.module)
+
+    def _walk_module_level(node: ast.AST) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if isinstance(child, ast.Import):
+                for alias in child.names:
+                    top = alias.name.split(".")[0]
+                    if child.lineno not in tc_lines and top not in _EXTERNAL_MODULES:
+                        imports.append(alias.name)
+            elif isinstance(child, ast.ImportFrom) and child.module:
+                top = child.module.split(".")[0]
+                if child.lineno not in tc_lines and top not in _EXTERNAL_MODULES:
+                    imports.append(child.module)
+            else:
+                _walk_module_level(child)
+
+    _walk_module_level(tree)
     return list(set(imports))
 
 
