@@ -167,6 +167,18 @@
         dest: /opt/autobot/
       become: true
 
+    - name: "[PLAY 1] SLM | Fix ownership (unarchive runs as root)"
+      file:
+        path: "/opt/autobot/{{ item }}"
+        owner: autobot
+        group: autobot
+        recurse: true
+      become: true
+      loop:
+        - autobot-slm-backend
+        - autobot-slm-frontend
+        - autobot-shared
+
     - name: "[PLAY 1] SLM | Rebuild frontend production build"
       command:
         cmd: npm run build
@@ -350,6 +362,17 @@
         '03-NPU' in inventory_hostname or
         'npu-worker' in inventory_hostname
 
+    - name: "[PLAY 2] NPU | Fix ownership"
+      file:
+        path: /opt/autobot/autobot-npu-worker
+        owner: autobot
+        group: autobot
+        recurse: true
+      become: true
+      when: >-
+        '03-NPU' in inventory_hostname or
+        'npu-worker' in inventory_hostname
+
     # ----- Browser Worker (172.16.168.25) -----
     - name: "[PLAY 2] Browser | Deploy autobot-browser-worker"
       unarchive:
@@ -360,11 +383,31 @@
         '05-Browser' in inventory_hostname or
         'browser-automation' in inventory_hostname
 
+    - name: "[PLAY 2] Browser | Fix ownership"
+      file:
+        path: /opt/autobot/autobot-browser-worker
+        owner: autobot
+        group: autobot
+        recurse: true
+      become: true
+      when: >-
+        '05-Browser' in inventory_hostname or
+        'browser-automation' in inventory_hostname
+
     # ----- Shared (non-backend nodes) -----
     - name: "[PLAY 2] Shared | Deploy autobot-shared"
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: /opt/autobot/
+      become: true
+      when: "'01-Backend' not in inventory_hostname"
+
+    - name: "[PLAY 2] Shared | Fix ownership"
+      file:
+        path: /opt/autobot/autobot-shared
+        owner: autobot
+        group: autobot
+        recurse: true
       become: true
       when: "'01-Backend' not in inventory_hostname"
 
