@@ -9,7 +9,7 @@ import ast
 import asyncio
 import logging
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Set
 
 import aiofiles
 from fastapi import APIRouter
@@ -18,11 +18,14 @@ from fastapi.responses import JSONResponse
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 from ..storage import get_code_collection
-from .shared import STDLIB_MODULES, get_project_root
+from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, get_project_root
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Combined set for fast lookup during import extraction (#1197)
+_EXTERNAL_MODULES = STDLIB_MODULES | COMMON_THIRD_PARTY
 
 
 def _extract_imports_from_ast(tree: ast.AST, stdlib_modules: set) -> tuple:
@@ -44,6 +47,140 @@ def _extract_imports_from_ast(tree: ast.AST, stdlib_modules: set) -> tuple:
                 external_deps[module_name] = external_deps.get(module_name, 0) + 1
 
     return list(set(file_imports)), external_deps
+
+
+# =====================================================================
+# Circular import detection pipeline (#1197)
+# =====================================================================
+
+
+def _get_type_checking_lines(tree: ast.AST) -> Set[int]:
+    """Identify line numbers inside TYPE_CHECKING blocks (#1197)."""
+    tc_lines: Set[int] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        test = node.test
+        is_tc = (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING") or (
+            isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
+        )
+        if is_tc:
+            for child in ast.walk(node):
+                if hasattr(child, "lineno"):
+                    tc_lines.add(child.lineno)
+    return tc_lines
+
+
+def _extract_runtime_imports(tree: ast.AST) -> List[str]:
+    """Extract runtime imports, excluding TYPE_CHECKING and stdlib (#1197)."""
+    tc_lines = _get_type_checking_lines(tree)
+    imports: List[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                top = alias.name.split(".")[0]
+                if node.lineno not in tc_lines and top not in _EXTERNAL_MODULES:
+                    imports.append(alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            top = node.module.split(".")[0]
+            if node.lineno not in tc_lines and top not in _EXTERNAL_MODULES:
+                imports.append(node.module)
+    return list(set(imports))
+
+
+def _build_module_index(modules: Dict[str, Dict]) -> Dict[str, str]:
+    """Build module name -> file path lookup from scanned modules (#1197).
+
+    Registers each file under its dotted module name (with and without
+    the top-level directory prefix) for import resolution.
+    """
+    index: Dict[str, str] = {}
+    for file_path in modules:
+        path = Path(file_path)
+        parts = list(path.parts)
+        if not parts:
+            continue
+
+        if parts[-1] == "__init__.py":
+            mod_parts = parts[:-1]
+        else:
+            mod_parts = parts[:-1] + [parts[-1].replace(".py", "")]
+
+        if not mod_parts:
+            continue
+
+        # Normalize hyphens to underscores (filesystem vs import convention)
+        norm_parts = [p.replace("-", "_") for p in mod_parts]
+
+        # Full dotted path (e.g., autobot_backend.utils.resource_factory)
+        index[".".join(norm_parts)] = file_path
+
+        # Short path without top-level dir (e.g., utils.resource_factory)
+        if len(norm_parts) > 1:
+            short = ".".join(norm_parts[1:])
+            if short not in index:
+                index[short] = file_path
+
+        # Bare stem for top-level modules only (e.g., llm_interface, config)
+        if len(norm_parts) == 2:
+            stem = norm_parts[-1]
+            if stem not in index:
+                index[stem] = file_path
+
+    return index
+
+
+def _resolve_import(import_name: str, module_index: Dict[str, str]) -> str | None:
+    """Resolve an import name to a known project file path (#1197)."""
+    if import_name in module_index:
+        return module_index[import_name]
+    parts = import_name.split(".")
+    for i in range(len(parts) - 1, 0, -1):
+        candidate = ".".join(parts[:i])
+        if candidate in module_index:
+            return module_index[candidate]
+    return None
+
+
+def _find_cycles_dfs(graph: Dict[str, Set[str]], max_length: int = 5) -> List[Dict]:
+    """Find unique cycles in a directed graph using DFS (#1197)."""
+    cycles: List[Dict] = []
+    seen: Set[tuple] = set()
+
+    def _dfs(start: str, node: str, path: List[str], depth: int):
+        if depth > max_length:
+            return
+        for neighbor in graph.get(node, set()):
+            if neighbor == start and len(path) > 1:
+                raw = path[:]
+                min_i = min(range(len(raw)), key=lambda i: raw[i])
+                norm = tuple(raw[min_i:] + raw[:min_i])
+                if norm not in seen:
+                    seen.add(norm)
+                    severity = (
+                        "high"
+                        if len(path) <= 2
+                        else "medium"
+                        if len(path) <= 4
+                        else "low"
+                    )
+                    cycle_path = path + [start]
+                    cycles.append(
+                        {
+                            "cycle": cycle_path,
+                            "modules": cycle_path,
+                            "length": len(path),
+                            "severity": severity,
+                        }
+                    )
+                return
+            if neighbor not in set(path):
+                _dfs(start, neighbor, path + [neighbor], depth + 1)
+
+    for node in graph:
+        _dfs(node, node, [node], 0)
+
+    return sorted(cycles, key=lambda c: c["length"])[:50]
 
 
 def _process_chromadb_metadata(
@@ -89,32 +226,25 @@ async def _read_file_content(py_file: Path) -> str | None:
         return None
 
 
-def _build_import_map(import_relationships: List[Dict]) -> Dict[str, set]:
-    """Build import map from relationships. (Issue #315 - extracted)"""
-    import_map: Dict[str, set] = {}
-    for rel in import_relationships:
+def _detect_circular_deps(
+    runtime_rels: List[Dict], module_index: Dict[str, str]
+) -> List[Dict]:
+    """Detect circular dependencies with DFS and module resolution (#1197).
+
+    Resolves import targets to file paths using module_index, builds a
+    directed graph, and finds all cycles up to length 5.
+
+    Replaces the previous mutual-import-only detection which was broken
+    due to source/target namespace mismatch (file paths vs import names).
+    """
+    graph: Dict[str, Set[str]] = {}
+    for rel in runtime_rels:
         source = rel["source"]
-        if source not in import_map:
-            import_map[source] = set()
-        import_map[source].add(rel["target"])
-    return import_map
+        target_path = _resolve_import(rel["target"], module_index)
+        if target_path and target_path != source:
+            graph.setdefault(source, set()).add(target_path)
 
-
-def _detect_circular_deps(import_relationships: List[Dict]) -> List[List[str]]:
-    """Detect simple circular dependencies (A→B, B→A) (Issue #315)."""
-    import_map = _build_import_map(import_relationships)
-
-    # Find mutual imports (A imports B and B imports A)
-    circular_deps = []
-    seen = set()
-    for source, targets in import_map.items():
-        for target in targets:
-            if target in import_map and source in import_map[target]:
-                cycle = tuple(sorted([source, target]))
-                if cycle not in seen:
-                    seen.add(cycle)
-                    circular_deps.append(list(cycle))
-    return circular_deps
+    return _find_cycles_dfs(graph, max_length=5)
 
 
 async def _analyze_file_imports(
@@ -123,11 +253,13 @@ async def _analyze_file_imports(
     modules: Dict[str, Dict],
     import_relationships: List[Dict],
     external_deps: Dict[str, int],
+    runtime_rels: List[Dict],
 ) -> None:
     """
     Analyze imports from a single Python file and update data structures.
 
     Issue #281: Extracted helper for file import analysis.
+    Issue #1197: Also collects runtime-only imports for circular detection.
 
     Args:
         py_file: Python file to analyze
@@ -135,6 +267,7 @@ async def _analyze_file_imports(
         modules: Dict to update with module info
         import_relationships: List to update with import relationships
         external_deps: Dict to update with external dependency counts
+        runtime_rels: List to update with runtime-only import edges
     """
     rel_path = str(py_file.relative_to(project_root))
     if rel_path not in modules:
@@ -164,18 +297,22 @@ async def _analyze_file_imports(
     for pkg, count in file_ext_deps.items():
         external_deps[pkg] = external_deps.get(pkg, 0) + count
 
-    # Create import relationships for graph
+    # Create import relationships for graph visualization
     for imp in file_imports:
         import_relationships.append(
             {"source": rel_path, "target": imp, "type": "import"}
         )
+
+    # Runtime-only imports for circular detection (#1197)
+    for imp in _extract_runtime_imports(tree):
+        runtime_rels.append({"source": rel_path, "target": imp})
 
 
 def _build_visualization_graph(
     modules: Dict[str, Dict],
     import_relationships: List[Dict],
     external_deps: Dict[str, int],
-    circular_deps: List[List[str]],
+    circular_deps: List[Dict],
 ) -> Dict:
     """
     Build graph structure and response dict for visualization.
@@ -258,8 +395,12 @@ async def _scan_filesystem_imports(
     modules: Dict[str, Dict],
     import_relationships: List[Dict],
     external_deps: Dict[str, int],
+    runtime_rels: List[Dict],
 ) -> None:
-    """Helper for get_dependencies. Scan filesystem Python files for imports. Ref: #1088."""
+    """Helper for get_dependencies. Scan filesystem Python files for imports.
+
+    Ref: #1088. Issue #1197: also collects runtime_rels for circular detection.
+    """
     # Issue #358 - avoid blocking (use lambda to defer rglob to thread)
     python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
     excluded_dirs = {
@@ -279,9 +420,17 @@ async def _scan_filesystem_imports(
         for f in python_files
         if not any(excluded in f.parts for excluded in excluded_dirs)
     ]
-    for py_file in python_files[:500]:  # Limit to 500 files for performance
+    # Prioritize source directories over infrastructure/tooling (#1197)
+    _priority = {"autobot-backend", "autobot-shared"}
+    python_files.sort(key=lambda f: 0 if _priority & set(f.parts) else 1)
+    for py_file in python_files[:1500]:  # Cover all backend+shared files
         await _analyze_file_imports(
-            py_file, project_root, modules, import_relationships, external_deps
+            py_file,
+            project_root,
+            modules,
+            import_relationships,
+            external_deps,
+            runtime_rels,
         )
 
 
@@ -310,16 +459,23 @@ async def get_dependencies():
     modules: Dict[str, Dict] = {}
     import_relationships: List[Dict] = []
     external_deps: Dict[str, int] = {}
+    runtime_rels: List[Dict] = []
 
     if code_collection:
         await _load_modules_from_chromadb(code_collection, modules)
 
     project_root = get_project_root()
     await _scan_filesystem_imports(
-        project_root, modules, import_relationships, external_deps
+        project_root,
+        modules,
+        import_relationships,
+        external_deps,
+        runtime_rels,
     )
 
-    circular_deps = _detect_circular_deps(import_relationships)
+    # Build module index and detect circular imports (#1197)
+    module_index = _build_module_index(modules)
+    circular_deps = _detect_circular_deps(runtime_rels, module_index)
     return JSONResponse(
         _build_visualization_graph(
             modules, import_relationships, external_deps, circular_deps

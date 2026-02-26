@@ -3187,8 +3187,10 @@ interface ExternalDependency {
 }
 
 // CircularDependency can be either an array of module names (string[])
-// or an object with a modules property
-type CircularDependency = string[] | { modules: string[]; [key: string]: unknown }
+// or an object with cycle/modules, length, and severity (#1197)
+type CircularDependency =
+  | string[]
+  | { modules: string[]; cycle?: string[]; length?: number; severity?: string }
 
 interface DependencySummary {
   total_modules?: number
@@ -5034,11 +5036,23 @@ const indexCodebase = async () => {
 
     const data = await response.json()
 
-    // Check if this is a new job or already running
-    if (data.status === 'already_running') {
+    // Check response status
+    if (data.status === 'syncing') {
+      // Source needs cloning first — sync started, indexing will auto-follow
+      progressStatus.value = 'Syncing repository (clone in progress)...'
+      notify('Source not yet cloned — sync started, indexing will begin automatically', 'info')
+      // Poll /index/current until a job appears (sync auto-triggers indexing)
+      startJobPolling()
+      return
+    } else if (data.status === 'already_running') {
       currentJobId.value = data.task_id
       progressStatus.value = 'Indexing already in progress, monitoring...'
       notify('Indexing job already running, now monitoring', 'info')
+    } else if (data.status === 'queued') {
+      progressStatus.value = `Queued (position ${data.position}) — will start automatically`
+      notify('Indexing queued behind current job', 'info')
+      startJobPolling()
+      return
     } else {
       currentJobId.value = data.task_id
       progressStatus.value = 'Initializing indexing...'
