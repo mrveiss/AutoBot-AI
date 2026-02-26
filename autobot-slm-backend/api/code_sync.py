@@ -370,13 +370,13 @@ async def _restart_slm_service(service: str) -> None:
 
 async def _fetch_code_source_connection_info(
     db_service,
-) -> Optional[Tuple[str, str, str, str]]:
-    """Helper for _sync_slm_from_code_source. Ref: #1088.
+) -> Optional[Tuple[str, str, str]]:
+    """Helper for _sync_slm_from_code_source. Ref: #1088, #1209.
 
     Read code source connection details from DB.
 
     Returns:
-        Tuple of (source_ip, source_user, repo_path, last_known_commit)
+        Tuple of (source_ip, source_user, repo_path)
         or None if the required records are missing.
     """
     from models.database import CodeSource, Node  # avoid circular import
@@ -403,29 +403,39 @@ async def _fetch_code_source_connection_info(
                 source_node.ip_address,
                 source_node.ssh_user or "autobot",
                 source.repo_path,
-                source.last_known_commit or "",
             )
     except Exception as db_err:
         logger.error("SLM self-sync failed: DB read error: %s", db_err)
         return None
 
 
-async def _mark_slm_node_up_to_date(
-    db_service, node_id: str, last_known_commit: str
-) -> None:
-    """Helper for _sync_slm_from_code_source. Ref: #1088.
+async def _mark_slm_node_up_to_date(db_service, node_id: str) -> None:
+    """Helper for _sync_slm_from_code_source. Ref: #1088, #1209.
 
     Persist UP_TO_DATE status for the SLM node after a successful rsync.
+    Uses git_tracker.get_local_commit() for the actual code_source HEAD
+    instead of the potentially-stale CodeSource.last_known_commit.
     """
     from models.database import Node  # avoid circular import
+
+    git_tracker = get_git_tracker()
+    current_commit = await git_tracker.get_local_commit()
+    if not current_commit:
+        logger.warning("SLM self-sync: could not determine current commit")
+        return
 
     try:
         async with db_service.session() as db:
             slm_result = await db.execute(select(Node).where(Node.node_id == node_id))
             slm_node = slm_result.scalar_one_or_none()
             if slm_node:
-                slm_node.code_version = last_known_commit
+                slm_node.code_version = current_commit
                 slm_node.code_status = CodeStatus.UP_TO_DATE.value
+                logger.info(
+                    "SLM self-sync: marked %s as up-to-date at %s",
+                    node_id,
+                    current_commit[:12],
+                )
     except Exception as db_err:
         logger.warning("SLM self-sync: could not update node status: %s", db_err)
 
@@ -447,7 +457,7 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
     conn_info = await _fetch_code_source_connection_info(db_service)
     if conn_info is None:
         return
-    source_ip, source_user, repo_path, last_known_commit = conn_info
+    source_ip, source_user, repo_path = conn_info
 
     # Detect if code source is on the same host — skip SSH entirely (#1191)
     own_ip = urlparse(settings.external_url).hostname or ""
@@ -483,8 +493,8 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
         logger.error("SLM self-sync had failures; services NOT restarted")
         return
 
-    # --- Phase 3: mark up-to-date in DB before restarting ---
-    await _mark_slm_node_up_to_date(db_service, node_id, last_known_commit)
+    # --- Phase 3: mark up-to-date in DB before restarting (#1209) ---
+    await _mark_slm_node_up_to_date(db_service, node_id)
 
     # --- Phase 4: restart services ---
     await _restart_slm_service("autobot-slm-backend")
@@ -633,46 +643,84 @@ async def sync_node(
 
 
 async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
-    """
-    Background task to execute fleet sync job using Ansible playbooks.
+    """Background task to execute fleet sync job using Ansible playbooks.
 
     Processes nodes according to the specified strategy and batch size.
+
+    Issue #1209: The SLM self-node (identified by matching
+    settings.external_url hostname) is always synced LAST and uses the
+    fire-and-forget _sync_slm_from_code_source path instead of Ansible,
+    because the Ansible restart kills this very process.
     """
     executor = get_playbook_executor()
     job.status = "running"
 
-    node_list = list(job.nodes.values())
+    # --- Separate SLM self-node from regular nodes (#1209) ---
+    slm_own_ip = urlparse(settings.external_url).hostname or ""
+    regular_nodes: list[NodeSyncState] = []
+    slm_self_node: Optional[NodeSyncState] = None
+
+    for ns in job.nodes.values():
+        if slm_own_ip and ns.ip_address == slm_own_ip:
+            slm_self_node = ns
+        else:
+            regular_nodes.append(ns)
+
+    if slm_self_node:
+        logger.info(
+            "Fleet sync %s: %s is SLM self-node — will sync last",
+            job.job_id,
+            slm_self_node.node_id,
+        )
+
     batch_size = job.batch_size
 
     try:
-        # Process nodes in batches
-        for i in range(0, len(node_list), batch_size):
-            batch = node_list[i : i + batch_size]
+        # --- Phase 1: sync all regular nodes via Ansible ---
+        for i in range(0, len(regular_nodes), batch_size):
+            batch = regular_nodes[i : i + batch_size]
 
-            # Start sync for all nodes in batch concurrently
             tasks = []
             for node_state in batch:
                 node_state.status = "syncing"
                 node_state.started_at = datetime.utcnow()
-
                 task = asyncio.create_task(
                     _sync_single_node(executor, node_state, job.restart)
                 )
                 tasks.append(task)
 
-            # Wait for batch to complete
             await asyncio.gather(*tasks, return_exceptions=True)
 
-            # If rolling strategy, wait between batches
-            if job.strategy == "rolling" and i + batch_size < len(node_list):
-                await asyncio.sleep(5)  # Brief pause between batches
+            if job.strategy == "rolling" and i + batch_size < len(regular_nodes):
+                await asyncio.sleep(5)
+
+        # --- Phase 2: sync SLM self-node LAST (#1209) ---
+        if slm_self_node and job.restart:
+            slm_self_node.status = "syncing"
+            slm_self_node.started_at = datetime.utcnow()
+            logger.info(
+                "Fleet sync %s: starting SLM self-sync for %s",
+                job.job_id,
+                slm_self_node.node_id,
+            )
+            # Use the self-sync path which rsyncs then restarts.
+            # This is fire-and-forget — the restart kills this process,
+            # but all other nodes are already done.
+            await _sync_slm_from_code_source(slm_self_node.node_id)
+            slm_self_node.status = "success"
+            slm_self_node.completed_at = datetime.utcnow()
+        elif slm_self_node:
+            # No restart requested — just sync code via Ansible (no restart tag)
+            slm_self_node.status = "syncing"
+            slm_self_node.started_at = datetime.utcnow()
+            await _sync_single_node(executor, slm_self_node, restart=False)
 
         # Calculate final status
         failed_count = sum(1 for n in job.nodes.values() if n.status == "failed")
         if failed_count == len(job.nodes):
             job.status = "failed"
         elif failed_count > 0:
-            job.status = "completed"  # Partial success
+            job.status = "completed"
         else:
             job.status = "completed"
 
@@ -690,7 +738,11 @@ async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
 
 
 async def _sync_single_node(executor, node_state: NodeSyncState, restart: bool) -> None:
-    """Sync a single node using Ansible playbook and update its state."""
+    """Sync a single node using Ansible playbook and update its state.
+
+    Issue #1209: Also updates node version in DB on success so the
+    code-sync GUI reflects the correct status.
+    """
     try:
         # Build playbook parameters
         # Use node_id (maps to slm_node_id in Ansible inventory) not hostname (#921)
@@ -707,12 +759,15 @@ async def _sync_single_node(executor, node_state: NodeSyncState, restart: bool) 
             tags=tags if tags else None,
         )
 
-        node_state.status = "success" if result["success"] else "failed"
-        node_state.message = (
-            result["output"][:500]
-            if result["success"]
-            else f"Playbook failed: {result['output'][:500]}"
-        )
+        if result["success"]:
+            node_state.status = "success"
+            node_state.message = result["output"][:500]
+            # Update node version in DB (#1209)
+            await _update_fleet_node_version(node_state.node_id)
+        else:
+            node_state.status = "failed"
+            node_state.message = f"Playbook failed: {result['output'][:500]}"
+
         node_state.completed_at = datetime.utcnow()
 
     except Exception as e:
@@ -720,6 +775,39 @@ async def _sync_single_node(executor, node_state: NodeSyncState, restart: bool) 
         node_state.message = str(e)
         node_state.completed_at = datetime.utcnow()
         logger.error("Node sync failed for %s: %s", node_state.node_id, e)
+
+
+async def _update_fleet_node_version(node_id: str) -> None:
+    """Update a node's code_version in DB after successful fleet sync.
+
+    Issue #1209: The fleet sync path (_sync_single_node) was not updating
+    the DB, so nodes stayed 'outdated' even after successful Ansible runs.
+    """
+    from models.database import Node as NodeModel
+    from services.database import db_service
+
+    git_tracker = get_git_tracker()
+    current_commit = await git_tracker.get_local_commit()
+    if not current_commit:
+        logger.warning("Fleet sync: cannot determine commit for %s", node_id)
+        return
+
+    try:
+        async with db_service.session() as db:
+            result = await db.execute(
+                select(NodeModel).where(NodeModel.node_id == node_id)
+            )
+            node = result.scalar_one_or_none()
+            if node:
+                node.code_version = current_commit
+                node.code_status = CodeStatus.UP_TO_DATE.value
+                logger.info(
+                    "Fleet sync: marked %s as up-to-date at %s",
+                    node_id,
+                    current_commit[:12],
+                )
+    except Exception as db_err:
+        logger.warning("Fleet sync: could not update %s version: %s", node_id, db_err)
 
 
 class MarkSyncedRequest(BaseModel):
@@ -1434,6 +1522,7 @@ async def run_schedule(
 
 @router.post("/pull")
 async def pull_from_source(
+    db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[dict, Depends(get_current_user)],
 ) -> dict:
     """
@@ -1441,9 +1530,16 @@ async def pull_from_source(
 
     Fetches the latest code from the designated code-source node
     and caches it locally for distribution to fleet nodes.
+
+    Issue #1209: Also updates slm_agent_latest_commit so the GUI
+    "Latest Version" header matches immediately after pulling.
     """
     orchestrator = get_sync_orchestrator()
     success, message, commit = await orchestrator.pull_from_source()
+
+    if success and commit:
+        await _update_version_setting(db, commit)
+        await db.commit()
 
     return {
         "success": success,
