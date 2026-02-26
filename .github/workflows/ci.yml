@@ -23,8 +23,15 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python virtual environment
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Free disk space and set up venv
       run: |
+        pip cache purge 2>/dev/null || true
+        rm -rf .venv 2>/dev/null || true
         python3 -m venv .venv
         source .venv/bin/activate
         echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
@@ -204,8 +211,15 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python virtual environment
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Free disk space and set up venv
       run: |
+        pip cache purge 2>/dev/null || true
+        rm -rf .venv 2>/dev/null || true
         python3 -m venv .venv
         source .venv/bin/activate
         echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
