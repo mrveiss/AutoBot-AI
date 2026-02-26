@@ -358,7 +358,8 @@ def safe_input(prompt: str = "", timeout: float = None, default: str = "") -> st
 
     Args:
         prompt: Prompt to display to user
-        timeout: Timeout in seconds (ignored in testing environments, uses environment default if None)
+        timeout: Timeout in seconds (ignored in testing
+            environments, uses environment default if None)
         default: Default value to return if no input or timeout
 
     Returns:

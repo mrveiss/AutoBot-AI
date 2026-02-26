@@ -459,7 +459,8 @@ class ProjectStateManager:
         cursor.execute(
             """
             INSERT OR REPLACE INTO project_phases
-            (phase_id, name, description, completion_percentage, is_active, is_completed, last_validated, updated_at)
+            (phase_id, name, description, completion_percentage,
+             is_active, is_completed, last_validated, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
@@ -665,7 +666,8 @@ class ProjectStateManager:
                 capability.name,
                 ValidationStatus.PASSED,
                 1.0,
-                f"Automated phase progression logic operational - {len(test_results)} phases tested",
+                "Automated phase progression logic operational"
+                f" - {len(test_results)} phases tested",
             )
         except Exception as e:
             return ValidationResult(
@@ -826,9 +828,9 @@ class ProjectStateManager:
                 old_phase = self.current_phase
                 self.current_phase = suggested_next
                 changes_made = True
-                progression_log.append(
-                    f"🔄 Progressed from {self.phases[old_phase].name} to {self.phases[suggested_next].name}"
-                )
+                old_name = self.phases[old_phase].name
+                new_name = self.phases[suggested_next].name
+                progression_log.append(f"🔄 Progressed from {old_name} to {new_name}")
 
         # Save changes if any were made
         if changes_made:
