@@ -88,8 +88,21 @@ def _check_existing_task_and_queue(
     )
 
 
-async def _validate_and_get_path(request: Optional[IndexCodebaseRequest]) -> str:
-    """Validate request and return the resolved index path (Issue #398 + #1133)."""
+class _SyncNeeded:
+    """Sentinel returned when a code source needs syncing before indexing."""
+
+    def __init__(self, source):
+        self.source = source
+
+
+async def _validate_and_get_path(
+    request: Optional[IndexCodebaseRequest],
+) -> "str | _SyncNeeded":
+    """Validate request and return the resolved index path (Issue #398 + #1133).
+
+    Returns the path string when ready. Returns a ``_SyncNeeded`` sentinel when
+    the source's clone directory does not exist and a sync must run first.
+    """
     if request and request.source_id:
         from ..source_storage import get_source
 
@@ -100,10 +113,18 @@ async def _validate_and_get_path(request: Optional[IndexCodebaseRequest]) -> str
                 detail=f"Source {request.source_id} not found",
             )
         if not source.clone_path:
-            raise HTTPException(
-                status_code=400,
-                detail="Source has no clone path; sync it first",
-            )
+            from ..source_models import SourceStatus
+            from .sources import _make_clone_path
+
+            source.clone_path = _make_clone_path(source.id)
+            source.status = SourceStatus.PENDING
+            from ..source_storage import save_source as _save
+
+            await _save(source)
+
+        if not Path(source.clone_path).is_dir():
+            return _SyncNeeded(source)
+
         return source.clone_path
     if request and request.root_path:
         target_path = Path(request.root_path)
@@ -179,7 +200,27 @@ async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
     logger.info("✅ ENTRY: index_codebase endpoint called!")
 
     # Resolve the path first (may be async for source_id lookup)
-    root_path = await _validate_and_get_path(request)
+    path_or_sync = await _validate_and_get_path(request)
+
+    # Auto-sync: source clone directory missing → trigger sync (which auto-indexes)
+    if isinstance(path_or_sync, _SyncNeeded):
+        source = path_or_sync.source
+        from .sources import _do_sync
+
+        asyncio.create_task(_do_sync(source))
+        logger.info("🔄 Source %s needs sync before indexing — sync started", source.id)
+        return JSONResponse(
+            {
+                "task_id": None,
+                "status": "syncing",
+                "message": (
+                    "Source repository not yet cloned. "
+                    "Sync started — indexing will begin automatically after sync."
+                ),
+            }
+        )
+
+    root_path = path_or_sync
     source_id = request.source_id if request else None
     logger.info("📁 Indexing path = %s", root_path)
 
