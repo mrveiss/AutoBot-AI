@@ -33,7 +33,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # === PACKAGE MANAGER GENERATED FILES ===
-package-lock.json
+# package-lock.json is committed — required by npm ci in CI pipelines
 yarn.lock
 pnpm-lock.yaml
 
