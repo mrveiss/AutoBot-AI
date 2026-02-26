@@ -12,6 +12,10 @@ on:
   pull_request:
     branches: [ main ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   security-tests:
     runs-on: self-hosted
@@ -84,15 +88,15 @@ jobs:
 
         # Code formatting check
         echo "Checking code formatting with black..."
-        black --check autobot-user-backend/ autobot-slm-backend/ autobot-shared/ --line-length=88 || echo "⚠️ Code formatting issues found"
+        black --check autobot-backend/ autobot-slm-backend/ autobot-shared/ --line-length=88 || echo "⚠️ Code formatting issues found"
 
         # Import sorting check
         echo "Checking import sorting with isort..."
-        isort --check-only autobot-user-backend/ autobot-slm-backend/ autobot-shared/ || echo "⚠️ Import sorting issues found"
+        isort --check-only autobot-backend/ autobot-slm-backend/ autobot-shared/ || echo "⚠️ Import sorting issues found"
 
         # Linting
         echo "Running flake8 linter..."
-        flake8 autobot-user-backend/ autobot-slm-backend/ autobot-shared/ --max-line-length=88 --extend-ignore=E203,W503 || echo "⚠️ Linting issues found"
+        flake8 autobot-backend/ autobot-slm-backend/ autobot-shared/ --max-line-length=88 --extend-ignore=E203,W503 || echo "⚠️ Linting issues found"
 
     - name: Run security analysis
       run: |
@@ -100,7 +104,7 @@ jobs:
         echo "🔒 Running security analysis..."
 
         # Security vulnerability scan
-        bandit -r autobot-user-backend/ autobot-slm-backend/ autobot-shared/ -f json -o bandit-report.json || echo "⚠️ Security issues found"
+        bandit -r autobot-backend/ autobot-slm-backend/ autobot-shared/ -f json -o bandit-report.json || echo "⚠️ Security issues found"
         if [ -f bandit-report.json ]; then
           echo "Security report generated"
           cat bandit-report.json | python -m json.tool || echo "No security issues to report"
@@ -112,14 +116,14 @@ jobs:
         echo "🧪 Running security unit tests..."
         # Tests are colocated with source files (#734)
         TEST_FILES=""
-        for file in autobot-user-backend/security/secure_command_executor_test.py autobot-user-backend/security/enhanced_security_layer_test.py autobot-user-backend/api/security_api_test.py; do
+        for file in autobot-backend/security/secure_command_executor_test.py autobot-backend/security/enhanced_security_layer_test.py autobot-backend/api/security_api_test.py; do
           if [ -f "$file" ]; then
             TEST_FILES="$TEST_FILES $file"
           fi
         done
 
         if [ -n "$TEST_FILES" ]; then
-          python -m pytest $TEST_FILES -v --tb=short --cov=autobot-user-backend --cov-report=xml --cov-report=term || echo "⚠️ Some tests failed"
+          python -m pytest $TEST_FILES -v --tb=short --cov=autobot-backend --cov-report=xml --cov-report=term || echo "⚠️ Some tests failed"
         else
           echo "⚠️ No security unit test files found - skipping"
         fi
@@ -161,36 +165,36 @@ jobs:
 
     - name: Install frontend dependencies
       run: |
-        cd autobot-user-frontend
+        cd autobot-frontend
         npm ci
 
     - name: Run frontend linting
       continue-on-error: true
       run: |
-        cd autobot-user-frontend
+        cd autobot-frontend
         npm run lint || echo "⚠️ Frontend linting issues found"
 
     - name: Run frontend type checking
       continue-on-error: true
       run: |
-        cd autobot-user-frontend
+        cd autobot-frontend
         # Type check application code only (skip tests for now)
         npx vue-tsc --noEmit -p tsconfig.app.json || echo "⚠️ App type checking issues found - continuing CI"
 
     - name: Build frontend
       run: |
-        cd autobot-user-frontend
+        cd autobot-frontend
         npm run build
 
     - name: Run frontend unit tests
       run: |
-        cd autobot-user-frontend
+        cd autobot-frontend
         npm run test:unit || echo "⚠️ Frontend tests failing due to mocking issues - continuing CI"
 
     - name: Cleanup
       if: always()
       run: |
-        rm -rf autobot-user-frontend/node_modules autobot-user-frontend/dist || true
+        rm -rf autobot-frontend/node_modules autobot-frontend/dist || true
 
   deployment-check:
     runs-on: self-hosted

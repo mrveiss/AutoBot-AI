@@ -15,6 +15,10 @@ on:
     # Run security scans daily at 2 AM UTC
     - cron: '0 2 * * *'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   NODE_VERSION: '20'
 
@@ -66,12 +70,12 @@ jobs:
 
     - name: Install Frontend dependencies
       run: |
-        cd autobot-vue
+        cd autobot-frontend
         npm ci
 
     - name: Node.js Dependency Audit
       run: |
-        cd autobot-vue
+        cd autobot-frontend
         echo "## Node.js Dependency Security Report" >> $GITHUB_STEP_SUMMARY
         npm audit --audit-level=moderate --json > npm-audit.json || true
         npm audit --audit-level=moderate || true
@@ -84,7 +88,7 @@ jobs:
         path: |
           python-audit.json
           safety-report.json
-          autobot-vue/npm-audit.json
+          autobot-frontend/npm-audit.json
         retention-days: 30
 
     - name: Cleanup
@@ -117,15 +121,15 @@ jobs:
       run: |
         source .venv/bin/activate
         echo "## Bandit Security Analysis" >> $GITHUB_STEP_SUMMARY
-        python3 -m bandit -r autobot-user-backend/ autobot-slm-backend/ autobot-shared/ -f json -o bandit-report.json || true
-        python3 -m bandit -r autobot-user-backend/ autobot-slm-backend/ autobot-shared/ -f txt || true
+        python3 -m bandit -r autobot-backend/ autobot-slm-backend/ autobot-shared/ -f json -o bandit-report.json || true
+        python3 -m bandit -r autobot-backend/ autobot-slm-backend/ autobot-shared/ -f txt || true
 
     - name: Semgrep SAST Scan
       run: |
         source .venv/bin/activate
         echo "## Semgrep Security Analysis" >> $GITHUB_STEP_SUMMARY
-        python3 -m semgrep --config=auto --json --output=semgrep-report.json autobot-user-backend/ autobot-slm-backend/ autobot-shared/ || true
-        python3 -m semgrep --config=auto autobot-user-backend/ autobot-slm-backend/ autobot-shared/ || true
+        python3 -m semgrep --config=auto --json --output=semgrep-report.json autobot-backend/ autobot-slm-backend/ autobot-shared/ || true
+        python3 -m semgrep --config=auto autobot-backend/ autobot-slm-backend/ autobot-shared/ || true
 
     - name: Python Code Quality Check
       continue-on-error: true
@@ -133,7 +137,7 @@ jobs:
         source .venv/bin/activate
         echo "## Code Quality Analysis" >> $GITHUB_STEP_SUMMARY
         echo "Note: In warn-only mode (Issue #173)" >> $GITHUB_STEP_SUMMARY
-        python3 -m flake8 autobot-user-backend/ autobot-slm-backend/ autobot-shared/ --max-line-length=88 --extend-ignore=E203,W503 \
+        python3 -m flake8 autobot-backend/ autobot-slm-backend/ autobot-shared/ --max-line-length=88 --extend-ignore=E203,W503 \
           --output-file=flake8-report.txt || true
         cat flake8-report.txt || true
 
@@ -150,19 +154,19 @@ jobs:
         SECRETS_FOUND=0
 
         # Check for AWS keys
-        if grep -rE "AKIA[0-9A-Z]{16}" autobot-user-backend/ autobot-slm-backend/ autobot-shared/ 2>/dev/null; then
+        if grep -rE "AKIA[0-9A-Z]{16}" autobot-backend/ autobot-slm-backend/ autobot-shared/ 2>/dev/null; then
           echo "⚠️ Potential AWS access key found" >> $GITHUB_STEP_SUMMARY
           SECRETS_FOUND=$((SECRETS_FOUND + 1))
         fi
 
         # Check for private keys
-        if grep -rE "-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----" autobot-user-backend/ autobot-slm-backend/ autobot-shared/ 2>/dev/null; then
+        if grep -rE "-----BEGIN (RSA |DSA |EC |OPENSSH )?PRIVATE KEY-----" autobot-backend/ autobot-slm-backend/ autobot-shared/ 2>/dev/null; then
           echo "⚠️ Potential private key found" >> $GITHUB_STEP_SUMMARY
           SECRETS_FOUND=$((SECRETS_FOUND + 1))
         fi
 
         # Check for common password patterns in code (excluding tests)
-        if grep -rE "password\s*=\s*['\"][^'\"]{8,}['\"]" autobot-user-backend/ autobot-slm-backend/ autobot-shared/ --include="*.py" 2>/dev/null | grep -v "test\|example\|placeholder"; then
+        if grep -rE "password\s*=\s*['\"][^'\"]{8,}['\"]" autobot-backend/ autobot-slm-backend/ autobot-shared/ --include="*.py" 2>/dev/null | grep -v "test\|example\|placeholder"; then
           echo "⚠️ Potential hardcoded password found" >> $GITHUB_STEP_SUMMARY
           SECRETS_FOUND=$((SECRETS_FOUND + 1))
         fi
@@ -226,15 +230,15 @@ jobs:
         echo "## Security Best Practices" >> $GITHUB_STEP_SUMMARY
 
         # Check for security-related imports
-        security_imports=$(grep -r "hashlib\|secrets\|cryptography\|bcrypt" autobot-user-backend/ autobot-slm-backend/ autobot-shared/ | wc -l)
+        security_imports=$(grep -r "hashlib\|secrets\|cryptography\|bcrypt" autobot-backend/ autobot-slm-backend/ autobot-shared/ | wc -l)
         echo "✅ Security-related imports found: $security_imports" >> $GITHUB_STEP_SUMMARY
 
         # Check for input validation patterns
-        validation_patterns=$(grep -r "validator\|sanitize\|escape\|validate" autobot-user-backend/ autobot-slm-backend/ autobot-shared/ | wc -l)
+        validation_patterns=$(grep -r "validator\|sanitize\|escape\|validate" autobot-backend/ autobot-slm-backend/ autobot-shared/ | wc -l)
         echo "✅ Input validation patterns found: $validation_patterns" >> $GITHUB_STEP_SUMMARY
 
         # Check for error handling
-        error_handling=$(grep -r "try:\|except\|raise" autobot-user-backend/ autobot-slm-backend/ autobot-shared/ | wc -l)
+        error_handling=$(grep -r "try:\|except\|raise" autobot-backend/ autobot-slm-backend/ autobot-shared/ | wc -l)
         echo "✅ Error handling patterns found: $error_handling" >> $GITHUB_STEP_SUMMARY
 
   security-summary:

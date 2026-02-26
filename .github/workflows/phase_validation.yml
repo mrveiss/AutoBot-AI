@@ -15,6 +15,15 @@ on:
         required: false
         default: ''
 
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   phase-validation:
     name: AutoBot Phase Validation
