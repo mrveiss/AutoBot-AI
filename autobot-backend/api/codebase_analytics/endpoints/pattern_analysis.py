@@ -7,6 +7,7 @@ Pattern Analysis API Endpoints
 Issue #208: FastAPI endpoints for code pattern detection and optimization.
 """
 
+import json
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -22,6 +23,47 @@ router = APIRouter(tags=["Pattern Analysis"])
 
 # Global state for tracking analysis tasks
 _analysis_tasks: Dict[str, Dict[str, Any]] = {}
+
+# Redis-backed task state for multi-worker visibility (#1179 pattern)
+_PATTERN_TASK_REDIS_PREFIX = "pattern_task:"
+_PATTERN_TASK_REDIS_TTL = 86400  # 24 hours
+
+
+async def _save_pattern_task_to_redis(task_id: str) -> None:
+    """Persist pattern task state to Redis so all workers can read it."""
+    try:
+        from ..scanner import get_redis_connection_async
+
+        redis = await get_redis_connection_async()
+        if redis:
+            state = _analysis_tasks.get(task_id)
+            if state:
+                # Exclude non-serializable fields
+                safe_state = {k: v for k, v in state.items() if k != "request"}
+                await redis.set(
+                    f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}",
+                    json.dumps(safe_state, default=str),
+                    ex=_PATTERN_TASK_REDIS_TTL,
+                )
+    except Exception as e:
+        logger.debug("Pattern task Redis save failed (non-fatal): %s", e)
+
+
+async def _load_pattern_task_from_redis(
+    task_id: str,
+) -> Optional[Dict[str, Any]]:
+    """Load pattern task state from Redis (cross-worker visibility)."""
+    try:
+        from ..scanner import get_redis_connection_async
+
+        redis = await get_redis_connection_async()
+        if redis:
+            data = await redis.get(f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}")
+            if data:
+                return json.loads(data)
+    except Exception as e:
+        logger.debug("Pattern task Redis load failed (non-fatal): %s", e)
+    return None
 
 
 class PatternAnalysisRequest(BaseModel):
@@ -85,6 +127,7 @@ async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
 
         _analysis_tasks[task_id]["status"] = "running"
         _analysis_tasks[task_id]["started_at"] = datetime.now().isoformat()
+        await _save_pattern_task_to_redis(task_id)
 
         # Create analyzer with request parameters
         analyzer = CodePatternAnalyzer(
@@ -103,12 +146,14 @@ async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
         _analysis_tasks[task_id]["completed_at"] = datetime.now().isoformat()
         _analysis_tasks[task_id]["result"] = report.to_dict()
         _analysis_tasks[task_id]["progress"] = 100.0
+        await _save_pattern_task_to_redis(task_id)
 
     except Exception as e:
         logger.error("Pattern analysis failed: %s", e)
         _analysis_tasks[task_id]["status"] = "failed"
         _analysis_tasks[task_id]["error"] = str(e)
         _analysis_tasks[task_id]["completed_at"] = datetime.now().isoformat()
+        await _save_pattern_task_to_redis(task_id)
 
 
 def _cleanup_stuck_tasks() -> int:
@@ -220,13 +265,17 @@ async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
     Returns:
         PatternAnalysisStatus with current status and results if complete
     """
-    if task_id not in _analysis_tasks:
+    # #1179 pattern: check local memory first, fall back to Redis
+    task = _analysis_tasks.get(task_id)
+    if task is None:
+        task = await _load_pattern_task_from_redis(task_id)
+
+    if task is None:
         raise HTTPException(
             status_code=404,
             detail=f"Analysis task {task_id} not found",
         )
 
-    task = _analysis_tasks[task_id]
     return PatternAnalysisStatus(
         task_id=task_id,
         status=task["status"],
@@ -248,13 +297,15 @@ async def get_analysis_result(task_id: str) -> Dict[str, Any]:
     Returns:
         Full analysis report as dictionary
     """
-    if task_id not in _analysis_tasks:
+    task = _analysis_tasks.get(task_id)
+    if task is None:
+        task = await _load_pattern_task_from_redis(task_id)
+
+    if task is None:
         raise HTTPException(
             status_code=404,
             detail=f"Analysis task {task_id} not found",
         )
-
-    task = _analysis_tasks[task_id]
 
     if task["status"] != "completed":
         raise HTTPException(

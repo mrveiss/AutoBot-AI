@@ -781,7 +781,7 @@ def _extract_class_info(node: ast.ClassDef) -> Dict:
     return {
         "name": node.name,
         "line": node.lineno,
-        "methods": [n.name for n in node.body if isinstance(n, ast.FunctionDef)],
+        "methods": [n.name for n in node.body if isinstance(n, _FUNCTION_DEF_TYPES)],
         "docstring": ast.get_docstring(node),
     }
 
@@ -1233,7 +1233,7 @@ def _analyze_ast_nodes(
     problems = []
 
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef):
+        if isinstance(node, _FUNCTION_DEF_TYPES):
             functions.append(_extract_function_info(node))
             long_func_problem = _check_long_function(node)
             if long_func_problem:

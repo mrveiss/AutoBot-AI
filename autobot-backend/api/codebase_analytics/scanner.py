@@ -1238,7 +1238,9 @@ async def _store_single_batch(
     if batch_embeddings is not None:
         batch_slice_embeddings = batch_embeddings[start_idx:end_idx]
 
-    await code_collection.add(
+    # Use upsert so the preserved codebase_stats entry (#540) gets
+    # updated with fresh values instead of being silently skipped by add().
+    await code_collection.upsert(
         ids=batch_slice_ids,
         documents=batch_slice_docs,
         metadatas=batch_slice_metas,

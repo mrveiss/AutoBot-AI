@@ -139,25 +139,33 @@ async def _do_sync(source: CodeSource) -> None:
 
 
 async def _trigger_indexing(source: CodeSource) -> None:
-    """Queue an indexing job for the source's clone path (#1133)."""
+    """Queue an indexing job for the source's clone path (#1133).
+
+    Uses _run_indexing_subprocess (#1180) to avoid ChromaDB SIGSEGV
+    in the main process, and sets _current_indexing_task_id so
+    /index/current reports the running job.
+    """
     try:
         from ..scanner import (
             _active_tasks,
             _current_indexing_task_id,
             _index_queue,
+            _run_indexing_subprocess,
             _tasks_lock,
-            do_indexing_with_progress,
-            indexing_tasks,
         )
+        from .indexing import _create_cleanup_callback
 
         task_id = str(uuid.uuid4())
         async with _tasks_lock:
             if _current_indexing_task_id is None:
-                indexing_tasks[task_id] = {"status": "running"}
+                import api.codebase_analytics.scanner as _scanner
+
+                _scanner._current_indexing_task_id = task_id
                 task = asyncio.create_task(
-                    do_indexing_with_progress(task_id, source.clone_path)
+                    _run_indexing_subprocess(task_id, source.clone_path)
                 )
                 _active_tasks[task_id] = task
+                task.add_done_callback(_create_cleanup_callback(task_id))
             else:
                 _index_queue.append(
                     {
