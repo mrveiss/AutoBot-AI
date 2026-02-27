@@ -55,7 +55,11 @@ async def _save_pattern_task_to_redis(task_id: str) -> None:
 async def _load_pattern_task_from_redis(
     task_id: str,
 ) -> Optional[Dict[str, Any]]:
-    """Load pattern task state from Redis (cross-worker visibility)."""
+    """Load pattern task state from Redis (cross-worker visibility).
+
+    If the task is still 'running' in Redis but absent from the in-memory
+    dict, it was orphaned by a backend restart — mark it failed (#1234).
+    """
     try:
         from ..scanner import get_redis_connection_async
 
@@ -63,7 +67,18 @@ async def _load_pattern_task_from_redis(
         if redis:
             data = await redis.get(f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}")
             if data:
-                return json.loads(data)
+                task = json.loads(data)
+                if task.get("status") == "running":
+                    task["status"] = "failed"
+                    task["error"] = "Task orphaned by backend restart (#1234)"
+                    task["completed_at"] = datetime.now().isoformat()
+                    await redis.set(
+                        f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}",
+                        json.dumps(task, default=str),
+                        ex=_PATTERN_TASK_REDIS_TTL,
+                    )
+                    logger.info("Marked orphaned Redis task %s as failed", task_id)
+                return task
     except Exception as e:
         logger.debug("Pattern task Redis load failed (non-fatal): %s", e)
     return None
@@ -425,6 +440,7 @@ async def clear_stuck_tasks(
                     )
                     _analysis_tasks[task_id]["completed_at"] = now.isoformat()
                     cleared.append(task_id)
+                    await _save_pattern_task_to_redis(task_id)
                     logger.info(
                         "Cleared %s task %s",
                         "forced" if force else "stuck",
@@ -440,18 +456,30 @@ async def clear_stuck_tasks(
 
 @router.post("/patterns/tasks/clear-all")
 async def clear_all_tasks() -> Dict[str, str]:
-    """Clear all pattern analysis tasks.
-
-    This removes all tasks from memory, allowing fresh analyses.
+    """Clear all pattern analysis tasks from memory and Redis.
 
     Returns:
         Confirmation message
 
     Issue #647: Added endpoint to clear all tasks.
+    Issue #1234: Also clear Redis-persisted task state.
     """
     async with _analysis_tasks_lock:
-        count = len(_analysis_tasks)
+        task_ids = list(_analysis_tasks.keys())
+        count = len(task_ids)
         _analysis_tasks.clear()
+
+    # Also clear from Redis (#1234)
+    try:
+        from ..scanner import get_redis_connection_async
+
+        redis = await get_redis_connection_async()
+        if redis:
+            for tid in task_ids:
+                await redis.delete(f"{_PATTERN_TASK_REDIS_PREFIX}{tid}")
+    except Exception as e:
+        logger.debug("Redis task cleanup failed (non-fatal): %s", e)
+
     return {"message": f"Cleared {count} task(s)"}
 
 
