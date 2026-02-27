@@ -14,18 +14,24 @@ Environment="PYTHONPATH=/opt/autobot/autobot-user-backend"
 EnvironmentFile=-/opt/autobot/autobot-user-backend/.env
 EnvironmentFile=-/etc/autobot/service-keys/main-backend.env
 
+# Issue #1240: Added --limit-max-requests to recycle workers and prevent memory leak
 ExecStart=/opt/autobot/autobot-user-backend/venv/bin/uvicorn \
     main:app \
     --host 0.0.0.0 \
     --port 8001 \
     --workers 4 \
-    --log-level info
+    --log-level info \
+    --limit-max-requests 1000
 
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5
 StandardOutput=append:/var/log/autobot/user-backend.log
 StandardError=append:/var/log/autobot/user-backend-error.log
+# Issue #1240: Memory limits to prevent runaway growth
+MemoryHigh=12G
+MemoryMax=16G
+TimeoutStopSec=90
 
 # Security hardening
 NoNewPrivileges=yes
