@@ -22,6 +22,7 @@ from typing import Optional
 from constants.threshold_constants import AnalyticsConfig
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
+from utils.io_executor import get_analytics_executor
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -78,9 +79,11 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
     """
     loop = asyncio.get_event_loop()
     try:
+        # Issue #1233: Use dedicated analytics executor to prevent
+        # default thread pool starvation
         analysis = await asyncio.wait_for(
             loop.run_in_executor(
-                None,
+                get_analytics_executor(),
                 lambda: DuplicateCodeDetector(
                     project_root=project_root,
                     min_similarity=min_similarity,

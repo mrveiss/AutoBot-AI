@@ -24,6 +24,7 @@ from services.slm_client import init_slm_client, shutdown_slm_client
 from type_defs.common import Metadata
 from user_management.database import init_database
 from utils.background_llm_sync import BackgroundLLMSync
+from utils.io_executor import shutdown_executors as shutdown_io_executors
 
 from autobot_shared.tracing import (
     instrument_aiohttp,
@@ -782,6 +783,9 @@ async def cleanup_services(app: FastAPI):
         # REMOVED as part of Issue #729 - SLM moved to slm-server
         # SLM server manages its own reconciler lifecycle
         pass  # SLM reconciler now in slm-server
+
+        # Issue #1233: Shutdown dedicated I/O thread pools
+        shutdown_io_executors()
 
         # Issue #697: Flush and shutdown OpenTelemetry tracing
         await shutdown_tracing()

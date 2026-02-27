@@ -41,6 +41,7 @@ from utils.file_categorization import (
     FILE_CATEGORY_LOGS,
     FILE_CATEGORY_TEST,
 )
+from utils.io_executor import get_analytics_executor, run_in_analytics_executor
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -1548,9 +1549,11 @@ async def _get_duplicate_analysis() -> Optional[DuplicateAnalysis]:
         loop = asyncio.get_event_loop()
         project_root = str(Path(__file__).resolve().parents[4])
 
+        # Issue #1233: Use dedicated analytics executor to prevent
+        # default thread pool starvation
         analysis = await asyncio.wait_for(
             loop.run_in_executor(
-                None,
+                get_analytics_executor(),
                 lambda: DuplicateCodeDetector(project_root=project_root).run_analysis(),
             ),
             timeout=60.0,  # 60 second timeout for duplicate detection
@@ -1581,7 +1584,8 @@ async def _get_api_endpoint_analysis() -> Optional[APIEndpointAnalysis]:
     """
     try:
         checker = APIEndpointChecker()
-        analysis = await asyncio.to_thread(checker.run_full_analysis)
+        # Issue #1233: Use dedicated analytics executor
+        analysis = await run_in_analytics_executor(checker.run_full_analysis)
         logger.info(
             "API endpoint analysis: %d endpoints, %d calls, %.1f%% coverage",
             analysis.backend_endpoints,
@@ -1620,7 +1624,8 @@ async def _get_bug_prediction(
         # Use project root or default to current working directory
         root = project_root or str(Path.cwd())
 
-        # Run in thread pool to avoid blocking the event loop
+        # Issue #1233: Use dedicated analytics executor to prevent
+        # default thread pool starvation
         loop = asyncio.get_event_loop()
 
         # Issue #554: Pass semantic analysis flag
@@ -1628,7 +1633,7 @@ async def _get_bug_prediction(
 
         result = await asyncio.wait_for(
             loop.run_in_executor(
-                None,  # Use default thread pool
+                get_analytics_executor(),
                 lambda: predictor.analyze_directory(pattern="*.py", limit=limit),
             ),
             timeout=BUG_PREDICTION_TIMEOUT,

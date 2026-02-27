@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+from utils.io_executor import get_analytics_executor
+
 from .complexity_analyzer import ComplexityAnalyzer
 from .refactoring_generator import RefactoringSuggestionGenerator
 from .regex_detector import RegexPatternDetector
@@ -271,10 +273,12 @@ class CodePatternAnalyzer:
             return {"type": "clone_detection", "patterns": []}
 
         try:
-            # Clone detection is synchronous, run in thread pool
+            # Issue #1233: Use dedicated analytics executor
             loop = asyncio.get_event_loop()
             report = await loop.run_in_executor(
-                None, self._clone_detector.detect_clones, directory
+                get_analytics_executor(),
+                self._clone_detector.detect_clones,
+                directory,
             )
 
             # Convert to our types
@@ -307,10 +311,12 @@ class CodePatternAnalyzer:
             return {"type": "regex_detection", "patterns": []}
 
         try:
-            # Run in thread pool
+            # Issue #1233: Use dedicated analytics executor
             loop = asyncio.get_event_loop()
             opportunities = await loop.run_in_executor(
-                None, self._regex_detector.detect_in_directory, directory
+                get_analytics_executor(),
+                self._regex_detector.detect_in_directory,
+                directory,
             )
 
             return {"type": "regex_detection", "patterns": opportunities}
@@ -332,10 +338,12 @@ class CodePatternAnalyzer:
             return {"type": "complexity_analysis", "patterns": [], "modules": []}
 
         try:
-            # Run in thread pool
+            # Issue #1233: Use dedicated analytics executor
             loop = asyncio.get_event_loop()
             modules = await loop.run_in_executor(
-                None, self._complexity_analyzer.analyze_directory, directory
+                get_analytics_executor(),
+                self._complexity_analyzer.analyze_directory,
+                directory,
             )
 
             # Find hotspots
@@ -369,10 +377,12 @@ class CodePatternAnalyzer:
             return {"type": "anti_pattern_detection", "patterns": []}
 
         try:
-            # Run in thread pool
+            # Issue #1233: Use dedicated analytics executor
             loop = asyncio.get_event_loop()
             report = await loop.run_in_executor(
-                None, self._anti_pattern_detector.analyze_directory, directory
+                get_analytics_executor(),
+                self._anti_pattern_detector.analyze_directory,
+                directory,
             )
 
             # Convert to modularization suggestions where appropriate
