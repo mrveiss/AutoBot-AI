@@ -98,6 +98,18 @@
           </button>
         </div>
 
+        <!-- Appearance Settings (Issue #753) -->
+        <div class="profile-section">
+          <h3>Appearance</h3>
+          <PreferencesPanel />
+        </div>
+
+        <!-- Voice Settings -->
+        <div class="profile-section">
+          <h3>Voice</h3>
+          <VoiceSettingsPanel />
+        </div>
+
         <!-- Change Password Section -->
         <div class="profile-section">
           <h3>Change Password</h3>
@@ -152,6 +164,8 @@
 import { ref, computed, watch } from 'vue'
 import { useUserStore } from '@/stores/useUserStore'
 import type { UserPreferences } from '@/stores/useUserStore'
+import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
+import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 
 defineProps<{
   isOpen: boolean
