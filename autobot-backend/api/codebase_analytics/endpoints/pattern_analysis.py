@@ -84,6 +84,58 @@ async def _load_pattern_task_from_redis(
     return None
 
 
+async def _clear_orphaned_redis_tasks() -> int:
+    """Mark any 'running' tasks in Redis as failed (#1234).
+
+    After a backend restart, in-memory _analysis_tasks is empty but Redis
+    may still hold tasks with status='running' that will never complete.
+    This scans Redis for such orphans and marks them failed so new
+    analyses can start without a false 409 conflict.
+
+    Returns:
+        Number of orphaned tasks cleared.
+    """
+    cleared = 0
+    try:
+        from ..scanner import get_redis_connection_async
+
+        redis = await get_redis_connection_async()
+        if not redis:
+            return 0
+
+        # Scan for pattern task keys
+        cursor = 0
+        while True:
+            cursor, keys = await redis.scan(
+                cursor,
+                match=f"{_PATTERN_TASK_REDIS_PREFIX}*",
+                count=100,
+            )
+            for key in keys:
+                data = await redis.get(key)
+                if not data:
+                    continue
+                task = json.loads(data)
+                task_id = key.decode() if isinstance(key, bytes) else key
+                task_id = task_id.removeprefix(_PATTERN_TASK_REDIS_PREFIX)
+                if task.get("status") == "running" and task_id not in _analysis_tasks:
+                    task["status"] = "failed"
+                    task["error"] = "Task orphaned by backend restart (#1234)"
+                    task["completed_at"] = datetime.now().isoformat()
+                    await redis.set(
+                        f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}",
+                        json.dumps(task, default=str),
+                        ex=_PATTERN_TASK_REDIS_TTL,
+                    )
+                    cleared += 1
+                    logger.info("Cleared orphaned Redis pattern task %s", task_id)
+            if cursor == 0:
+                break
+    except Exception as e:
+        logger.debug("Orphaned Redis task scan failed (non-fatal): %s", e)
+    return cleared
+
+
 class PatternAnalysisRequest(BaseModel):
     """Request model for pattern analysis."""
 
@@ -243,6 +295,9 @@ async def start_pattern_analysis(
                 "Auto-recovered %d stuck task(s) before starting new analysis",
                 cleaned,
             )
+
+        # Also clear orphaned Redis tasks that survived a restart (#1234)
+        await _clear_orphaned_redis_tasks()
 
         # Check if another analysis is genuinely running
         running_tasks = [

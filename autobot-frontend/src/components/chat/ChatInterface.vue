@@ -839,6 +839,7 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
 
 // Auto-speak last assistant message when voice output is enabled (#928)
 // Skip when voice conversation is active — it handles its own TTS (#1029)
+// Skip during streaming to avoid calling /api/voice/synthesize on every chunk
 watch(
   () => {
     const session = store.sessions.find(s => s.id === store.currentSessionId)
@@ -847,6 +848,7 @@ watch(
     return last?.sender === 'assistant' ? last.content : null
   },
   (newContent, oldContent) => {
+    if (store.isTyping) return  // Wait for streaming to finish
     if (newContent && newContent !== oldContent && !voiceConversation.isActive.value) {
       speak(newContent)
     }

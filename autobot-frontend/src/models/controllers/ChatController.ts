@@ -269,6 +269,10 @@ export class ChatController {
               if (backendMessageId && messageIdMap.has(backendMessageId)) {
                 // Existing message - update it (Agent Zero: always replace)
                 frontendMessageId = messageIdMap.get(backendMessageId)!
+              } else if (!backendMessageId && fallbackMessageId) {
+                // No backend ID but we already have a fallback — reuse it
+                // Prevents duplicate messages when chunks lack message_id
+                frontendMessageId = fallbackMessageId
               } else {
                 // New message - create it
                 const sender = data.type === 'terminal_output' ? 'system' : 'assistant'
