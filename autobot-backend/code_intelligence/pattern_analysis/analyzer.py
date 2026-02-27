@@ -18,9 +18,15 @@ from .complexity_analyzer import ComplexityAnalyzer
 from .refactoring_generator import RefactoringSuggestionGenerator
 from .regex_detector import RegexPatternDetector
 from .storage import store_patterns_batch
-from .types import (CodeLocation, CodePattern, DuplicatePattern,
-                    ModularizationSuggestion, PatternAnalysisReport,
-                    PatternSeverity, PatternType)
+from .types import (
+    CodeLocation,
+    CodePattern,
+    DuplicatePattern,
+    ModularizationSuggestion,
+    PatternAnalysisReport,
+    PatternSeverity,
+    PatternType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +208,9 @@ class CodePatternAnalyzer:
         start_time = time.time()
 
         report = PatternAnalysisReport(scan_path=directory)
-        file_count, line_count = self._count_files_and_lines(directory)
+        file_count, line_count = await asyncio.to_thread(
+            self._count_files_and_lines, directory
+        )
         report.total_files_analyzed = file_count
         report.total_lines_analyzed = line_count
 
