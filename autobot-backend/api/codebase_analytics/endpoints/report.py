@@ -2048,7 +2048,7 @@ async def generate_analysis_report(
     Returns:
         Markdown formatted report as plain text
     """
-    problems = _fetch_problems_from_chromadb()
+    problems = await asyncio.to_thread(_fetch_problems_from_chromadb)
     analyses = await _resolve_analyses(
         quick=quick,
         include_bug_prediction=include_bug_prediction,

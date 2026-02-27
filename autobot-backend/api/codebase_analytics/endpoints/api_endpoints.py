@@ -52,7 +52,7 @@ async def get_api_endpoints() -> JSONResponse:
     Returns list of all FastAPI route definitions found in the backend.
     """
     checker = _get_checker()
-    endpoints = checker.get_backend_endpoints()
+    endpoints = await asyncio.to_thread(checker.get_backend_endpoints)
 
     return JSONResponse(
         {
@@ -76,7 +76,7 @@ async def get_frontend_api_calls() -> JSONResponse:
     Returns list of all API calls found in frontend TypeScript/Vue files.
     """
     checker = _get_checker()
-    calls = checker.get_frontend_calls()
+    calls = await asyncio.to_thread(checker.get_frontend_calls)
 
     return JSONResponse(
         {
@@ -106,7 +106,7 @@ async def get_endpoint_coverage() -> JSONResponse:
     - Coverage percentage
     """
     checker = _get_checker()
-    analysis = checker.run_full_analysis()
+    analysis = await asyncio.to_thread(checker.run_full_analysis)
 
     # Cache the result (thread-safe, Issue #559)
     async with _analysis_cache_lock:
@@ -142,7 +142,7 @@ async def get_endpoint_analysis_full() -> JSONResponse:
     Use /endpoint-coverage for a summary only.
     """
     checker = _get_checker()
-    analysis = checker.run_full_analysis()
+    analysis = await asyncio.to_thread(checker.run_full_analysis)
 
     # Cache the result (thread-safe, Issue #559)
     async with _analysis_cache_lock:
@@ -175,7 +175,7 @@ async def get_orphaned_endpoints() -> JSONResponse:
             analysis = _analysis_cache["latest"]
         else:
             checker = _get_checker()
-            analysis = checker.run_full_analysis()
+            analysis = await asyncio.to_thread(checker.run_full_analysis)
             _analysis_cache["latest"] = analysis
 
     return JSONResponse(
@@ -206,7 +206,7 @@ async def get_missing_endpoints() -> JSONResponse:
             analysis = _analysis_cache["latest"]
         else:
             checker = _get_checker()
-            analysis = checker.run_full_analysis()
+            analysis = await asyncio.to_thread(checker.run_full_analysis)
             _analysis_cache["latest"] = analysis
 
     return JSONResponse(
@@ -236,7 +236,7 @@ async def get_used_endpoints() -> JSONResponse:
             analysis = _analysis_cache["latest"]
         else:
             checker = _get_checker()
-            analysis = checker.run_full_analysis()
+            analysis = await asyncio.to_thread(checker.run_full_analysis)
             _analysis_cache["latest"] = analysis
 
     # Sort by call count (most used first)

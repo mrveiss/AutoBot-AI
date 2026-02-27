@@ -468,7 +468,7 @@ async def get_dependencies():
     - circular_dependencies: Detected circular import issues
     - external_dependencies: Third-party package dependencies
     """
-    code_collection = get_code_collection()
+    code_collection = await asyncio.to_thread(get_code_collection)
     modules: Dict[str, Dict] = {}
     import_relationships: List[Dict] = []
     external_deps: Dict[str, int] = {}

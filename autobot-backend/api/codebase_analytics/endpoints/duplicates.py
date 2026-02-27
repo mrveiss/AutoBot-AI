@@ -298,7 +298,7 @@ def _check_duplicate_cache(refresh: bool) -> Optional[JSONResponse]:
     return None
 
 
-def _handle_detection_failure(error: Exception) -> JSONResponse:
+async def _handle_detection_failure(error: Exception) -> JSONResponse:
     """
     Handle duplicate detection failure with fallback.
 
@@ -312,7 +312,7 @@ def _handle_detection_failure(error: Exception) -> JSONResponse:
     """
     logger.error("Duplicate detection failed: %s", error, exc_info=True)
 
-    fallback = _get_chromadb_fallback(str(error))
+    fallback = await asyncio.to_thread(_get_chromadb_fallback, str(error))
     if fallback:
         return JSONResponse(fallback)
 
@@ -373,7 +373,7 @@ async def get_duplicate_code(
 
     except Exception as e:
         # Issue #620: Use helper for error handling
-        return _handle_detection_failure(e)
+        return await _handle_detection_failure(e)
 
 
 def _make_relative_path(path: str, project_root: str) -> str:
