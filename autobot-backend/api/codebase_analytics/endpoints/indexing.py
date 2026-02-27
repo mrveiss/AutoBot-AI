@@ -197,63 +197,52 @@ async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
     """
     global _current_indexing_task_id
 
-    logger.info("✅ ENTRY: index_codebase endpoint called!")
-
-    # Resolve the path first (may be async for source_id lookup)
     path_or_sync = await _validate_and_get_path(request)
 
-    # Auto-sync: source clone directory missing → trigger sync (which auto-indexes)
+    # Auto-sync: source clone directory missing → trigger sync
     if isinstance(path_or_sync, _SyncNeeded):
         source = path_or_sync.source
         from .sources import _do_sync
 
         asyncio.create_task(_do_sync(source))
-        logger.info("🔄 Source %s needs sync before indexing — sync started", source.id)
+        logger.info("Source %s needs sync before indexing", source.id)
         return JSONResponse(
             {
                 "task_id": None,
                 "status": "syncing",
                 "message": (
                     "Source repository not yet cloned. "
-                    "Sync started — indexing will begin automatically after sync."
+                    "Sync started — indexing will begin "
+                    "automatically after sync."
                 ),
             }
         )
 
     root_path = path_or_sync
     source_id = request.source_id if request else None
-    logger.info("📁 Indexing path = %s", root_path)
+    logger.info("Indexing path: %s", root_path)
 
     async with _tasks_lock:
-        # Check for existing task — queue if busy (#1133)
         queued_response = _check_existing_task_and_queue(source_id, root_path)
         if queued_response:
             return queued_response
 
-        # Generate unique task ID and start task
         task_id = str(uuid.uuid4())
-        logger.info("🆔 Generated task_id = %s", task_id)
-
         _current_indexing_task_id = task_id
-
-        logger.info("🔄 About to create_task")
         task = asyncio.create_task(_run_indexing_subprocess(task_id, root_path))
-        logger.info("✅ Task created: %s", task)
         _active_tasks[task_id] = task
-        logger.info("💾 Task stored in _active_tasks")
 
-    # Add cleanup callback
     task.add_done_callback(_create_cleanup_callback(task_id))
-    logger.info("🧹 Cleanup callback added")
+    logger.info("Indexing task %s started for %s", task_id, root_path)
 
-    logger.info("📤 About to return JSONResponse")
     return JSONResponse(
         {
             "task_id": task_id,
             "status": "started",
             "message": (
                 "Indexing started in background. Poll "
-                "/api/analytics/codebase/index/status/{task_id} for progress."
+                "/api/analytics/codebase/index/status/"
+                f"{task_id} for progress."
             ),
         }
     )
