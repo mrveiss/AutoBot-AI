@@ -31,16 +31,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+    - name: Install Python 3.10 via deadsnakes PPA
+      run: |
+        if ! command -v python3.10 &> /dev/null; then
+          sudo add-apt-repository -y ppa:deadsnakes/ppa
+          sudo apt-get update -y
+          sudo apt-get install -y python3.10 python3.10-venv python3.10-dev
+        fi
 
     - name: Set up Python virtual environment
       run: |
         pip cache purge 2>/dev/null || true
         rm -rf .venv 2>/dev/null || true
-        python3 -m venv .venv
+        python3.10 -m venv .venv
         source .venv/bin/activate
         echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
         echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
@@ -49,13 +52,13 @@ jobs:
       continue-on-error: true
       run: |
         source .venv/bin/activate
-        python3 -m pip install --upgrade pip setuptools wheel
-        python3 -m pip install pip-audit bandit safety
+        python -m pip install --upgrade pip setuptools wheel
+        python -m pip install pip-audit bandit safety
         # Use CI-safe requirements (excludes vllm and other GPU-dependent packages)
-        python3 -m pip install -r requirements-ci.txt --prefer-binary || {
+        python -m pip install -r requirements-ci.txt --prefer-binary || {
           echo "⚠️ Some dependencies failed to install - continuing with available tools"
         }
-        python3 -m pip install --no-deps llama-index-readers-file==0.4.11
+        python -m pip install --no-deps llama-index-readers-file==0.4.11
 
     - name: Python Dependency Audit
       run: |
@@ -112,16 +115,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+    - name: Install Python 3.10 via deadsnakes PPA
+      run: |
+        if ! command -v python3.10 &> /dev/null; then
+          sudo add-apt-repository -y ppa:deadsnakes/ppa
+          sudo apt-get update -y
+          sudo apt-get install -y python3.10 python3.10-venv python3.10-dev
+        fi
 
     - name: Set up Python virtual environment
       run: |
         pip cache purge 2>/dev/null || true
         rm -rf .venv 2>/dev/null || true
-        python3 -m venv .venv
+        python3.10 -m venv .venv
         source .venv/bin/activate
         echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
         echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
@@ -129,8 +135,8 @@ jobs:
     - name: Install SAST tools
       run: |
         source .venv/bin/activate
-        python3 -m pip install --upgrade pip
-        python3 -m pip install bandit semgrep flake8 pylint
+        python -m pip install --upgrade pip
+        python -m pip install bandit semgrep flake8 pylint
 
     - name: Bandit Security Linter
       run: |

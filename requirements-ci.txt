@@ -1,5 +1,5 @@
 # CI requirements — pinned to exact production versions (Issue #1211)
-# Python version: 3.10 (must match production)
+# Python version: 3.10 (installed via deadsnakes PPA on self-hosted runner)
 #
 # NOTE: llama-index-readers-file is installed separately with --no-deps
 # in the workflow because its metadata requires pypdf<6 but production

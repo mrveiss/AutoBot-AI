@@ -33,16 +33,19 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+    - name: Install Python 3.10 via deadsnakes PPA
+      run: |
+        if ! command -v python3.10 &> /dev/null; then
+          sudo add-apt-repository -y ppa:deadsnakes/ppa
+          sudo apt-get update -y
+          sudo apt-get install -y python3.10 python3.10-venv python3.10-dev
+        fi
 
     - name: Set up Python virtual environment
       run: |
         pip cache purge 2>/dev/null || true
         rm -rf .venv 2>/dev/null || true
-        python3 -m venv .venv
+        python3.10 -m venv .venv
         source .venv/bin/activate
         echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
         echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
@@ -50,8 +53,8 @@ jobs:
     - name: Install Python dependencies
       run: |
         source .venv/bin/activate
-        python3 -m pip install --upgrade pip
-        python3 -m pip install aiohttp psutil requests pyyaml
+        python -m pip install --upgrade pip
+        python -m pip install aiohttp psutil requests pyyaml
 
     - name: Create necessary directories and config files
       run: |

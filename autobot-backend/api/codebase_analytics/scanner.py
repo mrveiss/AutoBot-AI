@@ -484,15 +484,15 @@ async def _count_scannable_files(root_path_obj: Path) -> Tuple[int, list]:
     Returns:
         Tuple of (scannable_file_count, all_files_list) to avoid duplicate rglob.
     """
-    logger.info("DEBUG: _count_scannable_files starting for %s", root_path_obj)
     # Run entire counting operation in thread pool (rglob + is_file checks)
     total_files, all_files = await _run_in_indexing_thread(
         _count_scannable_files_sync, root_path_obj
     )
-    logger.info(
-        "DEBUG: _count_scannable_files returned %d scannable, %d total files",
+    logger.debug(
+        "Counted %d scannable files from %d total in %s",
         total_files,
         len(all_files),
+        root_path_obj,
     )
     return total_files, all_files
 
@@ -1010,14 +1010,6 @@ async def _initialize_chromadb_collection(task_id: str, update_progress, update_
     )
 
     await _clear_redis_codebase_cache(task_id)
-
-    await update_progress(
-        operation="Preparing ChromaDB",
-        current=1,
-        total=2,
-        current_file="Connecting to ChromaDB...",
-        phase="init",
-    )
 
     await update_progress(
         operation="Recreating ChromaDB collection",
@@ -2597,30 +2589,19 @@ async def _gather_scannable_files(
     total_files = 0
     all_files = []
 
-    logger.info("DEBUG: scan_codebase starting for %s", root_path_obj)
-
     if progress_callback:
-        logger.info("DEBUG: about to call _count_scannable_files")
         total_files, all_files = await _count_scannable_files(root_path_obj)
-        logger.info(
-            "DEBUG: Got %d scannable files from %d total files",
-            total_files,
-            len(all_files),
-        )
-        logger.info("DEBUG: About to call progress_callback for scan init")
         await progress_callback(
             operation="Scanning files",
             current=0,
             total=total_files,
             current_file="Initializing...",
         )
-        logger.info("DEBUG: progress_callback returned, about to iterate")
     else:
-        logger.info("DEBUG: No progress callback, doing direct rglob")
         all_files = await _run_in_indexing_thread(
             lambda: list(root_path_obj.rglob("*"))
         )
-        logger.info("DEBUG: Direct rglob returned %d files", len(all_files))
+        logger.debug("Direct rglob returned %d files", len(all_files))
 
     return total_files, all_files
 
