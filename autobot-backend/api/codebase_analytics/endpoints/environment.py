@@ -416,7 +416,7 @@ async def get_environment_analysis(
     pattern_list = [p.strip() for p in patterns.split(",")]
 
     try:
-        analyzer = _get_environment_analyzer()
+        analyzer = await asyncio.to_thread(_get_environment_analyzer)
         if not analyzer:
             return JSONResponse(
                 _build_error_response(
@@ -477,7 +477,7 @@ async def get_env_recommendations(
 async def _fetch_live_env_recommendations(path: str) -> JSONResponse:
     """Helper for get_env_recommendations. Ref: #1088."""
     try:
-        analyzer = _get_environment_analyzer()
+        analyzer = await asyncio.to_thread(_get_environment_analyzer)
         if not analyzer:
             return JSONResponse(
                 {
