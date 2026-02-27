@@ -98,6 +98,11 @@ _SKIP_DIRS: frozenset = frozenset(
 )
 
 
+# Issue #1217: Truncate code blocks during extraction to limit memory
+# Full code is rarely needed — 500 chars is enough for pattern matching
+_MAX_CODE_BLOCK_CHARS = 500
+
+
 class BasePatternExtractor(ABC):
     """Abstract base class for language-specific pattern extractors."""
 
@@ -144,12 +149,19 @@ class BasePatternExtractor(ABC):
         return ""
 
     def _get_code_block(self, start_line: int, end_line: int) -> str:
-        """Get code block from start to end line (1-indexed, inclusive)."""
+        """Get code block from start to end line (1-indexed, inclusive).
+
+        Issue #1217: Truncates to _MAX_CODE_BLOCK_CHARS to prevent OOM
+        when extracting patterns from large codebases.
+        """
         if start_line < 1:
             start_line = 1
         if end_line > len(self.lines):
             end_line = len(self.lines)
-        return "\n".join(self.lines[start_line - 1 : end_line])
+        code = "\n".join(self.lines[start_line - 1 : end_line])
+        if len(code) > _MAX_CODE_BLOCK_CHARS:
+            return code[:_MAX_CODE_BLOCK_CHARS]
+        return code
 
     def _create_location(
         self, line_start: int, line_end: int = None

@@ -73,6 +73,10 @@ PATTERNS_COLLECTION = "cross_language_patterns"
 # Sample the most significant patterns (DTOs, APIs, validators) first
 MAX_PATTERNS_FOR_EMBEDDING = 500
 
+# Issue #1217: Cap total patterns extracted per language to prevent OOM
+# on large codebases (3500+ files can produce 12K+ patterns at ~2KB each)
+MAX_PATTERNS_PER_LANGUAGE = 5000
+
 # Issue #659: Batch embedding configuration for parallel processing
 # Concurrent requests with semaphore limiting provides 5-10x speedup
 EMBEDDING_BATCH_CONCURRENCY = 10  # Max concurrent embedding requests
@@ -364,34 +368,70 @@ class CrossLanguagePatternDetector:
         typescript_files: List[Path],
         vue_files: List[Path],
     ) -> Tuple[List[Dict], List[Dict], List[Dict]]:
-        """Extract patterns from all files."""
+        """Extract patterns from all files.
+
+        Issue #1217: Caps each language at MAX_PATTERNS_PER_LANGUAGE
+        to prevent OOM on large codebases (3500+ files).
+        """
         python_patterns = []
         typescript_patterns = []
         vue_patterns = []
 
         # Extract Python patterns
         for file_path in python_files:
+            if len(python_patterns) >= MAX_PATTERNS_PER_LANGUAGE:
+                logger.info(
+                    "Python pattern cap reached (%d), " "skipping remaining files",
+                    MAX_PATTERNS_PER_LANGUAGE,
+                )
+                break
             try:
                 patterns = self.python_extractor.extract_patterns(file_path)
                 python_patterns.extend(patterns)
             except Exception as e:
-                logger.warning("Failed to extract patterns from %s: %s", file_path, e)
+                logger.warning(
+                    "Failed to extract patterns from %s: %s",
+                    file_path,
+                    e,
+                )
 
         # Extract TypeScript patterns
+        ts_cap = MAX_PATTERNS_PER_LANGUAGE
         for file_path in typescript_files:
+            if len(typescript_patterns) >= ts_cap:
+                logger.info(
+                    "TypeScript pattern cap reached (%d), " "skipping remaining files",
+                    ts_cap,
+                )
+                break
             try:
                 patterns = self.typescript_extractor.extract_patterns(file_path)
                 typescript_patterns.extend(patterns)
             except Exception as e:
-                logger.warning("Failed to extract patterns from %s: %s", file_path, e)
+                logger.warning(
+                    "Failed to extract patterns from %s: %s",
+                    file_path,
+                    e,
+                )
 
         # Extract Vue patterns (using TypeScript extractor)
+        # Share cap with TypeScript — they're the same language family
+        vue_remaining = ts_cap - len(typescript_patterns)
         for file_path in vue_files:
+            if len(vue_patterns) >= max(vue_remaining, 0):
+                logger.info(
+                    "Vue pattern cap reached, " "skipping remaining files",
+                )
+                break
             try:
                 patterns = self.typescript_extractor.extract_patterns(file_path)
                 vue_patterns.extend(patterns)
             except Exception as e:
-                logger.warning("Failed to extract patterns from %s: %s", file_path, e)
+                logger.warning(
+                    "Failed to extract patterns from %s: %s",
+                    file_path,
+                    e,
+                )
 
         return python_patterns, typescript_patterns, vue_patterns
 
