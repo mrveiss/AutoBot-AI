@@ -14,15 +14,21 @@
  *   /updates/code-sync - Code version sync across fleet (Issue #741)
  */
 
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCodeSync } from '@/composables/useCodeSync'
+import { useSystemUpdates } from '@/composables/useSystemUpdates'
 import SystemUpdatesTab from '@/views/SystemUpdatesTab.vue'
 import CodeSyncView from '@/views/CodeSyncView.vue'
 
 const route = useRoute()
 const router = useRouter()
 const codeSync = useCodeSync()
+const systemUpdates = useSystemUpdates()
+
+onMounted(() => {
+  systemUpdates.fetchSummary()
+})
 
 // Tab definitions
 type UpdatesTab = 'system' | 'code-sync'
@@ -68,7 +74,14 @@ function navigateToTab(tab: UpdatesTab): void {
           ]"
         >
           {{ tab.label }}
-          <!-- Code sync outdated badge -->
+          <!-- System updates badge (orange) -->
+          <span
+            v-if="tab.id === 'system' && systemUpdates.updateCount.value > 0"
+            class="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1 text-xs font-bold text-white bg-orange-500 rounded-full"
+          >
+            {{ systemUpdates.updateCount.value }}
+          </span>
+          <!-- Code sync outdated badge (amber) -->
           <span
             v-if="tab.id === 'code-sync' && codeSync.outdatedCount.value > 0"
             class="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-yellow-500 rounded-full"

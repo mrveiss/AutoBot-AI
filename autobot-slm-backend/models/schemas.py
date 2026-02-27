@@ -545,6 +545,60 @@ class FleetUpdateSummaryResponse(BaseModel):
     nodes_needing_updates: int = 0
 
 
+class UpdateDiscoverRequest(BaseModel):
+    """Request to discover available system updates on fleet nodes."""
+
+    node_ids: Optional[List[str]] = None
+    role: Optional[str] = None
+
+
+class UpdateDiscoverResponse(BaseModel):
+    """Response from triggering update discovery."""
+
+    success: bool
+    message: str
+    job_id: str
+
+
+class UpdateDiscoverStatus(BaseModel):
+    """Status of an update discovery job."""
+
+    job_id: str
+    status: str
+    progress: int = 0
+    message: Optional[str] = None
+    nodes_checked: int = 0
+    total_nodes: int = 0
+    packages_found: int = 0
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class UpdateSummaryResponse(BaseModel):
+    """Lightweight summary for sidebar badge polling."""
+
+    system_update_count: int = 0
+    security_update_count: int = 0
+    nodes_with_updates: int = 0
+    last_checked: Optional[datetime] = None
+
+
+class UpdatePackagesResponse(BaseModel):
+    """Paginated list of discovered packages."""
+
+    packages: List[UpdateInfoResponse]
+    total: int
+    by_node: Dict[str, int] = Field(default_factory=dict)
+
+
+class UpdateApplyAllRequest(BaseModel):
+    """Request to upgrade all packages on a node."""
+
+    node_id: str
+    upgrade_all: bool = False
+    update_ids: List[str] = Field(default_factory=list)
+
+
 # =============================================================================
 # Replication Schemas
 # =============================================================================

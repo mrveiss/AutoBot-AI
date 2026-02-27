@@ -17,6 +17,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { useCodeSync } from '@/composables/useCodeSync'
+import { useSystemUpdates } from '@/composables/useSystemUpdates'
 import { useHighContrast } from '@/composables/useAccessibility'
 
 const route = useRoute()
@@ -24,11 +25,25 @@ const router = useRouter()
 const fleetStore = useFleetStore()
 const authStore = useAuthStore()
 const codeSync = useCodeSync()
+const systemUpdates = useSystemUpdates()
 const highContrast = useHighContrast()
 
-// Polling interval for code sync status (1 minute)
-const CODE_SYNC_POLL_INTERVAL = 60000
-let codeSyncPollTimer: ReturnType<typeof setInterval> | null = null
+// Polling interval for code sync + system updates status (1 minute)
+const STATUS_POLL_INTERVAL = 60000
+let statusPollTimer: ReturnType<typeof setInterval> | null = null
+
+// Combined badge count for sidebar
+const combinedUpdateCount = computed(() =>
+  (systemUpdates.updateCount.value || 0) +
+  (codeSync.outdatedCount.value || 0),
+)
+
+const hasCombinedUpdates = computed(() => combinedUpdateCount.value > 0)
+
+// Badge color: orange when system updates present, amber when only code sync
+const badgeColor = computed(() =>
+  systemUpdates.updateCount.value > 0 ? '#f97316' : '#f59e0b',
+)
 
 const navItems = [
   { name: 'Fleet Overview', path: '/fleet', icon: 'grid' },
@@ -128,18 +143,25 @@ async function refreshCodeSyncStatus(): Promise<void> {
   await codeSync.fetchStatus()
 }
 
+async function refreshStatusPolling(): Promise<void> {
+  await Promise.all([
+    refreshCodeSyncStatus(),
+    systemUpdates.fetchSummary(),
+  ])
+}
+
 onMounted(async () => {
   if (!authStore.isAuthenticated) return
-  // Fetch initial code sync status
-  await refreshCodeSyncStatus()
-  // Set up polling for code sync status
-  codeSyncPollTimer = setInterval(refreshCodeSyncStatus, CODE_SYNC_POLL_INTERVAL)
+  // Fetch initial status for both code sync and system updates
+  await refreshStatusPolling()
+  // Set up combined polling
+  statusPollTimer = setInterval(refreshStatusPolling, STATUS_POLL_INTERVAL)
 })
 
 onUnmounted(() => {
-  if (codeSyncPollTimer) {
-    clearInterval(codeSyncPollTimer)
-    codeSyncPollTimer = null
+  if (statusPollTimer) {
+    clearInterval(statusPollTimer)
+    statusPollTimer = null
   }
 })
 </script>
@@ -285,14 +307,15 @@ onUnmounted(() => {
               </svg>
             </span>
             <span class="flex-1 text-left">{{ item.name }}</span>
-            <!-- Issue #741: Badge for Code Sync updates -->
+            <!-- Combined badge: system updates + code sync -->
             <span
-              v-if="item.showBadge && codeSync.hasOutdatedNodes.value"
+              v-if="item.showBadge && hasCombinedUpdates"
               class="nav-badge"
-              :aria-label="`${codeSync.outdatedCount.value} nodes need updates`"
+              :style="{ background: badgeColor }"
+              :aria-label="`${combinedUpdateCount} updates available`"
               role="status"
             >
-              {{ codeSync.outdatedCount.value }}
+              {{ combinedUpdateCount }}
             </span>
           </button>
         </li>
@@ -343,12 +366,11 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* Issue #741: Navigation badge for Code Sync updates */
+/* Combined navigation badge for Updates (system + code sync) */
 .nav-badge {
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  background: #f59e0b; /* amber-500 / warning */
   color: white;
   border-radius: 9px;
   font-size: 11px;
