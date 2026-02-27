@@ -83,6 +83,7 @@
             :current-session-id="store.currentSessionId"
             :novnc-url="novncUrl"
             @tool-call-detected="handleToolCallDetected"
+            @vision-send-to-chat="handleVisionSendToChat"
           />
         </UnifiedLoadingView>
       </div>
@@ -487,6 +488,73 @@ const handleToolCallDetected = async (toolCall: any) => {
 
   // Show approval dialog
   showCommandDialog.value = true
+}
+
+// Issue #1242: Handle vision analysis results being sent to chat
+const handleVisionSendToChat = (payload: {
+  filename: string
+  intent: string
+  question?: string
+  result: {
+    confidence: number
+    processing_time: number
+    device_used?: string
+    result_data: Record<string, unknown>
+  }
+}) => {
+  logger.debug('Vision analysis sent to chat:', payload.filename)
+
+  const intentLabels: Record<string, string> = {
+    analysis: 'General Analysis',
+    visual_qa: 'Visual Q&A',
+    automation: 'Automation Detection',
+    content_generation: 'Content Generation',
+  }
+  const intentLabel = intentLabels[payload.intent] || payload.intent
+
+  // Add user message
+  store.addMessage({
+    content: `Analyzed image: **${payload.filename}** (${intentLabel})${payload.question ? `\nQuestion: ${payload.question}` : ''}`,
+    sender: 'user',
+    status: 'sent',
+    type: 'message',
+  })
+
+  // Build formatted assistant response
+  const rd = payload.result.result_data as Record<string, unknown>
+  const parts: string[] = []
+
+  parts.push(`**Image Analysis Results** — ${(payload.result.confidence * 100).toFixed(1)}% confidence, ${payload.result.processing_time.toFixed(2)}s`)
+
+  if (rd.description) {
+    parts.push(`\n**Description:** ${rd.description}`)
+  }
+  if (Array.isArray(rd.labels) && rd.labels.length > 0) {
+    parts.push(`\n**Labels:** ${rd.labels.join(', ')}`)
+  }
+  if (Array.isArray(rd.objects) && rd.objects.length > 0) {
+    const objLines = (rd.objects as Array<{ name?: string; label?: string; confidence?: number }>)
+      .map(o => {
+        const name = o.name || o.label || 'Unknown'
+        const conf = o.confidence
+          ? ` (${(o.confidence * 100).toFixed(0)}%)`
+          : ''
+        return `- ${name}${conf}`
+      })
+      .join('\n')
+    parts.push(`\n**Detected Objects:**\n${objLines}`)
+  }
+
+  if (payload.result.device_used) {
+    parts.push(`\n*Processed on: ${payload.result.device_used}*`)
+  }
+
+  store.addMessage({
+    content: parts.join('\n'),
+    sender: 'assistant',
+    status: 'sent',
+    type: 'message',
+  })
 }
 
 const onCommandApproved = async (commandData: any) => {

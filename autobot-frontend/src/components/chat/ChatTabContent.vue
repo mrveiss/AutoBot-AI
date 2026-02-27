@@ -5,7 +5,7 @@
       <div class="flex-1">
         <ChatMessages @tool-call-detected="handleToolCallDetected" />
       </div>
-      <ChatInput class="flex-shrink-0" />
+      <ChatInput class="flex-shrink-0" @vision-send-to-chat="(p: any) => emit('vision-send-to-chat', p)" />
     </div>
 
     <!-- Files Tab Content -->
@@ -212,6 +212,17 @@ watch(() => props.activeTab, (newTab) => {
 const emit = defineEmits<{
   'tool-call-detected': [toolCall: ToolCall]
   'open-secrets-manager': []  // Issue #715: Open secrets manager to add hosts
+  'vision-send-to-chat': [payload: {
+    filename: string
+    intent: string
+    question?: string
+    result: {
+      confidence: number
+      processing_time: number
+      device_used?: string
+      result_data: Record<string, unknown>
+    }
+  }]  // Issue #1242
 }>()
 
 // Handler for tool call detection from ChatMessages
