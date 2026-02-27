@@ -447,9 +447,13 @@
           />
         </section>
 
-        <!-- GUI Automation Section -->
+        <!-- GUI Automation Section (#1242) -->
         <section v-if="activeSection === 'gui-automation'" class="section-gui-automation">
-          <VisionAutomationPage />
+          <GUIAutomationControls
+            :opportunities="guiAutomationOpportunities"
+            :loading="guiAutomationLoading"
+            @refresh="loadGuiAutomationOpportunities"
+          />
         </section>
 
         <!-- Agents Section -->
@@ -530,7 +534,11 @@ import WorkflowTemplateGallery from '@/components/workflow/WorkflowTemplateGalle
 import WorkflowRunner from '@/components/workflow/WorkflowRunner.vue';
 import WorkflowHistory from '@/components/workflow/WorkflowHistory.vue';
 import OrchestrationVisualizer from '@/components/workflow/OrchestrationVisualizer.vue';
-import VisionAutomationPage from '@/components/vision/VisionAutomationPage.vue';
+import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue';
+import {
+  visionMultimodalApiClient,
+  type AutomationOpportunity,
+} from '@/utils/VisionMultimodalApiClient';
 
 const logger = createLogger('WorkflowBuilderView');
 const { showToast } = useToast();
@@ -596,6 +604,24 @@ const naturalLanguageInput = ref('');
 const requireApprovalBeforeRun = ref(true);
 const selectedStrategy = ref<string>('');
 const sessionId = ref(`session_${Date.now()}`);
+
+// GUI Automation state (#1242)
+const guiAutomationOpportunities = ref<AutomationOpportunity[]>([]);
+const guiAutomationLoading = ref(false);
+
+async function loadGuiAutomationOpportunities(): Promise<void> {
+  guiAutomationLoading.value = true;
+  try {
+    const res = await visionMultimodalApiClient.getAutomationOpportunities();
+    if (res.success && res.data) {
+      guiAutomationOpportunities.value = res.data.opportunities || [];
+    }
+  } catch (e) {
+    logger.warn('Failed to load automation opportunities:', e);
+  } finally {
+    guiAutomationLoading.value = false;
+  }
+}
 
 // Computed
 const hasData = computed(
