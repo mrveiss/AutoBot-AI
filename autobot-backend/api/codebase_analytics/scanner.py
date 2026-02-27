@@ -891,16 +891,8 @@ async def _clear_redis_codebase_cache(task_id: str) -> None:
                code blocked BEFORE reaching any logging statements.
     """
     try:
-        logger.info("[Task %s] Getting async Redis connection...", task_id)
         redis_client = await get_redis_connection_async()
-        logger.info(
-            "[Task %s] Redis client: %s",
-            task_id,
-            type(redis_client) if redis_client else None,
-        )
         if redis_client:
-            # Native async Redis scan - no thread pool dependency
-            logger.info("[Task %s] Starting async scan for codebase:* keys...", task_id)
             keys_to_delete = []
             cursor = 0
             while True:
@@ -910,26 +902,33 @@ async def _clear_redis_codebase_cache(task_id: str) -> None:
                 keys_to_delete.extend(keys)
                 if cursor == 0:
                     break
-            logger.info(
-                "[Task %s] Async scan completed, found %d keys",
-                task_id,
-                len(keys_to_delete),
-            )
+            # Issue #1220: Preserve file hashes in incremental mode
+            if INCREMENTAL_INDEXING_ENABLED:
+                keys_to_delete = [
+                    k
+                    for k in keys_to_delete
+                    if not k.decode("utf-8", errors="ignore").startswith(
+                        FILE_HASH_REDIS_PREFIX
+                    )
+                ]
             if keys_to_delete:
-                # Native async delete
                 await redis_client.delete(*keys_to_delete)
                 logger.info(
-                    "[Task %s] Cleared %s Redis cache entries",
+                    "[Task %s] Cleared %d Redis cache entries",
                     task_id,
                     len(keys_to_delete),
                 )
         else:
             logger.info(
-                "[Task %s] No Redis client available, skipping cache clear", task_id
+                "[Task %s] No Redis client, skipping cache clear",
+                task_id,
             )
     except Exception as e:
         logger.error(
-            "[Task %s] Error clearing Redis cache: %s", task_id, e, exc_info=True
+            "[Task %s] Error clearing Redis cache: %s",
+            task_id,
+            e,
+            exc_info=True,
         )
 
 
@@ -999,7 +998,12 @@ async def _recreate_chromadb_collection(task_id: str):
 
 
 async def _initialize_chromadb_collection(task_id: str, update_progress, update_phase):
-    """Initialize and clear ChromaDB collection and Redis cache (Issue #281, #398: refactored)."""
+    """Initialize ChromaDB collection and Redis cache.
+
+    Issue #281, #398: refactored.
+    Issue #1220: In incremental mode, preserves existing collection
+    and file hash keys so unchanged files can be skipped.
+    """
     update_phase("init", "running")
     await update_progress(
         operation="Preparing storage",
@@ -1011,18 +1015,31 @@ async def _initialize_chromadb_collection(task_id: str, update_progress, update_
 
     await _clear_redis_codebase_cache(task_id)
 
-    await update_progress(
-        operation="Recreating ChromaDB collection",
-        current=1,
-        total=2,
-        current_file="Dropping and recreating collection...",
-        phase="init",
-    )
-
-    code_collection = await _recreate_chromadb_collection(task_id)
-    if not code_collection:
-        # Fallback: try getting existing collection if recreate failed
+    if INCREMENTAL_INDEXING_ENABLED:
+        # Keep existing collection — upsert will update changed files
+        await update_progress(
+            operation="Connecting to ChromaDB",
+            current=1,
+            total=2,
+            current_file="Incremental mode — keeping existing data...",
+            phase="init",
+        )
         code_collection = await get_code_collection_async()
+        logger.info(
+            "[Task %s] Incremental mode: reusing existing collection",
+            task_id,
+        )
+    else:
+        await update_progress(
+            operation="Recreating ChromaDB collection",
+            current=1,
+            total=2,
+            current_file="Dropping and recreating collection...",
+            phase="init",
+        )
+        code_collection = await _recreate_chromadb_collection(task_id)
+        if not code_collection:
+            code_collection = await get_code_collection_async()
 
     return code_collection
 
@@ -1253,15 +1270,7 @@ async def _store_single_batch(
     update_stats,
     batch_embeddings: Optional[List[List[float]]] = None,
 ) -> int:
-    """
-    Store a single batch to ChromaDB.
-
-    Issue #398: Extracted from _store_batches_to_chromadb to reduce method length.
-    Issue #660: Added optional batch_embeddings for pre-computed embeddings.
-
-    Returns:
-        Number of items stored in this batch.
-    """
+    """Store a single batch to ChromaDB (Issue #398, #660). Returns items stored."""
     end_idx = min(start_idx + batch_size, len(batch_ids))
     batch_slice_ids = batch_ids[start_idx:end_idx]
     batch_slice_docs = batch_documents[start_idx:end_idx]
@@ -2655,9 +2664,6 @@ async def scan_codebase(
         )
 
         # Process all files
-        logger.info(
-            "DEBUG: Starting _iterate_and_process_files with %d files", len(all_files)
-        )
         files_processed, files_skipped = await _iterate_and_process_files(
             all_files,
             root_path_obj,
