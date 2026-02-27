@@ -7,6 +7,7 @@ Pattern Analysis API Endpoints
 Issue #208: FastAPI endpoints for code pattern detection and optimization.
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -23,6 +24,8 @@ router = APIRouter(tags=["Pattern Analysis"])
 
 # Global state for tracking analysis tasks
 _analysis_tasks: Dict[str, Dict[str, Any]] = {}
+# Lock for thread-safe access to _analysis_tasks (Issue #1221)
+_analysis_tasks_lock = asyncio.Lock()
 
 # Redis-backed task state for multi-worker visibility (#1179 pattern)
 _PATTERN_TASK_REDIS_PREFIX = "pattern_task:"
@@ -216,36 +219,40 @@ async def start_pattern_analysis(
     # Generate task ID
     task_id = str(uuid.uuid4())[:8]
 
-    # Auto-cleanup any stuck tasks before checking (Issue #647)
-    cleaned = _cleanup_stuck_tasks()
-    if cleaned > 0:
-        logger.info(
-            "Auto-recovered %d stuck task(s) before starting new analysis", cleaned
-        )
+    # Thread-safe check+insert under lock (Issue #1221)
+    async with _analysis_tasks_lock:
+        # Auto-cleanup any stuck tasks before checking (Issue #647)
+        cleaned = _cleanup_stuck_tasks()
+        if cleaned > 0:
+            logger.info(
+                "Auto-recovered %d stuck task(s) before starting new analysis",
+                cleaned,
+            )
 
-    # Check if another analysis is genuinely running
-    running_tasks = [
-        t for t in _analysis_tasks.values() if t.get("status") == "running"
-    ]
-    if running_tasks:
-        raise HTTPException(
-            status_code=409,
-            detail="Another pattern analysis is already running. Please wait or cancel it.",
-        )
+        # Check if another analysis is genuinely running
+        running_tasks = [
+            t for t in _analysis_tasks.values() if t.get("status") == "running"
+        ]
+        if running_tasks:
+            raise HTTPException(
+                status_code=409,
+                detail="Another pattern analysis is already running. "
+                "Please wait or cancel it.",
+            )
 
-    # Initialize task state
-    _analysis_tasks[task_id] = {
-        "task_id": task_id,
-        "status": "pending",
-        "progress": 0.0,
-        "started_at": None,
-        "completed_at": None,
-        "error": None,
-        "result": None,
-        "request": request.model_dump(),
-    }
+        # Initialize task state
+        _analysis_tasks[task_id] = {
+            "task_id": task_id,
+            "status": "pending",
+            "progress": 0.0,
+            "started_at": None,
+            "completed_at": None,
+            "error": None,
+            "result": None,
+            "request": request.model_dump(),
+        }
 
-    # Start background task
+    # Start background task (outside lock — doesn't modify dict)
     background_tasks.add_task(_run_analysis, task_id, request)
 
     return PatternAnalysisStatus(
@@ -326,14 +333,15 @@ async def cancel_analysis(task_id: str) -> Dict[str, str]:
     Returns:
         Confirmation message
     """
-    if task_id not in _analysis_tasks:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Analysis task {task_id} not found",
-        )
+    async with _analysis_tasks_lock:
+        if task_id not in _analysis_tasks:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Analysis task {task_id} not found",
+            )
 
-    # Remove task (note: this doesn't actually stop a running task)
-    del _analysis_tasks[task_id]
+        # Remove task (note: this doesn't actually stop a running task)
+        del _analysis_tasks[task_id]
 
     return {"message": f"Task {task_id} removed"}
 
@@ -390,33 +398,38 @@ async def clear_stuck_tasks(
     cleared = []
     now = datetime.now()
 
-    for task_id, task in list(_analysis_tasks.items()):
-        if task.get("status") == "running":
-            should_clear = force  # Force mode clears all
+    async with _analysis_tasks_lock:
+        for task_id, task in list(_analysis_tasks.items()):
+            if task.get("status") == "running":
+                should_clear = force  # Force mode clears all
 
-            if not force:
-                # Normal mode: only clear timed-out tasks
-                started_at = task.get("started_at")
-                if started_at:
-                    try:
-                        start_time = datetime.fromisoformat(started_at)
-                        elapsed = (now - start_time).total_seconds()
-                        should_clear = elapsed > TASK_TIMEOUT_SECONDS
-                    except (ValueError, TypeError):
-                        should_clear = True  # Can't parse time, assume stuck
-                else:
-                    should_clear = True  # No start time, assume stuck
+                if not force:
+                    # Normal mode: only clear timed-out tasks
+                    started_at = task.get("started_at")
+                    if started_at:
+                        try:
+                            start_time = datetime.fromisoformat(started_at)
+                            elapsed = (now - start_time).total_seconds()
+                            should_clear = elapsed > TASK_TIMEOUT_SECONDS
+                        except (ValueError, TypeError):
+                            should_clear = True
+                    else:
+                        should_clear = True
 
-            if should_clear:
-                _analysis_tasks[task_id]["status"] = "failed"
-                _analysis_tasks[task_id]["error"] = (
-                    "Task cleared manually" if force else "Task timed out or was stuck"
-                )
-                _analysis_tasks[task_id]["completed_at"] = now.isoformat()
-                cleared.append(task_id)
-                logger.info(
-                    "Cleared %s task %s", "forced" if force else "stuck", task_id
-                )
+                if should_clear:
+                    _analysis_tasks[task_id]["status"] = "failed"
+                    _analysis_tasks[task_id]["error"] = (
+                        "Task cleared manually"
+                        if force
+                        else "Task timed out or was stuck"
+                    )
+                    _analysis_tasks[task_id]["completed_at"] = now.isoformat()
+                    cleared.append(task_id)
+                    logger.info(
+                        "Cleared %s task %s",
+                        "forced" if force else "stuck",
+                        task_id,
+                    )
 
     return {
         "cleared_count": len(cleared),
@@ -436,8 +449,9 @@ async def clear_all_tasks() -> Dict[str, str]:
 
     Issue #647: Added endpoint to clear all tasks.
     """
-    count = len(_analysis_tasks)
-    _analysis_tasks.clear()
+    async with _analysis_tasks_lock:
+        count = len(_analysis_tasks)
+        _analysis_tasks.clear()
     return {"message": f"Cleared {count} task(s)"}
 
 
