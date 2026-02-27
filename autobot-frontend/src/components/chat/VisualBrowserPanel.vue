@@ -13,6 +13,11 @@
 
 import { ref, onMounted } from 'vue'
 import ApiClient from '@/utils/ApiClient'
+import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue'
+import {
+  visionMultimodalApiClient,
+  type AutomationOpportunity,
+} from '@/utils/VisionMultimodalApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('VisualBrowserPanel')
@@ -25,6 +30,32 @@ const currentUrl = ref<string | null>(null)
 const pageTitle = ref<string | null>(null)
 const isConnected = ref(false)
 const statusChecked = ref(false)
+
+// GUI Automation panel state (#1242)
+const showAutomation = ref(false)
+const automationOpportunities = ref<AutomationOpportunity[]>([])
+const automationLoading = ref(false)
+
+async function loadAutomationOpportunities(): Promise<void> {
+  automationLoading.value = true
+  try {
+    const res = await visionMultimodalApiClient.getAutomationOpportunities()
+    if (res.success && res.data) {
+      automationOpportunities.value = res.data.opportunities || []
+    }
+  } catch (e) {
+    logger.warn('Failed to load automation opportunities:', e)
+  } finally {
+    automationLoading.value = false
+  }
+}
+
+function toggleAutomation(): void {
+  showAutomation.value = !showAutomation.value
+  if (showAutomation.value && automationOpportunities.value.length === 0) {
+    loadAutomationOpportunities()
+  }
+}
 
 async function checkStatus(): Promise<void> {
   try {
@@ -190,6 +221,16 @@ onMounted(() => {
         <button @click="captureScreenshot" :disabled="!isConnected || loading" class="nav-btn screenshot-btn" title="Refresh Screenshot">
           <i class="fas fa-camera"></i>
         </button>
+
+        <!-- Automation toggle (#1242) -->
+        <button
+          @click="toggleAutomation"
+          class="nav-btn automation-toggle-btn"
+          :class="{ 'automation-active': showAutomation }"
+          title="Toggle GUI Automation Panel"
+        >
+          <i class="fas fa-robot"></i>
+        </button>
       </div>
     </div>
 
@@ -200,38 +241,52 @@ onMounted(() => {
       <button @click="error = null" class="error-dismiss"><i class="fas fa-times"></i></button>
     </div>
 
-    <!-- Viewport -->
-    <div class="browser-viewport">
-      <!-- Loading Spinner -->
-      <div v-if="loading && !screenshot" class="viewport-state">
-        <i class="fas fa-spinner fa-spin viewport-icon"></i>
-        <p class="viewport-msg">Loading…</p>
+    <!-- Content Area (viewport + optional automation panel) (#1242) -->
+    <div class="browser-content">
+      <!-- Viewport -->
+      <div class="browser-viewport">
+        <!-- Loading Spinner -->
+        <div v-if="loading && !screenshot" class="viewport-state">
+          <i class="fas fa-spinner fa-spin viewport-icon"></i>
+          <p class="viewport-msg">Loading…</p>
+        </div>
+
+        <!-- Disconnected / not started -->
+        <div v-else-if="!isConnected" class="viewport-state">
+          <i class="fas fa-globe viewport-icon viewport-icon--dim"></i>
+          <h3 class="viewport-title">Browser</h3>
+          <p class="viewport-msg">Enter a URL above and press Enter or click the search icon to start browsing.</p>
+        </div>
+
+        <!-- Screenshot Display -->
+        <img
+          v-else-if="screenshot"
+          :src="`data:image/png;base64,${screenshot}`"
+          alt="Browser screenshot"
+          class="screenshot-img"
+          :class="{ 'screenshot-img--loading': loading }"
+        />
+
+        <!-- Connected but no screenshot yet -->
+        <div v-else class="viewport-state">
+          <i class="fas fa-camera viewport-icon viewport-icon--dim"></i>
+          <p class="viewport-msg">No screenshot yet — navigate to a URL to capture the browser view.</p>
+          <button @click="captureScreenshot" class="capture-btn">
+            <i class="fas fa-camera mr-2"></i>Capture Screenshot
+          </button>
+        </div>
       </div>
 
-      <!-- Disconnected / not started -->
-      <div v-else-if="!isConnected" class="viewport-state">
-        <i class="fas fa-globe viewport-icon viewport-icon--dim"></i>
-        <h3 class="viewport-title">Browser</h3>
-        <p class="viewport-msg">Enter a URL above and press Enter or click the search icon to start browsing.</p>
-      </div>
-
-      <!-- Screenshot Display -->
-      <img
-        v-else-if="screenshot"
-        :src="`data:image/png;base64,${screenshot}`"
-        alt="Browser screenshot"
-        class="screenshot-img"
-        :class="{ 'screenshot-img--loading': loading }"
-      />
-
-      <!-- Connected but no screenshot yet -->
-      <div v-else class="viewport-state">
-        <i class="fas fa-camera viewport-icon viewport-icon--dim"></i>
-        <p class="viewport-msg">No screenshot yet — navigate to a URL to capture the browser view.</p>
-        <button @click="captureScreenshot" class="capture-btn">
-          <i class="fas fa-camera mr-2"></i>Capture Screenshot
-        </button>
-      </div>
+      <!-- GUI Automation Side Panel (#1242) -->
+      <Transition name="slide-panel">
+        <div v-if="showAutomation" class="automation-panel">
+          <GUIAutomationControls
+            :opportunities="automationOpportunities"
+            :loading="automationLoading"
+            @refresh="loadAutomationOpportunities"
+          />
+        </div>
+      </Transition>
     </div>
   </div>
 </template>
@@ -389,6 +444,12 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
+/* Automation toggle active state (#1242) */
+.automation-toggle-btn.automation-active {
+  color: var(--color-primary);
+  background: var(--color-primary-bg, rgba(59, 130, 246, 0.1));
+}
+
 /* ---- Error banner ---- */
 .error-banner {
   flex-shrink: 0;
@@ -480,5 +541,36 @@ onMounted(() => {
 
 .screenshot-img--loading {
   opacity: 0.6;
+}
+
+/* ---- Content area (viewport + automation panel) (#1242) ---- */
+.browser-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ---- Automation side panel (#1242) ---- */
+.automation-panel {
+  width: 360px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  overflow-y: auto;
+  padding: var(--spacing-3);
+}
+
+/* Panel slide transition */
+.slide-panel-enter-active,
+.slide-panel-leave-active {
+  transition: width 0.25s ease, opacity 0.25s ease;
+}
+
+.slide-panel-enter-from,
+.slide-panel-leave-to {
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
 }
 </style>
