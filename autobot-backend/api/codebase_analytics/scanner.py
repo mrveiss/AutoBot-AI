@@ -933,45 +933,69 @@ async def _clear_redis_codebase_cache(task_id: str) -> None:
         )
 
 
-async def _clear_chromadb_collection(code_collection, task_id: str) -> None:
+async def _recreate_chromadb_collection(task_id: str):
     """
-    Clear existing entries from ChromaDB collection, preserving codebase_stats.
+    Drop and recreate the ChromaDB collection for a clean re-index.
 
-    Issue #398: Extracted from _initialize_chromadb_collection.
-    Issue #540: Preserve codebase_stats during clearing.
+    Issue #1213: Replaces paginated get+delete which caused SIGSEGV on
+    large collections (>32k entries) due to SQLite C-extension limits.
+    Dropping the collection entirely avoids touching SQLite data rows.
 
-    Uses paginated get + batch delete to avoid SQLite "too many SQL
-    variables" limit that occurs when get() or delete() exceeds ~10k IDs.
+    Returns:
+        The freshly created AsyncChromaCollection, or None on failure.
     """
+    from utils.chromadb_client import get_async_chromadb_client
+
+    chroma_path = str(Path(__file__).parent.parent.parent.parent / "data" / "chromadb")
+    collection_name = "autobot_code"
+    collection_meta = {
+        "description": (
+            "Codebase analytics: functions, classes, " "problems, duplicates"
+        )
+    }
+
     try:
-        total_count = await code_collection.count()
-        if total_count == 0:
-            return
+        async_client = await get_async_chromadb_client(
+            db_path=chroma_path,
+            allow_reset=False,
+            anonymized_telemetry=False,
+        )
 
-        page_size = 4000
-        total_deleted = 0
-        while True:
-            # Always offset=0: we delete each page, so next page is always first
-            page = await code_collection.get(limit=page_size, include=[])
-            page_ids = page["ids"]
-            if not page_ids:
-                break
-            # Issue #540: Preserve codebase_stats
-            ids_to_delete = [id for id in page_ids if id != "codebase_stats"]
-            if ids_to_delete:
-                await code_collection.delete(ids=ids_to_delete)
-                total_deleted += len(ids_to_delete)
-            if not ids_to_delete or len(page_ids) < page_size:
-                break
-        if total_deleted:
+        # Drop existing collection (ignore if it doesn't exist)
+        try:
+            await async_client.delete_collection(collection_name)
             logger.info(
-                "[Task %s] Cleared %s items from ChromaDB "
-                "(preserved codebase_stats)",
+                "[Task %s] Dropped ChromaDB collection '%s'",
                 task_id,
-                total_deleted,
+                collection_name,
             )
+        except Exception:
+            logger.info(
+                "[Task %s] No existing collection '%s' to drop",
+                task_id,
+                collection_name,
+            )
+
+        # Recreate fresh collection
+        new_collection = await async_client.get_or_create_collection(
+            name=collection_name,
+            metadata=collection_meta,
+        )
+        logger.info(
+            "[Task %s] Created fresh ChromaDB collection '%s'",
+            task_id,
+            collection_name,
+        )
+        return new_collection
+
     except Exception as e:
-        logger.warning("[Task %s] Error clearing collection: %s", task_id, e)
+        logger.error(
+            "[Task %s] Failed to recreate collection: %s",
+            task_id,
+            e,
+            exc_info=True,
+        )
+        return None
 
 
 async def _initialize_chromadb_collection(task_id: str, update_progress, update_phase):
@@ -995,16 +1019,18 @@ async def _initialize_chromadb_collection(task_id: str, update_progress, update_
         phase="init",
     )
 
-    code_collection = await get_code_collection_async()
-    if code_collection:
-        await update_progress(
-            operation="Clearing old ChromaDB data",
-            current=1,
-            total=2,
-            current_file="Removing existing entries...",
-            phase="init",
-        )
-        await _clear_chromadb_collection(code_collection, task_id)
+    await update_progress(
+        operation="Recreating ChromaDB collection",
+        current=1,
+        total=2,
+        current_file="Dropping and recreating collection...",
+        phase="init",
+    )
+
+    code_collection = await _recreate_chromadb_collection(task_id)
+    if not code_collection:
+        # Fallback: try getting existing collection if recreate failed
+        code_collection = await get_code_collection_async()
 
     return code_collection
 
