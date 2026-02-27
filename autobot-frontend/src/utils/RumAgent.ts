@@ -378,7 +378,7 @@ class RumAgent {
       logger.error('💥 Error Tracked', error)
     }
 
-    this.reportCriticalIssue('error', error)
+    this.reportCriticalIssue(type, error)
   }
 
   // Issue #476: Get current page name for metrics

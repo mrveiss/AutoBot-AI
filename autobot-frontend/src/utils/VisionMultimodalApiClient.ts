@@ -11,6 +11,7 @@
 import appConfig from '@/config/AppConfig.js';
 import { NetworkConstants } from '@/constants/network';
 import { createLogger } from '@/utils/debugUtils';
+import { getAuthToken } from '@/utils/fetchWithAuth';
 import type { ApiResponse } from '@/types/api';
 
 const logger = createLogger('VisionMultimodalApiClient');
@@ -354,6 +355,12 @@ class VisionMultimodalApiClient {
       'Content-Type': 'application/json',
     };
 
+    // Inject auth token if available (#1236)
+    const authToken = getAuthToken();
+    if (authToken) {
+      defaultHeaders['Authorization'] = `Bearer ${authToken}`;
+    }
+
     try {
       const response = await fetch(url, {
         ...options,
@@ -387,10 +394,18 @@ class VisionMultimodalApiClient {
     const baseUrl = await this.ensureBaseUrl();
     const url = `${baseUrl}${endpoint}`;
 
+    // Inject auth token if available (#1236)
+    const headers: Record<string, string> = {};
+    const authToken = getAuthToken();
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
     try {
       const response = await fetch(url, {
         method: 'POST',
         body: formData,
+        headers,
         // Don't set Content-Type - browser will set it with boundary for multipart
       });
 
