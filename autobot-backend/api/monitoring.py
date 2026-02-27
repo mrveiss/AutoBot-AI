@@ -27,6 +27,8 @@ from api.monitoring_utils import (
     _identify_bottlenecks,
 )
 from auth_middleware import check_admin_permission
+from config import ConfigManager
+from config.registry import ConfigRegistry
 
 # Issue #474: Import ServiceURLs for AlertManager integration
 from constants.network_constants import ServiceURLs
@@ -55,7 +57,6 @@ from utils.performance_monitor import (
 
 # Import AutoBot monitoring system
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from config import ConfigManager
 
 logger = logging.getLogger(__name__)
 config = ConfigManager()
@@ -296,9 +297,16 @@ def _resolve_service_urls() -> tuple:
         browser_url = config.get_service_url("browser", "health")
         ollama_url = f"{config.get_ollama_url()}/api/version"
     except Exception:
-        npu_url = "http://172.16.168.22:8081/health"
-        browser_url = "http://172.16.168.25:3000/health"
-        ollama_url = "http://172.16.168.20:11434/api/version"  # autobot-llm-gpu (#1193)
+        # Issue #1229: Use ConfigRegistry instead of hardcoded IPs
+        npu_host = ConfigRegistry.get("vm.npu", "172.16.168.22")
+        npu_port = ConfigRegistry.get("port.npu", "8081")
+        browser_host = ConfigRegistry.get("vm.browser", "172.16.168.25")
+        browser_port = ConfigRegistry.get("port.browser", "3000")
+        ollama_host = ConfigRegistry.get("vm.llm", "172.16.168.20")
+        ollama_port = ConfigRegistry.get("port.ollama", "11434")
+        npu_url = f"http://{npu_host}:{npu_port}/health"
+        browser_url = f"http://{browser_host}:{browser_port}/health"
+        ollama_url = f"http://{ollama_host}:{ollama_port}/api/version"
     return npu_url, browser_url, ollama_url
 
 
@@ -330,14 +338,43 @@ def _build_service_list(results: list) -> list:
     ollama_s, ollama_m = _safe(results[2])
     browser_s, browser_m = _safe(results[3])
 
+    # Issue #1229: Use ConfigRegistry instead of hardcoded IPs
     return [
-        _to_service("Backend API", "172.16.168.20", 8443, "online", "Running"),
-        _to_service("Redis", "172.16.168.23", 6379, redis_s, redis_m),
-        _to_service("NPU Worker", "172.16.168.22", 8081, npu_s, npu_m),
         _to_service(
-            "Ollama", "172.16.168.20", 11434, ollama_s, ollama_m
-        ),  # autobot-llm-gpu (#1193)
-        _to_service("Browser", "172.16.168.25", 3000, browser_s, browser_m),
+            "Backend API",
+            ConfigRegistry.get("vm.main", "172.16.168.20"),
+            int(ConfigRegistry.get("port.backend", "8443")),
+            "online",
+            "Running",
+        ),
+        _to_service(
+            "Redis",
+            ConfigRegistry.get("vm.redis", "172.16.168.23"),
+            int(ConfigRegistry.get("port.redis", "6379")),
+            redis_s,
+            redis_m,
+        ),
+        _to_service(
+            "NPU Worker",
+            ConfigRegistry.get("vm.npu", "172.16.168.22"),
+            int(ConfigRegistry.get("port.npu", "8081")),
+            npu_s,
+            npu_m,
+        ),
+        _to_service(
+            "Ollama",
+            ConfigRegistry.get("vm.llm", "172.16.168.20"),
+            int(ConfigRegistry.get("port.ollama", "11434")),
+            ollama_s,
+            ollama_m,
+        ),
+        _to_service(
+            "Browser",
+            ConfigRegistry.get("vm.browser", "172.16.168.25"),
+            int(ConfigRegistry.get("port.browser", "3000")),
+            browser_s,
+            browser_m,
+        ),
     ]
 
 
