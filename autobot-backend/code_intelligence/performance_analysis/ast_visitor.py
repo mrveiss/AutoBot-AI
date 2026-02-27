@@ -12,14 +12,23 @@ import ast
 import logging
 from typing import Dict, List, Optional
 
-from .patterns import (BLOCKING_IO_OPERATIONS,
-                       BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE,
-                       BLOCKING_IO_PATTERNS_MEDIUM_CONFIDENCE, DB_OBJECTS,
-                       DB_OPERATIONS_CONTEXTUAL, DB_OPERATIONS_FALSE_POSITIVES,
-                       DB_OPERATIONS_HIGH_CONFIDENCE, LEGACY_DB_OPERATIONS,
-                       SAFE_PATTERNS)
-from .types import (COMPLEXITY_LEVELS, PerformanceIssue, PerformanceIssueType,
-                    PerformanceSeverity)
+from .patterns import (
+    BLOCKING_IO_OPERATIONS,
+    BLOCKING_IO_PATTERNS_HIGH_CONFIDENCE,
+    BLOCKING_IO_PATTERNS_MEDIUM_CONFIDENCE,
+    DB_OBJECTS,
+    DB_OPERATIONS_CONTEXTUAL,
+    DB_OPERATIONS_FALSE_POSITIVES,
+    DB_OPERATIONS_HIGH_CONFIDENCE,
+    LEGACY_DB_OPERATIONS,
+    SAFE_PATTERNS,
+)
+from .types import (
+    COMPLEXITY_LEVELS,
+    PerformanceIssue,
+    PerformanceIssueType,
+    PerformanceSeverity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -520,12 +529,17 @@ class PerformanceASTVisitor(ast.NodeVisitor):
 
         Issue #665: Extracted from _check_blocking_in_async to reduce function length.
         Issue #569: Skip dict.get() false positives.
+        Issue #1226: Use exact method name matching instead of substring
+        matching to eliminate false positives (e.g. "get" matching
+        get_redis_client, _get_config, etc.).
 
         Returns:
             True if a legacy pattern match was found and issue created.
         """
+        # Extract actual method name (part after last dot)
+        method_name = call_name_lower.rsplit(".", 1)[-1]
         for blocking_op, recommendation in BLOCKING_IO_OPERATIONS.items():
-            if blocking_op in call_name_lower:
+            if method_name == blocking_op:
                 if blocking_op == "get" and ".get" in call_name_lower:
                     continue  # Skip dict.get() false positives
                 self._create_blocking_issue(

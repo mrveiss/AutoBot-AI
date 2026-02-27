@@ -147,6 +147,21 @@ SAFE_PATTERNS = {
     "asyncpg": "already using async postgres",
     "aiosqlite": "already using async sqlite",
     "aiomysql": "already using async mysql",
+    # Async wrapping - already offloaded to thread
+    "asyncio.to_thread": "already offloaded via asyncio.to_thread()",
+    "run_in_executor": "already offloaded via run_in_executor()",
+    # Logging calls - non-blocking in practice (Issue #1226)
+    "logger.info": "logger call (non-blocking)",
+    "logger.debug": "logger call (non-blocking)",
+    "logger.warning": "logger call (non-blocking)",
+    "logger.error": "logger call (non-blocking)",
+    "logger.critical": "logger call (non-blocking)",
+    "logger.exception": "logger call (non-blocking)",
+    "logger.log": "logger call (non-blocking)",
+    "logging.info": "logging module call (non-blocking)",
+    "logging.debug": "logging module call (non-blocking)",
+    "logging.warning": "logging module call (non-blocking)",
+    "logging.error": "logging module call (non-blocking)",
 }
 
 # Legacy compatibility - keep for any code referencing old constant
