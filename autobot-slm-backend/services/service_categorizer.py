@@ -41,10 +41,12 @@ AUTOBOT_SERVICE_PATTERNS: List[Tuple[re.Pattern, str]] = [
     # Message queues
     (re.compile(r"^rabbitmq", re.IGNORECASE), "RabbitMQ message broker"),
     (re.compile(r"^kafka", re.IGNORECASE), "Kafka message broker"),
-    # Monitoring
-    (re.compile(r"^prometheus", re.IGNORECASE), "Prometheus monitoring"),
+    # Monitoring (only core services, not hardware-specific exporters)
+    (
+        re.compile(r"^prometheus(-node-exporter)?$", re.IGNORECASE),
+        "Prometheus monitoring",
+    ),
     (re.compile(r"^grafana", re.IGNORECASE), "Grafana dashboards"),
-    (re.compile(r"^node.exporter", re.IGNORECASE), "Node exporter metrics"),
     # Browser automation
     (re.compile(r"^playwright", re.IGNORECASE), "Playwright browser"),
     (re.compile(r"^puppeteer", re.IGNORECASE), "Puppeteer browser"),

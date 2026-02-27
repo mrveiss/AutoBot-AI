@@ -40,6 +40,8 @@ export interface FleetServiceNodeStatus {
   node_id: string
   hostname: string
   status: string
+  ip_address?: string | null
+  port?: number | null
 }
 
 export interface FleetServiceStatus {

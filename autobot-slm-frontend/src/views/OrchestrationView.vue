@@ -74,7 +74,7 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
 // =============================================================================
 
 const searchQuery = ref('')
-const categoryFilter = ref<'autobot' | 'system' | 'all'>('all')
+const categoryFilter = ref<'autobot' | 'system' | 'all'>('autobot')
 const statusFilter = ref<string>('all')
 const expandedNodes = ref<Set<string>>(new Set())
 const autoRefresh = ref(true)
@@ -90,6 +90,8 @@ interface NodeServiceGroup {
     service_name: string
     category: string
     status: string
+    ip_address: string | null
+    port: number | null
   }>
   runningCount: number
   stoppedCount: number
@@ -142,6 +144,8 @@ const servicesByNode = computed<NodeServiceGroup[]>(() => {
         service_name: fleetService.service_name,
         category: fleetService.category,
         status: nodeStatus.status,
+        ip_address: nodeStatus.ip_address ?? null,
+        port: nodeStatus.port ?? null,
       })
 
       // Update counts
@@ -172,7 +176,7 @@ const categoryCounts = computed(() => {
 // =============================================================================
 
 const fleetSearchQuery = ref('')
-const fleetCategoryFilter = ref<'autobot' | 'system' | 'all'>('all')
+const fleetCategoryFilter = ref<'autobot' | 'system' | 'all'>('autobot')
 
 const expandedFleetServices = ref<Set<string>>(new Set())
 
@@ -971,6 +975,7 @@ onUnmounted(() => {
                 <thead class="bg-gray-50">
                   <tr class="text-xs text-gray-500 uppercase">
                     <th class="px-4 py-2 text-left">Service</th>
+                    <th class="px-4 py-2 text-left w-36">Endpoint</th>
                     <th class="px-4 py-2 text-left w-24">Category</th>
                     <th class="px-4 py-2 text-left w-24">Status</th>
                     <th class="px-4 py-2 text-right w-32">Actions</th>
@@ -984,6 +989,13 @@ onUnmounted(() => {
                   >
                     <td class="px-4 py-2">
                       <span class="font-medium text-gray-900">{{ service.service_name }}</span>
+                    </td>
+                    <td class="px-4 py-2">
+                      <span
+                        v-if="service.port"
+                        class="text-xs font-mono text-gray-500"
+                      >{{ service.ip_address || node.ipAddress }}:{{ service.port }}</span>
+                      <span v-else class="text-xs text-gray-300">&mdash;</span>
                     </td>
                     <td class="px-4 py-2">
                       <span

@@ -1158,6 +1158,8 @@ async def get_fleet_services(
                 "node_id": svc.node_id,
                 "hostname": node.hostname if node else "unknown",
                 "status": svc.status,
+                "ip_address": node.ip_address if node else None,
+                "port": svc.port,
             }
         )
 
