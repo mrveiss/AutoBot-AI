@@ -321,9 +321,17 @@ export function useCodeSync() {
       if (!response.data.success) {
         error.value = response.data.message
       } else {
-        // Refresh pending nodes and status after successful sync
-        await fetchPendingNodes()
-        await fetchStatus()
+        // Issue #1231: SLM self-sync is fire-and-forget — the backend
+        // returns immediately before the background task completes.
+        // Refreshing now would return stale data (node still outdated).
+        // Skip refresh and let the caller handle the delayed update.
+        const isSLMSelfSync = response.data.message?.includes(
+          'SLM update queued'
+        )
+        if (!isSLMSelfSync) {
+          await fetchPendingNodes()
+          await fetchStatus()
+        }
       }
 
       return response.data

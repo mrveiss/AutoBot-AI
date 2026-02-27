@@ -11,7 +11,7 @@
  * and scheduled update management.
  */
 
-import { ref, onMounted, computed, type DeepReadonly } from 'vue'
+import { ref, onMounted, onUnmounted, computed, type DeepReadonly } from 'vue'
 import {
   useCodeSync,
   type PendingNode,
@@ -45,6 +45,10 @@ const syncStage = ref<string | null>(null)
 const showScheduleModal = ref(false)
 const editingSchedule = ref<DeepReadonly<UpdateSchedule> | null>(null)
 const runningScheduleId = ref<number | null>(null)
+
+// SLM self-sync restart banner (Issue #1231)
+const slmRestartPending = ref(false)
+let slmRefreshTimer: ReturnType<typeof setTimeout> | null = null
 
 // Role-based sync state (Issue #779)
 const syncingRole = ref<string | null>(null)
@@ -129,6 +133,20 @@ async function handleSyncNode(node: PendingNode): Promise<void> {
 
   if (result.success) {
     selectedNodes.value.delete(node.node_id)
+
+    // Issue #1231: SLM self-sync is fire-and-forget — backend returns
+    // before the background task completes and restarts the service.
+    // Show a banner and auto-refresh after the restart window.
+    const isSLMSelfSync = result.message?.includes('SLM update queued')
+    if (isSLMSelfSync) {
+      slmRestartPending.value = true
+      if (slmRefreshTimer) clearTimeout(slmRefreshTimer)
+      slmRefreshTimer = setTimeout(async () => {
+        slmRestartPending.value = false
+        await handleRefresh()
+      }, 35000)
+    }
+
     logger.info('Node sync completed:', node.node_id)
   } else {
     logger.error('Node sync failed:', node.node_id, result.message)
@@ -345,7 +363,10 @@ onMounted(async () => {
     codeSync.fetchRoles(),
     codeSourceComposable.fetchCodeSource(),
   ])
+})
 
+onUnmounted(() => {
+  if (slmRefreshTimer) clearTimeout(slmRefreshTimer)
 })
 </script>
 
@@ -454,6 +475,24 @@ onMounted(async () => {
           <div class="font-medium text-blue-900">Sync in Progress</div>
           <div class="text-sm text-blue-700">
             {{ Array.from(syncProgress.values())[0] }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SLM Self-Sync Restart Banner (Issue #1231) -->
+    <div
+      v-if="slmRestartPending"
+      class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6"
+    >
+      <div class="flex items-center gap-3">
+        <svg class="w-5 h-5 text-amber-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <div class="flex-1">
+          <div class="font-medium text-amber-900">SLM Manager Restarting</div>
+          <div class="text-sm text-amber-700">
+            Code synced successfully. Backend is restarting and will auto-refresh in ~30 seconds.
           </div>
         </div>
       </div>
