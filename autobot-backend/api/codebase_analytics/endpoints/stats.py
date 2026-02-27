@@ -189,7 +189,7 @@ async def get_codebase_stats():
     # Issue #540: Check if indexing is in progress
     active_task = _get_active_indexing_task()
 
-    code_collection = get_code_collection()
+    code_collection = await asyncio.to_thread(get_code_collection)
 
     if not code_collection:
         # Issue #540, #665: Even if ChromaDB fails, show indexing status if available
@@ -520,7 +520,7 @@ async def reset_embedding_stats_endpoint() -> JSONResponse:
 @router.get("/problems")
 async def get_codebase_problems(problem_type: Optional[str] = None):
     """Get real code problems detected during analysis"""
-    code_collection = get_code_collection()
+    code_collection = await asyncio.to_thread(get_code_collection)
     all_problems = []
     storage_type = "chromadb"
 
