@@ -37,11 +37,10 @@ const navItems = [
   { name: 'Deployments', path: '/deployments', icon: 'rocket' },
   { name: 'Backups', path: '/backups', icon: 'database' },
   { name: 'Replication', path: '/replications', icon: 'replicate' },
-  { name: 'Code Sync', path: '/code-sync', icon: 'download', showBadge: true },
   // Issue #760: Agents — local + external (merged)
   { name: 'Agents', path: '/agents', icon: 'agents' },
-  // Issue #840: Updates management page
-  { name: 'Updates', path: '/updates', icon: 'updates' },
+  // Issue #1230: Consolidated Code Sync + System Updates into tabbed view
+  { name: 'Updates', path: '/updates', icon: 'updates', showBadge: true },
   // Issue #731: Skills system management
   { name: 'Skills', path: '/skills', icon: 'skills' },
   { name: 'Maintenance', path: '/maintenance', icon: 'wrench' },

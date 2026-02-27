@@ -84,11 +84,9 @@ const router = createRouter({
       meta: { title: 'Maintenance' }
     },
     {
-      // Issue #741: Code sync management for fleet-wide updates
+      // Issue #741: Code sync — redirects to /updates/code-sync (Issue #1230)
       path: '/code-sync',
-      name: 'code-sync',
-      component: () => import('@/views/CodeSyncView.vue'),
-      meta: { title: 'Code Sync' }
+      redirect: '/updates/code-sync',
     },
     {
       // Issue #760: Agent management - local + external agents
@@ -323,11 +321,16 @@ const router = createRouter({
       },
     },
     {
-      // Issue #840: Update job tracking and checking
-      path: '/updates',
+      // Issue #840, #1230: Updates — system + code-sync tabs
+      path: '/updates/:tab?',
       name: 'updates',
       component: () => import('@/views/UpdatesView.vue'),
-      meta: { title: 'Updates' }
+      meta: { title: 'Updates' },
+      beforeEnter: (to) => {
+        if (!to.params.tab) {
+          return { name: 'updates', params: { tab: 'system' }, replace: true }
+        }
+      },
     },
     {
       // Issue #850: Consolidated into unified orchestration view (Tab 3)
