@@ -22,12 +22,14 @@ import {
   type Role,
   type PlaybookMigrateResult,
   type NodeRolesInfo,
+  type PostSyncAction,
 } from '@/composables/useRoles'
 import { createLogger } from '@/utils/debugUtils'
 import ServiceStatusBadge from '@/components/orchestration/ServiceStatusBadge.vue'
 import ServiceActionButtons from '@/components/orchestration/ServiceActionButtons.vue'
 import NodeHealthCard from '@/components/orchestration/NodeHealthCard.vue'
 import RestartConfirmDialog from '@/components/orchestration/RestartConfirmDialog.vue'
+import PostSyncActionBadges from '@/components/orchestration/PostSyncActionBadges.vue'
 
 const logger = createLogger('OrchestrationView')
 
@@ -350,6 +352,58 @@ watch(assignNodeId, (nodeId) => {
 })
 
 // =============================================================================
+// Post-sync action badges state (Issue #1243)
+// =============================================================================
+
+const nodeActionsCache = reactive<Record<string, PostSyncAction[]>>({})
+const executingAction = ref<{
+  nodeId: string
+  roleName: string
+  category: string
+} | null>(null)
+
+async function loadNodeActions(nodeId: string): Promise<void> {
+  const result = await roles.fetchNodeActions(nodeId)
+  if (result) {
+    nodeActionsCache[nodeId] = result.actions
+  }
+}
+
+async function handleExecuteAction(
+  nodeId: string,
+  action: PostSyncAction,
+): Promise<void> {
+  executingAction.value = {
+    nodeId,
+    roleName: action.role_name,
+    category: action.category,
+  }
+  try {
+    const result = await roles.executeNodeAction(
+      nodeId,
+      action.role_name,
+      action.category,
+    )
+    if (result) {
+      logger.info(
+        '%s %s on %s: %s',
+        action.category,
+        action.role_name,
+        nodeId,
+        result.success ? 'success' : 'failed',
+      )
+      if (action.category === 'restart') {
+        await orchestration.fetchFleetServices()
+      }
+    }
+  } catch (err) {
+    logger.error('Action execution failed:', err)
+  } finally {
+    executingAction.value = null
+  }
+}
+
+// =============================================================================
 // Tab 5: Infrastructure Overview State
 // =============================================================================
 
@@ -437,6 +491,9 @@ function toggleNode(nodeId: string): void {
   } else {
     next.add(nodeId)
     loadRolesForNode(nodeId)
+    if (!nodeActionsCache[nodeId]) {
+      loadNodeActions(nodeId)
+    }
   }
   expandedNodes.value = next
 }
@@ -971,6 +1028,17 @@ onUnmounted(() => {
                   Loading…
                 </span>
               </div>
+              <!-- Post-sync action badges (Issue #1243) -->
+              <PostSyncActionBadges
+                v-if="nodeActionsCache[node.nodeId]?.length"
+                :actions="nodeActionsCache[node.nodeId]"
+                :executingAction="
+                  executingAction?.nodeId === node.nodeId
+                    ? { roleName: executingAction.roleName, category: executingAction.category }
+                    : null
+                "
+                @execute="(action) => handleExecuteAction(node.nodeId, action)"
+              />
               <table class="w-full">
                 <thead class="bg-gray-50">
                   <tr class="text-xs text-gray-500 uppercase">
