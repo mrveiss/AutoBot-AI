@@ -1581,7 +1581,7 @@ async def _get_api_endpoint_analysis() -> Optional[APIEndpointAnalysis]:
     """
     try:
         checker = APIEndpointChecker()
-        analysis = checker.run_full_analysis()
+        analysis = await asyncio.to_thread(checker.run_full_analysis)
         logger.info(
             "API endpoint analysis: %d endpoints, %d calls, %.1f%% coverage",
             analysis.backend_endpoints,
