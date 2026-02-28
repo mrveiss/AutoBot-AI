@@ -73,8 +73,45 @@ Review this work and either:
 3. Close if the work was intentional and already tracked elsewhere
 "
 
-# 5. Create the issue
-TITLE="Orphaned work on $BRANCH: $(echo "$ORPHAN_COMMITS $UNCOMMITTED" | head -1 | cut -c1-60)"
+# 5. Deduplicate: check for existing open orphan issue on this branch
+EXISTING_ISSUE=$(gh issue list \
+  --label "orphaned-work" \
+  --state open \
+  --search "Orphaned work on $BRANCH" \
+  --json number,title \
+  --jq ".[0].number // empty" \
+  2>/dev/null || true)
+
+if [ -n "$EXISTING_ISSUE" ]; then
+  # Update existing issue with a comment instead of creating duplicate
+  COMMENT="## Updated Orphan Detection
+
+**Detected at:** $(date -Iseconds)
+"
+  if [ -n "$ORPHAN_COMMITS" ]; then
+    COMMENT+="
+### Current orphaned commits
+\`\`\`
+$ORPHAN_COMMITS
+\`\`\`
+"
+  fi
+  if [ -n "$UNCOMMITTED" ]; then
+    COMMENT+="
+### Current uncommitted changes
+\`\`\`
+$UNCOMMITTED
+\`\`\`
+"
+  fi
+
+  gh issue comment "$EXISTING_ISSUE" --body "$COMMENT" 2>/dev/null || true
+  echo "ORPHANED WORK DETECTED - Updated existing issue: #$EXISTING_ISSUE"
+  exit 0
+fi
+
+# 6. No existing issue — create a new one
+TITLE="Orphaned work on $BRANCH"
 
 ISSUE_URL=$(gh issue create \
   --title "$TITLE" \
