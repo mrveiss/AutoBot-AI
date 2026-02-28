@@ -172,12 +172,12 @@ def _build_indexing_response(
     )
 
 
+@router.get("/stats")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_codebase_stats",
     error_code_prefix="CODEBASE",
 )
-@router.get("/stats")
 async def get_codebase_stats():
     """
     Get real codebase statistics from storage.
@@ -297,12 +297,12 @@ def _fetch_hardcodes_from_memory(storage, hardcode_type: Optional[str]) -> list:
     return results
 
 
+@router.get("/hardcodes")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_hardcoded_values",
     error_code_prefix="CODEBASE",
 )
-@router.get("/hardcodes")
 async def get_hardcoded_values(hardcode_type: Optional[str] = None):
     """
     Get real hardcoded values found in the codebase.
@@ -406,12 +406,12 @@ async def _fetch_problems_from_redis(problem_type: Optional[str]) -> tuple:
     return problems, True
 
 
+@router.get("/embedding-stats")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_embedding_stats",
     error_code_prefix="CODEBASE",
 )
-@router.get("/embedding-stats")
 async def get_embedding_stats() -> JSONResponse:
     """
     Get NPU embedding generation statistics.
@@ -468,12 +468,12 @@ async def get_embedding_stats() -> JSONResponse:
         )
 
 
+@router.post("/embedding-stats/reset")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="reset_embedding_stats",
     error_code_prefix="CODEBASE",
 )
-@router.post("/embedding-stats/reset")
 async def reset_embedding_stats_endpoint() -> JSONResponse:
     """
     Reset NPU embedding statistics.
@@ -512,12 +512,12 @@ async def reset_embedding_stats_endpoint() -> JSONResponse:
         )
 
 
+@router.get("/problems")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_codebase_problems",
     error_code_prefix="CODEBASE",
 )
-@router.get("/problems")
 async def get_codebase_problems(problem_type: Optional[str] = None):
     """Get real code problems detected during analysis"""
     code_collection = await asyncio.to_thread(get_code_collection)

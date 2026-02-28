@@ -251,12 +251,12 @@ async def _get_redis_fallback_chart_data(
         )
 
 
+@router.get("/analytics/charts")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chart_data",
     error_code_prefix="CODEBASE",
 )
-@router.get("/analytics/charts")
 async def get_chart_data():
     """
     Get aggregated data for analytics charts.

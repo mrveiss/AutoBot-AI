@@ -41,12 +41,12 @@ def _get_detector() -> CrossLanguagePatternDetector:
     )
 
 
+@router.post("/cross-language/analyze")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="run_cross_language_analysis",
     error_code_prefix="CODEBASE",
 )
-@router.post("/cross-language/analyze")
 async def run_cross_language_analysis(
     use_llm: bool = True,
     use_cache: bool = True,
@@ -86,12 +86,12 @@ async def run_cross_language_analysis(
     )
 
 
+@router.get("/cross-language/summary")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_cross_language_summary",
     error_code_prefix="CODEBASE",
 )
-@router.get("/cross-language/summary")
 async def get_cross_language_summary() -> JSONResponse:
     """
     Get summary of latest cross-language analysis.
@@ -155,12 +155,12 @@ async def get_cross_language_summary() -> JSONResponse:
     )
 
 
+@router.get("/cross-language/dto-mismatches")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dto_mismatches",
     error_code_prefix="CODEBASE",
 )
-@router.get("/cross-language/dto-mismatches")
 async def get_dto_mismatches() -> JSONResponse:
     """
     Get DTO/type mismatches between backend and frontend.
@@ -188,12 +188,12 @@ async def get_dto_mismatches() -> JSONResponse:
     )
 
 
+@router.get("/cross-language/validation-duplications")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_validation_duplications",
     error_code_prefix="CODEBASE",
 )
-@router.get("/cross-language/validation-duplications")
 async def get_validation_duplications() -> JSONResponse:
     """
     Get duplicated validation logic across languages.
@@ -221,12 +221,12 @@ async def get_validation_duplications() -> JSONResponse:
     )
 
 
+@router.get("/cross-language/api-mismatches")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_api_contract_mismatches",
     error_code_prefix="CODEBASE",
 )
-@router.get("/cross-language/api-mismatches")
 async def get_api_contract_mismatches() -> JSONResponse:
     """
     Get API contract mismatches between backend and frontend.
@@ -270,12 +270,12 @@ async def get_api_contract_mismatches() -> JSONResponse:
     )
 
 
+@router.get("/cross-language/semantic-matches")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_semantic_matches",
     error_code_prefix="CODEBASE",
 )
-@router.get("/cross-language/semantic-matches")
 async def get_semantic_matches(
     min_similarity: float = 0.7,
     limit: int = 50,
@@ -323,12 +323,12 @@ async def get_semantic_matches(
     )
 
 
+@router.get("/cross-language/patterns")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_patterns_by_category",
     error_code_prefix="CODEBASE",
 )
-@router.get("/cross-language/patterns")
 async def get_patterns_by_category(
     category: Optional[str] = None,
     severity: Optional[str] = None,
@@ -379,12 +379,12 @@ async def get_patterns_by_category(
     )
 
 
+@router.post("/cross-language/clear-cache")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_cross_language_cache",
     error_code_prefix="CODEBASE",
 )
-@router.post("/cross-language/clear-cache")
 async def clear_cross_language_cache() -> JSONResponse:
     """
     Clear the cross-language analysis cache.

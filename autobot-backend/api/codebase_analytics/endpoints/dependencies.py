@@ -447,12 +447,12 @@ async def _scan_filesystem_imports(
         )
 
 
+@router.get("/analytics/dependencies")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_dependencies",
     error_code_prefix="CODEBASE",
 )
-@router.get("/analytics/dependencies")
 async def get_dependencies():
     """
     Get file dependency analysis showing imports and module relationships.

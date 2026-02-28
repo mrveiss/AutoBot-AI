@@ -372,12 +372,12 @@ async def _analyze_and_return_env_result(
     return JSONResponse(result)
 
 
+@router.get("/env-analysis")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_environment_analysis",
     error_code_prefix="CODEBASE",
 )
-@router.get("/env-analysis")
 async def get_environment_analysis(
     path: str = Query(
         None, description="Root path to analyze (defaults to project root)"
@@ -433,12 +433,12 @@ async def get_environment_analysis(
         )
 
 
+@router.get("/env-recommendations")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_env_recommendations",
     error_code_prefix="CODEBASE",
 )
-@router.get("/env-recommendations")
 async def get_env_recommendations(
     path: str = Query(
         None, description="Root path to analyze (defaults to project root)"
@@ -600,12 +600,12 @@ def _build_export_response_json(
     )
 
 
+@router.get("/env-analysis/export")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="export_env_analysis",
     error_code_prefix="CODEBASE",
 )
-@router.get("/env-analysis/export")
 async def export_env_analysis(
     category: str = Query(
         None, description="Filter by category (e.g., 'security', 'port', 'hostname')"

@@ -184,24 +184,24 @@ async def _trigger_indexing(source: CodeSource) -> None:
 # ---------------------------------------------------------------------------
 
 
+@router.get("/sources")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_sources",
     error_code_prefix="CODEBASE",
 )
-@router.get("/sources")
 async def list_code_sources():
     """List all registered code sources."""
     sources = await list_sources()
     return JSONResponse({"sources": [s.model_dump() for s in sources]})
 
 
+@router.post("/sources")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_source",
     error_code_prefix="CODEBASE",
 )
-@router.post("/sources")
 async def create_code_source(request: CodeSourceCreateRequest):
     """Register a new code source."""
     source = CodeSource(
@@ -219,12 +219,12 @@ async def create_code_source(request: CodeSourceCreateRequest):
     return JSONResponse(source.model_dump(), status_code=201)
 
 
+@router.get("/sources/{source_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_source",
     error_code_prefix="CODEBASE",
 )
-@router.get("/sources/{source_id}")
 async def get_code_source(source_id: str):
     """Retrieve a code source by ID."""
     source = await get_source(source_id)
@@ -233,12 +233,12 @@ async def get_code_source(source_id: str):
     return JSONResponse(source.model_dump())
 
 
+@router.put("/sources/{source_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_source",
     error_code_prefix="CODEBASE",
 )
-@router.put("/sources/{source_id}")
 async def update_code_source(source_id: str, request: CodeSourceUpdateRequest):
     """Update an existing code source."""
     source = await get_source(source_id)
@@ -256,12 +256,12 @@ async def update_code_source(source_id: str, request: CodeSourceUpdateRequest):
     return JSONResponse(source.model_dump())
 
 
+@router.delete("/sources/{source_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_source",
     error_code_prefix="CODEBASE",
 )
-@router.delete("/sources/{source_id}")
 async def delete_code_source(source_id: str):
     """Delete a code source and remove its clone directory if present."""
     source = await get_source(source_id)
@@ -274,12 +274,12 @@ async def delete_code_source(source_id: str):
     return JSONResponse({"success": ok, "source_id": source_id})
 
 
+@router.post("/sources/{source_id}/sync")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="sync_source",
     error_code_prefix="CODEBASE",
 )
-@router.post("/sources/{source_id}/sync")
 async def sync_code_source(source_id: str):
     """Trigger an async clone/pull for a code source."""
     source = await get_source(source_id)
@@ -305,12 +305,12 @@ async def sync_code_source(source_id: str):
     return JSONResponse(resp.model_dump())
 
 
+@router.post("/sources/{source_id}/share")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="share_source",
     error_code_prefix="CODEBASE",
 )
-@router.post("/sources/{source_id}/share")
 async def share_code_source(source_id: str, request: SourceShareRequest):
     """Update access control settings for a code source."""
     source = await get_source(source_id)

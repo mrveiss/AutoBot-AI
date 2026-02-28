@@ -322,12 +322,12 @@ async def _handle_detection_failure(error: Exception) -> JSONResponse:
     return JSONResponse(_build_detection_error_response(str(error)))
 
 
+@router.get("/duplicates")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_duplicate_code",
     error_code_prefix="CODEBASE",
 )
-@router.get("/duplicates")
 async def get_duplicate_code(
     refresh: bool = Query(False, description="Force fresh analysis instead of cache"),
     min_similarity: float = Query(
@@ -464,12 +464,12 @@ def _convert_config_duplicates_to_array(duplicates_dict: dict) -> list:
     return duplicates_array
 
 
+@router.get("/config-duplicates")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_config_duplicates",
     error_code_prefix="CODEBASE",
 )
-@router.get("/config-duplicates")
 async def detect_config_duplicates_endpoint(
     use_semantic: bool = Query(
         False, description="Enable LLM-based semantic analysis (Issue #554)"

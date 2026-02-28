@@ -2019,12 +2019,12 @@ def _render_report(problems: list, analyses: dict) -> str:
     )
 
 
+@router.get("/report")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="generate_report",
     error_code_prefix="CODEBASE",
 )
-@router.get("/report")
 async def generate_analysis_report(
     format: str = "markdown",
     include_api_analysis: bool = True,
