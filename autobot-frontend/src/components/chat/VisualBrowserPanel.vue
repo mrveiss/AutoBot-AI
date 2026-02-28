@@ -477,13 +477,11 @@ onMounted(() => {
   flex: 1;
   overflow: auto;
   background: var(--bg-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   min-height: 0;
 }
 
 .viewport-state {
+  margin: auto;
   text-align: center;
   padding: var(--spacing-12) var(--spacing-6);
   color: var(--text-secondary);
@@ -535,6 +533,7 @@ onMounted(() => {
   display: block;
   max-width: 100%;
   height: auto;
+  margin: auto;
   object-fit: contain;
   transition: opacity var(--duration-200);
 }
