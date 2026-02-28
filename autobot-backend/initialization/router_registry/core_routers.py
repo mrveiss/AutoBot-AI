@@ -30,6 +30,7 @@ from api.knowledge_audit import router as knowledge_audit_router
 from api.knowledge_categories import router as knowledge_categories_router
 from api.knowledge_collaboration import router as knowledge_collaboration_router
 from api.knowledge_collections import router as knowledge_collections_router
+from api.knowledge_connectors import router as knowledge_connectors_router
 from api.knowledge_mcp import router as knowledge_mcp_router
 from api.knowledge_metadata import router as knowledge_metadata_router
 from api.knowledge_organization import router as knowledge_organization_router
@@ -134,6 +135,12 @@ def _get_knowledge_organization_routers() -> list:
             "/knowledge_base",
             ["knowledge-metadata"],
             "knowledge_metadata",
+        ),
+        (
+            knowledge_connectors_router,
+            "",
+            ["knowledge-connectors"],
+            "knowledge_connectors",
         ),
         (
             knowledge_population_router,
