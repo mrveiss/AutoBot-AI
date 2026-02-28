@@ -137,6 +137,15 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'verification',
+        name: 'knowledge-verification',
+        component: () => import('@/components/knowledge/KnowledgeVerificationQueue.vue'),
+        meta: {
+          title: 'Source Verification',
+          parent: 'knowledge'
+        }
+      },
+      {
         path: 'stats',
         name: 'knowledge-stats',
         component: () => import('@/components/knowledge/KnowledgeStats.vue'),
