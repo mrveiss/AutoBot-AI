@@ -182,12 +182,12 @@ def _create_cleanup_callback(task_id: str):
     return cleanup_task
 
 
+@router.post("/index")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="index_codebase",
     error_code_prefix="CODEBASE",
 )
-@router.post("/index")
 async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
     """
     Start background indexing of a codebase path (Issue #398: refactored, #1133: queued).
@@ -248,12 +248,12 @@ async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
     )
 
 
+@router.get("/index/status/{task_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_indexing_status",
     error_code_prefix="CODEBASE",
 )
-@router.get("/index/status/{task_id}")
 async def get_indexing_status(task_id: str):
     """
     Get the status of a background indexing task
@@ -295,12 +295,12 @@ async def get_indexing_status(task_id: str):
     return JSONResponse(response)
 
 
+@router.get("/index/current")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_current_indexing_job",
     error_code_prefix="CODEBASE",
 )
-@router.get("/index/current")
 async def get_current_indexing_job():
     """
     Get the status of the currently running indexing job (if any)
@@ -401,12 +401,12 @@ def _cancel_active_task(task_id: str, existing_task) -> JSONResponse:
         )
 
 
+@router.post("/index/cancel")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cancel_indexing_job",
     error_code_prefix="CODEBASE",
 )
-@router.post("/index/cancel")
 async def cancel_indexing_job():
     """
     Cancel the currently running indexing job

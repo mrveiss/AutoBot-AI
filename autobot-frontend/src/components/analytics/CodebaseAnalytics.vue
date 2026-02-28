@@ -5016,22 +5016,37 @@ const indexCodebase = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const indexEndpoint = `${backendUrl}/api/analytics/codebase/index`
+    const requestBody = JSON.stringify(
+      selectedSource.value
+        ? { source_id: selectedSource.value.id }
+        : { root_path: rootPath.value }
+    )
 
-    const response = await fetchWithAuth(indexEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(
-        selectedSource.value
-          ? { source_id: selectedSource.value.id }
-          : { root_path: rootPath.value }
-      )
-    })
+    // Issue #1249: Retry on 502/503 (backend temporarily unavailable)
+    const maxRetries = 2
+    let response: Response | null = null
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      response = await fetchWithAuth(indexEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: requestBody,
+      })
+      if (response.status !== 502 && response.status !== 503) break
+      if (attempt < maxRetries) {
+        const delay = (attempt + 1) * 3
+        progressStatus.value = `Backend temporarily unavailable, retrying in ${delay}s...`
+        logger.warn(`Index request got ${response.status}, retrying (${attempt + 1}/${maxRetries})`)
+        await new Promise(r => setTimeout(r, delay * 1000))
+      }
+    }
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Status ${response.status}: ${errorText}`)
+    if (!response || !response.ok) {
+      const errorText = response ? await response.text() : 'No response'
+      const status = response?.status ?? 0
+      if (status === 502 || status === 503) {
+        throw new Error('Backend is temporarily unavailable. Please try again in a moment.')
+      }
+      throw new Error(`Status ${status}: ${errorText}`)
     }
 
     const data = await response.json()

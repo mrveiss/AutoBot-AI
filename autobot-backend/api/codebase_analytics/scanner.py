@@ -1270,7 +1270,11 @@ async def _store_single_batch(
     update_stats,
     batch_embeddings: Optional[List[List[float]]] = None,
 ) -> int:
-    """Store a single batch to ChromaDB (Issue #398, #660). Returns items stored."""
+    """Store a single batch to ChromaDB (Issue #398, #660, #1249).
+
+    Returns items stored. Retries once on collection errors by
+    recreating the collection reference (#1249).
+    """
     end_idx = min(start_idx + batch_size, len(batch_ids))
     batch_slice_ids = batch_ids[start_idx:end_idx]
     batch_slice_docs = batch_documents[start_idx:end_idx]
@@ -1283,12 +1287,34 @@ async def _store_single_batch(
 
     # Use upsert so the preserved codebase_stats entry (#540) gets
     # updated with fresh values instead of being silently skipped by add().
-    await code_collection.upsert(
-        ids=batch_slice_ids,
-        documents=batch_slice_docs,
-        metadatas=batch_slice_metas,
-        embeddings=batch_slice_embeddings,
-    )
+    # Issue #1249: Retry once on stale collection reference.
+    try:
+        await code_collection.upsert(
+            ids=batch_slice_ids,
+            documents=batch_slice_docs,
+            metadatas=batch_slice_metas,
+            embeddings=batch_slice_embeddings,
+        )
+    except Exception as e:
+        err_msg = str(e).lower()
+        if "does not exist" in err_msg or "not found" in err_msg:
+            logger.warning(
+                "[Task %s] Collection stale on batch %d, " "recreating (#1249): %s",
+                task_id,
+                batch_num,
+                e,
+            )
+            new_collection = await get_code_collection_async()
+            if new_collection is None:
+                raise
+            await new_collection.upsert(
+                ids=batch_slice_ids,
+                documents=batch_slice_docs,
+                metadatas=batch_slice_metas,
+                embeddings=batch_slice_embeddings,
+            )
+        else:
+            raise
     items_in_batch = len(batch_slice_ids)
 
     # Issue #539: Thread-safe update for parallel batch processing
@@ -2817,13 +2843,23 @@ async def _run_indexing_phases(
     """
     Execute the core indexing phases.
 
-    Issue #398: Extracted from do_indexing_with_progress to reduce method length.
+    Issue #398: Extracted from do_indexing_with_progress.
+    Issue #1249: Retry ChromaDB init once on failure.
     """
     code_collection = await _initialize_chromadb_collection(
         task_id, update_progress, update_phase
     )
     if not code_collection:
-        raise Exception("ChromaDB connection failed")
+        logger.warning(
+            "[Task %s] ChromaDB init failed, retrying once (#1249)",
+            task_id,
+        )
+        await asyncio.sleep(2)
+        code_collection = await _initialize_chromadb_collection(
+            task_id, update_progress, update_phase
+        )
+    if not code_collection:
+        raise Exception("ChromaDB connection failed after retry")
 
     update_phase("init", "completed")
     update_phase("scan", "running")
