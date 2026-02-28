@@ -156,6 +156,11 @@ const roleCategories = computed(() => {
       description: 'VNC and remote desktop services',
       roles: [],
     },
+    infrastructure: {
+      label: 'Infrastructure',
+      description: 'Shared libraries and agents deployed to all nodes',
+      roles: [],
+    },
   }
 
   for (const role of roles) {

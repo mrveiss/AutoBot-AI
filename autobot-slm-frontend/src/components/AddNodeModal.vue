@@ -757,16 +757,14 @@ async function fetchRoles() {
       default_port: typeof role.variables?.port === 'number' ? role.variables.port : undefined,
     }))
   } catch (e) {
-    // Fallback to basic roles if API fails
-    availableRoles.value = [
-      { id: 'slm-agent', name: 'SLM Agent', description: 'SLM monitoring agent', category: 'core' },
-      { id: 'redis', name: 'Redis', description: 'Redis Stack server', category: 'data' },
-      { id: 'backend', name: 'Backend', description: 'AutoBot backend API', category: 'application' },
-      { id: 'frontend', name: 'Frontend', description: 'AutoBot Vue.js frontend', category: 'application' },
-      { id: 'npu-worker', name: 'NPU Worker', description: 'Intel NPU acceleration', category: 'ai' },
-      { id: 'browser-automation', name: 'Browser Automation', description: 'Playwright browser service', category: 'automation' },
-      { id: 'monitoring', name: 'Monitoring', description: 'Prometheus and Grafana', category: 'observability' },
-    ]
+    // Fallback to node-roles constants if API fails
+    const { NODE_ROLE_METADATA } = await import('@/constants/node-roles')
+    availableRoles.value = Object.values(NODE_ROLE_METADATA).map((meta) => ({
+      id: meta.name,
+      name: meta.displayName,
+      description: meta.description,
+      category: meta.category,
+    }))
   } finally {
     isLoadingRoles.value = false
   }

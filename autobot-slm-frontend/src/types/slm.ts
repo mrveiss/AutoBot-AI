@@ -9,15 +9,23 @@
 export type NodeStatus = 'registered' | 'pending' | 'enrolling' | 'healthy' | 'degraded' | 'unhealthy' | 'offline' | 'maintenance' | 'online' | 'error'
 
 export type NodeRole =
-  | 'slm-agent'
-  | 'redis'
+  | 'slm-backend'
+  | 'slm-frontend'
+  | 'slm-database'
+  | 'slm-monitoring'
   | 'backend'
+  | 'celery'
   | 'frontend'
-  | 'llm'
+  | 'redis'
   | 'ai-stack'
+  | 'chromadb'
   | 'npu-worker'
-  | 'browser-automation'
-  | 'monitoring'
+  | 'tts-worker'
+  | 'browser-service'
+  | 'autobot-llm-cpu'
+  | 'autobot-llm-gpu'
+  | 'autobot-shared'
+  | 'slm-agent'
   | 'vnc'
 
 export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
@@ -162,7 +170,7 @@ export interface UpdateInfo {
 /**
  * Role category for grouping
  */
-export type RoleCategory = 'core' | 'data' | 'application' | 'ai' | 'automation' | 'observability' | 'remote-access'
+export type RoleCategory = 'core' | 'data' | 'application' | 'ai' | 'automation' | 'observability' | 'remote-access' | 'infrastructure'
 
 /**
  * Available role information from backend

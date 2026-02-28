@@ -6,9 +6,10 @@
  * Node Role Constants
  *
  * Fallback role definitions when API is unavailable.
- * Source of truth: slm-server/api/deployments.py:AVAILABLE_ROLES
+ * Source of truth: autobot-slm-backend/services/role_registry.py:DEFAULT_ROLES
  *
  * Issue #737 Phase 3: Unified data models
+ * Issue #1247: Consistent roles across all views
  */
 
 import type { NodeRole, RoleCategory } from '@/types/slm'
@@ -26,22 +27,36 @@ export interface RoleMetadata {
 
 /**
  * Complete role metadata mapping.
- * Keep in sync with backend AVAILABLE_ROLES in slm-server/api/deployments.py
+ * Keep in sync with role_registry.py DEFAULT_ROLES.
  */
 export const NODE_ROLE_METADATA: Record<NodeRole, RoleMetadata> = {
-  'slm-agent': {
-    name: 'slm-agent',
-    displayName: 'SLM Agent',
-    description: 'SLM monitoring agent for node health reporting',
+  'slm-backend': {
+    name: 'slm-backend',
+    displayName: 'SLM Backend',
+    description: 'SLM backend API server',
     category: 'core',
-    tools: ['systemd', 'journalctl', 'htop', 'netstat'],
+    tools: ['uvicorn', 'python3', 'pip', 'alembic'],
   },
-  'redis': {
-    name: 'redis',
-    displayName: 'Redis',
-    description: 'Redis Stack server for data persistence',
-    category: 'data',
-    tools: ['redis-server', 'redis-cli', 'redis-sentinel'],
+  'slm-frontend': {
+    name: 'slm-frontend',
+    displayName: 'SLM Frontend',
+    description: 'SLM Vue.js frontend',
+    category: 'core',
+    tools: ['nginx', 'node', 'npm'],
+  },
+  'slm-database': {
+    name: 'slm-database',
+    displayName: 'SLM Database',
+    description: 'PostgreSQL 16 database server',
+    category: 'core',
+    tools: ['postgresql', 'psql', 'pg_dump', 'pg_restore'],
+  },
+  'slm-monitoring': {
+    name: 'slm-monitoring',
+    displayName: 'SLM Monitoring',
+    description: 'Prometheus and Grafana monitoring stack',
+    category: 'observability',
+    tools: ['prometheus', 'grafana', 'node_exporter', 'alertmanager'],
   },
   'backend': {
     name: 'backend',
@@ -50,6 +65,13 @@ export const NODE_ROLE_METADATA: Record<NodeRole, RoleMetadata> = {
     category: 'application',
     tools: ['uvicorn', 'gunicorn', 'python3', 'pip'],
   },
+  'celery': {
+    name: 'celery',
+    displayName: 'Celery Worker',
+    description: 'Celery background task worker',
+    category: 'application',
+    tools: ['celery', 'python3'],
+  },
   'frontend': {
     name: 'frontend',
     displayName: 'Frontend',
@@ -57,12 +79,12 @@ export const NODE_ROLE_METADATA: Record<NodeRole, RoleMetadata> = {
     category: 'application',
     tools: ['nginx', 'node', 'npm', 'vite'],
   },
-  'llm': {
-    name: 'llm',
-    displayName: 'LLM Provider',
-    description: 'LLM inference provider (Ollama/vLLM)',
-    category: 'ai',
-    tools: ['ollama', 'vllm', 'llama-cpp'],
+  'redis': {
+    name: 'redis',
+    displayName: 'Redis',
+    description: 'Redis Stack server for data persistence',
+    category: 'data',
+    tools: ['redis-server', 'redis-cli', 'redis-sentinel'],
   },
   'ai-stack': {
     name: 'ai-stack',
@@ -71,6 +93,13 @@ export const NODE_ROLE_METADATA: Record<NodeRole, RoleMetadata> = {
     category: 'ai',
     tools: ['chromadb', 'langchain', 'transformers', 'torch', 'onnxruntime'],
   },
+  'chromadb': {
+    name: 'chromadb',
+    displayName: 'ChromaDB',
+    description: 'ChromaDB vector database',
+    category: 'ai',
+    tools: ['chromadb'],
+  },
   'npu-worker': {
     name: 'npu-worker',
     displayName: 'NPU Worker',
@@ -78,19 +107,47 @@ export const NODE_ROLE_METADATA: Record<NodeRole, RoleMetadata> = {
     category: 'ai',
     tools: ['openvino', 'intel-npu-driver', 'benchmark_app'],
   },
-  'browser-automation': {
-    name: 'browser-automation',
+  'tts-worker': {
+    name: 'tts-worker',
+    displayName: 'TTS Worker',
+    description: 'Text-to-speech synthesis worker',
+    category: 'ai',
+    tools: ['python3', 'pip'],
+  },
+  'browser-service': {
+    name: 'browser-service',
     displayName: 'Browser Automation',
     description: 'Playwright browser automation service',
     category: 'automation',
     tools: ['playwright', 'chromium', 'firefox', 'webkit'],
   },
-  'monitoring': {
-    name: 'monitoring',
-    displayName: 'Monitoring',
-    description: 'Prometheus and Grafana monitoring stack',
-    category: 'observability',
-    tools: ['prometheus', 'grafana', 'node_exporter', 'alertmanager'],
+  'autobot-llm-cpu': {
+    name: 'autobot-llm-cpu',
+    displayName: 'LLM CPU Node',
+    description: 'LLM inference on CPU (Ollama)',
+    category: 'ai',
+    tools: ['ollama'],
+  },
+  'autobot-llm-gpu': {
+    name: 'autobot-llm-gpu',
+    displayName: 'LLM GPU Node',
+    description: 'LLM inference on GPU (Ollama)',
+    category: 'ai',
+    tools: ['ollama'],
+  },
+  'autobot-shared': {
+    name: 'autobot-shared',
+    displayName: 'Shared Library',
+    description: 'Shared Python library (deployed to all nodes)',
+    category: 'infrastructure',
+    tools: ['pip', 'python3'],
+  },
+  'slm-agent': {
+    name: 'slm-agent',
+    displayName: 'SLM Agent',
+    description: 'SLM monitoring agent for node health reporting',
+    category: 'infrastructure',
+    tools: ['systemd', 'journalctl', 'htop', 'netstat'],
   },
   'vnc': {
     name: 'vnc',

@@ -290,6 +290,18 @@ _OPTIONAL_ROLES = [
         ],
         "ansible_playbook": "playbooks/deploy_role.yml",
     },
+    {
+        "name": "vnc",
+        "display_name": "VNC Server",
+        "sync_type": None,
+        "source_paths": [],
+        "target_path": "",
+        "systemd_service": "tigervncserver",
+        "auto_restart": False,
+        "required": False,
+        "degraded_without": ["Remote desktop access — headed browser mode unavailable"],
+        "ansible_playbook": "playbooks/deploy_role.yml",
+    },
 ]
 
 # ---------------------------------------------------------------------------
