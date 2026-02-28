@@ -374,7 +374,7 @@ export class ChatController {
 
     // Strip internal tags that shouldn't be shown to users
     let preview = content
-      .replace(/\[THOUGHT\]|\[\/THOUGHT\]|\[PLANNING\]|\[\/PLANNING\]/gi, '')
+      .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
       .replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
       .replace(/<TOOL_CALL[^>]*>.*?<\/TOOL_CALL>/gs, '')
       .trim()

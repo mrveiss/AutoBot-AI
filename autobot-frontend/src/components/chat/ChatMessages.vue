@@ -732,14 +732,7 @@ const formatMessageContent = (content: string): string => {
   // These tags are used internally for message categorization but shouldn't display
   // Handles both complete tags [TAG] and malformed tags [TAG without closing bracket
   formatted = formatted
-    .replace(/\[THOUGHT\]?/gi, '')
-    .replace(/\[\/THOUGHT\]?/gi, '')
-    .replace(/\[PLANNING\]?/gi, '')
-    .replace(/\[\/PLANNING\]?/gi, '')
-    .replace(/\[DEBUG\]?/gi, '')
-    .replace(/\[\/DEBUG\]?/gi, '')
-    .replace(/\[SOURCES\]?/gi, '')
-    .replace(/\[\/SOURCES\]?/gi, '')
+    .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
     .trim()
 
   // Strip TOOL_CALL tags (internal metadata that shouldn't be displayed)
