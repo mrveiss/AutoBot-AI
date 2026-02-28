@@ -1,7 +1,11 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import ApiClient from '@/utils/ApiClient'
-import type { KnowledgeStats } from '@/types/knowledgeBase'
+import type {
+  KnowledgeStats,
+  VerificationConfig,
+  PendingSource
+} from '@/types/knowledgeBase'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useKnowledgeStore')
@@ -178,6 +182,15 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     open: false,
     document: null
   })
+
+  // Verification state (Issue #1253)
+  const pendingVerifications = ref<PendingSource[]>([])
+  const pendingVerificationsTotal = ref(0)
+  const verificationConfig = ref<VerificationConfig>({
+    mode: 'autonomous',
+    quality_threshold: 0.7
+  })
+  const verificationLoading = ref(false)
 
   // Computed
   const documentCount = computed(() => documents.value.length)
@@ -534,6 +547,32 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     selectedPromptId.value = id
   }
 
+  // Verification actions (Issue #1253)
+  function setPendingVerifications(
+    sources: PendingSource[],
+    total: number
+  ) {
+    pendingVerifications.value = sources
+    pendingVerificationsTotal.value = total
+  }
+
+  function removePendingSource(factId: string) {
+    pendingVerifications.value =
+      pendingVerifications.value.filter(s => s.fact_id !== factId)
+    pendingVerificationsTotal.value = Math.max(
+      0,
+      pendingVerificationsTotal.value - 1
+    )
+  }
+
+  function setVerificationConfig(config: VerificationConfig) {
+    verificationConfig.value = config
+  }
+
+  function setVerificationLoading(loading: boolean) {
+    verificationLoading.value = loading
+  }
+
   // Source panel actions (Issue #747)
   function openSourcePanel(document: SystemDoc) {
     sourcePanel.value = {
@@ -656,6 +695,12 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     // Source preview panel state (Issue #747)
     sourcePanel,
 
+    // Verification state (Issue #1253)
+    pendingVerifications,
+    pendingVerificationsTotal,
+    verificationConfig,
+    verificationLoading,
+
     // Computed
     documentCount,
     categoryCount,
@@ -696,6 +741,10 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     setSelectedPrompt,
     openSourcePanel,
     closeSourcePanel,
+    setPendingVerifications,
+    removePendingSource,
+    setVerificationConfig,
+    setVerificationLoading,
     updateFilters,
     clearFilters,
     updateSearchResults,

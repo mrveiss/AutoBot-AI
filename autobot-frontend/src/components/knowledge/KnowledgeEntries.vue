@@ -189,6 +189,12 @@
             </td>
             <td class="title-cell" @click="viewEntry(entry)">
               <span class="entry-title">{{ entry.title || 'Untitled' }}</span>
+              <span
+                v-if="getVerificationStatus(entry)"
+                class="provenance-dot"
+                :class="'provenance-' + getVerificationStatus(entry)"
+                :title="getVerificationLabel(entry)"
+              ></span>
             </td>
             <td>
               <span class="category-badge" :style="getCategoryStyle(entry.category)">
@@ -850,6 +856,29 @@ const formatContent = (content: string): string => {
 // Icon mapping now centralized in @/utils/iconMappings
 // Use getDocumentTypeIcon() directly
 
+// Issue #1253: Provenance status helpers
+const getVerificationStatus = (
+  entry: KnowledgeDocument
+): string | null => {
+  const meta = entry.metadata as Record<string, unknown> | undefined
+  const status = meta?.verification_status as string | undefined
+  if (!status) return null
+  return status
+}
+
+const getVerificationLabel = (
+  entry: KnowledgeDocument
+): string => {
+  const status = getVerificationStatus(entry)
+  const labels: Record<string, string> = {
+    verified: 'Verified',
+    pending_review: 'Pending review',
+    unverified: 'Unverified',
+    rejected: 'Rejected'
+  }
+  return labels[status || ''] || 'Unknown'
+}
+
 const getCategoryStyle = (category: string) => {
   const cat = store.categories.find(c => c.name === category)
   return cat?.color ? { backgroundColor: cat.color, color: 'white' } : {}
@@ -1033,6 +1062,32 @@ tr.selected {
 .entry-title:hover {
   text-decoration: underline;
   color: var(--color-info-dark);
+}
+
+/* Issue #1253: Provenance status dot */
+.provenance-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-left: var(--spacing-2);
+  vertical-align: middle;
+}
+
+.provenance-verified {
+  background: var(--color-success);
+}
+
+.provenance-pending_review {
+  background: var(--color-warning);
+}
+
+.provenance-unverified {
+  background: var(--text-tertiary);
+}
+
+.provenance-rejected {
+  background: var(--color-error);
 }
 
 /* Issue #901: Technical Precision badges */

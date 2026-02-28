@@ -9,6 +9,10 @@
  */
 import { ApiRepository } from './ApiRepository'
 import type { KnowledgeDocument, SearchResult } from '@/stores/useKnowledgeStore'
+import type {
+  VerificationConfig,
+  PendingSource
+} from '@/types/knowledgeBase'
 
 // Re-export types for convenience
 export type { KnowledgeDocument, SearchResult }
@@ -447,6 +451,77 @@ export class KnowledgeRepository extends ApiRepository {
    */
   async checkKnowledgeBaseHealth(): Promise<{ healthy: boolean; message: string }> {
     const response = await this.get('/api/knowledge_base/health')
+    return response.data
+  }
+
+  // ==========================================================================
+  // Source Verification & Provenance (Issue #1253)
+  // ==========================================================================
+
+  /**
+   * Get paginated list of sources pending verification
+   */
+  async getPendingVerifications(
+    page = 1,
+    pageSize = 20
+  ): Promise<{ sources: PendingSource[]; total: number; page: number }> {
+    const response = await this.get(
+      `/api/knowledge_base/verification/pending?page=${page}&page_size=${pageSize}`,
+      { skipCache: true }
+    )
+    return response.data
+  }
+
+  /**
+   * Approve a pending source by fact_id
+   */
+  async approveSource(
+    factId: string,
+    user: string
+  ): Promise<{ status: string; message: string }> {
+    const response = await this.post(
+      `/api/knowledge_base/verification/${encodeURIComponent(factId)}/approve`,
+      { user, delete_on_reject: false }
+    )
+    return response.data
+  }
+
+  /**
+   * Reject a pending source by fact_id
+   */
+  async rejectSource(
+    factId: string,
+    user: string,
+    deleteOnReject = false
+  ): Promise<{ status: string; message: string }> {
+    const response = await this.post(
+      `/api/knowledge_base/verification/${encodeURIComponent(factId)}/reject`,
+      { user, delete_on_reject: deleteOnReject }
+    )
+    return response.data
+  }
+
+  /**
+   * Get current verification configuration
+   */
+  async getVerificationConfig(): Promise<VerificationConfig> {
+    const response = await this.get(
+      '/api/knowledge_base/verification/config',
+      { skipCache: true }
+    )
+    return response.data
+  }
+
+  /**
+   * Update verification configuration
+   */
+  async updateVerificationConfig(
+    config: VerificationConfig
+  ): Promise<{ status: string; config: VerificationConfig }> {
+    const response = await this.put(
+      '/api/knowledge_base/verification/config',
+      config
+    )
     return response.data
   }
 

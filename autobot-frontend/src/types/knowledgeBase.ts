@@ -243,3 +243,50 @@ export interface CategoryFilterOption {
   icon: string
   count: number
 }
+
+// ============================================================================
+// Source Verification & Provenance Types (Issue #1253)
+// ============================================================================
+
+/**
+ * Provenance metadata attached to knowledge base entries.
+ * Tracks source origin, verification status, and chain of custody.
+ */
+export interface ProvenanceMetadata {
+  source_type: 'manual_upload' | 'url_fetch' | 'web_research' | 'connector'
+  verification_status: 'unverified' | 'pending_review' | 'verified' | 'rejected'
+  verification_method: 'auto_quality' | 'user_approved' | 'connector_trusted' | null
+  verified_by: string | null
+  verified_at: string | null
+  quality_score: number
+  provenance_chain: Array<{
+    action: string
+    actor: string
+    timestamp: string
+  }>
+  source_connector_id: string | null
+}
+
+/**
+ * Verification mode configuration.
+ * - autonomous: auto-approve sources above quality threshold
+ * - collaborative: require user review for all sources
+ */
+export interface VerificationConfig {
+  mode: 'autonomous' | 'collaborative'
+  quality_threshold: number
+}
+
+/**
+ * A source pending verification review.
+ */
+export interface PendingSource {
+  fact_id: string
+  content: string
+  source_type: string
+  quality_score: number
+  timestamp: string
+  domain: string | null
+  title: string | null
+  url: string | null
+}
