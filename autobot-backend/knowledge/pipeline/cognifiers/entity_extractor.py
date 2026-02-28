@@ -92,7 +92,8 @@ class EntityExtractor(BaseCognifier):
             response = await self.llm.chat_completion(
                 messages=[{"role": "user", "content": prompt}]
             )
-            raw_entities = parse_llm_json_response(response.content)
+            parsed = parse_llm_json_response(response.content)
+            raw_entities = parsed if isinstance(parsed, list) else []
             return self._convert_to_entities(raw_entities, chunk, context.document_id)
         except Exception as e:
             logger.error("Entity extraction failed: %s", e)
@@ -125,6 +126,19 @@ class EntityExtractor(BaseCognifier):
             except Exception as e:
                 logger.warning("Failed to create entity: %s", e)
         return entities
+
+    def _parse_llm_response(self, content: str) -> list:
+        """
+        Parse LLM JSON response for entity extraction. Delegates to shared util.
+
+        Args:
+            content: Raw LLM response text
+
+        Returns:
+            Parsed list of entity dicts, or empty list on failure
+        """
+        parsed = parse_llm_json_response(content)
+        return parsed if isinstance(parsed, list) else []
 
     def _normalize_name(self, name: str) -> str:
         """Normalize entity name for deduplication."""

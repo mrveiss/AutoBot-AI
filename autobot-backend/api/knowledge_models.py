@@ -1899,6 +1899,94 @@ class GetUserFactsRequest(BaseModel):
     )
 
 
+# ===== SOURCE PROVENANCE MODELS (Issue #1252) =====
+
+
+class ProvenanceMetadata(BaseModel):
+    """Provenance metadata for knowledge facts and documents (Issue #1252).
+
+    Tracks origin and verification status for every piece of knowledge stored.
+    """
+
+    source_type: str = Field(
+        default="manual_upload",
+        description="Origin type: manual_upload|url_fetch|web_research|connector",
+    )
+    source_connector_id: Optional[str] = Field(
+        default=None,
+        description="Connector ID when source_type='connector'",
+    )
+    verification_status: str = Field(
+        default="unverified",
+        description="Verification state: unverified|pending_review|verified|rejected",
+    )
+    verification_method: Optional[str] = Field(
+        default=None,
+        description="How it was verified: auto_quality|user_approved|connector_trusted",
+    )
+    verified_by: Optional[str] = Field(
+        default=None,
+        description="User or system that performed verification",
+    )
+    verified_at: Optional[str] = Field(
+        default=None,
+        description="ISO-8601 timestamp of verification",
+    )
+    quality_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Automated quality score (0.0 - 1.0)",
+    )
+    provenance_chain: List[str] = Field(
+        default_factory=list,
+        description="Ordered list of source IDs/URLs representing derivation chain",
+    )
+
+
+class VerificationConfig(BaseModel):
+    """Configuration for the librarian verification mode (Issue #1252)."""
+
+    mode: str = Field(
+        default="autonomous",
+        description="Verification mode: autonomous|collaborative",
+    )
+    quality_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Minimum quality score for autonomous storage",
+    )
+
+
+class VerificationRequest(BaseModel):
+    """Request body for approving or rejecting a fact (Issue #1252)."""
+
+    user: str = Field(
+        default="system",
+        min_length=1,
+        max_length=255,
+        description="Username performing the verification action",
+    )
+    delete_on_reject: bool = Field(
+        default=False,
+        description="When rejecting: also delete the fact from the knowledge base",
+    )
+
+
+class PendingSourceResponse(BaseModel):
+    """Single pending-review fact in the verification queue (Issue #1252)."""
+
+    fact_id: str
+    content: str
+    source_type: str
+    quality_score: float
+    timestamp: str
+    domain: Optional[str] = None
+    title: Optional[str] = None
+    url: Optional[str] = None
+
+
 # ===== MODULE EXPORTS =====
 
 __all__ = [
@@ -1969,4 +2057,9 @@ __all__ = [
     "UnshareFactRequest",
     "UpdateVisibilityRequest",
     "GetUserFactsRequest",
+    # Source provenance and verification (Issue #1252)
+    "ProvenanceMetadata",
+    "VerificationConfig",
+    "VerificationRequest",
+    "PendingSourceResponse",
 ]

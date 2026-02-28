@@ -16,12 +16,12 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from config import config
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
 from utils.service_registry import get_service_url
 
 from autobot_shared.http_client import get_http_client
+from config import config
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,11 @@ class LibrarianAssistant:
         )
         self.auto_store_quality = self.config.get_nested(
             "librarian_assistant.auto_store_quality", True
+        )
+        # Issue #1252: Verification mode controls whether content is auto-stored
+        # ('autonomous') or queued for human review ('collaborative').
+        self.verification_mode = self.config.get_nested(
+            "librarian_assistant.verification_mode", "autonomous"
         )
 
         # Trusted domains for content assessment
@@ -338,16 +343,33 @@ class LibrarianAssistant:
                 f"{content_data.get('content', '')}"
             )
 
+            quality_score = assessment.get("score", 0.0)
+            # Issue #1252: choose verification status based on mode
+            if self.verification_mode == "collaborative":
+                v_status = "pending_review"
+                v_method = None
+            else:
+                v_status = "unverified"
+                v_method = "auto_quality"
+
             metadata = {
                 "source": content_data.get("url", "web_research"),
                 "domain": content_data.get("domain", "unknown"),
                 "title": content_data.get("title", "Untitled"),
-                "quality_score": assessment.get("score", 0.0),
+                "quality_score": quality_score,
                 "recommendation": assessment.get("recommendation", "review"),
                 "key_topics": assessment.get("key_topics", []),
                 "is_trusted": content_data.get("is_trusted", False),
                 "stored_by": "librarian_assistant",
                 "timestamp": content_data.get("timestamp", datetime.now().isoformat()),
+                # Issue #1252: Provenance fields
+                "source_type": "web_research",
+                "source_connector_id": None,
+                "verification_status": v_status,
+                "verification_method": v_method,
+                "verified_by": None,
+                "verified_at": None,
+                "provenance_chain": [content_data.get("url", "")],
             }
 
             success = self.knowledge_base.add_document(document_content, metadata)
@@ -369,8 +391,16 @@ class LibrarianAssistant:
     def _should_store_content(
         self, assessment: Dict[str, Any], store_enabled: bool
     ) -> bool:
-        """Check if content should be stored (Issue #334 - extracted helper)."""
+        """Check if content should be auto-stored (Issue #334 - extracted helper).
+
+        Issue #1252: In 'collaborative' mode, auto-storage is disabled because
+        content is always stored with 'pending_review' status instead.
+        """
         if not store_enabled:
+            return False
+        # Collaborative mode never auto-stores via this path; content is stored
+        # with pending_review status in _process_single_search_result directly.
+        if self.verification_mode == "collaborative":
             return False
         if assessment.get("score", 0) < self.quality_threshold:
             return False
@@ -382,14 +412,25 @@ class LibrarianAssistant:
         store_quality_content: bool,
         stored_list: List[Dict[str, Any]],
     ) -> Optional[Dict[str, Any]]:
-        """Process single search result (Issue #334 - extracted helper)."""
+        """Process single search result (Issue #334 - extracted helper).
+
+        Issue #1252: In collaborative mode, all extracted content is stored with
+        verification_status='pending_review' regardless of quality score.
+        """
         content = await self.extract_content(result["url"])
         if not content:
             return None
         assessment = await self.assess_content_quality(content)
         content["quality_assessment"] = assessment
 
-        if self._should_store_content(assessment, store_quality_content):
+        should_auto_store = self._should_store_content(
+            assessment, store_quality_content
+        )
+        should_collab_store = (
+            self.verification_mode == "collaborative" and store_quality_content
+        )
+
+        if should_auto_store or should_collab_store:
             stored = await self.store_in_knowledge_base(content, assessment)
             if stored:
                 stored_list.append(
@@ -397,6 +438,11 @@ class LibrarianAssistant:
                         "url": content["url"],
                         "title": content["title"],
                         "quality_score": assessment.get("score", 0),
+                        "verification_status": (
+                            "pending_review"
+                            if self.verification_mode == "collaborative"
+                            else "unverified"
+                        ),
                     }
                 )
         return content

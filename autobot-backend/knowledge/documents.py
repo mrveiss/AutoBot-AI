@@ -78,8 +78,15 @@ class DocumentsMixin:
         metadata: Dict[str, Any] = None,
         doc_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Internal document addition implementation"""
-        # This delegates to store_fact for simplicity
+        """Internal document addition implementation.
+
+        Issue #1252: Ensures provenance source_type defaults to 'manual_upload'
+        for documents added via this path unless caller already specified it.
+        """
+        if metadata is None:
+            metadata = {}
+        metadata.setdefault("source_type", "manual_upload")
+        metadata.setdefault("verification_status", "unverified")
         return await self.store_fact(content, metadata, doc_id)
 
     async def export_all_data(self, output_dir: str = "data/exports") -> Dict[str, Any]:

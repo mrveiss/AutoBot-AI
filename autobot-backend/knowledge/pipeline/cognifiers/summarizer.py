@@ -39,7 +39,7 @@ Text:
 """
 
 
-@TaskRegistry.register_cognifier("generate_summaries")
+@TaskRegistry.register_cognifier("summarize")
 class HierarchicalSummarizer(BaseCognifier):
     """Generate hierarchical summaries at multiple levels."""
 
@@ -211,7 +211,12 @@ class HierarchicalSummarizer(BaseCognifier):
             response = await self.llm.chat_completion(
                 messages=[{"role": "user", "content": prompt}]
             )
-            parsed = parse_llm_json_response(response.content, fallback_dict=True)
+            raw = parse_llm_json_response(response.content, fallback_dict=True)
+            parsed = (
+                raw
+                if isinstance(raw, dict)
+                else {"summary": "", "key_topics": [], "key_entities": []}
+            )
 
             key_entity_ids = self._resolve_entity_ids(
                 parsed.get("key_entities", []), entity_map
@@ -233,6 +238,24 @@ class HierarchicalSummarizer(BaseCognifier):
         except Exception as e:
             logger.error("Summarization failed: %s", e)
             return None
+
+    def _parse_llm_response(self, content: str) -> dict:
+        """
+        Parse LLM JSON response for summarization. Delegates to shared util.
+
+        Uses fallback_dict=True so plain-text responses become a summary dict
+        rather than an empty list.
+
+        Args:
+            content: Raw LLM response text
+
+        Returns:
+            Parsed dict with 'summary', 'key_topics', 'key_entities' keys
+        """
+        raw = parse_llm_json_response(content, fallback_dict=True)
+        if isinstance(raw, dict):
+            return raw
+        return {"summary": content, "key_topics": [], "key_entities": []}
 
     def _resolve_entity_ids(
         self,
