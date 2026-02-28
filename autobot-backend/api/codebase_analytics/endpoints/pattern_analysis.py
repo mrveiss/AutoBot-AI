@@ -70,7 +70,8 @@ async def _load_pattern_task_from_redis(
                 task = json.loads(data)
                 if task.get("status") == "running":
                     task["status"] = "failed"
-                    task["error"] = "Task orphaned by backend restart (#1234)"
+                    task["error"] = "Task orphaned by backend restart"
+                    task["reason"] = "orphaned"
                     task["completed_at"] = datetime.now().isoformat()
                     await redis.set(
                         f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}",
@@ -120,7 +121,8 @@ async def _clear_orphaned_redis_tasks() -> int:
                 task_id = task_id.removeprefix(_PATTERN_TASK_REDIS_PREFIX)
                 if task.get("status") == "running" and task_id not in _analysis_tasks:
                     task["status"] = "failed"
-                    task["error"] = "Task orphaned by backend restart (#1234)"
+                    task["error"] = "Task orphaned by backend restart"
+                    task["reason"] = "orphaned"
                     task["completed_at"] = datetime.now().isoformat()
                     await redis.set(
                         f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}",
@@ -169,6 +171,7 @@ class PatternAnalysisStatus(BaseModel):
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
     error: Optional[str] = None
+    reason: Optional[str] = None  # orphaned, timeout, manual (#1250)
     result: Optional[Dict[str, Any]] = None
 
 
@@ -360,6 +363,7 @@ async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
         started_at=task.get("started_at"),
         completed_at=task.get("completed_at"),
         error=task.get("error"),
+        reason=task.get("reason"),
         result=task.get("result"),
     )
 
@@ -524,14 +528,26 @@ async def clear_all_tasks() -> Dict[str, str]:
         count = len(task_ids)
         _analysis_tasks.clear()
 
-    # Also clear from Redis (#1234)
+    # Clear from Redis — scan for ALL pattern task keys (#1250)
+    # After restart, in-memory dict is empty so task_ids would be empty.
+    # Must scan Redis directly to find orphaned keys.
     try:
         from ..scanner import get_redis_connection_async
 
         redis = await get_redis_connection_async()
         if redis:
-            for tid in task_ids:
-                await redis.delete(f"{_PATTERN_TASK_REDIS_PREFIX}{tid}")
+            cursor = 0
+            while True:
+                cursor, keys = await redis.scan(
+                    cursor,
+                    match=f"{_PATTERN_TASK_REDIS_PREFIX}*",
+                    count=100,
+                )
+                for key in keys:
+                    await redis.delete(key)
+                    count += 1
+                if cursor == 0:
+                    break
     except Exception as e:
         logger.debug("Redis task cleanup failed (non-fatal): %s", e)
 
