@@ -12,9 +12,10 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from config import settings
 from models.database import Base, Setting
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,33 @@ class DatabaseService:
         self._initialized = True
         logger.info("Database initialized successfully")
 
+    @staticmethod
+    def _ui_preference_defaults() -> dict:
+        """UI/display preference defaults (#1306)."""
+        return {
+            "system_name": (
+                "AutoBot Production",
+                "string",
+                "Display name for this installation",
+            ),
+            "default_timezone": (
+                "UTC",
+                "string",
+                "Default timezone for displaying dates and times",
+            ),
+            "dark_mode": ("true", "bool", "Use dark theme for the interface"),
+            "auto_refresh": (
+                "true",
+                "bool",
+                "Automatically refresh data on dashboards",
+            ),
+            "refresh_interval": (
+                "30",
+                "int",
+                "Dashboard auto-refresh interval in seconds",
+            ),
+        }
+
     def _build_required_settings(self) -> dict:
         """Helper for _initialize_defaults. Ref: #1088."""
         return {
@@ -77,7 +105,11 @@ class DatabaseService:
                 "string",
                 "Grafana server URL",
             ),
-            "heartbeat_timeout": ("60", "int", "Node heartbeat timeout in seconds"),
+            "heartbeat_timeout": (
+                "60",
+                "int",
+                "Node heartbeat timeout in seconds",
+            ),
             "auto_reconcile": (
                 "false",
                 "bool",
@@ -103,6 +135,7 @@ class DatabaseService:
                 "int",
                 "Time window (seconds) for auto-rollback eligibility",
             ),
+            **self._ui_preference_defaults(),
         }
 
     async def _initialize_defaults(self) -> None:
