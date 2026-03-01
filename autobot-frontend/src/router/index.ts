@@ -146,6 +146,15 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        path: 'connectors',
+        name: 'knowledge-connectors',
+        component: () => import('@/components/knowledge/connectors/ConnectorManager.vue'),
+        meta: {
+          title: 'Source Connectors',
+          parent: 'knowledge'
+        }
+      },
+      {
         path: 'stats',
         name: 'knowledge-stats',
         component: () => import('@/components/knowledge/KnowledgeStats.vue'),

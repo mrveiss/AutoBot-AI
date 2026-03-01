@@ -4,7 +4,9 @@ import ApiClient from '@/utils/ApiClient'
 import type {
   KnowledgeStats,
   VerificationConfig,
-  PendingSource
+  PendingSource,
+  ConnectorConfig,
+  ConnectorStatus
 } from '@/types/knowledgeBase'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -182,6 +184,12 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     open: false,
     document: null
   })
+
+  // Connector state (Issue #1255)
+  const connectors = ref<ConnectorConfig[]>([])
+  const connectorStatuses = ref<Record<string, ConnectorStatus>>({})
+  const connectorsLoading = ref(false)
+
 
   // Verification state (Issue #1253)
   const pendingVerifications = ref<PendingSource[]>([])
@@ -573,6 +581,42 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     verificationLoading.value = loading
   }
 
+  // Connector actions (Issue #1255)
+  function setConnectors(
+    configs: ConnectorConfig[],
+    statuses: Record<string, ConnectorStatus>
+  ) {
+    connectors.value = configs
+    connectorStatuses.value = statuses
+  }
+
+  function addConnector(config: ConnectorConfig) {
+    connectors.value.push(config)
+  }
+
+  function removeConnector(id: string) {
+    connectors.value = connectors.value.filter(
+      c => c.connector_id !== id
+    )
+    const { [id]: _removed, ...rest } = connectorStatuses.value
+    connectorStatuses.value = rest
+  }
+
+  function updateConnectorStatus(
+    id: string,
+    status: ConnectorStatus
+  ) {
+    connectorStatuses.value = {
+      ...connectorStatuses.value,
+      [id]: status
+    }
+  }
+
+  function setConnectorsLoading(loading: boolean) {
+    connectorsLoading.value = loading
+  }
+
+
   // Source panel actions (Issue #747)
   function openSourcePanel(document: SystemDoc) {
     sourcePanel.value = {
@@ -695,6 +739,12 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     // Source preview panel state (Issue #747)
     sourcePanel,
 
+    // Connector state (Issue #1255)
+    connectors,
+    connectorStatuses,
+    connectorsLoading,
+
+
     // Verification state (Issue #1253)
     pendingVerifications,
     pendingVerificationsTotal,
@@ -741,6 +791,12 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     setSelectedPrompt,
     openSourcePanel,
     closeSourcePanel,
+    // Connector actions (Issue #1255)
+    setConnectors,
+    addConnector,
+    removeConnector,
+    updateConnectorStatus,
+    setConnectorsLoading,
     setPendingVerifications,
     removePendingSource,
     setVerificationConfig,

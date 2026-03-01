@@ -11,7 +11,10 @@ import { ApiRepository } from './ApiRepository'
 import type { KnowledgeDocument, SearchResult } from '@/stores/useKnowledgeStore'
 import type {
   VerificationConfig,
-  PendingSource
+  PendingSource,
+  ConnectorConfig,
+  ConnectorStatus,
+  SyncResult
 } from '@/types/knowledgeBase'
 
 // Re-export types for convenience
@@ -524,6 +527,113 @@ export class KnowledgeRepository extends ApiRepository {
     )
     return response.data
   }
+
+  // ==========================================================================
+  // Connector Management (Issue #1255)
+  // ==========================================================================
+
+  /**
+   * List all connectors with their statuses
+   */
+  async listConnectors(): Promise<{
+    connectors: ConnectorConfig[]
+    statuses: Record<string, ConnectorStatus>
+  }> {
+    const response = await this.get(
+      '/api/knowledge_base/connectors',
+      { skipCache: true }
+    )
+    return response.data
+  }
+
+  /**
+   * Create a new connector
+   */
+  async createConnector(
+    config: Partial<ConnectorConfig>
+  ): Promise<ConnectorConfig> {
+    const response = await this.post(
+      '/api/knowledge_base/connectors',
+      config
+    )
+    return response.data
+  }
+
+  /**
+   * Get a single connector with its status
+   */
+  async getConnector(
+    id: string
+  ): Promise<{ config: ConnectorConfig; status: ConnectorStatus }> {
+    const response = await this.get(
+      `/api/knowledge_base/connectors/${encodeURIComponent(id)}`,
+      { skipCache: true }
+    )
+    return response.data
+  }
+
+  /**
+   * Update connector configuration
+   */
+  async updateConnector(
+    id: string,
+    updates: Partial<ConnectorConfig>
+  ): Promise<ConnectorConfig> {
+    const response = await this.put(
+      `/api/knowledge_base/connectors/${encodeURIComponent(id)}`,
+      updates
+    )
+    return response.data
+  }
+
+  /**
+   * Delete a connector
+   */
+  async deleteConnector(id: string): Promise<void> {
+    await this.delete(
+      `/api/knowledge_base/connectors/${encodeURIComponent(id)}`
+    )
+  }
+
+  /**
+   * Test a connector's connection
+   */
+  async testConnector(
+    id: string
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await this.post(
+      `/api/knowledge_base/connectors/${encodeURIComponent(id)}/test`
+    )
+    return response.data
+  }
+
+  /**
+   * Trigger a sync for a connector
+   */
+  async syncConnector(
+    id: string,
+    incremental = true
+  ): Promise<SyncResult> {
+    const response = await this.post(
+      `/api/knowledge_base/connectors/${encodeURIComponent(id)}/sync?incremental=${incremental}`
+    )
+    return response.data
+  }
+
+  /**
+   * Get sync history for a connector
+   */
+  async getConnectorHistory(
+    id: string,
+    limit = 20
+  ): Promise<SyncResult[]> {
+    const response = await this.get(
+      `/api/knowledge_base/connectors/${encodeURIComponent(id)}/history?limit=${limit}`,
+      { skipCache: true }
+    )
+    return response.data
+  }
+
 
   /**
    * Get all knowledge entries with optional collection filter

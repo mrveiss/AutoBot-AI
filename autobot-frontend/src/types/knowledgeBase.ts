@@ -290,3 +290,54 @@ export interface PendingSource {
   title: string | null
   url: string | null
 }
+
+// ============================================================================
+// Connector Types (Issue #1255)
+// ============================================================================
+
+/** Supported connector types for external data sources */
+export type ConnectorType = 'file_server' | 'web_crawler' | 'database'
+
+/**
+ * Connector configuration as stored by the backend.
+ * Each connector defines how to ingest data from an external source.
+ */
+export interface ConnectorConfig {
+  connector_id: string
+  connector_type: ConnectorType
+  name: string
+  config: Record<string, any>
+  schedule_cron: string | null
+  verification_mode: 'autonomous' | 'collaborative'
+  enabled: boolean
+  created_at: string
+  last_sync_at: string | null
+  include_patterns: string[]
+  exclude_patterns: string[]
+}
+
+/**
+ * Runtime status of a connector, returned alongside config.
+ */
+export interface ConnectorStatus {
+  connector_id: string
+  is_healthy: boolean
+  last_sync_at: string | null
+  last_sync_status: 'success' | 'failed' | 'running' | 'never'
+  documents_indexed: number
+  last_error: string | null
+}
+
+/**
+ * Result of a single sync operation.
+ */
+export interface SyncResult {
+  connector_id: string
+  started_at: string
+  completed_at: string | null
+  status: 'success' | 'failed' | 'partial'
+  added: number
+  updated: number
+  deleted: number
+  errors: string[]
+}
