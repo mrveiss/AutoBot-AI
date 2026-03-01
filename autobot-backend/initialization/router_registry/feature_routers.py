@@ -25,7 +25,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Core workflow and batch processing
     ("api.websockets", "", ["websockets"], "websockets"),
     ("api.workflow", "/workflow", ["workflow"], "workflow"),
-    ("api.batch", "/batch", ["batch"], "batch"),
+    # Issue #1287: batch.py consolidated into batch_jobs.py
     (
         "api.batch_jobs",
         "/batch-jobs",
