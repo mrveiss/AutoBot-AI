@@ -41,16 +41,15 @@ def _get_ownership_analyzer():
     try:
         import importlib.util
 
-        # Add project root so ownership_analyzer.py can import from utils
-        project_root = str(Path(__file__).resolve().parents[4])
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
+        # Add backend root so ownership_analyzer.py can import from utils
+        backend_root = str(Path(__file__).resolve().parents[3])
+        if backend_root not in sys.path:
+            sys.path.insert(0, backend_root)
 
-        # Load ownership_analyzer directly from file to avoid namespace conflict
+        # Load ownership_analyzer from code_analysis/src/ (#1210)
         analyzer_path = (
-            Path(__file__).resolve().parents[4]
-            / "tools"
-            / "code-analysis-suite"
+            Path(__file__).resolve().parents[3]
+            / "code_analysis"
             / "src"
             / "ownership_analyzer.py"
         )
@@ -307,12 +306,12 @@ async def _cache_ownership_result(result: dict) -> None:
         _ownership_analysis_cache = result
 
 
+@router.get("/analysis")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_ownership_analysis",
     error_code_prefix="CODEBASE",
 )
-@router.get("/analysis")
 async def get_ownership_analysis(
     path: str = Query(None, description="Root path to analyze"),
     refresh: bool = Query(False, description="Force fresh analysis"),
@@ -372,12 +371,12 @@ async def get_ownership_analysis(
         )
 
 
+@router.get("/expertise")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_expertise_scores",
     error_code_prefix="CODEBASE",
 )
-@router.get("/expertise")
 async def get_expertise_scores(
     path: str = Query(None, description="Root path to analyze"),
 ):
@@ -430,12 +429,12 @@ async def get_expertise_scores(
         return JSONResponse(_build_expertise_error(str(e)))
 
 
+@router.get("/knowledge-gaps")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_knowledge_gaps",
     error_code_prefix="CODEBASE",
 )
-@router.get("/knowledge-gaps")
 async def get_knowledge_gaps(
     path: str = Query(None, description="Root path to analyze"),
     risk_level: str = Query(

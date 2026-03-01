@@ -109,6 +109,23 @@ class LLMHandlerMixin:
             logger.warning("Model endpoint routing failed: %s", e)
         return self._get_ollama_endpoint()
 
+    async def _discover_ollama_from_slm(self) -> str | None:
+        """Try to discover Ollama endpoint from SLM service discovery (#1214).
+
+        Uses the SLM /api/discover/ollama endpoint (cached with 60s TTL).
+        Returns base URL (no /api/generate suffix) or None if unavailable.
+        """
+        try:
+            from services.slm_client import discover_service
+
+            url = await discover_service("ollama")
+            if url and url.startswith(_VALID_URL_SCHEMES):
+                logger.info("Ollama endpoint from SLM discovery: %s", url)
+                return url
+        except Exception as e:
+            logger.debug("SLM service discovery unavailable: %s", e)
+        return None
+
     def _get_personality_preamble(self) -> str:
         """Return personality block if enabled, else empty string.
 
@@ -263,8 +280,15 @@ NEVER teach commands - ALWAYS execute them."""
     ) -> Dict[str, Any]:
         """Prepare LLM request parameters including endpoint, model, and prompt."""
         selected_model = self._get_selected_model()
-        # Issue #1070: resolve endpoint AFTER model so GPU models route correctly
-        ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
+        # Issue #1214: Try SLM service discovery first (fleet-managed endpoint),
+        # then fall back to local config-based resolution (#1070 model routing).
+        slm_base = await self._discover_ollama_from_slm()
+        if slm_base:
+            if not slm_base.endswith("/api/generate"):
+                slm_base = slm_base.rstrip("/") + "/api/generate"
+            ollama_endpoint = slm_base
+        else:
+            ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
         system_prompt = self._get_system_prompt()
         conversation_context = self._build_conversation_context(session)
 
@@ -555,8 +579,14 @@ Do NOT conclude the task or provide a final summary - just explain this specific
     ) -> str:
         """Get LLM interpretation for command results (non-streaming)."""
         selected_model = global_config_manager.get_selected_model()
-        # Issue #1070: route to correct endpoint based on model
-        ollama_endpoint = global_config_manager.get_ollama_url_for_model(selected_model)
+        # Issue #1214: Try SLM discovery first, then config-based routing
+        slm_base = await self._discover_ollama_from_slm()
+        if slm_base:
+            ollama_endpoint = slm_base
+        else:
+            ollama_endpoint = global_config_manager.get_ollama_url_for_model(
+                selected_model
+            )
 
         logger.info(
             f"[interpret_terminal_command] Starting interpretation "

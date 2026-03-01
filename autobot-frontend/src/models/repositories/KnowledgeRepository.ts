@@ -634,6 +634,7 @@ export class KnowledgeRepository extends ApiRepository {
     return response.data
   }
 
+
   /**
    * Get all knowledge entries with optional collection filter
    */

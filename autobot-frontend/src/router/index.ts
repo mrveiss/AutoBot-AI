@@ -147,6 +147,16 @@ const routes: RouteRecordRaw[] = [
         }
       },
       {
+        // Issue #1256: Observable Research Panel — live browser collaboration
+        path: 'research',
+        name: 'knowledge-research',
+        component: () => import('@/components/knowledge/KnowledgeResearchPanel.vue'),
+        meta: {
+          title: 'Research',
+          parent: 'knowledge'
+        }
+      },
+      {
         path: 'connectors',
         name: 'knowledge-connectors',
         component: () => import('@/components/knowledge/connectors/ConnectorManager.vue'),

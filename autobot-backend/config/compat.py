@@ -98,8 +98,9 @@ async def set_config_value_async(
 
 # Export host and service constants for backward compatibility
 # Issue #763: Now uses ConfigRegistry with fallback to NetworkConstants
+# Issue #1214: Ollama fallback corrected — was AI_STACK_HOST (.24), now 127.0.0.1
 HTTP_PROTOCOL = "http"
-OLLAMA_HOST_IP = ConfigRegistry.get("vm.ollama", NetworkConstants.AI_STACK_HOST)
+OLLAMA_HOST_IP = ConfigRegistry.get("vm.ollama", "127.0.0.1")
 OLLAMA_PORT = int(ConfigRegistry.get("port.ollama", str(NetworkConstants.OLLAMA_PORT)))
 REDIS_HOST_IP = ConfigRegistry.get("vm.redis", NetworkConstants.REDIS_VM_IP)
 OLLAMA_URL = f"http://{OLLAMA_HOST_IP}:{OLLAMA_PORT}"

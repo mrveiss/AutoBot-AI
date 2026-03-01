@@ -77,6 +77,40 @@ _API_PATH_RE = re.compile(r'[\'"`](/api/[^\'"` ]+)[\'"`]')
 # Path parameter pattern for matching
 _PATH_PARAM_RE = re.compile(r"\{[^}]+\}")
 
+# Issue #1225: Router import detection patterns (hoisted from _compile_router_patterns)
+# from api.module import router as X_router
+_ROUTER_IMPORT_RE = re.compile(
+    r"from\s+api\.(\w+)\s+import\s+router\s+as\s+(\w+_router)",
+    re.MULTILINE,
+)
+# from api import module1, module2
+_IMPORT_MODULES_RE = re.compile(r"from\s+api\s+import\s+([^;\n]+)", re.MULTILINE)
+# router.include_router(X_router) or router.include_router(module.router)
+_INCLUDE_ROUTER_RE = re.compile(
+    r"router\.include_router\s*\(\s*(\w+(?:\.\w+)?)\s*\)",
+    re.MULTILINE,
+)
+
+# Issue #1225: Tuple registry patterns (hoisted from _compile_config_tuple_patterns)
+_SIMPLE_TUPLE_RE = re.compile(
+    r'\(\s*(\w+_router)\s*,\s*["\']([^"\']*)["\']',
+    re.MULTILINE,
+)
+_FIVE_ELEMENT_TUPLE_RE = re.compile(
+    r'\(\s*["\']([^"\']+)["\'],\s*["\']router["\'],' r'\s*["\']([^"\']*)["\']',
+    re.MULTILINE,
+)
+_FOUR_ELEMENT_TUPLE_RE = re.compile(
+    r'\(\s*["\']([^"\']+)["\'],\s*["\']([^"\']*)["\'],' r"\s*\[",
+    re.MULTILINE,
+)
+# Issue #552: Dynamic router loading pattern
+_DYNAMIC_ROUTER_TUPLE_RE = re.compile(
+    r'\(\s*(\w+_router)\s*,\s*["\']([^"\']*)["\'],'
+    r'\s*\[[^\]]*\]\s*,\s*["\'](\w+)["\']',
+    re.MULTILINE,
+)
+
 
 # =============================================================================
 # Backend Endpoint Scanner
@@ -173,31 +207,12 @@ class BackendEndpointScanner:
         )
 
     def _compile_router_patterns(self):
+        """Return pre-compiled regex patterns for router import detection.
+
+        Issue #665: Extracted from _scan_include_router_patterns.
+        Issue #1225: Patterns hoisted to module level.
         """
-        Compile regex patterns for router import detection.
-
-        Issue #665: Extracted from _scan_include_router_patterns to reduce function length.
-
-        Returns:
-            Tuple of (import_pattern, import_modules_pattern, include_pattern)
-        """
-        # Pattern to detect: from api.module import router as X_router
-        import_pattern = re.compile(
-            r"from\s+api\.(\w+)\s+import\s+router\s+as\s+(\w+_router)",
-            re.MULTILINE,
-        )
-
-        # Pattern to detect: from api import module1, module2
-        import_modules_pattern = re.compile(
-            r"from\s+api\s+import\s+([^;\n]+)", re.MULTILINE
-        )
-
-        # Pattern to detect: router.include_router(X_router) or router.include_router(module.router)
-        include_pattern = re.compile(
-            r"router\.include_router\s*\(\s*(\w+(?:\.\w+)?)\s*\)", re.MULTILINE
-        )
-
-        return import_pattern, import_modules_pattern, include_pattern
+        return _ROUTER_IMPORT_RE, _IMPORT_MODULES_RE, _INCLUDE_ROUTER_RE
 
     def _extract_router_imports(
         self,
@@ -343,11 +358,7 @@ class BackendEndpointScanner:
 
             # Pattern to match: (router_name, "/prefix", [...], "name")
             # Matches tuples like: (chat_router, "", ["chat"], "chat")
-            tuple_pattern = re.compile(
-                r'\(\s*(\w+_router)\s*,\s*["\']([^"\']*)["\']', re.MULTILINE
-            )
-
-            for match in tuple_pattern.finditer(content):
+            for match in _SIMPLE_TUPLE_RE.finditer(content):
                 router_var = match.group(1)  # e.g., "chat_router"
                 prefix = match.group(2)  # e.g., "" or "/system"
 
@@ -365,21 +376,12 @@ class BackendEndpointScanner:
             logger.debug("Error parsing router registry %s: %s", file_path, e)
 
     def _compile_config_tuple_patterns(self):
-        """Helper for _parse_config_tuple_registry. Ref: #1088."""
-        five_element_pattern = re.compile(
-            r'\(\s*["\']([^"\']+)["\'],\s*["\']router["\'],\s*["\']([^"\']*)["\']',
-            re.MULTILINE,
+        """Helper for _parse_config_tuple_registry. Ref: #1088, #1225."""
+        return (
+            _FIVE_ELEMENT_TUPLE_RE,
+            _FOUR_ELEMENT_TUPLE_RE,
+            _DYNAMIC_ROUTER_TUPLE_RE,
         )
-        four_element_pattern = re.compile(
-            r'\(\s*["\']([^"\']+)["\'],\s*["\']([^"\']*)["\'],\s*\[', re.MULTILINE
-        )
-        # Issue #552: Pattern for dynamic router loading in terminal_routers.py:
-        # (terminal_router, "/terminal", ["terminal"], "terminal")
-        dynamic_router_pattern = re.compile(
-            r'\(\s*(\w+_router)\s*,\s*["\']([^"\']*)["\'],\s*\[[^\]]*\]\s*,\s*["\'](\w+)["\']',
-            re.MULTILINE,
-        )
-        return five_element_pattern, four_element_pattern, dynamic_router_pattern
 
     def _apply_static_tuple_patterns(
         self,

@@ -242,78 +242,82 @@ class TestParseStatsMetadata:
         assert result["documentation_ratio"] == "23.7%"
 
 
-class TestClearChromaDBCollection:
-    """Tests for _clear_chromadb_collection preserving codebase_stats."""
+class TestRecreateChromaDBCollection:
+    """Tests for _recreate_chromadb_collection drop+recreate approach (#1213)."""
 
     @pytest.mark.asyncio
-    async def test_preserves_codebase_stats(self):
-        """Should not delete codebase_stats document."""
-        from api.codebase_analytics.scanner import _clear_chromadb_collection
+    async def test_drops_and_recreates_collection(self):
+        """Should delete and recreate the collection."""
+        from api.codebase_analytics.scanner import _recreate_chromadb_collection
 
-        mock_collection = MagicMock()
-        mock_collection.get = MagicMock(
-            return_value={
-                "ids": ["codebase_stats", "function_1", "class_1", "problem_1"]
-            }
-        )
-        mock_collection.delete = MagicMock()
+        mock_new_collection = MagicMock()
+        mock_client = MagicMock()
 
-        # Make get async
-        async def async_get():
-            return {"ids": ["codebase_stats", "function_1", "class_1", "problem_1"]}
-
-        async def async_delete(ids):
+        async def async_delete_collection(name):
             pass
 
-        mock_collection.get = async_get
-        mock_collection.delete = MagicMock(side_effect=async_delete)
+        async def async_get_or_create(name, metadata=None):
+            return mock_new_collection
 
-        await _clear_chromadb_collection(mock_collection, "test-task")
+        mock_client.delete_collection = MagicMock(side_effect=async_delete_collection)
+        mock_client.get_or_create_collection = MagicMock(
+            side_effect=async_get_or_create
+        )
 
-        # Verify delete was called with IDs excluding codebase_stats
-        mock_collection.delete.assert_called_once()
-        deleted_ids = mock_collection.delete.call_args[1]["ids"]
-        assert "codebase_stats" not in deleted_ids
-        assert "function_1" in deleted_ids
-        assert "class_1" in deleted_ids
-        assert "problem_1" in deleted_ids
+        with patch(
+            "utils.chromadb_client.get_async_chromadb_client",
+            return_value=mock_client,
+        ):
+            result = await _recreate_chromadb_collection("test-task")
 
-    @pytest.mark.asyncio
-    async def test_handles_empty_collection(self):
-        """Should handle empty collection gracefully."""
-        from api.codebase_analytics.scanner import _clear_chromadb_collection
-
-        mock_collection = MagicMock()
-
-        async def async_get():
-            return {"ids": []}
-
-        mock_collection.get = async_get
-        mock_collection.delete = MagicMock()
-
-        # Should not raise
-        await _clear_chromadb_collection(mock_collection, "test-task")
-
-        # Delete should not be called for empty collection
-        mock_collection.delete.assert_not_called()
+        assert result is mock_new_collection
+        mock_client.delete_collection.assert_called_once_with("autobot_code")
+        mock_client.get_or_create_collection.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_handles_only_stats_document(self):
-        """Should not delete anything if only codebase_stats exists."""
-        from api.codebase_analytics.scanner import _clear_chromadb_collection
+    async def test_handles_no_existing_collection(self):
+        """Should handle case where collection doesn't exist yet."""
+        from api.codebase_analytics.scanner import _recreate_chromadb_collection
 
-        mock_collection = MagicMock()
+        mock_new_collection = MagicMock()
+        mock_client = MagicMock()
 
-        async def async_get():
-            return {"ids": ["codebase_stats"]}
+        async def async_delete_raises(name):
+            raise ValueError("Collection not found")
 
-        mock_collection.get = async_get
-        mock_collection.delete = MagicMock()
+        async def async_get_or_create(name, metadata=None):
+            return mock_new_collection
 
-        await _clear_chromadb_collection(mock_collection, "test-task")
+        mock_client.delete_collection = MagicMock(side_effect=async_delete_raises)
+        mock_client.get_or_create_collection = MagicMock(
+            side_effect=async_get_or_create
+        )
 
-        # Delete should not be called since filtering removes codebase_stats
-        mock_collection.delete.assert_not_called()
+        with patch(
+            "utils.chromadb_client.get_async_chromadb_client",
+            return_value=mock_client,
+        ):
+            result = await _recreate_chromadb_collection("test-task")
+
+        # Should still create fresh collection despite delete failure
+        assert result is mock_new_collection
+        mock_client.get_or_create_collection.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_none_on_client_failure(self):
+        """Should return None if ChromaDB client fails entirely."""
+        from api.codebase_analytics.scanner import _recreate_chromadb_collection
+
+        async def async_client_fails(*args, **kwargs):
+            raise ConnectionError("ChromaDB unavailable")
+
+        with patch(
+            "utils.chromadb_client.get_async_chromadb_client",
+            side_effect=async_client_fails,
+        ):
+            result = await _recreate_chromadb_collection("test-task")
+
+        assert result is None
 
 
 class TestNoDataResponse:

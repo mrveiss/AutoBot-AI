@@ -7,6 +7,8 @@ Pattern Analysis API Endpoints
 Issue #208: FastAPI endpoints for code pattern detection and optimization.
 """
 
+import asyncio
+import json
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -22,6 +24,118 @@ router = APIRouter(tags=["Pattern Analysis"])
 
 # Global state for tracking analysis tasks
 _analysis_tasks: Dict[str, Dict[str, Any]] = {}
+# Lock for thread-safe access to _analysis_tasks (Issue #1221)
+_analysis_tasks_lock = asyncio.Lock()
+
+# Redis-backed task state for multi-worker visibility (#1179 pattern)
+_PATTERN_TASK_REDIS_PREFIX = "pattern_task:"
+_PATTERN_TASK_REDIS_TTL = 86400  # 24 hours
+
+
+async def _save_pattern_task_to_redis(task_id: str) -> None:
+    """Persist pattern task state to Redis so all workers can read it."""
+    try:
+        from ..scanner import get_redis_connection_async
+
+        redis = await get_redis_connection_async()
+        if redis:
+            state = _analysis_tasks.get(task_id)
+            if state:
+                # Exclude non-serializable fields
+                safe_state = {k: v for k, v in state.items() if k != "request"}
+                await redis.set(
+                    f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}",
+                    json.dumps(safe_state, default=str),
+                    ex=_PATTERN_TASK_REDIS_TTL,
+                )
+    except Exception as e:
+        logger.debug("Pattern task Redis save failed (non-fatal): %s", e)
+
+
+async def _load_pattern_task_from_redis(
+    task_id: str,
+) -> Optional[Dict[str, Any]]:
+    """Load pattern task state from Redis (cross-worker visibility).
+
+    If the task is still 'running' in Redis but absent from the in-memory
+    dict, it was orphaned by a backend restart — mark it failed (#1234).
+    """
+    try:
+        from ..scanner import get_redis_connection_async
+
+        redis = await get_redis_connection_async()
+        if redis:
+            data = await redis.get(f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}")
+            if data:
+                task = json.loads(data)
+                if task.get("status") == "running":
+                    task["status"] = "failed"
+                    task["error"] = "Task orphaned by backend restart"
+                    task["reason"] = "orphaned"
+                    task["completed_at"] = datetime.now().isoformat()
+                    await redis.set(
+                        f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}",
+                        json.dumps(task, default=str),
+                        ex=_PATTERN_TASK_REDIS_TTL,
+                    )
+                    logger.info("Marked orphaned Redis task %s as failed", task_id)
+                return task
+    except Exception as e:
+        logger.debug("Pattern task Redis load failed (non-fatal): %s", e)
+    return None
+
+
+async def _clear_orphaned_redis_tasks() -> int:
+    """Mark any 'running' tasks in Redis as failed (#1234).
+
+    After a backend restart, in-memory _analysis_tasks is empty but Redis
+    may still hold tasks with status='running' that will never complete.
+    This scans Redis for such orphans and marks them failed so new
+    analyses can start without a false 409 conflict.
+
+    Returns:
+        Number of orphaned tasks cleared.
+    """
+    cleared = 0
+    try:
+        from ..scanner import get_redis_connection_async
+
+        redis = await get_redis_connection_async()
+        if not redis:
+            return 0
+
+        # Scan for pattern task keys
+        cursor = 0
+        while True:
+            cursor, keys = await redis.scan(
+                cursor,
+                match=f"{_PATTERN_TASK_REDIS_PREFIX}*",
+                count=100,
+            )
+            for key in keys:
+                data = await redis.get(key)
+                if not data:
+                    continue
+                task = json.loads(data)
+                task_id = key.decode() if isinstance(key, bytes) else key
+                task_id = task_id.removeprefix(_PATTERN_TASK_REDIS_PREFIX)
+                if task.get("status") == "running" and task_id not in _analysis_tasks:
+                    task["status"] = "failed"
+                    task["error"] = "Task orphaned by backend restart"
+                    task["reason"] = "orphaned"
+                    task["completed_at"] = datetime.now().isoformat()
+                    await redis.set(
+                        f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}",
+                        json.dumps(task, default=str),
+                        ex=_PATTERN_TASK_REDIS_TTL,
+                    )
+                    cleared += 1
+                    logger.info("Cleared orphaned Redis pattern task %s", task_id)
+            if cursor == 0:
+                break
+    except Exception as e:
+        logger.debug("Orphaned Redis task scan failed (non-fatal): %s", e)
+    return cleared
 
 
 class PatternAnalysisRequest(BaseModel):
@@ -57,6 +171,7 @@ class PatternAnalysisStatus(BaseModel):
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
     error: Optional[str] = None
+    reason: Optional[str] = None  # orphaned, timeout, manual (#1250)
     result: Optional[Dict[str, Any]] = None
 
 
@@ -85,6 +200,7 @@ async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
 
         _analysis_tasks[task_id]["status"] = "running"
         _analysis_tasks[task_id]["started_at"] = datetime.now().isoformat()
+        await _save_pattern_task_to_redis(task_id)
 
         # Create analyzer with request parameters
         analyzer = CodePatternAnalyzer(
@@ -103,12 +219,14 @@ async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
         _analysis_tasks[task_id]["completed_at"] = datetime.now().isoformat()
         _analysis_tasks[task_id]["result"] = report.to_dict()
         _analysis_tasks[task_id]["progress"] = 100.0
+        await _save_pattern_task_to_redis(task_id)
 
     except Exception as e:
         logger.error("Pattern analysis failed: %s", e)
         _analysis_tasks[task_id]["status"] = "failed"
         _analysis_tasks[task_id]["error"] = str(e)
         _analysis_tasks[task_id]["completed_at"] = datetime.now().isoformat()
+        await _save_pattern_task_to_redis(task_id)
 
 
 def _cleanup_stuck_tasks() -> int:
@@ -171,36 +289,43 @@ async def start_pattern_analysis(
     # Generate task ID
     task_id = str(uuid.uuid4())[:8]
 
-    # Auto-cleanup any stuck tasks before checking (Issue #647)
-    cleaned = _cleanup_stuck_tasks()
-    if cleaned > 0:
-        logger.info(
-            "Auto-recovered %d stuck task(s) before starting new analysis", cleaned
-        )
+    # Thread-safe check+insert under lock (Issue #1221)
+    async with _analysis_tasks_lock:
+        # Auto-cleanup any stuck tasks before checking (Issue #647)
+        cleaned = _cleanup_stuck_tasks()
+        if cleaned > 0:
+            logger.info(
+                "Auto-recovered %d stuck task(s) before starting new analysis",
+                cleaned,
+            )
 
-    # Check if another analysis is genuinely running
-    running_tasks = [
-        t for t in _analysis_tasks.values() if t.get("status") == "running"
-    ]
-    if running_tasks:
-        raise HTTPException(
-            status_code=409,
-            detail="Another pattern analysis is already running. Please wait or cancel it.",
-        )
+        # Also clear orphaned Redis tasks that survived a restart (#1234)
+        await _clear_orphaned_redis_tasks()
 
-    # Initialize task state
-    _analysis_tasks[task_id] = {
-        "task_id": task_id,
-        "status": "pending",
-        "progress": 0.0,
-        "started_at": None,
-        "completed_at": None,
-        "error": None,
-        "result": None,
-        "request": request.model_dump(),
-    }
+        # Check if another analysis is genuinely running
+        running_tasks = [
+            t for t in _analysis_tasks.values() if t.get("status") == "running"
+        ]
+        if running_tasks:
+            raise HTTPException(
+                status_code=409,
+                detail="Another pattern analysis is already running. "
+                "Please wait or cancel it.",
+            )
 
-    # Start background task
+        # Initialize task state
+        _analysis_tasks[task_id] = {
+            "task_id": task_id,
+            "status": "pending",
+            "progress": 0.0,
+            "started_at": None,
+            "completed_at": None,
+            "error": None,
+            "result": None,
+            "request": request.model_dump(),
+        }
+
+    # Start background task (outside lock — doesn't modify dict)
     background_tasks.add_task(_run_analysis, task_id, request)
 
     return PatternAnalysisStatus(
@@ -220,13 +345,17 @@ async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
     Returns:
         PatternAnalysisStatus with current status and results if complete
     """
-    if task_id not in _analysis_tasks:
+    # #1179 pattern: check local memory first, fall back to Redis
+    task = _analysis_tasks.get(task_id)
+    if task is None:
+        task = await _load_pattern_task_from_redis(task_id)
+
+    if task is None:
         raise HTTPException(
             status_code=404,
             detail=f"Analysis task {task_id} not found",
         )
 
-    task = _analysis_tasks[task_id]
     return PatternAnalysisStatus(
         task_id=task_id,
         status=task["status"],
@@ -234,6 +363,7 @@ async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
         started_at=task.get("started_at"),
         completed_at=task.get("completed_at"),
         error=task.get("error"),
+        reason=task.get("reason"),
         result=task.get("result"),
     )
 
@@ -248,13 +378,15 @@ async def get_analysis_result(task_id: str) -> Dict[str, Any]:
     Returns:
         Full analysis report as dictionary
     """
-    if task_id not in _analysis_tasks:
+    task = _analysis_tasks.get(task_id)
+    if task is None:
+        task = await _load_pattern_task_from_redis(task_id)
+
+    if task is None:
         raise HTTPException(
             status_code=404,
             detail=f"Analysis task {task_id} not found",
         )
-
-    task = _analysis_tasks[task_id]
 
     if task["status"] != "completed":
         raise HTTPException(
@@ -275,14 +407,15 @@ async def cancel_analysis(task_id: str) -> Dict[str, str]:
     Returns:
         Confirmation message
     """
-    if task_id not in _analysis_tasks:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Analysis task {task_id} not found",
-        )
+    async with _analysis_tasks_lock:
+        if task_id not in _analysis_tasks:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Analysis task {task_id} not found",
+            )
 
-    # Remove task (note: this doesn't actually stop a running task)
-    del _analysis_tasks[task_id]
+        # Remove task (note: this doesn't actually stop a running task)
+        del _analysis_tasks[task_id]
 
     return {"message": f"Task {task_id} removed"}
 
@@ -339,33 +472,39 @@ async def clear_stuck_tasks(
     cleared = []
     now = datetime.now()
 
-    for task_id, task in list(_analysis_tasks.items()):
-        if task.get("status") == "running":
-            should_clear = force  # Force mode clears all
+    async with _analysis_tasks_lock:
+        for task_id, task in list(_analysis_tasks.items()):
+            if task.get("status") == "running":
+                should_clear = force  # Force mode clears all
 
-            if not force:
-                # Normal mode: only clear timed-out tasks
-                started_at = task.get("started_at")
-                if started_at:
-                    try:
-                        start_time = datetime.fromisoformat(started_at)
-                        elapsed = (now - start_time).total_seconds()
-                        should_clear = elapsed > TASK_TIMEOUT_SECONDS
-                    except (ValueError, TypeError):
-                        should_clear = True  # Can't parse time, assume stuck
-                else:
-                    should_clear = True  # No start time, assume stuck
+                if not force:
+                    # Normal mode: only clear timed-out tasks
+                    started_at = task.get("started_at")
+                    if started_at:
+                        try:
+                            start_time = datetime.fromisoformat(started_at)
+                            elapsed = (now - start_time).total_seconds()
+                            should_clear = elapsed > TASK_TIMEOUT_SECONDS
+                        except (ValueError, TypeError):
+                            should_clear = True
+                    else:
+                        should_clear = True
 
-            if should_clear:
-                _analysis_tasks[task_id]["status"] = "failed"
-                _analysis_tasks[task_id]["error"] = (
-                    "Task cleared manually" if force else "Task timed out or was stuck"
-                )
-                _analysis_tasks[task_id]["completed_at"] = now.isoformat()
-                cleared.append(task_id)
-                logger.info(
-                    "Cleared %s task %s", "forced" if force else "stuck", task_id
-                )
+                if should_clear:
+                    _analysis_tasks[task_id]["status"] = "failed"
+                    _analysis_tasks[task_id]["error"] = (
+                        "Task cleared manually"
+                        if force
+                        else "Task timed out or was stuck"
+                    )
+                    _analysis_tasks[task_id]["completed_at"] = now.isoformat()
+                    cleared.append(task_id)
+                    await _save_pattern_task_to_redis(task_id)
+                    logger.info(
+                        "Cleared %s task %s",
+                        "forced" if force else "stuck",
+                        task_id,
+                    )
 
     return {
         "cleared_count": len(cleared),
@@ -376,17 +515,42 @@ async def clear_stuck_tasks(
 
 @router.post("/patterns/tasks/clear-all")
 async def clear_all_tasks() -> Dict[str, str]:
-    """Clear all pattern analysis tasks.
-
-    This removes all tasks from memory, allowing fresh analyses.
+    """Clear all pattern analysis tasks from memory and Redis.
 
     Returns:
         Confirmation message
 
     Issue #647: Added endpoint to clear all tasks.
+    Issue #1234: Also clear Redis-persisted task state.
     """
-    count = len(_analysis_tasks)
-    _analysis_tasks.clear()
+    async with _analysis_tasks_lock:
+        task_ids = list(_analysis_tasks.keys())
+        count = len(task_ids)
+        _analysis_tasks.clear()
+
+    # Clear from Redis — scan for ALL pattern task keys (#1250)
+    # After restart, in-memory dict is empty so task_ids would be empty.
+    # Must scan Redis directly to find orphaned keys.
+    try:
+        from ..scanner import get_redis_connection_async
+
+        redis = await get_redis_connection_async()
+        if redis:
+            cursor = 0
+            while True:
+                cursor, keys = await redis.scan(
+                    cursor,
+                    match=f"{_PATTERN_TASK_REDIS_PREFIX}*",
+                    count=100,
+                )
+                for key in keys:
+                    await redis.delete(key)
+                    count += 1
+                if cursor == 0:
+                    break
+    except Exception as e:
+        logger.debug("Redis task cleanup failed (non-fatal): %s", e)
+
     return {"message": f"Cleared {count} task(s)"}
 
 

@@ -375,6 +375,37 @@ def _decode_redis_hash(fact_data: Dict[bytes, bytes]) -> Dict[str, Any]:
     return decoded
 
 
+# ===== PROVENANCE HELPERS (Issue #1252) =====
+
+#: Default provenance field values applied to every new fact/document.
+_PROVENANCE_DEFAULTS: Dict[str, Any] = {
+    "source_type": "manual_upload",
+    "source_connector_id": None,
+    "verification_status": "unverified",
+    "verification_method": None,
+    "verified_by": None,
+    "verified_at": None,
+    "quality_score": 0.0,
+    "provenance_chain": [],
+}
+
+
+def _apply_provenance_defaults(metadata: Dict[str, Any]) -> None:
+    """Inject provenance fields into metadata dict where not already set.
+
+    Modifies *metadata* in place so callers that already carry partial
+    provenance (e.g. librarian_assistant) retain their values.
+
+    Issue #1252: Source Provenance Metadata.
+
+    Args:
+        metadata: Mutable metadata dict to enrich with provenance defaults.
+    """
+    for field, default in _PROVENANCE_DEFAULTS.items():
+        if field not in metadata:
+            metadata[field] = default
+
+
 class FactsMixin:
     """
     Facts management mixin for knowledge base.
@@ -620,12 +651,17 @@ class FactsMixin:
     def _prepare_fact_metadata(
         self, fact_id: str, metadata: Optional[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Prepare metadata with system fields for new fact (Issue #398: extracted)."""
+        """Prepare metadata with system fields for new fact (Issue #398: extracted).
+
+        Issue #1252: Injects provenance defaults when not already present so every
+        stored fact carries source and verification information.
+        """
         if metadata is None:
             metadata = {}
         metadata["fact_id"] = fact_id
         metadata["timestamp"] = datetime.now().isoformat()
         metadata["embedding_model"] = self.embedding_model_name
+        _apply_provenance_defaults(metadata)
         return metadata
 
     async def _store_and_vectorize_fact(

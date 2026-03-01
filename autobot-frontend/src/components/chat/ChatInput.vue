@@ -149,6 +149,18 @@
               <i class="fas fa-paperclip" aria-hidden="true"></i>
             </BaseButton>
 
+            <!-- Vision Analysis Button (#1242) -->
+            <BaseButton
+              variant="ghost"
+              size="xs"
+              @click="showVisionModal = true"
+              class="action-btn"
+              :disabled="isDisabled"
+              aria-label="Analyze image"
+            >
+              <i class="fas fa-eye" aria-hidden="true"></i>
+            </BaseButton>
+
             <!-- Voice Input Button -->
             <BaseButton
               variant="ghost"
@@ -256,6 +268,13 @@
         </BaseButton>
       </div>
     </div>
+
+    <!-- Vision Analysis Modal (#1242) -->
+    <VisionAnalysisModal
+      v-if="showVisionModal"
+      @close="showVisionModal = false"
+      @send-to-chat="handleVisionSendToChat"
+    />
   </div>
 </template>
 
@@ -267,10 +286,12 @@ import globalWebSocketService from '@/services/GlobalWebSocketService'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import ProgressBar from '@/components/ui/ProgressBar.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import VisionAnalysisModal from './VisionAnalysisModal.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
 import type { UseOverseerAgentOptions } from '@/composables/useOverseerAgent'
+import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 
 const logger = createLogger('ChatInput')
@@ -298,6 +319,7 @@ const isInputFocused = ref(false)
 const isVoiceRecording = ref(false)
 const isSending = ref(false)
 const showEmojiPicker = ref(false)
+const showVisionModal = ref(false)
 const showQuickActions = ref(true)
 
 // Issue #249: Knowledge-Enhanced Chat (RAG) toggle
@@ -618,6 +640,26 @@ const stopVoiceRecording = () => {
 
 const toggleEmojiPicker = () => {
   showEmojiPicker.value = !showEmojiPicker.value
+}
+
+// Issue #1242: Vision analysis modal emit
+const emit = defineEmits<{
+  (e: 'vision-send-to-chat', payload: {
+    filename: string
+    intent: string
+    question?: string
+    result: MultiModalResponse
+  }): void
+}>()
+
+const handleVisionSendToChat = (payload: {
+  filename: string
+  intent: string
+  question?: string
+  result: MultiModalResponse
+}) => {
+  showVisionModal.value = false
+  emit('vision-send-to-chat', payload)
 }
 
 const insertEmoji = (emoji: typeof commonEmojis[0]) => {

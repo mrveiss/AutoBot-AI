@@ -27,6 +27,9 @@ _TIER2 = "llama3.2:3b"
 _TIER3 = "mistral:7b-instruct"
 _TIER4 = "mistral:7b-instruct"
 
+# Gemma model for classification agents (SSOT: agents.yaml llm.models.classification)
+_GEMMA_MODEL = "gemma2:2b"
+
 # All 29 AutoBot agents — mirrors DEFAULT_AGENT_CONFIGS exactly.
 # model/provider/endpoint can be overridden via /agent-config in the SLM UI.
 SEED_AGENT_CONFIGS: list[dict] = [
@@ -61,7 +64,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Classifies incoming requests by type and complexity. "
             "Invoked by Orchestrator to determine routing strategy."
         ),
-        "llm_model": _TIER1,
+        "llm_model": _GEMMA_MODEL,
         "is_default": False,
         "is_active": True,
     },
@@ -350,7 +353,7 @@ SEED_AGENT_CONFIGS: list[dict] = [
             "Ultra-fast classification using Google's Gemma models. "
             "Used by Orchestrator for advanced intent detection and multi-label tagging."
         ),
-        "llm_model": _TIER4,
+        "llm_model": _GEMMA_MODEL,
         "is_default": False,
         "is_active": True,
     },

@@ -251,12 +251,12 @@ async def _get_redis_fallback_chart_data(
         )
 
 
+@router.get("/analytics/charts")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_chart_data",
     error_code_prefix="CODEBASE",
 )
-@router.get("/analytics/charts")
 async def get_chart_data():
     """
     Get aggregated data for analytics charts.
@@ -270,15 +270,20 @@ async def get_chart_data():
     - top_files: Horizontal bar chart for files with most problems
     - summary: Overall summary statistics
     """
-    code_collection = get_code_collection()
+    code_collection = await asyncio.to_thread(get_code_collection)
     problem_types: Dict[str, int] = {}
     severity_counts: Dict[str, int] = {}
     race_conditions: Dict[str, int] = {}
     file_problems: Dict[str, int] = {}
 
     # Try ChromaDB first (Issue #665: uses _try_chromadb_aggregation helper)
-    total_problems, success = _try_chromadb_aggregation(
-        code_collection, problem_types, severity_counts, race_conditions, file_problems
+    total_problems, success = await asyncio.to_thread(
+        _try_chromadb_aggregation,
+        code_collection,
+        problem_types,
+        severity_counts,
+        race_conditions,
+        file_problems,
     )
 
     if success:

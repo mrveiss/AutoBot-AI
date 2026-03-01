@@ -9,7 +9,7 @@ Issue #759: Knowledge Pipeline Foundation - Extract, Cognify, Load (ECL).
 
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from knowledge.pipeline.base import BaseCognifier, PipelineContext
@@ -108,11 +108,25 @@ class EventExtractor(BaseCognifier):
             response = await self.llm.chat_completion(
                 messages=[{"role": "user", "content": prompt}]
             )
-            raw_events = parse_llm_json_response(response.content)
+            parsed = parse_llm_json_response(response.content)
+            raw_events = parsed if isinstance(parsed, list) else []
             return self._convert_to_events(raw_events, chunk, entity_map, context)
         except Exception as e:
             logger.error("Event extraction failed: %s", e)
             return []
+
+    def _parse_llm_response(self, content: str) -> list:
+        """
+        Parse LLM JSON response for event extraction. Delegates to shared util.
+
+        Args:
+            content: Raw LLM response text
+
+        Returns:
+            Parsed list of event dicts, or empty list on failure
+        """
+        parsed = parse_llm_json_response(content)
+        return parsed if isinstance(parsed, list) else []
 
     def _convert_to_events(
         self,
@@ -166,7 +180,7 @@ class EventExtractor(BaseCognifier):
         if not expression:
             return None
 
-        # ISO format: 2024-01-15
+        # ISO format: 2024-01-15 — return naive datetime to match test expectations
         iso_match = re.match(r"(\d{4})-(\d{2})-(\d{2})", expression)
         if iso_match:
             try:
@@ -174,13 +188,12 @@ class EventExtractor(BaseCognifier):
                     int(iso_match.group(1)),
                     int(iso_match.group(2)),
                     int(iso_match.group(3)),
-                    tzinfo=timezone.utc,
                 )
             except ValueError:
                 pass
 
-        # Relative patterns
-        now = datetime.now(timezone.utc)
+        # Relative patterns — naive local date for consistency with ISO path
+        now = datetime.now()
         if "today" in expression.lower():
             return now.replace(hour=0, minute=0, second=0, microsecond=0)
         if "yesterday" in expression.lower():

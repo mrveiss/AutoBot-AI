@@ -22,6 +22,7 @@ from typing import Optional
 from constants.threshold_constants import AnalyticsConfig
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
+from utils.io_executor import get_analytics_executor
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -78,9 +79,11 @@ async def _run_standard_analysis(project_root: str, min_similarity: float):
     """
     loop = asyncio.get_event_loop()
     try:
+        # Issue #1233: Use dedicated analytics executor to prevent
+        # default thread pool starvation
         analysis = await asyncio.wait_for(
             loop.run_in_executor(
-                None,
+                get_analytics_executor(),
                 lambda: DuplicateCodeDetector(
                     project_root=project_root,
                     min_similarity=min_similarity,
@@ -298,7 +301,7 @@ def _check_duplicate_cache(refresh: bool) -> Optional[JSONResponse]:
     return None
 
 
-def _handle_detection_failure(error: Exception) -> JSONResponse:
+async def _handle_detection_failure(error: Exception) -> JSONResponse:
     """
     Handle duplicate detection failure with fallback.
 
@@ -312,19 +315,19 @@ def _handle_detection_failure(error: Exception) -> JSONResponse:
     """
     logger.error("Duplicate detection failed: %s", error, exc_info=True)
 
-    fallback = _get_chromadb_fallback(str(error))
+    fallback = await asyncio.to_thread(_get_chromadb_fallback, str(error))
     if fallback:
         return JSONResponse(fallback)
 
     return JSONResponse(_build_detection_error_response(str(error)))
 
 
+@router.get("/duplicates")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_duplicate_code",
     error_code_prefix="CODEBASE",
 )
-@router.get("/duplicates")
 async def get_duplicate_code(
     refresh: bool = Query(False, description="Force fresh analysis instead of cache"),
     min_similarity: float = Query(
@@ -373,7 +376,7 @@ async def get_duplicate_code(
 
     except Exception as e:
         # Issue #620: Use helper for error handling
-        return _handle_detection_failure(e)
+        return await _handle_detection_failure(e)
 
 
 def _make_relative_path(path: str, project_root: str) -> str:
@@ -461,12 +464,12 @@ def _convert_config_duplicates_to_array(duplicates_dict: dict) -> list:
     return duplicates_array
 
 
+@router.get("/config-duplicates")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_config_duplicates",
     error_code_prefix="CODEBASE",
 )
-@router.get("/config-duplicates")
 async def detect_config_duplicates_endpoint(
     use_semantic: bool = Query(
         False, description="Enable LLM-based semantic analysis (Issue #554)"

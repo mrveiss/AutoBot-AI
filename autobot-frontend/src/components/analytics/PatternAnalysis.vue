@@ -19,6 +19,18 @@
       </div>
     </div>
 
+    <!-- Interrupted State (#1250) -->
+    <div v-else-if="wasInterrupted" class="interrupted-state">
+      <i class="fas fa-info-circle"></i>
+      Previous analysis was interrupted by a server restart.
+      <button @click="runAnalysis" :disabled="!rootPath" class="rerun-btn">
+        <i class="fas fa-redo"></i> Re-run Analysis
+      </button>
+      <button @click="reset" class="dismiss-btn">
+        <i class="fas fa-times"></i> Dismiss
+      </button>
+    </div>
+
     <!-- Error State -->
     <div v-else-if="error" class="error-state">
       <i class="fas fa-exclamation-triangle"></i> {{ error }}
@@ -262,6 +274,7 @@ const {
   loading,
   analyzing,
   error,
+  wasInterrupted,
   taskStatus,
   analysisReport,
   duplicatePatterns,
@@ -521,6 +534,53 @@ defineExpose({
 
 .error-state {
   color: var(--color-error);
+}
+
+.interrupted-state {
+  color: var(--color-info);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
+}
+
+.rerun-btn {
+  padding: var(--spacing-1) var(--spacing-2-5);
+  background: var(--color-purple);
+  color: var(--text-on-primary);
+  border: none;
+  border-radius: var(--radius-default);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.rerun-btn:hover:not(:disabled) {
+  background: var(--color-purple-dark);
+}
+
+.rerun-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dismiss-btn {
+  padding: var(--spacing-1) var(--spacing-2);
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-default);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.dismiss-btn:hover {
+  border-color: var(--text-secondary);
 }
 
 .retry-btn {

@@ -2,16 +2,19 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Roles API Routes (Issue #779, #1129).
+Roles API Routes (Issue #779, #1129, #1243).
 
-CRUD endpoints for role definitions, fleet health status, and role migration.
+CRUD endpoints for role definitions, fleet health status, role migration,
+and post-sync action badges (build, restart, schema).
 """
 
+import asyncio
 import logging
+import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from models.database import NodeRole, Role, RoleStatus, SyncType
+from models.database import Node, NodeRole, Role, RoleStatus, SyncType
 from pydantic import BaseModel, Field
 from services.auth import get_current_user
 from services.database import get_db
@@ -96,6 +99,34 @@ class FleetHealthResponse(BaseModel):
     required_down: List[str]
     optional_down: List[str]
     detail: str
+
+
+# ---- Post-sync action models (Issue #1243) ----
+
+
+class PostSyncAction(BaseModel):
+    """Single post-sync action for a node role."""
+
+    role_name: str
+    display_name: str
+    category: str  # build | restart | schema | install
+    label: str
+    command: Optional[str] = None
+    systemd_service: Optional[str] = None
+
+
+class NodeActionsResponse(BaseModel):
+    """All post-sync actions available for a node."""
+
+    node_id: str
+    actions: List[PostSyncAction]
+
+
+class ExecuteActionRequest(BaseModel):
+    """Request to execute a post-sync action."""
+
+    role_name: str = Field(..., min_length=1)
+    category: str = Field(..., min_length=1)
 
 
 @router.get("", response_model=List[RoleResponse])
@@ -340,3 +371,214 @@ async def _run_role_migration(role: Role, target_node_id: str) -> dict:
         "output": result["output"],
         "returncode": result["returncode"],
     }
+
+
+# =========================================================================
+# Post-Sync Action Badges  (Issue #1243)
+# =========================================================================
+
+# Patterns to classify post_sync_cmd segments
+_BUILD_PATTERNS = re.compile(r"npm run build|webpack|vite build", re.IGNORECASE)
+_SCHEMA_PATTERNS = re.compile(r"alembic upgrade|migrate|db upgrade", re.IGNORECASE)
+_INSTALL_PATTERNS = re.compile(r"pip install|npm install|yarn install", re.IGNORECASE)
+
+
+def _classify_post_sync(role: Role) -> List[PostSyncAction]:
+    """Parse a role's post_sync_cmd into categorised actions."""
+    actions: List[PostSyncAction] = []
+    cmd = role.post_sync_cmd or ""
+    display = role.display_name or role.name
+
+    if _SCHEMA_PATTERNS.search(cmd):
+        actions.append(
+            PostSyncAction(
+                role_name=role.name,
+                display_name=display,
+                category="schema",
+                label=f"Run migrations ({display})",
+                command=cmd,
+            )
+        )
+
+    if _BUILD_PATTERNS.search(cmd):
+        actions.append(
+            PostSyncAction(
+                role_name=role.name,
+                display_name=display,
+                category="build",
+                label=f"Build ({display})",
+                command=cmd,
+            )
+        )
+
+    if _INSTALL_PATTERNS.search(cmd) and not actions:
+        actions.append(
+            PostSyncAction(
+                role_name=role.name,
+                display_name=display,
+                category="install",
+                label=f"Install deps ({display})",
+                command=cmd,
+            )
+        )
+
+    if role.systemd_service and role.auto_restart:
+        actions.append(
+            PostSyncAction(
+                role_name=role.name,
+                display_name=display,
+                category="restart",
+                label=f"Restart {role.systemd_service}",
+                systemd_service=role.systemd_service,
+            )
+        )
+
+    return actions
+
+
+@router.get(
+    "/node-actions/{node_id}",
+    response_model=NodeActionsResponse,
+)
+async def get_node_actions(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> NodeActionsResponse:
+    """Return post-sync actions for a node based on its roles.
+
+    Issue #1243 — surfaces build, schema, install, and restart
+    actions in the per-node orchestration view.
+    """
+    nr_result = await db.execute(
+        select(NodeRole.role_name).where(
+            NodeRole.node_id == node_id,
+            NodeRole.status == RoleStatus.ACTIVE.value,
+        )
+    )
+    role_names = set(nr_result.scalars().all())
+
+    if not role_names:
+        return NodeActionsResponse(node_id=node_id, actions=[])
+
+    roles_result = await db.execute(select(Role).where(Role.name.in_(role_names)))
+    node_roles = list(roles_result.scalars().all())
+
+    actions: List[PostSyncAction] = []
+    for role in node_roles:
+        actions.extend(_classify_post_sync(role))
+
+    return NodeActionsResponse(node_id=node_id, actions=actions)
+
+
+async def _resolve_node_and_role(
+    db: AsyncSession,
+    node_id: str,
+    role_name: str,
+) -> tuple:
+    """Look up Node and Role or raise 404. Issue #1243 helper."""
+    node_res = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = node_res.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Node not found: {node_id}",
+        )
+    role_res = await db.execute(select(Role).where(Role.name == role_name))
+    role = role_res.scalar_one_or_none()
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Role not found: {role_name}",
+        )
+    return node, role
+
+
+@router.post("/node-actions/{node_id}/execute")
+async def execute_node_action(
+    node_id: str,
+    req: ExecuteActionRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """Execute a post-sync action on a node via SSH.
+
+    Issue #1243 — one-click execution of build / schema / restart
+    actions from the per-node orchestration view.
+    """
+    node, role = await _resolve_node_and_role(db, node_id, req.role_name)
+
+    if req.category == "restart":
+        if not role.systemd_service:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Role has no systemd_service",
+            )
+        success, output = await _run_ssh_cmd(
+            node,
+            f"sudo -n systemctl restart {role.systemd_service}",
+        )
+    else:
+        cmd = role.post_sync_cmd
+        if not cmd:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Role has no post_sync_cmd",
+            )
+        success, output = await _run_ssh_cmd(node, cmd)
+
+    logger.info(
+        "Executed %s action for role %s on %s: success=%s",
+        req.category,
+        req.role_name,
+        node_id,
+        success,
+    )
+    return {
+        "success": success,
+        "node_id": node_id,
+        "role_name": req.role_name,
+        "category": req.category,
+        "output": output,
+    }
+
+
+async def _run_ssh_cmd(node: Node, remote_cmd: str) -> tuple:
+    """Run a command on a node via SSH. Returns (success, output)."""
+    ssh_user = node.ssh_user or "autobot"
+    ssh_port = node.ssh_port or 22
+    ssh_key = "/home/autobot/.ssh/id_rsa"
+    ssh_cmd = [
+        "/usr/bin/ssh",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "BatchMode=yes",
+        "-i",
+        ssh_key,
+        "-p",
+        str(ssh_port),
+        f"{ssh_user}@{node.ip_address}",
+        remote_cmd,
+    ]
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *ssh_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(),
+            timeout=120.0,
+        )
+        combined = stdout.decode("utf-8", errors="replace") + stderr.decode(
+            "utf-8", errors="replace"
+        )
+        return process.returncode == 0, combined[:2000]
+    except asyncio.TimeoutError:
+        return False, "Timeout after 120 seconds"
+    except Exception as e:
+        logger.exception("SSH command error: %s", e)
+        return False, f"Error: {str(e)[:500]}"

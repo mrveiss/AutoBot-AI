@@ -16,24 +16,28 @@ const logger = createLogger('usePreferences')
 export type FontSize = 'small' | 'medium' | 'large'
 export type AccentColor = 'teal' | 'emerald' | 'blue' | 'purple' | 'orange'
 export type LayoutDensity = 'compact' | 'comfortable' | 'spacious'
+export type VoiceDisplayMode = 'modal' | 'sidepanel'
 
 export interface UserPreferences {
   fontSize: FontSize
   accentColor: AccentColor
   layoutDensity: LayoutDensity
+  voiceDisplayMode: VoiceDisplayMode
 }
 
 // Default preferences
 const DEFAULT_PREFERENCES: UserPreferences = {
   fontSize: 'medium',
   accentColor: 'teal',
-  layoutDensity: 'comfortable'
+  layoutDensity: 'comfortable',
+  voiceDisplayMode: 'modal'
 }
 
 // Reactive preferences state
 const fontSize = ref<FontSize>('medium')
 const accentColor = ref<AccentColor>('teal')
 const layoutDensity = ref<LayoutDensity>('comfortable')
+const voiceDisplayMode = ref<VoiceDisplayMode>('modal')
 
 // Local storage key
 const STORAGE_KEY = 'autobot-preferences'
@@ -49,6 +53,7 @@ function loadPreferences(): void {
       fontSize.value = parsed.fontSize || DEFAULT_PREFERENCES.fontSize
       accentColor.value = parsed.accentColor || DEFAULT_PREFERENCES.accentColor
       layoutDensity.value = parsed.layoutDensity || DEFAULT_PREFERENCES.layoutDensity
+      voiceDisplayMode.value = parsed.voiceDisplayMode || DEFAULT_PREFERENCES.voiceDisplayMode
 
       logger.debug('Preferences loaded from localStorage', {
         fontSize: fontSize.value,
@@ -71,7 +76,8 @@ function savePreferences(): void {
     const preferences: UserPreferences = {
       fontSize: fontSize.value,
       accentColor: accentColor.value,
-      layoutDensity: layoutDensity.value
+      layoutDensity: layoutDensity.value,
+      voiceDisplayMode: voiceDisplayMode.value
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences))
     logger.debug('Preferences saved to localStorage', preferences)
@@ -135,6 +141,10 @@ export function usePreferences() {
     savePreferences()
   })
 
+  watch(voiceDisplayMode, () => {
+    savePreferences()
+  })
+
   /**
    * Set font size preference
    */
@@ -156,6 +166,10 @@ export function usePreferences() {
     layoutDensity.value = density
   }
 
+  function setVoiceDisplayMode(mode: VoiceDisplayMode): void {
+    voiceDisplayMode.value = mode
+  }
+
   /**
    * Reset all preferences to defaults
    */
@@ -163,6 +177,7 @@ export function usePreferences() {
     fontSize.value = DEFAULT_PREFERENCES.fontSize
     accentColor.value = DEFAULT_PREFERENCES.accentColor
     layoutDensity.value = DEFAULT_PREFERENCES.layoutDensity
+    voiceDisplayMode.value = DEFAULT_PREFERENCES.voiceDisplayMode
     logger.debug('Preferences reset to defaults')
   }
 
@@ -171,11 +186,13 @@ export function usePreferences() {
     fontSize,
     accentColor,
     layoutDensity,
+    voiceDisplayMode,
 
     // Actions
     setFontSize,
     setAccentColor,
     setLayoutDensity,
+    setVoiceDisplayMode,
     resetPreferences
   }
 }

@@ -21,12 +21,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.delete("/cache")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_codebase_cache",
     error_code_prefix="CODEBASE",
 )
-@router.delete("/cache")
 async def clear_codebase_cache():
     """Clear codebase analysis cache from storage"""
     redis_client = await get_redis_connection()

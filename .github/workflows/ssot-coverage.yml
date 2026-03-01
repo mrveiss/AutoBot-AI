@@ -16,6 +16,10 @@ on:
   pull_request:
     branches: [ main, Dev_new_gui, develop ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ssot-coverage:
     name: SSOT Configuration Compliance
@@ -28,10 +32,10 @@ jobs:
     - name: Run SSOT-aware hardcoded value detection
       id: ssot_check
       run: |
-        chmod +x ./scripts/detect-hardcoded-values.sh
+        chmod +x ./pipeline-scripts/detect-hardcoded-values.sh
         # Run with JSON output for parsing
         set +e  # Don't exit on error
-        JSON_OUTPUT=$(./scripts/detect-hardcoded-values.sh --json 2>/dev/null)
+        JSON_OUTPUT=$(./pipeline-scripts/detect-hardcoded-values.sh --json 2>/dev/null)
         EXIT_CODE=$?
         set -e
 
@@ -60,7 +64,7 @@ jobs:
       if: steps.ssot_check.outputs.total_violations != '0'
       run: |
         echo "::group::Detailed SSOT Compliance Report"
-        ./scripts/detect-hardcoded-values.sh --report 2>/dev/null || true
+        ./pipeline-scripts/detect-hardcoded-values.sh --report 2>/dev/null || true
         echo "::endgroup::"
 
     - name: Comment on PR with SSOT status
@@ -141,7 +145,7 @@ jobs:
         # but marks the job as failed for visibility
         if [ "$SSOT_VIOLATIONS" -gt "0" ]; then
           echo "::warning::Found $SSOT_VIOLATIONS hardcoded values that have SSOT config equivalents"
-          echo "::warning::Run './scripts/detect-hardcoded-values.sh --report' locally for details"
+          echo "::warning::Run './pipeline-scripts/detect-hardcoded-values.sh --report' locally for details"
           # Currently warn-only mode - uncomment to enforce
           # exit 1
         fi

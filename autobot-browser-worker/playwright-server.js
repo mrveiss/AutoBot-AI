@@ -738,7 +738,7 @@ app.post('/test-frontend', async (req, res) => {
 // Persistent navigation page for BrowserTool (Issue #1120)
 // =============================================================================
 
-let navPage = null;
+navPage = null;
 
 async function ensureNavPage() {
   const b = await initBrowser();

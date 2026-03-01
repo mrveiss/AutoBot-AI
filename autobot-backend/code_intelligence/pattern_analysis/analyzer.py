@@ -14,13 +14,21 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+from utils.io_executor import get_analytics_executor
+
 from .complexity_analyzer import ComplexityAnalyzer
 from .refactoring_generator import RefactoringSuggestionGenerator
 from .regex_detector import RegexPatternDetector
 from .storage import store_patterns_batch
-from .types import (CodeLocation, CodePattern, DuplicatePattern,
-                    ModularizationSuggestion, PatternAnalysisReport,
-                    PatternSeverity, PatternType)
+from .types import (
+    CodeLocation,
+    CodePattern,
+    DuplicatePattern,
+    ModularizationSuggestion,
+    PatternAnalysisReport,
+    PatternSeverity,
+    PatternType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +210,9 @@ class CodePatternAnalyzer:
         start_time = time.time()
 
         report = PatternAnalysisReport(scan_path=directory)
-        file_count, line_count = self._count_files_and_lines(directory)
+        file_count, line_count = await asyncio.to_thread(
+            self._count_files_and_lines, directory
+        )
         report.total_files_analyzed = file_count
         report.total_lines_analyzed = line_count
 
@@ -263,10 +273,12 @@ class CodePatternAnalyzer:
             return {"type": "clone_detection", "patterns": []}
 
         try:
-            # Clone detection is synchronous, run in thread pool
+            # Issue #1233: Use dedicated analytics executor
             loop = asyncio.get_event_loop()
             report = await loop.run_in_executor(
-                None, self._clone_detector.detect_clones, directory
+                get_analytics_executor(),
+                self._clone_detector.detect_clones,
+                directory,
             )
 
             # Convert to our types
@@ -299,10 +311,12 @@ class CodePatternAnalyzer:
             return {"type": "regex_detection", "patterns": []}
 
         try:
-            # Run in thread pool
+            # Issue #1233: Use dedicated analytics executor
             loop = asyncio.get_event_loop()
             opportunities = await loop.run_in_executor(
-                None, self._regex_detector.detect_in_directory, directory
+                get_analytics_executor(),
+                self._regex_detector.detect_in_directory,
+                directory,
             )
 
             return {"type": "regex_detection", "patterns": opportunities}
@@ -324,10 +338,12 @@ class CodePatternAnalyzer:
             return {"type": "complexity_analysis", "patterns": [], "modules": []}
 
         try:
-            # Run in thread pool
+            # Issue #1233: Use dedicated analytics executor
             loop = asyncio.get_event_loop()
             modules = await loop.run_in_executor(
-                None, self._complexity_analyzer.analyze_directory, directory
+                get_analytics_executor(),
+                self._complexity_analyzer.analyze_directory,
+                directory,
             )
 
             # Find hotspots
@@ -361,10 +377,12 @@ class CodePatternAnalyzer:
             return {"type": "anti_pattern_detection", "patterns": []}
 
         try:
-            # Run in thread pool
+            # Issue #1233: Use dedicated analytics executor
             loop = asyncio.get_event_loop()
             report = await loop.run_in_executor(
-                None, self._anti_pattern_detector.analyze_directory, directory
+                get_analytics_executor(),
+                self._anti_pattern_detector.analyze_directory,
+                directory,
             )
 
             # Convert to modularization suggestions where appropriate

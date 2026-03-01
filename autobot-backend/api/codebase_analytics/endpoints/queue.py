@@ -39,12 +39,12 @@ def _build_running_info(task_id: str) -> dict:
     }
 
 
+@router.get("/index/queue")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_index_queue",
     error_code_prefix="CODEBASE",
 )
-@router.get("/index/queue")
 async def get_index_queue():
     """Return the current indexing queue state.
 
@@ -70,12 +70,12 @@ async def get_index_queue():
     )
 
 
+@router.delete("/index/queue/{source_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="dequeue_source",
     error_code_prefix="CODEBASE",
 )
-@router.delete("/index/queue/{source_id}")
 async def dequeue_source(source_id: str):
     """Remove all pending queue entries for a given source_id."""
     async with _tasks_lock:

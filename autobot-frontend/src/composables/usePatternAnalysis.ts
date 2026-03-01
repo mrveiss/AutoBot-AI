@@ -114,6 +114,7 @@ export interface AnalysisTaskStatus {
   current_step?: string
   result?: PatternAnalysisReport
   error?: string
+  reason?: string  // orphaned, timeout, manual (#1250)
 }
 
 /**
@@ -124,6 +125,7 @@ export function usePatternAnalysis() {
   const loading = ref(false)
   const analyzing = ref(false)
   const error = ref<string | null>(null)
+  const wasInterrupted = ref(false)  // #1250: orphaned task detection
   const currentTaskId = ref<string | null>(null)
   const taskStatus = ref<AnalysisTaskStatus | null>(null)
 
@@ -307,7 +309,15 @@ export function usePatternAnalysis() {
           analyzing.value = false
           return
         } else if (data.status === 'failed') {
-          error.value = data.error || 'Analysis failed'
+          // #1250: Detect orphaned tasks and show friendly message
+          const isOrphaned = data.reason === 'orphaned'
+            || data.error?.includes('orphaned')
+          if (isOrphaned) {
+            wasInterrupted.value = true
+            error.value = 'Previous analysis was interrupted by a server restart.'
+          } else {
+            error.value = data.error || 'Analysis failed'
+          }
           analyzing.value = false
           return
         }
@@ -660,6 +670,7 @@ export function usePatternAnalysis() {
     loading.value = false
     analyzing.value = false
     error.value = null
+    wasInterrupted.value = false
     currentTaskId.value = null
     taskStatus.value = null
     analysisReport.value = null
@@ -758,6 +769,7 @@ export function usePatternAnalysis() {
     loading,
     analyzing,
     error,
+    wasInterrupted,
     currentTaskId,
     taskStatus,
     analysisReport,

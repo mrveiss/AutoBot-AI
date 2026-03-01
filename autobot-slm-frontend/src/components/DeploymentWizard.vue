@@ -104,14 +104,14 @@ async function fetchRoles(): Promise<void> {
       roles.value = data.roles
     }
   } catch (e) {
-    // Use default roles if API fails
-    roles.value = [
-      { name: 'slm-agent', description: 'SLM monitoring agent', category: 'core', dependencies: [] },
-      { name: 'redis', description: 'Redis Stack server', category: 'data', dependencies: ['slm-agent'] },
-      { name: 'backend', description: 'AutoBot backend API', category: 'application', dependencies: ['slm-agent', 'redis'] },
-      { name: 'frontend', description: 'Vue.js frontend', category: 'application', dependencies: ['slm-agent'] },
-      { name: 'monitoring', description: 'Prometheus & Grafana', category: 'observability', dependencies: ['slm-agent'] },
-    ]
+    // Use default roles from node-roles constants if API fails
+    const { NODE_ROLE_METADATA } = await import('@/constants/node-roles')
+    roles.value = Object.values(NODE_ROLE_METADATA).map((meta) => ({
+      name: meta.name,
+      description: meta.description,
+      category: meta.category,
+      dependencies: [],
+    }))
   } finally {
     isLoadingRoles.value = false
   }
@@ -206,6 +206,8 @@ function getCategoryIcon(category: string): string {
       return 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
     case 'observability':
       return 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z'
+    case 'infrastructure':
+      return 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10'
     default:
       return 'M13 10V3L4 14h7v7l9-11h-7z'
   }

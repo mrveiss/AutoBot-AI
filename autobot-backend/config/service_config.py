@@ -10,12 +10,15 @@ import logging
 import os
 from typing import Any, Dict
 
+from config.registry import ConfigRegistry
 from constants.network_constants import NetworkConstants
 from constants.path_constants import PATH
 
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level cached maps to avoid repeated dictionary creation
+# Issue #1214: Ollama host resolved via ConfigRegistry (SLM-managed, not
+# hardcoded to any VM). ConfigRegistry checks Redis → env → registry_defaults.
 _HOST_SERVICE_MAP = {
     "slm": NetworkConstants.SLM_VM_IP,
     "backend": NetworkConstants.MAIN_MACHINE_IP,
@@ -24,7 +27,7 @@ _HOST_SERVICE_MAP = {
     "npu_worker": NetworkConstants.NPU_WORKER_VM_IP,
     "ai_stack": NetworkConstants.AI_STACK_VM_IP,
     "browser": NetworkConstants.BROWSER_VM_IP,
-    "ollama": NetworkConstants.AI_STACK_HOST,
+    "ollama": ConfigRegistry.get("vm.ollama", "127.0.0.1"),
     "browser_service": NetworkConstants.BROWSER_VM_IP,
     "openai": "api.openai.com",
     "anthropic": "api.anthropic.com",

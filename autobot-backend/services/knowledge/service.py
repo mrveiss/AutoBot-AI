@@ -623,7 +623,7 @@ class ChatKnowledgeService:
         )
         search_query = self._get_search_query(query, enhanced_query)
 
-        # Perform retrieval
+        # Perform retrieval from knowledge facts (autobot_memory)
         context_string, citations = await self.retrieve_relevant_knowledge(
             query=search_query,
             top_k=top_k,
@@ -631,14 +631,67 @@ class ChatKnowledgeService:
             categories=effective_categories,
         )
 
+        # Issue #1261: Also search indexed documentation (autobot_docs)
+        doc_context = self._retrieve_documentation_context(query)
+        if doc_context:
+            context_string = (
+                doc_context + "\n\n" + context_string if context_string else doc_context
+            )
+
         logger.info(
-            "[Conversation RAG] Completed in %.3fs - %d citations, enhanced=%s, categories=%s",
+            "[Conversation RAG] Completed in %.3fs - %d citations, "
+            "enhanced=%s, categories=%s, docs=%s",
             time.time() - start_time,
             len(citations),
             enhanced_query.enhancement_applied,
             effective_categories or "all",
+            bool(doc_context),
         )
         return context_string, citations, intent_result, enhanced_query
+
+    def _retrieve_documentation_context(
+        self, query: str, n_results: int = 3, score_threshold: float = 0.5
+    ) -> str:
+        """Retrieve documentation context if query matches doc patterns.
+
+        Issue #1261: Searches autobot_docs ChromaDB collection to provide
+        real AutoBot documentation context instead of relying on LLM
+        training data.
+
+        Args:
+            query: User's chat message
+            n_results: Max documentation chunks to retrieve
+            score_threshold: Minimum similarity score
+
+        Returns:
+            Formatted documentation context string, or empty string
+        """
+        if not self.doc_searcher:
+            return ""
+
+        try:
+            if not self.doc_searcher.is_documentation_query(query):
+                return ""
+
+            results = self.doc_searcher.search(
+                query=query,
+                n_results=n_results,
+                score_threshold=score_threshold,
+            )
+            if not results:
+                return ""
+
+            context = self.doc_searcher.format_as_context(results)
+            logger.info(
+                "[Doc Search] Added %d documentation chunks for: '%s...'",
+                len(results),
+                query[:50],
+            )
+            return context
+
+        except Exception as e:
+            logger.warning("[Doc Search] Failed: %s", e)
+            return ""
 
     def _search_and_format_documentation(
         self,

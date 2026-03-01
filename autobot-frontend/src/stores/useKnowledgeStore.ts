@@ -190,6 +190,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   const connectorStatuses = ref<Record<string, ConnectorStatus>>({})
   const connectorsLoading = ref(false)
 
+
   // Verification state (Issue #1253)
   const pendingVerifications = ref<PendingSource[]>([])
   const pendingVerificationsTotal = ref(0)
@@ -615,6 +616,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     connectorsLoading.value = loading
   }
 
+
   // Source panel actions (Issue #747)
   function openSourcePanel(document: SystemDoc) {
     sourcePanel.value = {
@@ -741,6 +743,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     connectors,
     connectorStatuses,
     connectorsLoading,
+
 
     // Verification state (Issue #1253)
     pendingVerifications,

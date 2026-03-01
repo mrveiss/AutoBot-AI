@@ -40,7 +40,10 @@ const showRemoveConfirm = ref(false)
 const roleToRemove = ref<string>('')
 const isRemoving = ref(false)
 
-const DATA_BEARING_ROLES = ['redis', 'postgresql', 'ai-stack', 'llm', 'backend', 'monitoring']
+const DATA_BEARING_ROLES = [
+  'redis', 'slm-database', 'ai-stack', 'chromadb',
+  'autobot-llm-cpu', 'autobot-llm-gpu', 'backend', 'slm-monitoring',
+]
 
 const isDataBearingRole = computed(() => DATA_BEARING_ROLES.includes(roleToRemove.value))
 

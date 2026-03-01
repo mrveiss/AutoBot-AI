@@ -73,6 +73,10 @@ PATTERNS_COLLECTION = "cross_language_patterns"
 # Sample the most significant patterns (DTOs, APIs, validators) first
 MAX_PATTERNS_FOR_EMBEDDING = 500
 
+# Issue #1217: Cap total patterns extracted per language to prevent OOM
+# on large codebases (3500+ files can produce 12K+ patterns at ~2KB each)
+MAX_PATTERNS_PER_LANGUAGE = 5000
+
 # Issue #659: Batch embedding configuration for parallel processing
 # Concurrent requests with semaphore limiting provides 5-10x speedup
 EMBEDDING_BATCH_CONCURRENCY = 10  # Max concurrent embedding requests
@@ -358,41 +362,61 @@ class CrossLanguagePatternDetector:
 
         return python_files, typescript_files, vue_files
 
+    async def _extract_language_patterns(
+        self, extractor, files: List[Path], cap: int, label: str
+    ) -> List[Dict]:
+        """Extract patterns for one language with cap and threading.
+
+        Issue #1217: Caps at `cap` patterns to prevent OOM.
+        Issue #1219: Runs in thread pool to avoid blocking event loop.
+        """
+        patterns = []
+        for file_path in files:
+            if len(patterns) >= cap:
+                logger.info(
+                    "%s pattern cap reached (%d), " "skipping remaining files",
+                    label,
+                    cap,
+                )
+                break
+            try:
+                result = await asyncio.to_thread(extractor.extract_patterns, file_path)
+                patterns.extend(result)
+            except Exception as e:
+                logger.warning(
+                    "Failed to extract patterns from %s: %s",
+                    file_path,
+                    e,
+                )
+        return patterns
+
     async def _extract_all_patterns(
         self,
         python_files: List[Path],
         typescript_files: List[Path],
         vue_files: List[Path],
     ) -> Tuple[List[Dict], List[Dict], List[Dict]]:
-        """Extract patterns from all files."""
-        python_patterns = []
-        typescript_patterns = []
-        vue_patterns = []
-
-        # Extract Python patterns
-        for file_path in python_files:
-            try:
-                patterns = self.python_extractor.extract_patterns(file_path)
-                python_patterns.extend(patterns)
-            except Exception as e:
-                logger.warning("Failed to extract patterns from %s: %s", file_path, e)
-
-        # Extract TypeScript patterns
-        for file_path in typescript_files:
-            try:
-                patterns = self.typescript_extractor.extract_patterns(file_path)
-                typescript_patterns.extend(patterns)
-            except Exception as e:
-                logger.warning("Failed to extract patterns from %s: %s", file_path, e)
-
-        # Extract Vue patterns (using TypeScript extractor)
-        for file_path in vue_files:
-            try:
-                patterns = self.typescript_extractor.extract_patterns(file_path)
-                vue_patterns.extend(patterns)
-            except Exception as e:
-                logger.warning("Failed to extract patterns from %s: %s", file_path, e)
-
+        """Extract patterns from all files (#1217, #1219)."""
+        python_patterns = await self._extract_language_patterns(
+            self.python_extractor,
+            python_files,
+            MAX_PATTERNS_PER_LANGUAGE,
+            "Python",
+        )
+        typescript_patterns = await self._extract_language_patterns(
+            self.typescript_extractor,
+            typescript_files,
+            MAX_PATTERNS_PER_LANGUAGE,
+            "TypeScript",
+        )
+        # Vue shares cap with TypeScript (same language family)
+        vue_cap = MAX_PATTERNS_PER_LANGUAGE - len(typescript_patterns)
+        vue_patterns = await self._extract_language_patterns(
+            self.typescript_extractor,
+            vue_files,
+            max(vue_cap, 0),
+            "Vue",
+        )
         return python_patterns, typescript_patterns, vue_patterns
 
     async def _find_dto_mismatches(

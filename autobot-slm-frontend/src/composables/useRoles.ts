@@ -80,6 +80,29 @@ export interface PlaybookMigrateResult {
   returncode: number
 }
 
+// Post-sync action types (Issue #1243)
+export interface PostSyncAction {
+  role_name: string
+  display_name: string
+  category: 'build' | 'restart' | 'schema' | 'install'
+  label: string
+  command: string | null
+  systemd_service: string | null
+}
+
+export interface NodeActionsResponse {
+  node_id: string
+  actions: PostSyncAction[]
+}
+
+export interface ExecuteActionResult {
+  success: boolean
+  node_id: string
+  role_name: string
+  category: string
+  output: string
+}
+
 export function useRoles() {
   const roles = ref<Role[]>([])
   const isLoading = ref(false)
@@ -270,6 +293,52 @@ export function useRoles() {
     }
   }
 
+  // Post-sync actions (Issue #1243)
+  async function fetchNodeActions(
+    nodeId: string
+  ): Promise<NodeActionsResponse | null> {
+    try {
+      const resp = await client.get<NodeActionsResponse>(
+        `/api/roles/node-actions/${nodeId}`
+      )
+      return resp.data
+    } catch (e: unknown) {
+      const err = e as {
+        response?: { data?: { detail?: string } }
+        message?: string
+      }
+      error.value =
+        err.response?.data?.detail ||
+        err.message ||
+        'Failed to fetch node actions'
+      return null
+    }
+  }
+
+  async function executeNodeAction(
+    nodeId: string,
+    roleName: string,
+    category: string
+  ): Promise<ExecuteActionResult | null> {
+    try {
+      const resp = await client.post<ExecuteActionResult>(
+        `/api/roles/node-actions/${nodeId}/execute`,
+        { role_name: roleName, category }
+      )
+      return resp.data
+    } catch (e: unknown) {
+      const err = e as {
+        response?: { data?: { detail?: string } }
+        message?: string
+      }
+      error.value =
+        err.response?.data?.detail ||
+        err.message ||
+        'Failed to execute action'
+      return null
+    }
+  }
+
   return reactive({
     roles,
     isLoading,
@@ -286,5 +355,7 @@ export function useRoles() {
     pullFromSource,
     fetchFleetHealth,
     migrateRole,
+    fetchNodeActions,
+    executeNodeAction,
   })
 }

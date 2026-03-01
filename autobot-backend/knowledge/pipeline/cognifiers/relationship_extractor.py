@@ -117,11 +117,25 @@ class RelationshipExtractor(BaseCognifier):
             response = await self.llm.chat_completion(
                 messages=[{"role": "user", "content": prompt}]
             )
-            raw_rels = parse_llm_json_response(response.content)
+            parsed = parse_llm_json_response(response.content)
+            raw_rels = parsed if isinstance(parsed, list) else []
             return self._convert_to_relationships(raw_rels, chunk, entity_map)
         except Exception as e:
             logger.error("Relationship extraction failed: %s", e)
             return []
+
+    def _parse_llm_response(self, content: str) -> list:
+        """
+        Parse LLM JSON response for relationship extraction. Delegates to shared util.
+
+        Args:
+            content: Raw LLM response text
+
+        Returns:
+            Parsed list of relationship dicts, or empty list on failure
+        """
+        parsed = parse_llm_json_response(content)
+        return parsed if isinstance(parsed, list) else []
 
     def _format_entity_list(self, entities: List[Entity], chunk: ProcessedChunk) -> str:
         """Format entity list for prompt (chunk-relevant only)."""

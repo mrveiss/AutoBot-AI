@@ -120,40 +120,6 @@
                   </div>
                 </router-link>
 
-                <!-- Issue #777: Vision & Multimodal AI -->
-                <router-link
-                  to="/vision"
-                  :class="{
-                    'bg-autobot-primary text-white': $route.path.startsWith('/vision'),
-                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/vision')
-                  }"
-                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                >
-                  <div class="flex items-center space-x-1">
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"></path>
-                      <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"></path>
-                    </svg>
-                    <span>Vision</span>
-                  </div>
-                </router-link>
-
-                <!-- Issue #753: User Preferences -->
-                <router-link
-                  to="/preferences"
-                  :class="{
-                    'bg-autobot-primary text-white': $route.path.startsWith('/preferences'),
-                    'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/preferences')
-                  }"
-                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200"
-                >
-                  <div class="flex items-center space-x-1">
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z"></path>
-                    </svg>
-                    <span>Preferences</span>
-                  </div>
-                </router-link>
 
                 <!-- Issue #929: Plugin Manager -->
                 <router-link
@@ -330,42 +296,6 @@
               </div>
             </router-link>
 
-            <!-- Issue #777: Vision & Multimodal AI -->
-            <router-link
-              to="/vision"
-              @click="closeMobileNav"
-              :class="{
-                'bg-autobot-primary text-white': $route.path.startsWith('/vision'),
-                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/vision')
-              }"
-              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
-            >
-              <div class="flex items-center space-x-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                </svg>
-                <span>Vision</span>
-              </div>
-            </router-link>
-
-            <!-- Issue #753: User Preferences -->
-            <router-link
-              to="/preferences"
-              @click="closeMobileNav"
-              :class="{
-                'bg-autobot-primary text-white': $route.path.startsWith('/preferences'),
-                'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/preferences')
-              }"
-              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
-            >
-              <div class="flex items-center space-x-2">
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M5 4a1 1 0 00-2 0v7.268a2 2 0 000 3.464V16a1 1 0 102 0v-1.268a2 2 0 000-3.464V4zM11 4a1 1 0 10-2 0v1.268a2 2 0 000 3.464V16a1 1 0 102 0V8.732a2 2 0 000-3.464V4zM16 3a1 1 0 011 1v7.268a2 2 0 010 3.464V16a1 1 0 11-2 0v-1.268a2 2 0 010-3.464V4a1 1 0 011-1z"></path>
-                </svg>
-                <span>Preferences</span>
-              </div>
-            </router-link>
 
             <!-- Issue #929: Plugin Manager -->
             <router-link
@@ -608,7 +538,7 @@
 </template>
 
 <script lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
@@ -642,7 +572,7 @@ export default {
     HostSelectionDialog,
     UnifiedLoadingView,
     ProfileModal,
-    DarkModeToggle: () => import('@/components/ui/DarkModeToggle.vue'),
+    DarkModeToggle: defineAsyncComponent(() => import('@/components/ui/DarkModeToggle.vue')),
   },
 
   setup() {

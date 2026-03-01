@@ -5,6 +5,7 @@
 Code declarations endpoints
 """
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -76,15 +77,15 @@ def _build_declarations_response(all_declarations: list, storage_type: str) -> d
     }
 
 
+@router.get("/declarations")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_code_declarations",
     error_code_prefix="CODEBASE",
 )
-@router.get("/declarations")
 async def get_code_declarations(declaration_type: Optional[str] = None):
     """Get code declarations (functions, classes, variables) detected during analysis"""
-    code_collection = get_code_collection()
+    code_collection = await asyncio.to_thread(get_code_collection)
     if not code_collection:
         return JSONResponse(
             {
@@ -93,5 +94,7 @@ async def get_code_declarations(declaration_type: Optional[str] = None):
                 "declarations": [],
             }
         )
-    all_declarations, storage_type = _query_chromadb_declarations(code_collection)
+    all_declarations, storage_type = await asyncio.to_thread(
+        _query_chromadb_declarations, code_collection
+    )
     return JSONResponse(_build_declarations_response(all_declarations, storage_type))

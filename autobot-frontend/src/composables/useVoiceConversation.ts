@@ -92,6 +92,7 @@ function _getMicContextError(modeLabel: string): string {
 /** Strip tool-call markup and truncate to a TTS-safe length. */
 function _sanitizeForSpeech(text: string): string {
   const clean = text
+    .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
     .replace(/<TOOL_CALL[^>]*>|<\/TOOL_CALL>/gi, '')
     .replace(/<[^>]+>/g, '')
     .replace(/\s+/g, ' ')

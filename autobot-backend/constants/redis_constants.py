@@ -27,7 +27,12 @@ Usage:
 
 from dataclasses import dataclass
 
-from config.registry import ConfigRegistry
+
+def _registry_get(key: str, default: str) -> int:
+    """Deferred ConfigRegistry lookup to avoid circular import (#1210)."""
+    from config.registry import ConfigRegistry
+
+    return int(ConfigRegistry.get(key, default))
 
 
 @dataclass(frozen=True)
@@ -63,22 +68,22 @@ class RedisConnectionConfig:
     @property
     def db_main(self) -> int:
         """Main database number from ConfigRegistry."""
-        return int(ConfigRegistry.get("redis.db_main", "0"))
+        return _registry_get("redis.db_main", "0")
 
     @property
     def db_knowledge(self) -> int:
         """Knowledge database number from ConfigRegistry."""
-        return int(ConfigRegistry.get("redis.db_knowledge", "1"))
+        return _registry_get("redis.db_knowledge", "1")
 
     @property
     def db_cache(self) -> int:
         """Cache database number from ConfigRegistry."""
-        return int(ConfigRegistry.get("redis.db_cache", "5"))
+        return _registry_get("redis.db_cache", "5")
 
     @property
     def db_sessions(self) -> int:
         """Sessions database number from ConfigRegistry."""
-        return int(ConfigRegistry.get("redis.db_sessions", "6"))
+        return _registry_get("redis.db_sessions", "6")
 
 
 @dataclass(frozen=True)

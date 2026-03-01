@@ -3187,8 +3187,10 @@ interface ExternalDependency {
 }
 
 // CircularDependency can be either an array of module names (string[])
-// or an object with a modules property
-type CircularDependency = string[] | { modules: string[]; [key: string]: unknown }
+// or an object with cycle/modules, length, and severity (#1197)
+type CircularDependency =
+  | string[]
+  | { modules: string[]; cycle?: string[]; length?: number; severity?: string }
 
 interface DependencySummary {
   total_modules?: number
@@ -5014,31 +5016,58 @@ const indexCodebase = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const indexEndpoint = `${backendUrl}/api/analytics/codebase/index`
+    const requestBody = JSON.stringify(
+      selectedSource.value
+        ? { source_id: selectedSource.value.id }
+        : { root_path: rootPath.value }
+    )
 
-    const response = await fetchWithAuth(indexEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(
-        selectedSource.value
-          ? { source_id: selectedSource.value.id }
-          : { root_path: rootPath.value }
-      )
-    })
+    // Issue #1249: Retry on 502/503 (backend temporarily unavailable)
+    const maxRetries = 2
+    let response: Response | null = null
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      response = await fetchWithAuth(indexEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: requestBody,
+      })
+      if (response.status !== 502 && response.status !== 503) break
+      if (attempt < maxRetries) {
+        const delay = (attempt + 1) * 3
+        progressStatus.value = `Backend temporarily unavailable, retrying in ${delay}s...`
+        logger.warn(`Index request got ${response.status}, retrying (${attempt + 1}/${maxRetries})`)
+        await new Promise(r => setTimeout(r, delay * 1000))
+      }
+    }
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Status ${response.status}: ${errorText}`)
+    if (!response || !response.ok) {
+      const errorText = response ? await response.text() : 'No response'
+      const status = response?.status ?? 0
+      if (status === 502 || status === 503) {
+        throw new Error('Backend is temporarily unavailable. Please try again in a moment.')
+      }
+      throw new Error(`Status ${status}: ${errorText}`)
     }
 
     const data = await response.json()
 
-    // Check if this is a new job or already running
-    if (data.status === 'already_running') {
+    // Check response status
+    if (data.status === 'syncing') {
+      // Source needs cloning first — sync started, indexing will auto-follow
+      progressStatus.value = 'Syncing repository (clone in progress)...'
+      notify('Source not yet cloned — sync started, indexing will begin automatically', 'info')
+      // Poll /index/current until a job appears (sync auto-triggers indexing)
+      startJobPolling()
+      return
+    } else if (data.status === 'already_running') {
       currentJobId.value = data.task_id
       progressStatus.value = 'Indexing already in progress, monitoring...'
       notify('Indexing job already running, now monitoring', 'info')
+    } else if (data.status === 'queued') {
+      progressStatus.value = `Queued (position ${data.position}) — will start automatically`
+      notify('Indexing queued behind current job', 'info')
+      startJobPolling()
+      return
     } else {
       currentJobId.value = data.task_id
       progressStatus.value = 'Initializing indexing...'
@@ -6244,42 +6273,59 @@ const clearCache = async () => {
   }
 }
 
-// Run full analysis - triggers indexing which automatically loads all data when complete
+// Run full analysis - triggers indexing then runs all analyses sequentially.
+// Each step runs to completion regardless of whether previous steps failed.
+// Progress is always displayed. Each analysis is independently runnable.
 const runFullAnalysis = async () => {
-  // Just trigger indexing - the polling mechanism will:
-  // 1. Track progress during indexing
-  // 2. Call loadCodebaseAnalyticsData() when complete (loads stats, problems, etc.)
-  await indexCodebase()
+  const results: { step: string; status: 'success' | 'failed'; error?: string }[] = []
 
-  // Issue #661: Run pattern analysis and cross-language analysis in parallel (2-3x speedup)
-  // These are independent operations that can run concurrently.
-  // Error handling: Each analysis catches its own errors to prevent one failure from
-  // blocking others. Failures are logged but don't fail the overall function (partial success OK).
-  const analysisPromises: Promise<void>[] = []
-
-  // Issue #208: Pattern analysis
-  if (patternAnalysisRef.value?.runAnalysis) {
-    logger.info('Triggering pattern analysis as part of full analysis')
-    analysisPromises.push(
-      patternAnalysisRef.value.runAnalysis().catch((e: unknown) => {
-        logger.error('Pattern analysis trigger failed:', e)
-        return  // Explicit void return
-      })
-    )
+  // Step 1: Codebase indexing
+  progressStatus.value = 'Step 1/3: Codebase indexing...'
+  try {
+    await indexCodebase()
+    results.push({ step: 'Codebase indexing', status: 'success' })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    logger.error('Codebase indexing failed, continuing with next step:', msg)
+    results.push({ step: 'Codebase indexing', status: 'failed', error: msg })
   }
 
-  // Issue #244: Cross-language analysis
-  logger.info('Triggering cross-language analysis as part of full analysis')
-  analysisPromises.push(
-    runCrossLanguageAnalysis().catch((e: unknown) => {
-      logger.error('Cross-language analysis trigger failed:', e)
-      return  // Explicit void return
-    })
-  )
+  // Step 2: Pattern analysis (independent of indexing success)
+  progressStatus.value = 'Step 2/3: Pattern analysis...'
+  try {
+    if (patternAnalysisRef.value?.runAnalysis) {
+      logger.info('Triggering pattern analysis as part of full analysis')
+      await patternAnalysisRef.value.runAnalysis()
+      results.push({ step: 'Pattern analysis', status: 'success' })
+    } else {
+      results.push({ step: 'Pattern analysis', status: 'failed', error: 'Component not ready' })
+    }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    logger.error('Pattern analysis failed, continuing with next step:', msg)
+    results.push({ step: 'Pattern analysis', status: 'failed', error: msg })
+  }
 
-  // Wait for all analyses to complete in parallel
-  // Note: analysisPromises always has at least cross-language analysis
-  await Promise.all(analysisPromises)
+  // Step 3: Cross-language analysis (independent of previous steps)
+  progressStatus.value = 'Step 3/3: Cross-language analysis...'
+  try {
+    logger.info('Triggering cross-language analysis as part of full analysis')
+    await runCrossLanguageAnalysis()
+    results.push({ step: 'Cross-language analysis', status: 'success' })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    logger.error('Cross-language analysis failed:', msg)
+    results.push({ step: 'Cross-language analysis', status: 'failed', error: msg })
+  }
+
+  // Report results
+  const succeeded = results.filter(r => r.status === 'success').length
+  const failed = results.filter(r => r.status === 'failed').length
+  progressStatus.value = `Analysis complete: ${succeeded}/${results.length} passed`
+  if (failed > 0) {
+    const failedNames = results.filter(r => r.status === 'failed').map(r => r.step).join(', ')
+    logger.warn(`Full analysis partial failure: ${failedNames}`)
+  }
 }
 
 // Enhanced Analytics Methods - Connected to real backend endpoints

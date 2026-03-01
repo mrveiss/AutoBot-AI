@@ -484,15 +484,15 @@ async def _count_scannable_files(root_path_obj: Path) -> Tuple[int, list]:
     Returns:
         Tuple of (scannable_file_count, all_files_list) to avoid duplicate rglob.
     """
-    logger.info("DEBUG: _count_scannable_files starting for %s", root_path_obj)
     # Run entire counting operation in thread pool (rglob + is_file checks)
     total_files, all_files = await _run_in_indexing_thread(
         _count_scannable_files_sync, root_path_obj
     )
-    logger.info(
-        "DEBUG: _count_scannable_files returned %d scannable, %d total files",
+    logger.debug(
+        "Counted %d scannable files from %d total in %s",
         total_files,
         len(all_files),
+        root_path_obj,
     )
     return total_files, all_files
 
@@ -698,7 +698,7 @@ async def _store_problems_batch_to_chromadb(
             documents.append(problem_doc)
             metadatas.append(metadata)
 
-        await collection.add(ids=ids, documents=documents, metadatas=metadatas)
+        await collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
         logger.debug("Batch stored %s problems to ChromaDB", len(problems))
     except Exception as e:
         logger.debug("Failed to batch store problems: %s", e)
@@ -891,16 +891,8 @@ async def _clear_redis_codebase_cache(task_id: str) -> None:
                code blocked BEFORE reaching any logging statements.
     """
     try:
-        logger.info("[Task %s] Getting async Redis connection...", task_id)
         redis_client = await get_redis_connection_async()
-        logger.info(
-            "[Task %s] Redis client: %s",
-            task_id,
-            type(redis_client) if redis_client else None,
-        )
         if redis_client:
-            # Native async Redis scan - no thread pool dependency
-            logger.info("[Task %s] Starting async scan for codebase:* keys...", task_id)
             keys_to_delete = []
             cursor = 0
             while True:
@@ -910,56 +902,108 @@ async def _clear_redis_codebase_cache(task_id: str) -> None:
                 keys_to_delete.extend(keys)
                 if cursor == 0:
                     break
-            logger.info(
-                "[Task %s] Async scan completed, found %d keys",
-                task_id,
-                len(keys_to_delete),
-            )
+            # Issue #1220: Preserve file hashes in incremental mode
+            if INCREMENTAL_INDEXING_ENABLED:
+                keys_to_delete = [
+                    k
+                    for k in keys_to_delete
+                    if not k.decode("utf-8", errors="ignore").startswith(
+                        FILE_HASH_REDIS_PREFIX
+                    )
+                ]
             if keys_to_delete:
-                # Native async delete
                 await redis_client.delete(*keys_to_delete)
                 logger.info(
-                    "[Task %s] Cleared %s Redis cache entries",
+                    "[Task %s] Cleared %d Redis cache entries",
                     task_id,
                     len(keys_to_delete),
                 )
         else:
             logger.info(
-                "[Task %s] No Redis client available, skipping cache clear", task_id
+                "[Task %s] No Redis client, skipping cache clear",
+                task_id,
             )
     except Exception as e:
         logger.error(
-            "[Task %s] Error clearing Redis cache: %s", task_id, e, exc_info=True
+            "[Task %s] Error clearing Redis cache: %s",
+            task_id,
+            e,
+            exc_info=True,
         )
 
 
-async def _clear_chromadb_collection(code_collection, task_id: str) -> None:
+async def _recreate_chromadb_collection(task_id: str):
     """
-    Clear existing entries from ChromaDB collection, preserving codebase_stats.
+    Drop and recreate the ChromaDB collection for a clean re-index.
 
-    Issue #398: Extracted from _initialize_chromadb_collection to reduce method length.
-    Issue #540: Preserve codebase_stats document during clearing so stats remain
-                available while indexing is in progress.
+    Issue #1213: Replaces paginated get+delete which caused SIGSEGV on
+    large collections (>32k entries) due to SQLite C-extension limits.
+    Dropping the collection entirely avoids touching SQLite data rows.
+
+    Returns:
+        The freshly created AsyncChromaCollection, or None on failure.
     """
+    from utils.chromadb_client import get_async_chromadb_client
+
+    chroma_path = str(Path(__file__).parent.parent.parent.parent / "data" / "chromadb")
+    collection_name = "autobot_code"
+    collection_meta = {
+        "description": (
+            "Codebase analytics: functions, classes, " "problems, duplicates"
+        )
+    }
+
     try:
-        existing_data = await code_collection.get()
-        existing_ids = existing_data["ids"]
-        if existing_ids:
-            # Issue #540: Preserve codebase_stats so stats endpoint returns data during indexing
-            ids_to_delete = [id for id in existing_ids if id != "codebase_stats"]
-            if ids_to_delete:
-                await code_collection.delete(ids=ids_to_delete)
-                logger.info(
-                    "[Task %s] Cleared %s existing items from ChromaDB (preserved codebase_stats)",
-                    task_id,
-                    len(ids_to_delete),
-                )
+        async_client = await get_async_chromadb_client(
+            db_path=chroma_path,
+            allow_reset=False,
+            anonymized_telemetry=False,
+        )
+
+        # Drop existing collection (ignore if it doesn't exist)
+        try:
+            await async_client.delete_collection(collection_name)
+            logger.info(
+                "[Task %s] Dropped ChromaDB collection '%s'",
+                task_id,
+                collection_name,
+            )
+        except Exception:
+            logger.info(
+                "[Task %s] No existing collection '%s' to drop",
+                task_id,
+                collection_name,
+            )
+
+        # Recreate fresh collection
+        new_collection = await async_client.get_or_create_collection(
+            name=collection_name,
+            metadata=collection_meta,
+        )
+        logger.info(
+            "[Task %s] Created fresh ChromaDB collection '%s'",
+            task_id,
+            collection_name,
+        )
+        return new_collection
+
     except Exception as e:
-        logger.warning("[Task %s] Error clearing collection: %s", task_id, e)
+        logger.error(
+            "[Task %s] Failed to recreate collection: %s",
+            task_id,
+            e,
+            exc_info=True,
+        )
+        return None
 
 
 async def _initialize_chromadb_collection(task_id: str, update_progress, update_phase):
-    """Initialize and clear ChromaDB collection and Redis cache (Issue #281, #398: refactored)."""
+    """Initialize ChromaDB collection and Redis cache.
+
+    Issue #281, #398: refactored.
+    Issue #1220: In incremental mode, preserves existing collection
+    and file hash keys so unchanged files can be skipped.
+    """
     update_phase("init", "running")
     await update_progress(
         operation="Preparing storage",
@@ -971,24 +1015,31 @@ async def _initialize_chromadb_collection(task_id: str, update_progress, update_
 
     await _clear_redis_codebase_cache(task_id)
 
-    await update_progress(
-        operation="Preparing ChromaDB",
-        current=1,
-        total=2,
-        current_file="Connecting to ChromaDB...",
-        phase="init",
-    )
-
-    code_collection = await get_code_collection_async()
-    if code_collection:
+    if INCREMENTAL_INDEXING_ENABLED:
+        # Keep existing collection — upsert will update changed files
         await update_progress(
-            operation="Clearing old ChromaDB data",
+            operation="Connecting to ChromaDB",
             current=1,
             total=2,
-            current_file="Removing existing entries...",
+            current_file="Incremental mode — keeping existing data...",
             phase="init",
         )
-        await _clear_chromadb_collection(code_collection, task_id)
+        code_collection = await get_code_collection_async()
+        logger.info(
+            "[Task %s] Incremental mode: reusing existing collection",
+            task_id,
+        )
+    else:
+        await update_progress(
+            operation="Recreating ChromaDB collection",
+            current=1,
+            total=2,
+            current_file="Dropping and recreating collection...",
+            phase="init",
+        )
+        code_collection = await _recreate_chromadb_collection(task_id)
+        if not code_collection:
+            code_collection = await get_code_collection_async()
 
     return code_collection
 
@@ -1219,14 +1270,10 @@ async def _store_single_batch(
     update_stats,
     batch_embeddings: Optional[List[List[float]]] = None,
 ) -> int:
-    """
-    Store a single batch to ChromaDB.
+    """Store a single batch to ChromaDB (Issue #398, #660, #1249).
 
-    Issue #398: Extracted from _store_batches_to_chromadb to reduce method length.
-    Issue #660: Added optional batch_embeddings for pre-computed embeddings.
-
-    Returns:
-        Number of items stored in this batch.
+    Returns items stored. Retries once on collection errors by
+    recreating the collection reference (#1249).
     """
     end_idx = min(start_idx + batch_size, len(batch_ids))
     batch_slice_ids = batch_ids[start_idx:end_idx]
@@ -1238,12 +1285,36 @@ async def _store_single_batch(
     if batch_embeddings is not None:
         batch_slice_embeddings = batch_embeddings[start_idx:end_idx]
 
-    await code_collection.add(
-        ids=batch_slice_ids,
-        documents=batch_slice_docs,
-        metadatas=batch_slice_metas,
-        embeddings=batch_slice_embeddings,
-    )
+    # Use upsert so the preserved codebase_stats entry (#540) gets
+    # updated with fresh values instead of being silently skipped by add().
+    # Issue #1249: Retry once on stale collection reference.
+    try:
+        await code_collection.upsert(
+            ids=batch_slice_ids,
+            documents=batch_slice_docs,
+            metadatas=batch_slice_metas,
+            embeddings=batch_slice_embeddings,
+        )
+    except Exception as e:
+        err_msg = str(e).lower()
+        if "does not exist" in err_msg or "not found" in err_msg:
+            logger.warning(
+                "[Task %s] Collection stale on batch %d, " "recreating (#1249): %s",
+                task_id,
+                batch_num,
+                e,
+            )
+            new_collection = await get_code_collection_async()
+            if new_collection is None:
+                raise
+            await new_collection.upsert(
+                ids=batch_slice_ids,
+                documents=batch_slice_docs,
+                metadatas=batch_slice_metas,
+                embeddings=batch_slice_embeddings,
+            )
+        else:
+            raise
     items_in_batch = len(batch_slice_ids)
 
     # Issue #539: Thread-safe update for parallel batch processing
@@ -2553,30 +2624,19 @@ async def _gather_scannable_files(
     total_files = 0
     all_files = []
 
-    logger.info("DEBUG: scan_codebase starting for %s", root_path_obj)
-
     if progress_callback:
-        logger.info("DEBUG: about to call _count_scannable_files")
         total_files, all_files = await _count_scannable_files(root_path_obj)
-        logger.info(
-            "DEBUG: Got %d scannable files from %d total files",
-            total_files,
-            len(all_files),
-        )
-        logger.info("DEBUG: About to call progress_callback for scan init")
         await progress_callback(
             operation="Scanning files",
             current=0,
             total=total_files,
             current_file="Initializing...",
         )
-        logger.info("DEBUG: progress_callback returned, about to iterate")
     else:
-        logger.info("DEBUG: No progress callback, doing direct rglob")
         all_files = await _run_in_indexing_thread(
             lambda: list(root_path_obj.rglob("*"))
         )
-        logger.info("DEBUG: Direct rglob returned %d files", len(all_files))
+        logger.debug("Direct rglob returned %d files", len(all_files))
 
     return total_files, all_files
 
@@ -2630,9 +2690,6 @@ async def scan_codebase(
         )
 
         # Process all files
-        logger.info(
-            "DEBUG: Starting _iterate_and_process_files with %d files", len(all_files)
-        )
         files_processed, files_skipped = await _iterate_and_process_files(
             all_files,
             root_path_obj,
@@ -2786,13 +2843,23 @@ async def _run_indexing_phases(
     """
     Execute the core indexing phases.
 
-    Issue #398: Extracted from do_indexing_with_progress to reduce method length.
+    Issue #398: Extracted from do_indexing_with_progress.
+    Issue #1249: Retry ChromaDB init once on failure.
     """
     code_collection = await _initialize_chromadb_collection(
         task_id, update_progress, update_phase
     )
     if not code_collection:
-        raise Exception("ChromaDB connection failed")
+        logger.warning(
+            "[Task %s] ChromaDB init failed, retrying once (#1249)",
+            task_id,
+        )
+        await asyncio.sleep(2)
+        code_collection = await _initialize_chromadb_collection(
+            task_id, update_progress, update_phase
+        )
+    if not code_collection:
+        raise Exception("ChromaDB connection failed after retry")
 
     update_phase("init", "completed")
     update_phase("scan", "running")

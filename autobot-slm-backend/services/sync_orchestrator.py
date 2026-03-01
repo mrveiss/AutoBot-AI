@@ -290,6 +290,7 @@ class SyncOrchestrator:
             "node_ip": node.ip_address,
             "node_user": node.ssh_user or "autobot",
             "repo_path": source.repo_path,
+            "branch": source.branch,
             "commit": source.last_known_commit or "latest",
         }
 
@@ -448,43 +449,143 @@ class SyncOrchestrator:
             logger.error("Pull error: %s", e)
             return False, str(e), None
 
+    def _is_local_source(self, node_ip: str) -> bool:
+        """Return True if the code-source node is this machine. Helper for #1194."""
+        from urllib.parse import urlparse
+
+        from config import settings
+
+        own_ip = urlparse(settings.external_url).hostname or ""
+        return node_ip in {"127.0.0.1", "localhost", own_ip}
+
+    async def _git_pull_local(self, repo_path: str, branch: str) -> Tuple[bool, str]:
+        """Run git pull origin <branch> in a local repo. Helper for #1194."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "-C",
+                repo_path,
+                "pull",
+                "origin",
+                branch,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=120)
+            output = stdout.decode("utf-8", errors="replace")
+            if proc.returncode != 0:
+                logger.error("git pull failed in %s: %s", repo_path, output[:300])
+                return False, f"git pull failed: {output[:200]}"
+            logger.info("git pull succeeded in %s: %s", repo_path, output[:80])
+            return True, output[:100]
+        except asyncio.TimeoutError:
+            return False, "git pull timed out"
+        except Exception as e:
+            logger.error("git pull error in %s: %s", repo_path, e)
+            return False, str(e)
+
+    async def _get_local_git_commit(self, repo_path: str) -> Optional[str]:
+        """Get git HEAD commit from a local repo without SSH. Helper for #1194."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "-C",
+                repo_path,
+                "rev-parse",
+                "HEAD",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+            commit = stdout.decode("utf-8", errors="replace").strip()
+            if len(commit) == 40 and commit.isalnum():
+                return commit
+            logger.warning("Unexpected git HEAD output: %s", commit[:50])
+            return None
+        except Exception as e:
+            logger.warning("Could not get local git commit: %s", e)
+            return None
+
+    def _build_local_rsync_command(self, repo_path: str, cache_path: Path) -> list:
+        """Build rsync command for local-to-local copy (no SSH). Helper for #1194."""
+        return [
+            "rsync",
+            "-avz",
+            "--delete",
+            "--exclude",
+            ".git",
+            "--exclude",
+            "__pycache__",
+            "--exclude",
+            "*.pyc",
+            "--exclude",
+            "node_modules",
+            "--exclude",
+            "venv",
+            "--exclude",
+            ".venv",
+            f"{repo_path}/",
+            f"{cache_path}/",
+        ]
+
+    async def _fetch_and_update_commit(
+        self, db: AsyncSession, node_info: dict, is_local: bool
+    ) -> str:
+        """Fetch current commit from source and update DB if it changed. Helper for #1194."""
+        if is_local:
+            current_commit = await self._get_local_git_commit(node_info["repo_path"])
+        else:
+            current_commit = await self._get_current_git_commit(
+                node_info["node_ip"], node_info["node_user"], node_info["repo_path"]
+            )
+        if not current_commit:
+            logger.warning("Could not get git commit, using database value")
+            return node_info["commit"]
+        if current_commit != node_info["commit"]:
+            logger.info(
+                "Updating code source commit: %s -> %s",
+                node_info["commit"][:12],
+                current_commit[:12],
+            )
+            await self._update_code_source_commit(db, current_commit)
+            node_info["commit"] = current_commit
+        return current_commit
+
     async def pull_from_source(self) -> Tuple[bool, str, Optional[str]]:
-        """Pull code from code-source node to SLM cache. Ref: #1088."""
-        # Get source node info from database
+        """Pull code from code-source node to SLM cache. Ref: #1088, #1194.
+
+        When code source is local, runs git pull first to update from GitHub.
+        When remote, uses SSH rsync as before.
+        """
         async with db_service.session() as db:
             success, msg, node_info = await self._get_source_node_info(db)
             if not success:
                 return False, msg, None
 
-            # Fetch actual current commit from source node
-            current_commit = await self._get_current_git_commit(
-                node_info["node_ip"], node_info["node_user"], node_info["repo_path"]
-            )
-
-            if not current_commit:
-                logger.warning(
-                    "Could not get git commit from source, using database value"
+            is_local = self._is_local_source(node_info["node_ip"])
+            if is_local:
+                # Update the git clone first, then read new HEAD (#1194)
+                ok, pull_msg = await self._git_pull_local(
+                    node_info["repo_path"], node_info["branch"]
                 )
-                current_commit = node_info["commit"]
-            elif current_commit != node_info["commit"]:
-                # Update database with actual current commit
-                logger.info(
-                    "Updating code source commit: %s -> %s",
-                    node_info["commit"][:12],
-                    current_commit[:12],
-                )
-                await self._update_code_source_commit(db, current_commit)
-                node_info["commit"] = current_commit
+                if not ok:
+                    return False, pull_msg, None
 
-        # Prepare cache path and rsync command
+            await self._fetch_and_update_commit(db, node_info, is_local)
+
         commit = node_info["commit"]
         cache_path = self.cache_dir / commit
-        rsync_cmd = self._build_rsync_command(
-            node_info["node_ip"],
-            node_info["node_user"],
-            node_info["repo_path"],
-            cache_path,
-        )
+        if is_local:
+            rsync_cmd = self._build_local_rsync_command(
+                node_info["repo_path"], cache_path
+            )
+        else:
+            rsync_cmd = self._build_rsync_command(
+                node_info["node_ip"],
+                node_info["node_user"],
+                node_info["repo_path"],
+                cache_path,
+            )
         return await self._run_rsync(
             rsync_cmd, commit, node_info["node_ip"], cache_path
         )

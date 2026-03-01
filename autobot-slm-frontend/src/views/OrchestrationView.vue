@@ -22,12 +22,14 @@ import {
   type Role,
   type PlaybookMigrateResult,
   type NodeRolesInfo,
+  type PostSyncAction,
 } from '@/composables/useRoles'
 import { createLogger } from '@/utils/debugUtils'
 import ServiceStatusBadge from '@/components/orchestration/ServiceStatusBadge.vue'
 import ServiceActionButtons from '@/components/orchestration/ServiceActionButtons.vue'
 import NodeHealthCard from '@/components/orchestration/NodeHealthCard.vue'
 import RestartConfirmDialog from '@/components/orchestration/RestartConfirmDialog.vue'
+import PostSyncActionBadges from '@/components/orchestration/PostSyncActionBadges.vue'
 
 const logger = createLogger('OrchestrationView')
 
@@ -74,7 +76,7 @@ const tabs: { id: Tab; label: string; icon: string }[] = [
 // =============================================================================
 
 const searchQuery = ref('')
-const categoryFilter = ref<'autobot' | 'system' | 'all'>('all')
+const categoryFilter = ref<'autobot' | 'system' | 'all'>('autobot')
 const statusFilter = ref<string>('all')
 const expandedNodes = ref<Set<string>>(new Set())
 const autoRefresh = ref(true)
@@ -90,6 +92,8 @@ interface NodeServiceGroup {
     service_name: string
     category: string
     status: string
+    ip_address: string | null
+    port: number | null
   }>
   runningCount: number
   stoppedCount: number
@@ -142,6 +146,8 @@ const servicesByNode = computed<NodeServiceGroup[]>(() => {
         service_name: fleetService.service_name,
         category: fleetService.category,
         status: nodeStatus.status,
+        ip_address: nodeStatus.ip_address ?? null,
+        port: nodeStatus.port ?? null,
       })
 
       // Update counts
@@ -172,7 +178,7 @@ const categoryCounts = computed(() => {
 // =============================================================================
 
 const fleetSearchQuery = ref('')
-const fleetCategoryFilter = ref<'autobot' | 'system' | 'all'>('all')
+const fleetCategoryFilter = ref<'autobot' | 'system' | 'all'>('autobot')
 
 const expandedFleetServices = ref<Set<string>>(new Set())
 
@@ -346,6 +352,58 @@ watch(assignNodeId, (nodeId) => {
 })
 
 // =============================================================================
+// Post-sync action badges state (Issue #1243)
+// =============================================================================
+
+const nodeActionsCache = reactive<Record<string, PostSyncAction[]>>({})
+const executingAction = ref<{
+  nodeId: string
+  roleName: string
+  category: string
+} | null>(null)
+
+async function loadNodeActions(nodeId: string): Promise<void> {
+  const result = await roles.fetchNodeActions(nodeId)
+  if (result) {
+    nodeActionsCache[nodeId] = result.actions
+  }
+}
+
+async function handleExecuteAction(
+  nodeId: string,
+  action: PostSyncAction,
+): Promise<void> {
+  executingAction.value = {
+    nodeId,
+    roleName: action.role_name,
+    category: action.category,
+  }
+  try {
+    const result = await roles.executeNodeAction(
+      nodeId,
+      action.role_name,
+      action.category,
+    )
+    if (result) {
+      logger.info(
+        '%s %s on %s: %s',
+        action.category,
+        action.role_name,
+        nodeId,
+        result.success ? 'success' : 'failed',
+      )
+      if (action.category === 'restart') {
+        await orchestration.fetchFleetServices()
+      }
+    }
+  } catch (err) {
+    logger.error('Action execution failed:', err)
+  } finally {
+    executingAction.value = null
+  }
+}
+
+// =============================================================================
 // Tab 5: Infrastructure Overview State
 // =============================================================================
 
@@ -433,6 +491,9 @@ function toggleNode(nodeId: string): void {
   } else {
     next.add(nodeId)
     loadRolesForNode(nodeId)
+    if (!nodeActionsCache[nodeId]) {
+      loadNodeActions(nodeId)
+    }
   }
   expandedNodes.value = next
 }
@@ -967,10 +1028,22 @@ onUnmounted(() => {
                   Loading…
                 </span>
               </div>
+              <!-- Post-sync action badges (Issue #1243) -->
+              <PostSyncActionBadges
+                v-if="nodeActionsCache[node.nodeId]?.length"
+                :actions="nodeActionsCache[node.nodeId]"
+                :executingAction="
+                  executingAction?.nodeId === node.nodeId
+                    ? { roleName: executingAction.roleName, category: executingAction.category }
+                    : null
+                "
+                @execute="(action) => handleExecuteAction(node.nodeId, action)"
+              />
               <table class="w-full">
                 <thead class="bg-gray-50">
                   <tr class="text-xs text-gray-500 uppercase">
                     <th class="px-4 py-2 text-left">Service</th>
+                    <th class="px-4 py-2 text-left w-36">Endpoint</th>
                     <th class="px-4 py-2 text-left w-24">Category</th>
                     <th class="px-4 py-2 text-left w-24">Status</th>
                     <th class="px-4 py-2 text-right w-32">Actions</th>
@@ -984,6 +1057,13 @@ onUnmounted(() => {
                   >
                     <td class="px-4 py-2">
                       <span class="font-medium text-gray-900">{{ service.service_name }}</span>
+                    </td>
+                    <td class="px-4 py-2">
+                      <span
+                        v-if="service.port"
+                        class="text-xs font-mono text-gray-500"
+                      >{{ service.ip_address || node.ipAddress }}:{{ service.port }}</span>
+                      <span v-else class="text-xs text-gray-300">&mdash;</span>
                     </td>
                     <td class="px-4 py-2">
                       <span

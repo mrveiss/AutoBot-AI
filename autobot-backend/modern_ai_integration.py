@@ -2,8 +2,10 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Modern AI Model Integration for AutoBot
-Integration with state-of-the-art AI models including GPT-4V, Claude-3, Gemini for enhanced capabilities
+Modern AI Model Integration for AutoBot.
+
+Integration with state-of-the-art AI models including
+GPT-4V, Claude-3, Gemini for enhanced capabilities.
 """
 
 import asyncio
@@ -1109,8 +1111,12 @@ class ModernAIIntegration:
         if provider not in self.providers:
             provider = next(iter(self.providers.keys()))
 
-        system_message = """You are an expert at converting natural language commands into structured actions.
-        Convert user commands into a JSON structure that defines specific actions to take."""
+        system_message = (
+            "You are an expert at converting natural language"
+            " commands into structured actions. "
+            "Convert user commands into a JSON structure"
+            " that defines specific actions to take."
+        )
 
         context_info = ""
         if context:

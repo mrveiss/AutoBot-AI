@@ -111,6 +111,8 @@ class FleetServiceNodeStatus(BaseModel):
     node_id: str
     hostname: str
     status: str
+    ip_address: Optional[str] = None
+    port: Optional[int] = None
 
 
 class FleetServiceStatus(BaseModel):

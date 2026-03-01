@@ -117,12 +117,12 @@ def _deduplicate_imports(imports: List[Dict]) -> List[Dict]:
     return unique_imports
 
 
+@router.get("/analytics/import-tree")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_import_tree",
     error_code_prefix="CODEBASE",
 )
-@router.get("/analytics/import-tree")
 async def get_import_tree():
     """
     Get bidirectional file import relationships for tree visualization.

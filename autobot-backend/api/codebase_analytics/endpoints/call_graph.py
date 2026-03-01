@@ -720,12 +720,12 @@ def _build_call_graph_response(
     }
 
 
+@router.get("/analytics/call-graph")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_call_graph",
     error_code_prefix="CODEBASE",
 )
-@router.get("/analytics/call-graph")
 async def get_call_graph(
     refresh: bool = Query(False, description="Force refresh, bypass cache")
 ):

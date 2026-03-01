@@ -63,6 +63,14 @@ except ImportError:
     logger.debug("SemanticAnalysisMixin not available - semantic features disabled")
 
 
+# Issue #1225: JS/TS function detection pattern (hoisted from _extract_js_blocks)
+_JS_FUNC_RE = re.compile(
+    r"(?:function\s+\w+|(?:const|let|var)\s+\w+\s*=\s*"
+    r"(?:async\s+)?(?:function|\([^)]*\)\s*=>))"
+    r"[^{]*\{",
+    re.MULTILINE,
+)
+
 # =============================================================================
 # Configuration Constants
 # =============================================================================
@@ -300,14 +308,7 @@ def _extract_js_blocks(file_path: str, lines: List[str]) -> List[CodeBlock]:
     blocks = []
     content = "\n".join(lines)
 
-    # Pattern for functions
-    func_pattern = re.compile(
-        r"(?:function\s+\w+|(?:const|let|var)\s+\w+\s*=\s*(?:async\s+)?(?:function|\([^)]*\)\s*=>))"
-        r"[^{]*\{",
-        re.MULTILINE,
-    )
-
-    for match in func_pattern.finditer(content):
+    for match in _JS_FUNC_RE.finditer(content):
         start_pos = match.start()
         start_line = content[:start_pos].count("\n")
 

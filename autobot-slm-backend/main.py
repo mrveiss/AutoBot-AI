@@ -56,7 +56,6 @@ from api.code_source import router as code_source_router
 from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
-from config import settings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.a2a_card_fetcher import start_card_refresh_task
@@ -64,6 +63,8 @@ from services.database import db_service
 from services.git_tracker import start_version_checker
 from services.reconciler import reconciler_service
 from services.schedule_executor import start_schedule_executor, stop_schedule_executor
+
+from config import settings
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -117,6 +118,14 @@ async def _run_migrations():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+    # Reconfigure root logger AFTER uvicorn's setup so application
+    # logs (code_sync, git_tracker, etc.) are visible in service logs.
+    logging.basicConfig(
+        level=logging.DEBUG if settings.debug else logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
+        force=True,
+    )
     logger.info("Starting SLM Backend v1.0.0")
     logger.info("Debug mode: %s", settings.debug)
 

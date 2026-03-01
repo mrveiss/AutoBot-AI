@@ -3,10 +3,14 @@
 # Author: mrveiss
 """
 SLM Deployments API Routes
+
+Role definitions are sourced from role_registry.DEFAULT_ROLES (single
+source of truth) so every view in the platform shows the same set of
+roles.  See docs/developer/ROLES.md for the authoritative spec.
 """
 
 import logging
-from typing import Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from models.schemas import (
@@ -19,116 +23,151 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.deployment import deployment_service
+from services.role_registry import DEFAULT_ROLES
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/deployments", tags=["deployments"])
 
-AVAILABLE_ROLES = [
-    RoleInfo(
-        name="autobot-slm-agent",
-        description="SLM monitoring agent for node health reporting",
-        category="core",
-        ansible_role="slm_agent",
-        dependencies=[],
-        variables={"heartbeat_interval": 30},
-        tools=["systemd", "journalctl", "htop", "netstat"],
-    ),
-    RoleInfo(
-        name="autobot-database",
-        description="Redis Stack server for data persistence",
-        category="data",
-        ansible_role="redis",
-        dependencies=["autobot-slm-agent"],
-        variables={"port": 6379, "cluster_enabled": False},
-        tools=["redis-server", "redis-cli", "redis-sentinel"],
-    ),
-    RoleInfo(
-        name="autobot-backend",
-        description="AutoBot backend API server",
-        category="application",
-        ansible_role="backend",
-        dependencies=["autobot-slm-agent", "autobot-database"],
-        variables={"port": 8443, "workers": 4},
-        tools=["uvicorn", "gunicorn", "python3", "pip"],
-    ),
-    RoleInfo(
-        name="autobot-frontend",
-        description="AutoBot Vue.js frontend server",
-        category="application",
-        ansible_role="frontend",
-        dependencies=["autobot-slm-agent"],
-        variables={"port": 443},
-        tools=["nginx", "node", "npm", "vite"],
-    ),
-    RoleInfo(
-        name="llm",
-        description="LLM inference provider (Ollama/vLLM)",
-        category="ai",
-        ansible_role="llm",
-        dependencies=["autobot-slm-agent"],
-        variables={"port": 11434},
-        tools=["ollama", "vllm", "llama-cpp"],
-    ),
-    RoleInfo(
-        name="autobot-ai-stack",
-        description="AI tools and processing stack",
-        category="ai",
-        ansible_role="ai-stack",
-        dependencies=["autobot-slm-agent"],
-        variables={"port": 8080},
-        tools=["chromadb", "langchain", "transformers", "torch", "onnxruntime"],
-    ),
-    RoleInfo(
-        name="autobot-npu-worker",
-        description="Intel NPU acceleration worker",
-        category="ai",
-        ansible_role="npu-worker",
-        dependencies=["autobot-slm-agent"],
-        variables={"device_id": 0},
-        tools=["openvino", "intel-npu-driver", "benchmark_app"],
-    ),
-    RoleInfo(
-        name="autobot-browser-worker",
-        description="Playwright browser automation service",
-        category="automation",
-        ansible_role="browser",
-        dependencies=["autobot-slm-agent"],
-        variables={"headless": True},
-        tools=["playwright", "chromium", "firefox", "webkit"],
-    ),
-    RoleInfo(
-        name="autobot-monitoring",
-        description="Prometheus and Grafana monitoring stack",
-        category="observability",
-        ansible_role="monitoring",
-        dependencies=["autobot-slm-agent"],
-        variables={"prometheus_port": 9090, "grafana_port": 3000},
-        tools=["prometheus", "grafana", "node_exporter", "alertmanager"],
-    ),
-    RoleInfo(
-        name="vnc",
-        description="VNC remote desktop server with noVNC web interface",
-        category="remote-access",
-        ansible_role="vnc",
-        dependencies=["autobot-slm-agent"],
-        variables={
-            "websockify_enabled": True,
-            "security_type": "VeNCrypt",
-        },
-        tools=["tigervnc-standalone-server", "websockify", "novnc", "x11vnc"],
-    ),
-    RoleInfo(
-        name="autobot-slm-database",
-        description="PostgreSQL 16 database server",
-        category="data",
-        ansible_role="postgresql",
-        dependencies=["autobot-slm-agent"],
-        variables={"postgresql_port": 5432, "postgresql_version": "16"},
-        tools=["postgresql", "psql", "pg_dump", "pg_restore"],
-    ),
-]
+# ---------------------------------------------------------------------------
+# Role metadata derived from role_registry.DEFAULT_ROLES
+#
+# The registry owns role *names* and operational fields.  The mapping
+# below adds UI-only fields (category, description, tools) that the
+# deployment wizard needs.  When a role has no explicit entry it gets
+# sensible defaults derived from the registry data.
+# ---------------------------------------------------------------------------
+
+_ROLE_UI_META: Dict[str, Dict] = {
+    "slm-backend": {
+        "description": "SLM backend API server",
+        "category": "core",
+        "tools": ["uvicorn", "python3", "pip", "alembic"],
+    },
+    "slm-frontend": {
+        "description": "SLM Vue.js frontend",
+        "category": "core",
+        "tools": ["nginx", "node", "npm"],
+    },
+    "slm-database": {
+        "description": "PostgreSQL 16 database server",
+        "category": "core",
+        "tools": ["postgresql", "psql", "pg_dump", "pg_restore"],
+    },
+    "slm-monitoring": {
+        "description": "Prometheus and Grafana monitoring stack",
+        "category": "observability",
+        "tools": ["prometheus", "grafana", "node_exporter", "alertmanager"],
+    },
+    "backend": {
+        "description": "AutoBot backend API server",
+        "category": "application",
+        "tools": ["uvicorn", "gunicorn", "python3", "pip"],
+    },
+    "celery": {
+        "description": "Celery background task worker",
+        "category": "application",
+        "tools": ["celery", "python3"],
+    },
+    "frontend": {
+        "description": "AutoBot Vue.js frontend server",
+        "category": "application",
+        "tools": ["nginx", "node", "npm", "vite"],
+    },
+    "redis": {
+        "description": "Redis Stack server for data persistence",
+        "category": "data",
+        "tools": ["redis-server", "redis-cli", "redis-sentinel"],
+    },
+    "ai-stack": {
+        "description": "AI tools and processing stack",
+        "category": "ai",
+        "tools": [
+            "chromadb",
+            "langchain",
+            "transformers",
+            "torch",
+            "onnxruntime",
+        ],
+    },
+    "chromadb": {
+        "description": "ChromaDB vector database",
+        "category": "ai",
+        "tools": ["chromadb"],
+    },
+    "npu-worker": {
+        "description": "Intel NPU acceleration worker",
+        "category": "ai",
+        "tools": ["openvino", "intel-npu-driver", "benchmark_app"],
+    },
+    "tts-worker": {
+        "description": "Text-to-speech synthesis worker",
+        "category": "ai",
+        "tools": ["python3", "pip"],
+    },
+    "browser-service": {
+        "description": "Playwright browser automation service",
+        "category": "automation",
+        "tools": ["playwright", "chromium", "firefox", "webkit"],
+    },
+    "autobot-llm-cpu": {
+        "description": "LLM inference on CPU (Ollama)",
+        "category": "ai",
+        "tools": ["ollama"],
+    },
+    "autobot-llm-gpu": {
+        "description": "LLM inference on GPU (Ollama)",
+        "category": "ai",
+        "tools": ["ollama"],
+    },
+    "autobot-shared": {
+        "description": "Shared Python library (deployed to all nodes)",
+        "category": "infrastructure",
+        "tools": ["pip", "python3"],
+    },
+    "slm-agent": {
+        "description": "SLM monitoring agent for node health reporting",
+        "category": "infrastructure",
+        "tools": ["systemd", "journalctl", "htop", "netstat"],
+    },
+    "vnc": {
+        "description": "VNC remote desktop server with noVNC web interface",
+        "category": "remote-access",
+        "tools": [
+            "tigervnc-standalone-server",
+            "websockify",
+            "novnc",
+            "x11vnc",
+        ],
+    },
+}
+
+
+def _build_available_roles() -> List[RoleInfo]:
+    """Build RoleInfo list from role_registry.DEFAULT_ROLES."""
+    roles: List[RoleInfo] = []
+    for reg in DEFAULT_ROLES:
+        name = reg["name"]
+        meta = _ROLE_UI_META.get(name, {})
+        roles.append(
+            RoleInfo(
+                name=name,
+                description=meta.get(
+                    "description",
+                    reg.get("display_name", name),
+                ),
+                category=meta.get("category", "core"),
+                ansible_role=reg.get("ansible_playbook", ""),
+                dependencies=[],
+                variables={},
+                tools=meta.get("tools", []),
+            )
+        )
+    return roles
+
+
+AVAILABLE_ROLES = _build_available_roles()
 
 
 @router.get("/roles", response_model=RoleListResponse)

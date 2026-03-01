@@ -88,8 +88,21 @@ def _check_existing_task_and_queue(
     )
 
 
-async def _validate_and_get_path(request: Optional[IndexCodebaseRequest]) -> str:
-    """Validate request and return the resolved index path (Issue #398 + #1133)."""
+class _SyncNeeded:
+    """Sentinel returned when a code source needs syncing before indexing."""
+
+    def __init__(self, source):
+        self.source = source
+
+
+async def _validate_and_get_path(
+    request: Optional[IndexCodebaseRequest],
+) -> "str | _SyncNeeded":
+    """Validate request and return the resolved index path (Issue #398 + #1133).
+
+    Returns the path string when ready. Returns a ``_SyncNeeded`` sentinel when
+    the source's clone directory does not exist and a sync must run first.
+    """
     if request and request.source_id:
         from ..source_storage import get_source
 
@@ -100,10 +113,18 @@ async def _validate_and_get_path(request: Optional[IndexCodebaseRequest]) -> str
                 detail=f"Source {request.source_id} not found",
             )
         if not source.clone_path:
-            raise HTTPException(
-                status_code=400,
-                detail="Source has no clone path; sync it first",
-            )
+            from ..source_models import SourceStatus
+            from .sources import _make_clone_path
+
+            source.clone_path = _make_clone_path(source.id)
+            source.status = SourceStatus.PENDING
+            from ..source_storage import save_source as _save
+
+            await _save(source)
+
+        if not Path(source.clone_path).is_dir():
+            return _SyncNeeded(source)
+
         return source.clone_path
     if request and request.root_path:
         target_path = Path(request.root_path)
@@ -161,12 +182,12 @@ def _create_cleanup_callback(task_id: str):
     return cleanup_task
 
 
+@router.post("/index")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="index_codebase",
     error_code_prefix="CODEBASE",
 )
-@router.post("/index")
 async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
     """
     Start background indexing of a codebase path (Issue #398: refactored, #1133: queued).
@@ -176,54 +197,63 @@ async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
     """
     global _current_indexing_task_id
 
-    logger.info("✅ ENTRY: index_codebase endpoint called!")
+    path_or_sync = await _validate_and_get_path(request)
 
-    # Resolve the path first (may be async for source_id lookup)
-    root_path = await _validate_and_get_path(request)
+    # Auto-sync: source clone directory missing → trigger sync
+    if isinstance(path_or_sync, _SyncNeeded):
+        source = path_or_sync.source
+        from .sources import _do_sync
+
+        asyncio.create_task(_do_sync(source))
+        logger.info("Source %s needs sync before indexing", source.id)
+        return JSONResponse(
+            {
+                "task_id": None,
+                "status": "syncing",
+                "message": (
+                    "Source repository not yet cloned. "
+                    "Sync started — indexing will begin "
+                    "automatically after sync."
+                ),
+            }
+        )
+
+    root_path = path_or_sync
     source_id = request.source_id if request else None
-    logger.info("📁 Indexing path = %s", root_path)
+    logger.info("Indexing path: %s", root_path)
 
     async with _tasks_lock:
-        # Check for existing task — queue if busy (#1133)
         queued_response = _check_existing_task_and_queue(source_id, root_path)
         if queued_response:
             return queued_response
 
-        # Generate unique task ID and start task
         task_id = str(uuid.uuid4())
-        logger.info("🆔 Generated task_id = %s", task_id)
-
         _current_indexing_task_id = task_id
-
-        logger.info("🔄 About to create_task")
         task = asyncio.create_task(_run_indexing_subprocess(task_id, root_path))
-        logger.info("✅ Task created: %s", task)
         _active_tasks[task_id] = task
-        logger.info("💾 Task stored in _active_tasks")
 
-    # Add cleanup callback
     task.add_done_callback(_create_cleanup_callback(task_id))
-    logger.info("🧹 Cleanup callback added")
+    logger.info("Indexing task %s started for %s", task_id, root_path)
 
-    logger.info("📤 About to return JSONResponse")
     return JSONResponse(
         {
             "task_id": task_id,
             "status": "started",
             "message": (
                 "Indexing started in background. Poll "
-                "/api/analytics/codebase/index/status/{task_id} for progress."
+                "/api/analytics/codebase/index/status/"
+                f"{task_id} for progress."
             ),
         }
     )
 
 
+@router.get("/index/status/{task_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_indexing_status",
     error_code_prefix="CODEBASE",
 )
-@router.get("/index/status/{task_id}")
 async def get_indexing_status(task_id: str):
     """
     Get the status of a background indexing task
@@ -235,11 +265,11 @@ async def get_indexing_status(task_id: str):
     - result: Final indexing results (if completed)
     - error: Error message (if failed)
     """
-    # #1179: With --workers N, this worker may not have the task in local memory.
-    # Fall back to Redis where the owning worker persists task state.
-    task_data = indexing_tasks.get(task_id)
+    # #1179/#1210: Subprocess writes progress to Redis, not parent memory.
+    # Prefer Redis (fresh) over in-memory (stale initial state).
+    task_data = await _load_task_from_redis(task_id)
     if task_data is None:
-        task_data = await _load_task_from_redis(task_id)
+        task_data = indexing_tasks.get(task_id)
 
     if task_data is None:
         return JSONResponse(
@@ -265,12 +295,12 @@ async def get_indexing_status(task_id: str):
     return JSONResponse(response)
 
 
+@router.get("/index/current")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_current_indexing_job",
     error_code_prefix="CODEBASE",
 )
-@router.get("/index/current")
 async def get_current_indexing_job():
     """
     Get the status of the currently running indexing job (if any)
@@ -298,8 +328,10 @@ async def get_current_indexing_job():
         # Check if task is still running
         existing_task = _active_tasks.get(current_task_id)
         if existing_task is None or existing_task.done():
-            # Task finished or was cleaned up
-            task_data = dict(indexing_tasks.get(current_task_id, {}))
+            # Task finished — load final state from Redis (#1210)
+            task_data = await _load_task_from_redis(current_task_id)
+            if not task_data:
+                task_data = dict(indexing_tasks.get(current_task_id, {}))
             return JSONResponse(
                 {
                     "has_active_job": False,
@@ -311,8 +343,15 @@ async def get_current_indexing_job():
                 }
             )
 
-        # Task is still running - get a copy of task data
+        # Task is still running — prefer Redis state (subprocess writes there)
+        # because the subprocess has its own in-memory indexing_tasks (#1210).
         task_data = dict(indexing_tasks.get(current_task_id, {}))
+
+    # Subprocess updates Redis, not parent's in-memory dict.
+    # Load fresh state from Redis so progress actually advances (#1210).
+    redis_state = await _load_task_from_redis(current_task_id)
+    if redis_state:
+        task_data = redis_state
 
     return JSONResponse(
         {
@@ -362,12 +401,12 @@ def _cancel_active_task(task_id: str, existing_task) -> JSONResponse:
         )
 
 
+@router.post("/index/cancel")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="cancel_indexing_job",
     error_code_prefix="CODEBASE",
 )
-@router.post("/index/cancel")
 async def cancel_indexing_job():
     """
     Cancel the currently running indexing job

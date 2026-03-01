@@ -39,12 +39,12 @@ def _get_checker() -> APIEndpointChecker:
     return APIEndpointChecker()
 
 
+@router.get("/api-endpoints")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_api_endpoints",
     error_code_prefix="CODEBASE",
 )
-@router.get("/api-endpoints")
 async def get_api_endpoints() -> JSONResponse:
     """
     Get all backend API endpoints.
@@ -52,7 +52,7 @@ async def get_api_endpoints() -> JSONResponse:
     Returns list of all FastAPI route definitions found in the backend.
     """
     checker = _get_checker()
-    endpoints = checker.get_backend_endpoints()
+    endpoints = await asyncio.to_thread(checker.get_backend_endpoints)
 
     return JSONResponse(
         {
@@ -63,12 +63,12 @@ async def get_api_endpoints() -> JSONResponse:
     )
 
 
+@router.get("/api-calls")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_frontend_api_calls",
     error_code_prefix="CODEBASE",
 )
-@router.get("/api-calls")
 async def get_frontend_api_calls() -> JSONResponse:
     """
     Get all frontend API calls.
@@ -76,7 +76,7 @@ async def get_frontend_api_calls() -> JSONResponse:
     Returns list of all API calls found in frontend TypeScript/Vue files.
     """
     checker = _get_checker()
-    calls = checker.get_frontend_calls()
+    calls = await asyncio.to_thread(checker.get_frontend_calls)
 
     return JSONResponse(
         {
@@ -87,12 +87,12 @@ async def get_frontend_api_calls() -> JSONResponse:
     )
 
 
+@router.get("/endpoint-coverage")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_endpoint_coverage",
     error_code_prefix="CODEBASE",
 )
-@router.get("/endpoint-coverage")
 async def get_endpoint_coverage() -> JSONResponse:
     """
     Get full API endpoint coverage analysis.
@@ -106,7 +106,7 @@ async def get_endpoint_coverage() -> JSONResponse:
     - Coverage percentage
     """
     checker = _get_checker()
-    analysis = checker.run_full_analysis()
+    analysis = await asyncio.to_thread(checker.run_full_analysis)
 
     # Cache the result (thread-safe, Issue #559)
     async with _analysis_cache_lock:
@@ -128,12 +128,12 @@ async def get_endpoint_coverage() -> JSONResponse:
     )
 
 
+@router.get("/endpoint-analysis")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_endpoint_analysis_full",
     error_code_prefix="CODEBASE",
 )
-@router.get("/endpoint-analysis")
 async def get_endpoint_analysis_full() -> JSONResponse:
     """
     Get complete API endpoint analysis with all details.
@@ -142,7 +142,7 @@ async def get_endpoint_analysis_full() -> JSONResponse:
     Use /endpoint-coverage for a summary only.
     """
     checker = _get_checker()
-    analysis = checker.run_full_analysis()
+    analysis = await asyncio.to_thread(checker.run_full_analysis)
 
     # Cache the result (thread-safe, Issue #559)
     async with _analysis_cache_lock:
@@ -156,12 +156,12 @@ async def get_endpoint_analysis_full() -> JSONResponse:
     )
 
 
+@router.get("/orphaned-endpoints")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_orphaned_endpoints",
     error_code_prefix="CODEBASE",
 )
-@router.get("/orphaned-endpoints")
 async def get_orphaned_endpoints() -> JSONResponse:
     """
     Get orphaned endpoints (defined but never called).
@@ -175,7 +175,7 @@ async def get_orphaned_endpoints() -> JSONResponse:
             analysis = _analysis_cache["latest"]
         else:
             checker = _get_checker()
-            analysis = checker.run_full_analysis()
+            analysis = await asyncio.to_thread(checker.run_full_analysis)
             _analysis_cache["latest"] = analysis
 
     return JSONResponse(
@@ -187,12 +187,12 @@ async def get_orphaned_endpoints() -> JSONResponse:
     )
 
 
+@router.get("/missing-endpoints")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_missing_endpoints",
     error_code_prefix="CODEBASE",
 )
-@router.get("/missing-endpoints")
 async def get_missing_endpoints() -> JSONResponse:
     """
     Get missing endpoints (called but not defined).
@@ -206,7 +206,7 @@ async def get_missing_endpoints() -> JSONResponse:
             analysis = _analysis_cache["latest"]
         else:
             checker = _get_checker()
-            analysis = checker.run_full_analysis()
+            analysis = await asyncio.to_thread(checker.run_full_analysis)
             _analysis_cache["latest"] = analysis
 
     return JSONResponse(
@@ -218,12 +218,12 @@ async def get_missing_endpoints() -> JSONResponse:
     )
 
 
+@router.get("/used-endpoints")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_used_endpoints",
     error_code_prefix="CODEBASE",
 )
-@router.get("/used-endpoints")
 async def get_used_endpoints() -> JSONResponse:
     """
     Get actively used endpoints with their call counts.
@@ -236,7 +236,7 @@ async def get_used_endpoints() -> JSONResponse:
             analysis = _analysis_cache["latest"]
         else:
             checker = _get_checker()
-            analysis = checker.run_full_analysis()
+            analysis = await asyncio.to_thread(checker.run_full_analysis)
             _analysis_cache["latest"] = analysis
 
     # Sort by call count (most used first)
@@ -262,12 +262,12 @@ async def get_used_endpoints() -> JSONResponse:
     )
 
 
+@router.post("/refresh-endpoint-cache")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="refresh_endpoint_cache",
     error_code_prefix="CODEBASE",
 )
-@router.post("/refresh-endpoint-cache")
 async def refresh_endpoint_cache() -> JSONResponse:
     """
     Force refresh the endpoint analysis cache.

@@ -24,10 +24,12 @@ DEFAULT_KNOWLEDGE_PIPELINE = {
         {"task": "extract_metadata", "params": {}},
     ],
     "cognify": [
-        # Cognifier tasks will be added in future issues
+        {"task": "extract_entities", "params": {}},
+        {"task": "extract_relationships", "params": {}},
+        {"task": "summarize", "params": {"levels": ["sentence", "paragraph"]}},
     ],
     "load": [
-        # Loader tasks will be added in future issues
+        {"task": "chromadb", "params": {}},
     ],
 }
 
