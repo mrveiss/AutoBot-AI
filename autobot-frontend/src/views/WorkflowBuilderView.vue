@@ -579,6 +579,7 @@ const {
   loadActiveWorkflows,
   createWorkflowFromTemplate,
   createWorkflowFromNaturalLanguage,
+  executeApiTemplate,
   startWorkflow,
   pauseWorkflow,
   resumeWorkflow,
@@ -823,11 +824,13 @@ async function handleTemplateSelected(template: WorkflowTemplate | WorkflowTempl
 }
 
 async function handleRunTemplate(template: WorkflowTemplate | WorkflowTemplateSummary): Promise<void> {
-  const workflowId = await createWorkflowFromTemplate(template as WorkflowTemplate, sessionId.value);
-  if (workflowId) {
-    await startWorkflow(workflowId);
+  const result = await executeApiTemplate(template.id);
+  if (result?.success) {
     showToast(`Workflow "${template.name}" started`, 'success');
     activeSection.value = 'runner';
+    await loadActiveWorkflows();
+  } else {
+    showToast(result?.error || `Failed to run "${template.name}"`, 'error');
   }
 }
 
