@@ -1342,43 +1342,75 @@ async def _store_single_batch(
     return items_in_batch
 
 
+async def _generate_embeddings_with_progress(
+    batch_documents: list, total_docs: int, update_progress
+) -> List[List[float]]:
+    """Generate embeddings in super-batches, reporting progress (#1303).
+
+    Splits the full document list into chunks of 1000 and updates
+    Redis progress after each chunk so the UI shows real progress.
+    """
+    super_batch_size = 1000
+    all_embeddings: List[List[float]] = []
+
+    for offset in range(0, total_docs, super_batch_size):
+        chunk = batch_documents[offset : offset + super_batch_size]
+        chunk_embeddings = await _generate_batch_embeddings(chunk)
+        all_embeddings.extend(chunk_embeddings)
+
+        processed = offset + len(chunk)
+        await update_progress(
+            operation="Generating embeddings",
+            current=processed,
+            total=total_docs,
+            current_file=(
+                f"Embeddings: {processed}/{total_docs} "
+                f"({processed * 100 // total_docs}%)"
+            ),
+            phase="embed",
+        )
+
+    return all_embeddings
+
+
 async def _precompute_embeddings(
     batch_documents: list, task_id: str, update_progress, update_phase
 ) -> Optional[List[List[float]]]:
-    """
-    Pre-compute embeddings for documents before storage.
+    """Pre-compute embeddings for documents before storage.
 
-    Issue #665: Extracted from _store_batches_to_chromadb for single responsibility.
+    Issue #665: Extracted from _store_batches_to_chromadb.
     Issue #660: Original embedding pre-computation logic.
-
-    Returns:
-        List of embeddings if successful, None otherwise.
+    Issue #1303: Delegates to _generate_embeddings_with_progress
+    so the embedding phase reports real progress instead of 0%.
     """
     if CHROMADB_EMBEDDING_MODE != "precompute":
         if CHROMADB_EMBEDDING_MODE == "skip":
             logger.info(
-                "[Task %s] Skipping pre-computed embeddings (mode=skip)", task_id
+                "[Task %s] Skipping pre-computed embeddings (mode=skip)",
+                task_id,
             )
         return None
 
     update_phase("embed", "running")
+    total_docs = len(batch_documents)
     await update_progress(
         operation="Generating embeddings",
         current=0,
-        total=len(batch_documents),
+        total=total_docs,
         current_file="Pre-computing embeddings...",
         phase="embed",
     )
 
     try:
-        batch_embeddings = await _generate_batch_embeddings(batch_documents)
-
-        if len(batch_embeddings) != len(batch_documents):
+        batch_embeddings = await _generate_embeddings_with_progress(
+            batch_documents, total_docs, update_progress
+        )
+        if len(batch_embeddings) != total_docs:
             logger.error(
-                "[Task %s] Embedding count mismatch: %d embeddings for %d documents",
+                "[Task %s] Embedding count mismatch: %d vs %d docs",
                 task_id,
                 len(batch_embeddings),
-                len(batch_documents),
+                total_docs,
             )
             batch_embeddings = None
         else:
@@ -1390,7 +1422,7 @@ async def _precompute_embeddings(
             )
     except Exception as e:
         logger.warning(
-            "[Task %s] Embedding pre-computation failed, falling back to auto: %s",
+            "[Task %s] Embedding pre-computation failed: %s",
             task_id,
             e,
         )

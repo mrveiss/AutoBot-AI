@@ -13,6 +13,7 @@ Usage (internal — called by _run_indexing_subprocess):
 """
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -38,6 +39,13 @@ def main() -> None:
     if len(sys.argv) < 3:
         logger.error("Usage: indexing_worker.py <task_id> <root_path>")
         sys.exit(1)
+
+    # Issue #1303: Lower process priority so the embedding-heavy indexing
+    # subprocess doesn't starve backend API workers of CPU.
+    try:
+        os.nice(10)
+    except OSError:
+        logger.debug("Could not set nice priority (non-root)")
 
     task_id = sys.argv[1]
     root_path = sys.argv[2]
