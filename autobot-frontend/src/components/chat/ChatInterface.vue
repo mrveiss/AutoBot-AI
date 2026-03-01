@@ -139,8 +139,9 @@
       </div>
     </div>
 
-    <!-- Voice Conversation Overlay (#1029) -->
+    <!-- Voice Conversation Overlay (#1029) — only mount for modal mode -->
     <VoiceConversationOverlay
+      v-if="showVoiceOverlay"
       @close="showVoiceOverlay = false"
     />
   </ErrorBoundary>
