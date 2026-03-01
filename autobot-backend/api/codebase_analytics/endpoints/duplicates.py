@@ -20,8 +20,9 @@ from pathlib import Path
 from typing import Optional
 
 from constants.threshold_constants import AnalyticsConfig
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
+from utils.background_task_manager import BackgroundTaskManager
 from utils.io_executor import get_analytics_executor
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -32,6 +33,9 @@ from ..storage import get_code_collection
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Background task manager for duplicate analysis (#1304)
+_manager = BackgroundTaskManager(redis_prefix="dup_task:")
 
 # Cache for duplicate analysis (in-memory, refreshed on demand)
 _duplicate_cache: Optional[dict] = None
@@ -508,3 +512,48 @@ async def detect_config_duplicates_endpoint(
             "report": result["report"],
         }
     )
+
+
+# ------------------------------------------------------------------
+# Background task endpoints (#1304)
+# ------------------------------------------------------------------
+
+
+async def _run_dup_analysis(task_id: str) -> None:
+    """Background worker for duplicate analysis (#1304)."""
+    try:
+        project_root = _get_project_root()
+
+        await _manager.update_progress(task_id, "Running duplicate analysis", 20.0)
+        analysis = await _run_duplicate_analysis(project_root, 0.5, False)
+
+        if analysis is None:
+            await _manager.update_progress(task_id, "Analysis timed out", 90.0)
+            await _manager.complete_task(task_id, _build_timeout_response())
+            return
+
+        await _manager.update_progress(task_id, "Processing results", 80.0)
+        result = _process_and_cache_analysis(analysis, project_root)
+        await _manager.complete_task(task_id, result)
+    except Exception as e:
+        logger.error("Duplicate analysis failed: %s", e)
+        await _manager.fail_task(task_id, str(e))
+
+
+@router.post("/duplicates/analyze")
+async def start_duplicate_analysis(
+    background_tasks: BackgroundTasks,
+):
+    """Start background duplicate analysis (#1304)."""
+    task_id = await _manager.create_task()
+    background_tasks.add_task(_run_dup_analysis, task_id)
+    return {"task_id": task_id, "status": "pending"}
+
+
+@router.get("/duplicates/status/{task_id}")
+async def get_duplicate_status(task_id: str):
+    """Get duplicate analysis task status (#1304)."""
+    task = await _manager.get_status(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return task
