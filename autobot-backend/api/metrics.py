@@ -5,11 +5,19 @@
 Metrics API endpoints for workflow performance monitoring
 """
 
+import asyncio
+import logging
+from datetime import datetime, timedelta
+
+# Prometheus query helpers shared from monitoring module (Issue #1283)
+from api.monitoring import _query_prometheus_range
 from fastapi import APIRouter, HTTPException, Query
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -75,6 +83,54 @@ async def get_current_system_metrics():
         raise HTTPException(
             status_code=500, detail=f"Failed to get system metrics: {str(e)}"
         )
+
+
+# CPU/memory time-series via Prometheus — extracted from monitoring_compat.py (Issue #1283)
+
+_HISTORY_DURATION_MAP = {
+    "15m": timedelta(minutes=15),
+    "1h": timedelta(hours=1),
+    "6h": timedelta(hours=6),
+    "1d": timedelta(days=1),
+    "7d": timedelta(days=7),
+}
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_system_metrics_history",
+    error_code_prefix="METRICS",
+)
+@router.get("/system/history")
+async def get_system_metrics_history(
+    duration: str = Query(
+        "1h", description="Time duration (e.g., 15m, 1h, 6h, 1d, 7d)"
+    ),
+    step: str = Query("15s", description="Data point resolution interval"),
+):
+    """Get historical CPU and memory metrics from Prometheus.
+
+    Supports time windows from 15 minutes to 7 days.  Queries Prometheus for
+    autobot_cpu_usage_percent and autobot_memory_usage_percent range data.
+    Extracted from monitoring_compat.py (Issue #1283).
+    """
+    logger.info("Fetching system metrics history: duration=%s step=%s", duration, step)
+
+    delta = _HISTORY_DURATION_MAP.get(duration, timedelta(hours=1))
+    end = datetime.utcnow()
+    start = end - delta
+
+    cpu_history, memory_history = await asyncio.gather(
+        _query_prometheus_range("autobot_cpu_usage_percent", start, end, step),
+        _query_prometheus_range("autobot_memory_usage_percent", start, end, step),
+    )
+
+    return {
+        "success": True,
+        "cpu_history": cpu_history,
+        "memory_history": memory_history,
+        "time_range": {"start": start.isoformat(), "end": end.isoformat()},
+    }
 
 
 @with_error_handling(
