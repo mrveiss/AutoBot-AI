@@ -38,8 +38,9 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["orchestrator"],
         "orchestrator",
     ),
+    # Issue #1285: Consolidated from api/workflow_automation.py to services/ version
     (
-        "api.workflow_automation",
+        "services.workflow_automation.routes",
         "/workflow-automation",
         ["workflow-automation"],
         "workflow_automation",

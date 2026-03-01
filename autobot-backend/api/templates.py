@@ -463,8 +463,9 @@ async def execute_template_workflow(
                 detail="Template not found or invalid",
             )
 
-        from api.workflow_automation import workflow_manager
+        from services.workflow_automation.routes import get_workflow_manager
 
+        workflow_manager = get_workflow_manager()
         if workflow_manager is None:
             raise HTTPException(
                 status_code=503,
@@ -510,7 +511,7 @@ async def execute_template_workflow(
 
 def _convert_template_steps(steps):
     """Convert template step dicts to WorkflowStep objects (#1272)."""
-    from api.workflow_automation import WorkflowStep as WAStep
+    from services.workflow_automation.models import WorkflowStep as WAStep
 
     wa_steps = []
     for step in steps:
@@ -544,7 +545,7 @@ async def _create_and_start_workflow(
     request,
 ):
     """Create and auto-start a workflow (#1272)."""
-    from api.workflow_automation import AutomationMode
+    from services.workflow_automation.models import AutomationMode
 
     mode = (
         AutomationMode.AUTOMATIC
