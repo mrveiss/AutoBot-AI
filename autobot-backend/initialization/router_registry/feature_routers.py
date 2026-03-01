@@ -377,6 +377,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["nl-database", "vanna", "natural-language-sql"],
         "nl_database",
     ),
+    # Issue #1295: Saved analytics reports CRUD + run
+    (
+        "api.bi_export_endpoints",
+        "/bi",
+        ["bi-reports"],
+        "bi_reports",
+    ),
 ]
 
 
