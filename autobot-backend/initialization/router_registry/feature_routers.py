@@ -93,7 +93,6 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Services and infrastructure
     ("api.services", "/services", ["services"], "services"),
     ("api.elevation", "/elevation", ["elevation"], "elevation"),
-    ("api.auth", "/auth", ["auth"], "auth"),
     ("api.hot_reload", "/hot-reload", ["hot-reload"], "hot_reload"),
     ("api.startup", "/startup", ["startup"], "startup"),
     # Enterprise and scheduling
