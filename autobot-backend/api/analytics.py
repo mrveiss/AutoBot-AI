@@ -29,7 +29,16 @@ from api.analytics_models import AnalyticsOverview, RealTimeEvent
 from auth_middleware import get_current_user
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
+from utils.background_task_manager import BackgroundTaskManager
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase
@@ -39,6 +48,9 @@ from .monitoring_hardware import hardware_monitor
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["analytics"])
+
+# Background task manager for dashboard overview (#1304)
+_dash_manager = BackgroundTaskManager(redis_prefix="dash_task:")
 
 # Module-level constants for O(1) lookups (Issue #326)
 ANALYTICS_REDIS_DATABASES = {
@@ -1181,3 +1193,68 @@ async def websocket_live_analytics(websocket: WebSocket):
 #         asyncio.create_task(collector.start_collection())
 #
 #     logger.info("Enhanced Analytics API initialized successfully")
+
+
+# ------------------------------------------------------------------
+# Background task endpoints for dashboard overview (#1304)
+# ------------------------------------------------------------------
+
+
+async def _run_dashboard_analysis(task_id: str) -> None:
+    """Background worker for dashboard overview (#1304)."""
+    try:
+        await _dash_manager.update_progress(task_id, "Collecting system health", 10.0)
+        results = await asyncio.gather(
+            hardware_monitor.get_system_health(),
+            analytics_controller.collect_performance_metrics(),
+            analytics_controller.analyze_communication_patterns(),
+            analytics_controller.get_usage_statistics(),
+            analytics_controller.detect_trends(),
+            return_exceptions=True,
+        )
+
+        await _dash_manager.update_progress(task_id, "Processing metrics", 60.0)
+        system_health = _handle_task_exception(results[0], "system_health")
+        performance = _handle_task_exception(results[1], "performance")
+        communication = _handle_task_exception(results[2], "communication")
+        usage = _handle_task_exception(results[3], "usage")
+        trends = _handle_task_exception(results[4], "trends")
+
+        await _dash_manager.update_progress(task_id, "Building overview", 80.0)
+        code_status = await _get_code_analysis_status()
+        realtime = await _get_realtime_metrics()
+
+        result = {
+            "timestamp": datetime.now().isoformat(),
+            "system_health": system_health,
+            "performance_metrics": performance,
+            "communication_patterns": communication,
+            "code_analysis_status": code_status,
+            "usage_statistics": usage,
+            "realtime_metrics": realtime,
+            "trends": trends,
+        }
+        await _dash_manager.complete_task(task_id, result)
+    except Exception as e:
+        logger.error("Dashboard analysis failed: %s", e)
+        await _dash_manager.fail_task(task_id, str(e))
+
+
+@router.post("/dashboard/overview/analyze")
+async def start_dashboard_analysis(
+    background_tasks: BackgroundTasks,
+    current_user: Dict = Depends(get_current_user),
+):
+    """Start background dashboard overview analysis (#1304)."""
+    task_id = await _dash_manager.create_task()
+    background_tasks.add_task(_run_dashboard_analysis, task_id)
+    return {"task_id": task_id, "status": "pending"}
+
+
+@router.get("/dashboard/overview/status/{task_id}")
+async def get_dashboard_status(task_id: str):
+    """Get dashboard overview task status (#1304)."""
+    task = await _dash_manager.get_status(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return task
