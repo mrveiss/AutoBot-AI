@@ -27,7 +27,7 @@ from llm_interface import LLMInterface
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/advanced_workflow", tags=["advanced_workflow"])
+router = APIRouter(prefix="/advanced_workflow", tags=["advanced_workflow"])
 
 
 class WorkflowComplexity(Enum):

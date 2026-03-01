@@ -438,7 +438,7 @@ async def get_sync_service() -> KnowledgeSyncService:
 
 
 # FastAPI router for REST API endpoints
-router = APIRouter(prefix="/api/knowledge/sync", tags=["knowledge-sync"])
+router = APIRouter(prefix="/knowledge/sync", tags=["knowledge-sync"])
 
 
 @router.post("/manual")
