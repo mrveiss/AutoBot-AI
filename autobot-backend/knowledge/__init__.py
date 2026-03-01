@@ -21,6 +21,7 @@ from multiple focused mixins:
 - MetadataMixin: Custom metadata templates and validation (Issue #414)
 - VersioningMixin: Fact version history and reversion (Issue #414)
 - BulkOperationsMixin: Import, export, and bulk operations
+- RelationsMixin: Fact-to-fact graph relations and traversal (Issue #1279)
 
 Usage:
     from knowledge import get_knowledge_base
@@ -48,6 +49,7 @@ from knowledge.documents import DocumentsMixin
 from knowledge.facts import FactsMixin
 from knowledge.index import IndexMixin
 from knowledge.metadata import MetadataMixin
+from knowledge.relations import RelationsMixin
 from knowledge.search import SearchMixin
 from knowledge.stats import StatsMixin
 from knowledge.suggestions import SuggestionsMixin
@@ -71,6 +73,7 @@ class KnowledgeBase(
     MetadataMixin,
     VersioningMixin,
     BulkOperationsMixin,
+    RelationsMixin,
 ):
     """
     Unified Knowledge Base implementation.
@@ -113,7 +116,7 @@ class KnowledgeBase(
         all instance variables that are shared across mixins.
         """
         super().__init__()
-        logger.debug("KnowledgeBase instance created (composed from 13 mixins)")
+        logger.debug("KnowledgeBase instance created (composed from 14 mixins)")
 
     async def initialize(self) -> bool:
         """
@@ -244,4 +247,5 @@ __all__ = [
     "MetadataMixin",
     "VersioningMixin",
     "BulkOperationsMixin",
+    "RelationsMixin",
 ]

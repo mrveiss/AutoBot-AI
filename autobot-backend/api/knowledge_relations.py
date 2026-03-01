@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Issue #380: Module-level frozenset for valid relation directions
 _VALID_DIRECTIONS = frozenset({"outgoing", "incoming", "both"})
 
-router = APIRouter(prefix="/relations", tags=["knowledge-relations"])
+router = APIRouter(tags=["knowledge-relations"])
 
 
 # ============================================================================
@@ -91,12 +91,12 @@ class HybridSearchRequest(BaseModel):
 # ============================================================================
 
 
+@router.post("/create")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_fact_relation",
     error_code_prefix="KNOWLEDGE_REL",
 )
-@router.post("/create")
 async def create_fact_relation(req: Request, body: CreateRelationRequest):
     """
     Create a bidirectional relation between two facts.
@@ -138,12 +138,12 @@ async def create_fact_relation(req: Request, body: CreateRelationRequest):
     return result
 
 
+@router.delete("/delete")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_fact_relation",
     error_code_prefix="KNOWLEDGE_REL",
 )
-@router.delete("/delete")
 async def delete_fact_relation(req: Request, body: DeleteRelationRequest):
     """
     Delete a relation between two facts.
@@ -170,12 +170,12 @@ async def delete_fact_relation(req: Request, body: DeleteRelationRequest):
     return result
 
 
+@router.get("/fact/{fact_id}")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_fact_relations",
     error_code_prefix="KNOWLEDGE_REL",
 )
-@router.get("/fact/{fact_id}")
 async def get_fact_relations(
     req: Request,
     fact_id: str,
@@ -219,12 +219,12 @@ async def get_fact_relations(
     return result
 
 
+@router.post("/traverse")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="traverse_relations",
     error_code_prefix="KNOWLEDGE_REL",
 )
-@router.post("/traverse")
 async def traverse_relations(req: Request, body: TraverseRequest):
     """
     Traverse the fact graph starting from a given fact.
@@ -253,12 +253,12 @@ async def traverse_relations(req: Request, body: TraverseRequest):
     return result
 
 
+@router.post("/hybrid-search")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="hybrid_search",
     error_code_prefix="KNOWLEDGE_REL",
 )
-@router.post("/hybrid-search")
 async def hybrid_search(req: Request, body: HybridSearchRequest):
     """
     Perform hybrid search combining vector similarity and graph relations.
@@ -291,12 +291,12 @@ async def hybrid_search(req: Request, body: HybridSearchRequest):
     return result
 
 
+@router.get("/stats")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_relation_stats",
     error_code_prefix="KNOWLEDGE_REL",
 )
-@router.get("/stats")
 async def get_relation_stats(req: Request):
     """
     Get statistics about fact relations in the knowledge base.
@@ -319,12 +319,12 @@ async def get_relation_stats(req: Request):
     return result
 
 
+@router.get("/types")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_available_relation_types",
     error_code_prefix="KNOWLEDGE_REL",
 )
-@router.get("/types")
 async def get_available_relation_types(req: Request):
     """
     Get list of valid relation types.

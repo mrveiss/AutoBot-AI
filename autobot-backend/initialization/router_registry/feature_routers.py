@@ -240,6 +240,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["knowledge-maintenance"],
         "knowledge_maintenance",
     ),
+    # Issue #1279: Fact-to-fact graph relations + hybrid search
+    (
+        "api.knowledge_relations",
+        "/knowledge-relations",
+        ["knowledge-relations"],
+        "knowledge_relations",
+    ),
     # Issue #708: knowledge_search_aggregator, knowledge_ai_stack, knowledge_debug
     # consolidated into knowledge.py as sub-routers (backend.api.knowledge includes them)
     (
