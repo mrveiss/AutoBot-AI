@@ -2766,6 +2766,7 @@ import BasePanel from '@/components/base/BasePanel.vue'
 import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
 import { useToast } from '@/composables/useToast'
 import { useCodeIntelligence } from '@/composables/useCodeIntelligence'
+import { useBackgroundTask } from '@/composables/useBackgroundTask'
 import { createLogger } from '@/utils/debugUtils'
 // Issue #1133: Code Source Registry Components
 import SourceManager from '@/components/analytics/SourceManager.vue'
@@ -2900,6 +2901,13 @@ async function handleFileScan(
 const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
   showToast(message, type, type === 'error' ? 5000 : 3000)
 }
+
+// Issue #1304: Background task composables for long-running analytics
+const depTask = useBackgroundTask('/api/analytics/codebase/analytics/dependencies')
+const importTreeTask = useBackgroundTask('/api/analytics/codebase/analytics/import-tree')
+const dupTask = useBackgroundTask('/api/analytics/codebase/duplicates')
+const secScoreTask = useBackgroundTask('/api/code-intelligence/security/score')
+const dashboardTask = useBackgroundTask('/api/analytics/dashboard/overview')
 
 // Issue #1133: CodeSource type
 interface CodeSource {
@@ -4272,41 +4280,25 @@ const filteredChartData = computed((): ChartData | null => {
   return filtered
 })
 
-// Load dependency analysis data
+// Load dependency analysis data (#1304: background task)
 const loadDependencyData = async () => {
   dependencyLoading.value = true
   dependencyError.value = ''
 
   try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/analytics/dependencies`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
+    const ok = await depTask.start()
+    if (ok && depTask.result.value) {
+      const data = depTask.result.value as Record<string, unknown>
+      if (data.status === 'success' && data.dependency_data) {
+        dependencyData.value = data.dependency_data as DependencyGraph
+        logger.debug('Dependency data loaded via background task')
+      } else if (data.status === 'no_data') {
+        dependencyData.value = null
+        logger.debug('No dependency data - run indexing first')
       }
-    })
-
-    if (!response.ok) {
-      throw new Error(`Dependency analysis endpoint returned ${response.status}`)
+    } else if (depTask.error.value) {
+      throw new Error(depTask.error.value)
     }
-
-    const data = await response.json()
-
-    if (data.status === 'success' && data.dependency_data) {
-      dependencyData.value = data.dependency_data
-      logger.debug('Dependency data loaded:', {
-        modules: data.dependency_data.modules?.length || 0,
-        relationships: data.dependency_data.import_relationships?.length || 0,
-        externalDeps: data.dependency_data.external_dependencies?.length || 0,
-        circularDeps: data.dependency_data.circular_dependencies?.length || 0
-      })
-    } else if (data.status === 'no_data') {
-      // Issue #543: Handle no_data status from backend
-      dependencyData.value = null
-      logger.debug('No dependency data - run indexing first')
-    }
-
   } catch (error: unknown) {
     logger.error('Failed to load dependency data:', error)
     dependencyError.value = error instanceof Error ? error.message : String(error)
@@ -4315,39 +4307,25 @@ const loadDependencyData = async () => {
   }
 }
 
-// Load import tree data for bidirectional file import visualization
+// Load import tree data (#1304: background task)
 const loadImportTreeData = async () => {
   importTreeLoading.value = true
   importTreeError.value = ''
 
   try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/analytics/import-tree`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
+    const ok = await importTreeTask.start()
+    if (ok && importTreeTask.result.value) {
+      const data = importTreeTask.result.value as Record<string, unknown>
+      if (data.status === 'success' && data.import_tree) {
+        importTreeData.value = data.import_tree as ImportTreeNode[]
+        logger.debug('Import tree loaded via background task')
+      } else if (data.status === 'no_data') {
+        importTreeData.value = []
+        logger.debug('No import tree data - run indexing first')
       }
-    })
-
-    if (!response.ok) {
-      throw new Error(`Import tree endpoint returned ${response.status}`)
+    } else if (importTreeTask.error.value) {
+      throw new Error(importTreeTask.error.value)
     }
-
-    const data = await response.json()
-
-    if (data.status === 'success' && data.import_tree) {
-      importTreeData.value = data.import_tree
-      logger.debug('Import tree loaded:', {
-        files: data.import_tree.length,
-        summary: data.summary
-      })
-    } else if (data.status === 'no_data') {
-      // Issue #543: Handle no_data status from backend
-      importTreeData.value = []
-      logger.debug('No import tree data - run indexing first')
-    }
-
   } catch (error: unknown) {
     logger.error('Failed to load import tree:', error)
     importTreeError.value = error instanceof Error ? error.message : String(error)
@@ -4442,24 +4420,17 @@ const loadDeclarations = async () => {
   }
 }
 
-// Silent version of duplicates loading (no alerts)
+// Silent version of duplicates loading (#1304: background task)
 const loadDuplicates = async () => {
   loadingProgress.duplicates = true
   try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const duplicatesEndpoint = `${backendUrl}/api/analytics/codebase/duplicates`
-    const response = await fetchWithAuth(duplicatesEndpoint, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
-    })
-    if (!response.ok) {
-      throw new Error(`Duplicates endpoint returned ${response.status}`)
+    const ok = await dupTask.start()
+    if (ok && dupTask.result.value) {
+      const data = dupTask.result.value as Record<string, unknown>
+      duplicateAnalysis.value = Array.isArray(data.duplicates)
+        ? (data.duplicates as DuplicateCode[])
+        : []
     }
-    const data = await response.json()
-    duplicateAnalysis.value = data.duplicates || []
   } catch (error: unknown) {
     logger.error('Failed to load duplicates:', error)
   } finally {
@@ -4602,41 +4573,36 @@ const loadApiEndpointAnalysis = async () => {
   }
 }
 
-// Issue #538: Load security score from code intelligence
+// Issue #538: Load security score (#1304: background task)
 const loadSecurityScore = async () => {
   if (!rootPath.value) return
   loadingSecurityScore.value = true
   securityScoreError.value = ''
   try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/code-intelligence/security/score?path=${encodeURIComponent(rootPath.value)}`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
+    const ok = await secScoreTask.start(
+      undefined,
+      { path: rootPath.value },
+    )
+    if (ok && secScoreTask.result.value) {
+      const data = secScoreTask.result.value as Record<string, unknown>
+      if (data.status === 'success') {
+        securityScore.value = {
+          security_score: (data.security_score as number) || 0,
+          grade: (data.grade as string) || 'N/A',
+          risk_level: (data.risk_level as string) || 'unknown',
+          status_message: (data.status_message as string) || '',
+          total_findings: (data.total_findings as number) || 0,
+          critical_issues: (data.critical_issues as number) || 0,
+          high_issues: (data.high_issues as number) || 0,
+          files_analyzed: (data.files_analyzed as number) || 0,
+          severity_breakdown: (data.severity_breakdown as Record<string, number>) || {},
+          owasp_breakdown: (data.owasp_breakdown as Record<string, number>) || {},
+        }
+      } else if (data.status === 'no_data') {
+        securityScore.value = null
       }
-    })
-    if (!response.ok) {
-      throw new Error(`Security score endpoint returned ${response.status}`)
-    }
-    const data = await response.json()
-    if (data.status === 'success') {
-      securityScore.value = {
-        security_score: data.security_score || 0,
-        grade: data.grade || 'N/A',
-        risk_level: data.risk_level || 'unknown',
-        status_message: data.status_message || '',
-        total_findings: data.total_findings || 0,
-        critical_issues: data.critical_issues || 0,
-        high_issues: data.high_issues || 0,
-        files_analyzed: data.files_analyzed || 0,
-        severity_breakdown: data.severity_breakdown || {},
-        owasp_breakdown: data.owasp_breakdown || {}
-      }
-    } else if (data.status === 'no_data') {
-      // Issue #543: Handle no_data status from backend
-      securityScore.value = null
-      logger.debug('No security score data - run indexing first')
+    } else if (secScoreTask.error.value) {
+      throw new Error(secScoreTask.error.value)
     }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -6338,48 +6304,42 @@ const runFullAnalysis = async () => {
   }
 }
 
-// Enhanced Analytics Methods - Connected to real backend endpoints
+// Enhanced Analytics Methods (#1304: background task)
 const loadSystemOverview = async () => {
   try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/dashboard/overview`)
+    const ok = await dashboardTask.start()
+    if (ok && dashboardTask.result.value) {
+      const result = dashboardTask.result.value as Record<string, unknown>
 
-    if (!response.ok) {
-      throw new Error(`Status ${response.status}`)
-    }
+      // Extract relevant data from the comprehensive dashboard response
+      const commPatterns = (result.communication_patterns || {}) as Record<string, unknown>
+      const perfMetrics = (result.performance_metrics || {}) as Record<string, unknown>
+      const sysHealth = (result.system_health || {}) as Record<string, unknown>
+      const realtimeMetrics = (result.realtime_metrics || {}) as Record<string, unknown>
 
-    const result = await response.json()
+      const totalCalls = (commPatterns.total_api_calls as number) || 0
+      const avgResponseTime = (commPatterns.avg_response_time as number)
+        || (perfMetrics.avg_response_time as number) || 0
+      const activeConns = (realtimeMetrics.active_connections as Record<string, unknown>)
+      const activeConnections = (sysHealth.active_connections as number)
+        || (activeConns?.value as number) || 0
 
-    // Extract relevant data from the comprehensive dashboard response
-    const commPatterns = result.communication_patterns || {}
-    const perfMetrics = result.performance_metrics || {}
-    const sysHealth = result.system_health || {}
+      let healthStatus = 'Unknown'
+      if (sysHealth.status) {
+        healthStatus = sysHealth.status as string
+      } else if (sysHealth.cpu_percent !== undefined) {
+        healthStatus = (sysHealth.cpu_percent as number) < 80 ? 'Healthy' : 'Warning'
+      }
 
-    // Calculate requests per minute from total calls and time window
-    const totalCalls = commPatterns.total_api_calls || 0
-    const avgResponseTime = commPatterns.avg_response_time || perfMetrics.avg_response_time || 0
-
-    // Get active connections from system health
-    const activeConnections = sysHealth.active_connections ||
-                              result.realtime_metrics?.active_connections?.value || 0
-
-    // Determine system health status
-    let healthStatus = 'Unknown'
-    if (sysHealth.status) {
-      healthStatus = sysHealth.status
-    } else if (sysHealth.cpu_percent !== undefined) {
-      healthStatus = sysHealth.cpu_percent < 80 ? 'Healthy' : 'Warning'
-    }
-
-    systemOverview.value = {
-      api_requests_per_minute: totalCalls,
-      average_response_time: Math.round(avgResponseTime * 1000), // Convert to ms
-      active_connections: activeConnections,
-      system_health: healthStatus
+      systemOverview.value = {
+        api_requests_per_minute: totalCalls,
+        average_response_time: Math.round(avgResponseTime * 1000),
+        active_connections: activeConnections,
+        system_health: healthStatus,
+      }
     }
   } catch (error: unknown) {
     logger.error('loadSystemOverview failed:', error)
-    // Set empty state on error
     systemOverview.value = null
   }
 }

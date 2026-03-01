@@ -69,10 +69,14 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
    * POST to start the analysis, then poll until done.
    * Handles 409 conflict by auto-clearing stuck tasks and retrying once.
    *
-   * @param body  Optional JSON body for the POST request.
+   * @param body   Optional JSON body for the POST request.
+   * @param query  Optional query params appended to the URL.
    * @returns true if task completed successfully, false otherwise.
    */
-  const start = async (body?: Record<string, unknown>): Promise<boolean> => {
+  const start = async (
+    body?: Record<string, unknown>,
+    query?: Record<string, string>,
+  ): Promise<boolean> => {
     running.value = true
     progress.value = 0
     currentStep.value = null
@@ -88,8 +92,12 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
         fetchOpts.body = JSON.stringify(body)
       }
 
+      const qs = query
+        ? '?' + new URLSearchParams(query).toString()
+        : ''
+
       let response = await fetchWithAuth(
-        `${backendUrl}${baseUrl}/analyze`,
+        `${backendUrl}${baseUrl}/analyze${qs}`,
         fetchOpts,
       )
 
@@ -101,7 +109,7 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
           { method: 'POST' },
         )
         response = await fetchWithAuth(
-          `${backendUrl}${baseUrl}/analyze`,
+          `${backendUrl}${baseUrl}/analyze${qs}`,
           fetchOpts,
         )
       }
