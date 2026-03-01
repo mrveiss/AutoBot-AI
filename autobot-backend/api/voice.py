@@ -178,6 +178,11 @@ async def voice_list_api():
     return voices
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_create_api",
+    error_code_prefix="VOICE",
+)
 @router.post("/voices/create")
 async def voice_create_api(
     name: str = Form(...),
@@ -190,6 +195,11 @@ async def voice_create_api(
     return result
 
 
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="voice_delete_api",
+    error_code_prefix="VOICE",
+)
 @router.delete("/voices/{voice_id}")
 async def voice_delete_api(voice_id: str):
     """Delete a custom voice profile."""
