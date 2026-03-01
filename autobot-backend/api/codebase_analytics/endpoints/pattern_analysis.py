@@ -168,6 +168,7 @@ class PatternAnalysisStatus(BaseModel):
     task_id: str
     status: str  # pending, running, completed, failed
     progress: float = 0.0
+    current_step: Optional[str] = None
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
     error: Optional[str] = None
@@ -202,6 +203,12 @@ async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
         _analysis_tasks[task_id]["started_at"] = datetime.now().isoformat()
         await _save_pattern_task_to_redis(task_id)
 
+        async def _on_progress(step: str, progress: float) -> None:
+            """Update task state with current phase info."""
+            _analysis_tasks[task_id]["current_step"] = step
+            _analysis_tasks[task_id]["progress"] = progress
+            await _save_pattern_task_to_redis(task_id)
+
         # Create analyzer with request parameters
         analyzer = CodePatternAnalyzer(
             enable_clone_detection=request.enable_clone_detection,
@@ -211,14 +218,17 @@ async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
             similarity_threshold=request.similarity_threshold,
         )
 
-        # Run analysis
-        report = await analyzer.analyze_directory(request.path)
+        # Run analysis with progress reporting
+        report = await analyzer.analyze_directory(
+            request.path, progress_callback=_on_progress
+        )
 
         # Store result
         _analysis_tasks[task_id]["status"] = "completed"
         _analysis_tasks[task_id]["completed_at"] = datetime.now().isoformat()
         _analysis_tasks[task_id]["result"] = report.to_dict()
         _analysis_tasks[task_id]["progress"] = 100.0
+        _analysis_tasks[task_id]["current_step"] = "Complete"
         await _save_pattern_task_to_redis(task_id)
 
     except Exception as e:
@@ -360,6 +370,7 @@ async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
         task_id=task_id,
         status=task["status"],
         progress=task.get("progress", 0.0),
+        current_step=task.get("current_step"),
         started_at=task.get("started_at"),
         completed_at=task.get("completed_at"),
         error=task.get("error"),

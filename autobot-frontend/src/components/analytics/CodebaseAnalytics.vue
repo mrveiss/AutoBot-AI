@@ -5368,7 +5368,9 @@ const getCrossLanguageAnalysis = async () => {
     notify(`Cross-language analysis failed: ${errorMessage} (${responseTime}ms)`, 'error')
   } finally {
     loadingCrossLanguage.value = false
-    progressStatus.value = 'Ready'
+    if (!analyzing.value) {
+      progressStatus.value = 'Ready'
+    }
   }
 }
 
@@ -5464,7 +5466,9 @@ const runCrossLanguageAnalysis = async () => {
     notify(`Cross-language scan failed: ${errorMessage} (${responseTime}ms)`, 'error')
   } finally {
     loadingCrossLanguage.value = false
-    progressStatus.value = 'Ready'
+    if (!analyzing.value) {
+      progressStatus.value = 'Ready'
+    }
   }
 }
 
@@ -6290,13 +6294,19 @@ const runFullAnalysis = async () => {
     results.push({ step: 'Codebase indexing', status: 'failed', error: msg })
   }
 
-  // Step 2: Pattern analysis (independent of indexing success)
+  // Step 2: Pattern analysis (now properly awaits completion)
   progressStatus.value = 'Step 2/3: Pattern analysis...'
   try {
     if (patternAnalysisRef.value?.runAnalysis) {
       logger.info('Triggering pattern analysis as part of full analysis')
       await patternAnalysisRef.value.runAnalysis()
-      results.push({ step: 'Pattern analysis', status: 'success' })
+      // runAnalysis now awaits polling — check error state for real result
+      const patternError = patternAnalysisRef.value?.error
+      if (patternError) {
+        results.push({ step: 'Pattern analysis', status: 'failed', error: patternError })
+      } else {
+        results.push({ step: 'Pattern analysis', status: 'success' })
+      }
     } else {
       results.push({ step: 'Pattern analysis', status: 'failed', error: 'Component not ready' })
     }
