@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import time
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -55,10 +56,115 @@ from utils.performance_monitor import (
 
 # Import AutoBot monitoring system
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_client import get_http_client
+from autobot_shared.ssot_config import get_config
 from config import ConfigManager
 
 logger = logging.getLogger(__name__)
 config = ConfigManager()
+
+# Prometheus server URL — loaded once at import time via SSOT config (Issue #1283)
+_ssot = get_config()
+_PROMETHEUS_URL = f"http://{_ssot.vm.main}:{_ssot.port.prometheus}"
+
+
+# External API status (extracted from monitoring_compat.py, Issue #1283)
+
+
+async def _query_prometheus_instant(query: str) -> Optional[float]:
+    """Execute an instant PromQL query and return the scalar value.
+
+    Uses the singleton HTTP client for connection reuse (Issue #65).
+
+    Args:
+        query: PromQL query string.
+
+    Returns:
+        Float value or None if no data or on error.
+    """
+    try:
+        http_client = get_http_client()
+        params = {"query": query}
+        async with await http_client.get(
+            f"{_PROMETHEUS_URL}/api/v1/query",
+            params=params,
+            timeout=aiohttp.ClientTimeout(total=10),
+        ) as response:
+            if response.status != 200:
+                logger.warning("Prometheus instant query failed: %s", response.status)
+                return None
+            data = await response.json()
+            if data.get("status") != "success":
+                return None
+            results = data.get("data", {}).get("result", [])
+            if not results:
+                return None
+            return float(results[0]["value"][1])
+    except aiohttp.ClientError as e:
+        logger.error("Prometheus connection error: %s", e)
+        return None
+    except (KeyError, IndexError, ValueError) as e:
+        logger.error("Error parsing Prometheus instant response: %s", e)
+        return None
+
+
+async def _query_prometheus_range(
+    query: str, start: datetime, end: datetime, step: str = "15s"
+) -> List[Dict[str, Any]]:
+    """Execute a range PromQL query and return time-series data points.
+
+    Uses the singleton HTTP client for connection reuse (Issue #65).
+
+    Args:
+        query: PromQL query string.
+        start: Start of the query window.
+        end: End of the query window.
+        step: Resolution step (e.g. "15s", "1m").
+
+    Returns:
+        List of dicts with 'timestamp', 'value', and 'labels' keys.
+    """
+    try:
+        http_client = get_http_client()
+        params = {
+            "query": query,
+            "start": start.isoformat() + "Z",
+            "end": end.isoformat() + "Z",
+            "step": step,
+        }
+        async with await http_client.get(
+            f"{_PROMETHEUS_URL}/api/v1/query_range",
+            params=params,
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as response:
+            if response.status != 200:
+                logger.warning("Prometheus range query failed: %s", response.status)
+                return []
+            data = await response.json()
+            if data.get("status") != "success":
+                return []
+            results = data.get("data", {}).get("result", [])
+            if not results:
+                return []
+            points: List[Dict[str, Any]] = []
+            for result in results:
+                metric = result.get("metric", {})
+                for timestamp, value in result.get("values", []):
+                    points.append(
+                        {
+                            "timestamp": datetime.fromtimestamp(timestamp).isoformat(),
+                            "value": float(value),
+                            "labels": metric,
+                        }
+                    )
+            return points
+    except aiohttp.ClientError as e:
+        logger.error("Prometheus connection error: %s", e)
+        return []
+    except (KeyError, ValueError) as e:
+        logger.error("Error parsing Prometheus range response: %s", e)
+        return []
+
 
 # Issue #474: AlertManager API timeout and cache
 _ALERTMANAGER_TIMEOUT = 5.0  # seconds
@@ -1083,3 +1189,79 @@ async def get_hardware_system_status(
 ):
     """Get system resource metrics (CPU, memory, disk)."""
     return await hardware_monitor.get_system_resources()
+
+
+# External API status endpoints — extracted from monitoring_compat.py (Issue #1283)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_claude_api_status",
+    error_code_prefix="MONITORING",
+)
+@router.get("/claude-api/status")
+async def get_claude_api_status():
+    """Get Claude API status via Prometheus metrics.
+
+    Returns Prometheus-scraped Claude API rate limits, p95 latency, and
+    failure rate.  Extracted from monitoring_compat.py (Issue #1283).
+    """
+    logger.info("Querying Claude API status from Prometheus")
+
+    rate_limit, request_rate, p95_latency, failure_rate = await asyncio.gather(
+        _query_prometheus_instant("autobot_claude_api_rate_limit_remaining"),
+        _query_prometheus_instant("rate(autobot_claude_api_requests_total[5m]) * 60"),
+        _query_prometheus_instant(
+            "histogram_quantile(0.95, "
+            "rate(autobot_claude_api_response_time_seconds_bucket[5m]))"
+        ),
+        _query_prometheus_instant(
+            'rate(autobot_claude_api_requests_total{success="false"}[5m])'
+            " / rate(autobot_claude_api_requests_total[5m])"
+        ),
+    )
+
+    return {
+        "success": True,
+        "claude_api_status": {
+            "rate_limit_remaining": rate_limit,
+            "requests_per_minute": request_rate,
+            "p95_latency_seconds": p95_latency,
+            "failure_rate": failure_rate,
+        },
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_github_status",
+    error_code_prefix="MONITORING",
+)
+@router.get("/github/status")
+async def get_github_status():
+    """Get GitHub API status via Prometheus metrics.
+
+    Returns Prometheus-scraped GitHub API rate limits, operation counts, and
+    p95 latency.  Extracted from monitoring_compat.py (Issue #1283).
+    """
+    logger.info("Querying GitHub API status from Prometheus")
+
+    rate_limit, total_ops, p95_latency = await asyncio.gather(
+        _query_prometheus_instant("autobot_github_api_rate_limit_remaining"),
+        _query_prometheus_instant("sum(autobot_github_api_operations_total)"),
+        _query_prometheus_instant(
+            "histogram_quantile(0.95, "
+            "rate(autobot_github_api_duration_seconds_bucket[5m]))"
+        ),
+    )
+
+    return {
+        "success": True,
+        "github_status": {
+            "rate_limit_remaining": rate_limit,
+            "total_operations": total_ops,
+            "p95_latency_seconds": p95_latency,
+        },
+        "timestamp": datetime.now().isoformat(),
+    }
