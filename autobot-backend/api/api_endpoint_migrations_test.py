@@ -24809,13 +24809,13 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
     # ==============================================
 
     def test_batch_143_get_cache_stats_simple_pattern(self):
-        """Verify get_cache_stats endpoint uses Simple Pattern"""
+        """Verify get_advanced_cache_stats endpoint uses Simple Pattern"""
         from api import cache_management
 
-        source = inspect.getsource(cache_management.get_cache_stats)
+        source = inspect.getsource(cache_management.get_advanced_cache_stats)
         self.assertIn("@with_error_handling", source)
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_cache_stats"', source)
+        self.assertIn('operation="get_advanced_cache_stats"', source)
         self.assertIn('error_code_prefix="CACHE_MANAGEMENT"', source)
 
     def test_batch_143_warm_cache_simple_pattern(self):
@@ -24863,7 +24863,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import cache_management
 
         endpoint_functions = [
-            cache_management.get_cache_stats,
+            cache_management.get_advanced_cache_stats,
             cache_management.warm_cache,
             cache_management.invalidate_cache,
             cache_management.clear_all_cache,
@@ -24883,7 +24883,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import cache_management
 
         endpoint_functions = [
-            cache_management.get_cache_stats,
+            cache_management.get_advanced_cache_stats,
             cache_management.warm_cache,
             cache_management.invalidate_cache,
             cache_management.clear_all_cache,
@@ -24909,7 +24909,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify migration preserves cache statistics retrieval"""
         from api import cache_management
 
-        source = inspect.getsource(cache_management.get_cache_stats)
+        source = inspect.getsource(cache_management.get_advanced_cache_stats)
         self.assertIn("advanced_cache.get_stats", source)
         self.assertIn("data_type", source)
         self.assertIn("CacheStatsResponse", source)

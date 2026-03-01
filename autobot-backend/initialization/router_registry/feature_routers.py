@@ -53,7 +53,6 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "log_forwarding",
     ),
     ("api.secrets", "/secrets", ["secrets"], "secrets"),
-    ("api.cache", "/cache", ["cache"], "cache"),
     ("api.registry", "/registry", ["registry"], "registry"),
     # AI and embeddings
     ("api.embeddings", "/embeddings", ["embeddings"], "embeddings"),
@@ -172,8 +171,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Caching
     (
         "api.cache_management",
-        "/cache-management",
-        ["cache-management"],
+        "/cache",
+        ["cache"],
         "cache_management",
     ),
     # Enhanced features
