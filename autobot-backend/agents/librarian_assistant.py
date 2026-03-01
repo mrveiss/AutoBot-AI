@@ -14,7 +14,7 @@ or the query requires current/external data.
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from knowledge_base import KnowledgeBase
 from llm_interface import LLMInterface
@@ -53,11 +53,6 @@ class LibrarianAssistant:
         self.auto_store_quality = self.config.get_nested(
             "librarian_assistant.auto_store_quality", True
         )
-        # Issue #1252: Verification mode controls whether content is auto-stored
-        # ('autonomous') or queued for human review ('collaborative').
-        self.verification_mode = self.config.get_nested(
-            "librarian_assistant.verification_mode", "autonomous"
-        )
 
         # Trusted domains for content assessment
         self.trusted_domains = self.config.get_nested(
@@ -78,6 +73,16 @@ class LibrarianAssistant:
         # Use HTTP client singleton for requests to Playwright service
         self.http_client = get_http_client()
 
+    @staticmethod
+    async def _emit(callback: Optional[Callable], event: Dict[str, Any]) -> None:
+        """Fire a progress event if a callback is registered. Issue #1256."""
+        if callback is None:
+            return
+        try:
+            await callback(event)
+        except Exception as exc:
+            logger.warning("Progress callback error for event %s: %s", event, exc)
+
     async def _check_playwright_service(self) -> bool:
         """Check if browser VM Playwright service is available."""
         try:
@@ -96,14 +101,57 @@ class LibrarianAssistant:
             logger.error("Cannot reach Playwright service: %s", e)
             return False
 
+    async def _execute_search_request(
+        self,
+        query: str,
+        search_engine: str,
+        progress_callback: Optional[Callable],
+    ) -> List[Dict[str, Any]]:
+        """POST to Playwright /search and emit result_found events. Issue #1256.
+
+        Returns top search results or empty list on failure.
+        """
+        payload = {"query": query, "search_engine": search_engine}
+        async with await self.http_client.post(
+            f"{self.playwright_service_url}/search", json=payload
+        ) as response:
+            if response.status != 200:
+                logger.error("Search request failed: status %s", response.status)
+                return []
+
+            result = await response.json()
+
+            if not result.get("success"):
+                logger.error("Search failed: %s", result.get("error", "Unknown error"))
+                return []
+
+            results = result.get("results", [])
+            logger.info("Found %s search results", len(results))
+            top_results = results[: self.max_search_results]
+            for item in top_results:
+                await self._emit(
+                    progress_callback,
+                    {
+                        "event": "research:result_found",
+                        "url": item.get("url", ""),
+                        "title": item.get("title", ""),
+                        "snippet": item.get("snippet", "")[:300],
+                    },
+                )
+            return top_results
+
     async def search_web(
-        self, query: str, search_engine: str = "duckduckgo"
+        self,
+        query: str,
+        search_engine: str = "duckduckgo",
+        progress_callback: Optional[Callable] = None,
     ) -> List[Dict[str, Any]]:
         """Search the web for information using the browser VM Playwright service.
 
         Args:
             query: Search query
             search_engine: Which search engine to use
+            progress_callback: Optional async callable for progress events (#1256)
 
         Returns:
             List of search results with URLs and content
@@ -115,32 +163,18 @@ class LibrarianAssistant:
             logger.error("Playwright service not available")
             return []
 
+        logger.info(
+            "Searching with %s via Playwright service: %s", search_engine, query
+        )
+        await self._emit(
+            progress_callback,
+            {"event": "research:searching", "engine": search_engine, "query": query},
+        )
+
         try:
-            payload = {"query": query, "search_engine": search_engine}
-
-            logger.info(
-                "Searching with %s via Playwright service: %s", search_engine, query
+            return await self._execute_search_request(
+                query, search_engine, progress_callback
             )
-
-            async with await self.http_client.post(
-                f"{self.playwright_service_url}/search", json=payload
-            ) as response:
-                if response.status != 200:
-                    logger.error("Search request failed: status %s", response.status)
-                    return []
-
-                result = await response.json()
-
-                if result.get("success"):
-                    results = result.get("results", [])
-                    logger.info("Found %s search results", len(results))
-                    return results[: self.max_search_results]
-                else:
-                    logger.error(
-                        "Search failed: %s", result.get("error", "Unknown error")
-                    )
-                    return []
-
         except Exception as e:
             logger.error("Error during web search: %s", e)
             return []
@@ -343,33 +377,16 @@ class LibrarianAssistant:
                 f"{content_data.get('content', '')}"
             )
 
-            quality_score = assessment.get("score", 0.0)
-            # Issue #1252: choose verification status based on mode
-            if self.verification_mode == "collaborative":
-                v_status = "pending_review"
-                v_method = None
-            else:
-                v_status = "unverified"
-                v_method = "auto_quality"
-
             metadata = {
                 "source": content_data.get("url", "web_research"),
                 "domain": content_data.get("domain", "unknown"),
                 "title": content_data.get("title", "Untitled"),
-                "quality_score": quality_score,
+                "quality_score": assessment.get("score", 0.0),
                 "recommendation": assessment.get("recommendation", "review"),
                 "key_topics": assessment.get("key_topics", []),
                 "is_trusted": content_data.get("is_trusted", False),
                 "stored_by": "librarian_assistant",
                 "timestamp": content_data.get("timestamp", datetime.now().isoformat()),
-                # Issue #1252: Provenance fields
-                "source_type": "web_research",
-                "source_connector_id": None,
-                "verification_status": v_status,
-                "verification_method": v_method,
-                "verified_by": None,
-                "verified_at": None,
-                "provenance_chain": [content_data.get("url", "")],
             }
 
             success = self.knowledge_base.add_document(document_content, metadata)
@@ -391,16 +408,8 @@ class LibrarianAssistant:
     def _should_store_content(
         self, assessment: Dict[str, Any], store_enabled: bool
     ) -> bool:
-        """Check if content should be auto-stored (Issue #334 - extracted helper).
-
-        Issue #1252: In 'collaborative' mode, auto-storage is disabled because
-        content is always stored with 'pending_review' status instead.
-        """
+        """Check if content should be stored (Issue #334 - extracted helper)."""
         if not store_enabled:
-            return False
-        # Collaborative mode never auto-stores via this path; content is stored
-        # with pending_review status in _process_single_search_result directly.
-        if self.verification_mode == "collaborative":
             return False
         if assessment.get("score", 0) < self.quality_threshold:
             return False
@@ -411,26 +420,37 @@ class LibrarianAssistant:
         result: Dict[str, Any],
         store_quality_content: bool,
         stored_list: List[Dict[str, Any]],
+        progress_callback: Optional[Callable] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Process single search result (Issue #334 - extracted helper).
-
-        Issue #1252: In collaborative mode, all extracted content is stored with
-        verification_status='pending_review' regardless of quality score.
-        """
+        """Process single search result (Issue #334, #1256 - extracted helper)."""
         content = await self.extract_content(result["url"])
         if not content:
             return None
+
+        await self._emit(
+            progress_callback,
+            {
+                "event": "research:content_extracted",
+                "url": content.get("url", ""),
+                "content_preview": content.get("content", "")[:300],
+            },
+        )
+
         assessment = await self.assess_content_quality(content)
         content["quality_assessment"] = assessment
 
-        should_auto_store = self._should_store_content(
-            assessment, store_quality_content
-        )
-        should_collab_store = (
-            self.verification_mode == "collaborative" and store_quality_content
+        await self._emit(
+            progress_callback,
+            {
+                "event": "research:quality_assessed",
+                "url": content.get("url", ""),
+                "score": assessment.get("score", 0),
+                "domain": content.get("domain", ""),
+                "recommendation": assessment.get("recommendation", "review"),
+            },
         )
 
-        if should_auto_store or should_collab_store:
+        if self._should_store_content(assessment, store_quality_content):
             stored = await self.store_in_knowledge_base(content, assessment)
             if stored:
                 stored_list.append(
@@ -438,12 +458,16 @@ class LibrarianAssistant:
                         "url": content["url"],
                         "title": content["title"],
                         "quality_score": assessment.get("score", 0),
-                        "verification_status": (
-                            "pending_review"
-                            if self.verification_mode == "collaborative"
-                            else "unverified"
-                        ),
                     }
+                )
+                await self._emit(
+                    progress_callback,
+                    {
+                        "event": "research:stored",
+                        "url": content.get("url", ""),
+                        "title": content.get("title", ""),
+                        "status": "verified",
+                    },
                 )
         return content
 
@@ -481,13 +505,15 @@ class LibrarianAssistant:
         search_results: List[Dict[str, Any]],
         store_quality_content: bool,
         stored_list: List[Dict[str, Any]],
+        progress_callback: Optional[Callable] = None,
     ) -> List[Dict[str, Any]]:
-        """Extract and process top search results. Issue #620.
+        """Extract and process top search results. Issue #620, #1256.
 
         Args:
             search_results: List of search results
             store_quality_content: Whether to store quality content
             stored_list: List to append stored items to
+            progress_callback: Optional async callable for progress events
 
         Returns:
             List of extracted content
@@ -495,20 +521,24 @@ class LibrarianAssistant:
         extracted = []
         for result in search_results[:3]:
             content = await self._process_single_search_result(
-                result, store_quality_content, stored_list
+                result, store_quality_content, stored_list, progress_callback
             )
             if content:
                 extracted.append(content)
         return extracted
 
     async def research_query(
-        self, query: str, store_quality_content: bool = None
+        self,
+        query: str,
+        store_quality_content: bool = None,
+        progress_callback: Optional[Callable] = None,
     ) -> Dict[str, Any]:
-        """Research a query by searching the web and extracting content. Issue #620.
+        """Research a query by searching the web and extracting content. Issue #620, #1256.
 
         Args:
             query: Research query
             store_quality_content: Whether to auto-store quality content
+            progress_callback: Optional async callable fired at each research step
 
         Returns:
             Research results with sources and assessments
@@ -530,7 +560,9 @@ class LibrarianAssistant:
                 return research_results
 
             logger.info("Researching query: %s", query)
-            search_results = await self.search_web(query)
+            search_results = await self.search_web(
+                query, progress_callback=progress_callback
+            )
             research_results["search_results"] = search_results
 
             if not search_results:
@@ -538,7 +570,10 @@ class LibrarianAssistant:
                 return research_results
 
             extracted_content = await self._extract_and_process_results(
-                search_results, store_quality_content, research_results["stored_in_kb"]
+                search_results,
+                store_quality_content,
+                research_results["stored_in_kb"],
+                progress_callback,
             )
             research_results["content_extracted"] = extracted_content
 

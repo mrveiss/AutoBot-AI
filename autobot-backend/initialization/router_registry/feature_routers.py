@@ -222,6 +222,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "validation_dashboard",
     ),
     # Knowledge and conversation
+    # Issue #1256: Observable Research Panel — live browser WS stream
+    (
+        "api.knowledge_research_ws",
+        "",
+        ["knowledge-research", "websockets"],
+        "knowledge_research_ws",
+    ),
     (
         "api.knowledge_test",
         "/knowledge-test",
