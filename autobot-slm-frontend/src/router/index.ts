@@ -28,6 +28,13 @@ const router = createRouter({
       meta: { title: 'SSO Login', public: true },
     },
     {
+      // Issue #1294: Setup wizard — guided first-run fleet configuration
+      path: '/setup',
+      name: 'setup',
+      component: () => import('@/views/SetupWizardView.vue'),
+      meta: { title: 'Setup Wizard' }
+    },
+    {
       path: '/',
       redirect: '/fleet'
     },
@@ -470,6 +477,22 @@ router.beforeEach(async (to, _from, next) => {
   if (!isValid) {
     next({ name: 'login', query: { redirect: to.fullPath } })
     return
+  }
+
+  // Issue #1294: Redirect to setup wizard on first run
+  if (to.name !== 'setup') {
+    try {
+      const res = await fetch('/api/setup/status')
+      if (res.ok) {
+        const status = await res.json()
+        if (!status.completed) {
+          next({ name: 'setup' })
+          return
+        }
+      }
+    } catch {
+      // Setup endpoint unavailable — skip redirect
+    }
   }
 
   // Check admin routes require admin role (Issue #729)
