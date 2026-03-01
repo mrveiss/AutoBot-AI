@@ -166,6 +166,7 @@ class PlaybookExecutor:
         tags: Optional[List[str]],
         extra_vars: Optional[Dict[str, str]],
         check_mode: bool,
+        inventory_path: Optional[Path] = None,
     ) -> List[str]:
         """
         Build Ansible command with parameters.
@@ -173,7 +174,8 @@ class PlaybookExecutor:
         Helper for execute_playbook (Issue #880).
         """
         ansible_cmd = self._find_ansible_playbook()
-        cmd = [ansible_cmd, "-i", str(self.inventory_path), str(playbook_path)]
+        effective_inventory = inventory_path or self.inventory_path
+        cmd = [ansible_cmd, "-i", str(effective_inventory), str(playbook_path)]
 
         if limit:
             cmd.extend(["--limit", ",".join(limit)])
@@ -264,6 +266,7 @@ class PlaybookExecutor:
         extra_vars: Optional[Dict[str, str]] = None,
         check_mode: bool = False,
         progress_callback: Optional[callable] = None,
+        inventory_path: Optional[Path] = None,
     ) -> Dict[str, any]:
         """
         Execute an Ansible playbook with optional progress updates (Issue #880).
@@ -275,19 +278,26 @@ class PlaybookExecutor:
             extra_vars: Extra variables to pass to playbook
             check_mode: Run in check mode (dry run)
             progress_callback: Async function to call with progress updates
+            inventory_path: Override inventory file (Issue #1294, wizard provisioning)
 
         Returns:
             Dict with keys: success (bool), output (str), returncode (int)
         """
         playbook_path = self.ansible_dir / playbook_name
+        effective_inventory = inventory_path or self.inventory_path
 
         if not playbook_path.exists():
             raise FileNotFoundError(f"Playbook not found: {playbook_path}")
-        if not self.inventory_path.exists():
-            raise FileNotFoundError(f"Inventory not found: {self.inventory_path}")
+        if not effective_inventory.exists():
+            raise FileNotFoundError(f"Inventory not found: {effective_inventory}")
 
         cmd = self._build_ansible_command(
-            playbook_path, limit, tags, extra_vars, check_mode
+            playbook_path,
+            limit,
+            tags,
+            extra_vars,
+            check_mode,
+            inventory_path=effective_inventory,
         )
         logger.info(f"Executing Ansible playbook: {' '.join(cmd[:5])}...")
 

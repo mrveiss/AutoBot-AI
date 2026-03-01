@@ -14,13 +14,22 @@
     <div class="wizard-header">
       <h1>AutoBot Setup Wizard</h1>
       <p class="subtitle">Configure your fleet in a few easy steps</p>
-      <button
-        v-if="currentStepIndex > 0 && currentStepIndex < steps.length - 1"
-        class="skip-btn"
-        @click="skipWizard"
-      >
-        Skip Setup
-      </button>
+      <div class="header-actions">
+        <button
+          v-if="currentStep !== 'complete'"
+          class="skip-btn"
+          @click="skipWizard"
+        >
+          Skip Setup
+        </button>
+        <button
+          class="close-btn"
+          @click="exitWizard"
+          title="Exit wizard without completing"
+        >
+          &#10005;
+        </button>
+      </div>
     </div>
 
     <!-- Progress bar -->
@@ -266,7 +275,7 @@
         <button
           class="btn-primary"
           @click="completeStep('verify_health')"
-          :disabled="!fleetHealth"
+          :disabled="!fleetHealth || !fleetHealth.ready"
         >
           Continue
         </button>
@@ -298,7 +307,19 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('SetupWizard')
 
 const router = useRouter()
-const api = useSlmApi()
+const {
+  getNodes: fetchNodes,
+  getRoles: fetchRoles,
+  registerNode,
+  testConnection,
+  enrollNode,
+  updateNodeRoles,
+  getWizardStatus,
+  completeWizardStep,
+  skipWizardSetup,
+  provisionWizardFleet,
+  validateWizardFleet,
+} = useSlmApi()
 
 // ── Wizard state ──────────────────────────────────────────────────────────
 
@@ -333,6 +354,9 @@ interface Node {
   ip_address: string
   status: string
   roles: string[]
+  ssh_user?: string
+  ssh_port?: number
+  auth_method?: string
 }
 
 const nodes = ref<Node[]>([])
@@ -359,7 +383,7 @@ const allConnectionsTested = computed(() =>
 const enrolling = ref(false)
 const allNodesEnrolled = computed(() =>
   nodes.value.length > 0 &&
-  nodes.value.every(n => ['online', 'enrolling'].includes(n.status))
+  nodes.value.every(n => n.status === 'online')
 )
 
 // ── Role assignment ───────────────────────────────────────────────────────
@@ -394,7 +418,7 @@ const fleetHealth = ref<{
 
 async function loadWizardStatus() {
   try {
-    const { data } = await api.get('/setup/status')
+    const data = await getWizardStatus()
     steps.value = data.steps
     currentStep.value = data.current_step
     currentStepIndex.value = data.current_step_index
@@ -408,8 +432,17 @@ async function loadWizardStatus() {
 
 async function loadNodes() {
   try {
-    const { data } = await api.get('/nodes')
-    nodes.value = Array.isArray(data) ? data : data.nodes || []
+    const result = await fetchNodes()
+    nodes.value = result.map(n => ({
+      node_id: n.node_id,
+      hostname: n.hostname,
+      ip_address: n.ip_address,
+      status: n.status,
+      roles: n.roles as string[],
+      ssh_user: n.ssh_user,
+      ssh_port: n.ssh_port,
+      auth_method: n.auth_method,
+    }))
     // Initialize role map from current node roles
     for (const node of nodes.value) {
       nodeRoles.value[node.node_id] = node.roles || []
@@ -421,8 +454,11 @@ async function loadNodes() {
 
 async function loadRoles() {
   try {
-    const { data } = await api.get('/roles')
-    availableRoles.value = Array.isArray(data) ? data : data.roles || []
+    const result = await fetchRoles()
+    availableRoles.value = result.map(r => ({
+      name: r.name,
+      display_name: r.description || r.name,
+    }))
   } catch {
     availableRoles.value = []
   }
@@ -430,7 +466,7 @@ async function loadRoles() {
 
 async function completeStep(step: string) {
   try {
-    await api.post('/setup/complete-step', { step })
+    await completeWizardStep(step)
     await loadWizardStatus()
     // Load data needed for the next step
     if (currentStep.value === 'add_nodes' || currentStep.value === 'test_connections') {
@@ -448,7 +484,7 @@ async function completeStep(step: string) {
 async function skipWizard() {
   if (confirm('Skip the setup wizard? You can configure nodes later from the Fleet page.')) {
     try {
-      await api.post('/setup/skip')
+      await skipWizardSetup()
       router.push({ name: 'fleet' })
     } catch (err) {
       logger.error('Failed to skip wizard:', err)
@@ -460,11 +496,11 @@ async function addNode() {
   if (!newNode.value.hostname || !newNode.value.ip_address) return
   addingNode.value = true
   try {
-    await api.post('/nodes', {
+    await registerNode({
       hostname: newNode.value.hostname,
       ip_address: newNode.value.ip_address,
       ssh_user: newNode.value.ssh_user || 'autobot',
-      auth_method: newNode.value.auth_method,
+      auth_method: newNode.value.auth_method as 'key' | 'password',
       ssh_password: newNode.value.auth_method === 'password' ? newNode.value.ssh_password : undefined,
       roles: [],
     })
@@ -483,11 +519,11 @@ async function testAllConnections() {
   for (const node of nodes.value) {
     try {
       connectionResults.value[node.node_id] = 'testing'
-      await api.post('/nodes/test-connection', {
+      await testConnection({
         ip_address: node.ip_address,
-        ssh_user: 'autobot',
-        ssh_port: 22,
-        auth_method: 'key',
+        ssh_user: node.ssh_user || 'autobot',
+        ssh_port: node.ssh_port || 22,
+        auth_method: (node.auth_method || 'key') as 'key' | 'password',
       })
       connectionResults.value[node.node_id] = 'success'
     } catch {
@@ -502,7 +538,7 @@ async function enrollAllNodes() {
   for (const node of nodes.value) {
     if (node.status === 'online') continue
     try {
-      await api.post(`/nodes/${node.node_id}/enroll`)
+      await enrollNode(node.node_id)
     } catch (err) {
       logger.error(`Failed to enroll ${node.hostname}:`, err)
     }
@@ -528,7 +564,7 @@ async function saveRoles() {
   try {
     for (const node of nodes.value) {
       const roles = nodeRoles.value[node.node_id] || []
-      await api.patch(`/nodes/${node.node_id}/roles`, { roles })
+      await updateNodeRoles(node.node_id, roles as any)
     }
   } catch (err) {
     logger.error('Failed to save roles:', err)
@@ -541,9 +577,9 @@ async function provisionFleet() {
   provisioning.value = true
   provisionOutput.value = 'Starting fleet provisioning...\n'
   try {
-    const { data } = await api.post('/setup/provision-fleet', {
-      node_ids: nodes.value.map(n => n.node_id),
-    })
+    const data = await provisionWizardFleet(
+      nodes.value.map(n => n.node_id)
+    )
     provisionOutput.value += data.output || 'Provisioning completed.\n'
     provisionComplete.value = true
   } catch (err: unknown) {
@@ -557,8 +593,7 @@ async function provisionFleet() {
 async function checkFleetHealth() {
   checkingHealth.value = true
   try {
-    const { data } = await api.get('/setup/validate')
-    fleetHealth.value = data
+    fleetHealth.value = await validateWizardFleet()
   } catch {
     fleetHealth.value = null
   } finally {
@@ -567,6 +602,10 @@ async function checkFleetHealth() {
 }
 
 function goToDashboard() {
+  router.push({ name: 'fleet' })
+}
+
+function exitWizard() {
   router.push({ name: 'fleet' })
 }
 
@@ -604,10 +643,16 @@ onMounted(async () => {
   margin-top: 0.25rem;
 }
 
-.skip-btn {
+.header-actions {
   position: absolute;
   top: 0;
   right: 0;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.skip-btn {
   background: none;
   border: 1px solid var(--border-color, #444);
   color: var(--text-secondary, #a0a0a0);
@@ -620,6 +665,25 @@ onMounted(async () => {
 .skip-btn:hover {
   border-color: var(--text-primary, #e0e0e0);
   color: var(--text-primary, #e0e0e0);
+}
+
+.close-btn {
+  background: none;
+  border: 1px solid var(--border-color, #444);
+  color: var(--text-secondary, #a0a0a0);
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  border-color: var(--color-danger, #ef4444);
+  color: var(--color-danger, #ef4444);
 }
 
 /* Progress bar */

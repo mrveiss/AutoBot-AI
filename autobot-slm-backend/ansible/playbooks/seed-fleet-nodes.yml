@@ -28,7 +28,7 @@
   gather_facts: false
 
   vars:
-    slm_api_url: "https://172.16.168.19"
+    slm_api_url: "https://{{ hostvars['00-SLM-Manager']['ansible_host'] | default('127.0.0.1') }}"
     slm_admin_user: "admin"
     # Password comes from hostvars (set by slm_manager role) or override
     slm_admin_password: >-

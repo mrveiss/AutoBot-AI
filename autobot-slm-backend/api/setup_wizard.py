@@ -10,10 +10,14 @@ node addition, enrollment, role assignment, and fleet provisioning.
 """
 
 import logging
-from typing import Optional
+import tempfile
+from pathlib import Path
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException
+import yaml
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from services.auth import get_current_user
 from services.database import db_service
 from services.playbook_executor import get_playbook_executor
 
@@ -89,11 +93,68 @@ async def _set_setting(key: str, value: str) -> None:
         await session.commit()
 
 
+async def _generate_dynamic_inventory(
+    node_ids: Optional[list[str]] = None,
+) -> Optional[Path]:
+    """Build a temporary Ansible inventory YAML from enrolled DB nodes."""
+    from models.database import Node, NodeRole
+    from sqlalchemy import select
+
+    async with db_service.session() as session:
+        query = select(Node)
+        if node_ids:
+            query = query.where(Node.node_id.in_(node_ids))
+        result = await session.execute(query)
+        db_nodes = result.scalars().all()
+
+        if not db_nodes:
+            return None
+
+        # Build inventory structure
+        hosts = {}
+        for node in db_nodes:
+            host_vars = {
+                "ansible_host": node.ip_address,
+                "ansible_user": node.ssh_user or "autobot",
+                "slm_node_id": node.node_id,
+            }
+            if node.ssh_port and node.ssh_port != 22:
+                host_vars["ansible_port"] = node.ssh_port
+            hosts[node.hostname] = host_vars
+
+        # Gather role assignments
+        role_result = await session.execute(select(NodeRole))
+        all_roles = role_result.scalars().all()
+        role_map = {}
+        for role in all_roles:
+            role_map.setdefault(role.node_id, []).append(role.role_name)
+
+    inventory = {
+        "all": {
+            "hosts": hosts,
+            "children": {
+                "slm_nodes": {"hosts": {h: None for h in hosts}},
+            },
+        },
+    }
+
+    # Write to temp file
+    fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-")
+    inventory_path = Path(path)
+    with open(fd, "w", encoding="utf-8") as f:
+        yaml.dump(inventory, f, default_flow_style=False)
+
+    logger.info("Generated dynamic inventory at %s with %d nodes", path, len(hosts))
+    return inventory_path
+
+
 # ── Endpoints ───────────────────────────────────────────────────────────────
 
 
 @router.get("/status", response_model=WizardStatus)
-async def get_wizard_status():
+async def get_wizard_status(
+    _: Annotated[dict, Depends(get_current_user)],
+):
     """Get the current setup wizard status."""
     is_completed = (await _get_setting("setup_wizard_completed")) == "true"
     current_step = await _get_setting("setup_wizard_current_step", "welcome")
@@ -128,7 +189,10 @@ async def get_wizard_status():
 
 
 @router.post("/complete-step")
-async def complete_step(request: StepCompleteRequest):
+async def complete_step(
+    request: StepCompleteRequest,
+    _: Annotated[dict, Depends(get_current_user)],
+):
     """Mark a wizard step as completed and advance to the next."""
     step = request.step
     if step not in WIZARD_STEPS:
@@ -156,7 +220,9 @@ async def complete_step(request: StepCompleteRequest):
 
 
 @router.post("/skip")
-async def skip_wizard():
+async def skip_wizard(
+    _: Annotated[dict, Depends(get_current_user)],
+):
     """Skip the setup wizard entirely (mark as completed)."""
     await _set_setting("setup_wizard_completed", "true")
     await _set_setting("setup_wizard_current_step", "complete")
@@ -165,7 +231,9 @@ async def skip_wizard():
 
 
 @router.post("/reset")
-async def reset_wizard():
+async def reset_wizard(
+    _: Annotated[dict, Depends(get_current_user)],
+):
     """Reset the setup wizard to run again."""
     await _set_setting("setup_wizard_completed", "false")
     await _set_setting("setup_wizard_current_step", "welcome")
@@ -175,7 +243,10 @@ async def reset_wizard():
 
 
 @router.post("/provision-fleet")
-async def provision_fleet(request: ProvisionRequest):
+async def provision_fleet(
+    request: ProvisionRequest,
+    _: Annotated[dict, Depends(get_current_user)],
+):
     """Trigger fleet provisioning via Ansible.
 
     Runs the provision-fleet-roles.yml playbook, optionally limited to
@@ -191,11 +262,20 @@ async def provision_fleet(request: ProvisionRequest):
         limit or "all",
     )
 
-    result = await executor.execute_playbook(
-        playbook_name="playbooks/provision-fleet-roles.yml",
-        limit=limit,
-        extra_vars=extra_vars,
-    )
+    # Generate dynamic inventory from enrolled nodes (Issue #1294)
+    temp_inventory_path = await _generate_dynamic_inventory(request.node_ids)
+
+    try:
+        result = await executor.execute_playbook(
+            playbook_name="playbooks/provision-fleet-roles.yml",
+            limit=limit,
+            extra_vars=extra_vars,
+            inventory_path=temp_inventory_path,
+        )
+    finally:
+        # Clean up temp inventory
+        if temp_inventory_path and temp_inventory_path.exists():
+            temp_inventory_path.unlink(missing_ok=True)
 
     if result.get("success"):
         logger.info("Fleet provisioning completed successfully")
@@ -213,7 +293,9 @@ async def provision_fleet(request: ProvisionRequest):
 
 
 @router.get("/validate")
-async def validate_fleet():
+async def validate_fleet(
+    _: Annotated[dict, Depends(get_current_user)],
+):
     """Validate that all fleet nodes are healthy.
 
     Checks the roles/fleet-health endpoint logic to determine if the fleet
