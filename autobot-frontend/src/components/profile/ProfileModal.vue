@@ -93,6 +93,31 @@
             </div>
           </div>
 
+          <!-- Voice Display Mode -->
+          <div class="pref-group">
+            <label class="pref-label">Voice Chat Display</label>
+            <div class="option-row">
+              <button
+                @click="setVoiceDisplayMode('modal')"
+                class="option-btn"
+                :class="{ active: voiceDisplayMode === 'modal' }"
+                type="button"
+              >
+                <i class="fas fa-expand-alt mr-1"></i>
+                Full-screen
+              </button>
+              <button
+                @click="setVoiceDisplayMode('sidepanel')"
+                class="option-btn"
+                :class="{ active: voiceDisplayMode === 'sidepanel' }"
+                type="button"
+              >
+                <i class="fas fa-columns mr-1"></i>
+                Side panel
+              </button>
+            </div>
+          </div>
+
           <button @click="savePreferences" class="save-btn" type="button">
             Save Preferences
           </button>
@@ -166,6 +191,7 @@ import { useUserStore } from '@/stores/useUserStore'
 import type { UserPreferences } from '@/stores/useUserStore'
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
+import { usePreferences } from '@/composables/usePreferences'
 
 defineProps<{
   isOpen: boolean
@@ -176,6 +202,7 @@ const emit = defineEmits<{
 }>()
 
 const userStore = useUserStore()
+const { voiceDisplayMode, setVoiceDisplayMode } = usePreferences()
 const currentUser = computed(() => userStore.currentUser)
 const successMessage = ref<string | null>(null)
 const errorMessage = ref<string | null>(null)
