@@ -15,9 +15,9 @@ from .base_terminal import BaseTerminalWebSocket
 def _get_workflow_manager():
     """Deferred import to avoid circular dependency (#1210)."""
     try:
-        from api.workflow_automation import workflow_manager
+        from services.workflow_automation.routes import get_workflow_manager
 
-        return workflow_manager
+        return get_workflow_manager()
     except ImportError:
         return None
 

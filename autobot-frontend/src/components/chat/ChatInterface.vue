@@ -44,7 +44,7 @@
             <button
               @click="openVoiceConversation"
               class="header-btn"
-              :class="{ 'bg-electric-100 text-electric-600': showVoiceOverlay }"
+              :class="{ 'bg-electric-100 text-electric-600': showVoiceOverlay || showVoicePanel }"
               title="Voice chat — talk to AutoBot"
             >
               <i class="fas fa-headset"></i>
@@ -88,12 +88,16 @@
         </UnifiedLoadingView>
       </div>
 
-      <!-- File Panel (Right Sidebar) -->
+      <!-- Right side panels (mutually exclusive) -->
       <Transition name="slide-left">
         <ChatFilePanel
           v-if="showFilePanel && store.currentSessionId"
           :session-id="store.currentSessionId"
           @close="showFilePanel = false"
+        />
+        <VoiceConversationPanel
+          v-else-if="showVoicePanel"
+          @close="closeVoicePanel"
         />
       </Transition>
 
@@ -135,8 +139,9 @@
       </div>
     </div>
 
-    <!-- Voice Conversation Overlay (#1029) -->
+    <!-- Voice Conversation Overlay (#1029) — only mount for modal mode -->
     <VoiceConversationOverlay
+      v-if="showVoiceOverlay"
       @close="showVoiceOverlay = false"
     />
   </ErrorBoundary>
@@ -151,6 +156,7 @@ import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useAppStore } from '@/stores/useAppStore'
 import { useToast } from '@/composables/useToast'
+import { usePreferences } from '@/composables/usePreferences'
 import { useOverseerAgent } from '@/composables/useOverseerAgent'
 import ApiClient from '@/utils/ApiClient'
 import batchApiService from '@/services/BatchApiService'
@@ -174,6 +180,7 @@ import KnowledgePersistenceDialog from '@/components/knowledge/KnowledgePersiste
 import CommandPermissionDialog from '@/components/ui/CommandPermissionDialog.vue'
 import WorkflowProgressWidget from '@/components/workflow/WorkflowProgressWidget.vue'
 import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
+import VoiceConversationPanel from './VoiceConversationPanel.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 // Stores and controller
@@ -187,9 +194,21 @@ const { voiceOutputEnabled, isSpeaking, toggleVoiceOutput, speak } = useVoiceOut
 // Voice conversation (#1029)
 const voiceConversation = useVoiceConversation()
 const showVoiceOverlay = ref(false)
+const showVoicePanel = ref(false)
+const { voiceDisplayMode } = usePreferences()
+
 function openVoiceConversation(): void {
-  showVoiceOverlay.value = true
+  if (voiceDisplayMode.value === 'sidepanel') {
+    showFilePanel.value = false
+    showVoicePanel.value = true
+  } else {
+    showVoiceOverlay.value = true
+  }
   voiceConversation.activate()
+}
+
+function closeVoicePanel(): void {
+  showVoicePanel.value = false
 }
 
 // Toast notifications
@@ -359,6 +378,7 @@ const sessionInfo = computed(() => {
 
 // Methods
 const toggleFilePanel = () => {
+  showVoicePanel.value = false
   showFilePanel.value = !showFilePanel.value
 }
 
@@ -834,6 +854,7 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
 
     // Close file panel when switching sessions
     showFilePanel.value = false
+    showVoicePanel.value = false
   }
 })
 

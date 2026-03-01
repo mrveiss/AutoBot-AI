@@ -102,7 +102,7 @@ def _get_chat_history_manager() -> ChatHistoryManager:
     return _chat_history_manager
 
 
-router = APIRouter(prefix="/api/overseer", tags=["overseer"])
+router = APIRouter(tags=["overseer"])
 
 # Active sessions (session_id -> OverseerAgent)
 _active_overseers: Dict[str, OverseerAgent] = {}

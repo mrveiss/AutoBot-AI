@@ -15,6 +15,9 @@ tts_voices_dir: /var/lib/autobot/voices
 tts_host: "0.0.0.0"
 tts_port: 8082
 
+# HuggingFace token (required for gated models like voice cloning)
+tts_hf_token: ""
+
 # Redis connection
 tts_redis_host: "{{ redis_host | default('127.0.0.1') }}"
 tts_redis_port: 6379

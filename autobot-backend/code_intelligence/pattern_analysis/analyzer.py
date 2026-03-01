@@ -197,11 +197,17 @@ class CodePatternAnalyzer:
                 continue
             self._merge_results(report, result)
 
-    async def analyze_directory(self, directory: str) -> PatternAnalysisReport:
+    async def analyze_directory(
+        self,
+        directory: str,
+        progress_callback: Optional[Any] = None,
+    ) -> PatternAnalysisReport:
         """Analyze a directory for code patterns.
 
         Args:
             directory: Path to directory to analyze
+            progress_callback: Optional async callable(step: str, progress: float)
+                for reporting progress to callers (e.g. background task status).
 
         Returns:
             PatternAnalysisReport with all findings
@@ -209,6 +215,11 @@ class CodePatternAnalyzer:
         logger.info("Starting code pattern analysis for: %s", directory)
         start_time = time.time()
 
+        async def _report(step: str, pct: float) -> None:
+            if progress_callback:
+                await progress_callback(step, pct)
+
+        await _report("Scanning files...", 5.0)
         report = PatternAnalysisReport(scan_path=directory)
         file_count, line_count = await asyncio.to_thread(
             self._count_files_and_lines, directory
@@ -216,12 +227,15 @@ class CodePatternAnalyzer:
         report.total_files_analyzed = file_count
         report.total_lines_analyzed = line_count
 
+        await _report(f"Analyzing {file_count} files ({line_count} lines)...", 15.0)
         tasks = self._build_analysis_tasks(directory)
         await self._execute_and_merge_results(tasks, report)
 
         if self.enable_embedding_storage:
+            await _report("Storing patterns in ChromaDB...", 85.0)
             await self._store_patterns(report)
 
+        await _report("Finalizing report...", 95.0)
         report.analysis_duration_seconds = time.time() - start_time
         report.calculate_metrics()
 

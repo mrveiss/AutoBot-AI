@@ -32,7 +32,7 @@ from utils.catalog_http_exceptions import (
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-router = APIRouter(prefix="/api/audit", tags=["audit"])
+router = APIRouter(prefix="/audit", tags=["audit"])
 logger = logging.getLogger(__name__)
 
 

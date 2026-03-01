@@ -47,7 +47,7 @@ jobs:
 
         echo "Installing CI-safe requirements..."
         python -m pip install -r requirements-ci.txt --prefer-binary
-        python -m pip install --no-deps llama-index-readers-file==0.4.11
+        python -m pip install --no-deps llama-index==0.12.48 llama-index-readers-file==0.4.11
 
         echo "Installing testing dependencies..."
         python -m pip install pytest pytest-asyncio pytest-cov flake8 black isort mypy bandit
@@ -237,7 +237,7 @@ jobs:
         source .venv/bin/activate
         python -m pip install --upgrade pip setuptools wheel
         python -m pip install -r requirements-ci.txt --prefer-binary
-        python -m pip install --no-deps llama-index-readers-file==0.4.11
+        python -m pip install --no-deps llama-index==0.12.48 llama-index-readers-file==0.4.11
 
     - name: Create necessary directories and config files
       run: |
@@ -286,7 +286,6 @@ jobs:
         echo "Checking required files..."
         test -f main.py || (echo "❌ main.py missing" && exit 1)
         test -f requirements.txt || (echo "❌ requirements.txt missing" && exit 1)
-        test -f scripts/setup/setup_agent.sh || (echo "❌ scripts/setup/setup_agent.sh missing" && exit 1)
         echo "✅ All required files present"
 
         # Test configuration loading

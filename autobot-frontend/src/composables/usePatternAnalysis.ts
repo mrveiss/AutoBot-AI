@@ -193,6 +193,7 @@ export function usePatternAnalysis() {
 
     analyzing.value = true
     error.value = null
+    wasInterrupted.value = false
 
     try {
       const backendUrl = await getBackendUrl()
@@ -253,9 +254,9 @@ export function usePatternAnalysis() {
           task_id: data.task_id,
           status: 'pending'
         }
-        // Start polling for status
-        pollTaskStatus(data.task_id)
-        return true
+        // Poll until task completes — caller awaits this
+        await pollTaskStatus(data.task_id)
+        return !error.value
       } else if (data.status === 'success' && data.report) {
         analysisReport.value = data.report
         duplicatePatterns.value = data.report.duplicate_patterns || []
@@ -275,64 +276,88 @@ export function usePatternAnalysis() {
   }
 
   /**
-   * Poll for background task status
+   * Poll for background task status using setInterval for resilience.
+   * Returns a Promise that resolves when the task completes or fails.
+   * Transient fetch errors are retried — a single network glitch
+   * does not kill the polling loop.
    */
-  const pollTaskStatus = async (taskId: string): Promise<void> => {
-    const pollInterval = 2000 // 2 seconds
-    const maxAttempts = 150 // 5 minutes max
+  const pollTaskStatus = (taskId: string): Promise<void> => {
+    const POLL_INTERVAL_MS = 2000
+    const MAX_CONSECUTIVE_ERRORS = 5
 
-    let attempts = 0
+    let consecutiveErrors = 0
+    let intervalId: ReturnType<typeof setInterval> | null = null
 
-    const poll = async (): Promise<void> => {
-      if (attempts >= maxAttempts) {
-        error.value = 'Analysis timed out'
-        analyzing.value = false
-        return
+    return new Promise<void>((resolve) => {
+      const stopPolling = () => {
+        if (intervalId !== null) {
+          clearInterval(intervalId)
+          intervalId = null
+        }
       }
 
-      try {
-        const backendUrl = await getBackendUrl()
-        const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/patterns/status/${taskId}`)
+      const poll = async () => {
+        try {
+          const backendUrl = await getBackendUrl()
+          const response = await fetchWithAuth(
+            `${backendUrl}/api/analytics/codebase/patterns/status/${taskId}`
+          )
 
-        if (!response.ok) {
-          throw new Error(`Status check failed: ${response.statusText}`)
-        }
-
-        const data = await response.json()
-        taskStatus.value = data
-
-        if (data.status === 'completed' && data.result) {
-          analysisReport.value = data.result
-          duplicatePatterns.value = data.result.duplicate_patterns || []
-          regexOpportunities.value = data.result.regex_opportunities || []
-          complexityHotspots.value = data.result.complexity_hotspots || []
-          analyzing.value = false
-          return
-        } else if (data.status === 'failed') {
-          // #1250: Detect orphaned tasks and show friendly message
-          const isOrphaned = data.reason === 'orphaned'
-            || data.error?.includes('orphaned')
-          if (isOrphaned) {
-            wasInterrupted.value = true
-            error.value = 'Previous analysis was interrupted by a server restart.'
-          } else {
-            error.value = data.error || 'Analysis failed'
+          if (!response.ok) {
+            throw new Error(`Status check failed: ${response.statusText}`)
           }
-          analyzing.value = false
-          return
+
+          const data = await response.json()
+          taskStatus.value = data
+          consecutiveErrors = 0 // Reset on success
+
+          if (data.status === 'completed' && data.result) {
+            analysisReport.value = data.result
+            duplicatePatterns.value = data.result.duplicate_patterns || []
+            regexOpportunities.value = data.result.regex_opportunities || []
+            complexityHotspots.value = data.result.complexity_hotspots || []
+            analyzing.value = false
+            stopPolling()
+            resolve()
+            return
+          }
+
+          if (data.status === 'failed') {
+            const isOrphaned = data.reason === 'orphaned'
+              || data.error?.includes('orphaned')
+            if (isOrphaned) {
+              wasInterrupted.value = true
+              error.value = 'Previous analysis was interrupted by a server restart.'
+            } else {
+              error.value = data.error || 'Analysis failed'
+            }
+            analyzing.value = false
+            stopPolling()
+            resolve()
+            return
+          }
+
+          // Still running — interval continues automatically
+        } catch (e: any) {
+          consecutiveErrors++
+          logger.warn(
+            `Task status poll error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}): ${e.message}`
+          )
+
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            error.value = `Lost connection to backend after ${MAX_CONSECUTIVE_ERRORS} retries`
+            analyzing.value = false
+            stopPolling()
+            resolve()
+          }
+          // Otherwise interval continues — transient error, keep trying
         }
-
-        // Continue polling
-        attempts++
-        setTimeout(poll, pollInterval)
-      } catch (e: any) {
-        error.value = e.message || 'Status check failed'
-        logger.error('Task status poll failed:', e)
-        analyzing.value = false
       }
-    }
 
-    await poll()
+      // Run first poll immediately, then on interval
+      poll()
+      intervalId = setInterval(poll, POLL_INTERVAL_MS)
+    })
   }
 
   /**

@@ -1,9 +1,11 @@
 # CI requirements — pinned to exact production versions (Issue #1211)
 # Python version: 3.10 (installed via deadsnakes PPA on self-hosted runner)
 #
-# NOTE: llama-index-readers-file is installed separately with --no-deps
-# in the workflow because its metadata requires pypdf<6 but production
-# runs pypdf 6.0.0 without issues.
+# NOTE: Packages with metadata conflicts are installed separately with
+# --no-deps in the CI workflow:
+#   - llama-index-readers-file==0.4.11 — metadata requires pypdf<6 but production runs pypdf 6.0.0
+#   - llama-index==0.12.48 — transitive dep llama-index-agent-openai requires llama-index-llms-openai<0.4
+#     while llama-index itself requires >=0.4 (ResolutionImpossible)
 
 # ===== CORE FRAMEWORK =====
 fastapi==0.115.9
@@ -49,7 +51,7 @@ nltk==3.9.1
 pyautogui==0.9.54
 mouseinfo==0.1.3
 pillow==11.3.0
-numpy==2.2.6
+numpy==1.26.4
 opencv-python==4.11.0.86
 pygetwindow==0.0.9
 
@@ -60,10 +62,11 @@ langchain-community==0.3.27
 langchain-core==0.3.68
 langchain-text-splitters==0.3.8
 langsmith==0.4.5
-llama-index==0.12.48
+llama-index-core==0.12.52
 llama-index-llms-ollama==0.6.2
 llama-index-embeddings-ollama==0.6.0
 llama-index-vector-stores-redis==0.5.2
+# llama-index==0.12.48 — installed via --no-deps in workflow (transitive dep conflict, see header)
 # llama-index-readers-file==0.4.11 — installed via --no-deps in workflow (pypdf<6 metadata conflict)
 
 # ===== SECURITY & DEV TOOLS =====

@@ -25,7 +25,7 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Core workflow and batch processing
     ("api.websockets", "", ["websockets"], "websockets"),
     ("api.workflow", "/workflow", ["workflow"], "workflow"),
-    ("api.batch", "/batch", ["batch"], "batch"),
+    # Issue #1287: batch.py consolidated into batch_jobs.py
     (
         "api.batch_jobs",
         "/batch-jobs",
@@ -38,8 +38,9 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["orchestrator"],
         "orchestrator",
     ),
+    # Issue #1285: Consolidated from api/workflow_automation.py to services/ version
     (
-        "api.workflow_automation",
+        "services.workflow_automation.routes",
         "/workflow-automation",
         ["workflow-automation"],
         "workflow_automation",
@@ -60,7 +61,6 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "log_forwarding",
     ),
     ("api.secrets", "/secrets", ["secrets"], "secrets"),
-    ("api.cache", "/cache", ["cache"], "cache"),
     ("api.registry", "/registry", ["registry"], "registry"),
     # AI and embeddings
     ("api.embeddings", "/embeddings", ["embeddings"], "embeddings"),
@@ -100,7 +100,6 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Services and infrastructure
     ("api.services", "/services", ["services"], "services"),
     ("api.elevation", "/elevation", ["elevation"], "elevation"),
-    ("api.auth", "/auth", ["auth"], "auth"),
     ("api.hot_reload", "/hot-reload", ["hot-reload"], "hot_reload"),
     ("api.startup", "/startup", ["startup"], "startup"),
     # Enterprise and scheduling
@@ -180,8 +179,8 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Caching
     (
         "api.cache_management",
-        "/cache-management",
-        ["cache-management"],
+        "/cache",
+        ["cache"],
         "cache_management",
     ),
     # Enhanced features
@@ -247,6 +246,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "/knowledge-maintenance",
         ["knowledge-maintenance"],
         "knowledge_maintenance",
+    ),
+    # Issue #1279: Fact-to-fact graph relations + hybrid search
+    (
+        "api.knowledge_relations",
+        "/knowledge-relations",
+        ["knowledge-relations"],
+        "knowledge_relations",
     ),
     # Issue #708: knowledge_search_aggregator, knowledge_ai_stack, knowledge_debug
     # consolidated into knowledge.py as sub-routers (backend.api.knowledge includes them)
@@ -370,6 +376,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         "/nl-database",
         ["nl-database", "vanna", "natural-language-sql"],
         "nl_database",
+    ),
+    # Issue #1295: Saved analytics reports CRUD + run
+    (
+        "api.bi_export_endpoints",
+        "/bi",
+        ["bi-reports"],
+        "bi_reports",
     ),
 ]
 

@@ -12,6 +12,7 @@ and are imported at module level to fail fast if missing.
 # Core router imports - these are required for basic functionality
 from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
+from api.audit import router as audit_router
 from api.auth import router as auth_router
 from api.browser_mcp import router as browser_mcp_router
 from api.chat import router as chat_router
@@ -60,13 +61,15 @@ from api.voice import router as voice_router
 from api.voice_stream import router as voice_stream_router
 from api.wake_word import router as wake_word_router
 from plugin_manager import router as plugin_manager_router
+from services.knowledge_sync_service import router as knowledge_sync_router
 
 # Issue #729: infrastructure_hosts removed - now served by slm-server
 
 
 def _get_system_routers() -> list:
-    """Get system and settings routers (Issue #560: extracted)."""
+    """Get system and settings routers (Issue #560: extracted, #1281: audit)."""
     return [
+        (audit_router, "", ["audit"], "audit"),
         (auth_router, "/auth", ["auth"], "auth"),
         (chat_router, "", ["chat"], "chat"),
         (collaboration_router, "", ["collaboration"], "collaboration"),
@@ -159,7 +162,7 @@ def _get_knowledge_organization_routers() -> list:
 
 
 def _get_knowledge_collaboration_routers() -> list:
-    """Get knowledge collaboration routers (Issue #688, #679).
+    """Get knowledge collaboration routers (Issue #688, #679, #1284: sync).
 
     Helper for _get_knowledge_routers() (Issue #679).
     """
@@ -181,6 +184,12 @@ def _get_knowledge_collaboration_routers() -> list:
             "",
             ["knowledge-organization"],
             "knowledge_organization",
+        ),
+        (
+            knowledge_sync_router,
+            "",
+            ["knowledge-sync"],
+            "knowledge_sync",
         ),
     ]
 

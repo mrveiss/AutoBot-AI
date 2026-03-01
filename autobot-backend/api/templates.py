@@ -11,6 +11,7 @@ Route ordering: Static paths (/templates/search, /templates/categories,
 segments as path parameters.
 """
 
+import logging
 from typing import Dict, Optional
 
 from autobot_types import TaskComplexity
@@ -20,6 +21,8 @@ from utils.advanced_cache_manager import smart_cache
 from workflow_templates import TemplateCategory, workflow_template_manager
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -445,46 +448,121 @@ async def create_workflow_from_template(
 async def execute_template_workflow(
     template_id: str, request: TemplateExecutionRequest
 ):
-    """Execute a workflow directly from a template"""
+    """Execute a workflow directly from a template (#1272).
+
+    Creates a workflow via WorkflowAutomationManager so it
+    appears in the Runner tab with step-by-step approval gates.
+    """
     try:
-        # Validate and create workflow
         workflow_data = workflow_template_manager.create_workflow_from_template(
             template_id, request.variables
         )
-
         if not workflow_data:
-            raise HTTPException(status_code=404, detail="Template not found or invalid")
+            raise HTTPException(
+                status_code=404,
+                detail="Template not found or invalid",
+            )
 
-        # Execute the workflow using the workflow API
-        from api.workflow import WorkflowExecutionRequest as WorkflowExecRequest
-        from api.workflow import execute_workflow
-        from fastapi import BackgroundTasks
+        from services.workflow_automation.routes import get_workflow_manager
 
-        # Create execution request
-        execution_request = WorkflowExecRequest(
-            user_message=f"Execute template: {workflow_data['template_name']}",
-            auto_approve=request.auto_approve,
+        workflow_manager = get_workflow_manager()
+        if workflow_manager is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Workflow automation unavailable",
+            )
+
+        wa_steps = _convert_template_steps(workflow_data["steps"])
+        workflow_id = await _create_and_start_workflow(
+            workflow_manager,
+            workflow_data,
+            wa_steps,
+            request,
         )
 
-        # Execute workflow
-        background_tasks = BackgroundTasks()
-        result = await execute_workflow(execution_request, background_tasks)
-
-        # Add template information to the result
-        if result.get("success"):
-            result["template_info"] = {
+        return {
+            "success": True,
+            "workflow_id": workflow_id,
+            "template_info": {
                 "template_id": template_id,
                 "template_name": workflow_data["template_name"],
                 "category": workflow_data["category"],
                 "variables_used": workflow_data.get("variables_used", {}),
-            }
-
-        return result
+            },
+            "message": (
+                f"Workflow '{workflow_data['template_name']}' " f"created and started"
+            ),
+        }
 
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(
+            "Failed to execute template %s: %s",
+            template_id,
+            e,
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to execute template workflow: {str(e)}",
+            detail=("Failed to execute template workflow: " f"{str(e)}"),
         )
+
+
+def _convert_template_steps(steps):
+    """Convert template step dicts to WorkflowStep objects (#1272)."""
+    from services.workflow_automation.models import WorkflowStep as WAStep
+
+    wa_steps = []
+    for step in steps:
+        wa_steps.append(
+            WAStep(
+                step_id=step["step_id"],
+                command=step["action"],
+                description=step["description"],
+                explanation=(
+                    f"Agent: {step['agent_type']} | "
+                    f"Inputs: {step.get('inputs', {})}"
+                ),
+                requires_confirmation=step.get("requires_approval", True),
+                risk_level="medium",
+                estimated_duration=(step.get("expected_duration_ms", 30000) / 1000),
+                dependencies=step.get("dependencies", []),
+                metadata={
+                    "agent_type": step["agent_type"],
+                    "action": step["action"],
+                    "inputs": step.get("inputs", {}),
+                },
+            )
+        )
+    return wa_steps
+
+
+async def _create_and_start_workflow(
+    manager,
+    workflow_data,
+    steps,
+    request,
+):
+    """Create and auto-start a workflow (#1272)."""
+    from services.workflow_automation.models import AutomationMode
+
+    mode = (
+        AutomationMode.AUTOMATIC
+        if request.auto_approve
+        else AutomationMode.SEMI_AUTOMATIC
+    )
+    workflow_id = await manager.create_automated_workflow(
+        name=workflow_data["template_name"],
+        description=workflow_data.get("description", ""),
+        steps=steps,
+        session_id="template-execution",
+        automation_mode=mode,
+    )
+    started = await manager.start_workflow_execution(workflow_id)
+    logger.info(
+        "Template executed as workflow %s (started=%s)",
+        workflow_id,
+        started,
+    )
+    return workflow_id

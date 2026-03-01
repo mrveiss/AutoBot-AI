@@ -21,7 +21,7 @@ from user_management.database import get_async_session
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/sessions", tags=["collaboration"])
+router = APIRouter(prefix="/sessions", tags=["collaboration"])
 
 
 # ====================================================================

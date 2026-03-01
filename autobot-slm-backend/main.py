@@ -42,6 +42,7 @@ from api import (
     security_router,
     services_router,
     settings_router,
+    setup_wizard_router,
     slm_auth_router,
     slm_users_router,
     sso_auth_router,
@@ -305,6 +306,8 @@ app.include_router(sso_auth_router, prefix="/api")
 # MFA and API Keys (Issue #576 Phase 5)
 app.include_router(mfa_router, prefix="/api")
 app.include_router(api_keys_router, prefix="/api")
+# Setup Wizard (Issue #1294)
+app.include_router(setup_wizard_router, prefix="/api")
 
 
 @app.get("/")

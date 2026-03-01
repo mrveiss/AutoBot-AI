@@ -11,7 +11,8 @@ import json
 import logging
 import threading
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from auth_middleware import get_current_user
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -60,7 +61,10 @@ def get_workflow_manager() -> WorkflowAutomationManager:
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.post("/create_workflow")
-async def create_workflow(request: AutomatedWorkflowRequest):
+async def create_workflow(
+    request: AutomatedWorkflowRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """Create new automated workflow"""
     try:
         workflow_steps = [
@@ -103,7 +107,9 @@ async def create_workflow(request: AutomatedWorkflowRequest):
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.post("/start_workflow/{workflow_id}")
-async def start_workflow(workflow_id: str):
+async def start_workflow(
+    workflow_id: str, current_user: dict = Depends(get_current_user)
+):
     """Start executing automated workflow"""
     try:
         success = await get_workflow_manager().start_workflow_execution(workflow_id)
@@ -127,7 +133,10 @@ async def start_workflow(workflow_id: str):
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.post("/control_workflow")
-async def control_workflow(request: WorkflowControlRequest):
+async def control_workflow(
+    request: WorkflowControlRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """Control workflow execution (pause, resume, cancel, approve, skip)"""
     try:
         success = await get_workflow_manager().handle_workflow_control(request)
@@ -155,7 +164,9 @@ async def control_workflow(request: WorkflowControlRequest):
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.get("/workflow_status/{workflow_id}")
-async def get_workflow_status(workflow_id: str):
+async def get_workflow_status(
+    workflow_id: str, current_user: dict = Depends(get_current_user)
+):
     """Get current workflow status"""
     try:
         status = get_workflow_manager().get_workflow_status(workflow_id)
@@ -176,7 +187,9 @@ async def get_workflow_status(workflow_id: str):
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.get("/active_workflows")
-async def get_active_workflows():
+async def get_active_workflows(
+    current_user: dict = Depends(get_current_user),
+):
     """Get list of all active workflows"""
     try:
         workflows = []
@@ -198,7 +211,9 @@ async def get_active_workflows():
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.post("/create_from_chat")
-async def create_workflow_from_chat(request: dict):
+async def create_workflow_from_chat(
+    request: dict, current_user: dict = Depends(get_current_user)
+):
     """
     Create workflow from natural language chat request.
 
@@ -270,7 +285,11 @@ async def create_workflow_from_chat(request: dict):
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.post("/present_plan/{workflow_id}")
-async def present_plan(workflow_id: str, request: PlanPresentationRequest = None):
+async def present_plan(
+    workflow_id: str,
+    request: PlanPresentationRequest = None,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Present workflow plan to user for approval.
 
@@ -347,7 +366,10 @@ async def _execute_approval_outcome(request: PlanApprovalResponse) -> dict:
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.post("/approve_plan")
-async def approve_plan(request: PlanApprovalResponse):
+async def approve_plan(
+    request: PlanApprovalResponse,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Handle user's approval/rejection of workflow plan.
 
@@ -389,7 +411,9 @@ async def approve_plan(request: PlanApprovalResponse):
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
 @router.get("/pending_approval/{workflow_id}")
-async def get_pending_approval(workflow_id: str):
+async def get_pending_approval(
+    workflow_id: str, current_user: dict = Depends(get_current_user)
+):
     """
     Get pending plan approval status for a workflow.
 

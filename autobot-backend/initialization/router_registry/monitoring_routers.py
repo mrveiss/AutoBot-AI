@@ -23,11 +23,13 @@ logger = logging.getLogger(__name__)
 MONITORING_ROUTER_CONFIGS = [
     ("api.monitoring", "router", "/monitoring", ["monitoring"], "monitoring"),
     ("api.metrics", "router", "/metrics", ["metrics"], "metrics"),
-    # Prometheus scrape endpoint at /api/metrics (no auth, used by Prometheus server)
+    # Issue #1288: Prometheus scrape endpoint at /api/metrics/prometheus
+    # (no auth, used by Prometheus server). Moved from /metrics to avoid
+    # sharing the same prefix as api.metrics JSON endpoints.
     (
         "api.prometheus_endpoint",
         "router",
-        "/metrics",
+        "/metrics/prometheus",
         ["metrics"],
         "prometheus_endpoint",
     ),

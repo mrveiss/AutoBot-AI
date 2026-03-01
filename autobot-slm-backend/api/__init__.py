@@ -34,6 +34,7 @@ from .security import router as security_router
 from .services import fleet_router as fleet_services_router
 from .services import router as services_router
 from .settings import router as settings_router
+from .setup_wizard import router as setup_wizard_router
 from .slm_auth import router as slm_auth_router
 from .slm_users import router as slm_users_router
 from .sso import router as sso_router
@@ -82,5 +83,6 @@ __all__ = [
     "autobot_users_router",
     "autobot_teams_router",
     "sso_router",
+    "setup_wizard_router",
     "sso_auth_router",
 ]
