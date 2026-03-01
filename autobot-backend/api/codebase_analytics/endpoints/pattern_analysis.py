@@ -230,6 +230,65 @@ async def get_pattern_summary(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Background task manager for pattern summary (#1304)
+_summary_manager = BackgroundTaskManager(redis_prefix="patsummary_task:")
+
+
+async def _run_summary_analysis(task_id: str, path: str) -> None:
+    """Background worker for pattern summary (#1304)."""
+    try:
+        from code_intelligence.pattern_analysis import CodePatternAnalyzer
+
+        await _summary_manager.update_progress(task_id, "Initializing analyzer", 10.0)
+        analyzer = CodePatternAnalyzer(
+            enable_embedding_storage=False,
+        )
+
+        await _summary_manager.update_progress(task_id, "Analyzing patterns", 30.0)
+        report = await analyzer.analyze_directory(path)
+
+        await _summary_manager.update_progress(task_id, "Building summary", 80.0)
+        result = {
+            "total_patterns": report.total_patterns,
+            "duplicates": len(report.duplicate_patterns),
+            "regex_opportunities": len(report.regex_opportunities),
+            "complexity_hotspots": len(report.complexity_hotspots),
+            "modularization_suggestions": len(report.modularization_suggestions),
+            "potential_loc_reduction": (report.potential_loc_reduction),
+            "complexity_score": report.complexity_score,
+        }
+        await _summary_manager.complete_task(task_id, result)
+    except Exception as e:
+        logger.error("Pattern summary analysis failed: %s", e)
+        await _summary_manager.fail_task(task_id, str(e))
+
+
+@router.post("/patterns/summary/analyze")
+async def start_pattern_summary_analysis(
+    background_tasks: BackgroundTasks,
+    path: str = Query(
+        default=str(PATH.PROJECT_ROOT),
+        description="Path to analyze",
+    ),
+):
+    """Start background pattern summary analysis (#1304)."""
+    task_id = await _summary_manager.create_task(params={"path": path})
+    background_tasks.add_task(_run_summary_analysis, task_id, path)
+    return {"task_id": task_id, "status": "pending"}
+
+
+@router.get("/patterns/summary/status/{task_id}")
+async def get_pattern_summary_status(task_id: str):
+    """Get pattern summary task status (#1304)."""
+    task = await _summary_manager.get_status(task_id)
+    if task is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task {task_id} not found",
+        )
+    return task
+
+
 @router.get("/patterns/duplicates")
 async def get_duplicate_patterns(
     path: str = Query(default=str(PATH.PROJECT_ROOT), description="Path to analyze"),
