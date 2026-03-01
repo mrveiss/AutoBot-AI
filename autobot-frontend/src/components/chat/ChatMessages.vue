@@ -730,9 +730,11 @@ const formatMessageContent = (content: string): string => {
 
   // Strip message type tags (Issue #680: Tags should not be visible in chat)
   // These tags are used internally for message categorization but shouldn't display
-  // Handles both complete tags [TAG] and malformed tags [TAG without closing bracket
+  // Handles: complete [TAG], malformed [TAG, partial tags like [/THO from streaming,
+  // and trailing partial tags at end of streamed content (e.g. [/THOU)
   formatted = formatted
     .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
+    .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?$/gi, '')
     .trim()
 
   // Strip TOOL_CALL tags (internal metadata that shouldn't be displayed)
@@ -1338,7 +1340,7 @@ onMounted(async () => {
 
 /* THOUGHT MESSAGES - Purple theme for AI reasoning */
 .message-wrapper.type-thought {
-  @apply bg-purple-50 border-purple-300 text-purple-900;
+  @apply bg-purple-900/20 border-purple-500/40 text-purple-200;
   border-left: 4px solid theme('colors.purple.500');
 }
 
@@ -1347,11 +1349,19 @@ onMounted(async () => {
 }
 
 .message-wrapper.type-thought .sender-name {
-  @apply text-purple-800;
+  @apply text-purple-300;
 }
 
 .message-wrapper.type-thought .message-time {
-  @apply text-purple-600;
+  @apply text-purple-400;
+}
+
+.message-wrapper.type-thought .message-content {
+  @apply text-purple-200;
+}
+
+.message-wrapper.type-thought .message-text {
+  @apply text-purple-100;
 }
 
 .message-wrapper.type-thought::before {
@@ -1359,27 +1369,40 @@ onMounted(async () => {
   @apply absolute top-2 right-2 w-2 h-2 rounded-full bg-purple-400;
 }
 
-/* PLANNING MESSAGES - Primary theme for task planning */
+/* PLANNING MESSAGES - Indigo theme for task planning */
 .message-wrapper.type-planning {
-  @apply bg-autobot-bg-tertiary border-autobot-border text-autobot-text-primary;
+  @apply bg-indigo-900/20 border-indigo-500/40 text-indigo-200;
   border-left: 4px solid theme('colors.indigo.500');
 }
 
 .message-wrapper.type-planning .message-avatar {
-  @apply bg-autobot-primary;
+  @apply bg-indigo-600;
 }
 
 .message-wrapper.type-planning .sender-name {
-  @apply text-autobot-text-primary;
+  @apply text-indigo-300;
 }
 
 .message-wrapper.type-planning .message-time {
-  @apply text-autobot-text-secondary;
+  @apply text-indigo-400;
+}
+
+.message-wrapper.type-planning .message-content {
+  @apply text-indigo-200;
+}
+
+.message-wrapper.type-planning .message-text {
+  @apply text-indigo-100;
+}
+
+.message-wrapper.type-planning::before {
+  content: '';
+  @apply absolute top-2 right-2 w-2 h-2 rounded-full bg-indigo-400;
 }
 
 /* DEBUG MESSAGES - Orange/Amber theme for debug output */
 .message-wrapper.type-debug {
-  @apply bg-amber-50 border-amber-300 text-amber-900;
+  @apply bg-amber-900/20 border-amber-500/40 text-amber-200;
   border-left: 4px solid theme('colors.amber.500');
 }
 
@@ -1388,15 +1411,19 @@ onMounted(async () => {
 }
 
 .message-wrapper.type-debug .sender-name {
-  @apply text-amber-800;
+  @apply text-amber-300;
 }
 
 .message-wrapper.type-debug .message-time {
-  @apply text-amber-600;
+  @apply text-amber-400;
+}
+
+.message-wrapper.type-debug .message-content {
+  @apply text-amber-200;
 }
 
 .message-wrapper.type-debug .message-text {
-  @apply font-mono text-xs;
+  @apply font-mono text-xs text-amber-100;
 }
 
 /* UTILITY MESSAGES - Slate theme for tool/utility output */
@@ -1478,12 +1505,16 @@ onMounted(async () => {
 
 /* COMMAND APPROVAL REQUEST - Yellow/Warning theme */
 .message-wrapper.type-command_approval_request {
-  @apply bg-yellow-50 border-yellow-400 text-yellow-900;
+  @apply bg-yellow-900/20 border-yellow-500/40 text-yellow-200;
   border-left: 4px solid theme('colors.yellow.500');
 }
 
 .message-wrapper.type-command_approval_request .message-avatar {
   @apply bg-yellow-600;
+}
+
+.message-wrapper.type-command_approval_request .message-content {
+  @apply text-yellow-200;
 }
 
 /* Message type indicator badge */
@@ -1493,12 +1524,12 @@ onMounted(async () => {
 
 .message-wrapper.type-thought::after {
   content: 'Thought';
-  @apply bg-purple-200 text-purple-800;
+  @apply bg-purple-800/60 text-purple-200;
 }
 
 .message-wrapper.type-planning::after {
   content: 'Planning';
-  @apply bg-autobot-bg-secondary text-autobot-primary;
+  @apply bg-indigo-800/60 text-indigo-200;
 }
 
 .message-wrapper.type-debug::after {

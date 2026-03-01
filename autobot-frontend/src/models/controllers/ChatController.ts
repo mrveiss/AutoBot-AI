@@ -331,18 +331,21 @@ export class ChatController {
         }
       }
 
-      // Finalize all messages
+      // Issue #1302: Finalize all messages and clean up truly empty ones
+      // Check displayable content (after stripping internal tags) not raw content
+      // to prevent deleting messages that have visible text between tags
       for (const frontendId of messageIdMap.values()) {
         const msg = this.chatStore.currentSession?.messages.find(m => m.id === frontendId)
-        if (msg && msg.content?.trim()) {
-          this.chatStore.updateMessage(frontendId, { status: 'sent' })
-        }
-      }
+        if (!msg) continue
 
-      // Clean up empty messages
-      for (const frontendId of messageIdMap.values()) {
-        const msg = this.chatStore.currentSession?.messages.find(m => m.id === frontendId)
-        if (msg && !msg.content?.trim()) {
+        const displayContent = (msg.content || '')
+          .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
+          .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?/gi, '')
+          .trim()
+
+        if (displayContent) {
+          this.chatStore.updateMessage(frontendId, { status: 'sent' })
+        } else {
           this.chatStore.deleteMessage(frontendId)
         }
       }
@@ -373,8 +376,10 @@ export class ChatController {
     if (!content || content.length < 3) return ''
 
     // Strip internal tags that shouldn't be shown to users
+    // Handles complete tags and partial/truncated tags from streaming (e.g. [/THO)
     let preview = content
       .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
+      .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?$/gi, '')
       .replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
       .replace(/<TOOL_CALL[^>]*>.*?<\/TOOL_CALL>/gs, '')
       .trim()

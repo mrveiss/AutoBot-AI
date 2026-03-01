@@ -1105,7 +1105,9 @@ def _validate_workflow_manager(chat_workflow_manager) -> None:
 async def send_chat_message_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
-    request_data: dict = None,
+    request_data: dict = Body(
+        default={}
+    ),  # Issue #1302: was None, preventing context/knowledge
     request: Request = None,
     ownership: Dict = Depends(validate_chat_ownership),  # SECURITY: Validate ownership
 ):
