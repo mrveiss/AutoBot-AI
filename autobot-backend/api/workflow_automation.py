@@ -55,7 +55,7 @@ class AutomationMode(Enum):
 
 @dataclass
 class WorkflowStep:
-    """Individual step in an automated workflow"""
+    """Individual step in an automated workflow (#1272)"""
 
     step_id: str
     command: str
@@ -69,6 +69,7 @@ class WorkflowStep:
     execution_result: Optional[Dict[str, Any]] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class WorkflowStepRequest(BaseModel):
@@ -389,9 +390,8 @@ class WorkflowAutomationManager:
         current_step.status = WorkflowStepStatus.EXECUTING
 
         try:
-            # Execute command via terminal
             result = await self._execute_workflow_command(
-                workflow.session_id, current_step.command
+                workflow.session_id, current_step
             )
 
             current_step.status = WorkflowStepStatus.COMPLETED
@@ -437,24 +437,17 @@ class WorkflowAutomationManager:
             await self._process_next_workflow_step(workflow_id)
 
     async def _execute_workflow_command(
-        self, session_id: str, command: str
+        self, session_id: str, step: WorkflowStep
     ) -> Dict[str, Any]:
-        """Execute command via terminal session"""
-        # This would integrate with the existing terminal WebSocket system
-        # For now, simulate command execution
+        """Execute a workflow step (#1272).
 
-        logger.info(f"Executing workflow command: {command}")
+        Skill-based steps (with metadata) are dispatched to
+        SkillManager. Plain commands fall back to shell execution.
+        """
+        if step.metadata and step.metadata.get("agent_type"):
+            return await _execute_skill_step(step)
 
-        # Simulate command execution delay
-        await asyncio.sleep(1)
-
-        return {
-            "command": command,
-            "exit_code": 0,
-            "stdout": f"Simulated output for: {command}",
-            "stderr": "",
-            "execution_time": 1.0,
-        }
+        return await _execute_shell_step(step.command)
 
     async def _check_step_dependencies(
         self, workflow_id: str, step: WorkflowStep
@@ -626,6 +619,94 @@ class WorkflowAutomationManager:
                 "Verify installations",
             ),
         ]
+
+
+# ---------------------------------------------------------------------------
+# Step execution helpers (#1272)
+# ---------------------------------------------------------------------------
+
+# Agent-type to skill-name mapping (underscores → hyphens)
+_AGENT_SKILL_MAP = {
+    "community_growth": "community-growth",
+    "orchestrator": None,  # human-review steps, no skill
+}
+
+
+async def _execute_skill_step(step: WorkflowStep) -> Dict[str, Any]:
+    """Dispatch a skill-based workflow step (#1272)."""
+    meta = step.metadata or {}
+    agent_type = meta.get("agent_type", "")
+    action = meta.get("action", step.command)
+    params = dict(meta.get("inputs", {}))
+
+    # Human-review steps just pass through
+    if action == "human_review":
+        return {
+            "success": True,
+            "action": action,
+            "message": "Human review approved",
+        }
+
+    skill_name = _AGENT_SKILL_MAP.get(agent_type, agent_type)
+    if not skill_name:
+        return {
+            "success": False,
+            "error": f"No skill mapped for agent_type={agent_type}",
+        }
+
+    from skills.manager import SkillManager
+
+    manager = SkillManager()
+    logger.info(
+        "Executing skill %s.%s with %s",
+        skill_name,
+        action,
+        params,
+    )
+    return await manager.execute_skill(skill_name, action, params)
+
+
+async def _execute_shell_step(command: str) -> Dict[str, Any]:
+    """Execute a plain shell command step (#1272)."""
+    import time
+
+    logger.info("Executing shell command: %s", command[:100])
+    start = time.monotonic()
+    try:
+        proc = await asyncio.subprocess.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+        elapsed = time.monotonic() - start
+        return {
+            "command": command,
+            "exit_code": proc.returncode,
+            "stdout": stdout.decode("utf-8", errors="replace")[:10000],
+            "stderr": stderr.decode("utf-8", errors="replace")[:10000],
+            "execution_time": round(elapsed, 2),
+            "success": proc.returncode == 0,
+        }
+    except asyncio.TimeoutError:
+        return {
+            "command": command,
+            "exit_code": -1,
+            "stdout": "",
+            "stderr": "Command timed out after 300s",
+            "execution_time": 300.0,
+            "success": False,
+        }
+    except Exception as e:
+        logger.error("Shell execution failed: %s", e)
+        return {
+            "command": command,
+            "exit_code": -1,
+            "stdout": "",
+            "stderr": str(e),
+            "execution_time": 0,
+            "success": False,
+        }
 
 
 # Global workflow manager instance — only created when deps are available
