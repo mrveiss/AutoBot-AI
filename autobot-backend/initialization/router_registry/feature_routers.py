@@ -44,6 +44,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["workflow-automation"],
         "workflow_automation",
     ),
+    # Issue #1280: Advanced workflow orchestrator (services/ version, replaces api/ prototype)
+    (
+        "services.advanced_workflow.routes",
+        "/advanced-workflow",
+        ["advanced-workflow"],
+        "advanced_workflow",
+    ),
     # Logging and configuration
     ("api.logs", "/logs", ["logs"], "logs"),
     (

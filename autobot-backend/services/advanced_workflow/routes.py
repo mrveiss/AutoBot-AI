@@ -10,7 +10,8 @@ FastAPI router endpoints for advanced workflow operations.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -60,7 +61,11 @@ async def get_orchestrator_instance(request: Request = None):
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.post("/generate_intelligent")
-async def generate_intelligent_workflow(request_data: dict, request: Request):
+async def generate_intelligent_workflow(
+    request_data: dict,
+    request: Request,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """Generate AI-optimized workflow from user request"""
     try:
         orchestrator = await get_orchestrator_instance(request)
@@ -93,7 +98,11 @@ async def generate_intelligent_workflow(request_data: dict, request: Request):
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.get("/intelligence/{workflow_id}")
-async def get_workflow_intelligence(workflow_id: str, request: Request):
+async def get_workflow_intelligence(
+    workflow_id: str,
+    request: Request,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """Get AI intelligence data for workflow"""
     try:
         orchestrator = await get_orchestrator_instance(request)
@@ -125,7 +134,10 @@ async def get_workflow_intelligence(workflow_id: str, request: Request):
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.get("/analytics")
-async def get_advanced_analytics(request: Request):
+async def get_advanced_analytics(
+    request: Request,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """Get advanced workflow analytics"""
     try:
         orchestrator = await get_orchestrator_instance(request)
@@ -156,7 +168,10 @@ async def get_advanced_analytics(request: Request):
 
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.get("/templates")
-async def get_workflow_templates(request: Request):
+async def get_workflow_templates(
+    request: Request,
+    admin_check: bool = Depends(check_admin_permission),
+):
     """Get all available intelligent workflow templates (Issue #372 - uses model methods)"""
     try:
         orchestrator = await get_orchestrator_instance(request)
@@ -177,7 +192,10 @@ async def get_workflow_templates(request: Request):
 @with_error_handling(category=ErrorCategory.SERVER_ERROR)
 @router.post("/templates/{template_id}/execute")
 async def execute_workflow_template(
-    template_id: str, request_data: dict, request: Request
+    template_id: str,
+    request_data: dict,
+    request: Request,
+    admin_check: bool = Depends(check_admin_permission),
 ):
     """Execute a workflow template with customizations"""
     try:
