@@ -27,7 +27,6 @@ from api.monitoring_utils import (
     _identify_bottlenecks,
 )
 from auth_middleware import check_admin_permission
-from config import ConfigManager
 from config.registry import ConfigRegistry
 
 # Issue #474: Import ServiceURLs for AlertManager integration
@@ -37,7 +36,6 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     Query,
-    Response,
     WebSocket,
     WebSocketDisconnect,
 )
@@ -57,6 +55,7 @@ from utils.performance_monitor import (
 
 # Import AutoBot monitoring system
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from config import ConfigManager
 
 logger = logging.getLogger(__name__)
 config = ConfigManager()
@@ -1041,94 +1040,9 @@ async def test_performance_monitoring(
     }
 
 
-# ===== PROMETHEUS METRICS ENDPOINTS =====
-
-from monitoring.prometheus_metrics import get_metrics_manager
-
-
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_prometheus_metrics",
-    error_code_prefix="MONITORING",
-)
-@router.get(
-    "/metrics",
-    summary="Prometheus Metrics Endpoint",
-    description="Exposes metrics in Prometheus format for scraping",
-)
-async def get_prometheus_metrics(
-    admin_check: bool = Depends(check_admin_permission),
-):
-    """
-    Prometheus metrics endpoint. Issue #744: Requires admin authentication.
-
-    Returns metrics in Prometheus text format for scraping by Prometheus server.
-    Includes timeout tracking, latency metrics, connection pool stats,
-    circuit breaker state, and request success/failure rates.
-    """
-    metrics_manager = get_metrics_manager()
-    metrics_data = metrics_manager.get_metrics()
-
-    return Response(
-        content=metrics_data, media_type="text/plain; version=0.0.4; charset=utf-8"
-    )
-
-
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="metrics_health_check",
-    error_code_prefix="MONITORING",
-)
-@router.get(
-    "/health/metrics",
-    summary="Metrics Health Check",
-    description="Verify metrics collection is working",
-)
-async def metrics_health_check(
-    admin_check: bool = Depends(check_admin_permission),
-):
-    """Health check for Prometheus metrics system. Issue #744: Requires admin authentication."""
-    metrics_manager = get_metrics_manager()
-    metrics_data = metrics_manager.get_metrics()
-
-    return {
-        "status": "healthy",
-        "metrics_count": len(metrics_data.decode("utf-8").split("\n")),
-        "endpoint": "/api/monitoring/metrics",
-        "format": "Prometheus text format",
-        "metric_categories": [
-            # Redis & Performance Metrics
-            "autobot_timeout_total",
-            "autobot_operation_duration_seconds",
-            "autobot_timeout_rate",
-            "autobot_redis_pool_connections",
-            "autobot_redis_pool_saturation_ratio",
-            "autobot_circuit_breaker_events_total",
-            "autobot_circuit_breaker_state",
-            "autobot_circuit_breaker_failure_count",
-            "autobot_redis_requests_total",
-            "autobot_redis_success_rate",
-            # Workflow Metrics
-            "autobot_workflow_executions_total",
-            "autobot_workflow_duration_seconds",
-            "autobot_workflow_steps_executed_total",
-            "autobot_active_workflows",
-            "autobot_workflow_approvals_total",
-            # GitHub Integration Metrics
-            "autobot_github_operations_total",
-            "autobot_github_api_duration_seconds",
-            "autobot_github_rate_limit_remaining",
-            "autobot_github_commits_total",
-            "autobot_github_pull_requests_total",
-            "autobot_github_issues_total",
-            # Task Execution Metrics
-            "autobot_tasks_executed_total",
-            "autobot_task_duration_seconds",
-            "autobot_active_tasks",
-            "autobot_task_queue_size",
-            "autobot_task_retries_total",
-        ],
-    }
+# Issue #1288: Prometheus metrics endpoints removed — consolidated into
+# api/prometheus_endpoint.py at /api/metrics/prometheus (no auth, for scraping).
+# The auth-protected duplicates here were unusable by Prometheus server.
 
 
 # Issue #1190: Hardware stub endpoints for analytics dashboard

@@ -24,7 +24,8 @@ scrape_configs:
           instance: 'autobot-main'
           service: 'backend-api'
 
-    metrics_path: '/api/monitoring/metrics'
+    # Issue #1288: Consolidated Prometheus scrape to /api/metrics/prometheus
+    metrics_path: '/api/metrics/prometheus'
     scrape_interval: 15s
     scrape_timeout: 10s
 

@@ -3,7 +3,9 @@
 # Author: mrveiss
 """
 Prometheus Metrics HTTP Endpoint
-Exposes Prometheus-format metrics for scraping
+
+Issue #1288: Exposes Prometheus-format metrics for scraping at /api/metrics/prometheus.
+Moved from shared /metrics prefix to avoid collision with JSON metrics endpoints.
 """
 
 from fastapi import APIRouter, Response
