@@ -36,15 +36,19 @@ from code_intelligence.security_analyzer import (
     SecuritySeverity,
     get_vulnerability_types,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from utils.background_task_manager import BackgroundTaskManager
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Background task manager for security score analysis (#1304)
+_sec_manager = BackgroundTaskManager(redis_prefix="sec_task:")
 
 # Issue #380: Module-level tuple for severity ordering (used in 4 endpoints)
 _SEVERITY_ORDER = ("info", "low", "medium", "high", "critical")
@@ -2156,3 +2160,73 @@ async def get_full_evolution_report(
             status_code=500,
             detail=f"Evolution report failed: {str(e)}",
         )
+
+
+# ------------------------------------------------------------------
+# Background task endpoints for security score (#1304)
+# ------------------------------------------------------------------
+
+
+async def _run_security_analysis(task_id: str, path: str) -> None:
+    """Background worker for security score analysis (#1304)."""
+    try:
+        await _sec_manager.update_progress(
+            task_id, "Initializing security analyzer", 10.0
+        )
+        analyzer = SecurityAnalyzer(project_root=path)
+
+        await _sec_manager.update_progress(
+            task_id, "Scanning for vulnerabilities", 30.0
+        )
+        await asyncio.to_thread(analyzer.analyze_directory)
+
+        await _sec_manager.update_progress(task_id, "Calculating security score", 80.0)
+        summary = analyzer.get_summary()
+        score = summary["security_score"]
+
+        result = {
+            "status": "success",
+            "timestamp": datetime.now().isoformat(),
+            "path": path,
+            "security_score": score,
+            "grade": _calculate_grade_from_score(score),
+            "risk_level": summary["risk_level"],
+            "status_message": _get_security_status_message(score),
+            "total_findings": summary["total_findings"],
+            "critical_issues": summary["critical_issues"],
+            "high_issues": summary["high_issues"],
+            "files_analyzed": summary["files_analyzed"],
+            "severity_breakdown": summary["by_severity"],
+            "owasp_breakdown": summary["by_owasp_category"],
+        }
+        await _sec_manager.complete_task(task_id, result)
+    except Exception as e:
+        logger.error("Security analysis failed: %s", e)
+        await _sec_manager.fail_task(task_id, str(e))
+
+
+@router.post("/security/score/analyze")
+async def start_security_analysis(
+    background_tasks: BackgroundTasks,
+    path: str = Query(..., description="Directory path to analyze"),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Start background security score analysis (#1304)."""
+    path_exists = await asyncio.to_thread(os.path.exists, path)
+    if not path_exists:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Path does not exist: {path}",
+        )
+    task_id = await _sec_manager.create_task(params={"path": path})
+    background_tasks.add_task(_run_security_analysis, task_id, path)
+    return {"task_id": task_id, "status": "pending"}
+
+
+@router.get("/security/score/status/{task_id}")
+async def get_security_score_status(task_id: str):
+    """Get security score analysis task status (#1304)."""
+    task = await _sec_manager.get_status(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return task
