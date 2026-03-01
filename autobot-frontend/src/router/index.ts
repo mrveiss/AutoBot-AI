@@ -39,7 +39,6 @@ import ChatView from '@/views/ChatView.vue'
 import KnowledgeView from '@/views/KnowledgeView.vue'
 import WorkflowBuilderView from '@/views/WorkflowBuilderView.vue'
 import AnalyticsView from '@/views/AnalyticsView.vue'
-import VisionView from '@/views/VisionView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 
 // Route configuration - Issue #729: Business-only routes, infrastructure moved to slm-admin
@@ -352,52 +351,6 @@ const routes: RouteRecordRaw[] = [
           requiresAuth: true
         }
       },
-    ]
-  },
-  // Issue #777: Vision & Multimodal AI Features
-  {
-    path: '/vision',
-    name: 'vision',
-    component: VisionView,
-    meta: {
-      title: 'Vision & AI',
-      icon: 'fas fa-eye',
-      description: 'Vision analysis and multimodal AI features',
-      requiresAuth: true
-    },
-    children: [
-      {
-        path: '',
-        name: 'vision-default',
-        redirect: '/vision/analyze'
-      },
-      {
-        path: 'analyze',
-        name: 'vision-analyze',
-        component: () => import('@/components/vision/ScreenCaptureViewer.vue'),
-        meta: {
-          title: 'Screen Analysis',
-          parent: 'vision'
-        }
-      },
-      {
-        path: 'image',
-        name: 'vision-image',
-        component: () => import('@/components/vision/ImageAnalyzer.vue'),
-        meta: {
-          title: 'Image Processing',
-          parent: 'vision'
-        }
-      },
-      {
-        path: 'automation',
-        name: 'vision-automation',
-        component: () => import('@/components/vision/VisionAutomationPage.vue'),
-        meta: {
-          title: 'GUI Automation',
-          parent: 'vision'
-        }
-      }
     ]
   },
   // Issue #753: User preferences (appearance, font size, colors, etc.)
