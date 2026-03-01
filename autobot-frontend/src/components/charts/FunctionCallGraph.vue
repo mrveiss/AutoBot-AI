@@ -1436,6 +1436,7 @@ watch(viewMode, async (newMode) => {
 
 .stats-bar {
   display: flex;
+  align-items: center;
   gap: var(--spacing-xl);
   margin-bottom: var(--spacing-md);
   padding: var(--spacing-3) var(--spacing-4);

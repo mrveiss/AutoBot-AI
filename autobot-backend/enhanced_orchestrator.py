@@ -84,7 +84,7 @@ class EnhancedOrchestrator:
             self._agent_registry.register(agent)
 
         # Expose registry dict for backward compatibility
-        self.agent_registry: Dict[str, AgentProfile] = self._agent_registry._registry
+        self.agent_registry: Dict[str, AgentProfile] = self._agent_registry._agents
 
         # Workflow documentation storage
         self.workflow_documentation: Dict[str, WorkflowDocumentation] = {}
