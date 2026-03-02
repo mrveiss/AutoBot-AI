@@ -12,6 +12,7 @@ import { ref } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
+import { getBackendWsUrl } from '@/config/ssot-config'
 
 const logger = createLogger('useVoiceOutput')
 
@@ -31,6 +32,11 @@ let _currentSource: AudioBufferSourceNode | null = null
 // Queue for streaming audio chunks (#1031)
 let _chunkQueue: ArrayBuffer[] = []
 let _isPlayingChunks = false
+
+// Streaming TTS WebSocket connection (#1319)
+let _ttsWs: WebSocket | null = null
+let _ttsWsIdleTimer: ReturnType<typeof setTimeout> | null = null
+const _TTS_WS_IDLE_TIMEOUT = 30_000
 
 function _getOrCreateContext(): AudioContext {
   if (!_audioContext) {
@@ -99,6 +105,91 @@ async function _drainChunkQueue(): Promise<void> {
   isSpeaking.value = false
 }
 
+/** Decode base64 audio and queue for playback (module-level for WS handler). */
+function _playAudioChunkFromBase64(base64Data: string): void {
+  try {
+    const binary = atob(base64Data)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i)
+    }
+    _chunkQueue.push(bytes.buffer)
+    isSpeaking.value = true
+    _drainChunkQueue()
+  } catch (e) {
+    logger.error('playAudioChunk error:', e)
+  }
+}
+
+function _resetTtsWsIdleTimer(): void {
+  if (_ttsWsIdleTimer) clearTimeout(_ttsWsIdleTimer)
+  _ttsWsIdleTimer = setTimeout(() => {
+    if (_ttsWs) {
+      _ttsWs.close()
+      _ttsWs = null
+    }
+  }, _TTS_WS_IDLE_TIMEOUT)
+}
+
+function _disconnectTtsWs(): void {
+  if (_ttsWsIdleTimer) {
+    clearTimeout(_ttsWsIdleTimer)
+    _ttsWsIdleTimer = null
+  }
+  if (_ttsWs) {
+    try { _ttsWs.close() } catch { /* ignore */ }
+    _ttsWs = null
+  }
+}
+
+function _connectTtsWs(): Promise<WebSocket> {
+  return new Promise((resolve, reject) => {
+    if (_ttsWs && _ttsWs.readyState === WebSocket.OPEN) {
+      _resetTtsWsIdleTimer()
+      resolve(_ttsWs)
+      return
+    }
+    if (_ttsWs) {
+      try { _ttsWs.close() } catch { /* ignore */ }
+      _ttsWs = null
+    }
+
+    const url = `${getBackendWsUrl()}/api/voice/stream`
+    const ws = new WebSocket(url)
+
+    ws.onopen = () => {
+      _ttsWs = ws
+      _resetTtsWsIdleTimer()
+      logger.debug('TTS WS connected')
+      resolve(ws)
+    }
+    ws.onerror = (e) => {
+      logger.warn('TTS WS error:', e)
+      _ttsWs = null
+      reject(e)
+    }
+    ws.onclose = () => {
+      logger.debug('TTS WS closed')
+      _ttsWs = null
+    }
+    ws.onmessage = (event) => {
+      _resetTtsWsIdleTimer()
+      try {
+        const msg = JSON.parse(event.data)
+        if (msg.type === 'tts_audio' && msg.data) {
+          _playAudioChunkFromBase64(msg.data)
+        } else if (msg.type === 'tts_end') {
+          // Sentence stream complete — isSpeaking cleared by chunk drain
+        } else if (msg.type === 'error') {
+          logger.warn('TTS WS server error:', msg.message)
+        }
+      } catch (e) {
+        logger.warn('TTS WS message parse error:', e)
+      }
+    }
+  })
+}
+
 export function useVoiceOutput() {
   function toggleVoiceOutput(): void {
     voiceOutputEnabled.value = !voiceOutputEnabled.value
@@ -146,18 +237,7 @@ export function useVoiceOutput() {
 
   /** Queue a base64-encoded WAV chunk for sequential playback (#1031). */
   function playAudioChunk(base64Data: string): void {
-    try {
-      const binary = atob(base64Data)
-      const bytes = new Uint8Array(binary.length)
-      for (let i = 0; i < binary.length; i++) {
-        bytes[i] = binary.charCodeAt(i)
-      }
-      _chunkQueue.push(bytes.buffer)
-      isSpeaking.value = true
-      _drainChunkQueue()
-    } catch (e) {
-      logger.error('playAudioChunk error:', e)
-    }
+    _playAudioChunkFromBase64(base64Data)
   }
 
   /** Stop any current or queued audio immediately (#1031). */
@@ -165,11 +245,38 @@ export function useVoiceOutput() {
     _stopCurrentAudio()
   }
 
+  async function speakStreaming(text: string): Promise<void> {
+    if (!text.trim()) return
+    try {
+      const ws = await _connectTtsWs()
+      const { effectiveVoiceId } = useVoiceProfiles()
+      ws.send(JSON.stringify({
+        type: 'speak_sentence',
+        text: text.trim(),
+        voice_id: effectiveVoiceId.value || '',
+      }))
+    } catch {
+      logger.warn('TTS WS unavailable, falling back to HTTP speak()')
+      await speak(text, true)
+    }
+  }
+
+  async function flushStreaming(): Promise<void> {
+    try {
+      const ws = await _connectTtsWs()
+      ws.send(JSON.stringify({ type: 'flush' }))
+    } catch {
+      // WS unavailable — nothing to flush
+    }
+  }
+
   return {
     voiceOutputEnabled,
     isSpeaking,
     toggleVoiceOutput,
     speak,
+    speakStreaming,
+    flushStreaming,
     unlockAudio,
     playAudioChunk,
     stopSpeaking,
