@@ -46,6 +46,31 @@ async function getBackendUrl(): Promise<string> {
 }
 
 /**
+ * Clear stuck tasks for a given endpoint.
+ * Shared helper used by both 409 recovery and orphan auto-retry.
+ */
+async function clearStuckTasks(clearUrl: string): Promise<void> {
+  const backendUrl = await getBackendUrl()
+  await fetchWithAuth(
+    `${backendUrl}${clearUrl}?force=true`,
+    { method: 'POST' },
+  )
+}
+
+/**
+ * POST to the /analyze endpoint and return the response.
+ * Shared helper to avoid duplicating the fetch logic.
+ */
+async function postAnalyze(
+  baseUrl: string,
+  qs: string,
+  fetchOpts: RequestInit,
+): Promise<Response> {
+  const backendUrl = await getBackendUrl()
+  return fetchWithAuth(`${backendUrl}${baseUrl}/analyze${qs}`, fetchOpts)
+}
+
+/**
  * Reusable background-task composable.
  *
  * @param baseUrl  API path prefix (e.g. `/api/analytics/codebase/analytics/dependencies`).
@@ -67,7 +92,7 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
 
   /**
    * POST to start the analysis, then poll until done.
-   * Handles 409 conflict by auto-clearing stuck tasks and retrying once.
+   * Handles 409 conflict and orphaned tasks by auto-clearing and retrying once.
    *
    * @param body   Optional JSON body for the POST request.
    * @param query  Optional query params appended to the URL.
@@ -85,7 +110,6 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
     result.value = null
 
     try {
-      const backendUrl = await getBackendUrl()
       const fetchOpts: RequestInit = { method: 'POST' }
       if (body) {
         fetchOpts.headers = { 'Content-Type': 'application/json' }
@@ -96,22 +120,13 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
         ? '?' + new URLSearchParams(query).toString()
         : ''
 
-      let response = await fetchWithAuth(
-        `${backendUrl}${baseUrl}/analyze${qs}`,
-        fetchOpts,
-      )
+      let response = await postAnalyze(baseUrl, qs, fetchOpts)
 
       // Auto-clear stuck tasks on 409 and retry once
       if (response.status === 409 && resolvedClearUrl) {
         logger.info('Task conflict (409), clearing stuck tasks…')
-        await fetchWithAuth(
-          `${backendUrl}${resolvedClearUrl}?force=true`,
-          { method: 'POST' },
-        )
-        response = await fetchWithAuth(
-          `${backendUrl}${baseUrl}/analyze${qs}`,
-          fetchOpts,
-        )
+        await clearStuckTasks(resolvedClearUrl)
+        response = await postAnalyze(baseUrl, qs, fetchOpts)
       }
 
       if (!response.ok) {
@@ -129,7 +144,29 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
       taskId.value = data.task_id
       taskStatus.value = { ...data, progress: 0, current_step: null, result: null }
 
-      await poll(data.task_id)
+      const pollResult = await poll(data.task_id)
+
+      // Auto-retry once if orphaned: clear stuck tasks and start fresh
+      if (pollResult === 'orphaned' && resolvedClearUrl) {
+        logger.info('Task orphaned, clearing stuck tasks and retrying…')
+        wasInterrupted.value = false
+        error.value = null
+        progress.value = 0
+
+        await clearStuckTasks(resolvedClearUrl)
+        const retryResp = await postAnalyze(baseUrl, qs, fetchOpts)
+        if (!retryResp.ok) {
+          throw new Error(`Retry failed: ${retryResp.statusText}`)
+        }
+        const retryData = await retryResp.json()
+        if (!retryData.task_id) {
+          throw new Error('No task_id in retry response')
+        }
+        taskId.value = retryData.task_id
+        taskStatus.value = { ...retryData, progress: 0, current_step: null, result: null }
+        await poll(retryData.task_id)
+      }
+
       return !error.value
     } catch (e: unknown) {
       error.value = e instanceof Error ? e.message : String(e)
@@ -142,12 +179,14 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
   /**
    * Poll GET /status/{id} every 2 s until completed or failed.
    * Resilient to transient network errors (up to MAX_CONSECUTIVE_ERRORS).
+   *
+   * @returns 'completed', 'failed', or 'orphaned' to let callers decide on retry.
    */
-  const poll = (id: string): Promise<void> => {
+  const poll = (id: string): Promise<'completed' | 'failed' | 'orphaned' | 'error'> => {
     let consecutiveErrors = 0
     let intervalId: ReturnType<typeof setInterval> | null = null
 
-    return new Promise<void>((resolve) => {
+    return new Promise<'completed' | 'failed' | 'orphaned' | 'error'>((resolve) => {
       const stop = () => {
         if (intervalId !== null) {
           clearInterval(intervalId)
@@ -174,7 +213,7 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
             progress.value = 100
             running.value = false
             stop()
-            resolve()
+            resolve('completed')
             return
           }
 
@@ -184,12 +223,15 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
             if (orphaned) {
               wasInterrupted.value = true
               error.value = 'Previous task was interrupted by a server restart.'
+              running.value = false
+              stop()
+              resolve('orphaned')
             } else {
               error.value = data.error || 'Task failed'
+              running.value = false
+              stop()
+              resolve('failed')
             }
-            running.value = false
-            stop()
-            resolve()
             return
           }
         } catch (e: unknown) {
@@ -202,7 +244,7 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
             error.value = `Lost connection after ${MAX_CONSECUTIVE_ERRORS} retries`
             running.value = false
             stop()
-            resolve()
+            resolve('error')
           }
         }
       }

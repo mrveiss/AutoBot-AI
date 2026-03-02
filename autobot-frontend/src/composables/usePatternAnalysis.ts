@@ -255,7 +255,43 @@ export function usePatternAnalysis() {
           status: 'pending'
         }
         // Poll until task completes — caller awaits this
-        await pollTaskStatus(data.task_id)
+        const pollResult = await pollTaskStatus(data.task_id)
+
+        // Auto-retry once if orphaned: clear stuck tasks and start fresh
+        if (pollResult === 'orphaned') {
+          logger.info('Pattern task orphaned, clearing stuck tasks and retrying…')
+          wasInterrupted.value = false
+          error.value = null
+
+          await fetchWithAuth(
+            `${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`,
+            { method: 'POST' },
+          )
+          const retryResp = await fetchWithAuth(
+            `${backendUrl}/api/analytics/codebase/patterns/analyze`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                path,
+                enable_regex_detection: enableRegex,
+                enable_complexity_analysis: enableComplexity,
+                enable_duplicate_detection: enableDuplicates,
+                similarity_threshold: similarityThreshold,
+                run_in_background: true,
+              }),
+            },
+          )
+          if (retryResp.ok) {
+            const retryData = await retryResp.json()
+            if (retryData.task_id) {
+              currentTaskId.value = retryData.task_id
+              taskStatus.value = { task_id: retryData.task_id, status: 'pending' }
+              await pollTaskStatus(retryData.task_id)
+            }
+          }
+        }
+
         return !error.value
       } else if (data.status === 'success' && data.report) {
         analysisReport.value = data.report
@@ -281,14 +317,16 @@ export function usePatternAnalysis() {
    * Transient fetch errors are retried — a single network glitch
    * does not kill the polling loop.
    */
-  const pollTaskStatus = (taskId: string): Promise<void> => {
+  const pollTaskStatus = (
+    taskId: string,
+  ): Promise<'completed' | 'failed' | 'orphaned' | 'error'> => {
     const POLL_INTERVAL_MS = 2000
     const MAX_CONSECUTIVE_ERRORS = 5
 
     let consecutiveErrors = 0
     let intervalId: ReturnType<typeof setInterval> | null = null
 
-    return new Promise<void>((resolve) => {
+    return new Promise<'completed' | 'failed' | 'orphaned' | 'error'>((resolve) => {
       const stopPolling = () => {
         if (intervalId !== null) {
           clearInterval(intervalId)
@@ -318,7 +356,7 @@ export function usePatternAnalysis() {
             complexityHotspots.value = data.result.complexity_hotspots || []
             analyzing.value = false
             stopPolling()
-            resolve()
+            resolve('completed')
             return
           }
 
@@ -328,12 +366,15 @@ export function usePatternAnalysis() {
             if (isOrphaned) {
               wasInterrupted.value = true
               error.value = 'Previous analysis was interrupted by a server restart.'
+              analyzing.value = false
+              stopPolling()
+              resolve('orphaned')
             } else {
               error.value = data.error || 'Analysis failed'
+              analyzing.value = false
+              stopPolling()
+              resolve('failed')
             }
-            analyzing.value = false
-            stopPolling()
-            resolve()
             return
           }
 
@@ -348,7 +389,7 @@ export function usePatternAnalysis() {
             error.value = `Lost connection to backend after ${MAX_CONSECUTIVE_ERRORS} retries`
             analyzing.value = false
             stopPolling()
-            resolve()
+            resolve('error')
           }
           // Otherwise interval continues — transient error, keep trying
         }

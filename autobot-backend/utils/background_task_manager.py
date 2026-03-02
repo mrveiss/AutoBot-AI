@@ -92,10 +92,13 @@ class BackgroundTaskManager:
             logger.debug("Task Redis save failed (non-fatal): %s", exc)
 
     async def _load_from_redis(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """Load task from Redis.
+        """Load task from Redis (read-only).
 
-        Marks orphans (running in Redis, absent from memory) as
-        failed (#1234).
+        Returns the task state as-is.  With multiple uvicorn workers
+        a task may be running in another worker's memory — marking it
+        orphaned here would be a false positive.  Orphan cleanup is
+        handled by ``_clear_orphaned`` (called from ``create_task``
+        and ``clear_stuck``) which scans *all* keys.
         """
         try:
             redis = await self._get_redis()
@@ -104,19 +107,7 @@ class BackgroundTaskManager:
             data = await redis.get(f"{self._prefix}{task_id}")
             if not data:
                 return None
-            task = json.loads(data)
-            if task.get("status") == "running":
-                task["status"] = "failed"
-                task["error"] = "Task orphaned by backend restart"
-                task["reason"] = "orphaned"
-                task["completed_at"] = datetime.now().isoformat()
-                await redis.set(
-                    f"{self._prefix}{task_id}",
-                    json.dumps(task, default=str),
-                    ex=self._ttl,
-                )
-                logger.info("Marked orphaned task %s as failed", task_id)
-            return task
+            return json.loads(data)
         except Exception as exc:
             logger.debug("Task Redis load failed (non-fatal): %s", exc)
         return None
@@ -143,8 +134,15 @@ class BackgroundTaskManager:
         return cleared
 
     async def _mark_orphans(self, redis, keys) -> int:
-        """Mark individual orphaned keys as failed."""
+        """Mark individual orphaned keys as failed.
+
+        Only marks tasks that are *not* in any worker's memory AND have
+        exceeded the task timeout.  This avoids false positives in
+        multi-worker deployments where one worker creates a task and
+        another handles the cleanup call.
+        """
         marked = 0
+        now = datetime.now()
         for key in keys:
             data = await redis.get(key)
             if not data:
@@ -152,22 +150,32 @@ class BackgroundTaskManager:
             task = json.loads(data)
             raw = key.decode() if isinstance(key, bytes) else key
             tid = raw.removeprefix(self._prefix)
-            if task.get("status") == "running" and tid not in self._tasks:
-                task["status"] = "failed"
-                task["error"] = "Task orphaned by backend restart"
-                task["reason"] = "orphaned"
-                task["completed_at"] = datetime.now().isoformat()
-                await redis.set(
-                    f"{self._prefix}{tid}",
-                    json.dumps(task, default=str),
-                    ex=self._ttl,
-                )
-                marked += 1
-                logger.info(
-                    "Cleared orphaned task %s%s",
-                    self._prefix,
-                    tid,
-                )
+            if task.get("status") != "running" or tid in self._tasks:
+                continue
+            # Only mark as orphaned if it has exceeded the timeout
+            started = task.get("started_at")
+            if started:
+                try:
+                    elapsed = (now - datetime.fromisoformat(started)).total_seconds()
+                    if elapsed < self._timeout:
+                        continue  # Still within timeout — may be running on another worker
+                except (ValueError, TypeError):
+                    pass
+            task["status"] = "failed"
+            task["error"] = "Task orphaned by backend restart"
+            task["reason"] = "orphaned"
+            task["completed_at"] = now.isoformat()
+            await redis.set(
+                f"{self._prefix}{tid}",
+                json.dumps(task, default=str),
+                ex=self._ttl,
+            )
+            marked += 1
+            logger.info(
+                "Cleared orphaned task %s%s",
+                self._prefix,
+                tid,
+            )
         return marked
 
     # ------------------------------------------------------------------
