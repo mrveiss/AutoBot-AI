@@ -20,6 +20,7 @@ import {
   type ScheduleCreateRequest,
 } from '@/composables/useCodeSync'
 import { createLogger } from '@/utils/debugUtils'
+import { formatDateTime } from '@/composables/useTimezone'
 import { getCommitHashDisplay, getCommitUrl } from '@/utils/commitHashUtils'
 import ScheduleModal from '@/components/ScheduleModal.vue'
 import CodeSourceModal from '@/components/CodeSourceModal.vue'
@@ -107,9 +108,7 @@ function formatVersion(version: string | null): string {
 }
 
 function formatDate(dateStr: string | null): string {
-  if (!dateStr) return 'Never'
-  const date = new Date(dateStr)
-  return date.toLocaleString()
+  return formatDateTime(dateStr)
 }
 
 async function handleRefresh(): Promise<void> {
@@ -330,8 +329,7 @@ async function handleRunSchedule(schedule: DeepReadonly<UpdateSchedule>): Promis
 
 function formatNextRun(dateStr: string | null): string {
   if (!dateStr) return 'Not scheduled'
-  const date = new Date(dateStr)
-  return date.toLocaleString()
+  return formatDateTime(dateStr)
 }
 
 function describeCron(expression: string): string {

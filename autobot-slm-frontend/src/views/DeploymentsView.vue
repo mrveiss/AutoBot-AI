@@ -14,6 +14,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
+import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
 import { createLogger } from '@/utils/debugUtils'
 import type { Deployment, BlueGreenDeployment, BlueGreenDeploymentCreate, NodeRole } from '@/types/slm'
 
@@ -553,7 +554,7 @@ function getStatusIcon(status: string): string {
 
 function formatDateTime(isoString: string | null): string {
   if (!isoString) return '-'
-  return new Date(isoString).toLocaleString()
+  return formatDateTimeTz(isoString)
 }
 
 function getNodeHostname(nodeId: string): string {

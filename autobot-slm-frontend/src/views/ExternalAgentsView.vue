@@ -12,6 +12,7 @@
 import { onMounted, ref, computed } from 'vue'
 import { useExternalAgents } from '@/composables/useExternalAgents'
 import type { ExternalAgent, ExternalAgentCreate, ExternalAgentUpdate } from '@/types/slm'
+import { formatDateTime } from '@/composables/useTimezone'
 
 const registry = useExternalAgents()
 
@@ -441,9 +442,7 @@ onMounted(() => {
             <div>
               <div class="text-xs text-gray-500 mb-0.5">Card Fetched</div>
               <div class="text-gray-200">
-                {{ detailAgent.card_fetched_at
-                  ? new Date(detailAgent.card_fetched_at).toLocaleString()
-                  : 'Never' }}
+                {{ formatDateTime(detailAgent.card_fetched_at ?? null) }}
               </div>
             </div>
             <div>

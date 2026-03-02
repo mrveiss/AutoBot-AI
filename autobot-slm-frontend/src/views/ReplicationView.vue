@@ -13,6 +13,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
+import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
 import { createLogger } from '@/utils/debugUtils'
 import type { Replication, ReplicationRequest } from '@/types/slm'
 
@@ -198,7 +199,7 @@ function getStatusClass(status: string): string {
 
 function formatDateTime(isoString: string | null): string {
   if (!isoString) return '-'
-  return new Date(isoString).toLocaleString()
+  return formatDateTimeTz(isoString)
 }
 
 function formatLag(lagBytes: number): string {
