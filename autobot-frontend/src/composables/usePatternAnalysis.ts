@@ -13,6 +13,7 @@ import appConfig from '@/config/AppConfig.js'
 import { getConfig } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { useBackgroundTask } from '@/composables/useBackgroundTask'
 
 const logger = createLogger('usePatternAnalysis')
 
@@ -121,6 +122,12 @@ export interface AnalysisTaskStatus {
  * Composable for Code Pattern Analysis
  */
 export function usePatternAnalysis() {
+  // Background task for pattern summary (#1332)
+  const summaryTask = useBackgroundTask(
+    '/api/analytics/codebase/patterns/summary',
+    '/api/analytics/codebase/patterns/summary/tasks/clear-stuck'
+  )
+
   // Reactive state
   const loading = ref(false)
   const analyzing = ref(false)
@@ -461,41 +468,36 @@ export function usePatternAnalysis() {
         return
       }
 
-      // Fall back to full summary if no cached data
-      const backendUrl = await getBackendUrl()
-      const url = path
-        ? `${backendUrl}/api/analytics/codebase/patterns/summary?path=${encodeURIComponent(path)}`
-        : `${backendUrl}/api/analytics/codebase/patterns/summary`
+      // Fall back to background task analysis (#1332)
+      // The sync GET /patterns/summary runs analysis inline and times out
+      // on large codebases. Use POST /patterns/summary/analyze instead.
+      const query = path ? { path } : undefined
+      const success = await summaryTask.start(undefined, query)
 
-      const response = await fetchWithAuth(url)
-
-      if (!response.ok) {
-        throw new Error(`Summary fetch failed: ${response.statusText}`)
+      if (!success) {
+        throw new Error(summaryTask.error.value || 'Summary analysis failed')
       }
 
-      const data = await response.json()
-      if (data.status === 'success') {
-        // Update counts from summary
-        if (data.summary) {
-          analysisReport.value = {
-            analysis_summary: {
-              scan_path: path || '',
-              timestamp: new Date().toISOString(),
-              files_analyzed: 0,
-              lines_analyzed: 0,
-              duration_seconds: 0,
-              total_patterns_found: data.summary.total_patterns || 0,
-              potential_loc_reduction: data.summary.loc_reduction_potential || 0,
-              complexity_score: data.summary.complexity_score || 'N/A'
-            },
-            pattern_counts: data.summary.pattern_counts || {},
-            severity_distribution: data.summary.severity_distribution || {},
-            duplicate_patterns: [],
-            regex_opportunities: [],
-            complexity_hotspots: [],
-            modularization_suggestions: [],
-            other_patterns: []
-          }
+      const data = summaryTask.result.value
+      if (data) {
+        analysisReport.value = {
+          analysis_summary: {
+            scan_path: path || '',
+            timestamp: new Date().toISOString(),
+            files_analyzed: 0,
+            lines_analyzed: 0,
+            duration_seconds: 0,
+            total_patterns_found: (data.total_patterns as number) || 0,
+            potential_loc_reduction: (data.potential_loc_reduction as number) || 0,
+            complexity_score: (data.complexity_score as string) || 'N/A'
+          },
+          pattern_counts: {},
+          severity_distribution: {},
+          duplicate_patterns: [],
+          regex_opportunities: [],
+          complexity_hotspots: [],
+          modularization_suggestions: [],
+          other_patterns: []
         }
       }
     } catch (e: any) {
