@@ -381,7 +381,7 @@ function _resumeAutoListening(): void {
 function _dispatchTranscript(text: string): void {
   const store = useChatStore()
   const controller = useChatController()
-  const { speak, isSpeaking } = useVoiceOutput()
+  const { speakStreaming, flushStreaming, isSpeaking } = useVoiceOutput()
 
   state.value = 'processing'
   _sendWs({ type: 'transcript', text, final: true })
@@ -429,10 +429,15 @@ function _dispatchTranscript(text: string): void {
       const { effectiveVoiceId } = useVoiceProfiles()
       _sendWs({ type: 'speak', text: speechText, voice_id: effectiveVoiceId.value })
     } else {
+      // Use streaming TTS for walkie-talkie and hands-free (#1319)
       state.value = 'speaking'
-      speak(speechText, true).then(() => {
-        if (!isSpeaking.value && state.value === 'speaking') {
-          state.value = 'idle'
+      speakStreaming(speechText)
+      flushStreaming()
+      // Resume listening when audio finishes
+      const unwatch = watch(isSpeaking, (speaking) => {
+        if (!speaking && state.value === 'speaking') {
+          unwatch()
+          _resumeAutoListening()
         }
       })
     }
