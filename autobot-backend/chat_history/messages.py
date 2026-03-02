@@ -96,6 +96,44 @@ class MessagesMixin:
             logger.error("Error adding message to session %s: %s", session_id, e)
             return False
 
+    async def add_messages_batch(
+        self,
+        session_id: str,
+        messages: List[Dict[str, Any]],
+    ) -> bool:
+        """
+        Add multiple messages in a single load/save cycle.
+
+        Issue #1316: Eliminates N separate file reads/writes when
+        persisting workflow messages after streaming completes.
+
+        Args:
+            session_id: The session identifier.
+            messages: List of message dictionaries to add.
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        if not messages:
+            return True
+        try:
+            existing = await self.load_session(session_id)
+            existing.extend(messages)
+            await self.save_session(session_id, messages=existing)
+            logger.debug(
+                "Batch-added %d messages to session %s",
+                len(messages),
+                session_id,
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                "Batch add to session %s failed: %s",
+                session_id,
+                e,
+            )
+            return False
+
     async def add_message(
         self,
         sender: str,

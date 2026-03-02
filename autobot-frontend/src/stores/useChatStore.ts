@@ -253,13 +253,20 @@ export const useChatStore = defineStore('chat', () => {
 
   function updateMessage(messageId: string, updates: Partial<ChatMessage>) {
     if (!currentSession.value) return
+    const msgs = currentSession.value.messages
 
-    const messageIndex = currentSession.value.messages.findIndex(m => m.id === messageId)
+    // Issue #1316: Fast path — streaming always updates the last message
+    const lastIdx = msgs.length - 1
+    if (lastIdx >= 0 && msgs[lastIdx].id === messageId) {
+      msgs[lastIdx] = { ...msgs[lastIdx], ...updates }
+      currentSession.value.updatedAt = new Date()
+      return
+    }
+
+    // Fallback for non-streaming updates
+    const messageIndex = msgs.findIndex(m => m.id === messageId)
     if (messageIndex !== -1) {
-      currentSession.value.messages[messageIndex] = {
-        ...currentSession.value.messages[messageIndex],
-        ...updates
-      }
+      msgs[messageIndex] = { ...msgs[messageIndex], ...updates }
       currentSession.value.updatedAt = new Date()
     }
   }
@@ -274,12 +281,20 @@ export const useChatStore = defineStore('chat', () => {
    */
   function updateMessageMetadata(messageId: string, metadataUpdates: Record<string, any>): boolean {
     if (!currentSession.value) return false
+    const msgs = currentSession.value.messages
 
-    const messageIndex = currentSession.value.messages.findIndex(m => m.id === messageId)
-    if (messageIndex !== -1) {
-      const message = currentSession.value.messages[messageIndex]
-      // Create new message object to ensure Vue reactivity
-      currentSession.value.messages[messageIndex] = {
+    // Issue #1316: Fast path — check last message first
+    const lastIdx = msgs.length - 1
+    let idx = -1
+    if (lastIdx >= 0 && msgs[lastIdx].id === messageId) {
+      idx = lastIdx
+    } else {
+      idx = msgs.findIndex(m => m.id === messageId)
+    }
+
+    if (idx !== -1) {
+      const message = msgs[idx]
+      msgs[idx] = {
         ...message,
         metadata: {
           ...message.metadata,

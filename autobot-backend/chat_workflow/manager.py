@@ -2528,46 +2528,44 @@ before summarizing.
         workflow_messages: List[WorkflowMessage],
         llm_response: str,
     ) -> None:
-        """Persist WorkflowMessages and assistant response to chat history (Issue #332)."""
+        """Persist WorkflowMessages to chat history in a single batch.
+
+        Issue #332: Original implementation.
+        Issue #1316: Batch all messages into one load/save cycle instead
+        of N individual add_message() calls.
+        """
         from chat_history import ChatHistoryManager
 
         try:
             chat_mgr = ChatHistoryManager()
 
-            # Persist all collected WorkflowMessages
+            # Build message dicts in memory, then persist in one batch
+            batch = []
             for wf_msg in workflow_messages:
-                message_type = wf_msg.type
-
-                # Skip segment_complete markers — internal stream control messages
-                # with empty content that pollute history and share message_id
-                # with the content message they terminate (Issue #1141).
-                if message_type == "segment_complete":
+                # Skip segment_complete markers — internal stream control
+                # messages with empty content (Issue #1141).
+                if wf_msg.type == "segment_complete":
                     continue
 
-                sender = "system" if message_type == "terminal_output" else "assistant"
-
-                await chat_mgr.add_message(
-                    sender=sender,
-                    text=wf_msg.content,
-                    message_type=message_type,
-                    raw_data=wf_msg.metadata,
-                    session_id=session_id,
-                )
-                logger.debug(
-                    "Persisted WorkflowMessage to chat history: type=%s, session=%s",
-                    message_type,
-                    session_id,
+                sender = "system" if wf_msg.type == "terminal_output" else "assistant"
+                batch.append(
+                    chat_mgr._build_message_dict(
+                        sender,
+                        wf_msg.content,
+                        wf_msg.type,
+                        wf_msg.metadata,
+                        None,
+                    )
                 )
 
-            # NOTE: Removed duplicate llm_response persistence (#1064).
-            # The per-message loop above already persists the final
-            # response; a second add_message with type="llm_response"
-            # created a duplicate that survived content-based dedup.
+            if batch:
+                await chat_mgr.add_messages_batch(session_id, batch)
+
             logger.info(
                 "Persisted conversation to chat history: "
                 "session=%s, workflow_messages=%d",
                 session_id,
-                len(workflow_messages),
+                len(batch),
             )
 
         except Exception as persist_error:
