@@ -2124,12 +2124,12 @@
         <div v-if="showSecurityDetails" class="findings-panel security-findings-panel">
           <div class="findings-header">
             <h4><i class="fas fa-shield-alt"></i> Security Findings</h4>
-            <span class="findings-count">{{ securityFindings.length }} findings</span>
+            <span class="findings-count">{{ securityFindings?.length ?? 0 }} findings</span>
           </div>
           <div v-if="loadingSecurityFindings" class="findings-loading">
             <i class="fas fa-spinner fa-spin"></i> Loading security findings...
           </div>
-          <div v-else-if="securityFindings.length === 0" class="findings-empty">
+          <div v-else-if="!securityFindings?.length" class="findings-empty">
             <i class="fas fa-check-circle"></i> No security vulnerabilities found
           </div>
           <div v-else class="findings-list">
@@ -2165,12 +2165,12 @@
         <div v-if="showPerformanceDetails" class="findings-panel performance-findings-panel">
           <div class="findings-header">
             <h4><i class="fas fa-tachometer-alt"></i> Performance Issues</h4>
-            <span class="findings-count">{{ performanceFindings.length }} issues</span>
+            <span class="findings-count">{{ performanceFindings?.length ?? 0 }} issues</span>
           </div>
           <div v-if="loadingPerformanceFindings" class="findings-loading">
             <i class="fas fa-spinner fa-spin"></i> Loading performance issues...
           </div>
-          <div v-else-if="performanceFindings.length === 0" class="findings-empty">
+          <div v-else-if="!performanceFindings?.length" class="findings-empty">
             <i class="fas fa-check-circle"></i> No performance issues found
           </div>
           <div v-else class="findings-list">
@@ -2206,12 +2206,12 @@
         <div v-if="showRedisDetails" class="findings-panel redis-findings-panel">
           <div class="findings-header">
             <h4><i class="fas fa-database"></i> Redis Optimizations</h4>
-            <span class="findings-count">{{ redisOptimizations.length }} suggestions</span>
+            <span class="findings-count">{{ redisOptimizations?.length ?? 0 }} suggestions</span>
           </div>
           <div v-if="loadingRedisOptimizations" class="findings-loading">
             <i class="fas fa-spinner fa-spin"></i> Loading Redis optimizations...
           </div>
-          <div v-else-if="redisOptimizations.length === 0" class="findings-empty">
+          <div v-else-if="!redisOptimizations?.length" class="findings-empty">
             <i class="fas fa-check-circle"></i> No Redis optimization suggestions
           </div>
           <div v-else class="findings-list">
@@ -2767,6 +2767,8 @@ import PatternAnalysis from '@/components/analytics/PatternAnalysis.vue'
 import { useToast } from '@/composables/useToast'
 import { useCodeIntelligence } from '@/composables/useCodeIntelligence'
 import { useBackgroundTask } from '@/composables/useBackgroundTask'
+import { useTaskLoader } from '@/composables/useTaskLoader'
+import { useAnalyticsFetch } from '@/composables/useAnalyticsFetch'
 import { createLogger } from '@/utils/debugUtils'
 // Issue #1133: Code Source Registry Components
 import SourceManager from '@/components/analytics/SourceManager.vue'
@@ -2902,11 +2904,65 @@ const notify = (message: string, type: 'info' | 'success' | 'warning' | 'error' 
   showToast(message, type, type === 'error' ? 5000 : 3000)
 }
 
-// Issue #1304: Background task composables for long-running analytics
-const depTask = useBackgroundTask('/api/analytics/codebase/analytics/dependencies')
-const importTreeTask = useBackgroundTask('/api/analytics/codebase/analytics/import-tree')
+// Issue #1304/#1321: Background task composables for long-running analytics
+const {
+  data: dependencyData,
+  loading: dependencyLoading,
+  error: dependencyError,
+  load: _loadDependencyTask,
+} = useTaskLoader<DependencyGraph>(
+  '/api/analytics/codebase/analytics/dependencies',
+  (r) => {
+    if (r.status === 'success' && r.dependency_data) {
+      return r.dependency_data as unknown as DependencyGraph
+    }
+    return undefined
+  },
+)
+
+const {
+  data: importTreeData,
+  loading: importTreeLoading,
+  error: importTreeError,
+  load: _loadImportTreeTask,
+} = useTaskLoader<ImportTreeNode[]>(
+  '/api/analytics/codebase/analytics/import-tree',
+  (r) => {
+    if (r.status === 'success' && r.import_tree) {
+      return r.import_tree as unknown as ImportTreeNode[]
+    }
+    return r.status === 'no_data' ? [] as ImportTreeNode[] : undefined
+  },
+)
+
 const dupTask = useBackgroundTask('/api/analytics/codebase/duplicates')
-const secScoreTask = useBackgroundTask('/api/code-intelligence/security/score')
+
+const {
+  data: securityScore,
+  loading: loadingSecurityScore,
+  error: securityScoreError,
+  load: _loadSecurityScoreTask,
+} = useTaskLoader<SecurityScoreResult>(
+  '/api/code-intelligence/security/score',
+  (r) => {
+    if (r.status === 'success') {
+      return {
+        security_score: (r.security_score as number) || 0,
+        grade: (r.grade as string) || 'N/A',
+        risk_level: (r.risk_level as string) || 'unknown',
+        status_message: (r.status_message as string) || '',
+        total_findings: (r.total_findings as number) || 0,
+        critical_issues: (r.critical_issues as number) || 0,
+        high_issues: (r.high_issues as number) || 0,
+        files_analyzed: (r.files_analyzed as number) || 0,
+        severity_breakdown: (r.severity_breakdown as Record<string, number>) || {},
+        owasp_breakdown: (r.owasp_breakdown as Record<string, number>) || {},
+      }
+    }
+    return undefined
+  },
+)
+
 const dashboardTask = useBackgroundTask('/api/analytics/dashboard/overview')
 
 // Issue #1133: CodeSource type
@@ -3251,15 +3307,8 @@ const unifiedReportLoading = ref(false)
 const unifiedReportError = ref('')
 const selectedCategory = ref('all') // Filter: all, race_conditions, debug_code, complexity, etc.
 
-// Dependency analysis data
-const dependencyData = ref<DependencyGraph | null>(null)
-const dependencyLoading = ref(false)
-const dependencyError = ref('')
-
-// Import tree data
-const importTreeData = ref<ImportTreeNode[]>([])
-const importTreeLoading = ref(false)
-const importTreeError = ref('')
+// Dependency analysis data — refs provided by useTaskLoader (#1321)
+// Import tree data — refs provided by useTaskLoader (#1321)
 
 // Function call graph data
 const callGraphData = ref<DependencyGraph>({ nodes: [], edges: [] })
@@ -3310,9 +3359,21 @@ interface ApiEndpointAnalysisResult {
   [key: string]: unknown
 }
 
-const apiEndpointAnalysis = ref<ApiEndpointAnalysisResult | null>(null)
-const loadingApiEndpoints = ref(false)
-const apiEndpointsError = ref('')
+// #1321: apiEndpointAnalysis — useAnalyticsFetch
+const {
+  data: apiEndpointAnalysis,
+  loading: loadingApiEndpoints,
+  error: apiEndpointsError,
+  load: _loadApiEndpoints,
+} = useAnalyticsFetch<ApiEndpointAnalysisResult>(
+  '/api/analytics/codebase/endpoint-analysis',
+  (r) => {
+    if (r.status === 'success' && r.analysis) {
+      return r.analysis as unknown as ApiEndpointAnalysisResult
+    }
+    return undefined
+  },
+)
 const expandedApiEndpointGroups = reactive({
   orphaned: false,
   missing: false,
@@ -3325,9 +3386,25 @@ interface ConfigDuplicatesResult {
   duplicates: Array<{ value: string; locations: Array<{ file: string; line: number }> }>
   report: string
 }
-const configDuplicatesAnalysis = ref<ConfigDuplicatesResult | null>(null)
-const loadingConfigDuplicates = ref(false)
-const configDuplicatesError = ref('')
+// #1321: configDuplicatesAnalysis — useAnalyticsFetch
+const {
+  data: configDuplicatesAnalysis,
+  loading: loadingConfigDuplicates,
+  error: configDuplicatesError,
+  load: _loadConfigDuplicates,
+} = useAnalyticsFetch<ConfigDuplicatesResult>(
+  '/api/analytics/codebase/config-duplicates',
+  (r) => {
+    if (r.status === 'success') {
+      return {
+        duplicates_found: (r.duplicates_found as number) || 0,
+        duplicates: (r.duplicates as ConfigDuplicatesResult['duplicates']) || [],
+        report: (r.report as string) || '',
+      }
+    }
+    return undefined
+  },
+)
 
 // Issue #538: Bug Prediction data
 interface BugPredictionFile {
@@ -3345,9 +3422,25 @@ interface BugPredictionResult {
   high_risk_count: number
   files: BugPredictionFile[]
 }
-const bugPredictionAnalysis = ref<BugPredictionResult | null>(null)
-const loadingBugPrediction = ref(false)
-const bugPredictionError = ref('')
+// #1321: bugPredictionAnalysis — useAnalyticsFetch
+const {
+  data: bugPredictionAnalysis,
+  loading: loadingBugPrediction,
+  error: bugPredictionError,
+  load: _loadBugPrediction,
+} = useAnalyticsFetch<BugPredictionResult>(
+  '/api/analytics/bug-prediction/analyze',
+  (r) => {
+    if (r.status === 'no_data') return undefined
+    return {
+      timestamp: (r.timestamp as string) || new Date().toISOString(),
+      total_files: (r.total_files as number) || 0,
+      analyzed_files: (r.analyzed_files as number) || 0,
+      high_risk_count: (r.high_risk_count as number) || 0,
+      files: (r.files as BugPredictionFile[]) || [],
+    }
+  },
+)
 
 // Enhanced Bug Prediction UI state
 const bugRiskFilter = ref<'all' | 'high' | 'medium' | 'low'>('all')
@@ -3508,12 +3601,31 @@ interface RedisHealthResult {
   total_issues: number
   files_with_issues: number
 }
-const securityScore = ref<SecurityScoreResult | null>(null)
-const loadingSecurityScore = ref(false)
-const securityScoreError = ref('')
-const performanceScore = ref<PerformanceScoreResult | null>(null)
-const loadingPerformanceScore = ref(false)
-const performanceScoreError = ref('')
+// securityScore, loadingSecurityScore, securityScoreError — provided by useTaskLoader (#1321)
+// #1321: performanceScore — useAnalyticsFetch
+const {
+  data: performanceScore,
+  loading: loadingPerformanceScore,
+  error: performanceScoreError,
+  load: _loadPerformanceScore,
+} = useAnalyticsFetch<PerformanceScoreResult>(
+  '/api/code-intelligence/performance/score',
+  (r) => {
+    if (r.status === 'success') {
+      return {
+        performance_score: (r.performance_score as number) || 0,
+        grade: (r.grade as string) || 'N/A',
+        status_message: (r.status_message as string) || '',
+        total_issues: (r.total_issues as number) || 0,
+        files_analyzed: (r.files_analyzed as number) || 0,
+        severity_breakdown: (r.severity_breakdown as Record<string, number>) || {},
+        issue_type_breakdown: (r.issue_type_breakdown as Record<string, number>) || {},
+      }
+    }
+    if (r.status === 'no_data') return undefined
+    return undefined
+  },
+)
 const redisHealth = ref<RedisHealthResult | null>(null)
 const loadingRedisHealth = ref(false)
 const redisHealthError = ref('')
@@ -3550,17 +3662,44 @@ interface RedisOptimization {
   recommendation?: string
 }
 
-// Issue #566: Detailed findings state
-const securityFindings = ref<SecurityFindingDetail[]>([])
-const loadingSecurityFindings = ref(false)
+// Issue #566/#1321: Detailed findings — useAnalyticsFetch (POST)
+const {
+  data: securityFindings,
+  loading: loadingSecurityFindings,
+  load: _loadSecurityFindings,
+} = useAnalyticsFetch<SecurityFindingDetail[]>(
+  '/api/code-intelligence/security/analyze',
+  (r) => (r.status === 'success' && r.findings)
+    ? r.findings as unknown as SecurityFindingDetail[]
+    : [],
+  { method: 'POST' },
+)
 const showSecurityDetails = ref(false)
 
-const performanceFindings = ref<PerformanceFindingDetail[]>([])
-const loadingPerformanceFindings = ref(false)
+const {
+  data: performanceFindings,
+  loading: loadingPerformanceFindings,
+  load: _loadPerformanceFindings,
+} = useAnalyticsFetch<PerformanceFindingDetail[]>(
+  '/api/code-intelligence/performance/analyze',
+  (r) => (r.status === 'success' && r.findings)
+    ? r.findings as unknown as PerformanceFindingDetail[]
+    : [],
+  { method: 'POST' },
+)
 const showPerformanceDetails = ref(false)
 
-const redisOptimizations = ref<RedisOptimization[]>([])
-const loadingRedisOptimizations = ref(false)
+const {
+  data: redisOptimizations,
+  loading: loadingRedisOptimizations,
+  load: _loadRedisOptimizations,
+} = useAnalyticsFetch<RedisOptimization[]>(
+  '/api/code-intelligence/redis/analyze',
+  (r) => (r.status === 'success' && r.findings)
+    ? r.findings as unknown as RedisOptimization[]
+    : [],
+  { method: 'POST' },
+)
 const showRedisDetails = ref(false)
 
 // Issue #538: Environment Analysis data
@@ -3686,9 +3825,39 @@ interface OwnershipAnalysisResult {
   knowledge_gaps: KnowledgeGap[]
   metrics: OwnershipMetrics
 }
-const ownershipAnalysis = ref<OwnershipAnalysisResult | null>(null)
-const loadingOwnership = ref(false)
-const ownershipError = ref('')
+// #1321: ownershipAnalysis — useAnalyticsFetch
+const {
+  data: ownershipAnalysis,
+  loading: loadingOwnership,
+  error: ownershipError,
+  load: _loadOwnership,
+} = useAnalyticsFetch<OwnershipAnalysisResult>(
+  '/api/analytics/codebase/ownership/analysis',
+  (r) => {
+    if (r.status === 'success') {
+      return {
+        status: r.status as string,
+        analysis_time_seconds: (r.analysis_time_seconds as number) || 0,
+        summary: (r.summary as OwnershipSummary) || {
+          total_files: 0, total_directories: 0, total_contributors: 0,
+          knowledge_gaps_count: 0, critical_gaps: 0, high_risk_gaps: 0,
+        },
+        file_ownership: (r.file_ownership as FileOwnership[]) || [],
+        directory_ownership: (r.directory_ownership as DirectoryOwnership[]) || [],
+        expertise_scores: (r.expertise_scores as ExpertiseScore[]) || [],
+        knowledge_gaps: (r.knowledge_gaps as KnowledgeGap[]) || [],
+        metrics: (r.metrics as OwnershipMetrics) || {
+          total_lines_analyzed: 0, total_files_analyzed: 0,
+          overall_bus_factor: 1, bus_factor_distribution: {},
+          knowledge_risk_distribution: {}, top_contributors: [],
+          ownership_concentration: 0, team_coverage: 0,
+        },
+      }
+    }
+    if (r.status === 'error') return undefined
+    return undefined
+  },
+)
 const ownershipViewMode = ref<'overview' | 'files' | 'contributors' | 'gaps'>('overview')
 
 // Issue #244: Cross-Language Pattern Analysis data
@@ -4280,59 +4449,11 @@ const filteredChartData = computed((): ChartData | null => {
   return filtered
 })
 
-// Load dependency analysis data (#1304: background task)
-const loadDependencyData = async () => {
-  dependencyLoading.value = true
-  dependencyError.value = ''
+// Load dependency analysis data (#1304/#1321: useTaskLoader)
+const loadDependencyData = () => _loadDependencyTask()
 
-  try {
-    const ok = await depTask.start()
-    if (ok && depTask.result.value) {
-      const data = depTask.result.value as Record<string, unknown>
-      if (data.status === 'success' && data.dependency_data) {
-        dependencyData.value = data.dependency_data as DependencyGraph
-        logger.debug('Dependency data loaded via background task')
-      } else if (data.status === 'no_data') {
-        dependencyData.value = null
-        logger.debug('No dependency data - run indexing first')
-      }
-    } else if (depTask.error.value) {
-      throw new Error(depTask.error.value)
-    }
-  } catch (error: unknown) {
-    logger.error('Failed to load dependency data:', error)
-    dependencyError.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    dependencyLoading.value = false
-  }
-}
-
-// Load import tree data (#1304: background task)
-const loadImportTreeData = async () => {
-  importTreeLoading.value = true
-  importTreeError.value = ''
-
-  try {
-    const ok = await importTreeTask.start()
-    if (ok && importTreeTask.result.value) {
-      const data = importTreeTask.result.value as Record<string, unknown>
-      if (data.status === 'success' && data.import_tree) {
-        importTreeData.value = data.import_tree as ImportTreeNode[]
-        logger.debug('Import tree loaded via background task')
-      } else if (data.status === 'no_data') {
-        importTreeData.value = []
-        logger.debug('No import tree data - run indexing first')
-      }
-    } else if (importTreeTask.error.value) {
-      throw new Error(importTreeTask.error.value)
-    }
-  } catch (error: unknown) {
-    logger.error('Failed to load import tree:', error)
-    importTreeError.value = error instanceof Error ? error.message : String(error)
-  } finally {
-    importTreeLoading.value = false
-  }
-}
+// Load import tree data (#1304/#1321: useTaskLoader)
+const loadImportTreeData = () => _loadImportTreeTask()
 
 // Handle file navigation from import tree
 const handleFileNavigate = (filePath: string) => {
@@ -4463,196 +4584,26 @@ const loadHardcodes = async () => {
   }
 }
 
-// Issue #538: Silent version of config duplicates loading
-const loadConfigDuplicates = async () => {
-  loadingConfigDuplicates.value = true
-  configDuplicatesError.value = ''
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/config-duplicates`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
-    })
-    if (!response.ok) {
-      throw new Error(`Config duplicates endpoint returned ${response.status}`)
-    }
-    const data = await response.json()
-    if (data.status === 'success') {
-      configDuplicatesAnalysis.value = {
-        duplicates_found: data.duplicates_found || 0,
-        duplicates: data.duplicates || [],
-        report: data.report || ''
-      }
-    } else {
-      throw new Error('Invalid response format')
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.error('Failed to load config duplicates:', error)
-    configDuplicatesError.value = errorMessage
-  } finally {
-    loadingConfigDuplicates.value = false
-  }
-}
+// Issue #538/#1321: Config duplicates (useAnalyticsFetch)
+const loadConfigDuplicates = () => _loadConfigDuplicates()
 
-// Issue #538: Silent version of bug prediction loading
-const loadBugPrediction = async () => {
-  loadingBugPrediction.value = true
-  bugPredictionError.value = ''
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    // Issue #608: Remove artificial limit to analyze all Python files
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/bug-prediction/analyze?limit=1000`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
-    })
-    if (!response.ok) {
-      throw new Error(`Bug prediction endpoint returned ${response.status}`)
-    }
-    const data = await response.json()
-    // Issue #543: Handle no_data status from backend
-    if (data.status === 'no_data') {
-      bugPredictionAnalysis.value = null
-      logger.debug('No bug prediction data - run indexing first')
-    } else {
-      bugPredictionAnalysis.value = {
-        timestamp: data.timestamp || new Date().toISOString(),
-        total_files: data.total_files || 0,
-        analyzed_files: data.analyzed_files || 0,
-        high_risk_count: data.high_risk_count || 0,
-        files: data.files || []
-      }
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.error('Failed to load bug prediction:', error)
-    bugPredictionError.value = errorMessage
-  } finally {
-    loadingBugPrediction.value = false
-  }
-}
+// Issue #538/#1321: Bug prediction (useAnalyticsFetch)
+// Issue #608: limit=1000 baked into the composable path
+const loadBugPrediction = () => _loadBugPrediction({ limit: '1000' })
 
-// Issue #538: Silent version of API endpoint analysis loading
-const loadApiEndpointAnalysis = async () => {
-  loadingApiEndpoints.value = true
-  apiEndpointsError.value = ''
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/endpoint-analysis`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
-    })
-    if (!response.ok) {
-      throw new Error(`Endpoint analysis returned ${response.status}`)
-    }
-    const data = await response.json()
-    if (data.status === 'success' && data.analysis) {
-      apiEndpointAnalysis.value = data.analysis
-    } else if (data.status === 'no_data') {
-      // Issue #543: Handle no_data status from backend
-      apiEndpointAnalysis.value = null
-      logger.debug('No API endpoint data - run indexing first')
-    } else {
-      throw new Error('Invalid response format')
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.error('Failed to load API endpoint analysis:', error)
-    apiEndpointsError.value = errorMessage
-  } finally {
-    loadingApiEndpoints.value = false
-  }
-}
+// Issue #538/#1321: API endpoint analysis (useAnalyticsFetch)
+const loadApiEndpointAnalysis = () => _loadApiEndpoints()
 
-// Issue #538: Load security score (#1304: background task)
+// Issue #538/#1321: Load security score (useTaskLoader)
 const loadSecurityScore = async () => {
   if (!rootPath.value) return
-  loadingSecurityScore.value = true
-  securityScoreError.value = ''
-  try {
-    const ok = await secScoreTask.start(
-      undefined,
-      { path: rootPath.value },
-    )
-    if (ok && secScoreTask.result.value) {
-      const data = secScoreTask.result.value as Record<string, unknown>
-      if (data.status === 'success') {
-        securityScore.value = {
-          security_score: (data.security_score as number) || 0,
-          grade: (data.grade as string) || 'N/A',
-          risk_level: (data.risk_level as string) || 'unknown',
-          status_message: (data.status_message as string) || '',
-          total_findings: (data.total_findings as number) || 0,
-          critical_issues: (data.critical_issues as number) || 0,
-          high_issues: (data.high_issues as number) || 0,
-          files_analyzed: (data.files_analyzed as number) || 0,
-          severity_breakdown: (data.severity_breakdown as Record<string, number>) || {},
-          owasp_breakdown: (data.owasp_breakdown as Record<string, number>) || {},
-        }
-      } else if (data.status === 'no_data') {
-        securityScore.value = null
-      }
-    } else if (secScoreTask.error.value) {
-      throw new Error(secScoreTask.error.value)
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.error('Failed to load security score:', error)
-    securityScoreError.value = errorMessage
-  } finally {
-    loadingSecurityScore.value = false
-  }
+  await _loadSecurityScoreTask(undefined, { path: rootPath.value })
 }
 
-// Issue #538: Load performance score from code intelligence
+// Issue #538/#1321: Performance score (useAnalyticsFetch)
 const loadPerformanceScore = async () => {
   if (!rootPath.value) return
-  loadingPerformanceScore.value = true
-  performanceScoreError.value = ''
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/code-intelligence/performance/score?path=${encodeURIComponent(rootPath.value)}`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
-    })
-    if (!response.ok) {
-      throw new Error(`Performance score endpoint returned ${response.status}`)
-    }
-    const data = await response.json()
-    if (data.status === 'success') {
-      performanceScore.value = {
-        performance_score: data.performance_score || 0,
-        grade: data.grade || 'N/A',
-        status_message: data.status_message || '',
-        total_issues: data.total_issues || 0,
-        files_analyzed: data.files_analyzed || 0,
-        severity_breakdown: data.severity_breakdown || {},
-        issue_type_breakdown: data.issue_type_breakdown || {}
-      }
-    } else if (data.status === 'no_data') {
-      // Issue #543: Handle no_data status from backend
-      performanceScore.value = null
-      logger.debug('No performance score data - run indexing first')
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.error('Failed to load performance score:', error)
-    performanceScoreError.value = errorMessage
-  } finally {
-    loadingPerformanceScore.value = false
-  }
+  await _loadPerformanceScore({ path: rootPath.value })
 }
 
 // Issue #538: Load Redis health score from code intelligence
@@ -4705,117 +4656,40 @@ const loadRedisHealth = async () => {
   }
 }
 
-// Issue #566: Load detailed security findings
+// Issue #566/#1321: Detailed findings loaders (useAnalyticsFetch POST)
 const loadSecurityFindings = async () => {
   if (!rootPath.value) return
-  loadingSecurityFindings.value = true
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/code-intelligence/security/analyze`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ path: rootPath.value })
-    })
-    if (!response.ok) {
-      throw new Error(`Security analyze endpoint returned ${response.status}`)
-    }
-    const data = await response.json()
-    if (data.status === 'success' && data.findings) {
-      securityFindings.value = data.findings
-    } else {
-      securityFindings.value = []
-    }
-  } catch (error: unknown) {
-    logger.error('Failed to load security findings:', error)
-    securityFindings.value = []
-  } finally {
-    loadingSecurityFindings.value = false
-  }
+  await _loadSecurityFindings(undefined, { path: rootPath.value })
 }
 
-// Issue #566: Load detailed performance findings
 const loadPerformanceFindings = async () => {
   if (!rootPath.value) return
-  loadingPerformanceFindings.value = true
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/code-intelligence/performance/analyze`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ path: rootPath.value })
-    })
-    if (!response.ok) {
-      throw new Error(`Performance analyze endpoint returned ${response.status}`)
-    }
-    const data = await response.json()
-    if (data.status === 'success' && data.findings) {
-      performanceFindings.value = data.findings
-    } else {
-      performanceFindings.value = []
-    }
-  } catch (error: unknown) {
-    logger.error('Failed to load performance findings:', error)
-    performanceFindings.value = []
-  } finally {
-    loadingPerformanceFindings.value = false
-  }
+  await _loadPerformanceFindings(undefined, { path: rootPath.value })
 }
 
-// Issue #566: Load detailed Redis optimization findings
 const loadRedisOptimizations = async () => {
   if (!rootPath.value) return
-  loadingRedisOptimizations.value = true
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/code-intelligence/redis/analyze`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ path: rootPath.value })
-    })
-    if (!response.ok) {
-      throw new Error(`Redis analyze endpoint returned ${response.status}`)
-    }
-    const data = await response.json()
-    if (data.status === 'success' && data.findings) {
-      redisOptimizations.value = data.findings
-    } else {
-      redisOptimizations.value = []
-    }
-  } catch (error: unknown) {
-    logger.error('Failed to load Redis optimizations:', error)
-    redisOptimizations.value = []
-  } finally {
-    loadingRedisOptimizations.value = false
-  }
+  await _loadRedisOptimizations(undefined, { path: rootPath.value })
 }
 
 // Issue #566: Toggle functions for detail panels
 const toggleSecurityDetails = async () => {
   showSecurityDetails.value = !showSecurityDetails.value
-  if (showSecurityDetails.value && securityFindings.value.length === 0) {
+  if (showSecurityDetails.value && !securityFindings.value?.length) {
     await loadSecurityFindings()
   }
 }
 
 const togglePerformanceDetails = async () => {
   showPerformanceDetails.value = !showPerformanceDetails.value
-  if (showPerformanceDetails.value && performanceFindings.value.length === 0) {
+  if (showPerformanceDetails.value && !performanceFindings.value?.length) {
     await loadPerformanceFindings()
   }
 }
 
 const toggleRedisDetails = async () => {
   showRedisDetails.value = !showRedisDetails.value
-  if (showRedisDetails.value && redisOptimizations.value.length === 0) {
+  if (showRedisDetails.value && !redisOptimizations.value?.length) {
     await loadRedisOptimizations()
   }
 }
@@ -4887,65 +4761,10 @@ const loadEnvironmentAnalysis = async () => {
   }
 }
 
-// Issue #248: Load code ownership analysis from codebase analytics
+// Issue #248/#1321: Ownership analysis (useAnalyticsFetch)
 const loadOwnershipAnalysis = async () => {
   if (!rootPath.value) return
-  loadingOwnership.value = true
-  ownershipError.value = ''
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/ownership/analysis?path=${encodeURIComponent(rootPath.value)}`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
-    })
-    if (!response.ok) {
-      throw new Error(`Ownership analysis endpoint returned ${response.status}`)
-    }
-    const data = await response.json()
-    if (data.status === 'success') {
-      ownershipAnalysis.value = {
-        status: data.status,
-        analysis_time_seconds: data.analysis_time_seconds || 0,
-        summary: data.summary || {
-          total_files: 0,
-          total_directories: 0,
-          total_contributors: 0,
-          knowledge_gaps_count: 0,
-          critical_gaps: 0,
-          high_risk_gaps: 0
-        },
-        file_ownership: data.file_ownership || [],
-        directory_ownership: data.directory_ownership || [],
-        expertise_scores: data.expertise_scores || [],
-        knowledge_gaps: data.knowledge_gaps || [],
-        metrics: data.metrics || {
-          total_lines_analyzed: 0,
-          total_files_analyzed: 0,
-          overall_bus_factor: 1,
-          bus_factor_distribution: {},
-          knowledge_risk_distribution: {},
-          top_contributors: [],
-          ownership_concentration: 0,
-          team_coverage: 0
-        }
-      }
-    } else if (data.status === 'error') {
-      ownershipError.value = data.message || 'Unknown error occurred'
-      ownershipAnalysis.value = null
-    } else {
-      ownershipAnalysis.value = null
-      logger.debug('No ownership analysis data available')
-    }
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.error('Failed to load ownership analysis:', error)
-    ownershipError.value = errorMessage
-  } finally {
-    loadingOwnership.value = false
-  }
+  await _loadOwnership({ path: rootPath.value })
 }
 
 onUnmounted(() => {
