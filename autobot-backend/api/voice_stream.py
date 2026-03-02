@@ -2,11 +2,10 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 """
-Voice Stream WebSocket Endpoint (#1031)
+Voice Stream WebSocket Endpoint (#1031, #1319)
 
-Provides a bidirectional WebSocket for full-duplex voice conversations.
-Handles control signaling (barge-in, state sync) and coordinates
-TTS audio streaming between client and server.
+Provides a bidirectional WebSocket for voice conversations.
+Supports full-duplex mode AND sentence-level streaming TTS for all modes.
 
 Protocol (JSON messages):
   Client -> Server:
@@ -14,6 +13,10 @@ Protocol (JSON messages):
     {"type": "transcript", "text": "...", "final": true/false}
     {"type": "start_listening"}       - Client started STT capture
     {"type": "stop_listening"}        - Client stopped STT capture
+    {"type": "speak", "text": "..."}  - Full-text TTS (cancels active, for duplex)
+    {"type": "speak_sentence", "text": "...", "voice_id": "..."}  - Queue sentence (#1319)
+    {"type": "flush"}                 - Signal end of sentence stream (#1319)
+    {"type": "ping"}
 
   Server -> Client:
     {"type": "state", "state": "idle|listening|processing|speaking"}
@@ -21,6 +24,7 @@ Protocol (JSON messages):
     {"type": "tts_audio", "data": "<base64>", "chunk": N, "total": N}
     {"type": "tts_end"}                     - TTS playback complete
     {"type": "error", "message": "..."}
+    {"type": "pong"}
 """
 
 import asyncio
@@ -132,6 +136,48 @@ async def _synthesize_and_stream(
     await _send_json(ws, {"type": "tts_end"})
 
 
+async def _tts_queue_worker(
+    ws: WebSocket,
+    queue: asyncio.Queue,
+    cancel_event: asyncio.Event,
+) -> None:
+    """Drain sentence queue, synthesizing and streaming each sequentially.
+
+    Runs as background task per WS connection. Receives (text, voice_id)
+    tuples; None is the flush sentinel that triggers tts_end.
+    """
+    while True:
+        item = await queue.get()
+        if item is None:
+            await _send_json(ws, {"type": "tts_end"})
+            continue
+        text, voice_id = item
+        if cancel_event.is_set():
+            continue
+        try:
+            tts = get_tts_client()
+            wav_bytes = await tts.synthesize(text, voice_id=voice_id)
+            if cancel_event.is_set():
+                continue
+            audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
+            await _send_json(
+                ws,
+                {
+                    "type": "tts_audio",
+                    "data": audio_b64,
+                },
+            )
+        except Exception as e:
+            logger.error("Sentence TTS error: %s", e)
+            await _send_json(
+                ws,
+                {
+                    "type": "error",
+                    "message": f"Sentence TTS failed: {e}",
+                },
+            )
+
+
 async def _cancel_active_tts(
     cancel_event: asyncio.Event,
     tts_task: Optional[asyncio.Task],
@@ -176,14 +222,99 @@ async def _start_tts_stream(
     return task
 
 
+async def _drain_sentence_queue(queue: asyncio.Queue) -> None:
+    """Clear pending sentences from queue on barge-in (#1319)."""
+    while not queue.empty():
+        try:
+            queue.get_nowait()
+        except asyncio.QueueEmpty:
+            break
+
+
+async def _handle_ws_message(
+    msg: dict,
+    ws: WebSocket,
+    ctx: dict,
+) -> Optional[asyncio.Task]:
+    """Dispatch a single WebSocket message. Returns updated tts_task.
+
+    ctx keys: cancel_tts, tts_task, sentence_queue, current_state,
+    set_state, get_state.
+    """
+    msg_type = msg.get("type", "")
+    tts_task = ctx["tts_task"]
+
+    if msg_type == "barge_in":
+        logger.debug("Barge-in received")
+        await _cancel_active_tts(ctx["cancel_tts"], tts_task)
+        await _drain_sentence_queue(ctx["sentence_queue"])
+        await ctx["set_state"]("listening")
+
+    elif msg_type == "start_listening":
+        if ctx["get_state"]() == "speaking":
+            await _cancel_active_tts(ctx["cancel_tts"], tts_task)
+        await ctx["set_state"]("listening")
+
+    elif msg_type == "stop_listening":
+        await ctx["set_state"]("idle")
+
+    elif msg_type == "transcript":
+        text = msg.get("text", "").strip()
+        if msg.get("final", False) and text:
+            await ctx["set_state"]("processing")
+
+    elif msg_type == "speak":
+        tts_task = await _start_tts_stream(
+            ws,
+            msg.get("text", "").strip(),
+            ctx["cancel_tts"],
+            ctx["set_state"],
+            ctx["get_state"],
+            voice_id=msg.get("voice_id", ""),
+        )
+
+    elif msg_type == "speak_sentence":
+        text = msg.get("text", "").strip()
+        voice_id = msg.get("voice_id", "")
+        if text:
+            await ctx["sentence_queue"].put((text, voice_id))
+
+    elif msg_type == "flush":
+        await ctx["sentence_queue"].put(None)  # sentinel
+
+    elif msg_type == "ping":
+        await _send_json(ws, {"type": "pong"})
+
+    return tts_task
+
+
+async def _cleanup_ws_tasks(
+    queue_worker_task: Optional[asyncio.Task],
+    cancel_tts: asyncio.Event,
+    tts_task: Optional[asyncio.Task],
+) -> None:
+    """Cancel background tasks on WebSocket close (#1319)."""
+    if queue_worker_task and not queue_worker_task.done():
+        queue_worker_task.cancel()
+        try:
+            await queue_worker_task
+        except asyncio.CancelledError:
+            pass
+    cancel_tts.set()
+    if tts_task and not tts_task.done():
+        tts_task.cancel()
+
+
 @router.websocket("/stream")
 async def voice_stream_ws(websocket: WebSocket) -> None:
-    """Full-duplex voice conversation WebSocket (#1031)."""
+    """Full-duplex voice conversation WebSocket (#1031, #1319)."""
     await websocket.accept()
     logger.info("Voice stream WebSocket connected")
 
     cancel_tts = asyncio.Event()
     tts_task: Optional[asyncio.Task] = None
+    sentence_queue: asyncio.Queue = asyncio.Queue()
+    queue_worker_task: Optional[asyncio.Task] = None
     current_state = "idle"
 
     async def _set_state(new_state: str) -> None:
@@ -191,42 +322,23 @@ async def voice_stream_ws(websocket: WebSocket) -> None:
         current_state = new_state
         await _send_json(websocket, {"type": "state", "state": new_state})
 
+    ctx = {
+        "cancel_tts": cancel_tts,
+        "tts_task": tts_task,
+        "sentence_queue": sentence_queue,
+        "set_state": _set_state,
+        "get_state": lambda: current_state,
+    }
+
     try:
+        queue_worker_task = asyncio.create_task(
+            _tts_queue_worker(websocket, sentence_queue, cancel_tts)
+        )
         await _set_state("idle")
         while True:
             msg = await websocket.receive_json()
-            msg_type = msg.get("type", "")
-
-            if msg_type == "barge_in":
-                logger.debug("Barge-in received")
-                await _cancel_active_tts(cancel_tts, tts_task)
-                await _set_state("listening")
-
-            elif msg_type == "start_listening":
-                if current_state == "speaking":
-                    await _cancel_active_tts(cancel_tts, tts_task)
-                await _set_state("listening")
-
-            elif msg_type == "stop_listening":
-                await _set_state("idle")
-
-            elif msg_type == "transcript":
-                text = msg.get("text", "").strip()
-                if msg.get("final", False) and text:
-                    await _set_state("processing")
-
-            elif msg_type == "speak":
-                tts_task = await _start_tts_stream(
-                    websocket,
-                    msg.get("text", "").strip(),
-                    cancel_tts,
-                    _set_state,
-                    lambda: current_state,
-                    voice_id=msg.get("voice_id", ""),
-                )
-
-            elif msg_type == "ping":
-                await _send_json(websocket, {"type": "pong"})
+            tts_task = await _handle_ws_message(msg, websocket, ctx)
+            ctx["tts_task"] = tts_task
 
     except WebSocketDisconnect:
         logger.info("Voice stream WebSocket disconnected")
@@ -234,7 +346,5 @@ async def voice_stream_ws(websocket: WebSocket) -> None:
         logger.error("Voice stream WebSocket error: %s", e)
         await _send_json(websocket, {"type": "error", "message": str(e)})
     finally:
-        cancel_tts.set()
-        if tts_task and not tts_task.done():
-            tts_task.cancel()
+        await _cleanup_ws_tasks(queue_worker_task, cancel_tts, tts_task)
         logger.info("Voice stream WebSocket closed")
