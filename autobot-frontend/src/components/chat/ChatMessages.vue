@@ -18,19 +18,40 @@
 
     <div
       v-else
-      class="space-y-1"
       role="log"
       aria-live="polite"
       aria-atomic="false"
       aria-relevant="additions"
       aria-label="Chat conversation"
     >
+      <!-- Issue #1314: Virtual scroll spacer — sets total scrollable height -->
       <div
-        v-for="message in filteredMessages"
-        :key="message.id"
-        class="message-wrapper"
-        :class="getMessageWrapperClass(message)"
+        :style="{
+          height: `${totalSize}px`,
+          width: '100%',
+          position: 'relative',
+        }"
       >
+        <div
+          v-for="vItem in virtualItems"
+          :key="String(vItem.key)"
+          :data-index="vItem.index"
+          :ref="(el: any) => el && measureElement(el as Element)"
+          :style="{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            transform: `translateY(${vItem.start}px)`,
+            paddingBottom: '4px',
+          }"
+        >
+        <!-- Issue #1314: Local alias via single-element v-for -->
+        <template v-for="message in [filteredMessages[vItem.index]]" :key="0">
+        <div
+          class="message-wrapper"
+          :class="getMessageWrapperClass(message)"
+        >
         <!-- Message Header -->
         <div class="message-header">
           <div class="flex items-center gap-1.5">
@@ -154,7 +175,7 @@
           <!-- Issue #249, #1186: Source Attribution Display -->
           <CitationsDisplay
             v-if="message.sender === 'assistant' && (message.metadata?.citations?.length || 0) > 0"
-            :citations="message.metadata.citations || []"
+            :citations="message.metadata?.citations || []"
           />
 
           <!-- Attachments -->
@@ -398,6 +419,9 @@
           </div>
         </div>
       </div>
+      </template>
+      </div>
+      </div>
 
       <!-- Enhanced AI typing indicator -->
       <div v-if="store.isTyping" class="message-wrapper assistant-message typing-message">
@@ -478,11 +502,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, watch, onMounted } from 'vue'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import { usePermissionStore } from '@/stores/usePermissionStore'
+import { useVirtualChatScroll } from '@/composables/useVirtualChatScroll'
 import type { ChatMessage } from '@/stores/useChatStore'
 import MessageStatus from '@/components/ui/MessageStatus.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
@@ -613,6 +638,20 @@ const filteredMessages = computed(() => {
     // Always show regular messages and responses
     return true
   })
+})
+
+// Issue #1314: Virtual scrolling composable
+const {
+  virtualItems,
+  totalSize,
+  measureElement,
+  scrollToBottom,
+  isStuckToBottom,
+} = useVirtualChatScroll({
+  messagesContainerRef: messagesContainer,
+  filteredMessages,
+  isTyping: computed(() => store.isTyping),
+  currentSessionId: computed(() => store.currentSessionId),
 })
 
 const typingStatusText = computed(() => {
@@ -1234,16 +1273,6 @@ const cancelComment = () => {
   pendingApprovalDecision.value = null
 }
 
-const scrollToBottom = () => {
-  if (store.settings.autoSave && messagesContainer.value) { // Using autoSave as proxy for auto-scroll
-    // Scroll the parent container (UnifiedLoadingView handles scrolling now)
-    const scrollableParent = messagesContainer.value.closest('.overflow-y-auto')
-    if (scrollableParent) {
-      scrollableParent.scrollTop = scrollableParent.scrollHeight
-    }
-  }
-}
-
 // Issue #1312: Consolidated watcher — auto-scroll + screen reader announcement
 // Replaces two separate watchers (one with deep: true that traversed all message
 // properties on every streaming chunk). Now watches only array length (O(1)).
@@ -1303,10 +1332,8 @@ watch(() => store.isTyping, (isTyping) => {
 //   }
 // }, { deep: true })
 
-// Scroll to bottom on mount and initialize permission store
+// Initialize permission store on mount (scroll handled by useVirtualChatScroll)
 onMounted(async () => {
-  nextTick(scrollToBottom)
-
   // Permission v2: Initialize permission store
   try {
     await permissionStore.initialize()

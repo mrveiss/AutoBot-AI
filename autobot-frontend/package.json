@@ -39,6 +39,7 @@
     "@fortawesome/fontawesome-free": "^7.1.0",
     "@heroicons/vue": "^2.2.0",
     "@ricky0123/vad-web": "^0.0.30",
+    "@tanstack/vue-virtual": "^3.13.19",
     "@tsconfig/node18": "^18.2.4",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-web-links": "^0.11.0",
