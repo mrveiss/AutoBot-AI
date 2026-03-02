@@ -64,10 +64,23 @@ class StreamingMessage:
     metadata: Dict[str, Any] = field(default_factory=dict)
     version: int = 0
     operation: StreamingOperation = StreamingOperation.CREATE
+    _chunks: List[str] = field(default_factory=list, init=False, repr=False)
+
+    def __getattribute__(self, name: str) -> Any:
+        """Issue #1313: Auto-flush chunk buffer when content is read."""
+        if name == "content":
+            chunks = object.__getattribute__(self, "_chunks")
+            if chunks:
+                cur = object.__getattribute__(self, "__dict__")["content"]
+                joined = cur + "".join(chunks)
+                object.__getattribute__(self, "__dict__")["content"] = joined
+                chunks.clear()
+        return object.__getattribute__(self, name)
 
     def stream(self, chunk: str) -> "StreamingMessage":
         """
         Append content (for streaming LLM tokens).
+        Issue #1313: Accumulate in list, join on read boundaries for O(1) append.
 
         Args:
             chunk: Text chunk to append
@@ -75,7 +88,7 @@ class StreamingMessage:
         Returns:
             self for method chaining
         """
-        self.content += chunk
+        self._chunks.append(chunk)
         self.version += 1
         self.operation = StreamingOperation.STREAM
         return self
@@ -93,6 +106,7 @@ class StreamingMessage:
         Returns:
             self for method chaining
         """
+        self._chunks.clear()
         self.content = content
         self.version += 1
         self.operation = StreamingOperation.UPDATE
