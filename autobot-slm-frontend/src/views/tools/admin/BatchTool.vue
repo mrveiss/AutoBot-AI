@@ -15,6 +15,7 @@ const logger = createLogger('BatchTool')
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
+import { formatDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
 
@@ -93,7 +94,7 @@ function getProgressColor(status: string): string {
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString()
+  return formatDateTime(dateStr)
 }
 
 function formatDuration(start: string | null, end: string | null): string {

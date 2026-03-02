@@ -12,6 +12,7 @@
 
 import { ref } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
+import { formatDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
 
@@ -398,7 +399,7 @@ function loadFromHistory(item: AnalysisHistory): void {
               <div class="flex gap-4">
                 <img :src="item.image" alt="History" class="w-24 h-24 object-cover rounded-lg" />
                 <div class="flex-1">
-                  <p class="text-xs text-gray-500 mb-1">{{ item.timestamp.toLocaleString() }}</p>
+                  <p class="text-xs text-gray-500 mb-1">{{ formatDateTime(item.timestamp.toISOString()) }}</p>
                   <p class="text-sm font-medium text-gray-900 mb-2">{{ item.prompt }}</p>
                   <p class="text-sm text-gray-600 line-clamp-2">{{ item.result }}</p>
                 </div>

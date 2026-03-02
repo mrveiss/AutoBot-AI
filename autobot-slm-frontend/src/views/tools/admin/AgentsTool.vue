@@ -15,6 +15,7 @@ const logger = createLogger('AgentsTool')
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
+import { formatDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
 
@@ -91,8 +92,7 @@ function getStatusDot(status: string): string {
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleString()
+  return formatDateTime(dateStr)
 }
 
 async function loadAgents(): Promise<void> {

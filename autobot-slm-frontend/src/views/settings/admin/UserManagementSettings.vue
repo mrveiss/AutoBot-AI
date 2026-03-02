@@ -12,6 +12,7 @@
  */
 
 import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { formatDateTime } from '@/composables/useTimezone'
 import { useAuthStore } from '@/stores/auth'
 import { useAutobotApi, type UserResponse } from '@/composables/useAutobotApi'
 import {
@@ -494,13 +495,7 @@ async function refreshActiveTab(): Promise<void> {
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return 'Never'
-  return new Date(dateStr).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatDateTime(dateStr)
 }
 
 // ===========================================================================
@@ -958,7 +953,7 @@ watch(() => authStore.user, (newUser: typeof authStore.user) => {
                     {{ provider.is_active ? 'Active' : 'Inactive' }}
                   </span>
                 </td>
-                <td class="py-3 px-4 text-sm text-gray-600">{{ provider.last_sync_at ? new Date(provider.last_sync_at).toLocaleString() : 'Never' }}</td>
+                <td class="py-3 px-4 text-sm text-gray-600">{{ formatDateTime(provider.last_sync_at ?? null) }}</td>
                 <td class="py-3 px-4 text-right">
                   <div class="flex justify-end gap-2">
                     <button @click="testSsoProvider(provider.id)" class="text-blue-600 hover:text-blue-800 p-1" title="Test connection">

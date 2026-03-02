@@ -14,6 +14,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { createLogger } from '@/utils/debugUtils'
+import { formatDateTime } from '@/composables/useTimezone'
 
 const logger = createLogger('ConfigDefaultsSettings')
 const authStore = useAuthStore()
@@ -125,7 +126,7 @@ async function deleteConfig(key: string): Promise<void> {
 }
 
 function formatDate(d: string): string {
-  return new Date(d).toLocaleString()
+  return formatDateTime(d)
 }
 
 // Lifecycle

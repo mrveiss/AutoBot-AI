@@ -13,6 +13,7 @@
 
 import { onMounted, onUnmounted, computed } from 'vue'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
+import { formatDateTime } from '@/composables/useTimezone'
 
 const {
   overview,
@@ -93,12 +94,8 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(2)}s`
 }
 
-/**
- * Format date string for display.
- */
 function formatDate(dateStr: string): string {
-  const d = new Date(dateStr)
-  return d.toLocaleString()
+  return formatDateTime(dateStr)
 }
 </script>
 
