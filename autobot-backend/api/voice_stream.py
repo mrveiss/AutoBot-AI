@@ -247,7 +247,19 @@ async def _handle_ws_message(
     if msg_type == "barge_in":
         logger.debug("Barge-in received")
         await _cancel_active_tts(ctx["cancel_tts"], tts_task)
+        # Cancel in-flight queue worker to interrupt synthesis (#1319)
+        worker = ctx.get("queue_worker_task")
+        if worker and not worker.done():
+            worker.cancel()
+            try:
+                await worker
+            except asyncio.CancelledError:
+                pass
         await _drain_sentence_queue(ctx["sentence_queue"])
+        # Restart queue worker for future sentences
+        ctx["queue_worker_task"] = asyncio.create_task(
+            _tts_queue_worker(ws, ctx["sentence_queue"], ctx["cancel_tts"])
+        )
         await ctx["set_state"]("listening")
 
     elif msg_type == "start_listening":
@@ -264,7 +276,7 @@ async def _handle_ws_message(
             await ctx["set_state"]("processing")
 
     elif msg_type == "speak":
-        tts_task = await _start_tts_stream(
+        result = await _start_tts_stream(
             ws,
             msg.get("text", "").strip(),
             ctx["cancel_tts"],
@@ -272,6 +284,8 @@ async def _handle_ws_message(
             ctx["get_state"],
             voice_id=msg.get("voice_id", ""),
         )
+        if result is not None:
+            tts_task = result
 
     elif msg_type == "speak_sentence":
         text = msg.get("text", "").strip()
@@ -326,6 +340,7 @@ async def voice_stream_ws(websocket: WebSocket) -> None:
         "cancel_tts": cancel_tts,
         "tts_task": tts_task,
         "sentence_queue": sentence_queue,
+        "queue_worker_task": queue_worker_task,
         "set_state": _set_state,
         "get_state": lambda: current_state,
     }
@@ -334,6 +349,7 @@ async def voice_stream_ws(websocket: WebSocket) -> None:
         queue_worker_task = asyncio.create_task(
             _tts_queue_worker(websocket, sentence_queue, cancel_tts)
         )
+        ctx["queue_worker_task"] = queue_worker_task
         await _set_state("idle")
         while True:
             msg = await websocket.receive_json()
@@ -346,5 +362,5 @@ async def voice_stream_ws(websocket: WebSocket) -> None:
         logger.error("Voice stream WebSocket error: %s", e)
         await _send_json(websocket, {"type": "error", "message": str(e)})
     finally:
-        await _cleanup_ws_tasks(queue_worker_task, cancel_tts, tts_task)
+        await _cleanup_ws_tasks(ctx.get("queue_worker_task"), cancel_tts, tts_task)
         logger.info("Voice stream WebSocket closed")
