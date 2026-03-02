@@ -189,7 +189,10 @@ const controller = useChatController()
 const appStore = useAppStore()
 
 // Voice output (#928)
-const { voiceOutputEnabled, isSpeaking, toggleVoiceOutput, speak } = useVoiceOutput()
+const {
+  voiceOutputEnabled, isSpeaking, toggleVoiceOutput,
+  speak, speakStreaming, flushStreaming,
+} = useVoiceOutput()
 
 // Voice conversation (#1029)
 const voiceConversation = useVoiceConversation()
@@ -858,11 +861,13 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
   }
 })
 
-// Auto-speak last assistant message when voice output is enabled (#928)
-// Skip when voice conversation is active — it handles its own TTS (#1029)
-// Skip during streaming to avoid calling /api/voice/synthesize on every chunk
-// Only speak 'response'/'message' types — skip thoughts/planning/debug
+// Streaming sentence-level TTS (#1319)
+// During LLM streaming: extract completed sentences and send each to TTS immediately.
+// After streaming: flush remainder. Falls back to HTTP speak() if WS unavailable.
 const _SPEAKABLE_TYPES = new Set(['response', 'message'])
+let _lastSpokenIdx = 0
+let _lastStreamingMsgId: string | null = null
+
 watch(
   () => {
     const session = store.sessions.find(s => s.id === store.currentSessionId)
@@ -871,17 +876,51 @@ watch(
       const m = msgs[i]
       if (m.sender !== 'assistant' || !m.content) continue
       if (m.type && !_SPEAKABLE_TYPES.has(m.type)) continue
-      return m.content
+      return { id: m.id, content: m.content }
     }
     return null
   },
-  (newContent, oldContent) => {
-    if (store.isTyping) return  // Wait for streaming to finish
-    if (newContent && newContent !== oldContent && !voiceConversation.isActive.value) {
-      speak(newContent)
+  (current, previous) => {
+    if (!voiceOutputEnabled.value || voiceConversation.isActive.value) return
+    if (!current) return
+
+    // Reset index when message changes
+    if (current.id !== _lastStreamingMsgId) {
+      _lastSpokenIdx = 0
+      _lastStreamingMsgId = current.id
+    }
+
+    if (store.isTyping && current.content) {
+      // During streaming: extract and speak completed sentences
+      const newText = current.content.slice(_lastSpokenIdx)
+      const sentences = _extractCompleteSentences(newText)
+      for (const s of sentences) {
+        speakStreaming(s)
+        _lastSpokenIdx += s.length
+      }
+    } else if (!store.isTyping && current.content) {
+      // Stream ended: flush any remaining text
+      const remainder = current.content.slice(_lastSpokenIdx).trim()
+      if (remainder) speakStreaming(remainder)
+      flushStreaming()
+      _lastSpokenIdx = 0
+      _lastStreamingMsgId = null
     }
   }
 )
+
+/** Extract sentences terminated by ". ", "! ", or "? " — remainder stays buffered. */
+function _extractCompleteSentences(text: string): string[] {
+  const sentences: string[] = []
+  const terminators = /(?<=[.!?])\s+/g
+  let lastEnd = 0
+  let match
+  while ((match = terminators.exec(text)) !== null) {
+    sentences.push(text.slice(lastEnd, match.index + 1))
+    lastEnd = match.index + match[0].length
+  }
+  return sentences
+}
 </script>
 
 <style scoped>
