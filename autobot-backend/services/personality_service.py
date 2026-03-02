@@ -34,7 +34,7 @@ _PERSONALITIES_DIR = (
 # Fallback for local dev (relative to this file)
 _DEV_PERSONALITIES_DIR = Path(__file__).parent.parent / "resources" / "personalities"
 
-_SYSTEM_PROFILES = {"default", "professional"}
+_SYSTEM_PROFILES = {"default", "professional", "rude"}
 
 _TONE_VALUES = ("direct", "professional", "casual", "technical")
 
