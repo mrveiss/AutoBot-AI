@@ -528,11 +528,6 @@ def _convert_template_steps(steps):
                 risk_level="medium",
                 estimated_duration=(step.get("expected_duration_ms", 30000) / 1000),
                 dependencies=step.get("dependencies", []),
-                metadata={
-                    "agent_type": step["agent_type"],
-                    "action": step["action"],
-                    "inputs": step.get("inputs", {}),
-                },
             )
         )
     return wa_steps
