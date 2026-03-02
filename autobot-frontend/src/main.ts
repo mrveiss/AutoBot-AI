@@ -30,6 +30,9 @@ initializeTheme()
 // Import xterm CSS globally to avoid dependency resolution issues
 import '@xterm/xterm/css/xterm.css'
 
+// Import i18n
+import i18n from './i18n'
+
 // Import plugins
 import rumPlugin from './plugins/rum'
 import errorHandlerPlugin from './plugins/errorHandler'
@@ -70,6 +73,7 @@ const app = createApp(App)
 
 // Use plugins
 app.use(pinia)
+app.use(i18n)
 app.use(router)
 app.use(rumPlugin, { router })
 app.use(errorHandlerPlugin)
