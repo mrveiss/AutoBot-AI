@@ -227,7 +227,14 @@ async function _initVad(): Promise<void> {
     logger.debug('VAD AudioWorklet initialized')
   } catch (e) {
     logger.error('VAD init failed:', e)
-    errorMessage.value = _getMicContextError('full-duplex')
+    // #1311: distinguish mic-denied from other init failures
+    const err = e instanceof Error ? e : new Error(String(e))
+    if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
+      errorMessage.value = _getMicContextError('full-duplex')
+    } else {
+      errorMessage.value =
+        `Full-duplex init failed: ${err.message || 'unknown error'}`
+    }
   }
 }
 
@@ -517,7 +524,21 @@ async function _startHandsFree(): Promise<void> {
     logger.debug('Silero VAD started (hands-free)')
   } catch (e) {
     logger.error('Silero VAD init failed:', e)
-    errorMessage.value = _getMicContextError('hands-free')
+    // #1311: distinguish mic-denied from ONNX/WASM init failures
+    const err = e instanceof Error ? e : new Error(String(e))
+    if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
+      errorMessage.value = _getMicContextError('hands-free')
+    } else if (
+      typeof SharedArrayBuffer === 'undefined' ||
+      err.message?.includes('SharedArrayBuffer')
+    ) {
+      errorMessage.value =
+        'Hands-free mode requires cross-origin isolation headers ' +
+        '(COOP/COEP). Ask your admin to update the nginx config.'
+    } else {
+      errorMessage.value =
+        `Hands-free init failed: ${err.message || 'unknown error'}`
+    }
     state.value = 'idle'
   }
 }
