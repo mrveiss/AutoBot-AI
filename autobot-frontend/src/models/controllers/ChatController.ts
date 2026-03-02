@@ -14,6 +14,18 @@ export class ChatController {
   private retryAttempts = 3
   private retryDelay = 1000
 
+  // Issue #1312: Streaming update throttle state
+  private _pendingStreamUpdate: {
+    messageId: string
+    content: string
+    type: any
+    metadata: any
+  } | null = null
+  private _streamFlushTimer: ReturnType<typeof setTimeout> | null = null
+  private _previewThrottleTimer: ReturnType<typeof setTimeout> | null = null
+  private static readonly STREAM_FLUSH_INTERVAL_MS = 80
+  private static readonly PREVIEW_THROTTLE_MS = 200
+
   constructor() {
     // Stores will be initialized lazily when needed
   }
@@ -179,6 +191,52 @@ export class ChatController {
     return `Failed to send message: ${error.message || 'Unknown error'}`
   }
 
+  /**
+   * Issue #1312: Flush pending streaming update to the store.
+   * Batches rapid chunk updates into a single store mutation per flush interval.
+   */
+  private flushStreamUpdate(): void {
+    if (!this._pendingStreamUpdate) return
+    const { messageId, content, type, metadata } = this._pendingStreamUpdate
+    this._pendingStreamUpdate = null
+    this.chatStore.updateMessage(messageId, { content, type, metadata })
+  }
+
+  /**
+   * Issue #1312: Schedule a throttled streaming update.
+   * Instead of mutating the store on every chunk, we buffer the latest state
+   * and flush at ~12fps (80ms) which is perceptually smooth for text.
+   */
+  private scheduleStreamUpdate(
+    messageId: string,
+    content: string,
+    type: any,
+    metadata: any
+  ): void {
+    this._pendingStreamUpdate = { messageId, content, type, metadata }
+    if (!this._streamFlushTimer) {
+      this._streamFlushTimer = setTimeout(() => {
+        this._streamFlushTimer = null
+        this.flushStreamUpdate()
+      }, ChatController.STREAM_FLUSH_INTERVAL_MS)
+    }
+  }
+
+  /**
+   * Issue #1312: Throttled preview extraction.
+   * Runs at most every 200ms instead of per-chunk.
+   */
+  private schedulePreviewUpdate(content: string, messageType?: string): void {
+    if (this._previewThrottleTimer) return // Already scheduled
+    this._previewThrottleTimer = setTimeout(() => {
+      this._previewThrottleTimer = null
+      const preview = this.extractStreamingPreview(content, messageType)
+      if (preview) {
+        this.chatStore.setStreamingPreview(preview)
+      }
+    }, ChatController.PREVIEW_THROTTLE_MS)
+  }
+
   private async handleStreamingResponse(response: Response): Promise<void> {
     const reader = response.body?.getReader()
     if (!reader) {
@@ -308,20 +366,18 @@ export class ChatController {
               }
 
               // Agent Zero Pattern: Backend sends CUMULATIVE content - just replace
-              // No local accumulation needed - content is already complete in each update
-              this.chatStore.updateMessage(frontendMessageId, {
-                content: data.content,
-                type: messageType,
-                metadata: data.metadata || {}
-              })
+              // Issue #1312: Throttle store updates to ~12fps instead of per-chunk
+              // This reduces 200+ re-renders to ~20 per streaming response
+              this.scheduleStreamUpdate(
+                frontendMessageId,
+                data.content,
+                messageType,
+                data.metadata || {}
+              )
 
-              // Issue #691: Update streaming preview with actual content for real-time feedback
-              // Extract meaningful preview text from the streaming content
+              // Issue #1312: Throttle preview extraction to max every 200ms
               if (data.content && this.chatStore.isTyping) {
-                const preview = this.extractStreamingPreview(data.content, messageType)
-                if (preview) {
-                  this.chatStore.setStreamingPreview(preview)
-                }
+                this.schedulePreviewUpdate(data.content, messageType)
               }
 
             } catch (e) {
@@ -329,6 +385,17 @@ export class ChatController {
             }
           }
         }
+      }
+
+      // Issue #1312: Flush any remaining buffered update before finalization
+      if (this._streamFlushTimer) {
+        clearTimeout(this._streamFlushTimer)
+        this._streamFlushTimer = null
+      }
+      this.flushStreamUpdate()
+      if (this._previewThrottleTimer) {
+        clearTimeout(this._previewThrottleTimer)
+        this._previewThrottleTimer = null
       }
 
       // Issue #1302: Finalize all messages and clean up truly empty ones

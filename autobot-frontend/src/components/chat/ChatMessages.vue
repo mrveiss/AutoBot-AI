@@ -120,7 +120,7 @@
         <div v-else class="message-content" :class="getContentClass(message)">
           <!-- Streaming content with typing indicator -->
           <div v-if="isStreamingMessage(message)" class="streaming-content">
-            <div class="message-text" v-html="formatMessageContent(message.content)"></div>
+            <div class="message-text" v-html="formatMessageContent(message.content, message.id)"></div>
             <div v-if="store.isTyping && isLastMessage(message)" class="typing-indicator">
               <div class="typing-dots">
                 <span></span>
@@ -131,7 +131,7 @@
           </div>
 
           <!-- Regular message content -->
-          <div v-else class="message-text" v-html="formatMessageContent(message.content)"></div>
+          <div v-else class="message-text" v-html="formatMessageContent(message.content, message.id)"></div>
 
           <!-- Message Metadata -->
           <div v-if="message.metadata && shouldShowMetadata(message)" class="message-metadata">
@@ -740,38 +740,41 @@ const getContentClass = (message: ChatMessage): string => {
 
 // NOTE: formatTime removed - now using shared utility from @/utils/formatHelpers
 
-const formatMessageContent = (content: string): string => {
+/**
+ * Issue #1312: Memoized format cache.
+ * Key: message id + content length (cheap proxy for content identity).
+ * Avoids re-running 11 regex ops for unchanged messages on every render.
+ */
+const formatCache = new Map<string, string>()
+const FORMAT_CACHE_MAX = 500
+
+const formatMessageContentRaw = (content: string): string => {
   // Strip ANSI escape codes FIRST (terminal color codes, cursor movements, etc.)
-  // This removes sequences like: \x1b[31m (red), \x1b[0m (reset), \x1b]0;... (set title), [?2004h, etc.
   let formatted = content
-    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences: \x1b[...m, \x1b[...H, etc.
-    .replace(/\x1b\][0-9;]*[^\x07]*\x07/g, '') // OSC sequences: \x1b]...BEL
-    .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x1b\\)?/g, '') // OSC sequences: \x1b]...ST
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences
+    .replace(/\x1b\][0-9;]*[^\x07]*\x07/g, '') // OSC sequences: BEL
+    .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x1b\\)?/g, '') // OSC sequences: ST
     .replace(/\x1b[=>]/g, '') // Set numeric keypad mode
     .replace(/\x1b[()][AB012]/g, '') // Character set selection
-    .replace(/\x1b\[[?\d;]*[hlHJ]/g, '') // Bracket sequences with ESC: \x1b[?2004h, etc.
-    .replace(/\x1b\]0;[^\x07\n]*\x07?/g, '') // Set title with ESC: \x1b]0;...
+    .replace(/\x1b\[[?\d;]*[hlHJ]/g, '') // Bracket sequences
+    .replace(/\x1b\]0;[^\x07\n]*\x07?/g, '') // Set title
     .trim()
 
-  // Strip message type tags (Issue #680: Tags should not be visible in chat)
-  // These tags are used internally for message categorization but shouldn't display
-  // Handles: complete [TAG], malformed [TAG, partial tags like [/THO from streaming,
-  // and trailing partial tags at end of streamed content (e.g. [/THOU)
+  // Strip message type tags (Issue #680)
   formatted = formatted
     .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
     .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?$/gi, '')
     .trim()
 
-  // Strip TOOL_CALL tags (internal metadata that shouldn't be displayed)
-  // Removes: <tool_call name="..." params="...">content</tool_call>
+  // Strip TOOL_CALL tags
   formatted = formatted.replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
 
-  // Process code blocks THIRD (after ANSI stripping and tool_call removal, before inline code and newlines)
-  formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+  // Process code blocks
+  formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match, lang, code) => {
     return `<pre class="code-block${lang ? ` language-${lang}` : ''}"><code>${code.trim()}</code></pre>`
   })
 
-  // Then basic markdown-like formatting
+  // Basic markdown formatting
   formatted = formatted
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
@@ -782,6 +785,22 @@ const formatMessageContent = (content: string): string => {
   formatted = formatted.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
 
   return formatted
+}
+
+const formatMessageContent = (content: string, messageId?: string): string => {
+  const cacheKey = messageId ? `${messageId}:${content.length}` : content
+  const cached = formatCache.get(cacheKey)
+  if (cached !== undefined) return cached
+
+  const result = formatMessageContentRaw(content)
+
+  // Evict oldest entries when cache is full
+  if (formatCache.size >= FORMAT_CACHE_MAX) {
+    const firstKey = formatCache.keys().next().value
+    if (firstKey !== undefined) formatCache.delete(firstKey)
+  }
+  formatCache.set(cacheKey, result)
+  return result
 }
 
 const getStatusText = (status: string): string => {
@@ -1225,28 +1244,27 @@ const scrollToBottom = () => {
   }
 }
 
-// Auto-scroll when new messages arrive
-watch(() => store.currentMessages.length, () => {
+// Issue #1312: Consolidated watcher — auto-scroll + screen reader announcement
+// Replaces two separate watchers (one with deep: true that traversed all message
+// properties on every streaming chunk). Now watches only array length (O(1)).
+watch(() => store.currentMessages.length, (newLen, oldLen) => {
+  // Auto-scroll on any length change (new message or streaming update)
   nextTick(scrollToBottom)
-})
 
-// Announce new messages to screen readers
-watch(() => store.currentMessages, (newMessages, oldMessages) => {
-  // Only announce if a new message was added
-  if (newMessages.length > (oldMessages?.length || 0)) {
-    const latestMessage = newMessages[newMessages.length - 1]
+  // Announce to screen readers only when a new message is added
+  if (newLen > (oldLen || 0)) {
+    const latestMessage = store.currentMessages[newLen - 1]
     if (latestMessage) {
       const sender = getSenderName(latestMessage.sender)
-      const preview = latestMessage.content.substring(0, 100).replace(/<[^>]*>/g, '') // Strip HTML
+      const preview = latestMessage.content.substring(0, 100).replace(/<[^>]*>/g, '')
       screenReaderStatus.value = `New message from ${sender}: ${preview}${preview.length < latestMessage.content.length ? '...' : ''}`
 
-      // Clear announcement after 2 seconds to allow new announcements
       setTimeout(() => {
         screenReaderStatus.value = ''
       }, 2000)
     }
   }
-}, { deep: true })
+})
 
 // Watch typing status to manage timing
 watch(() => store.isTyping, (isTyping) => {
