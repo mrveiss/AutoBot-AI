@@ -44,6 +44,15 @@
                   ({{ message.metadata.model }})
                 </span>
               </span>
+              <!-- Issue #1310: Visible type badge for typed messages -->
+              <span
+                v-if="getMessageTypeBadge(message)"
+                class="message-type-badge"
+                :class="`badge-${getMessageTypeBadge(message)!.type}`"
+              >
+                <i :class="getMessageTypeBadge(message)!.icon" class="mr-1"></i>
+                {{ getMessageTypeBadge(message)!.label }}
+              </span>
               <span class="message-time">{{ formatTime(message.timestamp) }}</span>
             </div>
           </div>
@@ -702,6 +711,22 @@ const getSenderName = (sender: string): string => {
   }
 
   return names[sender as keyof typeof names] || sender
+}
+
+/** Issue #1310: Visible badge for typed messages so they're clearly distinguishable. */
+const getMessageTypeBadge = (message: ChatMessage): { label: string; icon: string; type: string } | null => {
+  const msgType = message.type || message.metadata?.display_type
+  if (!msgType) return null
+
+  const badges: Record<string, { label: string; icon: string; type: string }> = {
+    thought:  { label: 'Thought',  icon: 'fas fa-brain',      type: 'thought' },
+    planning: { label: 'Planning', icon: 'fas fa-list-check',  type: 'planning' },
+    debug:    { label: 'Debug',    icon: 'fas fa-bug',         type: 'debug' },
+    utility:  { label: 'Utility',  icon: 'fas fa-wrench',      type: 'utility' },
+    sources:  { label: 'Sources',  icon: 'fas fa-book-open',   type: 'sources' },
+  }
+
+  return badges[msgType] || null
 }
 
 const getContentClass = (message: ChatMessage): string => {
@@ -1606,6 +1631,33 @@ onMounted(async () => {
 
 .model-name {
   @apply font-normal text-xs opacity-80 ml-1;
+}
+
+/* Issue #1310: Type badges for clear message identification */
+.message-type-badge {
+  @apply inline-flex items-center text-xs font-semibold px-1.5 py-0.5 rounded ml-2;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.badge-thought {
+  @apply bg-purple-900/40 text-purple-300 border border-purple-500/30;
+}
+
+.badge-planning {
+  @apply bg-indigo-900/40 text-indigo-300 border border-indigo-500/30;
+}
+
+.badge-debug {
+  @apply bg-amber-900/40 text-amber-300 border border-amber-500/30;
+}
+
+.badge-utility {
+  @apply bg-slate-700/40 text-slate-300 border border-slate-500/30;
+}
+
+.badge-sources {
+  @apply bg-teal-900/40 text-teal-300 border border-teal-500/30;
 }
 
 .message-time {

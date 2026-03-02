@@ -407,7 +407,7 @@ const { showToast } = useToast()
 // Display settings configuration (UI labels)
 const displaySettingsConfig = [
   { key: 'showThoughts', label: 'Show Thoughts' },
-  { key: 'showJson', label: 'Show JSON Output' },
+  { key: 'showJson', label: 'Show Metadata' },
   { key: 'showUtility', label: 'Show Utility Messages' },
   { key: 'showPlanning', label: 'Show Planning Messages' },
   { key: 'showDebug', label: 'Show Debug Messages' },

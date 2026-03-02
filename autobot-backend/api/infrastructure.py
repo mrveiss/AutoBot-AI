@@ -4,9 +4,10 @@
 """
 Infrastructure hosts API.
 
-Provides the list of known AutoBot fleet VMs plus user-configured
-infrastructure hosts (from secrets) for use by the chat terminal
-and host-selection UI components.
+Provides user-configured infrastructure hosts (from secrets) for use
+by the chat terminal and host-selection UI components.
+
+Issue #1310: Fleet/system VMs removed — they belong in SLM only.
 """
 
 import logging
@@ -15,72 +16,12 @@ from typing import Any, Dict, List, Optional
 from auth_middleware import get_current_user
 from fastapi import APIRouter, Depends, Query
 
-from autobot_shared.ssot_config import get_config
-
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["infrastructure"])
 
-_config = get_config()
-
-# Built-in fleet hosts with capabilities
-_FLEET_HOSTS: List[Dict[str, Any]] = [
-    {
-        "id": "fleet-slm",
-        "name": "autobot-slm",
-        "host": _config.vm.slm,
-        "ssh_port": 22,
-        "description": "SLM Server (Fleet Manager)",
-        "capabilities": ["ssh"],
-    },
-    {
-        "id": "fleet-main",
-        "name": "autobot-main",
-        "host": _config.vm.main,
-        "ssh_port": 22,
-        "description": "Main Machine (Backend API + VNC)",
-        "capabilities": ["ssh", "vnc"],
-    },
-    {
-        "id": "fleet-frontend",
-        "name": "autobot-frontend",
-        "host": _config.vm.frontend,
-        "ssh_port": 22,
-        "description": "Frontend VM",
-        "capabilities": ["ssh"],
-    },
-    {
-        "id": "fleet-npu",
-        "name": "autobot-npu-worker",
-        "host": _config.vm.npu,
-        "ssh_port": 22,
-        "description": "NPU Worker VM",
-        "capabilities": ["ssh"],
-    },
-    {
-        "id": "fleet-redis",
-        "name": "autobot-redis",
-        "host": _config.vm.redis,
-        "ssh_port": 22,
-        "description": "Redis VM",
-        "capabilities": ["ssh"],
-    },
-    {
-        "id": "fleet-aistack",
-        "name": "autobot-ai-stack",
-        "host": _config.vm.aistack,
-        "ssh_port": 22,
-        "description": "AI Stack VM",
-        "capabilities": ["ssh"],
-    },
-    {
-        "id": "fleet-browser",
-        "name": "autobot-browser",
-        "host": _config.vm.browser,
-        "ssh_port": 22,
-        "description": "Browser VM",
-        "capabilities": ["ssh"],
-    },
-]
+# Issue #1310: Fleet hosts removed from main UI.
+# System infrastructure VMs should only appear in SLM.
+# This endpoint now returns only user-configured hosts from secrets.
 
 
 def _load_secrets_hosts() -> List[Dict[str, Any]]:
@@ -123,25 +64,14 @@ async def get_infrastructure_hosts(
     ),
     _user: Any = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Return fleet hosts + user-configured hosts, filtered by capability."""
-    # Merge secrets-based hosts (priority) with fleet defaults
-    secrets_hosts = _load_secrets_hosts()
-    seen = set()
-    merged: List[Dict[str, Any]] = []
+    """Return user-configured hosts from secrets, filtered by capability.
 
-    for h in secrets_hosts:
-        key = f"{h['host']}:{h['ssh_port']}"
-        if key not in seen:
-            seen.add(key)
-            merged.append(h)
-
-    for h in _FLEET_HOSTS:
-        key = f"{h['host']}:{h['ssh_port']}"
-        if key not in seen:
-            seen.add(key)
-            merged.append(h)
+    Issue #1310: Fleet/system hosts removed — they belong in SLM only.
+    Only hosts explicitly added by the user via Secrets are returned.
+    """
+    hosts = _load_secrets_hosts()
 
     if capability:
-        merged = [h for h in merged if capability in h.get("capabilities", [])]
+        hosts = [h for h in hosts if capability in h.get("capabilities", [])]
 
-    return {"hosts": merged}
+    return {"hosts": hosts}
