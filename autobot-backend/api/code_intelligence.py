@@ -2230,3 +2230,18 @@ async def get_security_score_status(task_id: str):
     if task is None:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
     return task
+
+
+@router.post("/security/score/tasks/clear-stuck")
+async def clear_stuck_sec_tasks(
+    force: bool = Query(
+        default=False,
+        description="Force clear ALL running tasks",
+    ),
+):
+    """Clear stuck security score tasks (#1304)."""
+    cleaned = await _sec_manager.clear_stuck(force=force)
+    return {
+        "cleared_count": cleaned,
+        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
+    }

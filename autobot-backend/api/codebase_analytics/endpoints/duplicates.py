@@ -557,3 +557,18 @@ async def get_duplicate_status(task_id: str):
     if task is None:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
     return task
+
+
+@router.post("/duplicates/tasks/clear-stuck")
+async def clear_stuck_dup_tasks(
+    force: bool = Query(
+        default=False,
+        description="Force clear ALL running tasks",
+    ),
+):
+    """Clear stuck duplicate analysis tasks (#1304)."""
+    cleaned = await _manager.clear_stuck(force=force)
+    return {
+        "cleared_count": cleaned,
+        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
+    }

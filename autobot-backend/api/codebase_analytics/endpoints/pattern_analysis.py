@@ -289,6 +289,21 @@ async def get_pattern_summary_status(task_id: str):
     return task
 
 
+@router.post("/patterns/summary/tasks/clear-stuck")
+async def clear_stuck_summary_tasks(
+    force: bool = Query(
+        default=False,
+        description="Force clear ALL running tasks",
+    ),
+):
+    """Clear stuck pattern summary tasks (#1304)."""
+    cleaned = await _summary_manager.clear_stuck(force=force)
+    return {
+        "cleared_count": cleaned,
+        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
+    }
+
+
 @router.get("/patterns/duplicates")
 async def get_duplicate_patterns(
     path: str = Query(default=str(PATH.PROJECT_ROOT), description="Path to analyze"),
