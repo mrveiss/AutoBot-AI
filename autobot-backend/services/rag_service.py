@@ -143,11 +143,24 @@ class RAGService:
                 query, fetch_limit, enable_reranking, timeout_seconds
             )
             if categories:
-                results = self._filter_by_categories(results, categories)[:max_results]
+                unfiltered_count = len(results)
+                filtered = self._filter_by_categories(results, categories)[:max_results]
+                if not filtered and unfiltered_count > 0:
+                    logger.warning(
+                        "Category filter %s eliminated all %d results — "
+                        "returning unfiltered results instead",
+                        categories,
+                        unfiltered_count,
+                    )
+                else:
+                    results = filtered
+                    logger.info(
+                        "Category filter applied: %s, results: %d/%d",
+                        categories,
+                        len(results),
+                        unfiltered_count,
+                    )
                 metrics.final_results_count = len(results)
-                logger.info(
-                    "Category filter applied: %s, results: %d", categories, len(results)
-                )
             await self._add_to_cache(cache_key, (results, metrics))
             logger.info(
                 f"Advanced search completed: {len(results)} results in {metrics.total_time:.3f}s"
@@ -352,12 +365,21 @@ class RAGService:
                 # This can be changed to exclude if strict category filtering is needed
                 filtered.append(result)
 
-        logger.debug(
-            "Category filter: %d/%d results matched categories %s",
-            len(filtered),
-            len(results),
-            categories,
-        )
+        if not filtered and results:
+            actual_categories = {r.metadata.get("category", "<none>") for r in results}
+            logger.debug(
+                "Category filter: 0/%d matched %s — actual categories: %s",
+                len(results),
+                categories,
+                actual_categories,
+            )
+        else:
+            logger.debug(
+                "Category filter: %d/%d results matched categories %s",
+                len(filtered),
+                len(results),
+                categories,
+            )
         return filtered
 
     async def _fallback_basic_search(
