@@ -1022,10 +1022,9 @@ async def _stream_chat_workflow_messages(
         ):
             message_count += 1
             msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
-            logger.debug("[%s] Message %s: %s", request_id, message_count, msg_data)
             yield f"data: {json.dumps(msg_data)}\n\n"
 
-        logger.debug("[%s] Stream complete: %s messages", request_id, message_count)
+        logger.info("[%s] Stream complete: %d messages", request_id, message_count)
         yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
 
     except Exception as e:
