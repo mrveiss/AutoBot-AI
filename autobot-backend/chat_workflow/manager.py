@@ -2726,8 +2726,16 @@ before summarizing.
         Execute the main LLM workflow.
 
         Issue #620: Refactored using Extract Method to reduce function length.
+        Issue #1315: Yields progress indicator before RAG retrieval.
         Yields WorkflowMessages.
         """
+        # Issue #1315: Emit progress before RAG so frontend shows activity
+        use_knowledge = context.get("use_knowledge", True) if context else True
+        if use_knowledge and self.knowledge_service:
+            progress = StreamingMessage(type="progress")
+            progress.update("Searching knowledge base...")
+            yield progress.to_workflow_message()
+
         llm_params = await self._prepare_llm_workflow_params(session, message, context)
 
         ctx = self._create_llm_iteration_context(
