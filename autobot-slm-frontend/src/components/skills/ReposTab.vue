@@ -48,7 +48,7 @@
           <td class="py-3 pr-4 text-gray-400 max-w-xs truncate">{{ repo.url }}</td>
           <td class="py-3 pr-4 text-gray-300">{{ repo.skill_count }}</td>
           <td class="py-3 pr-4 text-gray-400">
-            {{ repo.last_synced ? new Date(repo.last_synced).toLocaleString() : 'Never' }}
+            {{ formatDateTime(repo.last_synced) }}
           </td>
           <td class="py-3">
             <button
@@ -130,6 +130,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { SkillRepo } from '@/composables/useSkills'
+import { formatDateTime } from '@/composables/useTimezone'
 
 defineProps<{ repos: readonly SkillRepo[] }>()
 const emit = defineEmits<{

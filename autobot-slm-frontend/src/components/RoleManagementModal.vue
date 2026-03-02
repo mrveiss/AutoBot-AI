@@ -15,6 +15,7 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useRoles, type NodeRolesInfo } from '@/composables/useRoles'
+import { formatDateTime } from '@/composables/useTimezone'
 
 const props = defineProps<{
   nodeId: string
@@ -134,8 +135,7 @@ function getStatusClass(status: string): string {
 }
 
 function formatDate(dateStr: string | null): string {
-  if (!dateStr) return 'Never'
-  return new Date(dateStr).toLocaleString()
+  return formatDateTime(dateStr)
 }
 </script>
 
