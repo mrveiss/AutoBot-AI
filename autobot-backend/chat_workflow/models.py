@@ -69,9 +69,6 @@ class StreamingMessage:
         """
         Append content (for streaming LLM tokens).
 
-        Use this for accumulating LLM response chunks where each chunk
-        should be added to the existing content.
-
         Args:
             chunk: Text chunk to append
 
@@ -146,12 +143,19 @@ class StreamingMessage:
         self.version += 1
         return self
 
-    def to_workflow_message(self) -> "WorkflowMessage":
+    def to_workflow_message(self, filter_prompts: bool = False) -> "WorkflowMessage":
         """
         Convert to WorkflowMessage for yielding.
 
         Issue #716: Applies filter to remove internal continuation prompts
         that LLM sometimes echoes back. These should never be shown to users.
+        Issue #1313: filter_prompts is now opt-in (only on final message) to avoid
+        running 6 expensive regex patterns on every streaming chunk. During
+        streaming, raw content is sent; frontend already strips tags visually.
+
+        Args:
+            filter_prompts: If True, apply internal prompt filtering. Only set
+                True on final/complete messages — not per-chunk.
 
         Returns:
             WorkflowMessage with streaming metadata for frontend handling
@@ -159,12 +163,13 @@ class StreamingMessage:
         # Import here to avoid circular dependency
         from async_chat_workflow import WorkflowMessage
 
-        # Issue #716: Filter internal prompts from content before sending to frontend
-        filtered_content = self._filter_internal_prompts(self.content)
+        content = self.content
+        if filter_prompts:
+            content = self._filter_internal_prompts(content)
 
         return WorkflowMessage(
             type=self.type,
-            content=filtered_content,
+            content=content,
             id=self.id,  # Use same ID for stable identity
             metadata={
                 **self.metadata,

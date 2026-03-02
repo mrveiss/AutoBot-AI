@@ -553,6 +553,9 @@ class ChatWorkflowManager(
         Process chunk data and detect content type.
 
         Issue #665: Extracted from _stream_llm_response to reduce function length.
+        Issue #1313: Only run full type detection when chunk contains '[' or ']',
+        which is the only way a tag boundary can occur. This avoids scanning
+        the entire accumulated content on every chunk (O(n²) → amortized O(n)).
 
         Returns:
             Tuple of (chunk_text, new_llm_response, new_current_segment, new_type)
@@ -564,7 +567,12 @@ class ChatWorkflowManager(
         chunk_text = self._normalize_tool_call_text(chunk_text)
         new_llm_response = llm_response + chunk_text
         new_current_segment = current_segment + chunk_text
-        new_type = self._detect_content_type(new_llm_response, current_message_type)
+
+        # Issue #1313: Skip expensive full-content scan when chunk has no tag chars
+        if "[" in chunk_text or "]" in chunk_text:
+            new_type = self._detect_content_type(new_llm_response, current_message_type)
+        else:
+            new_type = current_message_type
 
         return (chunk_text, new_llm_response, new_current_segment, new_type)
 
