@@ -10,92 +10,119 @@
         <button @click="handleClose" class="close-button" aria-label="Close profile settings">&times;</button>
       </div>
 
+      <!-- Tab Bar -->
+      <div class="tab-bar" role="tablist">
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          class="tab-btn"
+          :class="{ active: activeTab === tab.key }"
+          role="tab"
+          :aria-selected="activeTab === tab.key"
+          :aria-controls="`panel-${tab.key}`"
+          type="button"
+          @click="activeTab = tab.key"
+        >
+          <i :class="tab.icon"></i>
+          {{ tab.label }}
+        </button>
+      </div>
+
       <div class="modal-body">
-        <!-- Account Information -->
-        <div class="profile-section">
-          <h3>Account Information</h3>
-          <div class="info-grid">
-            <div class="info-row">
-              <label>Username:</label>
-              <span>{{ currentUser?.username || 'N/A' }}</span>
+        <!-- General Tab -->
+        <div v-if="activeTab === 'general'" id="panel-general" role="tabpanel">
+          <div class="profile-section">
+            <h3>Account Information</h3>
+            <div class="info-grid">
+              <div class="info-row">
+                <label>Username:</label>
+                <span>{{ currentUser?.username || 'N/A' }}</span>
+              </div>
+              <div class="info-row">
+                <label>Email:</label>
+                <span>{{ currentUser?.email || 'N/A' }}</span>
+              </div>
+              <div class="info-row">
+                <label>Role:</label>
+                <span class="role-badge" :class="`role-${currentUser?.role}`">{{ currentUser?.role || 'N/A' }}</span>
+              </div>
+              <div class="info-row">
+                <label>Last Login:</label>
+                <span>{{ formatDate(currentUser?.lastLoginAt) }}</span>
+              </div>
             </div>
-            <div class="info-row">
-              <label>Email:</label>
-              <span>{{ currentUser?.email || 'N/A' }}</span>
+          </div>
+
+          <div class="profile-section">
+            <h3>Preferences</h3>
+
+            <div class="pref-group">
+              <label class="pref-label">Theme</label>
+              <div class="option-row">
+                <button
+                  v-for="opt in themeOptions"
+                  :key="opt.value"
+                  @click="localPrefs.theme = opt.value"
+                  class="option-btn"
+                  :class="{ active: localPrefs.theme === opt.value }"
+                  type="button"
+                >
+                  {{ opt.label }}
+                </button>
+              </div>
             </div>
-            <div class="info-row">
-              <label>Role:</label>
-              <span class="role-badge" :class="`role-${currentUser?.role}`">{{ currentUser?.role || 'N/A' }}</span>
+
+            <div class="pref-group">
+              <label class="pref-label">Notifications</label>
+              <div class="toggle-list">
+                <label class="toggle-item">
+                  <input type="checkbox" v-model="localPrefs.notifications.email" />
+                  <span>Email notifications</span>
+                </label>
+                <label class="toggle-item">
+                  <input type="checkbox" v-model="localPrefs.notifications.browser" />
+                  <span>Browser notifications</span>
+                </label>
+                <label class="toggle-item">
+                  <input type="checkbox" v-model="localPrefs.notifications.sound" />
+                  <span>Sound notifications</span>
+                </label>
+              </div>
             </div>
-            <div class="info-row">
-              <label>Last Login:</label>
-              <span>{{ formatDate(currentUser?.lastLoginAt) }}</span>
+
+            <div class="pref-group">
+              <label class="pref-label">Interface</label>
+              <div class="toggle-list">
+                <label class="toggle-item">
+                  <input type="checkbox" v-model="localPrefs.ui.compactMode" />
+                  <span>Compact mode</span>
+                </label>
+                <label class="toggle-item">
+                  <input type="checkbox" v-model="localPrefs.ui.showTooltips" />
+                  <span>Show tooltips</span>
+                </label>
+                <label class="toggle-item">
+                  <input type="checkbox" v-model="localPrefs.ui.animationsEnabled" />
+                  <span>Enable animations</span>
+                </label>
+              </div>
             </div>
+
+            <button @click="savePreferences" class="save-btn" type="button">
+              Save Preferences
+            </button>
           </div>
         </div>
 
-        <!-- Preferences Section -->
-        <div class="profile-section">
-          <h3>Preferences</h3>
-
-          <!-- Theme -->
-          <div class="pref-group">
-            <label class="pref-label">Theme</label>
-            <div class="option-row">
-              <button
-                v-for="opt in themeOptions"
-                :key="opt.value"
-                @click="localPrefs.theme = opt.value"
-                class="option-btn"
-                :class="{ active: localPrefs.theme === opt.value }"
-                type="button"
-              >
-                {{ opt.label }}
-              </button>
-            </div>
+        <!-- Appearance & Voice Tab -->
+        <div v-if="activeTab === 'appearance'" id="panel-appearance" role="tabpanel">
+          <div class="profile-section">
+            <h3>Appearance</h3>
+            <PreferencesPanel />
           </div>
 
-          <!-- Notifications -->
-          <div class="pref-group">
-            <label class="pref-label">Notifications</label>
-            <div class="toggle-list">
-              <label class="toggle-item">
-                <input type="checkbox" v-model="localPrefs.notifications.email" />
-                <span>Email notifications</span>
-              </label>
-              <label class="toggle-item">
-                <input type="checkbox" v-model="localPrefs.notifications.browser" />
-                <span>Browser notifications</span>
-              </label>
-              <label class="toggle-item">
-                <input type="checkbox" v-model="localPrefs.notifications.sound" />
-                <span>Sound notifications</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- UI Settings -->
-          <div class="pref-group">
-            <label class="pref-label">Interface</label>
-            <div class="toggle-list">
-              <label class="toggle-item">
-                <input type="checkbox" v-model="localPrefs.ui.compactMode" />
-                <span>Compact mode</span>
-              </label>
-              <label class="toggle-item">
-                <input type="checkbox" v-model="localPrefs.ui.showTooltips" />
-                <span>Show tooltips</span>
-              </label>
-              <label class="toggle-item">
-                <input type="checkbox" v-model="localPrefs.ui.animationsEnabled" />
-                <span>Enable animations</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Voice Display Mode -->
-          <div class="pref-group">
-            <label class="pref-label">Voice Chat Display</label>
+          <div class="profile-section">
+            <h3>Voice Chat Display</h3>
             <div class="option-row">
               <button
                 @click="setVoiceDisplayMode('modal')"
@@ -118,56 +145,47 @@
             </div>
           </div>
 
-          <button @click="savePreferences" class="save-btn" type="button">
-            Save Preferences
-          </button>
+          <div class="profile-section">
+            <h3>Voice Profiles</h3>
+            <VoiceSettingsPanel />
+          </div>
         </div>
 
-        <!-- Appearance Settings (Issue #753) -->
-        <div class="profile-section">
-          <h3>Appearance</h3>
-          <PreferencesPanel />
-        </div>
-
-        <!-- Voice Settings -->
-        <div class="profile-section">
-          <h3>Voice</h3>
-          <VoiceSettingsPanel />
-        </div>
-
-        <!-- Change Password Section -->
-        <div class="profile-section">
-          <h3>Change Password</h3>
-          <div class="pw-form">
-            <input
-              v-model="passwordForm.current"
-              type="password"
-              placeholder="Current password"
-              class="pw-input"
-              autocomplete="current-password"
-            />
-            <input
-              v-model="passwordForm.newPw"
-              type="password"
-              placeholder="New password"
-              class="pw-input"
-              autocomplete="new-password"
-            />
-            <input
-              v-model="passwordForm.confirm"
-              type="password"
-              placeholder="Confirm new password"
-              class="pw-input"
-              autocomplete="new-password"
-            />
-            <button
-              @click="changePassword"
-              class="save-btn"
-              type="button"
-              :disabled="isChangingPassword"
-            >
-              {{ isChangingPassword ? 'Changing...' : 'Change Password' }}
-            </button>
+        <!-- Security Tab -->
+        <div v-if="activeTab === 'security'" id="panel-security" role="tabpanel">
+          <div class="profile-section">
+            <h3>Change Password</h3>
+            <div class="pw-form">
+              <input
+                v-model="passwordForm.current"
+                type="password"
+                placeholder="Current password"
+                class="pw-input"
+                autocomplete="current-password"
+              />
+              <input
+                v-model="passwordForm.newPw"
+                type="password"
+                placeholder="New password"
+                class="pw-input"
+                autocomplete="new-password"
+              />
+              <input
+                v-model="passwordForm.confirm"
+                type="password"
+                placeholder="Confirm new password"
+                class="pw-input"
+                autocomplete="new-password"
+              />
+              <button
+                @click="changePassword"
+                class="save-btn"
+                type="button"
+                :disabled="isChangingPassword"
+              >
+                {{ isChangingPassword ? 'Changing...' : 'Change Password' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -188,7 +206,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useUserStore } from '@/stores/useUserStore'
-import type { UserPreferences } from '@/stores/useUserStore'
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import { usePreferences } from '@/composables/usePreferences'
@@ -200,6 +217,16 @@ defineProps<{
 const emit = defineEmits<{
   close: []
 }>()
+
+type TabKey = 'general' | 'appearance' | 'security'
+
+const tabs: { key: TabKey; label: string; icon: string }[] = [
+  { key: 'general', label: 'General', icon: 'fas fa-user' },
+  { key: 'appearance', label: 'Appearance & Voice', icon: 'fas fa-palette' },
+  { key: 'security', label: 'Security', icon: 'fas fa-shield-alt' }
+]
+
+const activeTab = ref<TabKey>('general')
 
 const userStore = useUserStore()
 const { voiceDisplayMode, setVoiceDisplayMode } = usePreferences()
@@ -355,6 +382,42 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 
 .close-button:hover {
   background: var(--bg-secondary);
+}
+
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-default);
+  padding: 0 24px;
+}
+
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 16px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.tab-btn.active {
+  color: var(--color-primary, #6366f1);
+  border-bottom-color: var(--color-primary, #6366f1);
+}
+
+.tab-btn i {
+  font-size: 13px;
 }
 
 .modal-body {
