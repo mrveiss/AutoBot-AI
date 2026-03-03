@@ -93,10 +93,39 @@ async def _set_setting(key: str, value: str) -> None:
         await session.commit()
 
 
+def _build_inventory_children(
+    hosts: dict[str, dict],
+    node_roles: list,
+    node_id_to_hostname: dict[str, str],
+) -> tuple[dict[str, dict], dict[str, set[str]]]:
+    """Build Ansible inventory ``children`` with role-based groups (#1346).
+
+    Returns (children dict, ansible_groups) where ansible_groups maps
+    group name to set of hostnames for logging.
+    """
+    from services.role_registry import ROLE_ANSIBLE_GROUPS
+
+    ansible_groups: dict[str, set[str]] = {}
+    for nr in node_roles:
+        hostname = node_id_to_hostname.get(nr.node_id)
+        if not hostname:
+            continue
+        group = ROLE_ANSIBLE_GROUPS.get(nr.role_name)
+        if group:
+            ansible_groups.setdefault(group, set()).add(hostname)
+
+    children: dict[str, dict] = {
+        "slm_nodes": {"hosts": {h: None for h in hosts}},
+    }
+    for group_name, group_hosts in sorted(ansible_groups.items()):
+        children[group_name] = {"hosts": {h: None for h in sorted(group_hosts)}}
+    return children, ansible_groups
+
+
 async def _generate_dynamic_inventory(
     node_ids: Optional[list[str]] = None,
 ) -> Optional[Path]:
-    """Build a temporary Ansible inventory YAML from enrolled DB nodes."""
+    """Build Ansible inventory with role-based groups (#1346)."""
     from models.database import Node, NodeRole
     from sqlalchemy import select
 
@@ -104,14 +133,12 @@ async def _generate_dynamic_inventory(
         query = select(Node)
         if node_ids:
             query = query.where(Node.node_id.in_(node_ids))
-        result = await session.execute(query)
-        db_nodes = result.scalars().all()
-
+        db_nodes = (await session.execute(query)).scalars().all()
         if not db_nodes:
             return None
 
-        # Build inventory structure
-        hosts = {}
+        hosts: dict[str, dict] = {}
+        node_id_to_hostname: dict[str, str] = {}
         for node in db_nodes:
             host_vars = {
                 "ansible_host": node.ip_address,
@@ -121,31 +148,40 @@ async def _generate_dynamic_inventory(
             if node.ssh_port and node.ssh_port != 22:
                 host_vars["ansible_port"] = node.ssh_port
             hosts[node.hostname] = host_vars
+            node_id_to_hostname[node.node_id] = node.hostname
 
-        # Gather role assignments
-        role_result = await session.execute(select(NodeRole))
-        all_roles = role_result.scalars().all()
-        role_map = {}
-        for role in all_roles:
-            role_map.setdefault(role.node_id, []).append(role.role_name)
+        # All statuses: provisioning transitions not_installed → active.
+        nr_query = select(NodeRole)
+        if node_ids:
+            nr_query = nr_query.where(NodeRole.node_id.in_(node_ids))
+        all_node_roles = (await session.execute(nr_query)).scalars().all()
 
+    children, ansible_groups = _build_inventory_children(
+        hosts, all_node_roles, node_id_to_hostname
+    )
     inventory = {
         "all": {
-            "hosts": hosts,
-            "children": {
-                "slm_nodes": {"hosts": {h: None for h in hosts}},
+            "vars": {
+                "ansible_ssh_private_key_file": "~/.ssh/autobot_key",
+                "ansible_python_interpreter": "/usr/bin/python3",
             },
+            "hosts": hosts,
+            "children": children,
         },
     }
 
-    # Write to temp file
     fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-")
-    inventory_path = Path(path)
     with open(fd, "w", encoding="utf-8") as f:
         yaml.dump(inventory, f, default_flow_style=False)
 
-    logger.info("Generated dynamic inventory at %s with %d nodes", path, len(hosts))
-    return inventory_path
+    grp = ", ".join(f"{g}({len(h)})" for g, h in sorted(ansible_groups.items()))
+    logger.info(
+        "Generated inventory at %s: %d nodes, groups: %s",
+        path,
+        len(hosts),
+        grp or "(none)",
+    )
+    return Path(path)
 
 
 # ── Endpoints ───────────────────────────────────────────────────────────────

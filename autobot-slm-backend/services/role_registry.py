@@ -345,6 +345,30 @@ DEFAULT_ROLES = (
     + _INFRA_ROLES
 )
 
+# ---------------------------------------------------------------------------
+# Role → Ansible inventory group mapping  (#1346)
+#
+# Maps each role name to the inventory group(s) expected by
+# provision-fleet-roles.yml.  Used by _generate_dynamic_inventory()
+# in setup_wizard.py to build role-based host groups.
+# ---------------------------------------------------------------------------
+ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
+    "backend": "01-Backend",
+    "celery": "01-Backend",
+    "vnc": "01-Backend",
+    "frontend": "02-Frontend",
+    "ai-stack": "03-AI-Stack",
+    "chromadb": "03-AI-Stack",
+    "redis": "04-Databases",
+    "npu-worker": "npu-worker",
+    "browser-service": "browser-automation",
+    "autobot-llm-cpu": "llm_nodes",
+    "autobot-llm-gpu": "llm_nodes",
+    # tts-worker has no dedicated phase in provision-fleet-roles.yml;
+    # it co-locates with npu-worker by convention.
+    "tts-worker": "npu-worker",
+}
+
 
 async def seed_default_roles(db: AsyncSession) -> int:
     """Seed default roles if they don't exist."""
