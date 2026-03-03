@@ -17,8 +17,10 @@ For async contexts (FastAPI endpoints, async functions), always use the
 async variants to prevent event loop blocking. See Issue #369.
 """
 
+import json
 import logging
 import os
+import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING, Union
 
@@ -50,6 +52,76 @@ __all__ = [
     "AsyncChromaCollection",
     "wrap_collection_async",
 ]
+
+
+def _migrate_legacy_collection_configs(chroma_path: Path) -> None:
+    """Migrate ChromaDB collections missing _type in config_json_str.
+
+    ChromaDB 0.5.x requires '_type' fields in collection config JSON.
+    Collections created by older versions store config_json_str as '{}',
+    which causes KeyError: '_type' on access. This patches the SQLite
+    database directly before the PersistentClient opens it.
+    """
+    db_file = chroma_path / "chroma.sqlite3"
+    if not db_file.exists():
+        return
+
+    try:
+        conn = sqlite3.connect(str(db_file))
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, config_json_str FROM collections")
+        rows = cursor.fetchall()
+
+        fixed = 0
+        for cid, name, config_str in rows:
+            config = json.loads(config_str) if config_str else {}
+            if "_type" in config:
+                continue
+
+            # Read HNSW metadata stored by the old version
+            cursor.execute(
+                "SELECT key, str_value, int_value, float_value "
+                "FROM collection_metadata WHERE collection_id=?",
+                (cid,),
+            )
+            hnsw = {}
+            for key, sv, iv, fv in cursor.fetchall():
+                if key.startswith("hnsw:"):
+                    hnsw[key[5:]] = (
+                        sv if sv is not None else (iv if iv is not None else fv)
+                    )
+
+            new_cfg = json.dumps(
+                {
+                    "hnsw_configuration": {
+                        "space": hnsw.get("space", "l2"),
+                        "ef_construction": hnsw.get("construction_ef", 100),
+                        "ef_search": hnsw.get("search_ef", 10),
+                        "num_threads": 4,
+                        "M": hnsw.get("M", 16),
+                        "resize_factor": 1.2,
+                        "batch_size": 100,
+                        "sync_threshold": 1000,
+                        "_type": "HNSWConfigurationInternal",
+                    },
+                    "_type": "CollectionConfigurationInternal",
+                }
+            )
+            cursor.execute(
+                "UPDATE collections SET config_json_str=? WHERE id=?",
+                (new_cfg, cid),
+            )
+            fixed += 1
+
+        if fixed:
+            conn.commit()
+            logger.info(
+                "Migrated %d ChromaDB collection config(s) " "to 0.5.x format",
+                fixed,
+            )
+        conn.close()
+    except Exception as e:
+        logger.warning("ChromaDB config migration check failed: %s", e)
 
 
 def get_chromadb_client(
@@ -90,6 +162,7 @@ def get_chromadb_client(
         # Fallback: local PersistentClient
         chroma_path = Path(db_path or "data/chromadb")
         chroma_path.mkdir(parents=True, exist_ok=True)
+        _migrate_legacy_collection_configs(chroma_path)
         client = chromadb.PersistentClient(
             path=str(chroma_path),
             settings=ChromaSettings(
