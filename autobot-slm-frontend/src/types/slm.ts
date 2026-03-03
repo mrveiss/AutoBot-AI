@@ -179,6 +179,8 @@ export interface RoleInfo {
   name: NodeRole
   description: string
   category: RoleCategory
+  required: boolean
+  degraded_without: string[]
   dependencies: NodeRole[]
   variables: Record<string, unknown>
   tools: string[]

@@ -332,6 +332,8 @@ class RoleInfo(BaseModel):
     description: str
     category: str
     ansible_role: str = ""
+    required: bool = False
+    degraded_without: List[str] = Field(default_factory=list)
     dependencies: List[str] = Field(default_factory=list)
     variables: Dict = Field(default_factory=dict)
     tools: List[str] = Field(default_factory=list)
