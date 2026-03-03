@@ -6,8 +6,8 @@
   <div v-if="isOpen" class="modal-overlay" @click="handleClose">
     <div class="modal-content" @click.stop role="dialog" aria-modal="true" aria-labelledby="profile-title">
       <div class="modal-header">
-        <h2 id="profile-title">Profile Settings</h2>
-        <button @click="handleClose" class="close-button" aria-label="Close profile settings">&times;</button>
+        <h2 id="profile-title">{{ $t('profile.title') }}</h2>
+        <button @click="handleClose" class="close-button" :aria-label="$t('profile.closeAria')">&times;</button>
       </div>
 
       <!-- Tab Bar -->
@@ -32,32 +32,32 @@
         <!-- General Tab -->
         <div v-if="activeTab === 'general'" id="panel-general" role="tabpanel">
           <div class="profile-section">
-            <h3>Account Information</h3>
+            <h3>{{ $t('profile.accountInfo') }}</h3>
             <div class="info-grid">
               <div class="info-row">
-                <label>Username:</label>
+                <label>{{ $t('profile.username') }}</label>
                 <span>{{ currentUser?.username || 'N/A' }}</span>
               </div>
               <div class="info-row">
-                <label>Email:</label>
+                <label>{{ $t('profile.email') }}</label>
                 <span>{{ currentUser?.email || 'N/A' }}</span>
               </div>
               <div class="info-row">
-                <label>Role:</label>
+                <label>{{ $t('profile.role') }}</label>
                 <span class="role-badge" :class="`role-${currentUser?.role}`">{{ currentUser?.role || 'N/A' }}</span>
               </div>
               <div class="info-row">
-                <label>Last Login:</label>
+                <label>{{ $t('profile.lastLogin') }}</label>
                 <span>{{ formatDate(currentUser?.lastLoginAt) }}</span>
               </div>
             </div>
           </div>
 
           <div class="profile-section">
-            <h3>Preferences</h3>
+            <h3>{{ $t('profile.preferences') }}</h3>
 
             <div class="pref-group">
-              <label class="pref-label">Theme</label>
+              <label class="pref-label">{{ $t('profile.theme') }}</label>
               <div class="option-row">
                 <button
                   v-for="opt in themeOptions"
@@ -73,43 +73,43 @@
             </div>
 
             <div class="pref-group">
-              <label class="pref-label">Notifications</label>
+              <label class="pref-label">{{ $t('profile.notifications') }}</label>
               <div class="toggle-list">
                 <label class="toggle-item">
                   <input type="checkbox" v-model="localPrefs.notifications.email" />
-                  <span>Email notifications</span>
+                  <span>{{ $t('profile.emailNotifications') }}</span>
                 </label>
                 <label class="toggle-item">
                   <input type="checkbox" v-model="localPrefs.notifications.browser" />
-                  <span>Browser notifications</span>
+                  <span>{{ $t('profile.browserNotifications') }}</span>
                 </label>
                 <label class="toggle-item">
                   <input type="checkbox" v-model="localPrefs.notifications.sound" />
-                  <span>Sound notifications</span>
+                  <span>{{ $t('profile.soundNotifications') }}</span>
                 </label>
               </div>
             </div>
 
             <div class="pref-group">
-              <label class="pref-label">Interface</label>
+              <label class="pref-label">{{ $t('profile.interface') }}</label>
               <div class="toggle-list">
                 <label class="toggle-item">
                   <input type="checkbox" v-model="localPrefs.ui.compactMode" />
-                  <span>Compact mode</span>
+                  <span>{{ $t('profile.compactMode') }}</span>
                 </label>
                 <label class="toggle-item">
                   <input type="checkbox" v-model="localPrefs.ui.showTooltips" />
-                  <span>Show tooltips</span>
+                  <span>{{ $t('profile.showTooltips') }}</span>
                 </label>
                 <label class="toggle-item">
                   <input type="checkbox" v-model="localPrefs.ui.animationsEnabled" />
-                  <span>Enable animations</span>
+                  <span>{{ $t('profile.enableAnimations') }}</span>
                 </label>
               </div>
             </div>
 
             <button @click="savePreferences" class="save-btn" type="button">
-              Save Preferences
+              {{ $t('profile.savePreferences') }}
             </button>
           </div>
         </div>
@@ -117,12 +117,12 @@
         <!-- Appearance & Voice Tab -->
         <div v-if="activeTab === 'appearance'" id="panel-appearance" role="tabpanel">
           <div class="profile-section">
-            <h3>Appearance</h3>
+            <h3>{{ $t('profile.appearance') }}</h3>
             <PreferencesPanel />
           </div>
 
           <div class="profile-section">
-            <h3>Voice Chat Display</h3>
+            <h3>{{ $t('profile.voiceChatDisplay') }}</h3>
             <div class="option-row">
               <button
                 @click="setVoiceDisplayMode('modal')"
@@ -131,7 +131,7 @@
                 type="button"
               >
                 <i class="fas fa-expand-alt mr-1"></i>
-                Full-screen
+                {{ $t('profile.fullScreen') }}
               </button>
               <button
                 @click="setVoiceDisplayMode('sidepanel')"
@@ -140,13 +140,13 @@
                 type="button"
               >
                 <i class="fas fa-columns mr-1"></i>
-                Side panel
+                {{ $t('profile.sidePanel') }}
               </button>
             </div>
           </div>
 
           <div class="profile-section">
-            <h3>Voice Profiles</h3>
+            <h3>{{ $t('profile.voiceProfiles') }}</h3>
             <VoiceSettingsPanel />
           </div>
         </div>
@@ -154,26 +154,26 @@
         <!-- Security Tab -->
         <div v-if="activeTab === 'security'" id="panel-security" role="tabpanel">
           <div class="profile-section">
-            <h3>Change Password</h3>
+            <h3>{{ $t('profile.changePassword') }}</h3>
             <div class="pw-form">
               <input
                 v-model="passwordForm.current"
                 type="password"
-                placeholder="Current password"
+                :placeholder="$t('profile.currentPassword')"
                 class="pw-input"
                 autocomplete="current-password"
               />
               <input
                 v-model="passwordForm.newPw"
                 type="password"
-                placeholder="New password"
+                :placeholder="$t('profile.newPassword')"
                 class="pw-input"
                 autocomplete="new-password"
               />
               <input
                 v-model="passwordForm.confirm"
                 type="password"
-                placeholder="Confirm new password"
+                :placeholder="$t('profile.confirmNewPassword')"
                 class="pw-input"
                 autocomplete="new-password"
               />
@@ -183,7 +183,7 @@
                 type="button"
                 :disabled="isChangingPassword"
               >
-                {{ isChangingPassword ? 'Changing...' : 'Change Password' }}
+                {{ isChangingPassword ? $t('profile.changing') : $t('profile.changePassword') }}
               </button>
             </div>
           </div>
@@ -205,6 +205,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/useUserStore'
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
@@ -220,12 +221,13 @@ const emit = defineEmits<{
 
 type TabKey = 'general' | 'appearance' | 'security'
 
-const tabs: { key: TabKey; label: string; icon: string }[] = [
-  { key: 'general', label: 'General', icon: 'fas fa-user' },
-  { key: 'appearance', label: 'Appearance & Voice', icon: 'fas fa-palette' },
-  { key: 'security', label: 'Security', icon: 'fas fa-shield-alt' }
-]
+const tabs = computed<{ key: TabKey; label: string; icon: string }[]>(() => [
+  { key: 'general', label: t('profile.tabGeneral'), icon: 'fas fa-user' },
+  { key: 'appearance', label: t('profile.tabAppearance'), icon: 'fas fa-palette' },
+  { key: 'security', label: t('profile.tabSecurity'), icon: 'fas fa-shield-alt' }
+])
 
+const { t } = useI18n()
 const activeTab = ref<TabKey>('general')
 
 const userStore = useUserStore()
@@ -235,11 +237,11 @@ const successMessage = ref<string | null>(null)
 const errorMessage = ref<string | null>(null)
 const isChangingPassword = ref(false)
 
-const themeOptions = [
-  { value: 'light' as const, label: 'Light' },
-  { value: 'dark' as const, label: 'Dark' },
-  { value: 'auto' as const, label: 'Auto' }
-]
+const themeOptions = computed(() => [
+  { value: 'light' as const, label: t('profile.themeLight') },
+  { value: 'dark' as const, label: t('profile.themeDark') },
+  { value: 'auto' as const, label: t('profile.themeAuto') }
+])
 
 const localPrefs = ref({
   theme: userStore.preferences.theme,
@@ -271,24 +273,24 @@ function savePreferences(): void {
   userStore.updateNotificationSettings(localPrefs.value.notifications)
   userStore.updateUISettings(localPrefs.value.ui)
   userStore.persistToStorage()
-  showSuccess('Preferences saved.')
+  showSuccess(t('profile.preferencesSaved'))
 }
 
 async function changePassword(): Promise<void> {
   const { current, newPw, confirm } = passwordForm.value
 
   if (!current || !newPw || !confirm) {
-    showError('Please fill in all password fields.')
+    showError(t('profile.pwFillAll'))
     return
   }
 
   if (newPw !== confirm) {
-    showError('New passwords do not match.')
+    showError(t('profile.pwMismatch'))
     return
   }
 
   if (newPw.length < 8) {
-    showError('New password must be at least 8 characters.')
+    showError(t('profile.pwTooShort'))
     return
   }
 
@@ -297,7 +299,7 @@ async function changePassword(): Promise<void> {
     const result = await userStore.changePassword(current, newPw)
     if (result.success) {
       passwordForm.value = { current: '', newPw: '', confirm: '' }
-      showSuccess('Password changed successfully.')
+      showSuccess(t('profile.pwChanged'))
     } else {
       showError(result.message)
     }
@@ -319,7 +321,7 @@ function showError(msg: string): void {
 }
 
 function formatDate(dateValue: Date | string | undefined | null): string {
-  if (!dateValue) return 'Never'
+  if (!dateValue) return t('profile.never')
   const date = dateValue instanceof Date ? dateValue : new Date(dateValue)
   return date.toLocaleDateString() + ' ' + date.toLocaleTimeString()
 }

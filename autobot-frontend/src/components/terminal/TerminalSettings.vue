@@ -1,11 +1,11 @@
 <template>
   <div class="terminal-settings p-4 bg-gray-800 rounded-lg">
-    <h3 class="text-white text-lg mb-4">Terminal Settings</h3>
+    <h3 class="text-white text-lg mb-4">{{ $t('terminal.settings') }}</h3>
 
     <div class="space-y-4">
       <!-- Font Size -->
       <div class="flex items-center justify-between">
-        <label class="text-gray-300">Font Size</label>
+        <label class="text-gray-300">{{ $t('terminal.fontSize') }}</label>
         <div class="flex items-center gap-2">
           <input
             type="range"
@@ -21,34 +21,34 @@
 
       <!-- Theme -->
       <div class="flex items-center justify-between">
-        <label class="text-gray-300">Theme</label>
+        <label class="text-gray-300">{{ $t('terminal.theme') }}</label>
         <select
           v-model="settings.theme"
           class="bg-gray-700 text-white rounded px-2 py-1 border border-gray-600 focus:border-blue-500 focus:outline-none"
           data-testid="theme-select"
         >
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
+          <option value="dark">{{ $t('terminal.dark') }}</option>
+          <option value="light">{{ $t('terminal.light') }}</option>
         </select>
       </div>
 
       <!-- Cursor Style -->
       <div class="flex items-center justify-between">
-        <label class="text-gray-300">Cursor Style</label>
+        <label class="text-gray-300">{{ $t('terminal.cursorStyle') }}</label>
         <select
           v-model="settings.cursorStyle"
           class="bg-gray-700 text-white rounded px-2 py-1 border border-gray-600 focus:border-blue-500 focus:outline-none"
           data-testid="cursor-style-select"
         >
-          <option value="block">Block</option>
-          <option value="underline">Underline</option>
-          <option value="bar">Bar</option>
+          <option value="block">{{ $t('terminal.block') }}</option>
+          <option value="underline">{{ $t('terminal.underline') }}</option>
+          <option value="bar">{{ $t('terminal.bar') }}</option>
         </select>
       </div>
 
       <!-- Cursor Blink -->
       <div class="flex items-center justify-between">
-        <label class="text-gray-300">Cursor Blink</label>
+        <label class="text-gray-300">{{ $t('terminal.cursorBlink') }}</label>
         <input
           type="checkbox"
           v-model="settings.cursorBlink"
@@ -63,7 +63,7 @@
       class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
       data-testid="save-settings-button"
     >
-      Save Settings
+      {{ $t('terminal.saveSettings') }}
     </button>
   </div>
 </template>

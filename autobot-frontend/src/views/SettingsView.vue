@@ -49,7 +49,7 @@ Issue #753: User preference management interface
               <i class="fas fa-paint-brush"></i>
               Appearance
             </h2>
-            <p class="section-description">Customize the look and feel of your workspace</p>
+            <p class="section-description">{{ $t('settings.appearanceDesc') }}</p>
           </div>
           <div class="section-content">
             <PreferencesPanel />
@@ -62,7 +62,7 @@ Issue #753: User preference management interface
               <i class="fas fa-microphone"></i>
               Voice
             </h2>
-            <p class="section-description">Configure text-to-speech voice and voice profiles</p>
+            <p class="section-description">{{ $t('settings.voiceDesc') }}</p>
           </div>
           <div class="section-content">
             <VoiceSettingsPanel />

@@ -4,11 +4,11 @@
     <BaseModal
       :modelValue="showReconnectModal"
       @update:modelValue="val => !val && $emit('hide-reconnect-modal')"
-      title="Connection Lost"
+      :title="$t('terminal.modals.connectionLost')"
       size="small"
       :closeOnOverlay="!isReconnecting"
     >
-      <p>The terminal connection was lost. Would you like to reconnect?</p>
+      <p>{{ $t('terminal.modals.connectionLostMsg') }}</p>
 
       <!-- Error Display -->
       <div v-if="connectionError" class="error-message">
@@ -28,14 +28,14 @@
           @click="$emit('hide-reconnect-modal')"
           :disabled="isReconnecting"
         >
-          Cancel
+          {{ $t('common.cancel') }}
         </BaseButton>
         <BaseButton
           variant="primary"
           @click="handleReconnect"
           :loading="isReconnecting"
         >
-          {{ isReconnecting ? 'Reconnecting...' : 'Reconnect' }}
+          {{ isReconnecting ? $t('terminal.modals.reconnecting') : $t('terminal.reconnect') }}
         </BaseButton>
       </template>
     </BaseModal>
@@ -44,19 +44,19 @@
     <BaseModal
       :modelValue="showCommandConfirmation"
       @update:modelValue="val => !val && cancelCommand()"
-      title="⚠️ Potentially Destructive Command"
+      :title="$t('terminal.modals.destructiveCommand')"
       size="medium"
       :closeOnOverlay="!isExecutingCommand"
       class="command-confirmation-modal"
     >
       <div class="command-preview">
-        <div class="command-label">Command to execute:</div>
+        <div class="command-label">{{ $t('terminal.modals.commandLabel') }}</div>
         <div class="command-text">{{ pendingCommand }}</div>
       </div>
 
       <div class="risk-assessment">
         <div class="risk-level" :class="pendingCommandRisk">
-          Risk Level: <strong>{{ pendingCommandRisk.toUpperCase() }}</strong>
+          {{ $t('terminal.modals.riskLevel') }} <strong>{{ pendingCommandRisk.toUpperCase() }}</strong>
         </div>
         <div class="risk-reasons">
           <div v-for="reason in pendingCommandReasons" :key="reason" class="risk-reason">
@@ -78,14 +78,14 @@
       </div>
 
       <div class="confirmation-message">
-        <p><strong>This command may:</strong></p>
+        <p><strong>{{ $t('terminal.modals.commandMay') }}</strong></p>
         <ul>
-          <li>Delete files or directories permanently</li>
-          <li>Modify system configurations</li>
-          <li>Change file permissions or ownership</li>
-          <li>Install or remove software packages</li>
+          <li>{{ $t('terminal.modals.deleteFiles') }}</li>
+          <li>{{ $t('terminal.modals.modifyConfig') }}</li>
+          <li>{{ $t('terminal.modals.changePermissions') }}</li>
+          <li>{{ $t('terminal.modals.installRemove') }}</li>
         </ul>
-        <p><strong>Are you sure you want to proceed?</strong></p>
+        <p><strong>{{ $t('terminal.modals.confirmProceed') }}</strong></p>
       </div>
 
       <template #actions>
@@ -94,14 +94,14 @@
           @click="handleExecuteCommand"
           :loading="isExecutingCommand"
         >
-          {{ isExecutingCommand ? 'Executing...' : '⚡ Execute Command' }}
+          {{ isExecutingCommand ? $t('terminal.modals.executing') : $t('terminal.modals.executeCommand') }}
         </BaseButton>
         <BaseButton
           variant="secondary"
           @click="cancelCommand"
           :disabled="isExecutingCommand"
         >
-          ❌ Cancel
+          {{ $t('common.cancel') }}
         </BaseButton>
       </template>
     </BaseModal>
@@ -110,20 +110,20 @@
     <BaseModal
       :modelValue="showKillConfirmation"
       @update:modelValue="val => !val && cancelKill()"
-      title="🛑 Emergency Kill All Processes"
+      :title="$t('terminal.modals.emergencyKillTitle')"
       size="medium"
       :closeOnOverlay="!isKillingProcesses"
       class="emergency-kill-modal"
     >
       <div class="emergency-warning">
-        <p><strong>⚠️ WARNING: This will immediately terminate ALL running processes in this terminal session!</strong></p>
-        <p>Running processes:</p>
+        <p><strong>{{ $t('terminal.modals.emergencyWarning') }}</strong></p>
+        <p>{{ $t('terminal.modals.runningProcesses') }}</p>
         <ul>
           <li v-for="process in runningProcesses" :key="process.pid" class="process-item">
             PID {{ process.pid }}: {{ process.command }}
           </li>
         </ul>
-        <p><strong>This action cannot be undone. Continue?</strong></p>
+        <p><strong>{{ $t('terminal.modals.cannotUndo') }}</strong></p>
       </div>
 
       <!-- Error Display -->
@@ -144,14 +144,14 @@
           @click="handleEmergencyKill"
           :loading="isKillingProcesses"
         >
-          {{ isKillingProcesses ? 'Killing Processes...' : '🛑 KILL ALL PROCESSES' }}
+          {{ isKillingProcesses ? $t('terminal.modals.killingProcesses') : $t('terminal.modals.killAll') }}
         </BaseButton>
         <BaseButton
           variant="secondary"
           @click="cancelKill"
           :disabled="isKillingProcesses"
         >
-          ❌ Cancel
+          {{ $t('common.cancel') }}
         </BaseButton>
       </template>
     </BaseModal>
@@ -160,23 +160,23 @@
     <BaseModal
       :modelValue="showLegacyModal"
       @update:modelValue="val => !val && handleTakeManualControl()"
-      title="🤖 AI Workflow Step Confirmation"
+      :title="$t('terminal.modals.workflowTitle')"
       size="large"
       :closeOnOverlay="!isProcessingWorkflow"
       class="workflow-step-modal"
     >
       <div class="workflow-step-info" v-if="pendingWorkflowStep">
         <div class="step-counter">
-          Step {{ pendingWorkflowStep.stepNumber }} of {{ pendingWorkflowStep.totalSteps }}
+          {{ $t('terminal.modals.stepOf', { step: pendingWorkflowStep.stepNumber, total: pendingWorkflowStep.totalSteps }) }}
         </div>
 
         <div class="step-description">
           <h4>{{ pendingWorkflowStep.description }}</h4>
-          <p>{{ pendingWorkflowStep.explanation || 'The AI wants to execute the following command:' }}</p>
+          <p>{{ pendingWorkflowStep.explanation || $t('terminal.modals.wantsToExecute') }}</p>
         </div>
 
         <div class="command-preview">
-          <div class="command-label">Command to Execute:</div>
+          <div class="command-label">{{ $t('terminal.modals.commandToExecute') }}</div>
           <div class="command-text">{{ pendingWorkflowStep.command }}</div>
         </div>
 
@@ -194,11 +194,11 @@
 
         <div class="workflow-options">
           <div class="option-info">
-            <p><strong>Choose your action:</strong></p>
+            <p><strong>{{ $t('terminal.modals.chooseAction') }}</strong></p>
             <ul>
-              <li><strong>Execute:</strong> Run this command and continue to next step</li>
-              <li><strong>Skip:</strong> Skip this command and continue to next step</li>
-              <li><strong>Take Control:</strong> Pause automation and perform manual steps</li>
+              <li><strong>{{ $t('terminal.modals.executeOption') }}</strong> {{ $t('terminal.modals.executeDesc') }}</li>
+              <li><strong>{{ $t('terminal.modals.skipOption') }}</strong> {{ $t('terminal.modals.skipDesc') }}</li>
+              <li><strong>{{ $t('terminal.modals.takeControlOption') }}</strong> {{ $t('terminal.modals.takeControlDesc') }}</li>
             </ul>
           </div>
         </div>
@@ -211,7 +211,7 @@
           :loading="isProcessingWorkflow && lastWorkflowAction === 'execute'"
           :disabled="isProcessingWorkflow && lastWorkflowAction !== 'execute'"
         >
-          {{ (isProcessingWorkflow && lastWorkflowAction === 'execute') ? 'Executing...' : '✅ Execute & Continue' }}
+          {{ (isProcessingWorkflow && lastWorkflowAction === 'execute') ? $t('terminal.modals.executing') : $t('terminal.modals.executeContinue') }}
         </BaseButton>
         <BaseButton
           variant="warning"
@@ -219,7 +219,7 @@
           :loading="isProcessingWorkflow && lastWorkflowAction === 'skip'"
           :disabled="isProcessingWorkflow && lastWorkflowAction !== 'skip'"
         >
-          {{ (isProcessingWorkflow && lastWorkflowAction === 'skip') ? 'Skipping...' : '⏭️ Skip This Step' }}
+          {{ (isProcessingWorkflow && lastWorkflowAction === 'skip') ? $t('terminal.modals.skipping') : $t('terminal.modals.skipStep') }}
         </BaseButton>
         <BaseButton
           variant="primary"
@@ -227,7 +227,7 @@
           :loading="isProcessingWorkflow && lastWorkflowAction === 'manual'"
           :disabled="isProcessingWorkflow && lastWorkflowAction !== 'manual'"
         >
-          {{ (isProcessingWorkflow && lastWorkflowAction === 'manual') ? 'Taking Control...' : '👤 Take Manual Control' }}
+          {{ (isProcessingWorkflow && lastWorkflowAction === 'manual') ? $t('terminal.modals.takingControl') : $t('terminal.modals.takeManualControl') }}
         </BaseButton>
       </template>
     </BaseModal>
