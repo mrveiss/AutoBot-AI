@@ -102,17 +102,28 @@
       </div>
     </div>
 
-    <!-- Progress Indicator — Issue #1190: shown during indexing AND after so status persists -->
-    <!-- Issue #1365: exclude code-smells activity from triggering the idle-state display -->
+    <!-- Unified Operation Progress — Issues #1190, #1365, #1366 -->
+    <!-- Single status bar covering indexing and code-smell operations; shows all available detail -->
     <div
-      v-if="analyzing || (progressStatus && progressStatus !== 'Ready' && progressStatus !== 'Ready (state reset)' && !analyzingCodeSmells)"
+      v-if="analyzing || analyzingCodeSmells || (progressStatus && progressStatus !== 'Ready' && progressStatus !== 'Ready (state reset)')"
       class="progress-container"
-      :class="{ 'progress-container--idle': !analyzing }"
+      :class="{
+        'progress-container--idle': !analyzing && !analyzingCodeSmells,
+        'code-smells-progress': analyzingCodeSmells && !analyzing
+      }"
     >
       <div class="progress-header">
         <div class="progress-title">
-          <i :class="analyzing ? 'fas fa-spinner fa-spin' : progressStatus.includes('completed') || progressStatus.includes('complete') ? 'fas fa-check-circle' : progressStatus.includes('failed') || progressStatus.includes('cancelled') ? 'fas fa-times-circle' : 'fas fa-info-circle'"></i>
-          {{ analyzing ? 'Indexing in Progress' : 'Indexing Status' }}
+          <i :class="
+            (analyzing || analyzingCodeSmells)
+              ? 'fas fa-spinner fa-spin'
+              : progressStatus.includes('completed') || progressStatus.includes('complete')
+                ? 'fas fa-check-circle'
+                : progressStatus.includes('failed') || progressStatus.includes('cancelled')
+                  ? 'fas fa-times-circle'
+                  : 'fas fa-info-circle'
+          "></i>
+          {{ analyzing ? 'Indexing in Progress' : analyzingCodeSmells ? codeSmellsProgressTitle : 'Indexing Status' }}
         </div>
         <div v-if="currentJobId && analyzing" class="job-id">Job: {{ currentJobId.substring(0, 8) }}...</div>
       </div>
@@ -134,9 +145,13 @@
         </div>
       </div>
 
-      <!-- Main Progress Bar -->
+      <!-- Progress Bar: determinate for indexing/idle, indeterminate for code-smells-only -->
       <div class="progress-bar">
-        <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
+        <div
+          class="progress-fill"
+          :class="{ indeterminate: analyzingCodeSmells && !analyzing }"
+          :style="analyzingCodeSmells && !analyzing ? {} : { width: progressPercent + '%' }"
+        ></div>
       </div>
       <div class="progress-status">{{ progressStatus }}</div>
 
@@ -177,20 +192,6 @@
           <span>{{ jobStats.items_stored }} stored</span>
         </div>
       </div>
-    </div>
-
-    <!-- Code Smells Analysis Progress — Issue #1365: hide when indexing block is active (it's more detailed) -->
-    <div v-if="analyzingCodeSmells && !analyzing" class="progress-container code-smells-progress">
-      <div class="progress-header">
-        <div class="progress-title">
-          <i class="fas fa-spinner fa-spin"></i>
-          {{ codeSmellsProgressTitle }}
-        </div>
-      </div>
-      <div class="progress-bar">
-        <div class="progress-fill indeterminate"></div>
-      </div>
-      <div class="progress-status">{{ progressStatus }}</div>
     </div>
 
     <!-- Enhanced Analytics Dashboard Cards -->
