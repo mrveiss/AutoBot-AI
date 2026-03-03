@@ -194,21 +194,66 @@
 
         <div class="role-assignment" v-for="node in nodes" :key="node.node_id">
           <h3>{{ node.hostname }} ({{ node.ip_address }})</h3>
-          <div class="role-chips">
-            <label
-              v-for="role in availableRoles"
-              :key="role.name"
-              class="role-chip"
-              :class="{ selected: (nodeRoles[node.node_id] || []).includes(role.name) }"
+
+          <!-- Core Services (required) (#1350) -->
+          <div class="role-section">
+            <span class="section-header">Core Services</span>
+            <div class="role-chips">
+              <label
+                v-for="role in requiredRoles"
+                :key="role.name"
+                class="role-chip"
+                :class="{ selected: (nodeRoles[node.node_id] || []).includes(role.name) }"
+                :title="role.display_name"
+              >
+                <input
+                  type="checkbox"
+                  :value="role.name"
+                  :checked="(nodeRoles[node.node_id] || []).includes(role.name)"
+                  @change="toggleRole(node.node_id, role.name)"
+                />
+                {{ role.display_name || role.name }}
+              </label>
+            </div>
+          </div>
+
+          <!-- Optional Services (#1350) -->
+          <div class="role-section" v-if="optionalRoles.length">
+            <span class="section-header optional-header">Optional Services</span>
+            <div class="role-chips">
+              <label
+                v-for="role in optionalRoles"
+                :key="role.name"
+                class="role-chip optional-chip"
+                :class="{ selected: (nodeRoles[node.node_id] || []).includes(role.name) }"
+                :title="role.degraded_without.length
+                  ? 'Without: ' + role.degraded_without.join('; ')
+                  : role.display_name"
+              >
+                <input
+                  type="checkbox"
+                  :value="role.name"
+                  :checked="(nodeRoles[node.node_id] || []).includes(role.name)"
+                  @change="toggleRole(node.node_id, role.name)"
+                />
+                {{ role.display_name || role.name }}
+              </label>
+            </div>
+          </div>
+
+          <!-- Infra roles: auto-deployed, shown as locked (#1344) -->
+          <div
+            v-if="(nodeRoles[node.node_id] || []).some(r => !INFRA_ROLES.includes(r))"
+            class="infra-roles-row"
+          >
+            <span class="infra-label">Auto-deployed:</span>
+            <span
+              v-for="infra in INFRA_ROLES"
+              :key="infra"
+              class="role-chip infra-chip"
             >
-              <input
-                type="checkbox"
-                :value="role.name"
-                :checked="(nodeRoles[node.node_id] || []).includes(role.name)"
-                @change="toggleRole(node.node_id, role.name)"
-              />
-              {{ role.display_name || role.name }}
-            </label>
+              {{ infra === 'autobot-shared' ? 'Shared Library' : 'SLM Agent' }}
+            </span>
           </div>
         </div>
 
@@ -391,11 +436,18 @@ const allNodesEnrolled = computed(() =>
 interface RoleInfo {
   name: string
   display_name: string
+  required: boolean
+  degraded_without: string[]
 }
+
+const INFRA_ROLES = ['autobot-shared', 'slm-agent']
 
 const availableRoles = ref<RoleInfo[]>([])
 const nodeRoles = ref<Record<string, string[]>>({})
 const savingRoles = ref(false)
+
+const requiredRoles = computed(() => availableRoles.value.filter(r => r.required))
+const optionalRoles = computed(() => availableRoles.value.filter(r => !r.required))
 
 // ── Provisioning ──────────────────────────────────────────────────────────
 
@@ -455,10 +507,15 @@ async function loadNodes() {
 async function loadRoles() {
   try {
     const result = await fetchRoles()
-    availableRoles.value = result.map(r => ({
-      name: r.name,
-      display_name: r.description || r.name,
-    }))
+    // Filter out SLM-internal and infra roles (#1349, #1344)
+    availableRoles.value = result
+      .filter(r => !r.name.startsWith('slm-') && !INFRA_ROLES.includes(r.name))
+      .map(r => ({
+        name: r.name,
+        display_name: r.description || r.name,
+        required: r.required ?? false,
+        degraded_without: r.degraded_without ?? [],
+      }))
   } catch {
     availableRoles.value = []
   }
@@ -551,12 +608,22 @@ async function enrollAllNodes() {
 }
 
 function toggleRole(nodeId: string, roleName: string) {
-  const current = nodeRoles.value[nodeId] || []
+  let current = nodeRoles.value[nodeId] || []
   if (current.includes(roleName)) {
-    nodeRoles.value[nodeId] = current.filter(r => r !== roleName)
+    current = current.filter(r => r !== roleName)
   } else {
-    nodeRoles.value[nodeId] = [...current, roleName]
+    current = [...current, roleName]
   }
+  // Auto-inject/remove infra roles (#1344)
+  const hasUserRoles = current.some(r => !INFRA_ROLES.includes(r))
+  if (hasUserRoles) {
+    for (const infra of INFRA_ROLES) {
+      if (!current.includes(infra)) current.push(infra)
+    }
+  } else {
+    current = current.filter(r => !INFRA_ROLES.includes(r))
+  }
+  nodeRoles.value[nodeId] = current
 }
 
 async function saveRoles() {
@@ -987,6 +1054,53 @@ input.full-width {
 
 .role-chip input[type="checkbox"] {
   display: none;
+}
+
+.role-section {
+  margin-bottom: 0.75rem;
+}
+
+.section-header {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, #aaa);
+  margin-bottom: 0.4rem;
+}
+
+.optional-header {
+  color: var(--text-muted, #888);
+}
+
+.optional-chip {
+  opacity: 0.85;
+}
+
+.optional-chip.selected {
+  opacity: 1;
+}
+
+.infra-roles-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-muted, #888);
+}
+
+.infra-label {
+  font-style: italic;
+}
+
+.infra-chip {
+  background: var(--bg-tertiary, #252525);
+  border-color: var(--border-color, #555);
+  opacity: 0.7;
+  cursor: default;
+  font-size: 0.75rem;
 }
 
 /* Provision log */
