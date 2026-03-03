@@ -8,7 +8,7 @@
       variant="ghost"
       class="p-3 border-b border-autobot-border text-autobot-text-secondary flex-shrink-0"
       @click="controller.toggleSidebar()"
-      :aria-label="store.sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+      :aria-label="store.sidebarCollapsed ? $t('chat.sidebar.expandSidebar') : $t('chat.sidebar.collapseSidebar')"
     >
       <i :class="store.sidebarCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-left'"></i>
     </BaseButton>
@@ -19,26 +19,26 @@
       <!-- Chat History Section - FIXED: Scrollable area with multi-select -->
       <section class="flex-1 flex flex-col min-h-0 overflow-hidden p-4 pb-0">
         <div class="flex items-center justify-between mb-3 flex-shrink-0">
-          <h3 class="text-base font-semibold text-autobot-text-primary">Chat History</h3>
+          <h3 class="text-base font-semibold text-autobot-text-primary">{{ $t('chat.sidebar.chatHistory') }}</h3>
           <BaseButton
             v-if="!selectionMode"
             @click="enableSelectionMode"
             variant="ghost"
             size="xs"
             class="text-autobot-text-secondary"
-            title="Select multiple"
+            :title="$t('chat.sidebar.selectMultiple')"
           >
-            <i class="fas fa-check-square mr-1"></i>Select
+            <i class="fas fa-check-square mr-1"></i>{{ $t('common.select') }}
           </BaseButton>
           <div v-else class="flex items-center gap-2">
-            <span class="text-xs text-autobot-text-secondary">{{ selectedSessions.size }} selected</span>
+            <span class="text-xs text-autobot-text-secondary">{{ $t('chat.sidebar.nSelected', { count: selectedSessions.size }) }}</span>
             <BaseButton
               @click="cancelSelection"
               variant="ghost"
               size="xs"
               class="text-autobot-text-secondary"
             >
-              Cancel
+              {{ $t('common.cancel') }}
             </BaseButton>
           </div>
         </div>
@@ -85,7 +85,7 @@
                   size="xs"
                   class="text-autobot-primary p-1"
                   @click.stop="openShareDialog(session.id)"
-                  title="Share"
+                  :title="$t('common.share')"
                   tabindex="-1"
                 >
                   <i class="fas fa-share-alt text-xs"></i>
@@ -95,7 +95,7 @@
                   size="xs"
                   class="text-autobot-text-muted p-1"
                   @click.stop="editSessionName(session)"
-                  title="Edit Name"
+                  :title="$t('chat.editName')"
                   tabindex="-1"
                 >
                   <i class="fas fa-edit text-xs"></i>
@@ -105,7 +105,7 @@
                   size="xs"
                   class="text-red-400 p-1"
                   @click.stop="deleteSession(session.id)"
-                  title="Delete"
+                  :title="$t('common.delete')"
                   tabindex="-1"
                 >
                   <i class="fas fa-trash text-xs"></i>
@@ -115,7 +115,7 @@
 
             <!-- Session metadata - FIXED: Smaller, more compact -->
             <div class="text-xs text-autobot-text-secondary mt-1 flex justify-between leading-tight" :class="{ 'ml-6': selectionMode }">
-              <span>{{ session.messages.length }} msgs</span>
+              <span>{{ $t('chat.sidebar.nMsgs', { count: session.messages.length }) }}</span>
               <span>{{ formatDate(session.updatedAt) }}</span>
             </div>
           </div>
@@ -124,7 +124,7 @@
           <EmptyState
             v-if="store.sessions.length === 0"
             icon="fas fa-comments"
-            message="No chat sessions yet"
+            :message="$t('chat.sidebar.noSessions')"
           />
         </div>
 
@@ -135,10 +135,10 @@
             size="xs"
             class="py-1.5 px-2"
             @click="controller.createNewSession()"
-            aria-label="Create new chat"
+            :aria-label="$t('chat.sidebar.createNew')"
           >
             <i class="fas fa-plus mr-1"></i>
-            New
+            {{ $t('chat.sidebar.new') }}
           </BaseButton>
           <BaseButton
             variant="secondary"
@@ -146,10 +146,10 @@
             class="py-1.5 px-2"
             @click="controller.resetCurrentChat()"
             :disabled="!store.currentSessionId"
-            aria-label="Reset current chat"
+            :aria-label="$t('chat.sidebar.resetChat')"
           >
             <i class="fas fa-redo mr-1"></i>
-            Reset
+            {{ $t('common.reset') }}
           </BaseButton>
           <BaseButton
             variant="danger"
@@ -157,20 +157,20 @@
             class="py-1.5 px-2"
             @click="deleteCurrentSession()"
             :disabled="!store.currentSessionId"
-            aria-label="Delete current chat"
+            :aria-label="$t('chat.sidebar.deleteChat')"
           >
             <i class="fas fa-trash mr-1"></i>
-            Delete
+            {{ $t('common.delete') }}
           </BaseButton>
           <BaseButton
             variant="outline"
             size="xs"
             class="py-1.5 px-2"
             @click="controller.loadChatSessions()"
-            aria-label="Refresh chat list"
+            :aria-label="$t('chat.sidebar.refreshList')"
           >
             <i class="fas fa-sync mr-1"></i>
-            Refresh
+            {{ $t('common.refresh') }}
           </BaseButton>
         </div>
 
@@ -182,17 +182,17 @@
             class="w-full py-2"
             @click="deleteSelectedSessions()"
             :disabled="selectedSessions.size === 0"
-            aria-label="Delete selected conversations"
+            :aria-label="$t('chat.sidebar.deleteSelected')"
           >
             <i class="fas fa-trash mr-1.5"></i>
-            Delete {{ selectedSessions.size }} Selected
+            {{ $t('chat.sidebar.deleteNSelected', { count: selectedSessions.size }) }}
           </BaseButton>
         </div>
       </section>
 
       <!-- Display Settings Section - FIXED: More compact -->
       <section class="border-t border-autobot-border p-4 pb-3 flex-shrink-0">
-        <h3 class="text-base font-semibold text-autobot-text-primary mb-2">Message Display</h3>
+        <h3 class="text-base font-semibold text-autobot-text-primary mb-2">{{ $t('chat.sidebar.messageDisplay') }}</h3>
         <div class="space-y-2">
           <label v-for="setting in displaySettingsConfig" :key="setting.key" class="flex items-center">
             <input
@@ -208,7 +208,7 @@
 
       <!-- System Control Section - FIXED: More compact -->
       <section class="border-t border-autobot-border p-4 pb-4 flex-shrink-0">
-        <h3 class="text-base font-semibold text-autobot-text-primary mb-2">System Control</h3>
+        <h3 class="text-base font-semibold text-autobot-text-primary mb-2">{{ $t('chat.sidebar.systemControl') }}</h3>
         <div class="space-y-1.5">
           <BaseButton
             variant="primary"
@@ -216,15 +216,15 @@
             class="w-full py-1.5"
             @click="reloadSystem"
             :loading="isSystemReloading"
-            aria-label="Reload system"
+            :aria-label="$t('chat.sidebar.reloadSystem')"
           >
             <i class="fas fa-sync mr-1.5"></i>
-            {{ isSystemReloading ? 'Reloading...' : 'Reload System' }}
+            {{ isSystemReloading ? $t('chat.sidebar.reloading') : $t('chat.sidebar.reloadSystem') }}
           </BaseButton>
 
           <!-- System Status -->
           <div class="text-xs text-center text-autobot-text-secondary mt-1">
-            System: {{ systemStatus }}
+            {{ $t('chat.sidebar.system') }}: {{ systemStatus }}
           </div>
         </div>
       </section>
@@ -255,14 +255,14 @@
   <!-- Edit Session Name Modal -->
   <BaseModal
     v-model="showEditModal"
-    title="Edit Chat Name"
+    :title="$t('chat.sidebar.editChatName')"
     size="medium"
   >
     <input
       v-model="editingName"
       type="text"
       class="w-full px-3 py-2 border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-electric-500"
-      placeholder="Enter chat name..."
+      :placeholder="$t('chat.sidebar.enterChatName')"
       @keyup.enter="saveSessionName"
       @keyup.escape="cancelEdit"
       ref="editInput"
@@ -273,20 +273,21 @@
         variant="secondary"
         @click="cancelEdit"
       >
-        Cancel
+        {{ $t('common.cancel') }}
       </BaseButton>
       <BaseButton
         variant="primary"
         @click="saveSessionName"
       >
-        Save
+        {{ $t('common.save') }}
       </BaseButton>
     </template>
   </BaseModal>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, computed, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useDisplaySettings, type DisplaySettings } from '@/composables/useDisplaySettings'
@@ -305,6 +306,7 @@ import { useToast } from '@/composables/useToast'
 
 const logger = createLogger('ChatSidebar')
 
+const { t } = useI18n()
 const store = useChatStore()
 const controller = useChatController()
 const { getSetting, setSetting } = useDisplaySettings()
@@ -315,7 +317,7 @@ const editingName = ref('')
 const editingSession = ref<ChatSession | null>(null)
 const editInput = ref<HTMLInputElement>()
 const isSystemReloading = ref(false)
-const systemStatus = ref('Ready')
+const systemStatus = ref(t('status.ready'))
 
 // Multi-select state
 const selectionMode = ref(false)
@@ -405,15 +407,15 @@ const shareTargetSessionId = ref<string | null>(null)
 const { showToast } = useToast()
 
 // Display settings configuration (UI labels)
-const displaySettingsConfig = [
-  { key: 'showThoughts', label: 'Show Thoughts' },
-  { key: 'showJson', label: 'Show Metadata' },
-  { key: 'showUtility', label: 'Show Utility Messages' },
-  { key: 'showPlanning', label: 'Show Planning Messages' },
-  { key: 'showDebug', label: 'Show Debug Messages' },
-  { key: 'showSources', label: 'Show Sources' },
-  { key: 'autoScroll', label: 'Auto Scroll' }
-]
+const displaySettingsConfig = computed(() => [
+  { key: 'showThoughts', label: t('chat.sidebar.showThoughts') },
+  { key: 'showJson', label: t('chat.sidebar.showMetadata') },
+  { key: 'showUtility', label: t('chat.sidebar.showUtility') },
+  { key: 'showPlanning', label: t('chat.sidebar.showPlanning') },
+  { key: 'showDebug', label: t('chat.sidebar.showDebug') },
+  { key: 'showSources', label: t('chat.sidebar.showSources') },
+  { key: 'autoScroll', label: t('chat.sidebar.autoScroll') },
+])
 
 // Methods
 const getSessionPreview = (session: ChatSession): string => {
@@ -529,14 +531,14 @@ const handleDeleteConfirm = async (fileAction: string, fileOptions: any, selecte
 
     if (totalFacts > 0) {
       if (preservedCount > 0 && deletedCount > 0) {
-        showToast(`Conversation deleted. ${deletedCount} KB fact${deletedCount > 1 ? 's' : ''} removed, ${preservedCount} preserved.`, 'success')
+        showToast(t('chat.sidebar.deletedWithFactsMixed', { deleted: deletedCount, preserved: preservedCount }), 'success')
       } else if (deletedCount > 0) {
-        showToast(`Conversation deleted. ${deletedCount} KB fact${deletedCount > 1 ? 's' : ''} removed.`, 'success')
+        showToast(t('chat.sidebar.deletedWithFactsRemoved', { count: deletedCount }), 'success')
       } else {
-        showToast(`Conversation deleted. All ${preservedCount} KB fact${preservedCount > 1 ? 's' : ''} preserved.`, 'success')
+        showToast(t('chat.sidebar.deletedWithFactsPreserved', { count: preservedCount }), 'success')
       }
     } else {
-      showToast('Conversation deleted successfully.', 'success')
+      showToast(t('chat.sidebar.deletedSuccess'), 'success')
     }
 
     showDeleteDialog.value = false
@@ -545,7 +547,7 @@ const handleDeleteConfirm = async (fileAction: string, fileOptions: any, selecte
     deleteKBFacts.value = null
   } catch (error) {
     logger.error('Failed to delete session:', error)
-    showToast('Failed to delete conversation. Please try again.', 'error')
+    showToast(t('chat.sidebar.deleteFailed'), 'error')
   }
 }
 
@@ -566,7 +568,7 @@ const handleShareComplete = (result: Record<string, unknown>) => {
   showShareDialog.value = false
   shareTargetSessionId.value = null
   const sharedWith = (result?.shared_with as string[]) || []
-  showToast(`Conversation shared with ${sharedWith.length} user${sharedWith.length > 1 ? 's' : ''}.`, 'success')
+  showToast(t('chat.sidebar.sharedSuccess', { count: sharedWith.length }), 'success')
 }
 
 // Toggle setting handler
@@ -581,7 +583,7 @@ const toggleSetting = (key: string, value: boolean) => {
 
 const reloadSystem = async () => {
   isSystemReloading.value = true
-  systemStatus.value = 'Reloading...'
+  systemStatus.value = t('chat.sidebar.reloading')
 
   try {
     // Call real system reload API
@@ -589,18 +591,18 @@ const reloadSystem = async () => {
     const data = await (response as any).json()
 
     if (data && data.success) {
-      systemStatus.value = 'Ready'
+      systemStatus.value = t('status.ready')
 
       // Log reloaded components for debugging
       if (data.reloaded_components) {
         logger.debug('Reloaded components:', data.reloaded_components)
       }
     } else {
-      systemStatus.value = 'Error'
+      systemStatus.value = t('common.error')
       logger.error('System reload failed:', data?.message || 'Unknown error')
     }
   } catch (error) {
-    systemStatus.value = 'Error'
+    systemStatus.value = t('common.error')
     logger.error('System reload failed:', error)
   } finally {
     isSystemReloading.value = false
@@ -633,7 +635,7 @@ const toggleSelection = (sessionId: string) => {
 const deleteSelectedSessions = async () => {
   if (selectedSessions.value.size === 0) return
 
-  const confirmed = confirm(`Delete ${selectedSessions.value.size} conversation(s)? This action cannot be undone.`)
+  const confirmed = confirm(t('chat.sidebar.confirmDeleteSelected', { count: selectedSessions.value.size }))
   if (!confirmed) return
 
   // Delete all selected sessions in parallel - eliminates N+1 sequential API calls

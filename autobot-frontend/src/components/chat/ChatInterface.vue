@@ -1,5 +1,5 @@
 <template>
-  <ErrorBoundary fallback="Chat interface failed to load. Please refresh the page.">
+  <ErrorBoundary :fallback="$t('chat.interface.loadFailed')">
     <div class="chat-interface flex h-full bg-autobot-bg-card overflow-hidden">
 
       <!-- Chat Sidebar with Unified Loading -->
@@ -36,7 +36,7 @@
               @click="toggleVoiceOutput"
               class="header-btn"
               :class="{ 'bg-electric-100 text-electric-600': voiceOutputEnabled }"
-              :title="voiceOutputEnabled ? 'Voice output on — click to mute' : 'Voice output off — click to enable'"
+              :title="voiceOutputEnabled ? $t('chat.interface.voiceOutputOn') : $t('chat.interface.voiceOutputOff')"
             >
               <i :class="isSpeaking ? 'fas fa-volume-up animate-pulse' : voiceOutputEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute'"></i>
             </button>
@@ -45,7 +45,7 @@
               @click="openVoiceConversation"
               class="header-btn"
               :class="{ 'bg-electric-100 text-electric-600': showVoiceOverlay || showVoicePanel }"
-              title="Voice chat — talk to AutoBot"
+              :title="$t('chat.interface.voiceChat')"
             >
               <i class="fas fa-headset"></i>
             </button>
@@ -54,7 +54,7 @@
               @click="toggleFilePanel"
               class="header-btn"
               :class="{ 'bg-electric-100 text-electric-600': showFilePanel }"
-              title="Toggle file panel"
+              :title="$t('chat.interface.toggleFilePanel')"
             >
               <i class="fas fa-paperclip"></i>
             </button>
@@ -149,6 +149,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
@@ -182,6 +183,9 @@ import WorkflowProgressWidget from '@/components/workflow/WorkflowProgressWidget
 import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
 import VoiceConversationPanel from './VoiceConversationPanel.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+
+// i18n
+const { t } = useI18n()
 
 // Stores and controller
 const store = useChatStore()
@@ -304,13 +308,13 @@ const submitOverseerQuery = async (query: string) => {
 provide('submitOverseerQuery', submitOverseerQuery)
 
 // Connection state with stabilized status management
-const baseConnectionStatus = ref('Connected')
+const baseConnectionStatus = ref(t('status.connected'))
 const isConnected = ref(true)
 const lastHeartbeat = ref(Date.now())
 const connectionStatus = computed(() => {
   // If typing, show typing status temporarily
   if (store.isTyping) {
-    return 'AI is typing...'
+    return t('chat.interface.aiTyping')
   }
   // Otherwise show base connection status
   return baseConnectionStatus.value
@@ -357,14 +361,14 @@ const loadNovncUrl = async () => {
 // Computed
 const currentSessionTitle = computed(() => {
   const session = store.currentSession
-  if (!session) return 'New Chat'
+  if (!session) return t('chat.newChat')
 
   return session.title || `Chat ${session.id.slice(-8)}...`
 })
 
 const sessionInfo = computed(() => {
   const session = store.currentSession
-  if (!session) return 'Start a conversation'
+  if (!session) return t('chat.interface.startConversation')
 
   const messageCount = session.messages.length
   const lastMessage = session.messages[session.messages.length - 1]
@@ -418,7 +422,7 @@ const exportSession = async () => {
 const clearSession = async () => {
   if (!store.currentSessionId) return
 
-  if (confirm('Clear all messages in this chat? This action cannot be undone.')) {
+  if (confirm(t('chat.interface.confirmClear'))) {
     try {
       await controller.resetCurrentChat()
     } catch (error) {
@@ -653,15 +657,15 @@ const checkConnection = async () => {
 
     if (isConnectionValid) {
       isConnected.value = true
-      baseConnectionStatus.value = 'Connected'
+      baseConnectionStatus.value = t('status.connected')
       lastHeartbeat.value = Date.now()
     } else {
       isConnected.value = false
-      baseConnectionStatus.value = 'Disconnected'
+      baseConnectionStatus.value = t('status.disconnected')
     }
   } catch (error) {
     isConnected.value = false
-    baseConnectionStatus.value = 'Disconnected'
+    baseConnectionStatus.value = t('status.disconnected')
   }
 }
 

@@ -24,7 +24,7 @@
           v-if="currentSessionId"
           @click="$emit('export-session')"
           class="header-btn"
-          title="Export chat"
+          :title="$t('chat.exportChat')"
         >
           <i class="fas fa-download"></i>
         </button>
@@ -33,7 +33,7 @@
           v-if="currentSessionId"
           @click="$emit('clear-session')"
           class="header-btn"
-          title="Clear chat"
+          :title="$t('chat.clearChat')"
         >
           <i class="fas fa-trash"></i>
         </button>

@@ -4,16 +4,16 @@
     <div class="flex items-center justify-between p-3 border-b border-autobot-border flex-shrink-0">
       <div class="flex items-center gap-2">
         <i class="fas fa-folder text-autobot-text-secondary"></i>
-        <h3 class="text-sm font-semibold text-autobot-text-primary">File Manager</h3>
+        <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('chat.filePanel.title') }}</h3>
       </div>
       <div class="flex items-center gap-1">
-        <button @click="showCreateDialog = true" class="action-btn" title="New file (Ctrl+N)">
+        <button @click="showCreateDialog = true" class="action-btn" :title="$t('chat.filePanel.newFile')">
           <i class="fas fa-plus text-xs"></i>
         </button>
-        <button @click="viewMode = viewMode === 'list' ? 'grid' : 'list'" class="action-btn" :title="viewMode === 'list' ? 'Grid view' : 'List view'">
+        <button @click="viewMode = viewMode === 'list' ? 'grid' : 'list'" class="action-btn" :title="viewMode === 'list' ? $t('chat.filePanel.gridView') : $t('chat.filePanel.listView')">
           <i :class="viewMode === 'list' ? 'fas fa-th' : 'fas fa-list'" class="text-xs"></i>
         </button>
-        <button @click="$emit('close')" class="action-btn" title="Close panel">
+        <button @click="$emit('close')" class="action-btn" :title="$t('chat.filePanel.closePanel')">
           <i class="fas fa-times text-xs"></i>
         </button>
       </div>
@@ -31,13 +31,13 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search files..."
+          :placeholder="$t('chat.filePanel.searchFiles')"
           class="w-full pl-7 pr-2 py-1.5 text-xs border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary bg-autobot-bg-tertiary"
         />
       </div>
       <!-- Sort -->
       <div class="flex items-center gap-1 text-xs">
-        <span class="text-autobot-text-secondary">Sort:</span>
+        <span class="text-autobot-text-secondary">{{ $t('chat.filePanel.sort') }}:</span>
         <button
           v-for="opt in sortOptions"
           :key="opt.field"
@@ -51,11 +51,11 @@
       </div>
       <!-- Bulk actions -->
       <div v-if="selectedCount > 0" class="flex items-center justify-between bg-autobot-bg-tertiary rounded-md px-2 py-1">
-        <span class="text-xs text-autobot-text-secondary">{{ selectedCount }} selected</span>
+        <span class="text-xs text-autobot-text-secondary">{{ $t('chat.filePanel.nSelected', { count: selectedCount }) }}</span>
         <div class="flex gap-1">
-          <button @click="handleBulkDelete" class="text-xs text-red-600 hover:text-red-800 px-1">Delete</button>
+          <button @click="handleBulkDelete" class="text-xs text-red-600 hover:text-red-800 px-1">{{ $t('common.delete') }}</button>
           <button @click="selectAllFiles" class="text-xs text-autobot-primary hover:text-autobot-text-secondary px-1">
-            {{ allSelected ? 'Deselect' : 'Select all' }}
+            {{ allSelected ? $t('chat.filePanel.deselect') : $t('chat.filePanel.selectAll') }}
           </button>
         </div>
       </div>
@@ -77,7 +77,7 @@
       >
         <i class="fas fa-cloud-upload-alt text-2xl mb-1" :class="isDragging ? 'text-autobot-primary' : 'text-autobot-text-muted'"></i>
         <p class="text-xs text-autobot-text-secondary">
-          {{ isDragging ? 'Drop files here' : 'Click or drag files' }}
+          {{ isDragging ? $t('chat.filePanel.dropFiles') : $t('chat.filePanel.clickOrDrag') }}
         </p>
         <input
           ref="fileInput"
@@ -92,7 +92,7 @@
       <!-- Upload Progress -->
       <div v-if="uploadProgress > 0 && uploadProgress < 100" class="mt-2">
         <div class="flex items-center justify-between text-xs text-autobot-text-secondary mb-1">
-          <span>Uploading...</span>
+          <span>{{ $t('chat.filePanel.uploading') }}</span>
           <span>{{ uploadProgress }}%</span>
         </div>
         <div class="w-full bg-autobot-bg-tertiary rounded-full h-1.5">
@@ -126,14 +126,14 @@
       <EmptyState
         v-if="!hasFiles && !loading"
         icon="fas fa-folder-open"
-        message="No files attached"
+        :message="$t('chat.filePanel.noFiles')"
         compact
       />
 
       <!-- Loading State -->
       <div v-if="loading && !hasFiles" class="text-center py-8">
         <i class="fas fa-spinner fa-spin text-2xl text-autobot-text-muted mb-2"></i>
-        <p class="text-xs text-autobot-text-secondary">Loading files...</p>
+        <p class="text-xs text-autobot-text-secondary">{{ $t('chat.filePanel.loadingFiles') }}</p>
       </div>
 
       <!-- File Items -->
@@ -170,7 +170,7 @@
                 @keyup.escape="renamingFileId = null"
                 class="w-full text-xs px-1 py-0.5 border border-autobot-primary rounded focus:outline-none"
               />
-              <button @click="handleRename" class="action-btn" title="Save">
+              <button @click="handleRename" class="action-btn" :title="$t('common.save')">
                 <i class="fas fa-check text-xs text-green-600"></i>
               </button>
             </div>
@@ -188,7 +188,7 @@
               size="small"
               class="mt-1"
             >
-              AI Generated
+              {{ $t('chat.filePanel.aiGenerated') }}
             </StatusBadge>
           </div>
 
@@ -198,7 +198,7 @@
               v-if="isPreviewable(file.mime_type)"
               @click="handlePreview(file.file_id)"
               class="action-btn"
-              title="Preview"
+              :title="$t('chat.filePanel.preview')"
             >
               <i class="fas fa-eye text-xs"></i>
             </button>
@@ -206,21 +206,21 @@
               v-if="isEditable(file.mime_type)"
               @click="startEdit(file.file_id, file.filename)"
               class="action-btn"
-              title="Edit"
+              :title="$t('common.edit')"
             >
               <i class="fas fa-edit text-xs"></i>
             </button>
             <button
               @click="handleDownload(file.file_id, file.filename)"
               class="action-btn"
-              title="Download"
+              :title="$t('chat.filePanel.download')"
             >
               <i class="fas fa-download text-xs"></i>
             </button>
             <button
               @click="handleDelete(file.file_id, file.filename)"
               class="action-btn text-red-400 hover:text-red-600"
-              title="Delete"
+              :title="$t('common.delete')"
             >
               <i class="fas fa-trash text-xs"></i>
             </button>
@@ -238,18 +238,18 @@
         @click.stop
       >
         <button v-if="isPreviewable(contextMenu.mimeType)" @click="handlePreview(contextMenu.fileId); closeContextMenu()"
-          class="ctx-menu-item"><i class="fas fa-eye w-4"></i> Preview</button>
+          class="ctx-menu-item"><i class="fas fa-eye w-4"></i> {{ $t('chat.filePanel.preview') }}</button>
         <button v-if="isEditable(contextMenu.mimeType)" @click="startEdit(contextMenu.fileId, contextMenu.filename)"
-          class="ctx-menu-item"><i class="fas fa-edit w-4"></i> Edit</button>
+          class="ctx-menu-item"><i class="fas fa-edit w-4"></i> {{ $t('common.edit') }}</button>
         <button @click="startRename(contextMenu.fileId, contextMenu.filename)"
-          class="ctx-menu-item"><i class="fas fa-i-cursor w-4"></i> Rename</button>
+          class="ctx-menu-item"><i class="fas fa-i-cursor w-4"></i> {{ $t('chat.filePanel.rename') }}</button>
         <button @click="handleCopy(contextMenu.fileId)"
-          class="ctx-menu-item"><i class="fas fa-copy w-4"></i> Duplicate</button>
+          class="ctx-menu-item"><i class="fas fa-copy w-4"></i> {{ $t('chat.filePanel.duplicate') }}</button>
         <button @click="handleDownload(contextMenu.fileId, contextMenu.filename); closeContextMenu()"
-          class="ctx-menu-item"><i class="fas fa-download w-4"></i> Download</button>
+          class="ctx-menu-item"><i class="fas fa-download w-4"></i> {{ $t('chat.filePanel.download') }}</button>
         <div class="border-t border-autobot-border my-1"></div>
         <button @click="handleDelete(contextMenu.fileId, contextMenu.filename); closeContextMenu()"
-          class="ctx-menu-item text-red-600 hover:bg-red-50"><i class="fas fa-trash w-4"></i> Delete</button>
+          class="ctx-menu-item text-red-600 hover:bg-red-50"><i class="fas fa-trash w-4"></i> {{ $t('common.delete') }}</button>
       </div>
     </Teleport>
 
@@ -257,22 +257,22 @@
     <Teleport to="body">
       <div v-if="showCreateDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="showCreateDialog = false">
         <div class="bg-autobot-bg-card rounded-lg shadow-xl w-80 p-4">
-          <h4 class="text-sm font-semibold text-autobot-text-primary mb-3">Create New File</h4>
+          <h4 class="text-sm font-semibold text-autobot-text-primary mb-3">{{ $t('chat.filePanel.createNewFile') }}</h4>
           <input
             v-model="newFileName"
-            placeholder="filename.txt"
+            :placeholder="$t('chat.filePanel.filenamePlaceholder')"
             class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary mb-2"
             @keyup.enter="handleCreateFile"
           />
           <textarea
             v-model="newFileContent"
-            placeholder="File content (optional)"
+            :placeholder="$t('chat.filePanel.contentPlaceholder')"
             rows="4"
             class="w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary mb-3 resize-none font-mono"
           ></textarea>
           <div class="flex justify-end gap-2">
-            <button @click="showCreateDialog = false" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">Cancel</button>
-            <button @click="handleCreateFile" :disabled="!newFileName.trim()" class="px-3 py-1 text-xs text-white bg-autobot-primary hover:bg-autobot-primary-hover rounded disabled:opacity-50">Create</button>
+            <button @click="showCreateDialog = false" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">{{ $t('common.cancel') }}</button>
+            <button @click="handleCreateFile" :disabled="!newFileName.trim()" class="px-3 py-1 text-xs text-white bg-autobot-primary hover:bg-autobot-primary-hover rounded disabled:opacity-50">{{ $t('common.create') }}</button>
           </div>
         </div>
       </div>
@@ -291,8 +291,8 @@
             class="flex-1 w-full text-xs px-2 py-1.5 border border-autobot-border rounded-md focus:outline-none focus:border-autobot-primary resize-none font-mono min-h-[200px]"
           ></textarea>
           <div class="flex justify-end gap-2 mt-3">
-            <button @click="editingFileId = null" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">Cancel</button>
-            <button @click="handleSaveEdit" class="px-3 py-1 text-xs text-white bg-autobot-primary hover:bg-autobot-primary-hover rounded">Save</button>
+            <button @click="editingFileId = null" class="px-3 py-1 text-xs text-autobot-text-secondary hover:bg-autobot-bg-secondary rounded">{{ $t('common.cancel') }}</button>
+            <button @click="handleSaveEdit" class="px-3 py-1 text-xs text-white bg-autobot-primary hover:bg-autobot-primary-hover rounded">{{ $t('common.save') }}</button>
           </div>
         </div>
       </div>
@@ -301,7 +301,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useConversationFiles, type SortField } from '@/composables/useConversationFiles'
 import { formatTimeAgo } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -314,6 +315,8 @@ const props = defineProps<{
 defineEmits<{
   close: []
 }>()
+
+const { t } = useI18n()
 
 // File management composable
 const {
@@ -365,12 +368,12 @@ const renamingFileId = ref<string | null>(null)
 const renameValue = ref('')
 const contextMenu = ref<{ x: number; y: number; fileId: string; filename: string; mimeType: string } | null>(null)
 
-const sortOptions = [
-  { field: 'name' as SortField, label: 'Name' },
-  { field: 'date' as SortField, label: 'Date' },
-  { field: 'size' as SortField, label: 'Size' },
-  { field: 'type' as SortField, label: 'Type' }
-]
+const sortOptions = computed(() => [
+  { field: 'name' as SortField, label: t('chat.filePanel.sortName') },
+  { field: 'date' as SortField, label: t('chat.filePanel.sortDate') },
+  { field: 'size' as SortField, label: t('chat.filePanel.sortSize') },
+  { field: 'type' as SortField, label: t('chat.filePanel.sortType') },
+])
 
 // Methods
 const triggerFileInput = () => {
@@ -396,7 +399,7 @@ const handleDrop = async (event: DragEvent) => {
 const handlePreview = async (fileId: string) => { await previewFile(fileId) }
 const handleDownload = async (fileId: string, filename: string) => { await downloadFile(fileId, filename) }
 const handleDelete = async (fileId: string, filename: string) => {
-  if (confirm(`Delete "${filename}"? This action cannot be undone.`)) {
+  if (confirm(t('chat.filePanel.confirmDelete', { name: filename }))) {
     await deleteFile(fileId)
   }
 }
@@ -447,7 +450,7 @@ const handleCopy = async (fileId: string) => {
 }
 
 const handleBulkDelete = async () => {
-  if (confirm(`Delete ${selectedCount.value} selected files? This cannot be undone.`)) {
+  if (confirm(t('chat.filePanel.confirmBulkDelete', { count: selectedCount.value }))) {
     await deleteSelectedFiles()
   }
 }
