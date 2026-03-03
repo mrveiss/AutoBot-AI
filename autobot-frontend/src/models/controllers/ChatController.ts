@@ -320,6 +320,11 @@ export class ChatController {
                 continue
               }
 
+              // Map backend type to frontend type (must be before addMessage to set type immediately,
+              // preventing the 80ms throttle window where the message appears as 'response' then
+              // disappears when the real type is applied — issue #1364)
+              const messageType = this.mapMessageType(data.type, data.metadata?.message_type)
+
               // Agent Zero Pattern: Use backend message_id for stable identity
               const backendMessageId = data.metadata?.message_id || data.id
               let frontendMessageId: string
@@ -332,20 +337,18 @@ export class ChatController {
                 // Prevents duplicate messages when chunks lack message_id
                 frontendMessageId = fallbackMessageId
               } else {
-                // New message - create it
+                // New message - create it with type set immediately to prevent filter flicker (#1364)
                 const sender = data.type === 'terminal_output' ? 'system' : 'assistant'
                 frontendMessageId = this.chatStore.addMessage({
                   content: '',
-                  sender
+                  sender,
+                  type: messageType
                 })
                 if (backendMessageId) {
                   messageIdMap.set(backendMessageId, frontendMessageId)
                 }
                 fallbackMessageId = frontendMessageId
               }
-
-              // Map backend type to frontend type
-              const messageType = this.mapMessageType(data.type, data.metadata?.message_type)
 
               // Handle special message types
               if (data.type === 'command_approval_request') {
