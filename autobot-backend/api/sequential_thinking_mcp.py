@@ -19,14 +19,18 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["sequential_thinking_mcp", "mcp"])
+router = APIRouter(
+    tags=["sequential_thinking_mcp", "mcp"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 # In-memory storage for thinking sessions (could be moved to Redis for persistence)
 thinking_sessions: Dict[str, List[Metadata]] = {}

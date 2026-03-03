@@ -32,8 +32,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
+from auth_middleware import check_admin_permission
 from constants.threshold_constants import QueryDefaults
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from type_defs.common import JSONObject, Metadata
 
@@ -44,7 +45,10 @@ logger = logging.getLogger(__name__)
 
 # Default repository path from SSOT (Issue #610 - config consolidation)
 DEFAULT_REPO_PATH = str(PROJECT_ROOT)
-router = APIRouter(tags=["git_mcp", "mcp"])
+router = APIRouter(
+    tags=["git_mcp", "mcp"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 # Issue #380: Pre-compiled regex patterns for validators
 # These are called on every git request validation

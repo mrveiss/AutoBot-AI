@@ -129,7 +129,7 @@ from api.terminal_models import (
     TerminalInputRequest,
     TerminalSessionRequest,
 )
-from auth_middleware import get_current_user
+from auth_middleware import check_admin_permission, get_current_user
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from services.simple_pty import simple_pty_manager
 
@@ -141,7 +141,10 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 logger = logging.getLogger(__name__)
 
 # Create router for consolidated terminal API
-router = APIRouter(tags=["terminal"])
+router = APIRouter(
+    tags=["terminal"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 # Import SSH terminal handlers for infrastructure host connections (Issue #715)

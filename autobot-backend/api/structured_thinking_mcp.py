@@ -27,14 +27,18 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["structured_thinking_mcp", "mcp"])
+router = APIRouter(
+    tags=["structured_thinking_mcp", "mcp"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 class ThinkingStage(str, Enum):

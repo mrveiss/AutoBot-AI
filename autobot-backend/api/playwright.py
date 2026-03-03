@@ -9,9 +9,9 @@ Provides native API access to containerized Playwright functionality
 import logging
 
 import aiohttp
-from config import ConfigManager
+from auth_middleware import check_admin_permission
 from constants.network_constants import NetworkConstants
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from services.playwright_service import (
     get_playwright_service,
@@ -23,11 +23,12 @@ from services.playwright_service import (
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from config import ConfigManager
 
 # Create singleton config instance
 config = ConfigManager()
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = logging.getLogger(__name__)
 
 

@@ -9,8 +9,9 @@ Provides workflow scheduling and queue management capabilities
 from datetime import datetime
 from typing import List, Optional, Union
 
+from auth_middleware import check_admin_permission
 from constants.threshold_constants import RetryConfig
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from type_defs.common import Metadata
 from workflow_scheduler import WorkflowPriority
@@ -19,7 +20,7 @@ from workflow_scheduler import WorkflowStatus, workflow_scheduler
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(check_admin_permission)])
 
 
 class ScheduleWorkflowRequest(BaseModel):
