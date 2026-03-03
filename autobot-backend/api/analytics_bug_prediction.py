@@ -10,6 +10,7 @@ and targeted testing suggestions.
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 from datetime import datetime, timedelta
@@ -28,11 +29,76 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/bug-prediction", tags=["bug-prediction", "analytics"])
 
+# Issue #1341: Cache configuration for bug prediction
+BUG_PREDICTION_CACHE_PREFIX = "codebase:bug_prediction:cache"
+BUG_PREDICTION_CACHE_TTL = 300  # 5 minutes cache
+
 # Performance optimization: O(1) lookup for control flow keywords (Issue #326)
 CONTROL_FLOW_KEYWORDS = {"if ", "elif ", "else:", "try:", "except:", "for ", "while "}
 
 # Issue #380: Module-level tuple for function definition prefixes
 _FUNCTION_DEF_PREFIXES = ("def ", "async def ")
+
+
+def _get_bug_prediction_cache_key(path: str, include_pattern: str, limit: int) -> str:
+    """
+    Generate parameter-specific cache key for bug prediction.
+
+    Issue #1341: Include path, pattern, and limit in cache key
+    to prevent stale data across different query parameters.
+    """
+    raw = f"{path}:{include_pattern}:{limit}"
+    param_hash = hashlib.md5(raw.encode()).hexdigest()[:12]
+    return f"{BUG_PREDICTION_CACHE_PREFIX}:{param_hash}"
+
+
+async def _get_cached_bug_prediction(
+    path: str, include_pattern: str, limit: int
+) -> dict | None:
+    """
+    Get cached bug prediction from Redis.
+
+    Issue #1341: Cache for 5 minutes to prevent re-running
+    expensive git subprocesses and complexity analysis.
+    """
+    try:
+        cache_key = _get_bug_prediction_cache_key(path, include_pattern, limit)
+        redis_client = get_redis_client(async_client=False, database="cache")
+        cached = redis_client.get(cache_key)
+        if cached:
+            logger.debug("Bug prediction cache hit for path: %s", path)
+            return json.loads(cached)
+    except Exception as e:
+        logger.debug("Cache read error (non-critical): %s", e)
+    return None
+
+
+async def _set_cached_bug_prediction(
+    path: str,
+    include_pattern: str,
+    limit: int,
+    data: dict,
+) -> None:
+    """
+    Cache bug prediction results in Redis.
+
+    Issue #1341: Cache for 5 minutes (300 seconds).
+    """
+    try:
+        cache_key = _get_bug_prediction_cache_key(path, include_pattern, limit)
+        redis_client = get_redis_client(async_client=False, database="cache")
+        redis_client.setex(
+            cache_key,
+            BUG_PREDICTION_CACHE_TTL,
+            json.dumps(data, default=str),
+        )
+        logger.debug(
+            "Bug prediction cached for %d seconds (path: %s)",
+            BUG_PREDICTION_CACHE_TTL,
+            path,
+        )
+    except Exception as e:
+        logger.debug("Cache write error (non-critical): %s", e)
 
 
 def _no_data_response(
@@ -788,64 +854,84 @@ async def _safe_store_prediction_history(
         )
 
 
+async def _run_bug_analysis(
+    path: str, include_pattern: str, limit: int
+) -> dict[str, Any]:
+    """Run full bug prediction analysis pipeline.
+
+    Issue #1341: Extracted from analyze_codebase to keep endpoint under
+    65-line limit. Ref: analyze_codebase.
+    """
+    bug_history, change_freq, files_to_analyze = await asyncio.gather(
+        get_git_bug_history(),
+        get_file_change_frequency(),
+        asyncio.to_thread(_find_files_sync, path, include_pattern, limit),
+    )
+
+    if not files_to_analyze:
+        return _no_data_response(
+            f"No files matching '{include_pattern}' found in '{path}'"
+        )
+
+    analyzed_files = await _analyze_files_parallel(
+        files_to_analyze, change_freq, bug_history
+    )
+    analyzed_files.sort(key=lambda x: x["risk_score"], reverse=True)
+    high_risk = sum(1 for f in analyzed_files if f["risk_score"] >= 60)
+
+    risk_dist = {level.value: 0 for level in RiskLevel}
+    for f in analyzed_files:
+        level = get_risk_level(f["risk_score"])
+        risk_dist[level.value] += 1
+
+    asyncio.create_task(
+        _safe_store_prediction_history(
+            total_files=len(files_to_analyze),
+            high_risk_count=high_risk,
+            risk_distribution=risk_dist,
+            analyzed_files=analyzed_files,
+        )
+    )
+
+    return {
+        "status": "success",
+        "timestamp": datetime.now().isoformat(),
+        "total_files": len(files_to_analyze),
+        "analyzed_files": len(analyzed_files),
+        "high_risk_count": high_risk,
+        "files": analyzed_files[:limit],
+        "from_cache": False,
+    }
+
+
 @router.get("/analyze")
 async def analyze_codebase(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
     limit: int = Query(1000, ge=1, le=5000, description="Maximum files to analyze"),
+    refresh: bool = Query(False, description="Force refresh, bypass cache"),
 ) -> dict[str, Any]:
     """
     Analyze codebase for bug risk (Issue #543: no demo data).
     Issue #744: Requires admin authentication.
-
-    Returns risk assessment for all files matching the pattern.
-    Issue #569: Also stores prediction history for trend tracking.
+    Issue #1341: Results cached in Redis for 5 minutes.
     """
     try:
-        # Issue #664: Parallelize independent data fetches
-        bug_history, change_freq, files_to_analyze = await asyncio.gather(
-            get_git_bug_history(),
-            get_file_change_frequency(),
-            asyncio.to_thread(_find_files_sync, path, include_pattern, limit),
-        )
+        if not refresh:
+            cached = await _get_cached_bug_prediction(path, include_pattern, limit)
+            if cached:
+                cached["from_cache"] = True
+                return cached
 
-        if not files_to_analyze:
-            return _no_data_response(
-                f"No files matching '{include_pattern}' found in '{path}'"
+        response_data = await _run_bug_analysis(path, include_pattern, limit)
+
+        if response_data.get("status") == "success":
+            await _set_cached_bug_prediction(
+                path, include_pattern, limit, response_data
             )
 
-        # Issue #609: Analyze files in parallel
-        analyzed_files = await _analyze_files_parallel(
-            files_to_analyze, change_freq, bug_history
-        )
-        analyzed_files.sort(key=lambda x: x["risk_score"], reverse=True)
-        high_risk = sum(1 for f in analyzed_files if f["risk_score"] >= 60)
-
-        # Issue #569: Calculate risk distribution and store prediction history
-        risk_dist = {level.value: 0 for level in RiskLevel}
-        for f in analyzed_files:
-            level = get_risk_level(f["risk_score"])
-            risk_dist[level.value] += 1
-
-        # Store prediction history asynchronously (don't block response)
-        asyncio.create_task(
-            _safe_store_prediction_history(
-                total_files=len(files_to_analyze),
-                high_risk_count=high_risk,
-                risk_distribution=risk_dist,
-                analyzed_files=analyzed_files,
-            )
-        )
-
-        return {
-            "status": "success",
-            "timestamp": datetime.now().isoformat(),
-            "total_files": len(files_to_analyze),
-            "analyzed_files": len(analyzed_files),
-            "high_risk_count": high_risk,
-            "files": analyzed_files[:limit],
-        }
+        return response_data
 
     except Exception as e:
         logger.error("Failed to analyze codebase: %s", e, exc_info=True)

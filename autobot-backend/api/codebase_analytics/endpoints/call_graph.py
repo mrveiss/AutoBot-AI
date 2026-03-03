@@ -15,6 +15,7 @@ from typing import Dict, List, Optional
 import aiofiles
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
+from utils.io_executor import get_analytics_executor
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import get_redis_client
@@ -106,8 +107,17 @@ EXCLUDED_DIRS = {
 
 
 async def _get_python_files(project_root) -> List:
-    """Get filtered list of Python files for analysis (Issue #281: extracted)."""
-    python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
+    """Get filtered list of Python files for analysis.
+
+    Issue #281: extracted.
+    Issue #1341: Uses dedicated analytics executor to prevent
+    default thread pool contention during indexing.
+    """
+    loop = asyncio.get_running_loop()
+    python_files = await loop.run_in_executor(
+        get_analytics_executor(),
+        lambda: list(project_root.rglob("*.py")),
+    )
     return [
         f
         for f in python_files

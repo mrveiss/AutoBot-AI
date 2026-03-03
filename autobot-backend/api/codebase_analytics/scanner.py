@@ -61,6 +61,11 @@ from .types import FileAnalysisResult
 logger = logging.getLogger(__name__)
 
 # =============================================================================
+# Issue #1341: Subprocess timeout and watchdog configuration
+_SUBPROCESS_HARD_TIMEOUT = 1800  # 30 minutes max for entire subprocess
+_SUBPROCESS_PROGRESS_TIMEOUT = 300  # 5 min without progress = stale
+_SUBPROCESS_WATCHDOG_INTERVAL = 30  # Check progress every 30 seconds
+
 # Dedicated Indexing Thread Pool (Issue #XXX: Prevent thread starvation)
 # =============================================================================
 # The indexing task needs its own thread pool to avoid being starved by
@@ -2950,6 +2955,58 @@ async def _handle_subprocess_crash(task_id: str, returncode: int) -> None:
         await _save_task_to_redis(task_id)
 
 
+async def _wait_with_watchdog(
+    proc: asyncio.subprocess.Process,
+    task_id: str,
+) -> int:
+    """Wait for subprocess with progress watchdog (#1341).
+
+    Periodically checks if the subprocess is still making progress
+    by reading the task state from Redis. If no progress update
+    for _SUBPROCESS_PROGRESS_TIMEOUT seconds, kills the subprocess.
+    """
+    last_progress_hash = None
+    last_progress_time = asyncio.get_event_loop().time()
+
+    while True:
+        try:
+            returncode = await asyncio.wait_for(
+                proc.wait(),
+                timeout=_SUBPROCESS_WATCHDOG_INTERVAL,
+            )
+            return returncode
+        except asyncio.TimeoutError:
+            pass  # Process still running — check progress
+
+        task_data = await _load_task_from_redis(task_id)
+        if task_data:
+            status = task_data.get("status")
+            if status in ("completed", "failed", "cancelled"):
+                return await proc.wait()
+
+            progress = task_data.get("progress", {})
+            progress_hash = (
+                progress.get("current"),
+                progress.get("total"),
+                progress.get("operation"),
+            )
+            now = asyncio.get_event_loop().time()
+
+            if progress_hash != last_progress_hash:
+                last_progress_hash = progress_hash
+                last_progress_time = now
+            elif now - last_progress_time > _SUBPROCESS_PROGRESS_TIMEOUT:
+                logger.error(
+                    "[Task %s] Subprocess stale for %d seconds, "
+                    "killing (no progress update)",
+                    task_id,
+                    int(now - last_progress_time),
+                )
+                proc.kill()
+                await proc.wait()
+                return -9
+
+
 async def _run_indexing_subprocess(task_id: str, root_path: str) -> None:
     """Launch isolated indexing subprocess to prevent ChromaDB SIGSEGV (#1180).
 
@@ -2957,6 +3014,8 @@ async def _run_indexing_subprocess(task_id: str, root_path: str) -> None:
     ChromaDB PersistentClient does not conflict with the KB's concurrent
     client. If the subprocess crashes (SIGSEGV), this coroutine catches the
     non-zero exit code and marks the task failed in Redis.
+
+    Issue #1341: Added 30-minute hard timeout and 5-minute progress watchdog.
 
     Designed as a drop-in async replacement for asyncio.create_task usage of
     do_indexing_with_progress — wrap in asyncio.create_task() as before.
@@ -2976,7 +3035,22 @@ async def _run_indexing_subprocess(task_id: str, root_path: str) -> None:
         task_id,
         root_path,
     )
-    returncode = await proc.wait()
+
+    # Issue #1341: Wait with watchdog + hard timeout
+    try:
+        returncode = await asyncio.wait_for(
+            _wait_with_watchdog(proc, task_id),
+            timeout=_SUBPROCESS_HARD_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            "[Task %s] Subprocess exceeded hard timeout of %d seconds",
+            task_id,
+            _SUBPROCESS_HARD_TIMEOUT,
+        )
+        proc.kill()
+        await proc.wait()
+        returncode = -9
 
     if returncode != 0:
         await _handle_subprocess_crash(task_id, returncode)
