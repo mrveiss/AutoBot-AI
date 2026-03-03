@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional
 from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
-from services.personality_service import get_personality_manager
+from services.personality_service import SUPPORTED_LANGUAGES, get_personality_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["personality"])
@@ -50,6 +50,7 @@ class ProfileDetail(BaseModel):
     created_at: str
     updated_at: str
     voice_id: str = ""
+    language_code: str = "en"
 
 
 class ProfileCreate(BaseModel):
@@ -61,12 +62,22 @@ class ProfileCreate(BaseModel):
     off_limits: List[str] = []
     custom_notes: str = ""
     voice_id: str = ""
+    language_code: str = "en"
 
     @field_validator("tone")
     @classmethod
     def tone_must_be_valid(cls, v: str) -> str:
         if v not in _VALID_TONES:
             raise ValueError(f"tone must be one of {sorted(_VALID_TONES)}")
+        return v
+
+    @field_validator("language_code")
+    @classmethod
+    def language_code_must_be_valid(cls, v: str) -> str:
+        if v not in SUPPORTED_LANGUAGES:
+            raise ValueError(
+                f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}"
+            )
         return v
 
 
@@ -79,12 +90,22 @@ class ProfileUpdate(BaseModel):
     off_limits: Optional[List[str]] = None
     custom_notes: Optional[str] = None
     voice_id: Optional[str] = None
+    language_code: Optional[str] = None
 
     @field_validator("tone")
     @classmethod
     def tone_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and v not in _VALID_TONES:
             raise ValueError(f"tone must be one of {sorted(_VALID_TONES)}")
+        return v
+
+    @field_validator("language_code")
+    @classmethod
+    def language_code_must_be_valid(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in SUPPORTED_LANGUAGES:
+            raise ValueError(
+                f"language_code must be one of {sorted(SUPPORTED_LANGUAGES)}"
+            )
         return v
 
 
@@ -113,6 +134,7 @@ def _profile_to_detail(p) -> ProfileDetail:
         off_limits=p.off_limits,
         custom_notes=p.custom_notes,
         voice_id=p.voice_id,  # (#1135)
+        language_code=p.language_code,  # (#1324)
         is_system=p.is_system,
         created_by=p.created_by,
         created_at=p.created_at,
@@ -157,6 +179,12 @@ async def get_status() -> StatusResponse:
         enabled=index.get("enabled", True),
         active_id=index.get("active_id"),
     )
+
+
+@router.get("/languages")
+async def list_languages() -> Dict[str, str]:
+    """Return the supported language codes and their display names."""
+    return SUPPORTED_LANGUAGES
 
 
 @router.get("/profiles/{pid}", response_model=ProfileDetail)

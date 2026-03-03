@@ -38,6 +38,22 @@ _SYSTEM_PROFILES = {"default", "professional", "rude"}
 
 _TONE_VALUES = ("direct", "professional", "casual", "technical")
 
+SUPPORTED_LANGUAGES = {
+    "en": "English",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "pt": "Portuguese",
+    "zh": "Chinese",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "ar": "Arabic",
+    "ru": "Russian",
+    "it": "Italian",
+    "nl": "Dutch",
+    "hi": "Hindi",
+}
+
 
 def _personalities_dir() -> Path:
     """Return the personalities directory, preferring the installed path."""
@@ -59,6 +75,7 @@ class PersonalityProfile:
     off_limits: List[str] = field(default_factory=list)
     custom_notes: str = ""
     voice_id: str = ""  # Pocket TTS voice override (#1135)
+    language_code: str = "en"  # Response language (#1324)
     is_system: bool = False
     created_by: str = "system"
     created_at: str = ""
@@ -88,6 +105,12 @@ class PersonalityProfile:
             lines.extend(f"- {o}" for o in self.off_limits)
         if self.custom_notes:
             lines.append(f"\n**Additional Notes:**\n{self.custom_notes}")
+        if self.language_code and self.language_code != "en":
+            lang_name = SUPPORTED_LANGUAGES.get(self.language_code, self.language_code)
+            lines.append(
+                f"\n**Response Language:** Always respond in"
+                f" {lang_name} ({self.language_code})."
+            )
         return "\n".join(line for line in lines if line is not None)
 
 
@@ -219,7 +242,8 @@ class PersonalityManager:
             operating_style=list(kwargs.get("operating_style", [])),
             off_limits=list(kwargs.get("off_limits", [])),
             custom_notes=kwargs.get("custom_notes", ""),
-            voice_id=kwargs.get("voice_id", ""),  # NEW (#1135)
+            voice_id=kwargs.get("voice_id", ""),
+            language_code=kwargs.get("language_code", "en"),
             is_system=False,
             created_by=created_by,
         )
@@ -249,6 +273,7 @@ class PersonalityManager:
             "off_limits",
             "custom_notes",
             "voice_id",
+            "language_code",
         }
         for key, val in updates.items():
             if key in allowed:
@@ -294,9 +319,9 @@ class PersonalityManager:
         """
         Reset a profile's content to match the default profile.
 
-        For system profiles: restores the profile file from default.json content,
-        preserving id/name/is_system. For user profiles: overwrites all trait
-        fields with default values, giving a clean starting point.
+        For system profiles: restores the profile file from default.json
+        content, preserving id/name/is_system. For user profiles: overwrites
+        all trait fields with default values, giving a clean starting point.
         Raises ValueError if default.json or the target profile is missing.
         """
         default = self._load_profile("default")
@@ -311,6 +336,7 @@ class PersonalityManager:
         profile.operating_style = list(default.operating_style)
         profile.off_limits = list(default.off_limits)
         profile.custom_notes = ""
+        profile.language_code = default.language_code
         profile.updated_at = _now_iso()
         self._save_profile(profile)
         logger.info("Personality profile reset to default: %s", pid)
