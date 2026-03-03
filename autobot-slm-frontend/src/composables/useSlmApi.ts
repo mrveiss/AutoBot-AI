@@ -55,6 +55,7 @@ interface BackendNodeResponse {
   ip_address: string
   status: string
   roles: string[]
+  detected_roles?: string[]
   cpu_percent: number
   memory_percent: number
   disk_percent: number
@@ -86,6 +87,7 @@ function mapBackendNode(node: BackendNodeResponse): SLMNode {
     ip_address: node.ip_address,
     status: node.status as SLMNode['status'],
     roles: node.roles as SLMNode['roles'],
+    detected_roles: node.detected_roles ?? [],
     ssh_user: node.ssh_user,
     ssh_port: node.ssh_port,
     auth_method: node.auth_method as SLMNode['auth_method'],

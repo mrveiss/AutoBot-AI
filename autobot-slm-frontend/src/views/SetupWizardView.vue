@@ -203,8 +203,13 @@
                 v-for="role in requiredRoles"
                 :key="role.name"
                 class="role-chip"
-                :class="{ selected: (nodeRoles[node.node_id] || []).includes(role.name) }"
-                :title="role.display_name"
+                :class="[
+                  { selected: (nodeRoles[node.node_id] || []).includes(role.name) },
+                  `state-${roleState(node, role.name)}`,
+                ]"
+                :title="roleState(node, role.name) === 'running'
+                  ? role.display_name + ' (running)'
+                  : role.display_name"
               >
                 <input
                   type="checkbox"
@@ -212,6 +217,7 @@
                   :checked="(nodeRoles[node.node_id] || []).includes(role.name)"
                   @change="toggleRole(node.node_id, role.name)"
                 />
+                <span class="state-dot"></span>
                 {{ role.display_name || role.name }}
               </label>
             </div>
@@ -225,10 +231,15 @@
                 v-for="role in optionalRoles"
                 :key="role.name"
                 class="role-chip optional-chip"
-                :class="{ selected: (nodeRoles[node.node_id] || []).includes(role.name) }"
-                :title="role.degraded_without.length
-                  ? 'Without: ' + role.degraded_without.join('; ')
-                  : role.display_name"
+                :class="[
+                  { selected: (nodeRoles[node.node_id] || []).includes(role.name) },
+                  `state-${roleState(node, role.name)}`,
+                ]"
+                :title="roleState(node, role.name) === 'running'
+                  ? role.display_name + ' (running)'
+                  : role.degraded_without.length
+                    ? 'Without: ' + role.degraded_without.join('; ')
+                    : role.display_name"
               >
                 <input
                   type="checkbox"
@@ -236,6 +247,7 @@
                   :checked="(nodeRoles[node.node_id] || []).includes(role.name)"
                   @change="toggleRole(node.node_id, role.name)"
                 />
+                <span class="state-dot"></span>
                 {{ role.display_name || role.name }}
               </label>
             </div>
@@ -399,10 +411,13 @@ interface Node {
   ip_address: string
   status: string
   roles: string[]
+  detected_roles: string[]
   ssh_user?: string
   ssh_port?: number
   auth_method?: string
 }
+
+type RoleState = 'running' | 'assigned' | 'available'
 
 const nodes = ref<Node[]>([])
 const newNode = ref({
@@ -449,6 +464,13 @@ const savingRoles = ref(false)
 const requiredRoles = computed(() => availableRoles.value.filter(r => r.required))
 const optionalRoles = computed(() => availableRoles.value.filter(r => !r.required))
 
+/** Determine per-chip state for a role on a given node (#1353). */
+function roleState(node: Node, roleName: string): RoleState {
+  if (node.detected_roles.includes(roleName)) return 'running'
+  if ((nodeRoles.value[node.node_id] || []).includes(roleName)) return 'assigned'
+  return 'available'
+}
+
 // ── Provisioning ──────────────────────────────────────────────────────────
 
 const provisioning = ref(false)
@@ -491,6 +513,7 @@ async function loadNodes() {
       ip_address: n.ip_address,
       status: n.status,
       roles: n.roles as string[],
+      detected_roles: n.detected_roles ?? [],
       ssh_user: n.ssh_user,
       ssh_port: n.ssh_port,
       auth_method: n.auth_method,
@@ -1101,6 +1124,33 @@ input.full-width {
   opacity: 0.7;
   cursor: default;
   font-size: 0.75rem;
+}
+
+/* Role state indicators (#1353) */
+.state-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border-color, #555);
+  flex-shrink: 0;
+}
+
+.state-running .state-dot {
+  background: #22c55e;
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.5);
+}
+
+.state-assigned .state-dot {
+  background: var(--color-primary, #3b82f6);
+}
+
+.state-available .state-dot {
+  background: var(--border-color, #555);
+}
+
+.state-running {
+  border-color: rgba(34, 197, 94, 0.4);
 }
 
 /* Provision log */

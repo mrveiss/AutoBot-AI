@@ -151,6 +151,7 @@ class NodeResponse(BaseModel):
     ip_address: str
     status: str
     roles: Optional[List[str]] = []
+    detected_roles: List[str] = Field(default_factory=list)
     ssh_user: Optional[str] = "autobot"
     ssh_port: Optional[int] = 22
     auth_method: Optional[str] = "key"
