@@ -30,6 +30,7 @@ from code_intelligence.pattern_analysis import (
 )
 from fastapi import APIRouter
 from fastapi.responses import PlainTextResponse
+from utils.chromadb_client import get_all_paginated
 from utils.file_categorization import (
     FILE_CATEGORY_ARCHIVE,
     FILE_CATEGORY_ASSETS,
@@ -1274,7 +1275,8 @@ def _fetch_problems_from_chromadb() -> List[Dict]:
         return problems
 
     try:
-        results = code_collection.get(
+        results = get_all_paginated(
+            code_collection,
             where={"type": "problem"},
             include=["metadatas"],
         )

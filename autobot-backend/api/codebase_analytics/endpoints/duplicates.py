@@ -23,6 +23,7 @@ from constants.threshold_constants import AnalyticsConfig
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 from utils.background_task_manager import BackgroundTaskManager
+from utils.chromadb_client import get_all_paginated
 from utils.io_executor import get_analytics_executor
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -160,8 +161,8 @@ def _get_chromadb_fallback(error_msg: str) -> Optional[dict]:
         return None
 
     try:
-        results = code_collection.get(
-            where={"type": "duplicate"}, include=["metadatas"]
+        results = get_all_paginated(
+            code_collection, where={"type": "duplicate"}, include=["metadatas"]
         )
 
         all_duplicates = []

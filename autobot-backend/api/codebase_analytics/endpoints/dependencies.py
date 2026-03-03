@@ -15,6 +15,7 @@ import aiofiles
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
 from utils.background_task_manager import BackgroundTaskManager
+from utils.chromadb_client import get_all_paginated
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -396,8 +397,10 @@ async def _load_modules_from_chromadb(
 ) -> None:
     """Helper for get_dependencies. Load module map from ChromaDB. Ref: #1088."""
     try:
-        results = code_collection.get(
-            where={"type": {"$in": ["function", "class"]}}, include=["metadatas"]
+        results = get_all_paginated(
+            code_collection,
+            where={"type": {"$in": ["function", "class"]}},
+            include=["metadatas"],
         )
         seen_files: set = set()
         for metadata in results.get("metadatas", []):

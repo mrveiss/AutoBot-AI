@@ -48,6 +48,7 @@ _CHROMADB_PORT = int(os.getenv("AUTOBOT_CHROMADB_PORT", "8000"))
 __all__ = [
     "get_chromadb_client",
     "get_async_chromadb_client",
+    "get_all_paginated",
     "AsyncChromaClient",
     "AsyncChromaCollection",
     "wrap_collection_async",
@@ -176,3 +177,50 @@ def get_chromadb_client(
     except Exception as e:
         logger.error("Failed to initialize ChromaDB client: %s", e)
         raise
+
+
+def get_all_paginated(
+    collection,
+    where=None,
+    include=None,
+    page_size: int = 500,
+) -> dict:
+    """Fetch all matching documents from a ChromaDB collection using pagination.
+
+    ChromaDB's SQLite backend hard-limits SQL variables to 999, which is
+    exceeded by unbounded collection.get() on large collections. This helper
+    pages through results with limit+offset to avoid that constraint. #1361.
+
+    Args:
+        collection: A ChromaDB Collection object.
+        where: Optional metadata filter dict (same as Collection.get where).
+        include: Fields to include (e.g. ["metadatas"]). Defaults to ["metadatas"].
+        page_size: Items per page. Default 500 (safely under the 999 limit).
+
+    Returns:
+        Dict with merged results in the same shape as Collection.get():
+        {"ids": [...], "metadatas": [...], ...}
+    """
+    if include is None:
+        include = ["metadatas"]
+
+    merged: dict = {}
+    offset = 0
+    while True:
+        page = collection.get(
+            where=where,
+            limit=page_size,
+            offset=offset,
+            include=include,
+        )
+        if not merged:
+            merged = {k: list(v) if v is not None else [] for k, v in page.items()}
+        else:
+            for key, values in page.items():
+                if values:
+                    merged[key].extend(values)
+        ids = page.get("ids") or []
+        if len(ids) < page_size:
+            break
+        offset += page_size
+    return merged

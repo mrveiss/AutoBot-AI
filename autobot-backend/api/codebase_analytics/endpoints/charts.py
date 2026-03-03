@@ -12,6 +12,7 @@ from typing import Dict
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from utils.chromadb_client import get_all_paginated
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -44,7 +45,9 @@ def _try_chromadb_aggregation(
         return 0, False
 
     try:
-        results = code_collection.get(where={"type": "problem"}, include=["metadatas"])
+        results = get_all_paginated(
+            code_collection, where={"type": "problem"}, include=["metadatas"]
+        )
         total = 0
         for metadata in results.get("metadatas", []):
             total += 1
