@@ -21,7 +21,7 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
           :checked="selectedVoiceId === ''"
           @change="selectVoice('')"
         />
-        <span class="voice-name">Default</span>
+        <span class="voice-name">{{ $t('voice.default') }}</span>
         <span class="voice-badge builtin">built-in</span>
       </label>
 
