@@ -103,8 +103,9 @@
     </div>
 
     <!-- Progress Indicator — Issue #1190: shown during indexing AND after so status persists -->
+    <!-- Issue #1365: exclude code-smells activity from triggering the idle-state display -->
     <div
-      v-if="analyzing || (progressStatus && progressStatus !== 'Ready' && progressStatus !== 'Ready (state reset)')"
+      v-if="analyzing || (progressStatus && progressStatus !== 'Ready' && progressStatus !== 'Ready (state reset)' && !analyzingCodeSmells)"
       class="progress-container"
       :class="{ 'progress-container--idle': !analyzing }"
     >
@@ -178,8 +179,8 @@
       </div>
     </div>
 
-    <!-- Code Smells Analysis Progress -->
-    <div v-if="analyzingCodeSmells" class="progress-container code-smells-progress">
+    <!-- Code Smells Analysis Progress — Issue #1365: hide when indexing block is active (it's more detailed) -->
+    <div v-if="analyzingCodeSmells && !analyzing" class="progress-container code-smells-progress">
       <div class="progress-header">
         <div class="progress-title">
           <i class="fas fa-spinner fa-spin"></i>
