@@ -13,9 +13,11 @@ Issue #1373: Initial RLM prototype.
 """
 
 from rlm.evaluator import ResponseQualityEvaluator
+from rlm.rag_refiner import AdaptiveRAGRefiner
 from rlm.types import ReflectionResult, ReflectionVerdict, RLMConfig
 
 __all__ = [
+    "AdaptiveRAGRefiner",
     "ReflectionResult",
     "ReflectionVerdict",
     "ResponseQualityEvaluator",
