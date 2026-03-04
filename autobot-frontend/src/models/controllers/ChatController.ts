@@ -624,18 +624,28 @@ export class ChatController {
       // Update session with loaded messages
       const session = this.chatStore.sessions.find(s => s.id === sessionId)
       if (session) {
-        // CRITICAL FIX: Only update if message count or last message ID changed
-        // This prevents UI flickering during polling when nothing changed
-        const lastExisting = session.messages[session.messages.length - 1]
-        const lastNew = messages[messages.length - 1]
-        const hasChanges = session.messages.length !== messages.length ||
-          lastExisting?.id !== lastNew?.id
-
-        if (hasChanges) {
-          logger.debug(`Updating messages (${session.messages.length} → ${messages.length})`)
-          session.messages = messages as any
+        // Issue #1371: Never replace local messages with empty/fewer backend
+        // messages. The poller can get [] on transient API errors or stale
+        // data before the backend has persisted the streaming response.
+        if (messages.length === 0 && session.messages.length > 0) {
+          logger.debug('Skipping update - backend returned empty but local has messages')
+        } else if (messages.length < session.messages.length) {
+          logger.debug(
+            `Skipping update - backend has fewer messages (${messages.length}) than local (${session.messages.length})`
+          )
         } else {
-          logger.debug(`No message changes, skipping update`)
+          // Only update if message count or last message content changed
+          const lastExisting = session.messages[session.messages.length - 1]
+          const lastNew = messages[messages.length - 1]
+          const hasChanges = session.messages.length !== messages.length ||
+            lastExisting?.content !== lastNew?.content
+
+          if (hasChanges) {
+            logger.debug(`Updating messages (${session.messages.length} → ${messages.length})`)
+            session.messages = messages as any
+          } else {
+            logger.debug(`No message changes, skipping update`)
+          }
         }
 
         // Only switch session if not already current

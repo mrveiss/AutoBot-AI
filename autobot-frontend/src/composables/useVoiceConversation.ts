@@ -64,6 +64,10 @@ let _micStream: MediaStream | null = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _sileroVad: any = null
 
+// Issue #1371: Cooldown timer to prevent TTS echo from triggering VAD
+let _ttsCooldownTimer: ReturnType<typeof setTimeout> | null = null
+const _TTS_COOLDOWN_MS = 600 // Must exceed Silero redemptionMs (250ms)
+
 // Response message types that should be spoken (skip thoughts/planning/debug)
 const _SPEAKABLE_TYPES = new Set(['response', 'message'])
 
@@ -373,6 +377,13 @@ function _resumeAutoListening(): void {
   if (mode.value === 'full-duplex') {
     _startListeningInternal()
   } else if (mode.value === 'hands-free' && _sileroVad) {
+    // Issue #1371: Start a cooldown before accepting VAD events.
+    // TTS audio lingers in the Silero VAD buffer; without this delay the
+    // VAD fires onSpeechEnd with captured speaker audio immediately after
+    // state becomes 'listening', creating an echo feedback loop.
+    _ttsCooldownTimer = setTimeout(() => {
+      _ttsCooldownTimer = null
+    }, _TTS_COOLDOWN_MS)
     state.value = 'listening'
   }
 }
@@ -559,6 +570,10 @@ function _stopHandsFree(): void {
 /** Called by Silero VAD when speech ends: encode, transcribe, dispatch. */
 function _handleVadSpeechEnd(audio: Float32Array): void {
   if (!isActive.value || state.value !== 'listening') return
+  // Issue #1371: Ignore VAD events during TTS cooldown to prevent echo loop.
+  // Silero VAD captures TTS speaker audio via mic; without this guard the
+  // captured audio would be transcribed and sent back to the LLM.
+  if (_ttsCooldownTimer) return
   state.value = 'processing'
   const wavBlob = _float32ToWav(audio, 16000)
   _transcribeAudio(wavBlob)
@@ -622,6 +637,7 @@ export function useVoiceConversation() {
     _disconnectWs()
     _teardownVad()
     stopSpeaking()
+    if (_ttsCooldownTimer) { clearTimeout(_ttsCooldownTimer); _ttsCooldownTimer = null }
     isActive.value = false
     state.value = 'idle'
     currentTranscript.value = ''
@@ -676,6 +692,7 @@ export function useVoiceConversation() {
       _disconnectWs()
       _teardownVad()
       stopSpeaking()
+      if (_ttsCooldownTimer) { clearTimeout(_ttsCooldownTimer); _ttsCooldownTimer = null }
       state.value = 'idle'
       currentTranscript.value = ''
     }
