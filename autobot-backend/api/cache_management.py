@@ -632,6 +632,75 @@ async def cache_health_check():
         return {"status": "unhealthy", "error": str(e)}
 
 
+# =========================================================================
+# SEMANTIC QUERY CACHE ENDPOINTS (Issue #1372)
+# =========================================================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="semantic_cache_stats",
+    error_code_prefix="CACHE_MANAGEMENT",
+)
+@router.get("/semantic-cache/stats")
+async def semantic_cache_stats(
+    _user: dict = Depends(get_current_user),
+):
+    """Get semantic query cache statistics."""
+    from services.semantic_query_cache import get_semantic_query_cache
+
+    cache = await get_semantic_query_cache()
+    return cache.get_stats()
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="semantic_cache_clear",
+    error_code_prefix="CACHE_MANAGEMENT",
+)
+@router.delete("/semantic-cache/clear")
+async def semantic_cache_clear(
+    _user: dict = Depends(check_admin_permission),
+):
+    """Clear all semantic query cache entries (admin only)."""
+    from services.semantic_query_cache import get_semantic_query_cache
+
+    cache = await get_semantic_query_cache()
+    result = await cache.clear()
+    return {"status": "cleared", **result}
+
+
+class SemanticCacheConfigUpdate(BaseModel):
+    """Request body for semantic cache config update."""
+
+    similarity_threshold: Optional[float] = None
+    max_collection_size: Optional[int] = None
+    response_ttl: Optional[int] = None
+    enabled: Optional[bool] = None
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="semantic_cache_config",
+    error_code_prefix="CACHE_MANAGEMENT",
+)
+@router.put("/semantic-cache/config")
+async def semantic_cache_update_config(
+    update: SemanticCacheConfigUpdate,
+    _user: dict = Depends(check_admin_permission),
+):
+    """Update semantic cache configuration at runtime (admin only)."""
+    from services.semantic_query_cache import get_semantic_query_cache
+
+    cache = await get_semantic_query_cache()
+    return cache.update_config(
+        similarity_threshold=update.similarity_threshold,
+        max_collection_size=update.max_collection_size,
+        response_ttl=update.response_ttl,
+        enabled=update.enabled,
+    )
+
+
 # Startup cache warming function
 async def warm_startup_cache():
     """Warm essential cache data during application startup (Issue #380: use module constant)"""

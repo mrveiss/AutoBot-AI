@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
 from services.rag_config import RAGConfig, get_rag_config
+from services.semantic_query_cache import get_semantic_query_cache
 from type_defs.common import Metadata
 
 from autobot_shared.logging_manager import get_llm_logger
@@ -179,6 +180,64 @@ class RAGService:
                 return await self._fallback_basic_search(query, max_results)
             raise
 
+    async def _check_semantic_cache(
+        self, query: str
+    ) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+        """Check semantic query cache for similar past queries. Issue #1372."""
+        try:
+            sem_cache = await get_semantic_query_cache()
+            hit = await sem_cache.lookup(query)
+            if hit is None:
+                return None
+            # Reconstruct a single SearchResult from cached response
+            sr = SearchResult(
+                content=hit.response_text,
+                metadata={
+                    "source": "semantic_cache",
+                    "model": hit.model,
+                    "original_query": hit.original_query,
+                    "similarity_score": hit.similarity_score,
+                },
+                semantic_score=hit.similarity_score,
+                keyword_score=0.0,
+                hybrid_score=hit.similarity_score,
+                relevance_rank=1,
+                source_path="semantic_cache",
+            )
+            metrics = RAGMetrics()
+            metrics.total_time = 0.0
+            metrics.final_results_count = 1
+            return [sr], metrics
+        except Exception as exc:
+            logger.debug("Semantic cache check failed: %s", exc)
+            return None
+
+    async def _store_in_semantic_cache(
+        self,
+        query: str,
+        results: List[SearchResult],
+        model: str = "rag",
+    ) -> None:
+        """Store search results in semantic cache. Issue #1372."""
+        if not results:
+            return
+        try:
+            sem_cache = await get_semantic_query_cache()
+            # Cache the top result's content as the response
+            top_content = results[0].content if results else ""
+            metadata = {
+                "result_count": len(results),
+                "top_score": results[0].hybrid_score if results else 0,
+            }
+            await sem_cache.store(
+                query=query,
+                response_text=top_content,
+                model=model,
+                metadata=metadata,
+            )
+        except Exception as exc:
+            logger.debug("Semantic cache store failed: %s", exc)
+
     async def advanced_search(
         self,
         query: str,
@@ -193,6 +252,7 @@ class RAGService:
         Issue #556: Added categories parameter for category-based filtering.
         Issue #665: Refactored with extracted helper methods.
         Issue #1088: Extracted _execute_and_cache_search helper.
+        Issue #1372: Added semantic query cache tier.
 
         Args:
             query: Search query string
@@ -208,6 +268,13 @@ class RAGService:
             logger.info("Advanced RAG disabled in configuration")
             return await self._fallback_basic_search(query, max_results, categories)
 
+        # Tier 0: Semantic similarity cache (Issue #1372)
+        sem_result = await self._check_semantic_cache(query)
+        if sem_result is not None:
+            logger.debug("Semantic cache hit for query: '%s...'", query[:50])
+            return sem_result
+
+        # Tier 1: Exact-match cache
         cache_key = self._build_cache_key(
             query, max_results, enable_reranking, categories
         )
@@ -221,9 +288,14 @@ class RAGService:
             return await self._fallback_basic_search(query, max_results, categories)
 
         timeout_seconds = timeout or self.config.timeout_seconds
-        return await self._execute_and_cache_search(
+        results, metrics = await self._execute_and_cache_search(
             query, max_results, enable_reranking, timeout_seconds, categories, cache_key
         )
+
+        # Store in semantic cache for future similarity lookups
+        await self._store_in_semantic_cache(query, results)
+
+        return results, metrics
 
     async def get_optimized_context(
         self,
