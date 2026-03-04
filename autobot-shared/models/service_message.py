@@ -20,11 +20,15 @@ Usage::
     payload = msg.model_dump_json()
 """
 
+import json
+import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Literal
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 ServiceName = Literal[
     "main-backend",
@@ -79,4 +83,55 @@ class ServiceMessage(BaseModel):
     meta: Dict[str, Any] = Field(
         default_factory=dict,
         description="Arbitrary metadata (retry count, headers, tags).",
+    )
+
+
+# ------------------------------------------------------------------
+# Serialization / deserialization helpers
+# ------------------------------------------------------------------
+
+
+def serialize_message(msg: ServiceMessage) -> str:
+    """Serialize a *ServiceMessage* to a JSON string."""
+    return msg.model_dump_json()
+
+
+def deserialize_message(raw: str | bytes) -> Optional[ServiceMessage]:
+    """Deserialize JSON *raw* into a *ServiceMessage*.
+
+    Returns ``None`` (and logs a warning) if parsing fails instead
+    of raising, so callers can treat bad payloads as non-fatal.
+    """
+    text = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+    try:
+        return ServiceMessage.model_validate_json(text)
+    except (json.JSONDecodeError, Exception) as exc:
+        logger.warning("Failed to deserialize ServiceMessage: %s", exc)
+        return None
+
+
+def create_reply(
+    original: ServiceMessage,
+    *,
+    msg_type: str = "result",
+    content: str = "",
+    meta: Optional[Dict[str, Any]] = None,
+) -> ServiceMessage:
+    """Create a reply that swaps sender/receiver and shares *correlation_id*.
+
+    This is the standard way to respond to a cross-service request::
+
+        reply = create_reply(
+            incoming,
+            msg_type="result",
+            content='{"status": "ok"}',
+        )
+    """
+    return ServiceMessage(
+        sender=original.receiver,
+        receiver=original.sender,
+        msg_type=msg_type,
+        content=content,
+        correlation_id=original.correlation_id,
+        meta=meta or {},
     )

@@ -24,6 +24,9 @@ __all__ = [
     "ServiceMessage",
     "ServiceName",
     "MessageType",
+    "serialize_message",
+    "deserialize_message",
+    "create_reply",
 ]
 
 # Lazy import map — module attribute → (submodule, name)
@@ -35,6 +38,9 @@ _LAZY_IMPORTS = {
     "ServiceMessage": (".models.service_message", "ServiceMessage"),
     "ServiceName": (".models.service_message", "ServiceName"),
     "MessageType": (".models.service_message", "MessageType"),
+    "serialize_message": (".models.service_message", "serialize_message"),
+    "deserialize_message": (".models.service_message", "deserialize_message"),
+    "create_reply": (".models.service_message", "create_reply"),
 }
 
 

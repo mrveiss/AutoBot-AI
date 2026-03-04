@@ -7,6 +7,16 @@ from autobot_shared.models.service_message import (
     MessageType,
     ServiceMessage,
     ServiceName,
+    create_reply,
+    deserialize_message,
+    serialize_message,
 )
 
-__all__ = ["ServiceMessage", "ServiceName", "MessageType"]
+__all__ = [
+    "ServiceMessage",
+    "ServiceName",
+    "MessageType",
+    "serialize_message",
+    "deserialize_message",
+    "create_reply",
+]
