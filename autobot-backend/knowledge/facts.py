@@ -649,12 +649,13 @@ class FactsMixin:
         logger.info("Vectorized fact %s in ChromaDB", fact_id)
 
     def _prepare_fact_metadata(
-        self, fact_id: str, metadata: Optional[Dict[str, Any]]
+        self, fact_id: str, metadata: Optional[Dict[str, Any]], content: str = ""
     ) -> Dict[str, Any]:
         """Prepare metadata with system fields for new fact (Issue #398: extracted).
 
         Issue #1252: Injects provenance defaults when not already present so every
         stored fact carries source and verification information.
+        Issue #1375: Adds SHA-256 content fingerprint for cache invalidation.
         """
         if metadata is None:
             metadata = {}
@@ -662,6 +663,13 @@ class FactsMixin:
         metadata["timestamp"] = datetime.now().isoformat()
         metadata["embedding_model"] = self.embedding_model_name
         _apply_provenance_defaults(metadata)
+
+        # Issue #1375: Compute content fingerprint for cache invalidation
+        if content:
+            from services.content_fingerprint import compute_fingerprint
+
+            metadata["content_fingerprint"] = compute_fingerprint(content)
+
         return metadata
 
     async def _store_and_vectorize_fact(
@@ -687,7 +695,7 @@ class FactsMixin:
 
         try:
             fact_id = fact_id or str(uuid.uuid4())
-            metadata = self._prepare_fact_metadata(fact_id, metadata)
+            metadata = self._prepare_fact_metadata(fact_id, metadata, content)
 
             duplicate_result = await self._check_for_duplicates(content, metadata)
             if duplicate_result:
@@ -915,6 +923,20 @@ class FactsMixin:
         await asyncio.to_thread(self.vector_store.add, [doc])
         logger.info("Re-vectorized updated fact %s", fact_id)
 
+    async def _refresh_content_hash(
+        self, fact_id: str, old_content: str, new_content: str
+    ) -> None:
+        """Refresh content_hash dedup key when content changes. Issue #1375."""
+        if old_content:
+            old_hash = hashlib.sha256(old_content.encode("utf-8")).hexdigest()[:16]
+            await asyncio.to_thread(
+                self.redis_client.delete, "content_hash:%s" % old_hash
+            )
+        new_hash = hashlib.sha256(new_content.encode("utf-8")).hexdigest()[:16]
+        await asyncio.to_thread(
+            self.redis_client.set, "content_hash:%s" % new_hash, fact_id
+        )
+
     async def update_fact(
         self, fact_id: str, content: str = None, metadata: Dict[str, Any] = None
     ) -> Dict[str, Any]:
@@ -939,7 +961,14 @@ class FactsMixin:
                     pass
 
             if content is not None:
+                # Issue #1375: Refresh dedup key + fingerprint on content change
+                await self._refresh_content_hash(
+                    fact_id, decoded.get("content", ""), content
+                )
                 decoded["content"] = content
+                from services.content_fingerprint import compute_fingerprint
+
+                current_metadata["content_fingerprint"] = compute_fingerprint(content)
             if metadata is not None:
                 current_metadata.update(metadata)
             current_metadata["updated_at"] = datetime.now().isoformat()

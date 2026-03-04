@@ -15,12 +15,12 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from config import config_manager
 from models.atomic_fact import AtomicFact, FactType, TemporalType
 from services.fact_extraction_service import FactExtractionService
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_redis_client
+from config import config_manager
 
 logger = get_llm_logger("temporal_invalidation")
 
@@ -34,6 +34,7 @@ class InvalidationReason(Enum):
     MANUAL_INVALIDATION = "manual_invalidation"
     CONFIDENCE_THRESHOLD = "confidence_threshold"
     BATCH_CLEANUP = "batch_cleanup"
+    CONTENT_CHANGED = "content_changed"  # Issue #1375
 
 
 class InvalidationRule:
