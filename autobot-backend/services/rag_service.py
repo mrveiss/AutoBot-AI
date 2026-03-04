@@ -14,6 +14,10 @@ import time
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
+from services.context_sufficiency import (
+    SufficiencyVerdict,
+    get_context_sufficiency_evaluator,
+)
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
 from services.rag_config import RAGConfig, get_rag_config
 from services.semantic_query_cache import get_semantic_query_cache
@@ -268,11 +272,20 @@ class RAGService:
             logger.info("Advanced RAG disabled in configuration")
             return await self._fallback_basic_search(query, max_results, categories)
 
+        evaluator = get_context_sufficiency_evaluator()
+
         # Tier 0: Semantic similarity cache (Issue #1372)
         sem_result = await self._check_semantic_cache(query)
         if sem_result is not None:
-            logger.debug("Semantic cache hit for query: '%s...'", query[:50])
-            return sem_result
+            context_text = sem_result[0][0].content if sem_result[0] else ""
+            cached_at = (
+                sem_result[0][0].metadata.get("cached_at", 0) if sem_result[0] else 0
+            )
+            check = await evaluator.evaluate(query, context_text, cached_at)
+            if check.verdict != SufficiencyVerdict.INSUFFICIENT:
+                logger.debug("Semantic cache hit (sufficient) for: '%s...'", query[:50])
+                return sem_result
+            logger.info("Semantic cache hit rejected (insufficient): %s", check.reason)
 
         # Tier 1: Exact-match cache
         cache_key = self._build_cache_key(
@@ -280,8 +293,12 @@ class RAGService:
         )
         cached_result = await self._get_from_cache(cache_key)
         if cached_result:
-            logger.debug("Cache hit for query: '%s...'", query[:50])
-            return cached_result
+            context_text = " ".join(r.content for r in cached_result[0][:3])
+            check = await evaluator.evaluate(query, context_text)
+            if check.verdict != SufficiencyVerdict.INSUFFICIENT:
+                logger.debug("Cache hit (sufficient) for: '%s...'", query[:50])
+                return cached_result
+            logger.info("Cache hit rejected (insufficient): %s", check.reason)
 
         if not await self.initialize():
             logger.warning("RAG optimizer initialization failed, using fallback")

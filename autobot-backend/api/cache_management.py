@@ -701,6 +701,54 @@ async def semantic_cache_update_config(
     )
 
 
+# =========================================================================
+# CONTEXT SUFFICIENCY ENDPOINTS (Issue #1374)
+# =========================================================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="context_sufficiency_stats",
+    error_code_prefix="CACHE_MANAGEMENT",
+)
+@router.get("/context-sufficiency/stats")
+async def context_sufficiency_stats(
+    _user: dict = Depends(get_current_user),
+):
+    """Get context sufficiency evaluator statistics."""
+    from services.context_sufficiency import get_context_sufficiency_evaluator
+
+    evaluator = get_context_sufficiency_evaluator()
+    return evaluator.get_stats()
+
+
+class SufficiencyConfigUpdate(BaseModel):
+    """Request body for sufficiency evaluator config update."""
+
+    enabled: Optional[bool] = None
+    keyword_threshold: Optional[float] = None
+    enable_llm_pass: Optional[bool] = None
+    llm_timeout: Optional[float] = None
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="context_sufficiency_config",
+    error_code_prefix="CACHE_MANAGEMENT",
+)
+@router.put("/context-sufficiency/config")
+async def context_sufficiency_update_config(
+    update: SufficiencyConfigUpdate,
+    _user: dict = Depends(check_admin_permission),
+):
+    """Update context sufficiency config at runtime (admin only)."""
+    from services.context_sufficiency import get_context_sufficiency_evaluator
+
+    evaluator = get_context_sufficiency_evaluator()
+    kwargs = {k: v for k, v in update.model_dump().items() if v is not None}
+    return evaluator.update_config(**kwargs)
+
+
 # Startup cache warming function
 async def warm_startup_cache():
     """Warm essential cache data during application startup (Issue #380: use module constant)"""
