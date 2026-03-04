@@ -42,6 +42,8 @@ async function initBrowser() {
           '--disable-backgrounding-occluded-windows',
           '--disable-renderer-backgrounding',
           '--ignore-certificate-errors',
+          '--remote-debugging-port=9222',
+          '--remote-debugging-address=0.0.0.0',
         ]
       };
 
