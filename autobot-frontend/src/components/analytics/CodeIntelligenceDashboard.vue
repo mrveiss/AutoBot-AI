@@ -8,15 +8,15 @@
     <!-- Header -->
     <div class="dashboard-header">
       <div class="header-content">
-        <h2><i class="fas fa-brain"></i> Code Intelligence</h2>
-        <p class="header-description">Analyze your codebase for quality, security, and performance issues</p>
+        <h2><i class="fas fa-brain"></i> {{ $t('analytics.codeIntelligence.title') }}</h2>
+        <p class="header-description">{{ $t('analytics.codeIntelligence.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <div class="path-input">
           <input
             v-model="analysisPath"
             type="text"
-            placeholder="Enter code snippet to analyze..."
+            :placeholder="$t('analytics.codeIntelligence.analyzePlaceholder')"
             class="path-field"
           />
         </div>
@@ -26,7 +26,7 @@
           class="btn-primary"
         >
           <i :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
-          Analyze
+          {{ $t('analytics.codeIntelligence.analyze') }}
         </button>
       </div>
     </div>
@@ -44,7 +44,7 @@
           v-if="healthScore"
           :score="healthScore.health_score"
           :grade="healthScore.health_score >= 90 ? 'A' : healthScore.health_score >= 80 ? 'B' : healthScore.health_score >= 70 ? 'C' : healthScore.health_score >= 60 ? 'D' : 'F'"
-          label="Code Health"
+          :label="$t('analytics.codeIntelligence.codeHealth')"
           :status-message="`${healthScore.issues_count.critical + healthScore.issues_count.high + healthScore.issues_count.medium + healthScore.issues_count.low} issues · ${healthScore.coverage_percent}% coverage`"
         />
       </div>
@@ -53,7 +53,7 @@
           v-if="qualityScore"
           :score="qualityScore.overall_score"
           :grade="qualityScore.grade"
-          label="Code Quality"
+          :label="$t('analytics.codeIntelligence.codeQualityLabel')"
           :status-message="`Trend: ${qualityScore.trend}`"
         />
       </div>
@@ -65,8 +65,8 @@
     <!-- Empty state for scores -->
     <div v-else-if="!isLoading" class="empty-state">
       <i class="fas fa-code"></i>
-      <h3>No Analysis Results</h3>
-      <p>Enter a code snippet above and click Analyze to inspect quality and health</p>
+      <h3>{{ $t('analytics.codeIntelligence.noResults') }}</h3>
+      <p>{{ $t('analytics.codeIntelligence.noResultsDescription') }}</p>
     </div>
 
     <!-- Suggestions Tab -->
@@ -74,7 +74,7 @@
       <div class="tabs-header">
         <button class="tab-btn active">
           <i class="fas fa-lightbulb"></i>
-          Suggestions
+          {{ $t('analytics.codeIntelligence.suggestions') }}
           <span class="tab-count">{{ suggestions.length }}</span>
         </button>
       </div>
@@ -105,7 +105,7 @@
 
     <!-- Current Analysis Issues -->
     <div v-if="currentAnalysis && currentAnalysis.issues.length > 0" class="issues-section">
-      <h3><i class="fas fa-exclamation-triangle"></i> Issues Found</h3>
+      <h3><i class="fas fa-exclamation-triangle"></i> {{ $t('analytics.codeIntelligence.issuesFound') }}</h3>
       <div class="issues-list">
         <div
           v-for="(issue, idx) in currentAnalysis.issues"
@@ -116,14 +116,14 @@
           <span class="issue-severity" :class="issue.severity">{{ issue.severity }}</span>
           <span class="issue-category">{{ issue.category }}</span>
           <span class="issue-message">{{ issue.message }}</span>
-          <span v-if="issue.line_number" class="issue-line">Line {{ issue.line_number }}</span>
+          <span v-if="issue.line_number" class="issue-line">{{ $t('analytics.codeIntelligence.line') }} {{ issue.line_number }}</span>
         </div>
       </div>
     </div>
 
     <!-- Analysis History -->
     <div v-if="analysisHistory.length > 0" class="history-section">
-      <h3><i class="fas fa-history"></i> Analysis History</h3>
+      <h3><i class="fas fa-history"></i> {{ $t('analytics.codeIntelligence.analysisHistory') }}</h3>
       <div class="history-list">
         <div
           v-for="item in analysisHistory.slice(0, 10)"
@@ -137,7 +137,7 @@
               {{ item.quality_score }}/100
             </span>
           </div>
-          <div class="history-filename">{{ item.filename || 'Untitled' }}</div>
+          <div class="history-filename">{{ item.filename || $t('analytics.codeIntelligence.untitled') }}</div>
           <div class="history-time">{{ formatTimestamp(item.timestamp) }}</div>
         </div>
       </div>

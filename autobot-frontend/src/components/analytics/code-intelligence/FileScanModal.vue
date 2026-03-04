@@ -8,7 +8,7 @@
     <div v-if="show" class="modal-overlay" @click.self="$emit('close')">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Scan Single File</h3>
+          <h3>{{ $t('analytics.findings.fileScan.title') }}</h3>
           <button class="close-btn" @click="$emit('close')">
             <i class="fas fa-times"></i>
           </button>
@@ -16,11 +16,11 @@
 
         <div class="modal-body">
           <div class="form-group">
-            <label>File Path:</label>
+            <label>{{ $t('analytics.findings.fileScan.filePathLabel') }}</label>
             <input
               v-model="filePath"
               type="text"
-              placeholder="/path/to/file.py"
+              :placeholder="$t('analytics.findings.fileScan.filePathPlaceholder')"
               class="file-input"
               :class="{ error: pathError }"
             />
@@ -28,35 +28,35 @@
           </div>
 
           <div class="form-group">
-            <label>Scan Types:</label>
+            <label>{{ $t('analytics.findings.fileScan.scanTypesLabel') }}</label>
             <div class="checkbox-group">
               <label class="checkbox-label">
                 <input type="checkbox" v-model="scanTypes.security" />
-                <span>Security</span>
+                <span>{{ $t('analytics.findings.fileScan.security') }}</span>
               </label>
               <label class="checkbox-label">
                 <input type="checkbox" v-model="scanTypes.performance" />
-                <span>Performance</span>
+                <span>{{ $t('analytics.findings.fileScan.performance') }}</span>
               </label>
               <label class="checkbox-label">
                 <input type="checkbox" v-model="scanTypes.redis" />
-                <span>Redis</span>
+                <span>{{ $t('analytics.findings.fileScan.redis') }}</span>
               </label>
             </div>
           </div>
 
-          <p class="note">Note: Only Python (.py) files are supported</p>
+          <p class="note">{{ $t('analytics.findings.fileScan.pythonOnlyNote') }}</p>
         </div>
 
         <div class="modal-footer">
-          <button class="btn-secondary" @click="$emit('close')">Cancel</button>
+          <button class="btn-secondary" @click="$emit('close')">{{ $t('analytics.findings.fileScan.cancel') }}</button>
           <button
             class="btn-primary"
             @click="handleScan"
             :disabled="!canScan || scanning"
           >
             <span v-if="scanning" class="spinner-small"></span>
-            {{ scanning ? 'Scanning...' : 'Scan File' }}
+            {{ scanning ? $t('analytics.findings.fileScan.scanning') : $t('analytics.findings.fileScan.scanFile') }}
           </button>
         </div>
       </div>
@@ -66,6 +66,9 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   show: boolean
@@ -86,7 +89,7 @@ const scanTypes = ref({
 
 const pathError = computed(() => {
   if (!filePath.value) return ''
-  if (!filePath.value.endsWith('.py')) return 'Only Python files (.py) are supported'
+  if (!filePath.value.endsWith('.py')) return t('analytics.findings.fileScan.pythonOnlyError')
   return ''
 })
 

@@ -11,7 +11,7 @@
     :height="height"
     :series="chartSeries"
     :options="(chartOptions as any)"
-    :title="title"
+    :title="title ?? $t('charts.topFiles.title')"
     :subtitle="subtitle"
     :loading="loading"
     :error="error"
@@ -20,8 +20,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
+
+const { t } = useI18n()
 
 /**
  * Get CSS variable value from the document
@@ -51,7 +54,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'Top Files with Most Problems',
+  title: undefined,
   subtitle: '',
   height: 400,
   maxFiles: 10,
@@ -69,7 +72,7 @@ const sortedData = computed(() => {
 // Transform data for bar chart
 const chartSeries = computed(() => [
   {
-    name: 'Problems',
+    name: t('charts.topFiles.seriesName'),
     data: sortedData.value.map((item) => item.count ?? item.value ?? 0)
   }
 ])
@@ -101,7 +104,7 @@ const chartOptions = computed(() => ({
       }
     },
     title: {
-      text: 'Number of Problems',
+      text: t('charts.topFiles.xAxisTitle'),
       style: {
         fontSize: '12px',
         color: getCssVar('--text-secondary', '#94a3b8')
@@ -148,7 +151,7 @@ const chartOptions = computed(() => ({
             ${filePath}
           </div>
           <div style="color: ${textSecondary};">
-            <span style="color: ${chartBlue}; font-weight: 600;">${problemCount.toLocaleString()}</span> problems
+            <span style="color: ${chartBlue}; font-weight: 600;">${problemCount.toLocaleString()}</span> ${t('charts.topFiles.tooltipProblems')}
           </div>
         </div>
       `

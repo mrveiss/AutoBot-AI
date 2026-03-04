@@ -3,17 +3,17 @@
     <!-- Header -->
     <div class="dashboard-header">
       <div class="header-content">
-        <h2 class="dashboard-title">Bug Prediction System</h2>
-        <p class="dashboard-subtitle">Predict and prevent bugs before they occur</p>
+        <h2 class="dashboard-title">{{ $t('analytics.bugPrediction.title') }}</h2>
+        <p class="dashboard-subtitle">{{ $t('analytics.bugPrediction.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <button class="btn-analyze" @click="analyzeCodbase" :disabled="loading">
           <span class="icon">&#128269;</span>
-          {{ loading ? 'Analyzing...' : 'Analyze Codebase' }}
+          {{ loading ? $t('analytics.bugPrediction.analyzing') : $t('analytics.bugPrediction.analyzeCodbase') }}
         </button>
         <button class="btn-refresh" @click="refreshData" :disabled="loading">
           <span class="icon">&#8635;</span>
-          Refresh
+          {{ $t('analytics.bugPrediction.refresh') }}
         </button>
       </div>
     </div>
@@ -24,25 +24,25 @@
         <div class="card-icon">&#9888;&#65039;</div>
         <div class="card-content">
           <span class="card-value">{{ summary.high_risk_files }}</span>
-          <span class="card-label">High Risk Files</span>
+          <span class="card-label">{{ $t('analytics.bugPrediction.highRiskFiles') }}</span>
         </div>
-        <div class="card-indicator critical">Needs Attention</div>
+        <div class="card-indicator critical">{{ $t('analytics.bugPrediction.needsAttention') }}</div>
       </div>
 
       <div class="summary-card predictions">
         <div class="card-icon">&#128027;</div>
         <div class="card-content">
           <span class="card-value">{{ summary.predicted_bugs_next_sprint }}</span>
-          <span class="card-label">Predicted Bugs</span>
+          <span class="card-label">{{ $t('analytics.bugPrediction.predictedBugs') }}</span>
         </div>
-        <div class="card-indicator">Next Sprint</div>
+        <div class="card-indicator">{{ $t('analytics.bugPrediction.nextSprint') }}</div>
       </div>
 
       <div class="summary-card accuracy">
         <div class="card-icon">&#127919;</div>
         <div class="card-content">
           <span class="card-value">{{ summary.model_accuracy.toFixed(1) }}%</span>
-          <span class="card-label">Model Accuracy</span>
+          <span class="card-label">{{ $t('analytics.bugPrediction.modelAccuracy') }}</span>
         </div>
         <div class="accuracy-bar">
           <div class="accuracy-fill" :style="{ width: summary.model_accuracy + '%' }"></div>
@@ -53,7 +53,7 @@
         <div class="card-icon">&#128193;</div>
         <div class="card-content">
           <span class="card-value">{{ summary.total_files_analyzed }}</span>
-          <span class="card-label">Files Analyzed</span>
+          <span class="card-label">{{ $t('analytics.bugPrediction.filesAnalyzed') }}</span>
         </div>
       </div>
     </div>
@@ -63,13 +63,13 @@
       <!-- Risk Heatmap -->
       <div class="panel heatmap-panel">
         <div class="panel-header">
-          <h3>Risk Heatmap</h3>
+          <h3>{{ $t('analytics.bugPrediction.riskHeatmap') }}</h3>
           <div class="grouping-toggle">
             <button :class="{ active: heatmapGrouping === 'directory' }" @click="heatmapGrouping = 'directory'; loadHeatmap()">
-              By Directory
+              {{ $t('analytics.bugPrediction.byDirectory') }}
             </button>
             <button :class="{ active: heatmapGrouping === 'flat' }" @click="heatmapGrouping = 'flat'; loadHeatmap()">
-              All Files
+              {{ $t('analytics.bugPrediction.allFiles') }}
             </button>
           </div>
         </div>
@@ -94,23 +94,23 @@
           <div class="heatmap-legend">
             <div class="legend-item">
               <span class="legend-color critical"></span>
-              <span>Critical (80+)</span>
+              <span>{{ $t('analytics.bugPrediction.legendCritical') }}</span>
             </div>
             <div class="legend-item">
               <span class="legend-color high"></span>
-              <span>High (60-79)</span>
+              <span>{{ $t('analytics.bugPrediction.legendHigh') }}</span>
             </div>
             <div class="legend-item">
               <span class="legend-color medium"></span>
-              <span>Medium (40-59)</span>
+              <span>{{ $t('analytics.bugPrediction.legendMedium') }}</span>
             </div>
             <div class="legend-item">
               <span class="legend-color low"></span>
-              <span>Low (20-39)</span>
+              <span>{{ $t('analytics.bugPrediction.legendLow') }}</span>
             </div>
             <div class="legend-item">
               <span class="legend-color minimal"></span>
-              <span>Minimal (0-19)</span>
+              <span>{{ $t('analytics.bugPrediction.legendMinimal') }}</span>
             </div>
           </div>
         </div>
@@ -119,13 +119,13 @@
       <!-- High Risk Files -->
       <div class="panel high-risk-panel">
         <div class="panel-header">
-          <h3>&#128293; High Risk Files</h3>
-          <span class="panel-count">{{ highRiskFiles.length }} files</span>
+          <h3>&#128293; {{ $t('analytics.bugPrediction.highRiskFilesTitle') }}</h3>
+          <span class="panel-count">{{ highRiskFiles.length }} {{ $t('analytics.bugPrediction.files') }}</span>
         </div>
         <div class="panel-content">
           <div v-if="highRiskFiles.length === 0" class="empty-state">
             <span class="empty-icon">&#10024;</span>
-            <span class="empty-text">No high risk files detected</span>
+            <span class="empty-text">{{ $t('analytics.bugPrediction.noHighRiskFiles') }}</span>
           </div>
           <div v-else class="high-risk-list">
             <div
@@ -139,7 +139,7 @@
               <div class="file-info">
                 <span class="file-path">{{ truncatePath(file.file_path) }}</span>
                 <span class="file-bugs" v-if="file.bug_count_history">
-                  {{ file.bug_count_history }} historical bugs
+                  {{ file.bug_count_history }} {{ $t('analytics.bugPrediction.historicalBugs') }}
                 </span>
               </div>
               <div class="file-score">
@@ -158,7 +158,7 @@
       <!-- Top Risk Factors -->
       <div class="panel factors-panel">
         <div class="panel-header">
-          <h3>&#128202; Top Risk Factors</h3>
+          <h3>&#128202; {{ $t('analytics.bugPrediction.topRiskFactors') }}</h3>
         </div>
         <div class="panel-content">
           <div class="factors-list">
@@ -182,7 +182,7 @@
             </div>
           </div>
           <div class="factors-weights">
-            <h4>Factor Weights</h4>
+            <h4>{{ $t('analytics.bugPrediction.factorWeights') }}</h4>
             <div class="weights-grid">
               <div v-for="(weight, factor) in riskFactors" :key="factor" class="weight-item">
                 <span class="weight-name">{{ formatFactorName(factor) }}</span>
@@ -196,11 +196,11 @@
       <!-- Prediction Accuracy Trends -->
       <div class="panel trends-panel">
         <div class="panel-header">
-          <h3>&#128200; Prediction Accuracy</h3>
+          <h3>&#128200; {{ $t('analytics.bugPrediction.predictionAccuracy') }}</h3>
           <div class="header-actions">
             <span class="live-badge">
               <span class="pulse-dot"></span>
-              Live
+              {{ $t('analytics.bugPrediction.live') }}
             </span>
             <span v-if="lastUpdateTime" class="update-time">
               {{ formatTimeAgo(lastUpdateTime) }}
@@ -263,15 +263,15 @@
           </div>
           <div class="trend-stats">
             <div class="trend-stat">
-              <span class="stat-label">Average</span>
+              <span class="stat-label">{{ $t('analytics.bugPrediction.average') }}</span>
               <span class="stat-value">{{ trendStats.average.toFixed(1) }}%</span>
             </div>
             <div class="trend-stat">
-              <span class="stat-label">Predicted</span>
+              <span class="stat-label">{{ $t('analytics.bugPrediction.predicted') }}</span>
               <span class="stat-value">{{ trendStats.total_predicted }}</span>
             </div>
             <div class="trend-stat">
-              <span class="stat-label">Actual</span>
+              <span class="stat-label">{{ $t('analytics.bugPrediction.actual') }}</span>
               <span class="stat-value">{{ trendStats.total_actual }}</span>
             </div>
           </div>
@@ -282,7 +282,7 @@
     <!-- Recommendations -->
     <div class="panel recommendations-panel">
       <div class="panel-header">
-        <h3>&#128161; Recommendations</h3>
+        <h3>&#128161; {{ $t('analytics.bugPrediction.recommendations') }}</h3>
       </div>
       <div class="panel-content">
         <div class="recommendations-grid">
@@ -302,18 +302,18 @@
     <div v-if="selectedFile" class="modal-overlay" @click.self="selectedFile = null">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>File Risk Details</h3>
+          <h3>{{ $t('analytics.bugPrediction.fileRiskDetails') }}</h3>
           <button class="btn-close" @click="selectedFile = null">x</button>
         </div>
         <div class="modal-body">
           <div class="detail-section">
-            <h4>File Information</h4>
+            <h4>{{ $t('analytics.bugPrediction.fileInformation') }}</h4>
             <div class="detail-row">
-              <span class="detail-label">Path:</span>
+              <span class="detail-label">{{ $t('analytics.bugPrediction.path') }}:</span>
               <span class="detail-value file-path">{{ selectedFile.file_path }}</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Risk Score:</span>
+              <span class="detail-label">{{ $t('analytics.bugPrediction.riskScore') }}:</span>
               <span class="detail-value">
                 <span class="score-badge large" :class="selectedFile.risk_level">
                   {{ selectedFile.risk_score.toFixed(1) }}
@@ -321,17 +321,17 @@
               </span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Historical Bugs:</span>
+              <span class="detail-label">{{ $t('analytics.bugPrediction.historicalBugsLabel') }}:</span>
               <span class="detail-value">{{ selectedFile.bug_count_history || 0 }}</span>
             </div>
             <div v-if="selectedFile.last_bug_date" class="detail-row">
-              <span class="detail-label">Last Bug:</span>
+              <span class="detail-label">{{ $t('analytics.bugPrediction.lastBug') }}:</span>
               <span class="detail-value">{{ selectedFile.last_bug_date }}</span>
             </div>
           </div>
 
           <div class="detail-section">
-            <h4>Risk Factors</h4>
+            <h4>{{ $t('analytics.bugPrediction.riskFactorsTitle') }}</h4>
             <div class="factors-breakdown">
               <div
                 v-for="(value, factor) in selectedFile.factors"
@@ -352,22 +352,22 @@
           </div>
 
           <div class="detail-section">
-            <h4>Prevention Tips</h4>
+            <h4>{{ $t('analytics.bugPrediction.preventionTips') }}</h4>
             <ul class="tips-list">
               <li v-for="(tip, i) in selectedFile.prevention_tips" :key="i">{{ tip }}</li>
             </ul>
           </div>
 
           <div class="detail-section" v-if="selectedFile.suggested_tests?.length">
-            <h4>Suggested Tests</h4>
+            <h4>{{ $t('analytics.bugPrediction.suggestedTests') }}</h4>
             <ul class="tests-list">
               <li v-for="(test, i) in selectedFile.suggested_tests" :key="i">{{ test }}</li>
             </ul>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="selectedFile = null">Close</button>
-          <button class="btn-primary" @click="recordBug(selectedFile)">Record Bug</button>
+          <button class="btn-secondary" @click="selectedFile = null">{{ $t('analytics.bugPrediction.close') }}</button>
+          <button class="btn-primary" @click="recordBug(selectedFile)">{{ $t('analytics.bugPrediction.recordBug') }}</button>
         </div>
       </div>
     </div>

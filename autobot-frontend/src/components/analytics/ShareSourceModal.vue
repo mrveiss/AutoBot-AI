@@ -6,13 +6,13 @@
           class="modal-dialog"
           role="dialog"
           aria-modal="true"
-          aria-label="Share Code Source"
+          :aria-label="$t('analytics.sources.shareSource')"
         >
           <!-- Header -->
           <div class="modal-header">
             <h3>
               <i class="fas fa-share-alt"></i>
-              Share Source
+              {{ $t('analytics.sources.shareSource') }}
             </h3>
             <button class="close-btn" @click="$emit('close')" aria-label="Close">
               <i class="fas fa-times"></i>
@@ -32,7 +32,7 @@
 
             <!-- Access Level -->
             <div class="form-group">
-              <label class="form-label">Access Level</label>
+              <label class="form-label">{{ $t('analytics.sources.form.accessLevel') }}</label>
               <div class="access-selector">
                 <label
                   v-for="level in accessLevels"
@@ -56,8 +56,8 @@
             <!-- User IDs for shared access -->
             <div v-if="form.access === 'shared'" class="form-group">
               <label class="form-label" for="share-user-ids">
-                User IDs
-                <span class="form-label-hint">(one per line or comma-separated)</span>
+                {{ $t('analytics.sources.share.userIds') }}
+                <span class="form-label-hint">({{ $t('analytics.sources.share.userIdsHint') }})</span>
               </label>
               <textarea
                 id="share-user-ids"
@@ -69,13 +69,13 @@
               ></textarea>
               <span class="form-hint">
                 <i class="fas fa-info-circle"></i>
-                Enter user IDs separated by commas or new lines.
+                {{ $t('analytics.sources.share.userIdsHelp') }}
               </span>
             </div>
 
             <!-- Current shared_with display -->
             <div v-if="currentSharedWith.length > 0" class="shared-with-section">
-              <div class="form-label">Currently shared with:</div>
+              <div class="form-label">{{ $t('analytics.sources.share.currentlySharedWith') }}:</div>
               <div class="shared-tags">
                 <span v-for="uid in currentSharedWith" :key="uid" class="shared-tag">
                   <i class="fas fa-user"></i>
@@ -93,7 +93,7 @@
 
           <!-- Footer -->
           <div class="modal-footer">
-            <button class="btn-cancel" @click="$emit('close')" type="button">Cancel</button>
+            <button class="btn-cancel" @click="$emit('close')" type="button">{{ $t('analytics.sources.form.cancel') }}</button>
             <button
               class="btn-submit"
               @click="handleSubmit"
@@ -101,7 +101,7 @@
               type="button"
             >
               <i :class="submitting ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
-              {{ submitting ? 'Saving...' : 'Update Access' }}
+              {{ submitting ? $t('analytics.sources.form.saving') : $t('analytics.sources.share.updateAccess') }}
             </button>
           </div>
         </div>
@@ -122,11 +122,13 @@
  */
 
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ShareSourceModal')
+const { t } = useI18n()
 
 // ---- Types ----------------------------------------------------------------
 
@@ -163,26 +165,26 @@ const emit = defineEmits<{
 
 // ---- Constants ------------------------------------------------------------
 
-const accessLevels = [
+const accessLevels = computed(() => [
   {
     value: 'private' as const,
-    label: 'Private',
+    label: t('analytics.sources.access.private'),
     icon: 'fas fa-lock',
-    description: 'Only you'
+    description: t('analytics.sources.access.onlyYou')
   },
   {
     value: 'shared' as const,
-    label: 'Shared',
+    label: t('analytics.sources.access.shared'),
     icon: 'fas fa-users',
-    description: 'Specific users'
+    description: t('analytics.sources.access.specificUsers')
   },
   {
     value: 'public' as const,
-    label: 'Public',
+    label: t('analytics.sources.access.public'),
     icon: 'fas fa-globe',
-    description: 'All users'
+    description: t('analytics.sources.access.allUsers')
   }
-]
+])
 
 // ---- State ----------------------------------------------------------------
 

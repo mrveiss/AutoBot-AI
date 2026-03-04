@@ -9,11 +9,13 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useCodeIntelligence } from '@/composables/useCodeIntelligence'
 import type { CodeAnalysisRequest } from '@/composables/useCodeIntelligence'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CodeIntelligenceView')
+const { t } = useI18n()
 
 const {
   currentAnalysis,
@@ -64,7 +66,7 @@ async function handleGetSuggestions() {
 }
 
 async function handleDeleteAnalysis(id: string) {
-  if (confirm('Delete this analysis?')) {
+  if (confirm(t('analytics.codeIntelligence.confirmDelete'))) {
     await deleteAnalysis(id)
   }
 }
@@ -95,11 +97,11 @@ onMounted(async () => {
     <!-- Page Header -->
     <div class="page-header">
       <div class="page-header-content">
-        <h2 class="page-title">Code Intelligence</h2>
-        <p class="page-subtitle">Analyze code quality, get suggestions, and monitor health</p>
+        <h2 class="page-title">{{ $t('analytics.codeIntelligence.title') }}</h2>
+        <p class="page-subtitle">{{ $t('analytics.codeIntelligence.subtitle') }}</p>
       </div>
       <div v-if="healthScore" class="health-summary">
-        <div class="health-label">Codebase Health</div>
+        <div class="health-label">{{ $t('analytics.codeIntelligence.codebaseHealth') }}</div>
         <div :class="['health-value', getScoreColor(healthScore.health_score)]">
           {{ healthScore.health_score.toFixed(0) }}%
         </div>
@@ -110,7 +112,7 @@ onMounted(async () => {
     <div v-if="error" class="alert alert-error">
       <i class="fas fa-exclamation-circle"></i>
       <div class="alert-content">
-        <strong>Error</strong>
+        <strong>{{ $t('analytics.codeIntelligence.error') }}</strong>
         <p>{{ error }}</p>
       </div>
     </div>
@@ -121,25 +123,25 @@ onMounted(async () => {
         @click="activeTab = 'analysis'"
         :class="['tab-btn', { active: activeTab === 'analysis' }]"
       >
-        <i class="fas fa-microscope"></i> Analysis
+        <i class="fas fa-microscope"></i> {{ $t('analytics.codeIntelligence.tabs.analysis') }}
       </button>
       <button
         @click="activeTab = 'quality'"
         :class="['tab-btn', { active: activeTab === 'quality' }]"
       >
-        <i class="fas fa-chart-bar"></i> Quality Score
+        <i class="fas fa-chart-bar"></i> {{ $t('analytics.codeIntelligence.tabs.qualityScore') }}
       </button>
       <button
         @click="activeTab = 'suggestions'"
         :class="['tab-btn', { active: activeTab === 'suggestions' }]"
       >
-        <i class="fas fa-lightbulb"></i> Suggestions ({{ suggestions.length }})
+        <i class="fas fa-lightbulb"></i> {{ $t('analytics.codeIntelligence.tabs.suggestions') }} ({{ suggestions.length }})
       </button>
       <button
         @click="activeTab = 'history'"
         :class="['tab-btn', { active: activeTab === 'history' }]"
       >
-        <i class="fas fa-history"></i> History ({{ analysisHistory.length }})
+        <i class="fas fa-history"></i> {{ $t('analytics.codeIntelligence.tabs.history') }} ({{ analysisHistory.length }})
       </button>
     </nav>
 
@@ -149,12 +151,12 @@ onMounted(async () => {
       <div v-show="activeTab === 'analysis'" class="tab-panel">
         <div class="card">
           <div class="card-header">
-            <span class="card-title">Code Analysis</span>
+            <span class="card-title">{{ $t('analytics.codeIntelligence.codeAnalysis') }}</span>
           </div>
           <div class="card-body">
             <div class="form-grid">
               <div class="field-group">
-                <label class="field-label">Language</label>
+                <label class="field-label">{{ $t('analytics.codeIntelligence.language') }}</label>
                 <select v-model="languageInput" class="field-select">
                   <option v-for="lang in supportedLanguages" :key="lang" :value="lang">
                     {{ lang.charAt(0).toUpperCase() + lang.slice(1) }}
@@ -162,7 +164,7 @@ onMounted(async () => {
                 </select>
               </div>
               <div class="field-group">
-                <label class="field-label">Filename (optional)</label>
+                <label class="field-label">{{ $t('analytics.codeIntelligence.filenameOptional') }}</label>
                 <input
                   v-model="filenameInput"
                   type="text"
@@ -173,11 +175,11 @@ onMounted(async () => {
             </div>
 
             <div class="field-group">
-              <label class="field-label">Code</label>
+              <label class="field-label">{{ $t('analytics.codeIntelligence.code') }}</label>
               <textarea
                 v-model="codeInput"
                 rows="15"
-                placeholder="Paste your code here..."
+                :placeholder="$t('analytics.codeIntelligence.codePlaceholder')"
                 class="field-input code-textarea"
               ></textarea>
             </div>
@@ -188,14 +190,14 @@ onMounted(async () => {
                 :disabled="isLoading || !codeInput.trim()"
                 class="btn-action-primary"
               >
-                {{ isLoading ? 'Analyzing...' : 'Analyze Code' }}
+                {{ isLoading ? $t('analytics.codeIntelligence.analyzing') : $t('analytics.codeIntelligence.analyzeCode') }}
               </button>
               <button
                 @click="handleGetSuggestions"
                 :disabled="isLoading || !codeInput.trim()"
                 class="btn-action-secondary"
               >
-                Get Suggestions
+                {{ $t('analytics.codeIntelligence.getSuggestions') }}
               </button>
             </div>
           </div>
@@ -206,13 +208,13 @@ onMounted(async () => {
       <div v-show="activeTab === 'quality'" class="tab-panel">
         <div v-if="!currentAnalysis && !qualityScore" class="empty-state">
           <i class="fas fa-chart-bar"></i>
-          <p>Analyze code to see quality metrics</p>
+          <p>{{ $t('analytics.codeIntelligence.emptyQuality') }}</p>
         </div>
 
         <template v-else>
           <div v-if="currentAnalysis" class="card">
             <div class="card-header">
-              <span class="card-title">Quality Score</span>
+              <span class="card-title">{{ $t('analytics.codeIntelligence.tabs.qualityScore') }}</span>
               <span :class="['score-display', getScoreColor(currentAnalysis.quality_score)]">
                 {{ currentAnalysis.quality_score.toFixed(0) }}/100
               </span>
@@ -229,7 +231,7 @@ onMounted(async () => {
 
           <div v-if="currentAnalysis && currentAnalysis.issues.length > 0" class="card issues-card">
             <div class="card-header">
-              <span class="card-title">Issues ({{ currentAnalysis.issues.length }})</span>
+              <span class="card-title">{{ $t('analytics.codeIntelligence.issues') }} ({{ currentAnalysis.issues.length }})</span>
             </div>
             <div class="card-body">
               <div class="issues-list">
@@ -239,7 +241,7 @@ onMounted(async () => {
                   </span>
                   <div class="issue-content">
                     <p class="issue-message">{{ issue.message }}</p>
-                    <p v-if="issue.line_number" class="issue-line">Line {{ issue.line_number }}</p>
+                    <p v-if="issue.line_number" class="issue-line">{{ $t('analytics.codeIntelligence.line') }} {{ issue.line_number }}</p>
                     <p v-if="issue.suggestion" class="issue-suggestion">{{ issue.suggestion }}</p>
                   </div>
                 </div>
@@ -253,7 +255,7 @@ onMounted(async () => {
       <div v-show="activeTab === 'suggestions'" class="tab-panel">
         <div v-if="suggestions.length === 0" class="empty-state">
           <i class="fas fa-lightbulb"></i>
-          <p>No suggestions available. Analyze code first.</p>
+          <p>{{ $t('analytics.codeIntelligence.emptySuggestions') }}</p>
         </div>
 
         <div v-else class="suggestions-list">
@@ -268,12 +270,12 @@ onMounted(async () => {
                   suggestion.priority === 'medium' ? 'severity-medium' :
                   'severity-default'
                 ]">
-                  {{ suggestion.priority }} priority
+                  {{ suggestion.priority }} {{ $t('analytics.codeIntelligence.priority') }}
                 </span>
               </div>
               <p class="suggestion-desc">{{ suggestion.description }}</p>
               <div v-if="suggestion.impact" class="suggestion-impact">
-                <strong>Impact:</strong> {{ suggestion.impact }}
+                <strong>{{ $t('analytics.codeIntelligence.impact') }}:</strong> {{ suggestion.impact }}
               </div>
             </div>
           </div>
@@ -284,7 +286,7 @@ onMounted(async () => {
       <div v-show="activeTab === 'history'" class="tab-panel">
         <div v-if="analysisHistory.length === 0" class="empty-state">
           <i class="fas fa-history"></i>
-          <p>No analysis history yet</p>
+          <p>{{ $t('analytics.codeIntelligence.emptyHistory') }}</p>
         </div>
 
         <div v-else class="card">
@@ -292,17 +294,17 @@ onMounted(async () => {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Filename</th>
-                  <th>Language</th>
-                  <th>Quality Score</th>
-                  <th>Issues</th>
-                  <th>Date</th>
-                  <th>Actions</th>
+                  <th>{{ $t('analytics.codeIntelligence.table.filename') }}</th>
+                  <th>{{ $t('analytics.codeIntelligence.table.language') }}</th>
+                  <th>{{ $t('analytics.codeIntelligence.table.qualityScore') }}</th>
+                  <th>{{ $t('analytics.codeIntelligence.table.issues') }}</th>
+                  <th>{{ $t('analytics.codeIntelligence.table.date') }}</th>
+                  <th>{{ $t('analytics.codeIntelligence.table.actions') }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="analysis in analysisHistory" :key="analysis.id">
-                  <td class="cell-primary">{{ analysis.filename || 'Untitled' }}</td>
+                  <td class="cell-primary">{{ analysis.filename || $t('analytics.codeIntelligence.untitled') }}</td>
                   <td>{{ analysis.language }}</td>
                   <td>
                     <span :class="['score-inline', getScoreColor(analysis.quality_score)]">
@@ -313,7 +315,7 @@ onMounted(async () => {
                   <td>{{ new Date(analysis.timestamp).toLocaleString() }}</td>
                   <td>
                     <button @click="handleDeleteAnalysis(analysis.id)" class="btn-delete">
-                      Delete
+                      {{ $t('analytics.codeIntelligence.delete') }}
                     </button>
                   </td>
                 </tr>

@@ -3,17 +3,17 @@
     <!-- Header -->
     <div class="dashboard-header">
       <div class="header-content">
-        <h2 class="dashboard-title">Technical Debt Dashboard</h2>
-        <p class="dashboard-subtitle">Track, prioritize, and manage technical debt across the codebase</p>
+        <h2 class="dashboard-title">{{ $t('analytics.technicalDebt.title') }}</h2>
+        <p class="dashboard-subtitle">{{ $t('analytics.technicalDebt.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <button class="btn-refresh" @click="refreshData" :disabled="loading">
           <span class="icon">↻</span>
-          {{ loading ? 'Loading...' : 'Refresh' }}
+          {{ loading ? $t('analytics.technicalDebt.loading') : $t('analytics.technicalDebt.refresh') }}
         </button>
         <button class="btn-export" @click="exportReport">
           <span class="icon">↓</span>
-          Export Report
+          {{ $t('analytics.technicalDebt.exportReport') }}
         </button>
       </div>
     </div>
@@ -24,7 +24,7 @@
         <div class="card-icon">⚠️</div>
         <div class="card-content">
           <span class="card-value">{{ summary.total_items }}</span>
-          <span class="card-label">Total Debt Items</span>
+          <span class="card-label">{{ $t('analytics.technicalDebt.totalDebtItems') }}</span>
         </div>
         <div class="card-trend" :class="getTrendClass(summary.trend)">
           {{ formatTrend(summary.trend) }}
@@ -35,7 +35,7 @@
         <div class="card-icon">⏱️</div>
         <div class="card-content">
           <span class="card-value">{{ formatHours(summary.total_hours) }}</span>
-          <span class="card-label">Estimated Hours</span>
+          <span class="card-label">{{ $t('analytics.technicalDebt.estimatedHours') }}</span>
         </div>
         <div class="card-cost">${{ formatCost(summary.estimated_cost) }}</div>
       </div>
@@ -44,16 +44,16 @@
         <div class="card-icon">🔴</div>
         <div class="card-content">
           <span class="card-value">{{ summary.critical_count }}</span>
-          <span class="card-label">Critical Items</span>
+          <span class="card-label">{{ $t('analytics.technicalDebt.criticalItems') }}</span>
         </div>
-        <div class="card-priority">Needs Immediate Attention</div>
+        <div class="card-priority">{{ $t('analytics.technicalDebt.needsImmediateAttention') }}</div>
       </div>
 
       <div class="summary-card health-score">
         <div class="card-icon">💚</div>
         <div class="card-content">
           <span class="card-value">{{ summary.health_score }}%</span>
-          <span class="card-label">Debt Health Score</span>
+          <span class="card-label">{{ $t('analytics.technicalDebt.debtHealthScore') }}</span>
         </div>
         <div class="health-bar">
           <div class="health-fill" :style="{ width: summary.health_score + '%' }" :class="getHealthClass(summary.health_score)"></div>
@@ -66,10 +66,10 @@
       <!-- Category Breakdown -->
       <div class="panel category-panel">
         <div class="panel-header">
-          <h3>Debt by Category</h3>
+          <h3>{{ $t('analytics.technicalDebt.debtByCategory') }}</h3>
           <div class="view-toggle">
-            <button :class="{ active: categoryView === 'chart' }" @click="categoryView = 'chart'">Chart</button>
-            <button :class="{ active: categoryView === 'list' }" @click="categoryView = 'list'">List</button>
+            <button :class="{ active: categoryView === 'chart' }" @click="categoryView = 'chart'">{{ $t('analytics.technicalDebt.chart') }}</button>
+            <button :class="{ active: categoryView === 'list' }" @click="categoryView = 'list'">{{ $t('analytics.technicalDebt.list') }}</button>
           </div>
         </div>
         <div class="panel-content">
@@ -96,7 +96,7 @@
                   {{ summary.total_items }}
                 </text>
                 <text class="center-label donut-text-secondary" text-anchor="middle" dy="1.5em" font-size="10">
-                  Total Items
+                  {{ $t('analytics.technicalDebt.totalItems') }}
                 </text>
               </g>
             </svg>
@@ -127,7 +127,7 @@
                 <span class="category-name">{{ formatCategoryName(category.category) }}</span>
               </div>
               <div class="category-stats">
-                <span class="stat-count">{{ category.count }} items</span>
+                <span class="stat-count">{{ category.count }} {{ $t('analytics.technicalDebt.items') }}</span>
                 <span class="stat-hours">{{ formatHours(category.total_hours) }}h</span>
                 <span class="stat-severity" :class="category.avg_severity">
                   {{ category.avg_severity }}
@@ -148,13 +148,13 @@
       <!-- ROI Priorities -->
       <div class="panel priorities-panel">
         <div class="panel-header">
-          <h3>🎯 Quick Wins (Best ROI)</h3>
-          <span class="panel-info">High impact, low effort items</span>
+          <h3>🎯 {{ $t('analytics.technicalDebt.quickWins') }}</h3>
+          <span class="panel-info">{{ $t('analytics.technicalDebt.highImpactLowEffort') }}</span>
         </div>
         <div class="panel-content">
           <div v-if="roiPriorities.length === 0" class="empty-state">
             <span class="empty-icon">✨</span>
-            <span class="empty-text">No quick wins available</span>
+            <span class="empty-text">{{ $t('analytics.technicalDebt.noQuickWins') }}</span>
           </div>
           <div v-else class="priority-list">
             <div
@@ -174,18 +174,18 @@
                 <div class="priority-description">{{ item.description }}</div>
                 <div class="priority-metrics">
                   <span class="metric roi">
-                    <strong>ROI:</strong> {{ item.roi_score.toFixed(1) }}
+                    <strong>{{ $t('analytics.technicalDebt.roi') }}:</strong> {{ item.roi_score.toFixed(1) }}
                   </span>
                   <span class="metric impact">
-                    <strong>Impact:</strong> {{ item.impact_score }}/10
+                    <strong>{{ $t('analytics.technicalDebt.impactLabel') }}:</strong> {{ item.impact_score }}/10
                   </span>
                   <span class="metric effort">
-                    <strong>Effort:</strong> {{ item.estimated_hours }}h
+                    <strong>{{ $t('analytics.technicalDebt.effort') }}:</strong> {{ item.estimated_hours }}h
                   </span>
                 </div>
               </div>
               <div class="priority-action">
-                <button class="btn-fix" @click="showFixDetails(item)">Fix</button>
+                <button class="btn-fix" @click="showFixDetails(item)">{{ $t('analytics.technicalDebt.fix') }}</button>
               </div>
             </div>
           </div>
@@ -196,7 +196,7 @@
     <!-- Trends Section -->
     <div class="panel trends-panel">
       <div class="panel-header">
-        <h3>📈 Debt Trends</h3>
+        <h3>📈 {{ $t('analytics.technicalDebt.debtTrends') }}</h3>
         <div class="period-selector">
           <button
             v-for="period in ['7d', '30d', '90d']"
@@ -271,21 +271,21 @@
         <!-- Trend Summary -->
         <div class="trend-summary">
           <div class="trend-stat">
-            <span class="stat-label">Period Change</span>
+            <span class="stat-label">{{ $t('analytics.technicalDebt.periodChange') }}</span>
             <span class="stat-value" :class="getTrendClass(trendSummary.change)">
               {{ formatTrendChange(trendSummary.change) }}
             </span>
           </div>
           <div class="trend-stat">
-            <span class="stat-label">Average Items</span>
+            <span class="stat-label">{{ $t('analytics.technicalDebt.averageItems') }}</span>
             <span class="stat-value">{{ trendSummary.average }}</span>
           </div>
           <div class="trend-stat">
-            <span class="stat-label">Peak</span>
+            <span class="stat-label">{{ $t('analytics.technicalDebt.peak') }}</span>
             <span class="stat-value">{{ trendSummary.peak }}</span>
           </div>
           <div class="trend-stat">
-            <span class="stat-label">Current</span>
+            <span class="stat-label">{{ $t('analytics.technicalDebt.current') }}</span>
             <span class="stat-value">{{ trendSummary.current }}</span>
           </div>
         </div>
@@ -295,25 +295,25 @@
     <!-- Detailed Debt Table -->
     <div class="panel table-panel">
       <div class="panel-header">
-        <h3>📋 Debt Inventory</h3>
+        <h3>📋 {{ $t('analytics.technicalDebt.debtInventory') }}</h3>
         <div class="table-filters">
           <select v-model="filterCategory" @change="applyFilters">
-            <option value="">All Categories</option>
+            <option value="">{{ $t('analytics.technicalDebt.allCategories') }}</option>
             <option v-for="cat in availableCategories" :key="cat" :value="cat">
               {{ formatCategoryName(cat) }}
             </option>
           </select>
           <select v-model="filterSeverity" @change="applyFilters">
-            <option value="">All Severities</option>
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
+            <option value="">{{ $t('analytics.technicalDebt.allSeverities') }}</option>
+            <option value="critical">{{ $t('analytics.technicalDebt.critical') }}</option>
+            <option value="high">{{ $t('analytics.technicalDebt.high') }}</option>
+            <option value="medium">{{ $t('analytics.technicalDebt.medium') }}</option>
+            <option value="low">{{ $t('analytics.technicalDebt.low') }}</option>
           </select>
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Search files..."
+            :placeholder="$t('analytics.technicalDebt.searchFiles')"
             @input="applyFilters"
           />
         </div>
@@ -323,13 +323,13 @@
           <table class="debt-table">
             <thead>
               <tr>
-                <th @click="sortBy('severity')">Severity</th>
-                <th @click="sortBy('category')">Category</th>
-                <th @click="sortBy('file_path')">File</th>
-                <th>Description</th>
-                <th @click="sortBy('estimated_hours')">Est. Hours</th>
-                <th @click="sortBy('roi_score')">ROI</th>
-                <th>Actions</th>
+                <th @click="sortBy('severity')">{{ $t('analytics.technicalDebt.severity') }}</th>
+                <th @click="sortBy('category')">{{ $t('analytics.technicalDebt.category') }}</th>
+                <th @click="sortBy('file_path')">{{ $t('analytics.technicalDebt.file') }}</th>
+                <th>{{ $t('analytics.technicalDebt.description') }}</th>
+                <th @click="sortBy('estimated_hours')">{{ $t('analytics.technicalDebt.estHours') }}</th>
+                <th @click="sortBy('roi_score')">{{ $t('analytics.technicalDebt.roiHeader') }}</th>
+                <th>{{ $t('analytics.technicalDebt.actions') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -356,7 +356,7 @@
                   </span>
                 </td>
                 <td class="actions-cell">
-                  <button class="btn-view" @click="showItemDetails(item)">View</button>
+                  <button class="btn-view" @click="showItemDetails(item)">{{ $t('analytics.technicalDebt.view') }}</button>
                 </td>
               </tr>
             </tbody>
@@ -365,9 +365,9 @@
 
         <!-- Pagination -->
         <div class="pagination">
-          <button :disabled="currentPage === 1" @click="currentPage--">Previous</button>
-          <span class="page-info">Page {{ currentPage }} of {{ totalPages }}</span>
-          <button :disabled="currentPage === totalPages" @click="currentPage++">Next</button>
+          <button :disabled="currentPage === 1" @click="currentPage--">{{ $t('analytics.technicalDebt.previous') }}</button>
+          <span class="page-info">{{ $t('analytics.technicalDebt.pageInfo', { current: currentPage, total: totalPages }) }}</span>
+          <button :disabled="currentPage === totalPages" @click="currentPage++">{{ $t('analytics.technicalDebt.next') }}</button>
         </div>
       </div>
     </div>
@@ -376,56 +376,56 @@
     <div v-if="selectedItem" class="modal-overlay" @click.self="selectedItem = null">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>Debt Item Details</h3>
+          <h3>{{ $t('analytics.technicalDebt.debtItemDetails') }}</h3>
           <button class="btn-close" @click="selectedItem = null">×</button>
         </div>
         <div class="modal-body">
           <div class="detail-row">
-            <span class="detail-label">File:</span>
+            <span class="detail-label">{{ $t('analytics.technicalDebt.file') }}:</span>
             <span class="detail-value file-path">{{ selectedItem.file_path }}</span>
           </div>
           <div v-if="selectedItem.line_number" class="detail-row">
-            <span class="detail-label">Line:</span>
+            <span class="detail-label">{{ $t('analytics.technicalDebt.line') }}:</span>
             <span class="detail-value">{{ selectedItem.line_number }}</span>
           </div>
           <div class="detail-row">
-            <span class="detail-label">Category:</span>
+            <span class="detail-label">{{ $t('analytics.technicalDebt.category') }}:</span>
             <span class="detail-value category-badge" :class="selectedItem.category">
               {{ formatCategoryName(selectedItem.category) }}
             </span>
           </div>
           <div class="detail-row">
-            <span class="detail-label">Severity:</span>
+            <span class="detail-label">{{ $t('analytics.technicalDebt.severity') }}:</span>
             <span class="detail-value severity-badge" :class="selectedItem.severity">
               {{ selectedItem.severity }}
             </span>
           </div>
           <div class="detail-row">
-            <span class="detail-label">Description:</span>
+            <span class="detail-label">{{ $t('analytics.technicalDebt.description') }}:</span>
             <span class="detail-value">{{ selectedItem.description }}</span>
           </div>
           <div class="detail-row">
-            <span class="detail-label">Estimated Hours:</span>
+            <span class="detail-label">{{ $t('analytics.technicalDebt.estimatedHours') }}:</span>
             <span class="detail-value">{{ selectedItem.estimated_hours }}h</span>
           </div>
           <div class="detail-row">
-            <span class="detail-label">Impact Score:</span>
+            <span class="detail-label">{{ $t('analytics.technicalDebt.impactScore') }}:</span>
             <span class="detail-value">{{ selectedItem.impact_score }}/10</span>
           </div>
           <div class="detail-row">
-            <span class="detail-label">ROI Score:</span>
+            <span class="detail-label">{{ $t('analytics.technicalDebt.roiScore') }}:</span>
             <span class="detail-value roi-badge" :class="getRoiClass(selectedItem.roi_score)">
               {{ selectedItem.roi_score.toFixed(2) }}
             </span>
           </div>
           <div v-if="selectedItem.suggested_fix" class="detail-row full-width">
-            <span class="detail-label">Suggested Fix:</span>
+            <span class="detail-label">{{ $t('analytics.technicalDebt.suggestedFix') }}:</span>
             <pre class="suggested-fix">{{ selectedItem.suggested_fix }}</pre>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="selectedItem = null">Close</button>
-          <button class="btn-primary" @click="navigateToFile(selectedItem)">Open in Editor</button>
+          <button class="btn-secondary" @click="selectedItem = null">{{ $t('analytics.technicalDebt.close') }}</button>
+          <button class="btn-primary" @click="navigateToFile(selectedItem)">{{ $t('analytics.technicalDebt.openInEditor') }}</button>
         </div>
       </div>
     </div>

@@ -3,19 +3,19 @@
     <!-- Header -->
     <div class="dashboard-header">
       <div class="header-content">
-        <h2><i class="fas fa-comments"></i> Conversation Flow Analyzer</h2>
-        <p class="subtitle">Understand user intents, conversation patterns, and bottlenecks</p>
+        <h2><i class="fas fa-comments"></i> {{ $t('analytics.conversationFlow.title') }}</h2>
+        <p class="subtitle">{{ $t('analytics.conversationFlow.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <select v-model="timeRange" class="time-select" @change="runAnalysis">
-          <option value="6">Last 6 hours</option>
-          <option value="24">Last 24 hours</option>
-          <option value="72">Last 3 days</option>
-          <option value="168">Last 7 days</option>
+          <option value="6">{{ $t('analytics.conversationFlow.last6Hours') }}</option>
+          <option value="24">{{ $t('analytics.conversationFlow.last24Hours') }}</option>
+          <option value="72">{{ $t('analytics.conversationFlow.last3Days') }}</option>
+          <option value="168">{{ $t('analytics.conversationFlow.last7Days') }}</option>
         </select>
         <button @click="runAnalysis" class="analyze-btn" :disabled="isLoading">
           <i :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-chart-line'"></i>
-          {{ isLoading ? 'Analyzing...' : 'Analyze' }}
+          {{ isLoading ? $t('analytics.conversationFlow.analyzing') : $t('analytics.conversationFlow.analyze') }}
         </button>
       </div>
     </div>
@@ -28,7 +28,7 @@
         </div>
         <div class="metric-content">
           <div class="metric-value">{{ analysisResult.metrics.total_conversations }}</div>
-          <div class="metric-label">Total Conversations</div>
+          <div class="metric-label">{{ $t('analytics.conversationFlow.totalConversations') }}</div>
         </div>
       </div>
       <div class="metric-card">
@@ -37,7 +37,7 @@
         </div>
         <div class="metric-content">
           <div class="metric-value">{{ analysisResult.metrics.avg_messages_per_conversation }}</div>
-          <div class="metric-label">Avg Messages/Conv</div>
+          <div class="metric-label">{{ $t('analytics.conversationFlow.avgMessages') }}</div>
         </div>
       </div>
       <div class="metric-card">
@@ -46,7 +46,7 @@
         </div>
         <div class="metric-content">
           <div class="metric-value">{{ analysisResult.metrics.user_satisfaction_estimate }}%</div>
-          <div class="metric-label">Satisfaction</div>
+          <div class="metric-label">{{ $t('analytics.conversationFlow.satisfaction') }}</div>
         </div>
       </div>
       <div class="metric-card">
@@ -55,7 +55,7 @@
         </div>
         <div class="metric-content">
           <div class="metric-value">{{ analysisResult.metrics.resolution_rate }}%</div>
-          <div class="metric-label">Resolution Rate</div>
+          <div class="metric-label">{{ $t('analytics.conversationFlow.resolutionRate') }}</div>
         </div>
       </div>
     </div>
@@ -65,8 +65,8 @@
       <!-- Intent Patterns -->
       <div class="panel intents-panel">
         <div class="panel-header">
-          <h3><i class="fas fa-bullseye"></i> User Intents</h3>
-          <span class="count-badge">{{ analysisResult.intent_patterns.length }} detected</span>
+          <h3><i class="fas fa-bullseye"></i> {{ $t('analytics.conversationFlow.userIntents') }}</h3>
+          <span class="count-badge">{{ analysisResult.intent_patterns.length }} {{ $t('analytics.conversationFlow.detected') }}</span>
         </div>
         <div class="panel-content">
           <div class="intent-list">
@@ -88,8 +88,8 @@
                 ></div>
               </div>
               <div class="intent-meta">
-                <span><i class="fas fa-check"></i> {{ intent.success_rate }}% success</span>
-                <span><i class="fas fa-exchange-alt"></i> {{ intent.avg_turns_to_resolve }} turns avg</span>
+                <span><i class="fas fa-check"></i> {{ intent.success_rate }}% {{ $t('analytics.conversationFlow.success') }}</span>
+                <span><i class="fas fa-exchange-alt"></i> {{ intent.avg_turns_to_resolve }} {{ $t('analytics.conversationFlow.turnsAvg') }}</span>
               </div>
             </div>
           </div>
@@ -99,12 +99,12 @@
       <!-- Common Flows -->
       <div class="panel flows-panel">
         <div class="panel-header">
-          <h3><i class="fas fa-route"></i> Common Flow Paths</h3>
+          <h3><i class="fas fa-route"></i> {{ $t('analytics.conversationFlow.commonFlowPaths') }}</h3>
         </div>
         <div class="panel-content">
           <div v-if="analysisResult.common_flows.length === 0" class="empty-state">
             <i class="fas fa-route"></i>
-            <p>Not enough data for flow analysis</p>
+            <p>{{ $t('analytics.conversationFlow.notEnoughData') }}</p>
           </div>
           <div v-else class="flow-list">
             <div
@@ -138,12 +138,12 @@
       <!-- Bottlenecks -->
       <div class="panel bottlenecks-panel">
         <div class="panel-header">
-          <h3><i class="fas fa-exclamation-triangle"></i> Identified Bottlenecks</h3>
+          <h3><i class="fas fa-exclamation-triangle"></i> {{ $t('analytics.conversationFlow.identifiedBottlenecks') }}</h3>
         </div>
         <div class="panel-content">
           <div v-if="analysisResult.bottlenecks.length === 0" class="empty-state success">
             <i class="fas fa-thumbs-up"></i>
-            <p>No significant bottlenecks detected</p>
+            <p>{{ $t('analytics.conversationFlow.noBottlenecks') }}</p>
           </div>
           <div v-else class="bottleneck-list">
             <div
@@ -160,7 +160,7 @@
               </div>
               <p class="description">{{ bottleneck.description }}</p>
               <div class="suggestions">
-                <span class="suggestion-label">Suggestions:</span>
+                <span class="suggestion-label">{{ $t('analytics.conversationFlow.suggestions') }}:</span>
                 <ul>
                   <li v-for="(suggestion, idx) in bottleneck.suggested_improvements" :key="idx">
                     {{ suggestion }}
@@ -175,7 +175,7 @@
       <!-- Hourly Distribution -->
       <div class="panel distribution-panel">
         <div class="panel-header">
-          <h3><i class="fas fa-clock"></i> Activity Distribution</h3>
+          <h3><i class="fas fa-clock"></i> {{ $t('analytics.conversationFlow.activityDistribution') }}</h3>
         </div>
         <div class="panel-content">
           <div class="distribution-chart">
@@ -207,26 +207,26 @@
         <div class="modal-body">
           <div class="detail-grid">
             <div class="detail-item">
-              <span class="label">Intent ID</span>
+              <span class="label">{{ $t('analytics.conversationFlow.intentId') }}</span>
               <span class="value">{{ selectedIntent.intent_id }}</span>
             </div>
             <div class="detail-item">
-              <span class="label">Total Occurrences</span>
+              <span class="label">{{ $t('analytics.conversationFlow.totalOccurrences') }}</span>
               <span class="value">{{ selectedIntent.occurrences }}</span>
             </div>
             <div class="detail-item">
-              <span class="label">Success Rate</span>
+              <span class="label">{{ $t('analytics.conversationFlow.successRateLabel') }}</span>
               <span class="value" :class="getSuccessClass(selectedIntent.success_rate)">
                 {{ selectedIntent.success_rate }}%
               </span>
             </div>
             <div class="detail-item">
-              <span class="label">Avg Turns to Resolve</span>
+              <span class="label">{{ $t('analytics.conversationFlow.avgTurnsToResolve') }}</span>
               <span class="value">{{ selectedIntent.avg_turns_to_resolve }}</span>
             </div>
           </div>
           <div v-if="selectedIntent.sample_queries?.length" class="samples-section">
-            <h4>Sample Queries</h4>
+            <h4>{{ $t('analytics.conversationFlow.sampleQueries') }}</h4>
             <div class="sample-list">
               <div v-for="(sample, idx) in selectedIntent.sample_queries" :key="idx" class="sample-item">
                 {{ sample }}
@@ -240,14 +240,14 @@
     <!-- Loading State -->
     <div v-if="isLoading && !analysisResult" class="loading-state">
       <i class="fas fa-cog fa-spin fa-3x"></i>
-      <p>Analyzing conversation patterns...</p>
+      <p>{{ $t('analytics.conversationFlow.analyzingPatterns') }}</p>
     </div>
 
     <!-- Empty State -->
     <div v-if="!isLoading && !analysisResult" class="empty-state-full">
       <i class="fas fa-comments"></i>
-      <h3>No Analysis Data</h3>
-      <p>Click "Analyze" to start analyzing conversation patterns</p>
+      <h3>{{ $t('analytics.conversationFlow.noData') }}</h3>
+      <p>{{ $t('analytics.conversationFlow.noDataDescription') }}</p>
     </div>
   </div>
 </template>

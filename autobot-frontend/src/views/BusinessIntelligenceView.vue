@@ -4,8 +4,8 @@
     <div class="health-overview" v-if="dashboard">
       <div class="health-card" :class="dashboard.health?.status">
         <div class="health-score">{{ dashboard.health?.score || 0 }}</div>
-        <div class="health-label">Health Score</div>
-        <div class="health-grade">Grade: {{ dashboard.health?.grade || 'N/A' }}</div>
+        <div class="health-label">{{ $t('analytics.bi.healthScore') }}</div>
+        <div class="health-grade">{{ $t('analytics.bi.grade') }}: {{ dashboard.health?.grade || 'N/A' }}</div>
       </div>
 
       <div class="overview-cards">
@@ -13,7 +13,7 @@
           <i class="fas fa-dollar-sign"></i>
           <div class="card-content">
             <div class="card-value">${{ (dashboard.cost?.total_usd || 0).toFixed(2) }}</div>
-            <div class="card-label">Total Cost (30d)</div>
+            <div class="card-label">{{ $t('analytics.bi.totalCost30d') }}</div>
             <div class="card-trend" :class="getTrendClass(dashboard.cost?.trend)">
               <i :class="getTrendIcon(dashboard.cost?.trend)"></i>
               {{ (dashboard.cost?.growth_rate || 0).toFixed(1) }}%
@@ -25,8 +25,8 @@
           <i class="fas fa-robot"></i>
           <div class="card-content">
             <div class="card-value">{{ dashboard.agents?.total_agents || 0 }}</div>
-            <div class="card-label">Active Agents</div>
-            <div class="card-meta">{{ formatNumber(dashboard.agents?.total_tasks || 0) }} tasks</div>
+            <div class="card-label">{{ $t('analytics.bi.activeAgents') }}</div>
+            <div class="card-meta">{{ formatNumber(dashboard.agents?.total_tasks || 0) }} {{ $t('analytics.bi.tasks') }}</div>
           </div>
         </div>
 
@@ -34,7 +34,7 @@
           <i class="fas fa-check-circle"></i>
           <div class="card-content">
             <div class="card-value">{{ (dashboard.agents?.avg_success_rate || 0).toFixed(1) }}%</div>
-            <div class="card-label">Avg Success Rate</div>
+            <div class="card-label">{{ $t('analytics.bi.avgSuccessRate') }}</div>
           </div>
         </div>
 
@@ -42,8 +42,8 @@
           <i class="fas fa-users"></i>
           <div class="card-content">
             <div class="card-value">{{ formatNumber(dashboard.engagement?.total_sessions || 0) }}</div>
-            <div class="card-label">Total Sessions</div>
-            <div class="card-meta">{{ formatNumber(dashboard.engagement?.page_views || 0) }} views</div>
+            <div class="card-label">{{ $t('analytics.bi.totalSessions') }}</div>
+            <div class="card-meta">{{ formatNumber(dashboard.engagement?.page_views || 0) }} {{ $t('analytics.bi.views') }}</div>
           </div>
         </div>
       </div>
@@ -52,7 +52,7 @@
     <!-- Refresh Button -->
     <div class="actions-bar">
       <BaseButton variant="secondary" size="sm" @click="refreshAll" :loading="loading">
-        <i class="fas fa-sync"></i> Refresh All
+        <i class="fas fa-sync"></i> {{ $t('analytics.bi.refreshAll') }}
       </BaseButton>
     </div>
 
@@ -80,28 +80,28 @@
       <div v-if="activeTab === 'maintenance'" class="tab-panel">
         <div class="maintenance-section">
           <div class="section-header">
-            <h3><i class="fas fa-tools"></i> Predictive Maintenance</h3>
+            <h3><i class="fas fa-tools"></i> {{ $t('analytics.bi.predictiveMaintenance') }}</h3>
             <BaseButton variant="outline" size="sm" @click="fetchMaintenance">
-              <i class="fas fa-refresh"></i> Refresh
+              <i class="fas fa-refresh"></i> {{ $t('analytics.bi.refresh') }}
             </BaseButton>
           </div>
 
           <div class="priority-summary" v-if="maintenance">
             <div class="priority-card critical" v-if="maintenance.by_priority?.critical > 0">
               <span class="count">{{ maintenance.by_priority.critical }}</span>
-              <span class="label">Critical</span>
+              <span class="label">{{ $t('analytics.bi.priority.critical') }}</span>
             </div>
             <div class="priority-card high" v-if="maintenance.by_priority?.high > 0">
               <span class="count">{{ maintenance.by_priority.high }}</span>
-              <span class="label">High</span>
+              <span class="label">{{ $t('analytics.bi.priority.high') }}</span>
             </div>
             <div class="priority-card medium">
               <span class="count">{{ maintenance.by_priority?.medium || 0 }}</span>
-              <span class="label">Medium</span>
+              <span class="label">{{ $t('analytics.bi.priority.medium') }}</span>
             </div>
             <div class="priority-card low">
               <span class="count">{{ maintenance.by_priority?.low || 0 }}</span>
-              <span class="label">Low</span>
+              <span class="label">{{ $t('analytics.bi.priority.low') }}</span>
             </div>
           </div>
 
@@ -129,7 +129,7 @@
                 </div>
                 <div class="detail confidence">
                   <i class="fas fa-chart-pie"></i>
-                  <span>{{ (rec.confidence * 100).toFixed(0) }}% confidence</span>
+                  <span>{{ (rec.confidence * 100).toFixed(0) }}% {{ $t('analytics.bi.confidence') }}</span>
                 </div>
               </div>
               <div class="rec-action">
@@ -141,7 +141,7 @@
           <EmptyState
             v-else
             icon="fas fa-check-circle"
-            message="No maintenance recommendations at this time"
+            :message="$t('analytics.bi.noMaintenance')"
           />
         </div>
       </div>
@@ -150,9 +150,9 @@
       <div v-if="activeTab === 'optimization'" class="tab-panel">
         <div class="optimization-section">
           <div class="section-header">
-            <h3><i class="fas fa-rocket"></i> Resource Optimization</h3>
+            <h3><i class="fas fa-rocket"></i> {{ $t('analytics.bi.resourceOptimization') }}</h3>
             <BaseButton variant="outline" size="sm" @click="fetchOptimization">
-              <i class="fas fa-refresh"></i> Refresh
+              <i class="fas fa-refresh"></i> {{ $t('analytics.bi.refresh') }}
             </BaseButton>
           </div>
 
@@ -161,14 +161,14 @@
               <i class="fas fa-dollar-sign"></i>
               <div class="savings-content">
                 <div class="savings-value">${{ (optimization.potential_savings?.cost_usd || 0).toFixed(2) }}</div>
-                <div class="savings-label">Potential Cost Savings</div>
+                <div class="savings-label">{{ $t('analytics.bi.potentialCostSavings') }}</div>
               </div>
             </div>
             <div class="savings-card">
               <i class="fas fa-tachometer-alt"></i>
               <div class="savings-content">
                 <div class="savings-value">{{ (optimization.potential_savings?.performance_improvement_percent || 0).toFixed(1) }}%</div>
-                <div class="savings-label">Performance Improvement</div>
+                <div class="savings-label">{{ $t('analytics.bi.performanceImprovement') }}</div>
               </div>
             </div>
           </div>
@@ -181,7 +181,7 @@
             >
               <div class="opt-header">
                 <span class="resource-type" :class="opt.resource_type">{{ opt.resource_type }}</span>
-                <span class="effort-badge" :class="opt.implementation_effort">{{ opt.implementation_effort }} effort</span>
+                <span class="effort-badge" :class="opt.implementation_effort">{{ opt.implementation_effort }} {{ $t('analytics.bi.effort') }}</span>
               </div>
               <h4>{{ opt.title }}</h4>
               <p class="details">{{ opt.details }}</p>
@@ -204,7 +204,7 @@
           <EmptyState
             v-else
             icon="fas fa-check-circle"
-            message="No optimization recommendations at this time"
+            :message="$t('analytics.bi.noOptimization')"
           />
         </div>
       </div>
@@ -213,9 +213,9 @@
       <div v-if="activeTab === 'insights'" class="tab-panel">
         <div class="insights-section">
           <div class="section-header">
-            <h3><i class="fas fa-lightbulb"></i> Actionable Insights</h3>
+            <h3><i class="fas fa-lightbulb"></i> {{ $t('analytics.bi.actionableInsights') }}</h3>
             <BaseButton variant="outline" size="sm" @click="fetchInsights">
-              <i class="fas fa-refresh"></i> Refresh
+              <i class="fas fa-refresh"></i> {{ $t('analytics.bi.refresh') }}
             </BaseButton>
           </div>
 
@@ -244,7 +244,7 @@
           <EmptyState
             v-else
             icon="fas fa-sparkles"
-            message="No insights available at this time"
+            :message="$t('analytics.bi.noInsights')"
           />
         </div>
       </div>
@@ -253,40 +253,40 @@
       <div v-if="activeTab === 'reports'" class="tab-panel">
         <div class="reports-section">
           <div class="section-header">
-            <h3><i class="fas fa-file-alt"></i> Custom Reports</h3>
+            <h3><i class="fas fa-file-alt"></i> {{ $t('analytics.bi.customReports') }}</h3>
           </div>
 
           <div class="report-options">
             <div class="report-card" @click="generateReport('executive')">
               <i class="fas fa-briefcase"></i>
-              <h4>Executive Summary</h4>
-              <p>High-level overview with key metrics and recommendations</p>
+              <h4>{{ $t('analytics.bi.reports.executiveSummary') }}</h4>
+              <p>{{ $t('analytics.bi.reports.executiveDesc') }}</p>
             </div>
             <div class="report-card" @click="generateReport('technical')">
               <i class="fas fa-cogs"></i>
-              <h4>Technical Report</h4>
-              <p>Detailed technical analysis and system metrics</p>
+              <h4>{{ $t('analytics.bi.reports.technicalReport') }}</h4>
+              <p>{{ $t('analytics.bi.reports.technicalDesc') }}</p>
             </div>
             <div class="report-card" @click="generateReport('cost')">
               <i class="fas fa-dollar-sign"></i>
-              <h4>Cost Report</h4>
-              <p>Cost breakdown, trends, and optimization opportunities</p>
+              <h4>{{ $t('analytics.bi.reports.costReport') }}</h4>
+              <p>{{ $t('analytics.bi.reports.costDesc') }}</p>
             </div>
             <div class="report-card" @click="generateReport('performance')">
               <i class="fas fa-tachometer-alt"></i>
-              <h4>Performance Report</h4>
-              <p>Agent and system performance metrics</p>
+              <h4>{{ $t('analytics.bi.reports.performanceReport') }}</h4>
+              <p>{{ $t('analytics.bi.reports.performanceDesc') }}</p>
             </div>
           </div>
 
           <div class="generated-report" v-if="generatedReport">
             <div class="report-header">
-              <h4>{{ generatedReport.report_type }} Report</h4>
+              <h4>{{ generatedReport.report_type }} {{ $t('analytics.bi.report') }}</h4>
               <span class="report-date">{{ formatDate(generatedReport.generated_at) }}</span>
             </div>
             <pre class="report-content">{{ JSON.stringify(generatedReport, null, 2) }}</pre>
             <BaseButton variant="primary" size="sm" @click="downloadReport">
-              <i class="fas fa-download"></i> Download JSON
+              <i class="fas fa-download"></i> {{ $t('analytics.bi.downloadJson') }}
             </BaseButton>
           </div>
         </div>
@@ -296,7 +296,7 @@
     <!-- Loading Overlay -->
     <div v-if="loading" class="loading-overlay">
       <i class="fas fa-spinner fa-spin fa-2x"></i>
-      <span>Loading analytics data...</span>
+      <span>{{ $t('analytics.bi.loadingData') }}</span>
     </div>
   </div>
 </template>
@@ -307,6 +307,7 @@
 // Author: mrveiss
 
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import AdvancedAnalytics from '@/components/analytics/AdvancedAnalytics.vue'
@@ -314,6 +315,7 @@ import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('BusinessIntelligenceView')
+const { t } = useI18n()
 
 // State
 const loading = ref(false)
@@ -326,23 +328,23 @@ const generatedReport = ref<any>(null)
 
 // Tab configuration with badges
 const tabs = computed(() => [
-  { id: 'analytics', label: 'Analytics', icon: 'fas fa-chart-pie' },
+  { id: 'analytics', label: t('analytics.bi.tabs.analytics'), icon: 'fas fa-chart-pie' },
   {
     id: 'maintenance',
-    label: 'Maintenance',
+    label: t('analytics.bi.tabs.maintenance'),
     icon: 'fas fa-tools',
     badge: maintenance.value?.by_priority?.critical || 0,
     badgeClass: maintenance.value?.by_priority?.critical > 0 ? 'critical' : ''
   },
   {
     id: 'optimization',
-    label: 'Optimization',
+    label: t('analytics.bi.tabs.optimization'),
     icon: 'fas fa-rocket',
     badge: optimization.value?.total_recommendations || 0,
     badgeClass: ''
   },
-  { id: 'insights', label: 'Insights', icon: 'fas fa-lightbulb' },
-  { id: 'reports', label: 'Reports', icon: 'fas fa-file-alt' }
+  { id: 'insights', label: t('analytics.bi.tabs.insights'), icon: 'fas fa-lightbulb' },
+  { id: 'reports', label: t('analytics.bi.tabs.reports'), icon: 'fas fa-file-alt' }
 ])
 
 // Methods

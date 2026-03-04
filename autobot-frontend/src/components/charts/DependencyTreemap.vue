@@ -11,8 +11,8 @@
     :height="height"
     :series="chartSeries"
     :options="chartOptions"
-    :title="title"
-    :subtitle="subtitle"
+    :title="title ?? $t('charts.dependencyTreemap.title')"
+    :subtitle="subtitle ?? $t('charts.dependencyTreemap.subtitle')"
     :loading="loading"
     :error="error"
   />
@@ -20,8 +20,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
+
+const { t } = useI18n()
 
 /**
  * Get CSS variable value from the document
@@ -47,8 +50,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'External Dependencies',
-  subtitle: 'Package usage across codebase',
+  title: undefined,
+  subtitle: undefined,
   height: 400,
   loading: false,
   error: ''
@@ -106,13 +109,13 @@ const chartOptions = computed<ApexOptions>(() => ({
       fontWeight: 600
     },
     formatter: (text: string, op: { value: number }) => {
-      return `${text}\n${op.value} uses`
+      return `${text}\n${op.value} ${t('charts.dependencyTreemap.uses')}`
     },
     offsetY: -4
   },
   tooltip: {
     y: {
-      formatter: (value: number) => `${value} imports across codebase`
+      formatter: (value: number) => t('charts.dependencyTreemap.tooltipImports', { count: value })
     }
   }
 }))

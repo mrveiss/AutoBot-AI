@@ -1,12 +1,12 @@
 <template>
   <div class="code-smells-section analytics-section">
     <h3>
-      <i class="fas fa-bug"></i> Code Smells & Anti-Patterns
+      <i class="fas fa-bug"></i> {{ $t('analytics.codeSmells.title') }}
       <span v-if="codeHealthScore" class="health-badge" :class="getHealthGradeClass(codeHealthScore.grade)">
         {{ codeHealthScore.grade }} ({{ codeHealthScore.health_score }}/100)
       </span>
       <span v-if="smells.length > 0" class="total-count">
-        ({{ smells.length.toLocaleString() }} found)
+        ({{ smells.length.toLocaleString() }} {{ $t('analytics.codeSmells.found') }})
       </span>
     </h3>
     <div v-if="smells.length > 0" class="section-content">
@@ -14,23 +14,23 @@
       <div class="summary-cards">
         <div class="summary-card total">
           <div class="summary-value">{{ smells.length.toLocaleString() }}</div>
-          <div class="summary-label">Total</div>
+          <div class="summary-label">{{ $t('analytics.codeSmells.total') }}</div>
         </div>
         <div class="summary-card critical">
           <div class="summary-value">{{ severitySummary.critical }}</div>
-          <div class="summary-label">Critical</div>
+          <div class="summary-label">{{ $t('analytics.codeSmells.critical') }}</div>
         </div>
         <div class="summary-card high">
           <div class="summary-value">{{ severitySummary.high }}</div>
-          <div class="summary-label">High</div>
+          <div class="summary-label">{{ $t('analytics.codeSmells.high') }}</div>
         </div>
         <div class="summary-card medium">
           <div class="summary-value">{{ severitySummary.medium }}</div>
-          <div class="summary-label">Medium</div>
+          <div class="summary-label">{{ $t('analytics.codeSmells.medium') }}</div>
         </div>
         <div class="summary-card low">
           <div class="summary-value">{{ severitySummary.low }}</div>
-          <div class="summary-label">Low</div>
+          <div class="summary-label">{{ $t('analytics.codeSmells.low') }}</div>
         </div>
       </div>
 
@@ -52,16 +52,16 @@
             </div>
             <div class="header-badges">
               <span v-if="group.severityCounts.critical > 0" class="severity-badge critical">
-                {{ group.severityCounts.critical }} critical
+                {{ group.severityCounts.critical }} {{ $t('analytics.codeSmells.critical') }}
               </span>
               <span v-if="group.severityCounts.high > 0" class="severity-badge high">
-                {{ group.severityCounts.high }} high
+                {{ group.severityCounts.high }} {{ $t('analytics.codeSmells.high') }}
               </span>
               <span v-if="group.severityCounts.medium > 0" class="severity-badge medium">
-                {{ group.severityCounts.medium }} medium
+                {{ group.severityCounts.medium }} {{ $t('analytics.codeSmells.medium') }}
               </span>
               <span v-if="group.severityCounts.low > 0" class="severity-badge low">
-                {{ group.severityCounts.low }} low
+                {{ group.severityCounts.low }} {{ $t('analytics.codeSmells.low') }}
               </span>
             </div>
           </div>
@@ -87,7 +87,7 @@
                 <div v-if="smell.suggestion" class="item-suggestion">{{ smell.suggestion }}</div>
               </div>
               <div v-if="group.smells.length > 20" class="show-more">
-                <span class="muted">Showing 20 of {{ group.smells.length.toLocaleString() }} {{ formatCodeSmellType(String(smellType)) }} issues</span>
+                <span class="muted">{{ $t('analytics.codeSmells.showingOf', { shown: 20, total: group.smells.length.toLocaleString(), type: formatCodeSmellType(String(smellType)) }) }}</span>
               </div>
             </div>
           </transition>
@@ -97,7 +97,7 @@
     <EmptyState
       v-else
       icon="fas fa-sparkles"
-      message="No code smells detected in indexed data. Run codebase indexing first."
+      :message="$t('analytics.codeSmells.emptyMessage')"
       variant="info"
     />
   </div>

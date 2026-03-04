@@ -1,9 +1,9 @@
 <template>
   <div class="problems-section analytics-section">
     <h3>
-      <i class="fas fa-exclamation-triangle"></i> Code Problems
+      <i class="fas fa-exclamation-triangle"></i> {{ $t('analytics.problems.title') }}
       <span v-if="problems && problems.length > 0" class="total-count">
-        ({{ problems.length.toLocaleString() }} total)
+        ({{ problems.length.toLocaleString() }} {{ $t('analytics.problems.total') }})
       </span>
     </h3>
     <div v-if="problems && problems.length > 0" class="section-content">
@@ -11,7 +11,7 @@
       <div class="summary-cards">
         <div class="summary-card total">
           <div class="summary-value">{{ problems.length.toLocaleString() }}</div>
-          <div class="summary-label">Total</div>
+          <div class="summary-label">{{ $t('analytics.problems.total') }}</div>
         </div>
         <div
           v-for="(problemList, severity) in problemsBySeverity"
@@ -42,16 +42,16 @@
             </div>
             <div class="header-badges">
               <span v-if="typeData.severityCounts.critical" class="severity-badge critical">
-                {{ typeData.severityCounts.critical }} critical
+                {{ typeData.severityCounts.critical }} {{ $t('analytics.problems.critical') }}
               </span>
               <span v-if="typeData.severityCounts.high" class="severity-badge high">
-                {{ typeData.severityCounts.high }} high
+                {{ typeData.severityCounts.high }} {{ $t('analytics.problems.high') }}
               </span>
               <span v-if="typeData.severityCounts.medium" class="severity-badge medium">
-                {{ typeData.severityCounts.medium }} medium
+                {{ typeData.severityCounts.medium }} {{ $t('analytics.problems.medium') }}
               </span>
               <span v-if="typeData.severityCounts.low" class="severity-badge low">
-                {{ typeData.severityCounts.low }} low
+                {{ typeData.severityCounts.low }} {{ $t('analytics.problems.low') }}
               </span>
             </div>
           </div>
@@ -73,7 +73,7 @@
                 <div v-if="problem.suggestion" class="item-suggestion">{{ problem.suggestion }}</div>
               </div>
               <div v-if="typeData.problems.length > 20" class="show-more">
-                <span class="muted">Showing 20 of {{ typeData.problems.length.toLocaleString() }} {{ formatProblemType(String(type)) }} issues</span>
+                <span class="muted">{{ $t('analytics.problems.showingOf', { shown: 20, total: typeData.problems.length.toLocaleString(), type: formatProblemType(String(type)) }) }}</span>
               </div>
             </div>
           </transition>
@@ -83,7 +83,7 @@
     <EmptyState
       v-else
       icon="fas fa-check-circle"
-      message="No code problems detected or analysis not run yet."
+      :message="$t('analytics.problems.emptyMessage')"
       variant="success"
     />
   </div>

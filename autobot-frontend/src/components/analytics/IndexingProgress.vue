@@ -3,9 +3,9 @@
     <div class="progress-header">
       <div class="progress-title">
         <i class="fas fa-spinner fa-spin"></i>
-        Indexing in Progress
+        {{ $t('analytics.indexing.inProgress') }}
       </div>
-      <div v-if="currentJobId" class="job-id">Job: {{ currentJobId.substring(0, 8) }}...</div>
+      <div v-if="currentJobId" class="job-id">{{ $t('analytics.indexing.jobId') }} {{ currentJobId.substring(0, 8) }}...</div>
     </div>
 
     <!-- Phase Progress -->
@@ -34,7 +34,7 @@
     <!-- Batch Progress -->
     <div v-if="jobBatches && jobBatches.total_batches > 0" class="batch-progress">
       <div class="batch-header">
-        <span class="batch-label">Batch Progress:</span>
+        <span class="batch-label">{{ $t('analytics.indexing.batchProgress') }}</span>
         <span class="batch-count">{{ jobBatches.completed_batches }} / {{ jobBatches.total_batches }}</span>
       </div>
       <div class="batch-bar">
@@ -49,23 +49,23 @@
     <div v-if="jobStats" class="live-stats">
       <div class="stat-item">
         <i class="fas fa-file-code"></i>
-        <span>{{ jobStats.files_scanned }} files</span>
+        <span>{{ jobStats.files_scanned }} {{ $t('analytics.indexing.files') }}</span>
       </div>
       <div class="stat-item">
         <i class="fas fa-exclamation-triangle"></i>
-        <span>{{ jobStats.problems_found }} problems</span>
+        <span>{{ jobStats.problems_found }} {{ $t('analytics.indexing.problems') }}</span>
       </div>
       <div class="stat-item">
         <i class="fas fa-code"></i>
-        <span>{{ jobStats.functions_found }} functions</span>
+        <span>{{ jobStats.functions_found }} {{ $t('analytics.indexing.functions') }}</span>
       </div>
       <div class="stat-item">
         <i class="fas fa-cubes"></i>
-        <span>{{ jobStats.classes_found }} classes</span>
+        <span>{{ jobStats.classes_found }} {{ $t('analytics.indexing.classes') }}</span>
       </div>
       <div class="stat-item" v-if="jobStats.items_stored > 0">
         <i class="fas fa-database"></i>
-        <span>{{ jobStats.items_stored }} stored</span>
+        <span>{{ jobStats.items_stored }} {{ $t('analytics.indexing.stored') }}</span>
       </div>
     </div>
   </div>

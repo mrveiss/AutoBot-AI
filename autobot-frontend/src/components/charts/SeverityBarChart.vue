@@ -11,7 +11,7 @@
     :height="height"
     :series="chartSeries"
     :options="chartOptions"
-    :title="title"
+    :title="title ?? $t('charts.severity.title')"
     :subtitle="subtitle"
     :loading="loading"
     :error="error"
@@ -20,8 +20,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
+
+const { t } = useI18n()
 
 /**
  * Get CSS variable value from the document
@@ -49,7 +52,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'Problems by Severity',
+  title: undefined,
   subtitle: '',
   height: 300,
   loading: false,
@@ -59,7 +62,7 @@ const props = withDefaults(defineProps<Props>(), {
 // Transform data for bar chart - support both count/value and severity/name formats
 const chartSeries = computed(() => [
   {
-    name: 'Problems',
+    name: t('charts.severity.seriesName'),
     data: props.data.map((item) => item.count ?? item.value ?? 0)
   }
 ])
@@ -109,7 +112,7 @@ const chartOptions = computed<ApexOptions>(() => ({
   },
   tooltip: {
     y: {
-      formatter: (value: number) => `${value.toLocaleString()} problems`
+      formatter: (value: number) => t('charts.severity.tooltipProblems', { count: value.toLocaleString() })
     }
   },
   legend: {
@@ -142,16 +145,16 @@ function getSeverityColors(severities: string[]): string[] {
 // Format severity label for display
 function formatSeverityLabel(severity: string): string {
   const labels: Record<string, string> = {
-    critical: 'Critical',
-    high: 'High',
-    error: 'Error',
-    medium: 'Medium',
-    warning: 'Warning',
-    low: 'Low',
-    info: 'Info',
-    hint: 'Hint',
-    suggestion: 'Suggestion',
-    trivial: 'Trivial'
+    critical: t('charts.severity.levels.critical'),
+    high: t('charts.severity.levels.high'),
+    error: t('charts.severity.levels.error'),
+    medium: t('charts.severity.levels.medium'),
+    warning: t('charts.severity.levels.warning'),
+    low: t('charts.severity.levels.low'),
+    info: t('charts.severity.levels.info'),
+    hint: t('charts.severity.levels.hint'),
+    suggestion: t('charts.severity.levels.suggestion'),
+    trivial: t('charts.severity.levels.trivial')
   }
 
   return labels[severity.toLowerCase()] || severity.charAt(0).toUpperCase() + severity.slice(1)

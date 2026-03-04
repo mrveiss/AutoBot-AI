@@ -2,8 +2,8 @@
   <div class="llm-pattern-dashboard">
     <!-- Header -->
     <div class="dashboard-header">
-      <h2>LLM Usage Pattern Analyzer</h2>
-      <p class="subtitle">Cost optimization and usage insights</p>
+      <h2>{{ $t('analytics.llmPatterns.title') }}</h2>
+      <p class="subtitle">{{ $t('analytics.llmPatterns.subtitle') }}</p>
     </div>
 
     <!-- Summary Cards -->
@@ -16,7 +16,7 @@
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.total_requests }}</span>
-          <span class="stat-label">Total Requests</span>
+          <span class="stat-label">{{ $t('analytics.llmPatterns.totalRequests') }}</span>
         </div>
       </div>
 
@@ -28,7 +28,7 @@
         </div>
         <div class="stat-content">
           <span class="stat-value">${{ formatCost(stats.total_cost) }}</span>
-          <span class="stat-label">Total Cost (7d)</span>
+          <span class="stat-label">{{ $t('analytics.llmPatterns.totalCost7d') }}</span>
         </div>
       </div>
 
@@ -40,7 +40,7 @@
         </div>
         <div class="stat-content">
           <span class="stat-value">${{ formatCost(stats.avg_cost_per_request) }}</span>
-          <span class="stat-label">Avg Cost/Request</span>
+          <span class="stat-label">{{ $t('analytics.llmPatterns.avgCostPerRequest') }}</span>
         </div>
       </div>
 
@@ -52,7 +52,7 @@
         </div>
         <div class="stat-content">
           <span class="stat-value">${{ formatCost(potentialSavings) }}</span>
-          <span class="stat-label">Potential Savings</span>
+          <span class="stat-label">{{ $t('analytics.llmPatterns.potentialSavings') }}</span>
         </div>
       </div>
     </div>
@@ -64,19 +64,19 @@
         <!-- Prompt Analyzer -->
         <div class="panel">
           <div class="panel-header">
-            <h3>Prompt Analyzer</h3>
+            <h3>{{ $t('analytics.llmPatterns.promptAnalyzer') }}</h3>
           </div>
           <div class="panel-content">
             <div class="form-group">
               <textarea
                 v-model="analyzePrompt"
-                placeholder="Paste a prompt to analyze for optimization..."
+                :placeholder="$t('analytics.llmPatterns.promptPlaceholder')"
                 rows="3"
               ></textarea>
             </div>
             <div class="form-row">
               <select v-model="analyzeModel">
-                <option value="">Select model (optional)</option>
+                <option value="">{{ $t('analytics.llmPatterns.selectModel') }}</option>
                 <option value="claude-3-opus">Claude 3 Opus</option>
                 <option value="claude-3-sonnet">Claude 3 Sonnet</option>
                 <option value="claude-3-haiku">Claude 3 Haiku</option>
@@ -85,7 +85,7 @@
                 <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
               </select>
               <button class="analyze-btn" :disabled="!analyzePrompt" @click="runAnalysis">
-                Analyze
+                {{ $t('analytics.llmPatterns.analyze') }}
               </button>
             </div>
 
@@ -112,7 +112,7 @@
               </div>
 
               <div v-if="analysisResult.cache_potential" class="cache-indicator">
-                This prompt has caching potential
+                {{ $t('analytics.llmPatterns.cachePotential') }}
               </div>
             </div>
           </div>
@@ -121,7 +121,7 @@
         <!-- Optimization Recommendations -->
         <div class="panel">
           <div class="panel-header">
-            <h3>Optimization Recommendations</h3>
+            <h3>{{ $t('analytics.llmPatterns.optimizationRecommendations') }}</h3>
             <button class="refresh-btn" @click="fetchRecommendations">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -130,7 +130,7 @@
           </div>
           <div class="panel-content">
             <div v-if="recommendations.length === 0" class="empty-state">
-              <p>No recommendations available</p>
+              <p>{{ $t('analytics.llmPatterns.noRecommendations') }}</p>
             </div>
             <div v-else class="recommendations-grid">
               <div
@@ -146,10 +146,10 @@
                 <h4>{{ rec.title }}</h4>
                 <p>{{ rec.description }}</p>
                 <div class="rec-meta">
-                  <span>{{ rec.affected_prompts }} prompts affected</span>
+                  <span>{{ $t('analytics.llmPatterns.promptsAffected', { count: rec.affected_prompts }) }}</span>
                 </div>
                 <button class="expand-btn" @click="toggleSteps(rec.type)">
-                  {{ expandedRec === rec.type ? 'Hide steps' : 'Show steps' }}
+                  {{ expandedRec === rec.type ? $t('analytics.llmPatterns.hideSteps') : $t('analytics.llmPatterns.showSteps') }}
                 </button>
                 <div v-if="expandedRec === rec.type" class="rec-steps">
                   <ol>
@@ -169,11 +169,11 @@
         <!-- Model Comparison -->
         <div class="panel">
           <div class="panel-header">
-            <h3>Model Comparison</h3>
+            <h3>{{ $t('analytics.llmPatterns.modelComparison') }}</h3>
           </div>
           <div class="panel-content">
             <div v-if="modelComparison.length === 0" class="empty-state">
-              <p>No model usage data</p>
+              <p>{{ $t('analytics.llmPatterns.noModelData') }}</p>
             </div>
             <div v-else class="model-list">
               <div
@@ -186,9 +186,9 @@
                   <span class="model-cost">${{ formatCost(model.total_cost) }}</span>
                 </div>
                 <div class="model-stats">
-                  <span>{{ model.request_count }} requests</span>
-                  <span>{{ formatTokens(model.total_tokens) }} tokens</span>
-                  <span>{{ model.success_rate }}% success</span>
+                  <span>{{ $t('analytics.llmPatterns.requests', { count: model.request_count }) }}</span>
+                  <span>{{ $t('analytics.llmPatterns.tokens', { count: formatTokens(model.total_tokens) }) }}</span>
+                  <span>{{ $t('analytics.llmPatterns.successRate', { rate: model.success_rate }) }}</span>
                 </div>
                 <div class="model-bar">
                   <div
@@ -204,11 +204,11 @@
         <!-- Category Distribution -->
         <div class="panel">
           <div class="panel-header">
-            <h3>Usage by Category</h3>
+            <h3>{{ $t('analytics.llmPatterns.usageByCategory') }}</h3>
           </div>
           <div class="panel-content">
             <div v-if="categoryData.categories?.length === 0" class="empty-state">
-              <p>No category data</p>
+              <p>{{ $t('analytics.llmPatterns.noCategoryData') }}</p>
             </div>
             <div v-else class="category-list">
               <div
@@ -238,11 +238,11 @@
         <!-- Cache Opportunities -->
         <div class="panel">
           <div class="panel-header">
-            <h3>Caching Opportunities</h3>
+            <h3>{{ $t('analytics.llmPatterns.cachingOpportunities') }}</h3>
           </div>
           <div class="panel-content">
             <div v-if="cacheOpportunities.length === 0" class="empty-state">
-              <p>No caching opportunities detected</p>
+              <p>{{ $t('analytics.llmPatterns.noCachingOpportunities') }}</p>
             </div>
             <div v-else class="cache-list">
               <div
@@ -252,7 +252,7 @@
               >
                 <div class="cache-header">
                   <span class="cache-count">{{ opp.occurrence_count }}x</span>
-                  <span class="cache-savings">${{ formatCost(opp.potential_savings) }} savings</span>
+                  <span class="cache-savings">${{ formatCost(opp.potential_savings) }} {{ $t('analytics.llmPatterns.savings') }}</span>
                 </div>
                 <p class="cache-preview">{{ opp.prompt_preview }}</p>
               </div>
@@ -265,11 +265,11 @@
     <!-- Cost Trend Chart -->
     <div class="panel trend-panel">
       <div class="panel-header">
-        <h3>Daily Cost Trend</h3>
+        <h3>{{ $t('analytics.llmPatterns.dailyCostTrend') }}</h3>
       </div>
       <div class="panel-content">
         <div v-if="stats.by_date?.length === 0" class="empty-state">
-          <p>No trend data available</p>
+          <p>{{ $t('analytics.llmPatterns.noTrendData') }}</p>
         </div>
         <div v-else class="trend-chart">
           <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" class="chart-svg">
@@ -313,7 +313,7 @@
           <div class="trend-legend">
             <span class="legend-item">
               <span class="legend-dot"></span>
-              Cost per day
+              {{ $t('analytics.llmPatterns.costPerDay') }}
             </span>
           </div>
         </div>

@@ -2,24 +2,24 @@
   <div class="code-evolution-timeline">
     <!-- Header with controls -->
     <div class="timeline-header">
-      <h2><i class="fas fa-chart-line"></i> Code Evolution Timeline</h2>
+      <h2><i class="fas fa-chart-line"></i> {{ $t('analytics.codeEvolution.title') }}</h2>
       <div class="timeline-controls">
         <select v-model="selectedGranularity" class="control-select">
-          <option value="daily">Daily</option>
-          <option value="weekly">Weekly</option>
-          <option value="monthly">Monthly</option>
+          <option value="daily">{{ $t('analytics.codeEvolution.daily') }}</option>
+          <option value="weekly">{{ $t('analytics.codeEvolution.weekly') }}</option>
+          <option value="monthly">{{ $t('analytics.codeEvolution.monthly') }}</option>
         </select>
         <select v-model="selectedDays" class="control-select">
-          <option value="7">Last 7 days</option>
-          <option value="30">Last 30 days</option>
-          <option value="90">Last 90 days</option>
-          <option value="365">Last year</option>
+          <option value="7">{{ $t('analytics.codeEvolution.last7days') }}</option>
+          <option value="30">{{ $t('analytics.codeEvolution.last30days') }}</option>
+          <option value="90">{{ $t('analytics.codeEvolution.last90days') }}</option>
+          <option value="365">{{ $t('analytics.codeEvolution.lastYear') }}</option>
         </select>
         <BaseButton variant="secondary" size="sm" @click="fetchTimeline" :loading="loading">
-          <i class="fas fa-sync"></i> Refresh
+          <i class="fas fa-sync"></i> {{ $t('analytics.codeEvolution.refresh') }}
         </BaseButton>
         <BaseButton variant="primary" size="sm" @click="exportData">
-          <i class="fas fa-download"></i> Export
+          <i class="fas fa-download"></i> {{ $t('analytics.codeEvolution.export') }}
         </BaseButton>
       </div>
     </div>
@@ -27,14 +27,14 @@
     <!-- Loading State -->
     <div v-if="loading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Loading evolution data...</span>
+      <span>{{ $t('analytics.codeEvolution.loading') }}</span>
     </div>
 
     <!-- Error State -->
     <div v-else-if="error" class="error-state">
       <i class="fas fa-exclamation-triangle"></i>
       <span>{{ error }}</span>
-      <BaseButton variant="secondary" size="sm" @click="fetchTimeline">Retry</BaseButton>
+      <BaseButton variant="secondary" size="sm" @click="fetchTimeline">{{ $t('analytics.codeEvolution.retry') }}</BaseButton>
     </div>
 
     <!-- Main Content -->
@@ -64,7 +64,7 @@
       <!-- Timeline Chart -->
       <div class="chart-container">
         <div class="chart-header">
-          <h3>Quality Score Over Time</h3>
+          <h3>{{ $t('analytics.codeEvolution.qualityScoreOverTime') }}</h3>
           <div class="metric-toggles">
             <label
               v-for="metric in availableMetrics"
@@ -162,7 +162,7 @@
 
       <!-- Pattern Evolution Section -->
       <div class="patterns-section" v-if="patterns && Object.keys(patterns).length">
-        <h3><i class="fas fa-bug"></i> Anti-Pattern Evolution</h3>
+        <h3><i class="fas fa-bug"></i> {{ $t('analytics.codeEvolution.antiPatternEvolution') }}</h3>
         <div class="patterns-grid">
           <div
             v-for="(data, patternType) in patterns"
@@ -209,10 +209,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 // @ts-ignore - Component may not have type declarations
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { useToast } from '@/composables/useToast'
+
+const { t } = useI18n()
 
 interface TimelinePoint {
   timestamp: string
@@ -347,7 +350,7 @@ async function fetchTimeline() {
     patterns.value = patternsJson.patterns || {}
 
     if (timelineJson.status === 'demo') {
-      showToast('Using demo data - Redis unavailable', 'warning')
+      showToast(t('analytics.codeEvolution.demoDataWarning'), 'warning')
     }
 
   } catch (e: unknown) {
@@ -378,9 +381,9 @@ async function exportData() {
     a.click()
     URL.revokeObjectURL(url)
 
-    showToast('Data exported successfully', 'success')
+    showToast(t('analytics.codeEvolution.exportSuccess'), 'success')
   } catch (e) {
-    showToast('Export failed', 'error')
+    showToast(t('analytics.codeEvolution.exportFailed'), 'error')
   }
 }
 
@@ -490,12 +493,12 @@ function getPatternTrendIcon(data: PatternPoint[]): string {
 }
 
 function getPatternTrendText(data: PatternPoint[]): string {
-  if (data.length < 2) return 'No trend data'
+  if (data.length < 2) return t('analytics.codeEvolution.noTrendData')
   const first = data[0].count
   const last = data[data.length - 1].count
   const change = last - first
-  if (change === 0) return 'Stable'
-  return `${change > 0 ? '+' : ''}${change} since start`
+  if (change === 0) return t('analytics.codeEvolution.stable')
+  return t('analytics.codeEvolution.sinceStart', { change: `${change > 0 ? '+' : ''}${change}` })
 }
 
 function getSparklineHeight(count: number, data: PatternPoint[]): number {

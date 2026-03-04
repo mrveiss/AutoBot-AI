@@ -11,7 +11,7 @@
     :height="height"
     :series="chartSeries"
     :options="chartOptions"
-    :title="title"
+    :title="title ?? $t('charts.raceConditions.title')"
     :subtitle="subtitle"
     :loading="loading"
     :error="error"
@@ -20,8 +20,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
+
+const { t } = useI18n()
 
 /**
  * Get CSS variable value from the document
@@ -49,7 +52,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'Race Conditions by Category',
+  title: undefined,
   subtitle: '',
   height: 350,
   loading: false,
@@ -75,7 +78,7 @@ const chartOptions = computed<ApexOptions>(() => ({
   },
   tooltip: {
     y: {
-      formatter: (value: number) => `${value} issues`
+      formatter: (value: number) => t('charts.raceConditions.tooltipIssues', { count: value })
     }
   },
   dataLabels: {
@@ -108,7 +111,7 @@ const chartOptions = computed<ApexOptions>(() => ({
           total: {
             show: true,
             showAlways: true,
-            label: 'Total Issues',
+            label: t('charts.raceConditions.totalIssues'),
             fontSize: '12px',
             color: getCssVar('--text-secondary', '#94a3b8'),
             formatter: () => totalCount.value.toString()
@@ -165,17 +168,17 @@ function getCategoryColors(categories: string[]): string[] {
 // Format category label for display
 function formatCategoryLabel(category: string): string {
   const labels: Record<string, string> = {
-    thread_unsafe_singleton: 'Thread-Unsafe Singleton',
-    unprotected_global_state: 'Unprotected Global State',
-    unprotected_global_modification: 'Unprotected Global Modification',
-    unprotected_subscript_assignment: 'Unprotected Subscript',
-    unprotected_mutating_method: 'Unprotected Mutation',
-    async_shared_state: 'Async Shared State',
-    async_global_modification: 'Async Global Modification',
-    file_write_without_lock: 'File Write Without Lock',
-    file_writes_without_locking: 'File Writes Without Lock',
-    read_modify_write: 'Read-Modify-Write',
-    read_modify_write_pattern: 'Read-Modify-Write Pattern'
+    thread_unsafe_singleton: t('charts.raceConditions.categories.threadUnsafeSingleton'),
+    unprotected_global_state: t('charts.raceConditions.categories.unprotectedGlobalState'),
+    unprotected_global_modification: t('charts.raceConditions.categories.unprotectedGlobalModification'),
+    unprotected_subscript_assignment: t('charts.raceConditions.categories.unprotectedSubscript'),
+    unprotected_mutating_method: t('charts.raceConditions.categories.unprotectedMutation'),
+    async_shared_state: t('charts.raceConditions.categories.asyncSharedState'),
+    async_global_modification: t('charts.raceConditions.categories.asyncGlobalModification'),
+    file_write_without_lock: t('charts.raceConditions.categories.fileWriteWithoutLock'),
+    file_writes_without_locking: t('charts.raceConditions.categories.fileWritesWithoutLock'),
+    read_modify_write: t('charts.raceConditions.categories.readModifyWrite'),
+    read_modify_write_pattern: t('charts.raceConditions.categories.readModifyWritePattern')
   }
 
   const key = category.toLowerCase().replace(/[^a-z_]/g, '_').replace(/__+/g, '_')

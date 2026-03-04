@@ -4,28 +4,28 @@
     <BasePanel variant="dark" size="medium">
       <template #header>
         <div class="card-header-content">
-          <h3><i class="fas fa-tachometer-alt"></i> System Overview</h3>
+          <h3><i class="fas fa-tachometer-alt"></i> {{ $t('analytics.grid.systemOverview') }}</h3>
           <div class="refresh-indicator" :class="{ active: realTimeEnabled }">
             <i class="fas fa-circle"></i>
-            {{ realTimeEnabled ? 'Live' : 'Static' }}
+            {{ realTimeEnabled ? $t('analytics.grid.live') : $t('analytics.grid.static') }}
           </div>
         </div>
       </template>
       <div v-if="systemOverview" class="metrics-grid">
         <div class="metric-item">
-          <div class="metric-label">API Requests/Min</div>
+          <div class="metric-label">{{ $t('analytics.grid.apiRequestsMin') }}</div>
           <div class="metric-value">{{ systemOverview.api_requests_per_minute || 0 }}</div>
         </div>
         <div class="metric-item">
-          <div class="metric-label">Avg Response Time</div>
+          <div class="metric-label">{{ $t('analytics.grid.avgResponseTime') }}</div>
           <div class="metric-value">{{ systemOverview.average_response_time || 0 }}ms</div>
         </div>
         <div class="metric-item">
-          <div class="metric-label">Active Connections</div>
+          <div class="metric-label">{{ $t('analytics.grid.activeConnections') }}</div>
           <div class="metric-value">{{ systemOverview.active_connections || 0 }}</div>
         </div>
         <div class="metric-item">
-          <div class="metric-label">System Health</div>
+          <div class="metric-label">{{ $t('analytics.grid.systemHealth') }}</div>
           <div class="metric-value" :class="getHealthClass(systemOverview.system_health)">
             {{ systemOverview.system_health || 'Unknown' }}
           </div>
@@ -34,10 +34,10 @@
       <EmptyState
         v-else
         icon="fas fa-database"
-        message="No system metrics available"
+        :message="$t('analytics.grid.noSystemMetrics')"
       >
         <template #actions>
-          <button @click="$emit('load-system-overview')" class="btn-link">Load Metrics</button>
+          <button @click="$emit('load-system-overview')" class="btn-link">{{ $t('analytics.grid.loadMetrics') }}</button>
         </template>
       </EmptyState>
     </BasePanel>
@@ -46,7 +46,7 @@
     <BasePanel variant="dark" size="medium">
       <template #header>
         <div class="card-header-content">
-          <h3><i class="fas fa-network-wired"></i> Communication Patterns</h3>
+          <h3><i class="fas fa-network-wired"></i> {{ $t('analytics.grid.communicationPatterns') }}</h3>
           <button @click="$emit('load-communication-patterns')" class="refresh-btn">
             <i class="fas fa-sync"></i>
           </button>
@@ -54,22 +54,22 @@
       </template>
       <div v-if="communicationPatterns" class="communication-metrics">
         <div class="pattern-item">
-          <div class="pattern-label">WebSocket Connections</div>
+          <div class="pattern-label">{{ $t('analytics.grid.websocketConnections') }}</div>
           <div class="pattern-value">{{ communicationPatterns.websocket_connections || 0 }}</div>
         </div>
         <div class="pattern-item">
-          <div class="pattern-label">API Call Frequency</div>
+          <div class="pattern-label">{{ $t('analytics.grid.apiCallFrequency') }}</div>
           <div class="pattern-value">{{ communicationPatterns.api_call_frequency || 0 }}/min</div>
         </div>
         <div class="pattern-item">
-          <div class="pattern-label">Data Transfer Rate</div>
+          <div class="pattern-label">{{ $t('analytics.grid.dataTransferRate') }}</div>
           <div class="pattern-value">{{ communicationPatterns.data_transfer_rate || 0 }} KB/s</div>
         </div>
       </div>
       <EmptyState
         v-else
         icon="fas fa-wifi"
-        message="No communication data"
+        :message="$t('analytics.grid.noCommunicationData')"
       />
     </BasePanel>
 
@@ -77,7 +77,7 @@
     <BasePanel variant="dark" size="medium">
       <template #header>
         <div class="card-header-content">
-          <h3><i class="fas fa-code-branch"></i> Code Quality</h3>
+          <h3><i class="fas fa-code-branch"></i> {{ $t('analytics.grid.codeQuality') }}</h3>
           <button @click="$emit('load-code-quality')" class="refresh-btn">
             <i class="fas fa-sync"></i>
           </button>
@@ -86,19 +86,19 @@
       <div v-if="codeQuality" class="quality-metrics">
         <div class="quality-score" :class="getQualityClass(codeQuality.overall_score)">
           <div class="score-value">{{ codeQuality.overall_score || 0 }}</div>
-          <div class="score-label">Overall Score</div>
+          <div class="score-label">{{ $t('analytics.grid.overallScore') }}</div>
         </div>
         <div class="quality-details">
           <div class="quality-item">
-            <span class="quality-label">Test Coverage:</span>
+            <span class="quality-label">{{ $t('analytics.grid.testCoverage') }}</span>
             <span class="quality-value">{{ codeQuality.test_coverage || 0 }}%</span>
           </div>
           <div class="quality-item">
-            <span class="quality-label">Code Duplicates:</span>
+            <span class="quality-label">{{ $t('analytics.grid.codeDuplicates') }}</span>
             <span class="quality-value">{{ codeQuality.code_duplicates || 0 }}</span>
           </div>
           <div class="quality-item">
-            <span class="quality-label">Technical Debt:</span>
+            <span class="quality-label">{{ $t('analytics.grid.technicalDebt') }}</span>
             <span class="quality-value">{{ codeQuality.technical_debt || 0 }}h</span>
           </div>
         </div>
@@ -106,7 +106,7 @@
       <EmptyState
         v-else
         icon="fas fa-star"
-        message="No quality metrics"
+        :message="$t('analytics.grid.noQualityMetrics')"
       />
     </BasePanel>
 
@@ -114,7 +114,7 @@
     <BasePanel variant="dark" size="medium">
       <template #header>
         <div class="card-header-content">
-          <h3><i class="fas fa-bolt"></i> Performance Metrics</h3>
+          <h3><i class="fas fa-bolt"></i> {{ $t('analytics.grid.performanceMetrics') }}</h3>
           <button @click="$emit('load-performance-metrics')" class="refresh-btn">
             <i class="fas fa-sync"></i>
           </button>
@@ -123,19 +123,19 @@
       <div v-if="performanceMetrics" class="performance-metrics">
         <div class="performance-gauge" :class="getEfficiencyClass(performanceMetrics.efficiency_score)">
           <div class="gauge-value">{{ performanceMetrics.efficiency_score || 0 }}%</div>
-          <div class="gauge-label">Efficiency</div>
+          <div class="gauge-label">{{ $t('analytics.grid.efficiency') }}</div>
         </div>
         <div class="performance-details">
           <div class="performance-item">
-            <span class="performance-label">Memory Usage:</span>
+            <span class="performance-label">{{ $t('analytics.grid.memoryUsage') }}</span>
             <span class="performance-value">{{ performanceMetrics.memory_usage || 0 }}MB</span>
           </div>
           <div class="performance-item">
-            <span class="performance-label">CPU Usage:</span>
+            <span class="performance-label">{{ $t('analytics.grid.cpuUsage') }}</span>
             <span class="performance-value">{{ performanceMetrics.cpu_usage || 0 }}%</span>
           </div>
           <div class="performance-item">
-            <span class="performance-label">Load Time:</span>
+            <span class="performance-label">{{ $t('analytics.grid.loadTime') }}</span>
             <span class="performance-value">{{ performanceMetrics.load_time || 0 }}ms</span>
           </div>
         </div>
@@ -143,7 +143,7 @@
       <EmptyState
         v-else
         icon="fas fa-rocket"
-        message="No performance data"
+        :message="$t('analytics.grid.noPerformanceData')"
       />
     </BasePanel>
   </div>

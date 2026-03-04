@@ -10,9 +10,9 @@
     <!-- Header -->
     <div class="page-header">
       <div>
-        <h1 class="page-title">Code Evolution</h1>
+        <h1 class="page-title">{{ $t('analytics.evolution.title') }}</h1>
         <p class="page-subtitle">
-          Track how code patterns and quality metrics evolve over time
+          {{ $t('analytics.evolution.subtitle') }}
         </p>
       </div>
       <button
@@ -21,7 +21,7 @@
         :disabled="evolution.loading.value"
       >
         <i class="fas fa-play-circle"></i>
-        Analyze Repository
+        {{ $t('analytics.evolution.analyzeRepository') }}
       </button>
     </div>
 
@@ -33,7 +33,7 @@
         </div>
         <div class="summary-content">
           <div class="summary-value">{{ evolution.analysisResult.value?.commits_analyzed || 0 }}</div>
-          <div class="summary-label">Commits Analyzed</div>
+          <div class="summary-label">{{ $t('analytics.evolution.commitsAnalyzed') }}</div>
         </div>
       </div>
 
@@ -45,7 +45,7 @@
           <div class="summary-value">
             {{ evolution.analysisResult.value?.emerging_patterns?.length || 0 }}
           </div>
-          <div class="summary-label">Emerging Patterns</div>
+          <div class="summary-label">{{ $t('analytics.evolution.emergingPatterns') }}</div>
         </div>
       </div>
 
@@ -57,7 +57,7 @@
           <div class="summary-value">
             {{ evolution.analysisResult.value?.declining_patterns?.length || 0 }}
           </div>
-          <div class="summary-label">Declining Patterns</div>
+          <div class="summary-label">{{ $t('analytics.evolution.decliningPatterns') }}</div>
         </div>
       </div>
 
@@ -69,7 +69,7 @@
           <div class="summary-value">
             {{ evolution.analysisResult.value?.refactorings_detected || 0 }}
           </div>
-          <div class="summary-label">Refactorings Detected</div>
+          <div class="summary-label">{{ $t('analytics.evolution.refactoringsDetected') }}</div>
         </div>
       </div>
     </div>
@@ -78,30 +78,30 @@
     <div class="filter-panel">
       <div class="filter-row">
         <div class="filter-group">
-          <label class="filter-label">Start Date</label>
+          <label class="filter-label">{{ $t('analytics.evolution.filters.startDate') }}</label>
           <input v-model="filters.startDate" type="date" class="field-input filter-input" />
         </div>
         <div class="filter-group">
-          <label class="filter-label">End Date</label>
+          <label class="filter-label">{{ $t('analytics.evolution.filters.endDate') }}</label>
           <input v-model="filters.endDate" type="date" class="field-input filter-input" />
         </div>
         <div class="filter-group">
-          <label class="filter-label">Granularity</label>
+          <label class="filter-label">{{ $t('analytics.evolution.filters.granularity') }}</label>
           <select v-model="filters.granularity" class="field-input filter-input">
-            <option value="hourly">Hourly</option>
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
+            <option value="hourly">{{ $t('analytics.evolution.filters.hourly') }}</option>
+            <option value="daily">{{ $t('analytics.evolution.filters.daily') }}</option>
+            <option value="weekly">{{ $t('analytics.evolution.filters.weekly') }}</option>
+            <option value="monthly">{{ $t('analytics.evolution.filters.monthly') }}</option>
           </select>
         </div>
         <div class="filter-group">
-          <label class="filter-label">Trend Period</label>
+          <label class="filter-label">{{ $t('analytics.evolution.filters.trendPeriod') }}</label>
           <select v-model="filters.trendDays" class="field-input filter-input">
-            <option :value="7">7 days</option>
-            <option :value="30">30 days</option>
-            <option :value="90">90 days</option>
-            <option :value="180">180 days</option>
-            <option :value="365">1 year</option>
+            <option :value="7">{{ $t('analytics.evolution.filters.days7') }}</option>
+            <option :value="30">{{ $t('analytics.evolution.filters.days30') }}</option>
+            <option :value="90">{{ $t('analytics.evolution.filters.days90') }}</option>
+            <option :value="180">{{ $t('analytics.evolution.filters.days180') }}</option>
+            <option :value="365">{{ $t('analytics.evolution.filters.year1') }}</option>
           </select>
         </div>
         <div class="filter-actions">
@@ -111,13 +111,13 @@
             :disabled="evolution.loading.value"
           >
             <i class="fas fa-filter"></i>
-            Apply Filters
+            {{ $t('analytics.evolution.applyFilters') }}
           </button>
           <div class="export-group">
             <button
               @click="evolution.exportData('json', filters.startDate, filters.endDate)"
               class="btn-action-secondary"
-              title="Export as JSON"
+              :title="$t('analytics.evolution.exportJson')"
             >
               <i class="fas fa-file-code"></i>
               JSON
@@ -125,7 +125,7 @@
             <button
               @click="evolution.exportData('csv', filters.startDate, filters.endDate)"
               class="btn-action-secondary"
-              title="Export as CSV"
+              :title="$t('analytics.evolution.exportCsv')"
             >
               <i class="fas fa-file-csv"></i>
               CSV
@@ -135,7 +135,7 @@
       </div>
       <!-- Metric Selector -->
       <div class="metric-selector">
-        <span class="filter-label">Metrics:</span>
+        <span class="filter-label">{{ $t('analytics.evolution.filters.metrics') }}:</span>
         <label v-for="m in availableMetrics" :key="m.value" class="metric-checkbox">
           <input type="checkbox" :value="m.value" v-model="filters.selectedMetrics" />
           {{ m.label }}
@@ -145,7 +145,7 @@
 
     <!-- Quality Trends (Issue #247) -->
     <div v-if="evolution.hasTrendsData.value" class="trends-section">
-      <h2 class="section-title">Quality Trends ({{ filters.trendDays }} days)</h2>
+      <h2 class="section-title">{{ $t('analytics.evolution.qualityTrends') }} ({{ filters.trendDays }} {{ $t('analytics.evolution.days') }})</h2>
       <div class="trends-grid">
         <div
           v-for="(trend, metric) in evolution.trendsData.value"
@@ -197,22 +197,22 @@
 
     <!-- Pattern Details Table -->
     <div v-if="evolution.hasAnalysisResult.value" class="patterns-section">
-      <h2 class="section-title">Pattern Details</h2>
+      <h2 class="section-title">{{ $t('analytics.evolution.patternDetails') }}</h2>
 
       <!-- Emerging Patterns -->
       <div v-if="evolution.analysisResult.value?.emerging_patterns.length" class="pattern-table">
         <h3 class="table-title">
           <i class="fas fa-arrow-trend-up icon-success"></i>
-          Emerging Patterns
+          {{ $t('analytics.evolution.emergingPatterns') }}
         </h3>
         <table class="data-table">
           <thead>
             <tr>
-              <th>Pattern Type</th>
-              <th>Count</th>
-              <th>First Seen</th>
-              <th>Last Seen</th>
-              <th>Trend</th>
+              <th>{{ $t('analytics.evolution.table.patternType') }}</th>
+              <th>{{ $t('analytics.evolution.table.count') }}</th>
+              <th>{{ $t('analytics.evolution.table.firstSeen') }}</th>
+              <th>{{ $t('analytics.evolution.table.lastSeen') }}</th>
+              <th>{{ $t('analytics.evolution.table.trend') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -233,16 +233,16 @@
       <div v-if="evolution.analysisResult.value?.declining_patterns.length" class="pattern-table">
         <h3 class="table-title">
           <i class="fas fa-arrow-trend-down icon-info"></i>
-          Declining Patterns
+          {{ $t('analytics.evolution.decliningPatterns') }}
         </h3>
         <table class="data-table">
           <thead>
             <tr>
-              <th>Pattern Type</th>
-              <th>Count</th>
-              <th>First Seen</th>
-              <th>Last Seen</th>
-              <th>Trend</th>
+              <th>{{ $t('analytics.evolution.table.patternType') }}</th>
+              <th>{{ $t('analytics.evolution.table.count') }}</th>
+              <th>{{ $t('analytics.evolution.table.firstSeen') }}</th>
+              <th>{{ $t('analytics.evolution.table.lastSeen') }}</th>
+              <th>{{ $t('analytics.evolution.table.trend') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -263,9 +263,9 @@
     <!-- Empty State -->
     <div v-if="!evolution.loading.value && !evolution.hasAnalysisResult.value" class="empty-state">
       <i class="fas fa-chart-line"></i>
-      <p>No Evolution Data</p>
+      <p>{{ $t('analytics.evolution.noData') }}</p>
       <p class="empty-detail">
-        Click "Analyze Repository" to start analyzing git history and track code evolution
+        {{ $t('analytics.evolution.noDataHint') }}
       </p>
     </div>
 
@@ -273,7 +273,7 @@
     <div v-if="showAnalysisModal" class="modal-overlay" @click.self="showAnalysisModal = false">
       <div class="modal-content">
         <div class="modal-header">
-          <h3 class="modal-title">Analyze Repository</h3>
+          <h3 class="modal-title">{{ $t('analytics.evolution.analyzeRepository') }}</h3>
           <button @click="showAnalysisModal = false" class="modal-close">
             <i class="fas fa-times"></i>
           </button>
@@ -281,7 +281,7 @@
 
         <div class="modal-body">
           <div class="field-group">
-            <label>Repository Path</label>
+            <label>{{ $t('analytics.evolution.modal.repoPath') }}</label>
             <input
               v-model="analysisForm.repo_path"
               type="text"
@@ -292,7 +292,7 @@
 
           <div class="form-row">
             <div class="field-group">
-              <label>Start Date (Optional)</label>
+              <label>{{ $t('analytics.evolution.modal.startDateOptional') }}</label>
               <input
                 v-model="analysisForm.start_date"
                 type="date"
@@ -301,7 +301,7 @@
             </div>
 
             <div class="field-group">
-              <label>End Date (Optional)</label>
+              <label>{{ $t('analytics.evolution.modal.endDateOptional') }}</label>
               <input
                 v-model="analysisForm.end_date"
                 type="date"
@@ -311,7 +311,7 @@
           </div>
 
           <div class="field-group">
-            <label>Commit Limit</label>
+            <label>{{ $t('analytics.evolution.modal.commitLimit') }}</label>
             <input
               v-model.number="analysisForm.commit_limit"
               type="number"
@@ -319,7 +319,7 @@
               max="1000"
               class="field-input"
             />
-            <p class="form-help">Maximum number of commits to analyze (1-1000)</p>
+            <p class="form-help">{{ $t('analytics.evolution.modal.commitLimitHelp') }}</p>
           </div>
 
           <div v-if="evolution.error.value" class="error-message">
@@ -330,7 +330,7 @@
 
         <div class="modal-footer">
           <button @click="showAnalysisModal = false" class="btn-action-secondary">
-            Cancel
+            {{ $t('analytics.evolution.modal.cancel') }}
           </button>
           <button
             @click="runAnalysis"
@@ -339,7 +339,7 @@
           >
             <i class="fas fa-spinner fa-spin" v-if="evolution.loading.value"></i>
             <i class="fas fa-play-circle" v-else></i>
-            {{ evolution.loading.value ? 'Analyzing...' : 'Start Analysis' }}
+            {{ evolution.loading.value ? $t('analytics.evolution.modal.analyzing') : $t('analytics.evolution.modal.startAnalysis') }}
           </button>
         </div>
       </div>
@@ -348,12 +348,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useEvolution } from '@/composables/useEvolution'
 import EvolutionTimelineChart from '@/components/charts/EvolutionTimelineChart.vue'
 import PatternEvolutionChart from '@/components/charts/PatternEvolutionChart.vue'
 
 const evolution = useEvolution()
+const { t } = useI18n()
 const showAnalysisModal = ref(false)
 
 // Filter state (Issue #247)
@@ -365,15 +367,15 @@ const filters = ref({
   selectedMetrics: ['overall_score', 'maintainability', 'complexity'],
 })
 
-const availableMetrics = [
-  { value: 'overall_score', label: 'Overall' },
-  { value: 'maintainability', label: 'Maintainability' },
-  { value: 'complexity', label: 'Complexity' },
-  { value: 'testability', label: 'Testability' },
-  { value: 'documentation', label: 'Documentation' },
-  { value: 'security', label: 'Security' },
-  { value: 'performance', label: 'Performance' },
-]
+const availableMetrics = computed(() => [
+  { value: 'overall_score', label: t('analytics.evolution.metrics.overall') },
+  { value: 'maintainability', label: t('analytics.evolution.metrics.maintainability') },
+  { value: 'complexity', label: t('analytics.evolution.metrics.complexity') },
+  { value: 'testability', label: t('analytics.evolution.metrics.testability') },
+  { value: 'documentation', label: t('analytics.evolution.metrics.documentation') },
+  { value: 'security', label: t('analytics.evolution.metrics.security') },
+  { value: 'performance', label: t('analytics.evolution.metrics.performance') },
+])
 
 const analysisForm = ref({
   repo_path: '/opt/autobot',

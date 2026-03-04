@@ -13,19 +13,19 @@
       <div class="header-content">
         <h2>
           <span class="icon">🔍</span>
-          AI Code Review
+          {{ $t('analytics.codeReview.title') }}
         </h2>
-        <p class="subtitle">Automated code analysis and review suggestions</p>
+        <p class="subtitle">{{ $t('analytics.codeReview.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <button class="action-btn secondary" @click="loadPatterns" :disabled="loading">
           <span class="btn-icon">⚙️</span>
-          Patterns
+          {{ $t('analytics.codeReview.patterns') }}
         </button>
         <button class="action-btn primary" @click="runAnalysis" :disabled="loading || !selectedPath">
           <span v-if="loading" class="spinner"></span>
           <span v-else class="btn-icon">▶️</span>
-          {{ loading ? 'Analyzing...' : 'Run Review' }}
+          {{ loading ? $t('analytics.codeReview.analyzing') : $t('analytics.codeReview.runReview') }}
         </button>
       </div>
     </div>
@@ -33,16 +33,16 @@
     <!-- Path Selection -->
     <div class="path-selection">
       <div class="input-group">
-        <label>File or Directory Path</label>
+        <label>{{ $t('analytics.codeReview.filePath') }}</label>
         <input
           v-model="selectedPath"
           type="text"
-          placeholder="Enter path to analyze (e.g., src/components/)"
+          :placeholder="$t('analytics.codeReview.pathPlaceholder')"
           @keydown.enter="runAnalysis"
         />
       </div>
       <div class="input-group">
-        <label>Languages</label>
+        <label>{{ $t('analytics.codeReview.languages') }}</label>
         <div class="language-chips">
           <span
             v-for="lang in availableLanguages"
@@ -63,35 +63,35 @@
         <div class="card-icon">🔴</div>
         <div class="card-content">
           <span class="card-value">{{ summary.critical }}</span>
-          <span class="card-label">Critical</span>
+          <span class="card-label">{{ $t('analytics.codeReview.critical') }}</span>
         </div>
       </div>
       <div class="summary-card high">
         <div class="card-icon">🟠</div>
         <div class="card-content">
           <span class="card-value">{{ summary.high }}</span>
-          <span class="card-label">High</span>
+          <span class="card-label">{{ $t('analytics.codeReview.high') }}</span>
         </div>
       </div>
       <div class="summary-card medium">
         <div class="card-icon">🟡</div>
         <div class="card-content">
           <span class="card-value">{{ summary.medium }}</span>
-          <span class="card-label">Medium</span>
+          <span class="card-label">{{ $t('analytics.codeReview.medium') }}</span>
         </div>
       </div>
       <div class="summary-card low">
         <div class="card-icon">🟢</div>
         <div class="card-content">
           <span class="card-value">{{ summary.low }}</span>
-          <span class="card-label">Low</span>
+          <span class="card-label">{{ $t('analytics.codeReview.low') }}</span>
         </div>
       </div>
       <div class="summary-card files">
         <div class="card-icon">📄</div>
         <div class="card-content">
           <span class="card-value">{{ summary.filesAnalyzed }}</span>
-          <span class="card-label">Files</span>
+          <span class="card-label">{{ $t('analytics.codeReview.files') }}</span>
         </div>
       </div>
     </div>
@@ -101,7 +101,7 @@
       <!-- Issues List -->
       <div class="panel issues-panel">
         <div class="panel-header">
-          <h3>Review Issues</h3>
+          <h3>{{ $t('analytics.codeReview.reviewIssues') }}</h3>
           <div class="filter-tabs">
             <button
               v-for="category in categories"
@@ -118,8 +118,8 @@
         <div class="panel-content">
           <div v-if="filteredIssues.length === 0" class="empty-state">
             <span class="empty-icon">✨</span>
-            <p v-if="!hasAnalyzed">Run a review to find issues</p>
-            <p v-else>No issues found in this category</p>
+            <p v-if="!hasAnalyzed">{{ $t('analytics.codeReview.runToFindIssues') }}</p>
+            <p v-else>{{ $t('analytics.codeReview.noIssuesInCategory') }}</p>
           </div>
           <div v-else class="issues-list">
             <div
@@ -138,7 +138,7 @@
               </div>
               <div class="issue-location">
                 <span class="file-path">{{ issue.file }}</span>
-                <span class="line-number">Line {{ issue.line }}</span>
+                <span class="line-number">{{ $t('analytics.codeReview.line') }} {{ issue.line }}</span>
               </div>
               <p class="issue-message">{{ issue.message }}</p>
             </div>
@@ -149,7 +149,7 @@
       <!-- Issue Detail -->
       <div class="panel detail-panel" v-if="selectedIssue">
         <div class="panel-header">
-          <h3>Issue Details</h3>
+          <h3>{{ $t('analytics.codeReview.issueDetails') }}</h3>
           <button class="close-btn" @click="selectedIssue = null">×</button>
         </div>
         <div class="panel-content">
@@ -166,20 +166,20 @@
           </div>
 
           <div class="detail-section">
-            <label>Location</label>
+            <label>{{ $t('analytics.codeReview.location') }}</label>
             <div class="location-info">
               <span class="file-path">{{ selectedIssue.file }}</span>
-              <span class="line-info">Line {{ selectedIssue.line }}, Column {{ selectedIssue.column }}</span>
+              <span class="line-info">{{ $t('analytics.codeReview.line') }} {{ selectedIssue.line }}, {{ $t('analytics.codeReview.column') }} {{ selectedIssue.column }}</span>
             </div>
           </div>
 
           <div class="detail-section">
-            <label>Description</label>
+            <label>{{ $t('analytics.codeReview.descriptionLabel') }}</label>
             <p class="description">{{ selectedIssue.message }}</p>
           </div>
 
           <div class="detail-section" v-if="selectedIssue.suggestion">
-            <label>Suggestion</label>
+            <label>{{ $t('analytics.codeReview.suggestion') }}</label>
             <div class="suggestion-box">
               <span class="suggestion-icon">💡</span>
               <p>{{ selectedIssue.suggestion }}</p>
@@ -187,7 +187,7 @@
           </div>
 
           <div class="detail-section" v-if="selectedIssue.snippet">
-            <label>Code Snippet</label>
+            <label>{{ $t('analytics.codeReview.codeSnippet') }}</label>
             <div class="code-snippet">
               <pre><code>{{ selectedIssue.snippet }}</code></pre>
             </div>
@@ -195,10 +195,10 @@
 
           <div class="detail-actions">
             <button class="action-btn secondary" @click="markResolved(selectedIssue)">
-              Mark Resolved
+              {{ $t('analytics.codeReview.markResolved') }}
             </button>
             <button class="action-btn secondary" @click="markFalsePositive(selectedIssue)">
-              False Positive
+              {{ $t('analytics.codeReview.falsePositive') }}
             </button>
           </div>
         </div>
@@ -207,7 +207,7 @@
       <!-- Pattern Categories Chart -->
       <div class="panel chart-panel" v-if="!selectedIssue">
         <div class="panel-header">
-          <h3>Issue Distribution</h3>
+          <h3>{{ $t('analytics.codeReview.issueDistribution') }}</h3>
         </div>
         <div class="panel-content">
           <div class="donut-chart-container">
@@ -241,7 +241,7 @@
                 {{ totalIssues }}
               </text>
               <text x="100" y="115" text-anchor="middle" class="center-label">
-                Total Issues
+                {{ $t('analytics.codeReview.totalIssues') }}
               </text>
             </svg>
           </div>
@@ -263,9 +263,9 @@
     <!-- Recent Reviews -->
     <div class="panel history-panel">
       <div class="panel-header">
-        <h3>Review History</h3>
+        <h3>{{ $t('analytics.codeReview.reviewHistory') }}</h3>
         <button class="action-btn text" @click="loadHistory">
-          Refresh
+          {{ $t('analytics.codeReview.refresh') }}
         </button>
       </div>
       <div class="panel-content">
@@ -282,18 +282,18 @@
             </div>
             <div class="history-stats">
               <span class="stat critical" v-if="review.critical > 0">
-                {{ review.critical }} critical
+                {{ review.critical }} {{ $t('analytics.codeReview.critical') }}
               </span>
               <span class="stat high" v-if="review.high > 0">
-                {{ review.high }} high
+                {{ review.high }} {{ $t('analytics.codeReview.high') }}
               </span>
               <span class="stat total">
-                {{ review.total }} issues
+                {{ review.total }} {{ $t('analytics.codeReview.issuesCount') }}
               </span>
             </div>
           </div>
           <div v-if="reviewHistory.length === 0" class="empty-state small">
-            <p>No previous reviews</p>
+            <p>{{ $t('analytics.codeReview.noPreviousReviews') }}</p>
           </div>
         </div>
       </div>
@@ -303,7 +303,7 @@
     <div v-if="showPatterns" class="modal-overlay" @click.self="showPatterns = false">
       <div class="modal patterns-modal">
         <div class="modal-header">
-          <h3>Review Patterns</h3>
+          <h3>{{ $t('analytics.codeReview.reviewPatterns') }}</h3>
           <button class="close-btn" @click="showPatterns = false">×</button>
         </div>
         <div class="modal-content">
@@ -345,10 +345,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
 
+const { t } = useI18n()
 const logger = createLogger('CodeReviewDashboard')
 
 // Issue #701: Type for API response with data property
@@ -551,15 +553,15 @@ function formatDate(timestamp: string): string {
   const now = new Date()
   const diff = now.getTime() - date.getTime()
 
-  if (diff < 60000) return 'Just now'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+  if (diff < 60000) return t('analytics.codeReview.justNow')
+  if (diff < 3600000) return t('analytics.codeReview.minutesAgo', { count: Math.floor(diff / 60000) })
+  if (diff < 86400000) return t('analytics.codeReview.hoursAgo', { count: Math.floor(diff / 3600000) })
   return date.toLocaleDateString()
 }
 
 async function runAnalysis() {
   if (!selectedPath.value) {
-    showToast('Please enter a path to analyze', 'warning')
+    showToast(t('analytics.codeReview.enterPathWarning'), 'warning')
     return
   }
 
@@ -580,9 +582,9 @@ async function runAnalysis() {
     hasAnalyzed.value = true
 
     if (issues.value.length === 0) {
-      showToast('No issues found! Code looks good.', 'success')
+      showToast(t('analytics.codeReview.noIssuesFound'), 'success')
     } else {
-      showToast(`Found ${issues.value.length} issues`, 'info')
+      showToast(t('analytics.codeReview.foundIssues', { count: issues.value.length }), 'info')
     }
 
     await loadHistory()
@@ -590,7 +592,7 @@ async function runAnalysis() {
     logger.error('Analysis failed:', error)
     issues.value = []
     hasAnalyzed.value = false
-    showToast('Analysis failed - please check backend connection', 'error')
+    showToast(t('analytics.codeReview.analysisFailed'), 'error')
   } finally {
     loading.value = false
   }
@@ -616,7 +618,7 @@ async function loadReview(reviewId: string) {
     hasAnalyzed.value = true
   } catch (error) {
     logger.error('Failed to load review:', error)
-    showToast('Failed to load review', 'error')
+    showToast(t('analytics.codeReview.failedToLoadReview'), 'error')
   }
 }
 
@@ -705,10 +707,10 @@ async function markResolved(issue: ReviewIssue) {
     })
     issues.value = issues.value.filter(i => i.id !== issue.id)
     selectedIssue.value = null
-    showToast('Issue marked as resolved', 'success')
+    showToast(t('analytics.codeReview.issueResolved'), 'success')
   } catch (error) {
     logger.warn('Failed to mark issue resolved:', error)
-    showToast('Failed to update issue', 'error')
+    showToast(t('analytics.codeReview.failedToUpdate'), 'error')
   }
 }
 
@@ -720,10 +722,10 @@ async function markFalsePositive(issue: ReviewIssue) {
     })
     issues.value = issues.value.filter(i => i.id !== issue.id)
     selectedIssue.value = null
-    showToast('Marked as false positive', 'info')
+    showToast(t('analytics.codeReview.markedFalsePositive'), 'info')
   } catch (error) {
     logger.warn('Failed to mark issue as false positive:', error)
-    showToast('Failed to update issue', 'error')
+    showToast(t('analytics.codeReview.failedToUpdate'), 'error')
   }
 }
 

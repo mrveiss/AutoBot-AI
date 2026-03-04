@@ -11,8 +11,8 @@
     :height="height"
     :series="series"
     :options="chartOptions"
-    :title="title"
-    :subtitle="subtitle"
+    :title="title ?? $t('charts.evolution.title')"
+    :subtitle="subtitle ?? $t('charts.evolution.subtitle')"
     :loading="loading"
     :error="error"
   />
@@ -20,9 +20,12 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
 import type { TimelineData } from '@/composables/useEvolution'
+
+const { t } = useI18n()
 
 interface Props {
   data: TimelineData[]
@@ -36,8 +39,8 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   height: 400,
-  title: 'Code Quality Evolution',
-  subtitle: 'Historical trends over time',
+  title: undefined,
+  subtitle: undefined,
   loading: false,
   error: '',
   metrics: () => ['overall_score', 'maintainability', 'complexity'],
@@ -96,7 +99,7 @@ const chartOptions = computed<ApexOptions>(() => ({
   },
   yaxis: {
     title: {
-      text: 'Score (0-100)',
+      text: t('charts.evolution.yAxisTitle'),
     },
     min: 0,
     max: 100,

@@ -2,8 +2,8 @@
   <div class="code-generation-dashboard">
     <!-- Header -->
     <div class="dashboard-header">
-      <h2>LLM-Powered Code Generation</h2>
-      <p class="subtitle">Generate and refactor code using AI</p>
+      <h2>{{ $t('analytics.codeGeneration.title') }}</h2>
+      <p class="subtitle">{{ $t('analytics.codeGeneration.subtitle') }}</p>
     </div>
 
     <!-- Stats Cards -->
@@ -16,7 +16,7 @@
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.generation.total }}</span>
-          <span class="stat-label">Generated</span>
+          <span class="stat-label">{{ $t('analytics.codeGeneration.generated') }}</span>
         </div>
       </div>
 
@@ -28,7 +28,7 @@
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.refactoring.total }}</span>
-          <span class="stat-label">Refactored</span>
+          <span class="stat-label">{{ $t('analytics.codeGeneration.refactored') }}</span>
         </div>
       </div>
 
@@ -41,7 +41,7 @@
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ formatTokens(totalTokens) }}</span>
-          <span class="stat-label">Tokens Used</span>
+          <span class="stat-label">{{ $t('analytics.codeGeneration.tokensUsed') }}</span>
         </div>
       </div>
 
@@ -53,7 +53,7 @@
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ successRate }}%</span>
-          <span class="stat-label">Success Rate</span>
+          <span class="stat-label">{{ $t('analytics.codeGeneration.successRate') }}</span>
         </div>
       </div>
     </div>
@@ -68,30 +68,30 @@
             :class="['mode-btn', { active: mode === 'generate' }]"
             @click="mode = 'generate'"
           >
-            Generate Code
+            {{ $t('analytics.codeGeneration.generateCode') }}
           </button>
           <button
             :class="['mode-btn', { active: mode === 'refactor' }]"
             @click="mode = 'refactor'"
           >
-            Refactor Code
+            {{ $t('analytics.codeGeneration.refactorCode') }}
           </button>
         </div>
 
         <!-- Generate Mode -->
         <div v-if="mode === 'generate'" class="generate-form">
           <div class="form-group">
-            <label>Description</label>
+            <label>{{ $t('analytics.codeGeneration.description') }}</label>
             <textarea
               v-model="generateRequest.description"
-              placeholder="Describe what code you want to generate..."
+              :placeholder="$t('analytics.codeGeneration.descriptionPlaceholder')"
               rows="4"
             ></textarea>
           </div>
 
           <div class="form-row">
             <div class="form-group">
-              <label>Language</label>
+              <label>{{ $t('analytics.codeGeneration.language') }}</label>
               <select v-model="generateRequest.language">
                 <option value="python">Python</option>
                 <option value="typescript">TypeScript</option>
@@ -102,19 +102,19 @@
           </div>
 
           <div class="form-group">
-            <label>Additional Context (optional)</label>
+            <label>{{ $t('analytics.codeGeneration.additionalContext') }}</label>
             <textarea
               v-model="generateRequest.context"
-              placeholder="Any additional requirements or context..."
+              :placeholder="$t('analytics.codeGeneration.additionalContextPlaceholder')"
               rows="2"
             ></textarea>
           </div>
 
           <div class="form-group">
-            <label>Existing Code to Integrate (optional)</label>
+            <label>{{ $t('analytics.codeGeneration.existingCode') }}</label>
             <textarea
               v-model="generateRequest.existing_code"
-              placeholder="Paste existing code to integrate with..."
+              :placeholder="$t('analytics.codeGeneration.existingCodePlaceholder')"
               rows="4"
               class="code-input"
             ></textarea>
@@ -126,17 +126,17 @@
             @click="generateCode"
           >
             <span v-if="processing" class="spinner"></span>
-            {{ processing ? 'Generating...' : 'Generate Code' }}
+            {{ processing ? $t('analytics.codeGeneration.generating') : $t('analytics.codeGeneration.generateCode') }}
           </button>
         </div>
 
         <!-- Refactor Mode -->
         <div v-else class="refactor-form">
           <div class="form-group">
-            <label>Code to Refactor</label>
+            <label>{{ $t('analytics.codeGeneration.codeToRefactor') }}</label>
             <textarea
               v-model="refactorRequest.code"
-              placeholder="Paste code to refactor..."
+              :placeholder="$t('analytics.codeGeneration.codeToRefactorPlaceholder')"
               rows="8"
               class="code-input"
             ></textarea>
@@ -144,7 +144,7 @@
 
           <div class="form-row">
             <div class="form-group">
-              <label>Language</label>
+              <label>{{ $t('analytics.codeGeneration.language') }}</label>
               <select v-model="refactorRequest.language">
                 <option value="python">Python</option>
                 <option value="typescript">TypeScript</option>
@@ -154,7 +154,7 @@
             </div>
 
             <div class="form-group">
-              <label>Refactoring Type</label>
+              <label>{{ $t('analytics.codeGeneration.refactoringType') }}</label>
               <select v-model="refactorRequest.refactoring_type">
                 <option v-for="rt in refactoringTypes" :key="rt.id" :value="rt.id">
                   {{ rt.name }}
@@ -166,7 +166,7 @@
           <div class="form-group checkbox-group">
             <label>
               <input type="checkbox" v-model="refactorRequest.preserve_comments" />
-              Preserve comments
+              {{ $t('analytics.codeGeneration.preserveComments') }}
             </label>
           </div>
 
@@ -176,7 +176,7 @@
             @click="refactorCode"
           >
             <span v-if="processing" class="spinner"></span>
-            {{ processing ? 'Refactoring...' : 'Refactor Code' }}
+            {{ processing ? $t('analytics.codeGeneration.refactoring') : $t('analytics.codeGeneration.refactorCode') }}
           </button>
         </div>
       </div>
@@ -188,7 +188,7 @@
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
             <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
           </svg>
-          <p>Generated code will appear here</p>
+          <p>{{ $t('analytics.codeGeneration.emptyState') }}</p>
         </div>
 
         <div v-else class="result-container">
@@ -202,10 +202,10 @@
                 <circle cx="12" cy="12" r="10"/>
                 <path d="M15 9l-6 6M9 9l6 6"/>
               </svg>
-              {{ result.success ? 'Success' : 'Failed' }}
+              {{ result.success ? $t('analytics.codeGeneration.success') : $t('analytics.codeGeneration.failed') }}
             </div>
             <div class="result-meta">
-              <span>{{ result.tokens_used }} tokens</span>
+              <span>{{ result.tokens_used }} {{ $t('analytics.codeGeneration.tokens') }}</span>
               <span>{{ result.processing_time?.toFixed(2) }}s</span>
             </div>
           </div>
@@ -216,7 +216,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
               </svg>
-              Warnings
+              {{ $t('analytics.codeGeneration.warnings') }}
             </div>
             <ul>
               <li v-for="(warning, idx) in result.validation.warnings" :key="idx">
@@ -232,7 +232,7 @@
                 <circle cx="12" cy="12" r="10"/>
                 <path d="M15 9l-6 6M9 9l6 6"/>
               </svg>
-              Errors
+              {{ $t('analytics.codeGeneration.errors') }}
             </div>
             <ul>
               <li v-for="(error, idx) in result.validation.errors" :key="idx">
@@ -243,7 +243,7 @@
 
           <!-- Changes (for refactoring) -->
           <div v-if="result.changes?.length" class="changes-list">
-            <div class="changes-header">Changes Made</div>
+            <div class="changes-header">{{ $t('analytics.codeGeneration.changesMade') }}</div>
             <ul>
               <li v-for="(change, idx) in result.changes" :key="idx">
                 {{ change }}
@@ -254,13 +254,13 @@
           <!-- Code Output -->
           <div class="code-output">
             <div class="code-header">
-              <span>{{ mode === 'generate' ? 'Generated Code' : 'Refactored Code' }}</span>
+              <span>{{ mode === 'generate' ? $t('analytics.codeGeneration.generatedCode') : $t('analytics.codeGeneration.refactoredCode') }}</span>
               <button class="copy-btn" @click="copyCode">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                   <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
                 </svg>
-                {{ copied ? 'Copied!' : 'Copy' }}
+                {{ copied ? $t('analytics.codeGeneration.copied') : $t('analytics.codeGeneration.copy') }}
               </button>
             </div>
             <pre class="code-block"><code>{{ outputCode }}</code></pre>
@@ -269,9 +269,9 @@
           <!-- Diff View (for refactoring) -->
           <div v-if="mode === 'refactor' && result.diff" class="diff-section">
             <div class="diff-header">
-              <span>Diff</span>
+              <span>{{ $t('analytics.codeGeneration.diff') }}</span>
               <button class="toggle-btn" @click="showDiff = !showDiff">
-                {{ showDiff ? 'Hide' : 'Show' }}
+                {{ showDiff ? $t('analytics.codeGeneration.hide') : $t('analytics.codeGeneration.show') }}
               </button>
             </div>
             <pre v-if="showDiff" class="diff-block"><code v-html="formatDiff(result.diff)"></code></pre>
@@ -282,12 +282,12 @@
 
     <!-- Validation Panel -->
     <div class="validation-panel">
-      <h3>Code Validator</h3>
+      <h3>{{ $t('analytics.codeGeneration.codeValidator') }}</h3>
       <div class="validator-content">
         <div class="form-group">
           <textarea
             v-model="validateCode"
-            placeholder="Paste code to validate..."
+            :placeholder="$t('analytics.codeGeneration.validatePlaceholder')"
             rows="4"
             class="code-input"
           ></textarea>
@@ -300,22 +300,22 @@
             <option value="vue">Vue</option>
           </select>
           <button class="validate-btn" :disabled="!validateCode" @click="validateCodeSubmit">
-            Validate
+            {{ $t('analytics.codeGeneration.validate') }}
           </button>
         </div>
         <div v-if="validationResult" class="validation-result">
           <div :class="['validation-status', { valid: validationResult.is_valid, invalid: !validationResult.is_valid }]">
-            {{ validationResult.is_valid ? 'Valid' : 'Invalid' }}
+            {{ validationResult.is_valid ? $t('analytics.codeGeneration.valid') : $t('analytics.codeGeneration.invalid') }}
           </div>
           <div v-if="validationResult.ast_info" class="ast-info">
             <span v-if="validationResult.ast_info.functions !== undefined">
-              Functions: {{ Array.isArray(validationResult.ast_info.functions) ? validationResult.ast_info.functions.length : validationResult.ast_info.functions }}
+              {{ $t('analytics.codeGeneration.functions') }}: {{ Array.isArray(validationResult.ast_info.functions) ? validationResult.ast_info.functions.length : validationResult.ast_info.functions }}
             </span>
             <span v-if="validationResult.ast_info.classes !== undefined">
-              Classes: {{ Array.isArray(validationResult.ast_info.classes) ? validationResult.ast_info.classes.length : validationResult.ast_info.classes }}
+              {{ $t('analytics.codeGeneration.classes') }}: {{ Array.isArray(validationResult.ast_info.classes) ? validationResult.ast_info.classes.length : validationResult.ast_info.classes }}
             </span>
             <span v-if="validationResult.ast_info.total_lines">
-              Lines: {{ validationResult.ast_info.total_lines }}
+              {{ $t('analytics.codeGeneration.lines') }}: {{ validationResult.ast_info.total_lines }}
             </span>
           </div>
         </div>

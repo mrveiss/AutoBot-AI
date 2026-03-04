@@ -3,7 +3,7 @@
     <!-- Header Controls -->
     <div class="analytics-header">
       <div class="header-content">
-        <h2><i class="fas fa-code"></i> Real-time Codebase Analytics</h2>
+        <h2><i class="fas fa-code"></i> {{ $t('analytics.codebase.title') }}</h2>
         <div class="header-controls">
           <!-- Issue #1133: Source selector row -->
           <div class="source-selector-row">
@@ -21,16 +21,16 @@
                   }
                 }"
               >
-                <option value="__custom__">Custom path...</option>
+                <option value="__custom__">{{ $t('analytics.codebase.buttons.customPath') }}</option>
                 <option v-for="src in sources" :key="src.id" :value="src.id">
-                  {{ src.name }} ({{ src.source_type === 'github' ? src.repo : 'local' }})
+                  {{ src.name }} ({{ src.source_type === 'github' ? src.repo : $t('analytics.codebase.sourceLocal') }})
                 </option>
               </select>
               <i class="fas fa-chevron-down select-chevron"></i>
             </div>
             <button class="btn-manage-sources" @click="showSourceManager = true">
               <i class="fas fa-code-branch"></i>
-              Manage Sources
+              {{ $t('analytics.codebase.buttons.manageSources') }}
             </button>
           </div>
 
@@ -38,7 +38,7 @@
           <input
             v-if="!selectedSource"
             v-model="rootPath"
-            placeholder="/path/to/analyze"
+            :placeholder="$t('analytics.codebase.pathPlaceholder')"
             class="path-input"
             @keyup.enter="runFullAnalysis"
           />
@@ -49,53 +49,53 @@
             <span class="selected-source-name">{{ selectedSource.name }}</span>
             <span class="selected-source-path">{{ selectedSource.repo ?? selectedSource.clone_path ?? '' }}</span>
             <span class="selected-source-status" :class="`status--${selectedSource.status}`">{{ selectedSource.status }}</span>
-            <button class="btn-clear-source" @click="handleClearSource" title="Use custom path">
+            <button class="btn-clear-source" @click="handleClearSource" :title="$t('analytics.codebase.buttons.useCustomPath')">
               <i class="fas fa-times"></i>
             </button>
           </div>
 
           <button @click="indexCodebase" :disabled="analyzing" class="btn-primary">
             <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-database'"></i>
-            {{ analyzing ? 'Indexing...' : 'Index Codebase' }}
+            {{ analyzing ? $t('analytics.codebase.buttons.indexing') : $t('analytics.codebase.buttons.indexCodebase') }}
           </button>
           <button v-if="analyzing && currentJobId" @click="cancelIndexingJob" class="btn-cancel">
             <i class="fas fa-stop-circle"></i>
-            Cancel
+            {{ $t('analytics.codebase.actions.cancel') }}
           </button>
           <button @click="runFullAnalysis" :disabled="analyzing || (!rootPath && !selectedSource)" class="btn-secondary">
             <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-chart-bar'"></i>
-            {{ analyzing ? 'Analyzing...' : 'Analyze All' }}
+            {{ analyzing ? $t('analytics.codebase.buttons.analyzing') : $t('analytics.codebase.buttons.analyzeAll') }}
           </button>
 
           <!-- Enhanced Debug Controls -->
           <div class="debug-controls" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
-            <button @click="getDeclarationsData" class="btn-debug btn-debug-success">Test Declarations</button>
-            <button @click="getDuplicatesData" class="btn-debug btn-debug-warning">Test Duplicates</button>
-            <button @click="getHardcodesData" class="btn-debug btn-debug-error">Test Hardcodes</button>
-            <button @click="testNpuConnection" class="btn-debug btn-debug-purple">Test NPU</button>
-            <button @click="testDataState" class="btn-debug btn-debug-info">Debug State</button>
-            <button @click="resetState" class="btn-debug btn-debug-orange">Reset State</button>
-            <button @click="testAllEndpoints" class="btn-debug btn-debug-cyan">Test All APIs</button>
+            <button @click="getDeclarationsData" class="btn-debug btn-debug-success">{{ $t('analytics.codebase.buttons.testDeclarations') }}</button>
+            <button @click="getDuplicatesData" class="btn-debug btn-debug-warning">{{ $t('analytics.codebase.buttons.testDuplicates') }}</button>
+            <button @click="getHardcodesData" class="btn-debug btn-debug-error">{{ $t('analytics.codebase.buttons.testHardcodes') }}</button>
+            <button @click="testNpuConnection" class="btn-debug btn-debug-purple">{{ $t('analytics.codebase.buttons.testNpu') }}</button>
+            <button @click="testDataState" class="btn-debug btn-debug-info">{{ $t('analytics.codebase.buttons.debugState') }}</button>
+            <button @click="resetState" class="btn-debug btn-debug-orange">{{ $t('analytics.codebase.buttons.resetState') }}</button>
+            <button @click="testAllEndpoints" class="btn-debug btn-debug-cyan">{{ $t('analytics.codebase.buttons.testAllApis') }}</button>
             <!-- Issue #527: API Endpoint Checker -->
             <button @click="getApiEndpointCoverage" :disabled="loadingApiEndpoints" class="btn-debug btn-debug-indigo">
               <i :class="loadingApiEndpoints ? 'fas fa-spinner fa-spin' : 'fas fa-plug'"></i>
-              {{ loadingApiEndpoints ? 'Scanning...' : 'API Coverage' }}
+              {{ loadingApiEndpoints ? $t('analytics.codebase.buttons.scanning') : $t('analytics.codebase.buttons.apiCoverage') }}
             </button>
             <!-- Code Intelligence / Anti-Pattern Detection -->
             <button @click="runCodeSmellAnalysis" :disabled="analyzingCodeSmells" class="btn-debug btn-debug-pink">
               <i :class="analyzingCodeSmells ? 'fas fa-spinner fa-spin' : 'fas fa-bug'"></i>
-              {{ analyzingCodeSmells ? 'Scanning...' : 'Code Smells' }}
+              {{ analyzingCodeSmells ? $t('analytics.codebase.buttons.scanning') : $t('analytics.codebase.buttons.codeSmells') }}
             </button>
             <button @click="getCodeHealthScore" :disabled="analyzingCodeSmells" class="btn-debug btn-debug-violet">
-              <i class="fas fa-heartbeat"></i> Health Score
+              <i class="fas fa-heartbeat"></i> {{ $t('analytics.codebase.buttons.healthScore') }}
             </button>
             <button @click="exportReport()" :disabled="exportingReport" class="btn-debug btn-debug-secondary">
               <i :class="exportingReport ? 'fas fa-spinner fa-spin' : 'fas fa-file-export'"></i>
-              {{ exportingReport ? 'Exporting...' : 'Export Report' }}
+              {{ exportingReport ? $t('analytics.codebase.buttons.exporting') : $t('analytics.codebase.buttons.exportReport') }}
             </button>
             <button @click="clearCache" :disabled="clearingCache" class="btn-debug btn-debug-brown">
               <i :class="clearingCache ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
-              {{ clearingCache ? 'Clearing...' : 'Clear Cache' }}
+              {{ clearingCache ? $t('analytics.codebase.buttons.clearing') : $t('analytics.codebase.buttons.clearCache') }}
             </button>
           </div>
         </div>
@@ -123,9 +123,9 @@
                   ? 'fas fa-times-circle'
                   : 'fas fa-info-circle'
           "></i>
-          {{ analyzing ? 'Indexing in Progress' : analyzingCodeSmells ? codeSmellsProgressTitle : 'Indexing Status' }}
+          {{ analyzing ? $t('analytics.codebase.progress.indexingInProgress') : analyzingCodeSmells ? codeSmellsProgressTitle : $t('analytics.codebase.progress.indexingStatus') }}
         </div>
-        <div v-if="currentJobId && analyzing" class="job-id">Job: {{ currentJobId.substring(0, 8) }}...</div>
+        <div v-if="currentJobId && analyzing" class="job-id">{{ $t('analytics.codebase.progress.job') }}: {{ currentJobId.substring(0, 8) }}...</div>
       </div>
 
       <!-- Phase Progress (active indexing only) -->
@@ -158,7 +158,7 @@
       <!-- Batch Progress (active indexing only) -->
       <div v-if="analyzing && jobBatches && jobBatches.total_batches > 0" class="batch-progress">
         <div class="batch-header">
-          <span class="batch-label">Batch Progress:</span>
+          <span class="batch-label">{{ $t('analytics.codebase.progress.batchProgress') }}:</span>
           <span class="batch-count">{{ jobBatches.completed_batches }} / {{ jobBatches.total_batches }}</span>
         </div>
         <div class="batch-bar">
@@ -173,23 +173,23 @@
       <div v-if="analyzing && jobStats" class="live-stats">
         <div class="stat-item">
           <i class="fas fa-file-code"></i>
-          <span>{{ jobStats.files_scanned }} files</span>
+          <span>{{ jobStats.files_scanned }} {{ $t('analytics.codebase.progress.files') }}</span>
         </div>
         <div class="stat-item">
           <i class="fas fa-exclamation-triangle"></i>
-          <span>{{ jobStats.problems_found }} problems</span>
+          <span>{{ jobStats.problems_found }} {{ $t('analytics.codebase.progress.problems') }}</span>
         </div>
         <div class="stat-item">
           <i class="fas fa-code"></i>
-          <span>{{ jobStats.functions_found }} functions</span>
+          <span>{{ jobStats.functions_found }} {{ $t('analytics.codebase.progress.functions') }}</span>
         </div>
         <div class="stat-item">
           <i class="fas fa-cubes"></i>
-          <span>{{ jobStats.classes_found }} classes</span>
+          <span>{{ jobStats.classes_found }} {{ $t('analytics.codebase.progress.classes') }}</span>
         </div>
         <div class="stat-item" v-if="jobStats.items_stored > 0">
           <i class="fas fa-database"></i>
-          <span>{{ jobStats.items_stored }} stored</span>
+          <span>{{ jobStats.items_stored }} {{ $t('analytics.codebase.progress.stored') }}</span>
         </div>
       </div>
     </div>
@@ -200,28 +200,28 @@
       <BasePanel variant="dark" size="medium">
         <template #header>
           <div class="card-header-content">
-            <h3><i class="fas fa-tachometer-alt"></i> System Overview</h3>
+            <h3><i class="fas fa-tachometer-alt"></i> {{ $t('analytics.codebase.overview.title') }}</h3>
             <div class="refresh-indicator" :class="{ active: realTimeEnabled }">
               <i class="fas fa-circle"></i>
-              {{ realTimeEnabled ? 'Live' : 'Static' }}
+              {{ realTimeEnabled ? $t('analytics.codebase.overview.live') : $t('analytics.codebase.overview.static') }}
             </div>
           </div>
         </template>
         <div v-if="systemOverview" class="metrics-grid">
           <div class="metric-item">
-            <div class="metric-label">API Requests/Min</div>
+            <div class="metric-label">{{ $t('analytics.codebase.overview.apiRequestsPerMin') }}</div>
             <div class="metric-value">{{ systemOverview.api_requests_per_minute || 0 }}</div>
           </div>
           <div class="metric-item">
-            <div class="metric-label">Avg Response Time</div>
+            <div class="metric-label">{{ $t('analytics.codebase.overview.avgResponseTime') }}</div>
             <div class="metric-value">{{ systemOverview.average_response_time || 0 }}ms</div>
           </div>
           <div class="metric-item">
-            <div class="metric-label">Active Connections</div>
+            <div class="metric-label">{{ $t('analytics.codebase.overview.activeConnections') }}</div>
             <div class="metric-value">{{ systemOverview.active_connections || 0 }}</div>
           </div>
           <div class="metric-item">
-            <div class="metric-label">System Health</div>
+            <div class="metric-label">{{ $t('analytics.codebase.overview.systemHealth') }}</div>
             <div class="metric-value" :class="getHealthClass(systemOverview.system_health)">
               {{ systemOverview.system_health || 'Unknown' }}
             </div>
@@ -230,10 +230,10 @@
         <EmptyState
           v-else
           icon="fas fa-database"
-          message="No system metrics available"
+          :message="$t('analytics.codebase.overview.noMetrics')"
         >
           <template #actions>
-            <button @click="loadSystemOverview" class="btn-link">Load Metrics</button>
+            <button @click="loadSystemOverview" class="btn-link">{{ $t('analytics.codebase.actions.loadMetrics') }}</button>
           </template>
         </EmptyState>
       </BasePanel>
@@ -242,7 +242,7 @@
       <BasePanel variant="dark" size="medium">
         <template #header>
           <div class="card-header-content">
-            <h3><i class="fas fa-network-wired"></i> Communication Patterns</h3>
+            <h3><i class="fas fa-network-wired"></i> {{ $t('analytics.codebase.communication.title') }}</h3>
             <button @click="loadCommunicationPatterns" class="refresh-btn">
               <i class="fas fa-sync"></i>
             </button>
@@ -250,22 +250,22 @@
         </template>
         <div v-if="communicationPatterns" class="communication-metrics">
           <div class="pattern-item">
-            <div class="pattern-label">WebSocket Connections</div>
+            <div class="pattern-label">{{ $t('analytics.codebase.communication.websocketConnections') }}</div>
             <div class="pattern-value">{{ communicationPatterns.websocket_connections || 0 }}</div>
           </div>
           <div class="pattern-item">
-            <div class="pattern-label">API Call Frequency</div>
+            <div class="pattern-label">{{ $t('analytics.codebase.communication.apiCallFrequency') }}</div>
             <div class="pattern-value">{{ communicationPatterns.api_call_frequency || 0 }}/min</div>
           </div>
           <div class="pattern-item">
-            <div class="pattern-label">Data Transfer Rate</div>
+            <div class="pattern-label">{{ $t('analytics.codebase.communication.dataTransferRate') }}</div>
             <div class="pattern-value">{{ communicationPatterns.data_transfer_rate || 0 }} KB/s</div>
           </div>
         </div>
         <EmptyState
           v-else
           icon="fas fa-wifi"
-          message="No communication data"
+          :message="$t('analytics.codebase.communication.noData')"
         />
       </BasePanel>
 
@@ -273,7 +273,7 @@
       <BasePanel variant="dark" size="medium">
         <template #header>
           <div class="card-header-content">
-            <h3><i class="fas fa-code-branch"></i> Code Quality</h3>
+            <h3><i class="fas fa-code-branch"></i> {{ $t('analytics.codebase.quality.title') }}</h3>
             <button @click="loadCodeQuality" class="refresh-btn">
               <i class="fas fa-sync"></i>
             </button>
@@ -282,19 +282,19 @@
         <div v-if="codeQuality" class="quality-metrics">
           <div class="quality-score" :class="getQualityClass(codeQuality.overall_score)">
             <div class="score-value">{{ codeQuality.overall_score || 0 }}</div>
-            <div class="score-label">Overall Score</div>
+            <div class="score-label">{{ $t('analytics.codebase.quality.overallScore') }}</div>
           </div>
           <div class="quality-details">
             <div class="quality-item">
-              <span class="quality-label">Test Coverage:</span>
+              <span class="quality-label">{{ $t('analytics.codebase.quality.testCoverage') }}:</span>
               <span class="quality-value">{{ codeQuality.test_coverage || 0 }}%</span>
             </div>
             <div class="quality-item">
-              <span class="quality-label">Code Duplicates:</span>
+              <span class="quality-label">{{ $t('analytics.codebase.quality.codeDuplicates') }}:</span>
               <span class="quality-value">{{ codeQuality.code_duplicates || 0 }}</span>
             </div>
             <div class="quality-item">
-              <span class="quality-label">Technical Debt:</span>
+              <span class="quality-label">{{ $t('analytics.codebase.quality.technicalDebt') }}:</span>
               <span class="quality-value">{{ codeQuality.technical_debt || 0 }}h</span>
             </div>
           </div>
@@ -302,7 +302,7 @@
         <EmptyState
           v-else
           icon="fas fa-star"
-          message="No quality metrics"
+          :message="$t('analytics.codebase.quality.noMetrics')"
         />
       </BasePanel>
 
@@ -310,7 +310,7 @@
       <BasePanel variant="dark" size="medium">
         <template #header>
           <div class="card-header-content">
-            <h3><i class="fas fa-bolt"></i> Performance Metrics</h3>
+            <h3><i class="fas fa-bolt"></i> {{ $t('analytics.codebase.performance.title') }}</h3>
             <button @click="loadPerformanceMetrics" class="refresh-btn">
               <i class="fas fa-sync"></i>
             </button>
@@ -319,19 +319,19 @@
         <div v-if="performanceMetrics" class="performance-metrics">
           <div class="performance-gauge" :class="getEfficiencyClass(performanceMetrics.efficiency_score)">
             <div class="gauge-value">{{ performanceMetrics.efficiency_score || 0 }}%</div>
-            <div class="gauge-label">Efficiency</div>
+            <div class="gauge-label">{{ $t('analytics.codebase.performance.efficiency') }}</div>
           </div>
           <div class="performance-details">
             <div class="performance-item">
-              <span class="performance-label">Memory Usage:</span>
+              <span class="performance-label">{{ $t('analytics.codebase.performance.memoryUsage') }}:</span>
               <span class="performance-value">{{ performanceMetrics.memory_usage || 0 }}MB</span>
             </div>
             <div class="performance-item">
-              <span class="performance-label">CPU Usage:</span>
+              <span class="performance-label">{{ $t('analytics.codebase.performance.cpuUsage') }}:</span>
               <span class="performance-value">{{ performanceMetrics.cpu_usage || 0 }}%</span>
             </div>
             <div class="performance-item">
-              <span class="performance-label">Load Time:</span>
+              <span class="performance-label">{{ $t('analytics.codebase.performance.loadTime') }}:</span>
               <span class="performance-value">{{ performanceMetrics.load_time || 0 }}ms</span>
             </div>
           </div>
@@ -339,7 +339,7 @@
         <EmptyState
           v-else
           icon="fas fa-rocket"
-          message="No performance data"
+          :message="$t('analytics.codebase.performance.noData')"
         />
       </BasePanel>
     </div>
@@ -351,23 +351,23 @@
         <label class="toggle-switch">
           <input type="checkbox" v-model="realTimeEnabled" @change="toggleRealTime">
           <span class="toggle-slider"></span>
-          Real-time Updates
+          {{ $t('analytics.codebase.actions.realTimeUpdates') }}
         </label>
         <button @click="refreshAllMetrics" class="refresh-all-btn">
-          <i class="fas fa-sync-alt"></i> Refresh All
+          <i class="fas fa-sync-alt"></i> {{ $t('analytics.codebase.actions.refreshAll') }}
         </button>
       </div>
 
       <!-- Codebase Statistics -->
       <div class="stats-section">
         <h3>
-          <i class="fas fa-chart-pie"></i> Codebase Statistics
+          <i class="fas fa-chart-pie"></i> {{ $t('analytics.codebase.stats.title') }}
           <!-- Issue #609: Section Export Buttons -->
           <div class="section-export-buttons">
-            <button @click="exportSection('statistics', 'md')" class="export-btn" :disabled="!codebaseStats" title="Export as Markdown">
+            <button @click="exportSection('statistics', 'md')" class="export-btn" :disabled="!codebaseStats" :title="$t('analytics.codebase.actions.exportMarkdown')">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('statistics', 'json')" class="export-btn" :disabled="!codebaseStats" title="Export as JSON">
+            <button @click="exportSection('statistics', 'json')" class="export-btn" :disabled="!codebaseStats" :title="$t('analytics.codebase.actions.exportJson')">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -375,37 +375,37 @@
         <div v-if="codebaseStats" class="stats-grid">
           <BasePanel variant="elevated" size="small">
             <div class="stat-value">{{ codebaseStats.total_files || 0 }}</div>
-            <div class="stat-label">Total Files</div>
+            <div class="stat-label">{{ $t('analytics.codebase.stats.totalFiles') }}</div>
           </BasePanel>
           <BasePanel variant="elevated" size="small">
             <div class="stat-value">{{ codebaseStats.total_lines || 0 }}</div>
-            <div class="stat-label">Lines of Code</div>
+            <div class="stat-label">{{ $t('analytics.codebase.stats.linesOfCode') }}</div>
           </BasePanel>
           <BasePanel variant="elevated" size="small">
             <div class="stat-value">{{ codebaseStats.total_functions || 0 }}</div>
-            <div class="stat-label">Functions</div>
+            <div class="stat-label">{{ $t('analytics.codebase.stats.functions') }}</div>
           </BasePanel>
           <BasePanel variant="elevated" size="small">
             <div class="stat-value">{{ codebaseStats.total_classes || 0 }}</div>
-            <div class="stat-label">Classes</div>
+            <div class="stat-label">{{ $t('analytics.codebase.stats.classes') }}</div>
           </BasePanel>
         </div>
         <EmptyState
           v-else
           icon="fas fa-chart-bar"
-          message="No codebase statistics available. Run analysis to generate data."
+          :message="$t('analytics.codebase.stats.noData')"
         />
       </div>
 
       <!-- Analytics Charts Section -->
       <div class="charts-section">
         <div class="section-header">
-          <h3><i class="fas fa-chart-bar"></i> Problem Analytics</h3>
+          <h3><i class="fas fa-chart-bar"></i> {{ $t('analytics.codebase.problems.title') }}</h3>
           <div class="section-header-actions">
-            <button @click="loadUnifiedReport" class="refresh-btn" :disabled="unifiedReportLoading" title="Load unified report">
+            <button @click="loadUnifiedReport" class="refresh-btn" :disabled="unifiedReportLoading" :title="$t('analytics.codebase.problems.loadReport')">
               <i :class="unifiedReportLoading ? 'fas fa-spinner fa-spin' : 'fas fa-layer-group'"></i>
             </button>
-            <button @click="loadChartData" class="refresh-btn" :disabled="chartDataLoading" title="Refresh charts">
+            <button @click="loadChartData" class="refresh-btn" :disabled="chartDataLoading" :title="$t('analytics.codebase.actions.refreshCharts')">
               <i :class="chartDataLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
             </button>
           </div>
@@ -419,7 +419,7 @@
             :class="{ active: selectedCategory === 'all' }"
           >
             <i class="fas fa-th-large"></i>
-            All Issues
+            {{ $t('analytics.codebase.problems.allIssues') }}
             <span class="tab-count" v-if="chartData?.summary?.total_problems">
               {{ chartData.summary.total_problems.toLocaleString() }}
             </span>
@@ -441,18 +441,18 @@
         <div v-if="unifiedReportError" class="charts-error">
           <i class="fas fa-exclamation-triangle"></i>
           <span>{{ unifiedReportError }}</span>
-          <button @click="loadUnifiedReport" class="btn-link">Retry</button>
+          <button @click="loadUnifiedReport" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
         </div>
 
         <div v-if="chartDataLoading" class="charts-loading">
           <i class="fas fa-spinner fa-spin"></i>
-          <span>Loading chart data...</span>
+          <span>{{ $t('analytics.codebase.problems.loadingChartData') }}</span>
         </div>
 
         <div v-else-if="chartDataError" class="charts-error">
           <i class="fas fa-exclamation-triangle"></i>
           <span>{{ chartDataError }}</span>
-          <button @click="loadChartData" class="btn-link">Retry</button>
+          <button @click="loadChartData" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
         </div>
 
         <div v-else-if="chartData" class="charts-grid">
@@ -460,19 +460,19 @@
           <div v-if="chartData.summary" class="chart-summary">
             <div class="summary-stat">
               <span class="summary-value">{{ chartData.summary.total_problems?.toLocaleString() || 0 }}</span>
-              <span class="summary-label">Total Problems</span>
+              <span class="summary-label">{{ $t('analytics.codebase.problems.totalProblems') }}</span>
             </div>
             <div class="summary-stat">
               <span class="summary-value">{{ chartData.summary.unique_problem_types || 0 }}</span>
-              <span class="summary-label">Problem Types</span>
+              <span class="summary-label">{{ $t('analytics.codebase.problems.problemTypes') }}</span>
             </div>
             <div class="summary-stat">
               <span class="summary-value">{{ chartData.summary.files_with_problems || 0 }}</span>
-              <span class="summary-label">Files Affected</span>
+              <span class="summary-label">{{ $t('analytics.codebase.problems.filesAffected') }}</span>
             </div>
             <div class="summary-stat race-highlight">
               <span class="summary-value">{{ chartData.summary.race_condition_count || 0 }}</span>
-              <span class="summary-label">Race Conditions</span>
+              <span class="summary-label">{{ $t('analytics.codebase.problems.raceConditions') }}</span>
             </div>
           </div>
 
@@ -529,11 +529,11 @@
         <EmptyState
           v-else
           icon="fas fa-chart-area"
-          message="No chart data available. Run codebase indexing to generate analytics."
+          :message="$t('analytics.codebase.problems.noChartData')"
         >
           <template #actions>
             <button @click="indexCodebase" class="btn-primary" :disabled="analyzing">
-              <i class="fas fa-database"></i> Index Codebase
+              <i class="fas fa-database"></i> {{ $t('analytics.codebase.buttons.indexCodebase') }}
             </button>
           </template>
         </EmptyState>
@@ -542,7 +542,7 @@
       <!-- Dependency Analysis Section -->
       <div class="dependency-section">
         <div class="section-header">
-          <h3><i class="fas fa-project-diagram"></i> Dependency Analysis</h3>
+          <h3><i class="fas fa-project-diagram"></i> {{ $t('analytics.codebase.dependencies.title') }}</h3>
           <button @click="loadDependencyData" class="refresh-btn" :disabled="dependencyLoading">
             <i :class="dependencyLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
           </button>
@@ -550,13 +550,13 @@
 
         <div v-if="dependencyLoading" class="charts-loading">
           <i class="fas fa-spinner fa-spin"></i>
-          <span>Analyzing dependencies...</span>
+          <span>{{ $t('analytics.codebase.dependencies.analyzing') }}</span>
         </div>
 
         <div v-else-if="dependencyError" class="charts-error">
           <i class="fas fa-exclamation-triangle"></i>
           <span>{{ dependencyError }}</span>
-          <button @click="loadDependencyData" class="btn-link">Retry</button>
+          <button @click="loadDependencyData" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
         </div>
 
         <div v-else-if="dependencyData" class="dependency-grid">
@@ -564,19 +564,19 @@
           <div v-if="dependencyData.summary" class="chart-summary">
             <div class="summary-stat">
               <span class="summary-value">{{ dependencyData.summary.total_modules?.toLocaleString() || 0 }}</span>
-              <span class="summary-label">Python Modules</span>
+              <span class="summary-label">{{ $t('analytics.codebase.dependencies.pythonModules') }}</span>
             </div>
             <div class="summary-stat">
               <span class="summary-value">{{ dependencyData.summary.total_import_relationships?.toLocaleString() || 0 }}</span>
-              <span class="summary-label">Import Relationships</span>
+              <span class="summary-label">{{ $t('analytics.codebase.dependencies.importRelationships') }}</span>
             </div>
             <div class="summary-stat">
               <span class="summary-value">{{ dependencyData.summary.external_dependency_count || 0 }}</span>
-              <span class="summary-label">External Packages</span>
+              <span class="summary-label">{{ $t('analytics.codebase.dependencies.externalPackages') }}</span>
             </div>
             <div class="summary-stat" :class="{ 'race-highlight': (dependencyData.summary.circular_dependency_count ?? 0) > 0 }">
               <span class="summary-value">{{ dependencyData.summary.circular_dependency_count || 0 }}</span>
-              <span class="summary-label">Circular Dependencies</span>
+              <span class="summary-label">{{ $t('analytics.codebase.dependencies.circularDependencies') }}</span>
             </div>
           </div>
 
@@ -611,7 +611,7 @@
           <div v-if="dependencyData.circular_dependencies && dependencyData.circular_dependencies.length > 0" class="circular-deps-warning">
             <div class="warning-header">
               <i class="fas fa-exclamation-triangle"></i>
-              <span>Circular Dependencies Detected</span>
+              <span>{{ $t('analytics.codebase.dependencies.circularDetected') }}</span>
             </div>
             <div class="circular-deps-list">
               <div
@@ -630,7 +630,7 @@
 
           <!-- Top External Dependencies Table -->
           <div v-if="dependencyData.external_dependencies && dependencyData.external_dependencies.length > 0" class="external-deps-table">
-            <h4><i class="fas fa-cube"></i> Top External Dependencies</h4>
+            <h4><i class="fas fa-cube"></i> {{ $t('analytics.codebase.dependencies.topExternal') }}</h4>
             <div class="deps-table-content">
               <div
                 v-for="(dep, index) in dependencyData.external_dependencies.slice(0, 20)"
@@ -647,11 +647,11 @@
         <EmptyState
           v-else
           icon="fas fa-project-diagram"
-          message="No dependency data available. Click refresh to analyze."
+          :message="$t('analytics.codebase.dependencies.noData')"
         >
           <template #actions>
             <button @click="loadDependencyData" class="btn-primary" :disabled="dependencyLoading">
-              <i class="fas fa-project-diagram"></i> Analyze Dependencies
+              <i class="fas fa-project-diagram"></i> {{ $t('analytics.codebase.dependencies.analyze') }}
             </button>
           </template>
         </EmptyState>
@@ -660,10 +660,10 @@
       <!-- Import Tree Section -->
       <div class="import-tree-section">
         <div class="section-header">
-          <h3><i class="fas fa-sitemap"></i> File Import Tree</h3>
+          <h3><i class="fas fa-sitemap"></i> {{ $t('analytics.codebase.importTree.title') }}</h3>
           <button @click="loadImportTreeData" class="refresh-btn" :disabled="importTreeLoading">
             <i :class="importTreeLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
-            {{ importTreeLoading ? 'Loading...' : 'Refresh' }}
+            {{ importTreeLoading ? $t('analytics.codebase.actions.loading') : $t('analytics.codebase.actions.refresh') }}
           </button>
         </div>
 
@@ -671,7 +671,7 @@
         <div v-if="importTreeError" class="section-error">
           <i class="fas fa-exclamation-triangle"></i>
           <span>{{ importTreeError }}</span>
-          <button @click="loadImportTreeData" class="btn-link">Retry</button>
+          <button @click="loadImportTreeData" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
         </div>
 
         <!-- Import Tree Content -->
@@ -691,12 +691,12 @@
         <EmptyState
           v-else-if="!importTreeLoading"
           icon="fas fa-sitemap"
-          message="No import data available yet. Click 'Refresh' to analyze file imports."
+          :message="$t('analytics.codebase.importTree.noData')"
           variant="info"
         >
           <template #actions>
             <button @click="loadImportTreeData" class="btn-primary" :disabled="importTreeLoading">
-              <i class="fas fa-sitemap"></i> Analyze Imports
+              <i class="fas fa-sitemap"></i> {{ $t('analytics.codebase.importTree.analyze') }}
             </button>
           </template>
         </EmptyState>
@@ -705,10 +705,10 @@
       <!-- Function Call Graph Section -->
       <div class="call-graph-section">
         <div class="section-header">
-          <h3><i class="fas fa-project-diagram"></i> Function Call Graph</h3>
+          <h3><i class="fas fa-project-diagram"></i> {{ $t('analytics.codebase.callGraph.title') }}</h3>
           <button @click="loadCallGraphData" class="refresh-btn" :disabled="callGraphLoading">
             <i :class="callGraphLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
-            {{ callGraphLoading ? 'Loading...' : 'Refresh' }}
+            {{ callGraphLoading ? $t('analytics.codebase.actions.loading') : $t('analytics.codebase.actions.refresh') }}
           </button>
         </div>
 
@@ -716,7 +716,7 @@
         <div v-if="callGraphError" class="section-error">
           <i class="fas fa-exclamation-triangle"></i>
           <span>{{ callGraphError }}</span>
-          <button @click="loadCallGraphData" class="btn-link">Retry</button>
+          <button @click="loadCallGraphData" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
         </div>
 
         <!-- Call Graph Content -->
@@ -738,12 +738,12 @@
         <EmptyState
           v-else-if="!callGraphLoading"
           icon="fas fa-project-diagram"
-          message="No function call data available. Click 'Refresh' to analyze function calls."
+          :message="$t('analytics.codebase.callGraph.noData')"
           variant="info"
         >
           <template #actions>
             <button @click="loadCallGraphData" class="btn-primary" :disabled="callGraphLoading">
-              <i class="fas fa-project-diagram"></i> Analyze Calls
+              <i class="fas fa-project-diagram"></i> {{ $t('analytics.codebase.callGraph.analyze') }}
             </button>
           </template>
         </EmptyState>
@@ -752,16 +752,16 @@
       <!-- Problems Report - Grouped by Type and Severity -->
       <div class="problems-section analytics-section">
         <h3>
-          <i class="fas fa-exclamation-triangle"></i> Code Problems
+          <i class="fas fa-exclamation-triangle"></i> {{ $t('analytics.codebase.problems.codeProblems') }}
           <span v-if="problemsReport && problemsReport.length > 0" class="total-count">
             ({{ problemsReport.length.toLocaleString() }} total)
           </span>
           <!-- Issue #609: Section Export Buttons -->
           <div class="section-export-buttons">
-            <button @click="exportSection('problems', 'md')" class="export-btn" :disabled="!problemsReport || problemsReport.length === 0" title="Export as Markdown">
+            <button @click="exportSection('problems', 'md')" class="export-btn" :disabled="!problemsReport || problemsReport.length === 0" :title="$t('analytics.codebase.actions.exportMarkdown')">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('problems', 'json')" class="export-btn" :disabled="!problemsReport || problemsReport.length === 0" title="Export as JSON">
+            <button @click="exportSection('problems', 'json')" class="export-btn" :disabled="!problemsReport || problemsReport.length === 0" :title="$t('analytics.codebase.actions.exportJson')">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -771,7 +771,7 @@
           <div class="summary-cards">
             <div class="summary-card total">
               <div class="summary-value">{{ problemsReport.length.toLocaleString() }}</div>
-              <div class="summary-label">Total</div>
+              <div class="summary-label">{{ $t('analytics.codebase.stats.total') }}</div>
             </div>
             <div
               v-for="(problems, severity) in problemsBySeverity"
@@ -802,16 +802,16 @@
                 </div>
                 <div class="header-badges">
                   <span v-if="typeData.severityCounts.critical" class="severity-badge critical">
-                    {{ typeData.severityCounts.critical }} critical
+                    {{ typeData.severityCounts.critical }} {{ $t('analytics.codebase.severity.critical') }}
                   </span>
                   <span v-if="typeData.severityCounts.high" class="severity-badge high">
-                    {{ typeData.severityCounts.high }} high
+                    {{ typeData.severityCounts.high }} {{ $t('analytics.codebase.severity.high') }}
                   </span>
                   <span v-if="typeData.severityCounts.medium" class="severity-badge medium">
-                    {{ typeData.severityCounts.medium }} medium
+                    {{ typeData.severityCounts.medium }} {{ $t('analytics.codebase.severity.medium') }}
                   </span>
                   <span v-if="typeData.severityCounts.low" class="severity-badge low">
-                    {{ typeData.severityCounts.low }} low
+                    {{ typeData.severityCounts.low }} {{ $t('analytics.codebase.severity.low') }}
                   </span>
                 </div>
               </div>
@@ -843,7 +843,7 @@
         <EmptyState
           v-else
           icon="fas fa-check-circle"
-          message="No code problems detected or analysis not run yet."
+          :message="$t('analytics.codebase.problems.noProblems')"
           variant="success"
         />
       </div>
@@ -851,7 +851,7 @@
       <!-- Code Intelligence: Anti-Pattern / Code Smells Report -->
       <div class="code-smells-section analytics-section">
         <h3>
-          <i class="fas fa-bug"></i> Code Smells & Anti-Patterns
+          <i class="fas fa-bug"></i> {{ $t('analytics.codebase.intelligence.codeSmellsTitle') }}
           <span v-if="codeHealthScore" class="health-badge" :class="getHealthGradeClass(codeHealthScore.grade)">
             {{ codeHealthScore.grade }} ({{ codeHealthScore.health_score }}/100)
           </span>
@@ -860,10 +860,10 @@
           </span>
           <!-- Issue #609: Section Export Buttons -->
           <div class="section-export-buttons">
-            <button @click="exportSection('code-smells', 'md')" class="export-btn" title="Export as Markdown" :disabled="codeSmellsFromProblems.length === 0">
+            <button @click="exportSection('code-smells', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')" :disabled="codeSmellsFromProblems.length === 0">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('code-smells', 'json')" class="export-btn" title="Export as JSON" :disabled="codeSmellsFromProblems.length === 0">
+            <button @click="exportSection('code-smells', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')" :disabled="codeSmellsFromProblems.length === 0">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -873,23 +873,23 @@
           <div class="summary-cards">
             <div class="summary-card total">
               <div class="summary-value">{{ codeSmellsFromProblems.length.toLocaleString() }}</div>
-              <div class="summary-label">Total</div>
+              <div class="summary-label">{{ $t('analytics.codebase.stats.total') }}</div>
             </div>
             <div class="summary-card critical">
               <div class="summary-value">{{ codeSmellsSeveritySummary.critical }}</div>
-              <div class="summary-label">Critical</div>
+              <div class="summary-label">{{ $t('analytics.codebase.severity.critical') }}</div>
             </div>
             <div class="summary-card high">
               <div class="summary-value">{{ codeSmellsSeveritySummary.high }}</div>
-              <div class="summary-label">High</div>
+              <div class="summary-label">{{ $t('analytics.codebase.severity.high') }}</div>
             </div>
             <div class="summary-card medium">
               <div class="summary-value">{{ codeSmellsSeveritySummary.medium }}</div>
-              <div class="summary-label">Medium</div>
+              <div class="summary-label">{{ $t('analytics.codebase.severity.medium') }}</div>
             </div>
             <div class="summary-card low">
               <div class="summary-value">{{ codeSmellsSeveritySummary.low }}</div>
-              <div class="summary-label">Low</div>
+              <div class="summary-label">{{ $t('analytics.codebase.severity.low') }}</div>
             </div>
           </div>
 
@@ -911,16 +911,16 @@
                 </div>
                 <div class="header-badges">
                   <span v-if="group.severityCounts.critical > 0" class="severity-badge critical">
-                    {{ group.severityCounts.critical }} critical
+                    {{ group.severityCounts.critical }} {{ $t('analytics.codebase.severity.critical') }}
                   </span>
                   <span v-if="group.severityCounts.high > 0" class="severity-badge high">
-                    {{ group.severityCounts.high }} high
+                    {{ group.severityCounts.high }} {{ $t('analytics.codebase.severity.high') }}
                   </span>
                   <span v-if="group.severityCounts.medium > 0" class="severity-badge medium">
-                    {{ group.severityCounts.medium }} medium
+                    {{ group.severityCounts.medium }} {{ $t('analytics.codebase.severity.medium') }}
                   </span>
                   <span v-if="group.severityCounts.low > 0" class="severity-badge low">
-                    {{ group.severityCounts.low }} low
+                    {{ group.severityCounts.low }} {{ $t('analytics.codebase.severity.low') }}
                   </span>
                 </div>
               </div>
@@ -956,7 +956,7 @@
         <EmptyState
           v-else
           icon="fas fa-sparkles"
-          message="No code smells detected in indexed data. Run codebase indexing first."
+          :message="$t('analytics.codebase.intelligence.noCodeSmells')"
           variant="info"
         />
       </div>
@@ -964,17 +964,17 @@
       <!-- Issue #566: Code Intelligence Analysis (Security, Performance, Redis) -->
       <div class="code-intelligence-section analytics-section">
         <h3>
-          <i class="fas fa-brain"></i> Code Intelligence Analysis
+          <i class="fas fa-brain"></i> {{ $t('analytics.codebase.intelligence.title') }}
           <span v-if="codeIntelTotalFindings > 0" class="total-count">
             ({{ codeIntelTotalFindings.toLocaleString() }} findings)
           </span>
           <div class="section-actions">
-            <button @click="showFileScanModal = true" class="action-btn" title="Scan single file">
-              <i class="fas fa-file-code"></i> Scan File
+            <button @click="showFileScanModal = true" class="action-btn" :title="$t('analytics.codebase.intelligence.scanFileTitle')">
+              <i class="fas fa-file-code"></i> {{ $t('analytics.codebase.intelligence.scanFile') }}
             </button>
-            <button @click="runCodeIntelligenceAnalysis" :disabled="codeIntelLoading" class="action-btn primary" title="Run full analysis">
+            <button @click="runCodeIntelligenceAnalysis" :disabled="codeIntelLoading" class="action-btn primary" :title="$t('analytics.codebase.intelligence.runAnalysisTitle')">
               <i :class="codeIntelLoading ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
-              {{ codeIntelLoading ? 'Analyzing...' : 'Analyze' }}
+              {{ codeIntelLoading ? $t('analytics.codebase.buttons.analyzing') : $t('analytics.codebase.intelligence.analyze') }}
             </button>
           </div>
         </h3>
@@ -989,7 +989,7 @@
               :class="['tab-btn', { active: activeCodeIntelTab === tab.id }]"
             >
               <i :class="tab.icon"></i>
-              {{ tab.label }}
+              {{ $t(tab.labelKey) }}
               <span v-if="getCodeIntelTabCount(tab.id) > 0" class="tab-count">
                 {{ getCodeIntelTabCount(tab.id) }}
               </span>
@@ -1018,11 +1018,11 @@
         <EmptyState
           v-else-if="!codeIntelLoading"
           icon="fas fa-brain"
-          message="Run Code Intelligence analysis to detect security vulnerabilities, performance issues, and Redis optimizations."
+          :message="$t('analytics.codebase.intelligence.noData')"
           variant="info"
         >
           <template #actions>
-            <button @click="runCodeIntelligenceAnalysis" class="btn-link">Run Analysis</button>
+            <button @click="runCodeIntelligenceAnalysis" class="btn-link">{{ $t('analytics.codebase.intelligence.runAnalysis') }}</button>
           </template>
         </EmptyState>
 
@@ -1037,16 +1037,16 @@
       <!-- Duplicate Code Analysis - Grouped by Similarity -->
       <div class="duplicates-section analytics-section">
         <h3>
-          <i class="fas fa-copy"></i> Duplicate Code Detection
+          <i class="fas fa-copy"></i> {{ $t('analytics.codebase.duplicates.title') }}
           <span v-if="duplicateAnalysis && duplicateAnalysis.length > 0" class="total-count">
             ({{ duplicateAnalysis.length.toLocaleString() }} pairs)
           </span>
           <!-- Issue #609: Section Export Buttons -->
           <div class="section-export-buttons">
-            <button @click="exportSection('duplicates', 'md')" class="export-btn" title="Export as Markdown" :disabled="!duplicateAnalysis || duplicateAnalysis.length === 0">
+            <button @click="exportSection('duplicates', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')" :disabled="!duplicateAnalysis || duplicateAnalysis.length === 0">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('duplicates', 'json')" class="export-btn" title="Export as JSON" :disabled="!duplicateAnalysis || duplicateAnalysis.length === 0">
+            <button @click="exportSection('duplicates', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')" :disabled="!duplicateAnalysis || duplicateAnalysis.length === 0">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -1056,23 +1056,23 @@
           <div class="summary-cards">
             <div class="summary-card total">
               <div class="summary-value">{{ duplicateAnalysis.length.toLocaleString() }}</div>
-              <div class="summary-label">Total Pairs</div>
+              <div class="summary-label">{{ $t('analytics.codebase.duplicates.totalPairs') }}</div>
             </div>
             <div class="summary-card high">
               <div class="summary-value">{{ duplicatesBySimilarity.high?.length || 0 }}</div>
-              <div class="summary-label">High (90%+)</div>
+              <div class="summary-label">{{ $t('analytics.codebase.duplicates.highSimilarity') }}</div>
             </div>
             <div class="summary-card medium">
               <div class="summary-value">{{ duplicatesBySimilarity.medium?.length || 0 }}</div>
-              <div class="summary-label">Medium (70-89%)</div>
+              <div class="summary-label">{{ $t('analytics.codebase.duplicates.mediumSimilarity') }}</div>
             </div>
             <div class="summary-card low">
               <div class="summary-value">{{ duplicatesBySimilarity.low?.length || 0 }}</div>
-              <div class="summary-label">Low (&lt;70%)</div>
+              <div class="summary-label">{{ $t('analytics.codebase.duplicates.lowSimilarity') }}</div>
             </div>
             <div class="summary-card info">
               <div class="summary-value">{{ totalDuplicateLines.toLocaleString() }}</div>
-              <div class="summary-label">Total Lines</div>
+              <div class="summary-label">{{ $t('analytics.codebase.duplicates.totalLines') }}</div>
             </div>
           </div>
 
@@ -1127,7 +1127,7 @@
         <EmptyState
           v-else
           icon="fas fa-check-circle"
-          message="No duplicate code detected or analysis not run yet."
+          :message="$t('analytics.codebase.duplicates.noData')"
           variant="success"
         />
       </div>
@@ -1135,16 +1135,16 @@
       <!-- Function Declarations - Grouped by Type -->
       <div class="declarations-section analytics-section">
         <h3>
-          <i class="fas fa-code"></i> Code Declarations
+          <i class="fas fa-code"></i> {{ $t('analytics.codebase.declarations.title') }}
           <span v-if="declarationAnalysis && declarationAnalysis.length > 0" class="total-count">
             ({{ declarationAnalysis.length.toLocaleString() }} total)
           </span>
           <!-- Issue #609: Section Export Buttons -->
           <div class="section-export-buttons">
-            <button @click="exportSection('declarations', 'md')" class="export-btn" title="Export as Markdown" :disabled="!declarationAnalysis || declarationAnalysis.length === 0">
+            <button @click="exportSection('declarations', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')" :disabled="!declarationAnalysis || declarationAnalysis.length === 0">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('declarations', 'json')" class="export-btn" title="Export as JSON" :disabled="!declarationAnalysis || declarationAnalysis.length === 0">
+            <button @click="exportSection('declarations', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')" :disabled="!declarationAnalysis || declarationAnalysis.length === 0">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -1214,14 +1214,14 @@
         <EmptyState
           v-else
           icon="fas fa-code"
-          message="No code declarations found or analysis not run yet."
+          :message="$t('analytics.codebase.declarations.noData')"
         />
       </div>
 
       <!-- Issue #527: API Endpoint Checker Section -->
       <div class="api-endpoints-section analytics-section">
         <h3>
-          <i class="fas fa-plug"></i> API Endpoint Coverage
+          <i class="fas fa-plug"></i> {{ $t('analytics.codebase.apiCoverage.title') }}
           <span v-if="apiEndpointAnalysis" class="total-count">
             ({{ apiEndpointAnalysis.coverage_percentage?.toFixed(1) || 0 }}% coverage)
           </span>
@@ -1230,10 +1230,10 @@
           </button>
           <!-- Issue #609: Section Export Buttons -->
           <div class="section-export-buttons">
-            <button @click="exportSection('api-endpoints', 'md')" class="export-btn" title="Export as Markdown" :disabled="!apiEndpointAnalysis">
+            <button @click="exportSection('api-endpoints', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')" :disabled="!apiEndpointAnalysis">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('api-endpoints', 'json')" class="export-btn" title="Export as JSON" :disabled="!apiEndpointAnalysis">
+            <button @click="exportSection('api-endpoints', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')" :disabled="!apiEndpointAnalysis">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -1241,13 +1241,13 @@
 
         <!-- Loading State -->
         <div v-if="loadingApiEndpoints" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i> Scanning API endpoints...
+          <i class="fas fa-spinner fa-spin"></i> {{ $t('analytics.codebase.apiCoverage.scanning') }}
         </div>
 
         <!-- Error State -->
         <div v-else-if="apiEndpointsError" class="error-state">
           <i class="fas fa-exclamation-triangle"></i> {{ apiEndpointsError }}
-          <button @click="getApiEndpointCoverage" class="btn-link">Retry</button>
+          <button @click="getApiEndpointCoverage" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
         </div>
 
         <!-- Analysis Results -->
@@ -1256,30 +1256,30 @@
           <div class="summary-cards">
             <div class="summary-card total">
               <div class="summary-value">{{ apiEndpointAnalysis.backend_endpoints || 0 }}</div>
-              <div class="summary-label">Backend Endpoints</div>
+              <div class="summary-label">{{ $t('analytics.codebase.apiCoverage.backendEndpoints') }}</div>
             </div>
             <div class="summary-card info">
               <div class="summary-value">{{ apiEndpointAnalysis.frontend_calls || 0 }}</div>
-              <div class="summary-label">Frontend Calls</div>
+              <div class="summary-label">{{ $t('analytics.codebase.apiCoverage.frontendCalls') }}</div>
             </div>
             <div class="summary-card success">
               <div class="summary-value">{{ apiEndpointAnalysis.used_endpoints || 0 }}</div>
-              <div class="summary-label">Used Endpoints</div>
+              <div class="summary-label">{{ $t('analytics.codebase.apiCoverage.usedEndpoints') }}</div>
             </div>
             <div class="summary-card warning">
               <div class="summary-value">{{ apiEndpointAnalysis.orphaned_endpoints || 0 }}</div>
-              <div class="summary-label">Orphaned</div>
+              <div class="summary-label">{{ $t('analytics.codebase.apiCoverage.orphaned') }}</div>
             </div>
             <div class="summary-card critical">
               <div class="summary-value">{{ apiEndpointAnalysis.missing_endpoints || 0 }}</div>
-              <div class="summary-label">Missing</div>
+              <div class="summary-label">{{ $t('analytics.codebase.apiCoverage.missing') }}</div>
             </div>
           </div>
 
           <!-- Coverage Progress Bar -->
           <div class="coverage-bar-container">
             <div class="coverage-label">
-              <span>API Coverage</span>
+              <span>{{ $t('analytics.codebase.apiCoverage.coverageLabel') }}</span>
               <span class="coverage-value" :class="getCoverageClass(apiEndpointAnalysis.coverage_percentage)">
                 {{ apiEndpointAnalysis.coverage_percentage?.toFixed(1) || 0 }}%
               </span>
@@ -1300,11 +1300,11 @@
               <div class="accordion-header warning" @click="expandedApiEndpointGroups.orphaned = !expandedApiEndpointGroups.orphaned">
                 <div class="header-info">
                   <i :class="expandedApiEndpointGroups.orphaned ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-                  <span class="header-name">Orphaned Endpoints</span>
+                  <span class="header-name">{{ $t('analytics.codebase.apiCoverage.orphanedEndpoints') }}</span>
                   <span class="header-count">({{ apiEndpointAnalysis.orphaned.length }})</span>
                 </div>
                 <div class="header-badges">
-                  <span class="severity-badge warning">Unused Code</span>
+                  <span class="severity-badge warning">{{ $t('analytics.codebase.apiCoverage.unusedCode') }}</span>
                 </div>
               </div>
               <transition name="accordion">
@@ -1328,11 +1328,11 @@
               <div class="accordion-header critical" @click="expandedApiEndpointGroups.missing = !expandedApiEndpointGroups.missing">
                 <div class="header-info">
                   <i :class="expandedApiEndpointGroups.missing ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-                  <span class="header-name">Missing Endpoints</span>
+                  <span class="header-name">{{ $t('analytics.codebase.apiCoverage.missingEndpoints') }}</span>
                   <span class="header-count">({{ apiEndpointAnalysis.missing.length }})</span>
                 </div>
                 <div class="header-badges">
-                  <span class="severity-badge critical">Potential Bugs</span>
+                  <span class="severity-badge critical">{{ $t('analytics.codebase.apiCoverage.potentialBugs') }}</span>
                 </div>
               </div>
               <transition name="accordion">
@@ -1357,11 +1357,11 @@
               <div class="accordion-header success" @click="expandedApiEndpointGroups.used = !expandedApiEndpointGroups.used">
                 <div class="header-info">
                   <i :class="expandedApiEndpointGroups.used ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-                  <span class="header-name">Used Endpoints</span>
+                  <span class="header-name">{{ $t('analytics.codebase.apiCoverage.usedEndpointsHeader') }}</span>
                   <span class="header-count">({{ apiEndpointAnalysis.used?.length ?? 0 }})</span>
                 </div>
                 <div class="header-badges">
-                  <span class="severity-badge success">Active</span>
+                  <span class="severity-badge success">{{ $t('analytics.codebase.apiCoverage.active') }}</span>
                 </div>
               </div>
               <transition name="accordion">
@@ -1384,7 +1384,7 @@
 
           <!-- Last Scan Timestamp -->
           <div v-if="apiEndpointAnalysis.scan_timestamp" class="scan-timestamp">
-            <i class="fas fa-clock"></i> Last scan: {{ formatTimestamp(apiEndpointAnalysis.scan_timestamp) }}
+            <i class="fas fa-clock"></i> {{ $t('analytics.codebase.actions.lastScan') }}: {{ formatTimestamp(apiEndpointAnalysis.scan_timestamp) }}
           </div>
         </div>
 
@@ -1392,14 +1392,14 @@
         <EmptyState
           v-else
           icon="fas fa-plug"
-          message="No API endpoint analysis available. Click 'API Coverage' button to scan."
+          :message="$t('analytics.codebase.apiCoverage.noData')"
         />
       </div>
 
       <!-- Issue #244: Cross-Language Pattern Analysis Section -->
       <div class="cross-language-section analytics-section">
         <h3>
-          <i class="fas fa-language"></i> Cross-Language Pattern Analysis
+          <i class="fas fa-language"></i> {{ $t('analytics.codebase.crossLanguage.title') }}
           <span v-if="crossLanguageAnalysis" class="total-count">
             ({{ crossLanguageAnalysis.total_patterns }} patterns)
           </span>
@@ -1408,14 +1408,14 @@
           </button>
           <button @click="runCrossLanguageAnalysis" :disabled="loadingCrossLanguage" class="btn-scan" style="margin-left: 5px;">
             <i :class="loadingCrossLanguage ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
-            {{ loadingCrossLanguage ? 'Scanning...' : 'Full Scan' }}
+            {{ loadingCrossLanguage ? $t('analytics.codebase.buttons.scanning') : $t('analytics.codebase.crossLanguage.fullScan') }}
           </button>
           <!-- Issue #609: Section Export Buttons -->
           <div class="section-export-buttons">
-            <button @click="exportSection('cross-language', 'md')" class="export-btn" :disabled="!crossLanguageAnalysis" title="Export as Markdown">
+            <button @click="exportSection('cross-language', 'md')" class="export-btn" :disabled="!crossLanguageAnalysis" :title="$t('analytics.codebase.actions.exportMarkdown')">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('cross-language', 'json')" class="export-btn" :disabled="!crossLanguageAnalysis" title="Export as JSON">
+            <button @click="exportSection('cross-language', 'json')" class="export-btn" :disabled="!crossLanguageAnalysis" :title="$t('analytics.codebase.actions.exportJson')">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -1423,13 +1423,13 @@
 
         <!-- Loading State -->
         <div v-if="loadingCrossLanguage" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i> Analyzing cross-language patterns (Python ↔ TypeScript/Vue)...
+          <i class="fas fa-spinner fa-spin"></i> {{ $t('analytics.codebase.crossLanguage.analyzing') }}
         </div>
 
         <!-- Error State -->
         <div v-else-if="crossLanguageError" class="error-state">
           <i class="fas fa-exclamation-triangle"></i> {{ crossLanguageError }}
-          <button @click="getCrossLanguageAnalysis" class="btn-link">Retry</button>
+          <button @click="getCrossLanguageAnalysis" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
         </div>
 
         <!-- Analysis Results -->
@@ -1438,23 +1438,23 @@
           <div class="summary-cards">
             <div class="summary-card total">
               <div class="summary-value">{{ crossLanguageAnalysis.python_files_analyzed + crossLanguageAnalysis.typescript_files_analyzed + crossLanguageAnalysis.vue_files_analyzed }}</div>
-              <div class="summary-label">Files Analyzed</div>
+              <div class="summary-label">{{ $t('analytics.codebase.crossLanguage.filesAnalyzed') }}</div>
             </div>
             <div class="summary-card critical">
               <div class="summary-value">{{ crossLanguageAnalysis.critical_issues }}</div>
-              <div class="summary-label">Critical</div>
+              <div class="summary-label">{{ $t('analytics.codebase.severity.critical') }}</div>
             </div>
             <div class="summary-card warning">
               <div class="summary-value">{{ crossLanguageAnalysis.high_issues }}</div>
-              <div class="summary-label">High</div>
+              <div class="summary-label">{{ $t('analytics.codebase.severity.high') }}</div>
             </div>
             <div class="summary-card info">
               <div class="summary-value">{{ crossLanguageAnalysis.dto_mismatches?.length || 0 }}</div>
-              <div class="summary-label">DTO Mismatches</div>
+              <div class="summary-label">{{ $t('analytics.codebase.crossLanguage.dtoMismatches') }}</div>
             </div>
             <div class="summary-card success">
               <div class="summary-value">{{ crossLanguageAnalysis.pattern_matches?.length || 0 }}</div>
-              <div class="summary-label">Semantic Matches</div>
+              <div class="summary-label">{{ $t('analytics.codebase.crossLanguage.semanticMatches') }}</div>
             </div>
           </div>
 
@@ -1478,11 +1478,11 @@
               <div class="accordion-header critical" @click="expandedCrossLanguageGroups.dtoMismatches = !expandedCrossLanguageGroups.dtoMismatches">
                 <div class="header-info">
                   <i :class="expandedCrossLanguageGroups.dtoMismatches ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-                  <span class="header-name">DTO/Type Mismatches</span>
+                  <span class="header-name">{{ $t('analytics.codebase.crossLanguage.dtoTypeMismatches') }}</span>
                   <span class="header-count">({{ crossLanguageAnalysis.dto_mismatches.length }})</span>
                 </div>
                 <div class="header-badges">
-                  <span class="severity-badge critical">Type Safety</span>
+                  <span class="severity-badge critical">{{ $t('analytics.codebase.crossLanguage.typeSafety') }}</span>
                 </div>
               </div>
               <transition name="accordion">
@@ -1507,11 +1507,11 @@
               <div class="accordion-header warning" @click="expandedCrossLanguageGroups.apiMismatches = !expandedCrossLanguageGroups.apiMismatches">
                 <div class="header-info">
                   <i :class="expandedCrossLanguageGroups.apiMismatches ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-                  <span class="header-name">API Contract Issues</span>
+                  <span class="header-name">{{ $t('analytics.codebase.crossLanguage.apiContractIssues') }}</span>
                   <span class="header-count">({{ crossLanguageAnalysis.api_contract_mismatches.length }})</span>
                 </div>
                 <div class="header-badges">
-                  <span class="severity-badge warning">Contract</span>
+                  <span class="severity-badge warning">{{ $t('analytics.codebase.crossLanguage.contract') }}</span>
                 </div>
               </div>
               <transition name="accordion">
@@ -1539,11 +1539,11 @@
               <div class="accordion-header info" @click="expandedCrossLanguageGroups.validationDups = !expandedCrossLanguageGroups.validationDups">
                 <div class="header-info">
                   <i :class="expandedCrossLanguageGroups.validationDups ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-                  <span class="header-name">Validation Duplications</span>
+                  <span class="header-name">{{ $t('analytics.codebase.crossLanguage.validationDuplications') }}</span>
                   <span class="header-count">({{ crossLanguageAnalysis.validation_duplications.length }})</span>
                 </div>
                 <div class="header-badges">
-                  <span class="severity-badge info">DRY Violation</span>
+                  <span class="severity-badge info">{{ $t('analytics.codebase.crossLanguage.dryViolation') }}</span>
                 </div>
               </div>
               <transition name="accordion">
@@ -1575,11 +1575,11 @@
               <div class="accordion-header success" @click="expandedCrossLanguageGroups.semanticMatches = !expandedCrossLanguageGroups.semanticMatches">
                 <div class="header-info">
                   <i :class="expandedCrossLanguageGroups.semanticMatches ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-                  <span class="header-name">Semantic Pattern Matches</span>
+                  <span class="header-name">{{ $t('analytics.codebase.crossLanguage.semanticPatternMatches') }}</span>
                   <span class="header-count">({{ crossLanguageAnalysis.pattern_matches.length }})</span>
                 </div>
                 <div class="header-badges">
-                  <span class="severity-badge success">AI Detected</span>
+                  <span class="severity-badge success">{{ $t('analytics.codebase.crossLanguage.aiDetected') }}</span>
                 </div>
               </div>
               <transition name="accordion">
@@ -1609,7 +1609,7 @@
 
           <!-- Analysis Timestamp -->
           <div v-if="crossLanguageAnalysis.scan_timestamp" class="scan-timestamp">
-            <i class="fas fa-clock"></i> Last scan: {{ formatTimestamp(crossLanguageAnalysis.scan_timestamp) }}
+            <i class="fas fa-clock"></i> {{ $t('analytics.codebase.actions.lastScan') }}: {{ formatTimestamp(crossLanguageAnalysis.scan_timestamp) }}
             <span v-if="crossLanguageAnalysis.analysis_time_ms" class="analysis-time">
               ({{ (crossLanguageAnalysis.analysis_time_ms / 1000).toFixed(1) }}s)
             </span>
@@ -1620,7 +1620,7 @@
         <EmptyState
           v-else
           icon="fas fa-language"
-          message="No cross-language analysis available. Click 'Full Scan' to analyze patterns across Python and TypeScript/Vue."
+          :message="$t('analytics.codebase.crossLanguage.noData')"
         />
       </div>
 
@@ -1636,7 +1636,7 @@
       <!-- Issue #538: Config Duplicates Detection Section -->
       <div class="config-duplicates-section analytics-section">
         <h3>
-          <i class="fas fa-clone"></i> Configuration Duplicates
+          <i class="fas fa-clone"></i> {{ $t('analytics.codebase.duplicates.configTitle') }}
           <span v-if="configDuplicatesAnalysis" class="total-count">
             ({{ configDuplicatesAnalysis.duplicates_found }} duplicates)
           </span>
@@ -1645,10 +1645,10 @@
           </button>
           <!-- Issue #609: Section Export Buttons -->
           <div class="section-export-buttons">
-            <button @click="exportSection('config-duplicates', 'md')" class="export-btn" title="Export as Markdown" :disabled="!configDuplicatesAnalysis">
+            <button @click="exportSection('config-duplicates', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')" :disabled="!configDuplicatesAnalysis">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('config-duplicates', 'json')" class="export-btn" title="Export as JSON" :disabled="!configDuplicatesAnalysis">
+            <button @click="exportSection('config-duplicates', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')" :disabled="!configDuplicatesAnalysis">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -1656,13 +1656,13 @@
 
         <!-- Loading State -->
         <div v-if="loadingConfigDuplicates" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i> Scanning for config duplicates...
+          <i class="fas fa-spinner fa-spin"></i> {{ $t('analytics.codebase.duplicates.scanningConfig') }}
         </div>
 
         <!-- Error State -->
         <div v-else-if="configDuplicatesError" class="error-state">
           <i class="fas fa-exclamation-triangle"></i> {{ configDuplicatesError }}
-          <button @click="loadConfigDuplicates" class="btn-link">Retry</button>
+          <button @click="loadConfigDuplicates" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
         </div>
 
         <!-- Analysis Results -->
@@ -1671,11 +1671,11 @@
           <div class="summary-cards">
             <div class="summary-card warning">
               <div class="summary-value">{{ configDuplicatesAnalysis.duplicates_found }}</div>
-              <div class="summary-label">Duplicate Values</div>
+              <div class="summary-label">{{ $t('analytics.codebase.duplicates.duplicateValues') }}</div>
             </div>
             <div class="summary-card info">
               <div class="summary-value">{{ configDuplicatesAnalysis.duplicates?.length || 0 }}</div>
-              <div class="summary-label">Unique Patterns</div>
+              <div class="summary-label">{{ $t('analytics.codebase.duplicates.uniquePatterns') }}</div>
             </div>
           </div>
 
@@ -1707,27 +1707,27 @@
           <!-- Recommendation -->
           <div class="recommendation-box">
             <i class="fas fa-lightbulb"></i>
-            <span>Move duplicate values to <code>src/constants/</code> or <code>backend/constants/</code> for single-source-of-truth.</span>
+            <span>{{ $t('analytics.codebase.duplicates.recommendation') }}</span>
           </div>
         </div>
 
         <!-- No Duplicates Found -->
         <div v-else-if="configDuplicatesAnalysis && configDuplicatesAnalysis.duplicates_found === 0" class="success-state">
-          <i class="fas fa-check-circle"></i> No configuration duplicates found. Single-source-of-truth principle is maintained.
+          <i class="fas fa-check-circle"></i> {{ $t('analytics.codebase.duplicates.noDuplicatesFound') }}
         </div>
 
         <!-- Empty State -->
         <EmptyState
           v-else
           icon="fas fa-clone"
-          message="No config duplicate analysis available. Run 'Analyze All' to scan."
+          :message="$t('analytics.codebase.duplicates.noConfigData')"
         />
       </div>
 
       <!-- Issue #538: Bug Prediction Section - Enhanced with detailed findings -->
       <div class="bug-prediction-section analytics-section">
         <h3>
-          <i class="fas fa-bug"></i> Bug Risk Prediction
+          <i class="fas fa-bug"></i> {{ $t('analytics.codebase.bugPrediction.title') }}
           <span v-if="bugPredictionAnalysis" class="total-count">
             ({{ getAtRiskFilesCount() }} files need attention)
           </span>
@@ -1736,10 +1736,10 @@
           </button>
           <!-- Issue #609: Section Export Buttons -->
           <div class="section-export-buttons" v-if="bugPredictionAnalysis">
-            <button @click="exportSection('bug-prediction', 'md')" class="export-btn" title="Export as Markdown">
+            <button @click="exportSection('bug-prediction', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('bug-prediction', 'json')" class="export-btn" title="Export as JSON">
+            <button @click="exportSection('bug-prediction', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -1747,13 +1747,13 @@
 
         <!-- Loading State -->
         <div v-if="loadingBugPrediction" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i> Analyzing bug risk patterns...
+          <i class="fas fa-spinner fa-spin"></i> {{ $t('analytics.codebase.bugPrediction.analyzing') }}
         </div>
 
         <!-- Error State -->
         <div v-else-if="bugPredictionError" class="error-state">
           <i class="fas fa-exclamation-triangle"></i> {{ bugPredictionError }}
-          <button @click="loadBugPrediction" class="btn-link">Retry</button>
+          <button @click="loadBugPrediction" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
         </div>
 
         <!-- Analysis Results -->
@@ -1762,25 +1762,25 @@
           <div class="summary-cards">
             <div class="summary-card total">
               <div class="summary-value">{{ bugPredictionAnalysis.analyzed_files }}</div>
-              <div class="summary-label">Files Analyzed</div>
+              <div class="summary-label">{{ $t('analytics.codebase.bugPrediction.filesAnalyzed') }}</div>
             </div>
             <div class="summary-card critical" :class="{ clickable: bugPredictionAnalysis.high_risk_count > 0 }" @click="bugPredictionAnalysis.high_risk_count > 0 && toggleBugRiskFilter('high')">
               <div class="summary-value">{{ bugPredictionAnalysis.high_risk_count }}</div>
-              <div class="summary-label">High Risk (60+)</div>
+              <div class="summary-label">{{ $t('analytics.codebase.bugPrediction.highRisk') }}</div>
             </div>
             <div class="summary-card warning clickable" @click="toggleBugRiskFilter('medium')">
               <div class="summary-value">{{ bugPredictionAnalysis.files.filter(f => f.risk_score >= 40 && f.risk_score < 60).length }}</div>
-              <div class="summary-label">Medium Risk (40-59)</div>
+              <div class="summary-label">{{ $t('analytics.codebase.bugPrediction.mediumRisk') }}</div>
             </div>
             <div class="summary-card success clickable" @click="toggleBugRiskFilter('low')">
               <div class="summary-value">{{ bugPredictionAnalysis.files.filter(f => f.risk_score < 40).length }}</div>
-              <div class="summary-label">Low Risk (&lt;40)</div>
+              <div class="summary-label">{{ $t('analytics.codebase.bugPrediction.lowRisk') }}</div>
             </div>
           </div>
 
           <!-- Top Risk Factors Summary -->
           <div v-if="getTopRiskFactors().length > 0" class="top-risk-factors-summary">
-            <h4><i class="fas fa-exclamation-circle"></i> Top Issues Found Across Codebase</h4>
+            <h4><i class="fas fa-exclamation-circle"></i> {{ $t('analytics.codebase.bugPrediction.topIssues') }}</h4>
             <div class="risk-factors-grid">
               <div v-for="factor in getTopRiskFactors()" :key="factor.name" class="risk-factor-card" :class="factor.severity">
                 <div class="factor-icon">
@@ -1833,7 +1833,7 @@
             </h4>
 
             <div v-if="getFilteredBugRiskFiles().length === 0" class="no-files-message">
-              <i class="fas fa-check-circle"></i> No files in this category
+              <i class="fas fa-check-circle"></i> {{ $t('analytics.codebase.bugPrediction.noFilesInCategory') }}
             </div>
 
             <div
@@ -1879,7 +1879,7 @@
               <div v-if="expandedBugRiskFiles.has(file.file_path)" class="file-details">
                 <!-- Risk Factors Breakdown -->
                 <div class="detail-section">
-                  <h5><i class="fas fa-chart-bar"></i> Risk Factor Breakdown</h5>
+                  <h5><i class="fas fa-chart-bar"></i> {{ $t('analytics.codebase.bugPrediction.riskFactorBreakdown') }}</h5>
                   <div class="factors-breakdown">
                     <div
                       v-for="(value, factor) in file.factors"
@@ -1901,7 +1901,7 @@
 
                 <!-- Prevention Tips -->
                 <div v-if="file.prevention_tips && file.prevention_tips.length > 0" class="detail-section">
-                  <h5><i class="fas fa-lightbulb"></i> Recommended Fixes</h5>
+                  <h5><i class="fas fa-lightbulb"></i> {{ $t('analytics.codebase.bugPrediction.recommendedFixes') }}</h5>
                   <ul class="tips-list">
                     <li v-for="(tip, tipIndex) in file.prevention_tips" :key="tipIndex">
                       <i class="fas fa-wrench"></i> {{ tip }}
@@ -1911,7 +1911,7 @@
 
                 <!-- Suggested Tests -->
                 <div v-if="file.suggested_tests && file.suggested_tests.length > 0" class="detail-section">
-                  <h5><i class="fas fa-vial"></i> Suggested Tests</h5>
+                  <h5><i class="fas fa-vial"></i> {{ $t('analytics.codebase.bugPrediction.suggestedTests') }}</h5>
                   <ul class="tests-list">
                     <li v-for="(test, testIndex) in file.suggested_tests" :key="testIndex">
                       <i class="fas fa-flask"></i> {{ test }}
@@ -1932,27 +1932,27 @@
 
           <!-- Timestamp -->
           <div v-if="bugPredictionAnalysis.timestamp" class="scan-timestamp">
-            <i class="fas fa-clock"></i> Last analysis: {{ formatTimestamp(bugPredictionAnalysis.timestamp) }}
+            <i class="fas fa-clock"></i> {{ $t('analytics.codebase.bugPrediction.lastAnalysis') }}: {{ formatTimestamp(bugPredictionAnalysis.timestamp) }}
           </div>
         </div>
 
         <!-- No Files to Analyze -->
         <div v-else-if="bugPredictionAnalysis && bugPredictionAnalysis.files.length === 0" class="success-state">
-          <i class="fas fa-check-circle"></i> No files analyzed yet. Run 'Analyze All' to scan.
+          <i class="fas fa-check-circle"></i> {{ $t('analytics.codebase.bugPrediction.noFilesAnalyzed') }}
         </div>
 
         <!-- Empty State -->
         <EmptyState
           v-else
           icon="fas fa-bug"
-          message="No bug prediction analysis available. Run 'Analyze All' to scan."
+          :message="$t('analytics.codebase.bugPrediction.noData')"
         />
       </div>
 
       <!-- Issue #538: Code Intelligence Scores Section -->
       <div class="code-intelligence-scores-section analytics-section">
         <h3>
-          <i class="fas fa-shield-alt"></i> Code Intelligence Scores
+          <i class="fas fa-shield-alt"></i> {{ $t('analytics.codebase.intelligence.scoresTitle') }}
           <button
             @click="loadSecurityScore(); loadPerformanceScore(); loadRedisHealth()"
             :disabled="loadingSecurityScore || loadingPerformanceScore || loadingRedisHealth"
@@ -1969,12 +1969,12 @@
           <div class="score-card security-card">
             <div class="score-header">
               <i class="fas fa-shield-alt"></i>
-              <span>Security</span>
+              <span>{{ $t('analytics.codebase.intelligence.security') }}</span>
               <button
                 @click="loadSecurityScore"
                 :disabled="loadingSecurityScore"
                 class="card-refresh-btn"
-                title="Refresh Security Score"
+                :title="$t('analytics.codebase.intelligence.refreshSecurity')"
               >
                 <i :class="loadingSecurityScore ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
               </button>
@@ -2011,11 +2011,11 @@
                 :disabled="loadingSecurityFindings"
               >
                 <i :class="loadingSecurityFindings ? 'fas fa-spinner fa-spin' : (showSecurityDetails ? 'fas fa-chevron-up' : 'fas fa-chevron-down')"></i>
-                {{ showSecurityDetails ? 'Hide Details' : 'View Details' }}
+                {{ showSecurityDetails ? $t('analytics.codebase.intelligence.hideDetails') : $t('analytics.codebase.intelligence.viewDetails') }}
               </button>
             </div>
             <div v-else class="score-empty">
-              <span>No data</span>
+              <span>{{ $t('analytics.codebase.intelligence.noScoreData') }}</span>
             </div>
           </div>
 
@@ -2023,12 +2023,12 @@
           <div class="score-card performance-card">
             <div class="score-header">
               <i class="fas fa-tachometer-alt"></i>
-              <span>Performance</span>
+              <span>{{ $t('analytics.codebase.intelligence.performanceLabel') }}</span>
               <button
                 @click="loadPerformanceScore"
                 :disabled="loadingPerformanceScore"
                 class="card-refresh-btn"
-                title="Refresh Performance Score"
+                :title="$t('analytics.codebase.intelligence.refreshPerformance')"
               >
                 <i :class="loadingPerformanceScore ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
               </button>
@@ -2062,11 +2062,11 @@
                 :disabled="loadingPerformanceFindings"
               >
                 <i :class="loadingPerformanceFindings ? 'fas fa-spinner fa-spin' : (showPerformanceDetails ? 'fas fa-chevron-up' : 'fas fa-chevron-down')"></i>
-                {{ showPerformanceDetails ? 'Hide Details' : 'View Details' }}
+                {{ showPerformanceDetails ? $t('analytics.codebase.intelligence.hideDetails') : $t('analytics.codebase.intelligence.viewDetails') }}
               </button>
             </div>
             <div v-else class="score-empty">
-              <span>No data</span>
+              <span>{{ $t('analytics.codebase.intelligence.noScoreData') }}</span>
             </div>
           </div>
 
@@ -2074,12 +2074,12 @@
           <div class="score-card redis-card">
             <div class="score-header">
               <i class="fas fa-database"></i>
-              <span>Redis Usage</span>
+              <span>{{ $t('analytics.codebase.intelligence.redisUsage') }}</span>
               <button
                 @click="loadRedisHealth"
                 :disabled="loadingRedisHealth"
                 class="card-refresh-btn"
-                title="Refresh Redis Health"
+                :title="$t('analytics.codebase.intelligence.refreshRedis')"
               >
                 <i :class="loadingRedisHealth ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
               </button>
@@ -2113,11 +2113,11 @@
                 :disabled="loadingRedisOptimizations"
               >
                 <i :class="loadingRedisOptimizations ? 'fas fa-spinner fa-spin' : (showRedisDetails ? 'fas fa-chevron-up' : 'fas fa-chevron-down')"></i>
-                {{ showRedisDetails ? 'Hide Details' : 'View Details' }}
+                {{ showRedisDetails ? $t('analytics.codebase.intelligence.hideDetails') : $t('analytics.codebase.intelligence.viewDetails') }}
               </button>
             </div>
             <div v-else class="score-empty">
-              <span>No data</span>
+              <span>{{ $t('analytics.codebase.intelligence.noScoreData') }}</span>
             </div>
           </div>
         </div>
@@ -2125,14 +2125,14 @@
         <!-- Issue #566: Expandable Security Findings Panel -->
         <div v-if="showSecurityDetails" class="findings-panel security-findings-panel">
           <div class="findings-header">
-            <h4><i class="fas fa-shield-alt"></i> Security Findings</h4>
+            <h4><i class="fas fa-shield-alt"></i> {{ $t('analytics.codebase.intelligence.securityFindings') }}</h4>
             <span class="findings-count">{{ securityFindings?.length ?? 0 }} findings</span>
           </div>
           <div v-if="loadingSecurityFindings" class="findings-loading">
-            <i class="fas fa-spinner fa-spin"></i> Loading security findings...
+            <i class="fas fa-spinner fa-spin"></i> {{ $t('analytics.codebase.intelligence.loadingSecurityFindings') }}
           </div>
           <div v-else-if="!securityFindings?.length" class="findings-empty">
-            <i class="fas fa-check-circle"></i> No security vulnerabilities found
+            <i class="fas fa-check-circle"></i> {{ $t('analytics.codebase.intelligence.noSecurityVulnerabilities') }}
           </div>
           <div v-else class="findings-list">
             <div
@@ -2166,14 +2166,14 @@
         <!-- Issue #566: Expandable Performance Findings Panel -->
         <div v-if="showPerformanceDetails" class="findings-panel performance-findings-panel">
           <div class="findings-header">
-            <h4><i class="fas fa-tachometer-alt"></i> Performance Issues</h4>
+            <h4><i class="fas fa-tachometer-alt"></i> {{ $t('analytics.codebase.intelligence.performanceIssues') }}</h4>
             <span class="findings-count">{{ performanceFindings?.length ?? 0 }} issues</span>
           </div>
           <div v-if="loadingPerformanceFindings" class="findings-loading">
-            <i class="fas fa-spinner fa-spin"></i> Loading performance issues...
+            <i class="fas fa-spinner fa-spin"></i> {{ $t('analytics.codebase.intelligence.loadingPerformanceIssues') }}
           </div>
           <div v-else-if="!performanceFindings?.length" class="findings-empty">
-            <i class="fas fa-check-circle"></i> No performance issues found
+            <i class="fas fa-check-circle"></i> {{ $t('analytics.codebase.intelligence.noPerformanceIssues') }}
           </div>
           <div v-else class="findings-list">
             <div
@@ -2207,14 +2207,14 @@
         <!-- Issue #566: Expandable Redis Optimizations Panel -->
         <div v-if="showRedisDetails" class="findings-panel redis-findings-panel">
           <div class="findings-header">
-            <h4><i class="fas fa-database"></i> Redis Optimizations</h4>
+            <h4><i class="fas fa-database"></i> {{ $t('analytics.codebase.intelligence.redisOptimizations') }}</h4>
             <span class="findings-count">{{ redisOptimizations?.length ?? 0 }} suggestions</span>
           </div>
           <div v-if="loadingRedisOptimizations" class="findings-loading">
-            <i class="fas fa-spinner fa-spin"></i> Loading Redis optimizations...
+            <i class="fas fa-spinner fa-spin"></i> {{ $t('analytics.codebase.intelligence.loadingRedisOptimizations') }}
           </div>
           <div v-else-if="!redisOptimizations?.length" class="findings-empty">
-            <i class="fas fa-check-circle"></i> No Redis optimization suggestions
+            <i class="fas fa-check-circle"></i> {{ $t('analytics.codebase.intelligence.noRedisOptimizations') }}
           </div>
           <div v-else class="findings-list">
             <div
@@ -2247,14 +2247,14 @@
         <EmptyState
           v-if="!rootPath && !securityScore && !performanceScore && !redisHealth"
           icon="fas fa-shield-alt"
-          message="Enter a path and run 'Analyze All' to see code intelligence scores."
+          :message="$t('analytics.codebase.intelligence.noScoresData')"
         />
       </div>
 
       <!-- Issue #538: Environment Analysis Section -->
       <div class="environment-analysis-section analytics-section">
         <h3>
-          <i class="fas fa-leaf"></i> Environment Variable Analysis
+          <i class="fas fa-leaf"></i> {{ $t('analytics.codebase.environment.title') }}
           <span v-if="environmentAnalysis" class="total-count">
             ({{ environmentAnalysis.total_hardcoded_values }} hardcoded values)
           </span>
@@ -2263,10 +2263,10 @@
           </button>
           <!-- Issue #609: Section Export Buttons -->
           <div class="section-export-buttons" v-if="environmentAnalysis">
-            <button @click="exportSection('environment', 'md')" class="export-btn" title="Export as Markdown">
+            <button @click="exportSection('environment', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('environment', 'json')" class="export-btn" title="Export as JSON">
+            <button @click="exportSection('environment', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -2281,15 +2281,15 @@
               style="width: 18px; height: 18px; cursor: pointer;"
             />
             <span style="font-weight: 500;">
-              <i class="fas fa-robot"></i> Use AI Filtering
+              <i class="fas fa-robot"></i> {{ $t('analytics.codebase.environment.useAiFiltering') }}
             </span>
           </label>
           <span v-if="useAiFiltering" class="ai-filter-options" style="display: flex; align-items: center; gap: 10px;">
             <select v-model="aiFilteringPriority" class="ai-filter-select">
-              <option value="high">High Priority Only</option>
-              <option value="medium">Medium Priority</option>
-              <option value="low">Low Priority</option>
-              <option value="all">All Priorities</option>
+              <option value="high">{{ $t('analytics.codebase.environment.highPriorityOnly') }}</option>
+              <option value="medium">{{ $t('analytics.codebase.environment.mediumPriority') }}</option>
+              <option value="low">{{ $t('analytics.codebase.environment.lowPriority') }}</option>
+              <option value="all">{{ $t('analytics.codebase.environment.allPriorities') }}</option>
             </select>
             <span class="ai-filter-model-hint">
               Model: {{ aiFilteringModel }}
@@ -2311,7 +2311,7 @@
         <!-- Error State -->
         <div v-else-if="envAnalysisError" class="error-state">
           <i class="fas fa-exclamation-triangle"></i> {{ envAnalysisError }}
-          <button @click="loadEnvironmentAnalysis" class="btn-link">Retry</button>
+          <button @click="loadEnvironmentAnalysis" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
         </div>
 
         <!-- Analysis Results -->
@@ -2320,25 +2320,25 @@
           <div class="summary-cards">
             <div class="summary-card total">
               <div class="summary-value">{{ environmentAnalysis.total_hardcoded_values }}</div>
-              <div class="summary-label">Hardcoded Values</div>
+              <div class="summary-label">{{ $t('analytics.codebase.environment.hardcodedValues') }}</div>
             </div>
             <div class="summary-card critical">
               <div class="summary-value">{{ environmentAnalysis.high_priority_count }}</div>
-              <div class="summary-label">High Priority</div>
+              <div class="summary-label">{{ $t('analytics.codebase.environment.highPriority') }}</div>
             </div>
             <div class="summary-card warning">
               <div class="summary-value">{{ environmentAnalysis.recommendations_count }}</div>
-              <div class="summary-label">Recommendations</div>
+              <div class="summary-label">{{ $t('analytics.codebase.environment.recommendations') }}</div>
             </div>
             <div class="summary-card info">
               <div class="summary-value">{{ Object.keys(environmentAnalysis.categories).length }}</div>
-              <div class="summary-label">Categories</div>
+              <div class="summary-label">{{ $t('analytics.codebase.environment.categories') }}</div>
             </div>
           </div>
 
           <!-- Categories Breakdown -->
           <div v-if="Object.keys(environmentAnalysis.categories).length > 0" class="categories-breakdown">
-            <h4>Categories</h4>
+            <h4>{{ $t('analytics.codebase.environment.categories') }}</h4>
             <div class="category-badges">
               <span
                 v-for="(count, category) in environmentAnalysis.categories"
@@ -2352,7 +2352,7 @@
 
           <!-- Recommendations List -->
           <div v-if="environmentAnalysis.recommendations.length > 0" class="recommendations-list">
-            <h4>Environment Variable Recommendations</h4>
+            <h4>{{ $t('analytics.codebase.environment.envVarRecommendations') }}</h4>
             <div
               v-for="(rec, index) in environmentAnalysis.recommendations.slice(0, 10)"
               :key="'rec-' + index"
@@ -2374,7 +2374,7 @@
           <!-- Hardcoded Values Preview -->
           <div v-if="environmentAnalysis.hardcoded_values.length > 0" class="hardcoded-preview">
             <h4>
-              Sample Hardcoded Values
+              {{ $t('analytics.codebase.environment.sampleHardcodedValues') }}
               <!-- Issue #631: Show truncation warning when results are limited -->
               <span v-if="environmentAnalysis.is_truncated || environmentAnalysis.hardcoded_values.length < environmentAnalysis.total_hardcoded_values" class="truncation-warning">
                 (showing {{ environmentAnalysis.hardcoded_values.length }} of {{ environmentAnalysis.total_hardcoded_values.toLocaleString() }} - use Export for full data)
@@ -2409,21 +2409,21 @@
 
         <!-- No Hardcoded Values -->
         <div v-else-if="environmentAnalysis && environmentAnalysis.total_hardcoded_values === 0" class="success-state">
-          <i class="fas fa-check-circle"></i> No hardcoded values detected. Configuration looks clean.
+          <i class="fas fa-check-circle"></i> {{ $t('analytics.codebase.environment.noHardcodedValues') }}
         </div>
 
         <!-- Empty State -->
         <EmptyState
           v-else
           icon="fas fa-leaf"
-          message="No environment analysis available. Run 'Analyze All' to scan."
+          :message="$t('analytics.codebase.environment.noData')"
         />
       </div>
 
       <!-- Issue #248: Code Ownership and Expertise Map Section -->
       <div class="ownership-section analytics-section">
         <h3>
-          <i class="fas fa-users-cog"></i> Code Ownership & Expertise Map
+          <i class="fas fa-users-cog"></i> {{ $t('analytics.codebase.ownership.title') }}
           <span v-if="ownershipAnalysis" class="total-count">
             ({{ ownershipAnalysis.summary.total_contributors }} contributors)
           </span>
@@ -2432,10 +2432,10 @@
           </button>
           <!-- Issue #609: Section Export Buttons -->
           <div class="section-export-buttons" v-if="ownershipAnalysis">
-            <button @click="exportSection('ownership', 'md')" class="export-btn" title="Export as Markdown">
+            <button @click="exportSection('ownership', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
               <i class="fas fa-file-alt"></i> MD
             </button>
-            <button @click="exportSection('ownership', 'json')" class="export-btn" title="Export as JSON">
+            <button @click="exportSection('ownership', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')">
               <i class="fas fa-file-code"></i> JSON
             </button>
           </div>
@@ -2443,13 +2443,13 @@
 
         <!-- Loading State -->
         <div v-if="loadingOwnership" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i> Analyzing code ownership via git history...
+          <i class="fas fa-spinner fa-spin"></i> {{ $t('analytics.codebase.ownership.analyzing') }}
         </div>
 
         <!-- Error State -->
         <div v-else-if="ownershipError" class="error-state">
           <i class="fas fa-exclamation-triangle"></i> {{ ownershipError }}
-          <button @click="loadOwnershipAnalysis" class="btn-link">Retry</button>
+          <button @click="loadOwnershipAnalysis" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
         </div>
 
         <!-- Analysis Results -->
@@ -2460,25 +2460,25 @@
               :class="['tab-btn', { active: ownershipViewMode === 'overview' }]"
               @click="ownershipViewMode = 'overview'"
             >
-              <i class="fas fa-chart-pie"></i> Overview
+              <i class="fas fa-chart-pie"></i> {{ $t('analytics.codebase.ownership.overview') }}
             </button>
             <button
               :class="['tab-btn', { active: ownershipViewMode === 'contributors' }]"
               @click="ownershipViewMode = 'contributors'"
             >
-              <i class="fas fa-users"></i> Contributors
+              <i class="fas fa-users"></i> {{ $t('analytics.codebase.ownership.contributors') }}
             </button>
             <button
               :class="['tab-btn', { active: ownershipViewMode === 'files' }]"
               @click="ownershipViewMode = 'files'"
             >
-              <i class="fas fa-folder-tree"></i> Files
+              <i class="fas fa-folder-tree"></i> {{ $t('analytics.codebase.ownership.filesTab') }}
             </button>
             <button
               :class="['tab-btn', { active: ownershipViewMode === 'gaps' }]"
               @click="ownershipViewMode = 'gaps'"
             >
-              <i class="fas fa-exclamation-triangle"></i> Knowledge Gaps
+              <i class="fas fa-exclamation-triangle"></i> {{ $t('analytics.codebase.ownership.knowledgeGaps') }}
               <span v-if="ownershipAnalysis.summary.critical_gaps > 0" class="gap-badge critical">
                 {{ ownershipAnalysis.summary.critical_gaps }}
               </span>
@@ -2491,26 +2491,26 @@
             <div class="summary-cards">
               <div class="summary-card total">
                 <div class="summary-value">{{ ownershipAnalysis.summary.total_files }}</div>
-                <div class="summary-label">Files Analyzed</div>
+                <div class="summary-label">{{ $t('analytics.codebase.ownership.filesAnalyzed') }}</div>
               </div>
               <div class="summary-card info">
                 <div class="summary-value">{{ ownershipAnalysis.summary.total_contributors }}</div>
-                <div class="summary-label">Contributors</div>
+                <div class="summary-label">{{ $t('analytics.codebase.ownership.contributors') }}</div>
               </div>
               <div class="summary-card" :class="ownershipAnalysis.metrics.overall_bus_factor <= 1 ? 'critical' : 'warning'">
                 <div class="summary-value">{{ ownershipAnalysis.metrics.overall_bus_factor }}</div>
-                <div class="summary-label">Bus Factor</div>
+                <div class="summary-label">{{ $t('analytics.codebase.ownership.busFactor') }}</div>
               </div>
               <div class="summary-card" :class="ownershipAnalysis.summary.critical_gaps > 0 ? 'critical' : 'success'">
                 <div class="summary-value">{{ ownershipAnalysis.summary.knowledge_gaps_count }}</div>
-                <div class="summary-label">Knowledge Gaps</div>
+                <div class="summary-label">{{ $t('analytics.codebase.ownership.knowledgeGaps') }}</div>
               </div>
             </div>
 
             <!-- Metrics -->
             <div class="ownership-metrics">
               <div class="metric-item">
-                <span class="metric-label">Ownership Concentration:</span>
+                <span class="metric-label">{{ $t('analytics.codebase.ownership.ownershipConcentration') }}:</span>
                 <span class="metric-value" :class="ownershipAnalysis.metrics.ownership_concentration > 70 ? 'high-concentration' : ''">
                   {{ ownershipAnalysis.metrics.ownership_concentration }}%
                 </span>
@@ -2520,7 +2520,7 @@
                 </div>
               </div>
               <div class="metric-item">
-                <span class="metric-label">Team Coverage:</span>
+                <span class="metric-label">{{ $t('analytics.codebase.ownership.teamCoverage') }}:</span>
                 <span class="metric-value">{{ ownershipAnalysis.metrics.team_coverage }}%</span>
                 <div class="metric-bar">
                   <div class="metric-bar-fill" :style="{ width: ownershipAnalysis.metrics.team_coverage + '%' }"
@@ -2531,7 +2531,7 @@
 
             <!-- Top Contributors Preview -->
             <div v-if="ownershipAnalysis.metrics.top_contributors.length > 0" class="top-contributors-preview">
-              <h4><i class="fas fa-trophy"></i> Top Contributors</h4>
+              <h4><i class="fas fa-trophy"></i> {{ $t('analytics.codebase.ownership.topContributors') }}</h4>
               <div class="contributor-list">
                 <div
                   v-for="(contrib, index) in ownershipAnalysis.metrics.top_contributors.slice(0, 5)"
@@ -2548,7 +2548,7 @@
 
             <!-- Knowledge Risk Distribution -->
             <div v-if="Object.keys(ownershipAnalysis.metrics.knowledge_risk_distribution).length > 0" class="risk-distribution">
-              <h4><i class="fas fa-chart-bar"></i> Knowledge Risk Distribution</h4>
+              <h4><i class="fas fa-chart-bar"></i> {{ $t('analytics.codebase.ownership.knowledgeRiskDistribution') }}</h4>
               <div class="risk-badges">
                 <span
                   v-for="(count, risk) in ownershipAnalysis.metrics.knowledge_risk_distribution"
@@ -2616,7 +2616,7 @@
           <div v-if="ownershipViewMode === 'files'" class="ownership-files">
             <!-- Directory Overview -->
             <div v-if="ownershipAnalysis.directory_ownership.length > 0" class="directories-section">
-              <h4><i class="fas fa-folder"></i> Directory Ownership</h4>
+              <h4><i class="fas fa-folder"></i> {{ $t('analytics.codebase.ownership.directoryOwnership') }}</h4>
               <div class="directory-list">
                 <div
                   v-for="(dir, index) in ownershipAnalysis.directory_ownership.slice(0, 15)"
@@ -2639,7 +2639,7 @@
 
             <!-- File Details -->
             <div v-if="ownershipAnalysis.file_ownership.length > 0" class="files-section">
-              <h4><i class="fas fa-file-code"></i> File Ownership (Top 30)</h4>
+              <h4><i class="fas fa-file-code"></i> {{ $t('analytics.codebase.ownership.fileOwnership') }}</h4>
               <div class="file-list">
                 <div
                   v-for="(file, index) in ownershipAnalysis.file_ownership.slice(0, 30)"
@@ -2664,7 +2664,7 @@
           <!-- Knowledge Gaps Tab -->
           <div v-if="ownershipViewMode === 'gaps'" class="ownership-gaps">
             <div v-if="ownershipAnalysis.knowledge_gaps.length === 0" class="success-state">
-              <i class="fas fa-check-circle"></i> No critical knowledge gaps detected. Good team coverage!
+              <i class="fas fa-check-circle"></i> {{ $t('analytics.codebase.ownership.noKnowledgeGaps') }}
             </div>
             <div v-else class="gaps-list">
               <div
@@ -2699,7 +2699,7 @@
         <EmptyState
           v-else
           icon="fas fa-users-cog"
-          message="No ownership analysis available. Run 'Analyze All' to scan git history."
+          :message="$t('analytics.codebase.ownership.noData')"
         />
       </div>
     </div>
@@ -2709,8 +2709,8 @@
       <div class="kb-optin-content">
         <i class="fas fa-book"></i>
         <div class="kb-optin-text">
-          <strong>Indexing complete!</strong>
-          Add this codebase to the knowledge base so AutoBot can answer questions about it.
+          <strong>{{ $t('analytics.codebase.knowledgeBase.indexingComplete') }}</strong>
+          {{ $t('analytics.codebase.knowledgeBase.addDescription') }}
         </div>
         <button
           class="kb-optin-btn"
@@ -2718,9 +2718,9 @@
           :disabled="knowledgeBaseAdding"
         >
           <i :class="knowledgeBaseAdding ? 'fas fa-spinner fa-spin' : 'fas fa-plus'"></i>
-          {{ knowledgeBaseAdding ? 'Adding...' : 'Add to Knowledge Base' }}
+          {{ knowledgeBaseAdding ? $t('analytics.codebase.knowledgeBase.adding') : $t('analytics.codebase.knowledgeBase.addToKnowledgeBase') }}
         </button>
-        <button class="kb-optin-dismiss" @click="showKnowledgeBaseOptIn = false" aria-label="Dismiss">
+        <button class="kb-optin-dismiss" @click="showKnowledgeBaseOptIn = false" :aria-label="$t('analytics.codebase.actions.dismiss')">
           <i class="fas fa-times"></i>
         </button>
       </div>
@@ -2760,6 +2760,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { NetworkConstants } from '@/constants/network.ts'
@@ -2801,6 +2802,9 @@ import {
   FunctionCallGraph
 } from '@/components/charts'
 
+// i18n
+const { t } = useI18n()
+
 // Toast notifications
 const { showToast } = useToast()
 
@@ -2828,9 +2832,9 @@ const codeIntelFindingsFetched = ref({ security: false, performance: false, redi
 
 // Issue #566: Code Intelligence tabs definition
 const codeIntelTabs = [
-  { id: 'security' as const, label: 'Security', icon: 'fas fa-shield-alt' },
-  { id: 'performance' as const, label: 'Performance', icon: 'fas fa-tachometer-alt' },
-  { id: 'redis' as const, label: 'Redis', icon: 'fas fa-database' }
+  { id: 'security' as const, labelKey: 'analytics.codebase.intelligence.security', icon: 'fas fa-shield-alt' },
+  { id: 'performance' as const, labelKey: 'analytics.codebase.intelligence.performanceLabel', icon: 'fas fa-tachometer-alt' },
+  { id: 'redis' as const, labelKey: 'analytics.codebase.intelligence.redisLabel', icon: 'fas fa-database' }
 ]
 
 // Issue #566: Code Intelligence computed properties
@@ -2866,10 +2870,10 @@ async function runCodeIntelligenceAnalysis() {
     await codeIntelAnalyzeCode({ code: rootPath.value })
     await codeIntelGetSuggestions(rootPath.value)
     codeIntelFindingsFetched.value = { security: true, performance: true, redis: true }
-    notify(`Code Intelligence analysis complete: ${codeIntelTotalFindings.value} suggestions`, 'success')
+    notify(t('analytics.codebase.notify.codeIntelComplete', { count: codeIntelTotalFindings.value }), 'success')
   } catch (e) {
     logger.error('Code Intelligence analysis failed:', e)
-    notify('Code Intelligence analysis failed', 'error')
+    notify(t('analytics.codebase.notify.codeIntelFailed'), 'error')
   } finally {
     codeIntelFindingsLoading.value = false
   }
@@ -2889,13 +2893,13 @@ async function handleFileScan(
     const results = await codeIntelBatchAnalyze([{ code: filePath, filename: filePath }])
     if (results.length > 0) {
       codeIntelFindingsFetched.value = { security: true, performance: true, redis: true }
-      notify(`File scan complete: ${results.length} result(s)`, 'info')
+      notify(t('analytics.codebase.notify.fileScanComplete', { count: results.length }), 'info')
     } else {
-      notify('No issues found in file scan', 'success')
+      notify(t('analytics.codebase.notify.fileScanNoIssues'), 'success')
     }
   } catch (e) {
     logger.error('File scan failed:', e)
-    notify('File scan failed', 'error')
+    notify(t('analytics.codebase.notify.fileScanFailed'), 'error')
   } finally {
     codeIntelFindingsLoading.value = false
   }
@@ -3172,8 +3176,8 @@ const clearingCache = ref(false)
 // Computed property for code smells progress title
 const codeSmellsProgressTitle = computed(() => {
   return codeSmellsAnalysisType.value === 'health'
-    ? 'Calculating Health Score...'
-    : 'Analyzing Code Smells...'
+    ? t('analytics.codebase.progress.calculatingHealth')
+    : t('analytics.codebase.progress.analyzingSmells')
 })
 
 // Enhanced analytics data interfaces
@@ -3557,14 +3561,14 @@ function getRiskFactorIcon(factor: string): string {
 
 function getRiskFactorDescription(factor: string): string {
   const descriptions: Record<string, string> = {
-    complexity: 'High cyclomatic complexity - break down into smaller functions',
-    change_frequency: 'Frequently modified - stabilize before adding features',
-    file_size: 'Large files - consider splitting into modules',
-    bug_history: 'Previous bugs found - add regression tests',
-    test_coverage: 'No tests detected - add unit tests',
-    dependency_count: 'Many dependencies - review and reduce'
+    complexity: t('analytics.codebase.bugPrediction.factors.complexity'),
+    change_frequency: t('analytics.codebase.bugPrediction.factors.changeFrequency'),
+    file_size: t('analytics.codebase.bugPrediction.factors.fileSize'),
+    bug_history: t('analytics.codebase.bugPrediction.factors.bugHistory'),
+    test_coverage: t('analytics.codebase.bugPrediction.factors.testCoverage'),
+    dependency_count: t('analytics.codebase.bugPrediction.factors.dependencyCount')
   }
-  return descriptions[factor] || 'Review and address this factor'
+  return descriptions[factor] || t('analytics.codebase.bugPrediction.factors.default')
 }
 
 function getFactorBarClass(value: number): string {
@@ -3994,7 +3998,7 @@ function handleSelectSource(source: CodeSource) {
     localStorage.setItem(STORAGE_KEY_PATH, source.clone_path)
   }
   showSourceManager.value = false
-  notify(`Selected source: ${source.name}`, 'info')
+  notify(t('analytics.codebase.notify.selectedSource', { name: source.name }), 'info')
 }
 
 function handleClearSource() {
@@ -4005,14 +4009,14 @@ async function handleSourceSaved(source: CodeSource) {
   showAddSourceModal.value = false
   editTargetSource.value = null
   await loadSources()
-  notify(`Source "${source.name}" saved successfully`, 'success')
+  notify(t('analytics.codebase.notify.sourceSaved', { name: source.name }), 'success')
 }
 
 async function handleShareSaved(source: CodeSource) {
   showShareSourceModal.value = false
   shareTargetSource.value = null
   await loadSources()
-  notify(`Access updated for "${source.name}"`, 'success')
+  notify(t('analytics.codebase.notify.accessUpdated', { name: source.name }), 'success')
 }
 
 function handleEditSource(source: CodeSource) {
@@ -4041,10 +4045,10 @@ async function addToKnowledgeBase() {
       throw new Error(`HTTP ${response.status}: ${text}`)
     }
     showKnowledgeBaseOptIn.value = false
-    notify('Codebase added to knowledge base', 'success')
+    notify(t('analytics.codebase.notify.knowledgeBaseAdded'), 'success')
   } catch (err: unknown) {
     logger.error('Failed to add to knowledge base:', err instanceof Error ? err.message : String(err))
-    notify('Failed to add to knowledge base', 'error')
+    notify(t('analytics.codebase.notify.knowledgeBaseFailed'), 'error')
   } finally {
     knowledgeBaseAdding.value = false
   }
@@ -4062,15 +4066,15 @@ const checkCurrentIndexingJob = async () => {
         currentJobId.value = data.task_id
         currentJobStatus.value = data.status
         analyzing.value = true
-        progressStatus.value = data.progress?.step || 'Indexing in progress...'
+        progressStatus.value = data.progress?.step || t('analytics.codebase.status.indexingInProgress')
         progressPercent.value = data.progress?.percent || 20
 
         // Start polling for updates
         startJobPolling()
-        notify('Indexing job already in progress', 'info')
+        notify(t('analytics.codebase.notify.indexingAlreadyRunning'), 'info')
       } else if (data.task_id && data.status !== 'idle') {
         // Job recently completed
-        progressStatus.value = `Last job: ${data.status}`
+        progressStatus.value = t('analytics.codebase.status.lastJob', { status: data.status })
       }
     }
   } catch (error: unknown) {
@@ -4163,9 +4167,9 @@ const pollJobStatus = async () => {
         jobStats.value = null
 
         if (data.status === 'completed') {
-          progressStatus.value = 'Indexing completed!'
+          progressStatus.value = t('analytics.codebase.status.indexingCompleted')
           progressPercent.value = 100
-          notify('Codebase indexing completed', 'success')
+          notify(t('analytics.codebase.notify.indexingCompleted'), 'success')
 
           // Issue #1133: Show knowledge base opt-in after indexing
           showKnowledgeBaseOptIn.value = true
@@ -4173,11 +4177,11 @@ const pollJobStatus = async () => {
           // Refresh data
           await loadCodebaseAnalyticsData()
         } else if (data.status === 'cancelled') {
-          progressStatus.value = 'Indexing cancelled'
-          notify('Indexing was cancelled', 'warning')
+          progressStatus.value = t('analytics.codebase.status.indexingCancelled')
+          notify(t('analytics.codebase.notify.indexingCancelled'), 'warning')
         } else if (data.status === 'failed' || data.error) {
-          progressStatus.value = `Indexing failed: ${data.error || 'Unknown error'}`
-          notify(`Indexing failed: ${data.error || 'Unknown error'}`, 'error')
+          progressStatus.value = t('analytics.codebase.status.indexingFailed', { error: data.error || t('analytics.codebase.errors.unknown') })
+          notify(t('analytics.codebase.notify.indexingFailed', { error: data.error || t('analytics.codebase.errors.unknown') }), 'error')
         }
 
         currentJobId.value = null
@@ -4221,7 +4225,7 @@ const pollIntermediateResults = async () => {
 // Cancel the running indexing job
 const cancelIndexingJob = async () => {
   if (!currentJobId.value) {
-    notify('No active job to cancel', 'warning')
+    notify(t('analytics.codebase.notify.noActiveJob'), 'warning')
     return
   }
 
@@ -4240,17 +4244,17 @@ const cancelIndexingJob = async () => {
         analyzing.value = false
         stopJobPolling()
         currentJobId.value = null
-        progressStatus.value = 'Indexing cancelled by user'
-        notify('Indexing job cancelled', 'success')
+        progressStatus.value = t('analytics.codebase.status.indexingCancelledByUser')
+        notify(t('analytics.codebase.notify.indexingJobCancelled'), 'success')
       } else {
-        notify(data.message || 'Could not cancel job', 'warning')
+        notify(data.message || t('analytics.codebase.notify.couldNotCancel'), 'warning')
       }
     } else {
-      notify('Failed to cancel job', 'error')
+      notify(t('analytics.codebase.notify.cancelFailed'), 'error')
     }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    notify(`Error cancelling job: ${errorMessage}`, 'error')
+    notify(t('analytics.codebase.notify.cancelError', { error: errorMessage }), 'error')
   }
 }
 
@@ -4275,7 +4279,7 @@ const loadProjectRoot = async () => {
     }
   } catch (error: unknown) {
     logger.error('Failed to load project root:', error)
-    progressStatus.value = 'Please enter project path to analyze'
+    progressStatus.value = t('analytics.codebase.status.enterProjectPath')
   }
 }
 
@@ -4333,7 +4337,7 @@ const loadCodebaseAnalyticsData = async () => {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Failed to load codebase analytics data:', error)
     // Provide user feedback for critical failures
-    progressStatus.value = `Failed to load analytics: ${errorMessage}`
+    progressStatus.value = t('analytics.codebase.status.loadFailed', { error: errorMessage })
   }
 }
 
@@ -4462,7 +4466,7 @@ const handleFileNavigate = (filePath: string) => {
   logger.debug('Navigate to file:', filePath)
   // Could scroll to file in problems list or open in editor
   // For now, just log it - can be extended later
-  showToast(`Selected: ${filePath}`, 'info', 2000)
+  showToast(t('analytics.codebase.notify.selected', { item: filePath }), 'info', 2000)
 }
 
 // Load function call graph data
@@ -4515,7 +4519,7 @@ const loadCallGraphData = async () => {
 // Handle function selection from call graph
 const handleFunctionSelect = (funcId: string) => {
   logger.debug('Selected function:', funcId)
-  showToast(`Selected: ${funcId}`, 'info', 2000)
+  showToast(t('analytics.codebase.notify.selected', { item: funcId }), 'info', 2000)
 }
 
 // Silent version of declarations loading (no alerts)
@@ -4781,13 +4785,13 @@ onUnmounted(() => {
 const indexCodebase = async () => {
   // Check if there's already a job running
   if (currentJobId.value) {
-    notify('Indexing is already in progress', 'warning')
+    notify(t('analytics.codebase.notify.indexingAlreadyRunning'), 'warning')
     return
   }
 
   analyzing.value = true
   progressPercent.value = 10
-  progressStatus.value = 'Starting codebase indexing...'
+  progressStatus.value = t('analytics.codebase.status.startingIndexing')
 
   // Save the path to localStorage for persistence across page refreshes
   localStorage.setItem(STORAGE_KEY_PATH, rootPath.value)
@@ -4821,7 +4825,7 @@ const indexCodebase = async () => {
       if (response.status !== 502 && response.status !== 503) break
       if (attempt < maxRetries) {
         const delay = (attempt + 1) * 3
-        progressStatus.value = `Backend temporarily unavailable, retrying in ${delay}s...`
+        progressStatus.value = t('analytics.codebase.status.backendRetrying', { delay })
         logger.warn(`Index request got ${response.status}, retrying (${attempt + 1}/${maxRetries})`)
         await new Promise(r => setTimeout(r, delay * 1000))
       }
@@ -4841,24 +4845,24 @@ const indexCodebase = async () => {
     // Check response status
     if (data.status === 'syncing') {
       // Source needs cloning first — sync started, indexing will auto-follow
-      progressStatus.value = 'Syncing repository (clone in progress)...'
-      notify('Source not yet cloned — sync started, indexing will begin automatically', 'info')
+      progressStatus.value = t('analytics.codebase.status.syncingRepo')
+      notify(t('analytics.codebase.notify.syncStarted'), 'info')
       // Poll /index/current until a job appears (sync auto-triggers indexing)
       startJobPolling()
       return
     } else if (data.status === 'already_running') {
       currentJobId.value = data.task_id
-      progressStatus.value = 'Indexing already in progress, monitoring...'
-      notify('Indexing job already running, now monitoring', 'info')
+      progressStatus.value = t('analytics.codebase.status.monitoringIndexing')
+      notify(t('analytics.codebase.notify.indexingMonitoring'), 'info')
     } else if (data.status === 'queued') {
-      progressStatus.value = `Queued (position ${data.position}) — will start automatically`
-      notify('Indexing queued behind current job', 'info')
+      progressStatus.value = t('analytics.codebase.status.queued', { position: data.position })
+      notify(t('analytics.codebase.notify.indexingQueued'), 'info')
       startJobPolling()
       return
     } else {
       currentJobId.value = data.task_id
-      progressStatus.value = 'Initializing indexing...'
-      notify('Codebase indexing started', 'success')
+      progressStatus.value = t('analytics.codebase.status.initializingIndexing')
+      notify(t('analytics.codebase.notify.indexingStarted'), 'success')
     }
 
     // Poll immediately to get initial phases/stats, then continue at interval
@@ -4868,8 +4872,8 @@ const indexCodebase = async () => {
   } catch (error: unknown) {
     logger.error('Indexing failed:', error)
     const errorMessage = error instanceof Error ? error.message : String(error)
-    progressStatus.value = `Indexing failed to start: ${errorMessage}`
-    notify(`Indexing failed: ${errorMessage}`, 'error')
+    progressStatus.value = t('analytics.codebase.status.indexingFailedToStart', { error: errorMessage })
+    notify(t('analytics.codebase.notify.indexingFailed', { error: errorMessage }), 'error')
     analyzing.value = false
   }
 }
@@ -4900,7 +4904,7 @@ const getCodebaseStats = async () => {
 // Get problems report
 const getProblemsReport = async () => {
   loadingProgress.problems = true
-  progressStatus.value = 'Analyzing code problems...'
+  progressStatus.value = t('analytics.codebase.status.analyzingProblems')
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
@@ -4928,7 +4932,7 @@ const getProblemsReport = async () => {
 const getDeclarationsData = async () => {
   const startTime = Date.now()
   loadingProgress.declarations = true
-  progressStatus.value = 'Processing declarations...'
+  progressStatus.value = t('analytics.codebase.status.processingDeclarations')
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
@@ -4947,22 +4951,22 @@ const getDeclarationsData = async () => {
     const data = await response.json()
     const responseTime = Date.now() - startTime
     declarationAnalysis.value = data.declarations || []
-    notify(`Found ${declarationAnalysis.value.length} declarations (${responseTime}ms)`, 'success')
+    notify(t('analytics.codebase.notify.declarationsFound', { count: declarationAnalysis.value.length, time: responseTime }), 'success')
   } catch (error: unknown) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Declarations failed:', error)
-    notify(`Declarations failed: ${errorMessage} (${responseTime}ms)`, 'error')
+    notify(t('analytics.codebase.notify.declarationsFailed', { error: errorMessage, time: responseTime }), 'error')
   } finally {
     loadingProgress.declarations = false
-    progressStatus.value = 'Ready'
+    progressStatus.value = t('analytics.codebase.status.ready')
   }
 }
 
 // Get duplicates data (debug button)
 const getDuplicatesData = async () => {
   loadingProgress.duplicates = true
-  progressStatus.value = 'Finding duplicate code...'
+  progressStatus.value = t('analytics.codebase.status.findingDuplicates')
   const startTime = Date.now()
 
   try {
@@ -4982,22 +4986,22 @@ const getDuplicatesData = async () => {
     const data = await response.json()
     const responseTime = Date.now() - startTime
     duplicateAnalysis.value = data.duplicates || []
-    notify(`Found ${duplicateAnalysis.value.length} duplicates (${responseTime}ms)`, 'success')
+    notify(t('analytics.codebase.notify.duplicatesFound', { count: duplicateAnalysis.value.length, time: responseTime }), 'success')
   } catch (error: unknown) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Duplicates failed:', error)
-    notify(`Duplicates failed: ${errorMessage} (${responseTime}ms)`, 'error')
+    notify(t('analytics.codebase.notify.duplicatesFailed', { error: errorMessage, time: responseTime }), 'error')
   } finally {
     loadingProgress.duplicates = false
-    progressStatus.value = 'Ready'
+    progressStatus.value = t('analytics.codebase.status.ready')
   }
 }
 
 // Get hardcodes data (debug button)
 const getHardcodesData = async () => {
   loadingProgress.hardcodes = true
-  progressStatus.value = 'Detecting hardcoded values...'
+  progressStatus.value = t('analytics.codebase.status.detectingHardcodes')
   const startTime = Date.now()
 
   try {
@@ -5022,15 +5026,15 @@ const getHardcodesData = async () => {
 
     const hardcodeCount = hardcodeAnalysis.value.length
     const hardcodeTypes = hardcodeCount > 0 ? [...new Set(hardcodeAnalysis.value.map(h => h.type))].join(', ') : 'none'
-    notify(`Found ${hardcodeCount} hardcodes (${hardcodeTypes}) - ${responseTime}ms`, 'success')
+    notify(t('analytics.codebase.notify.hardcodesFound', { count: hardcodeCount, types: hardcodeTypes, time: responseTime }), 'success')
   } catch (error: unknown) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Hardcodes failed:', error)
-    notify(`Hardcodes failed: ${errorMessage} (${responseTime}ms)`, 'error')
+    notify(t('analytics.codebase.notify.hardcodesFailed', { error: errorMessage, time: responseTime }), 'error')
   } finally {
     loadingProgress.hardcodes = false
-    progressStatus.value = 'Ready'
+    progressStatus.value = t('analytics.codebase.status.ready')
   }
 }
 
@@ -5038,7 +5042,7 @@ const getHardcodesData = async () => {
 const getApiEndpointCoverage = async () => {
   loadingApiEndpoints.value = true
   apiEndpointsError.value = ''
-  progressStatus.value = 'Scanning API endpoints...'
+  progressStatus.value = t('analytics.codebase.status.scanningApi')
   const startTime = Date.now()
 
   try {
@@ -5064,7 +5068,7 @@ const getApiEndpointCoverage = async () => {
       const coverage = data.analysis.coverage_percentage?.toFixed(1) || 0
       const orphaned = data.analysis.orphaned_endpoints || 0
       const missing = data.analysis.missing_endpoints || 0
-      notify(`API Coverage: ${coverage}% (${orphaned} orphaned, ${missing} missing) - ${responseTime}ms`, 'success')
+      notify(t('analytics.codebase.notify.apiCoverageResult', { coverage, orphaned, missing, time: responseTime }), 'success')
     } else {
       throw new Error('Invalid response format')
     }
@@ -5073,10 +5077,10 @@ const getApiEndpointCoverage = async () => {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('API Endpoint analysis failed:', error)
     apiEndpointsError.value = errorMessage
-    notify(`API Endpoint analysis failed: ${errorMessage} (${responseTime}ms)`, 'error')
+    notify(t('analytics.codebase.notify.apiAnalysisFailed', { error: errorMessage, time: responseTime }), 'error')
   } finally {
     loadingApiEndpoints.value = false
-    progressStatus.value = 'Ready'
+    progressStatus.value = t('analytics.codebase.status.ready')
   }
 }
 
@@ -5092,7 +5096,7 @@ const getCoverageClass = (percentage: number): string => {
 const getCrossLanguageAnalysis = async () => {
   loadingCrossLanguage.value = true
   crossLanguageError.value = ''
-  progressStatus.value = 'Running cross-language pattern analysis...'
+  progressStatus.value = t('analytics.codebase.status.runningCrossLanguage')
   const startTime = Date.now()
 
   try {
@@ -5136,7 +5140,7 @@ const getCrossLanguageAnalysis = async () => {
       const totalIssues = data.summary.issues?.total || 0
       const critical = data.summary.issues?.critical || 0
       const high = data.summary.issues?.high || 0
-      notify(`Cross-language analysis: ${totalIssues} patterns (${critical} critical, ${high} high) - ${responseTime}ms`, 'success')
+      notify(t('analytics.codebase.notify.crossLanguageResult', { total: totalIssues, critical, high, time: responseTime }), 'success')
 
       // Load detailed data for the groups
       await loadCrossLanguageDetails()
@@ -5152,11 +5156,11 @@ const getCrossLanguageAnalysis = async () => {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Cross-language analysis failed:', error)
     crossLanguageError.value = errorMessage
-    notify(`Cross-language analysis failed: ${errorMessage} (${responseTime}ms)`, 'error')
+    notify(t('analytics.codebase.notify.crossLanguageFailed', { error: errorMessage, time: responseTime }), 'error')
   } finally {
     loadingCrossLanguage.value = false
     if (!analyzing.value) {
-      progressStatus.value = 'Ready'
+      progressStatus.value = t('analytics.codebase.status.ready')
     }
   }
 }
@@ -5213,7 +5217,7 @@ const loadCrossLanguageDetails = async () => {
 const runCrossLanguageAnalysis = async () => {
   loadingCrossLanguage.value = true
   crossLanguageError.value = ''
-  progressStatus.value = 'Running full cross-language pattern scan...'
+  progressStatus.value = t('analytics.codebase.status.runningFullCrossLanguage')
   const startTime = Date.now()
 
   try {
@@ -5239,7 +5243,7 @@ const runCrossLanguageAnalysis = async () => {
     const responseTime = Date.now() - startTime
 
     if (data.status === 'success') {
-      notify(`Cross-language scan complete - ${responseTime}ms`, 'success')
+      notify(t('analytics.codebase.notify.crossLanguageScanComplete', { time: responseTime }), 'success')
       // Reload the summary with fresh data
       await getCrossLanguageAnalysis()
     } else {
@@ -5250,11 +5254,11 @@ const runCrossLanguageAnalysis = async () => {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Cross-language analysis scan failed:', error)
     crossLanguageError.value = errorMessage
-    notify(`Cross-language scan failed: ${errorMessage} (${responseTime}ms)`, 'error')
+    notify(t('analytics.codebase.notify.crossLanguageScanFailed', { error: errorMessage, time: responseTime }), 'error')
   } finally {
     loadingCrossLanguage.value = false
     if (!analyzing.value) {
-      progressStatus.value = 'Ready'
+      progressStatus.value = t('analytics.codebase.status.ready')
     }
   }
 }
@@ -5273,12 +5277,12 @@ const getCrossLanguageSeverityClass = (severity: string): string => {
 // Issue #208: Pattern Analysis event handlers
 const onPatternAnalysisComplete = (report: any) => {
   logger.info('Pattern analysis complete:', report?.analysis_summary)
-  notify(`Pattern analysis found ${report?.analysis_summary?.total_patterns_found || 0} patterns`, 'success')
+  notify(t('analytics.codebase.notify.patternAnalysisComplete', { count: report?.analysis_summary?.total_patterns_found || 0 }), 'success')
 }
 
 const onPatternAnalysisError = (message: string) => {
   logger.error('Pattern analysis error:', message)
-  notify(`Pattern analysis error: ${message}`, 'error')
+  notify(t('analytics.codebase.notify.patternAnalysisError', { error: message }), 'error')
 }
 
 // Issue #538: Truncate long config values for display
@@ -5338,7 +5342,7 @@ const testDataState = () => {
   }
 
   logger.info('Debug State:', summary)
-  notify(`analyzing=${summary.analyzing}, path=${summary.rootPath ? 'set' : 'empty'}, jobId=${summary.currentJobId || 'none'}, problems=${summary.problems}`, 'info')
+  notify(t('analytics.codebase.notify.debugState', { analyzing: summary.analyzing, path: summary.rootPath ? 'set' : 'empty', jobId: summary.currentJobId || 'none', problems: summary.problems }), 'info')
 }
 
 // Reset stuck state (debug helper)
@@ -5348,8 +5352,8 @@ const resetState = () => {
   currentJobStatus.value = null
   stopJobPolling()
   progressPercent.value = 0
-  progressStatus.value = 'Ready (state reset)'
-  notify('State reset - ready to analyze', 'success')
+  progressStatus.value = t('analytics.codebase.status.stateReset')
+  notify(t('analytics.codebase.notify.stateReset'), 'success')
 }
 
 // Issue #1007: NPU health check via backend proxy (avoids CORS/mixed content)
@@ -5366,20 +5370,20 @@ const testNpuConnection = async () => {
     const available = data.available || data.status === 'ok' || data.workers_connected > 0
     const workerCount = data.workers_connected ?? data.total_workers ?? 0
     notify(
-      `NPU: ${available ? 'Available' : 'Not Available'} (${workerCount} workers, ${responseTime}ms)`,
+      t('analytics.codebase.notify.npuStatus', { status: available ? t('analytics.codebase.available') : t('analytics.codebase.notAvailable'), workers: workerCount, time: responseTime }),
       available ? 'success' : 'warning'
     )
   } catch (error: unknown) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('NPU connection failed:', error)
-    notify(`NPU failed: ${errorMessage} (${responseTime}ms)`, 'error')
+    notify(t('analytics.codebase.notify.npuFailed', { error: errorMessage, time: responseTime }), 'error')
   }
 }
 
 // NEW: Test all endpoints functionality
 const testAllEndpoints = async () => {
-  progressStatus.value = 'Testing all API endpoints...'
+  progressStatus.value = t('analytics.codebase.status.testingApis')
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
@@ -5437,16 +5441,16 @@ const testAllEndpoints = async () => {
 
     const passed = results.filter(r => r.includes('✅')).length
     const failed = results.filter(r => r.includes('❌')).length
-    const summary = `API Tests: ${passed}/${results.length} passed`
+    const summary = t('analytics.codebase.notify.apiTestResults', { passed, total: results.length })
     notify(summary, failed === 0 ? 'success' : 'warning')
     // Log full results to console for detailed review
     logger.debug('API Test Results:', results.join('\n'))
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('API tests failed:', error)
-    notify(`API tests failed: ${errorMessage}`, 'error')
+    notify(t('analytics.codebase.notify.apiTestsFailed', { error: errorMessage }), 'error')
   } finally {
-    progressStatus.value = 'Ready'
+    progressStatus.value = t('analytics.codebase.status.ready')
   }
 }
 
@@ -5461,14 +5465,14 @@ const runCodeSmellAnalysis = async () => {
   const analysisPath = rootPath.value
   if (analysisPath.includes('/data/code-sources/')) {
     notify(
-      'Code intelligence analysis requires a local path. Code sources are stored on the SLM server — use a custom path on the analysis backend.',
+      t('analytics.codebase.notify.codeIntelLocalPathRequired'),
       'warning'
     )
     return
   }
 
   analyzingCodeSmells.value = true
-  progressStatus.value = 'Scanning for code smells and anti-patterns...'
+  progressStatus.value = t('analytics.codebase.status.scanningCodeSmells')
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
@@ -5494,14 +5498,14 @@ const runCodeSmellAnalysis = async () => {
     codeSmellsReport.value = data.report
     const totalIssues = data.report?.anti_patterns?.length || 0
     const filesAnalyzed = data.report?.total_files || 0
-    notify(`Found ${totalIssues} code smells in ${filesAnalyzed} files (${responseTime}ms)`, totalIssues > 0 ? 'warning' : 'success')
-    progressStatus.value = `Code smell scan complete: ${totalIssues} issues found`
+    notify(t('analytics.codebase.notify.codeSmellsFound', { count: totalIssues, files: filesAnalyzed, time: responseTime }), totalIssues > 0 ? 'warning' : 'success')
+    progressStatus.value = t('analytics.codebase.status.codeSmellsComplete', { count: totalIssues })
   } catch (error: unknown) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Code smell analysis failed:', error)
-    notify(`Code smell analysis failed: ${errorMessage} (${responseTime}ms)`, 'error')
-    progressStatus.value = 'Code smell analysis failed'
+    notify(t('analytics.codebase.notify.codeSmellsFailed', { error: errorMessage, time: responseTime }), 'error')
+    progressStatus.value = t('analytics.codebase.status.codeSmellsFailed')
   } finally {
     analyzingCodeSmells.value = false
   }
@@ -5516,14 +5520,14 @@ const getCodeHealthScore = async () => {
   const analysisPath = rootPath.value
   if (analysisPath.includes('/data/code-sources/')) {
     notify(
-      'Health score requires a local path. Code sources are stored on the SLM server — use a custom path on the analysis backend.',
+      t('analytics.codebase.notify.healthScoreLocalPathRequired'),
       'warning'
     )
     return
   }
 
   analyzingCodeSmells.value = true
-  progressStatus.value = 'Calculating codebase health score...'
+  progressStatus.value = t('analytics.codebase.status.calculatingHealth')
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
@@ -5544,14 +5548,14 @@ const getCodeHealthScore = async () => {
     const score = data.health_score || 0
     const grade = data.grade || 'N/A'
     const issues = data.total_issues || 0
-    notify(`Health Score: ${score}/100 (Grade: ${grade}) - ${issues} issues (${responseTime}ms)`, score >= 70 ? 'success' : 'warning')
-    progressStatus.value = `Health Score: ${score}/100 (${grade})`
+    notify(t('analytics.codebase.notify.healthScoreResult', { score, grade, issues, time: responseTime }), score >= 70 ? 'success' : 'warning')
+    progressStatus.value = t('analytics.codebase.status.healthScoreResult', { score, grade })
   } catch (error: unknown) {
     const responseTime = Date.now() - startTime
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Health score failed:', error)
-    notify(`Health score failed: ${errorMessage} (${responseTime}ms)`, 'error')
-    progressStatus.value = 'Health score calculation failed'
+    notify(t('analytics.codebase.notify.healthScoreFailed', { error: errorMessage, time: responseTime }), 'error')
+    progressStatus.value = t('analytics.codebase.status.healthScoreFailed')
   } finally {
     analyzingCodeSmells.value = false
   }
@@ -5562,7 +5566,7 @@ const getCodeHealthScore = async () => {
 // Set quick=false for comprehensive report with bug prediction, duplicates, API analysis
 const exportReport = async (quick: boolean = true) => {
   exportingReport.value = true
-  progressStatus.value = quick ? 'Generating quick report...' : 'Generating comprehensive report (this may take a minute)...'
+  progressStatus.value = quick ? t('analytics.codebase.status.generatingQuickReport') : t('analytics.codebase.status.generatingFullReport')
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
@@ -5596,13 +5600,13 @@ const exportReport = async (quick: boolean = true) => {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
 
-    notify('Report exported successfully', 'success')
-    progressStatus.value = 'Report exported'
+    notify(t('analytics.codebase.notify.reportExported'), 'success')
+    progressStatus.value = t('analytics.codebase.status.reportExported')
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Report export failed:', error)
-    notify(`Report export failed: ${errorMessage}`, 'error')
-    progressStatus.value = 'Report export failed'
+    notify(t('analytics.codebase.notify.reportExportFailed', { error: errorMessage }), 'error')
+    progressStatus.value = t('analytics.codebase.status.reportExportFailed')
   } finally {
     exportingReport.value = false
   }
@@ -5674,13 +5678,13 @@ const exportSection = async (section: SectionType, format: 'md' | 'json' = 'md')
         } else {
           // Fallback to cached display data if export fails
           logger.warn('Environment export: export endpoint failed, using display data')
-          notify('Using cached display data (may be truncated) - run analysis first for full export', 'warning')
+          notify(t('analytics.codebase.notify.usingCachedData'), 'warning')
           data = environmentAnalysis.value
         }
       } catch (err) {
         // Fallback to cached display data
         logger.warn('Environment export: fetch failed, using display data', err)
-        notify('Export endpoint unavailable - using truncated display data', 'warning')
+        notify(t('analytics.codebase.notify.exportEndpointUnavailable'), 'warning')
         data = environmentAnalysis.value
       }
       filename = `environment-analysis-${timestamp}`
@@ -5694,12 +5698,12 @@ const exportSection = async (section: SectionType, format: 'md' | 'json' = 'md')
       filename = `codebase-statistics-${timestamp}`
       break
     default:
-      notify('Unknown section type', 'error')
+      notify(t('analytics.codebase.notify.unknownSectionType'), 'error')
       return
   }
 
   if (!data) {
-    notify(`No data available for ${section}. Load the section first.`, 'warning')
+    notify(t('analytics.codebase.notify.noDataAvailable', { section }), 'warning')
     return
   }
 
@@ -5724,7 +5728,7 @@ const exportSection = async (section: SectionType, format: 'md' | 'json' = 'md')
   document.body.removeChild(link)
   window.URL.revokeObjectURL(url)
 
-  notify(`${section} exported as ${format.toUpperCase()}`, 'success')
+  notify(t('analytics.codebase.notify.sectionExported', { section, format: format.toUpperCase() }), 'success')
 }
 
 // Generate markdown for a section
@@ -6026,7 +6030,7 @@ const generateSectionMarkdown = (section: SectionType, data: unknown): string =>
 // Clear analysis cache (both Redis and ChromaDB)
 const clearCache = async () => {
   clearingCache.value = true
-  progressStatus.value = 'Clearing cache...'
+  progressStatus.value = t('analytics.codebase.status.clearingCache')
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
@@ -6052,13 +6056,13 @@ const clearCache = async () => {
     hardcodeAnalysis.value = []
     chartData.value = null
 
-    notify(`Cache cleared: ${result.deleted_keys || 0} entries removed`, 'success')
-    progressStatus.value = 'Cache cleared - Re-index to refresh data'
+    notify(t('analytics.codebase.notify.cacheCleared', { count: result.deleted_keys || 0 }), 'success')
+    progressStatus.value = t('analytics.codebase.status.cacheCleared')
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Cache clear failed:', error)
-    notify(`Cache clear failed: ${errorMessage}`, 'error')
-    progressStatus.value = 'Cache clear failed'
+    notify(t('analytics.codebase.notify.cacheClearFailed', { error: errorMessage }), 'error')
+    progressStatus.value = t('analytics.codebase.status.cacheClearFailed')
   } finally {
     clearingCache.value = false
   }
@@ -6071,7 +6075,7 @@ const runFullAnalysis = async () => {
   const results: { step: string; status: 'success' | 'failed'; error?: string }[] = []
 
   // Step 1: Codebase indexing
-  progressStatus.value = 'Step 1/3: Codebase indexing...'
+  progressStatus.value = t('analytics.codebase.status.step1Indexing')
   try {
     await indexCodebase()
     results.push({ step: 'Codebase indexing', status: 'success' })
@@ -6082,7 +6086,7 @@ const runFullAnalysis = async () => {
   }
 
   // Step 2: Pattern analysis (now properly awaits completion)
-  progressStatus.value = 'Step 2/3: Pattern analysis...'
+  progressStatus.value = t('analytics.codebase.status.step2Patterns')
   try {
     if (patternAnalysisRef.value?.runAnalysis) {
       logger.info('Triggering pattern analysis as part of full analysis')
@@ -6104,7 +6108,7 @@ const runFullAnalysis = async () => {
   }
 
   // Step 3: Cross-language analysis (independent of previous steps)
-  progressStatus.value = 'Step 3/3: Cross-language analysis...'
+  progressStatus.value = t('analytics.codebase.status.step3CrossLanguage')
   try {
     logger.info('Triggering cross-language analysis as part of full analysis')
     await runCrossLanguageAnalysis()
@@ -6118,7 +6122,7 @@ const runFullAnalysis = async () => {
   // Report results
   const succeeded = results.filter(r => r.status === 'success').length
   const failed = results.filter(r => r.status === 'failed').length
-  progressStatus.value = `Analysis complete: ${succeeded}/${results.length} passed`
+  progressStatus.value = t('analytics.codebase.status.analysisComplete', { succeeded, total: results.length })
   if (failed > 0) {
     const failedNames = results.filter(r => r.status === 'failed').map(r => r.step).join(', ')
     logger.warn(`Full analysis partial failure: ${failedNames}`)
@@ -6517,9 +6521,9 @@ const toggleDuplicateGroup = (similarity: string): void => {
 
 const formatSimilarityGroup = (similarity: string): string => {
   const labels: Record<string, string> = {
-    high: 'High Similarity',
-    medium: 'Medium Similarity',
-    low: 'Low Similarity'
+    high: t('analytics.codebase.duplicates.similarityHigh'),
+    medium: t('analytics.codebase.duplicates.similarityMedium'),
+    low: t('analytics.codebase.duplicates.similarityLow')
   }
   return labels[similarity] || similarity
 }

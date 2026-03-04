@@ -11,8 +11,8 @@
     :height="height"
     :series="series"
     :options="chartOptions"
-    :title="title"
-    :subtitle="subtitle"
+    :title="title ?? $t('charts.patternEvolution.title')"
+    :subtitle="subtitle ?? $t('charts.patternEvolution.subtitle')"
     :loading="loading"
     :error="error"
   />
@@ -20,9 +20,12 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
 import type { PatternEvolutionData } from '@/composables/useEvolution'
+
+const { t } = useI18n()
 
 interface Props {
   data: PatternEvolutionData
@@ -35,8 +38,8 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   height: 400,
-  title: 'Pattern Evolution',
-  subtitle: 'Anti-pattern occurrences over time',
+  title: undefined,
+  subtitle: undefined,
   loading: false,
   error: '',
 })
@@ -94,7 +97,7 @@ const chartOptions = computed<ApexOptions>(() => ({
   },
   yaxis: {
     title: {
-      text: 'Occurrences',
+      text: t('charts.patternEvolution.yAxisTitle'),
     },
     min: 0,
     labels: {
