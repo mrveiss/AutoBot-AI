@@ -869,13 +869,13 @@ async def remove_role_from_node(
             detail=f"Role assignment not found: {role_name}",
         )
 
-    # Look up the systemd service name from Role table
-    service_name = await _get_role_service_name(db, role_name)
+    # Look up the systemd service name and target path from Role table
+    service_name, target_path = await _get_role_service_and_path(db, role_name)
 
     # If there's a service, run Ansible to stop and clean up
     if service_name:
         ansible_result = await _run_role_removal(
-            node_id, role_name, service_name, backup
+            node_id, role_name, service_name, backup, target_path
         )
         if not ansible_result["success"]:
             raise HTTPException(
@@ -899,12 +899,17 @@ async def remove_role_from_node(
     return response
 
 
-async def _get_role_service_name(db: AsyncSession, role_name: str) -> str | None:
-    """Look up the systemd service name for a role."""
+async def _get_role_service_and_path(
+    db: AsyncSession, role_name: str
+) -> tuple[str | None, str | None]:
+    """Look up the systemd service name and target path for a role."""
     result = await db.execute(
-        select(Role.systemd_service).where(Role.name == role_name)
+        select(Role.systemd_service, Role.target_path).where(Role.name == role_name)
     )
-    return result.scalar_one_or_none()
+    row = result.one_or_none()
+    if row is None:
+        return None, None
+    return row[0], row[1]
 
 
 async def _run_role_removal(
@@ -912,19 +917,25 @@ async def _run_role_removal(
     role_name: str,
     service_name: str,
     backup: bool,
+    target_path: str | None = None,
 ) -> dict:
     """Execute the remove-role Ansible playbook."""
     from services.playbook_executor import get_playbook_executor
 
     executor = get_playbook_executor()
+    extra_vars = {
+        "role_name": role_name,
+        "systemd_service": service_name,
+        "backup_before_removal": str(backup).lower(),
+    }
+    if target_path:
+        # Extract directory name from full path
+        # e.g. /opt/autobot/autobot-npu-worker -> autobot-npu-worker
+        extra_vars["role_target_dir"] = os.path.basename(target_path.rstrip("/"))
     result = await executor.execute_playbook(
         playbook_name="playbooks/remove-role.yml",
         limit=[node_id],
-        extra_vars={
-            "role_name": role_name,
-            "systemd_service": service_name,
-            "backup_before_removal": str(backup).lower(),
-        },
+        extra_vars=extra_vars,
     )
     # Extract backup path from output if backup was requested
     if backup and result["success"]:
