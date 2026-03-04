@@ -32,8 +32,9 @@ from api.knowledge_models import (
     SearchCategoriesByPathRequest,
     UpdateCategoryRequest,
 )
+from auth_middleware import check_admin_permission
 from constants.threshold_constants import QueryDefaults
-from fastapi import APIRouter, HTTPException, Path, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from knowledge_factory import get_or_create_knowledge_base
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -44,7 +45,10 @@ logger = logging.getLogger(__name__)
 _CATEGORY_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 # Create router for category management endpoints
-router = APIRouter(tags=["knowledge-categories"])
+router = APIRouter(
+    tags=["knowledge-categories"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 def _raise_kb_error(error_message: str, default_code: int = 500) -> None:

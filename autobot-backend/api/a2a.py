@@ -34,12 +34,15 @@ from a2a.task_executor import execute_a2a_task
 from a2a.task_manager import get_task_manager
 from a2a.tracing import extract_caller_id, new_trace_id
 from a2a.types import Task
-from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(check_admin_permission)],
+)
 
 # ---------------------------------------------------------------------------
 # Rate limiting (simple in-process token bucket per IP)

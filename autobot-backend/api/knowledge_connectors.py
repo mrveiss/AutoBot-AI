@@ -27,7 +27,8 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from knowledge.connectors.models import ConnectorConfig
 from knowledge.connectors.registry import ConnectorRegistry
 from knowledge.connectors.scheduler import get_connector_scheduler
@@ -37,7 +38,10 @@ from autobot_shared.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["knowledge-connectors"])
+router = APIRouter(
+    tags=["knowledge-connectors"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 # ---------------------------------------------------------------------------
 # Pydantic request / response models

@@ -13,13 +13,14 @@ from datetime import datetime
 from typing import Optional
 
 import aiofiles
-from config import ConfigManager
+from auth_middleware import check_admin_permission
 from constants.network_constants import NetworkConstants
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from config import ConfigManager
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,9 @@ except ImportError:
 # Create singleton config instance
 config = ConfigManager()
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 class ResearchRequest(BaseModel):

@@ -16,7 +16,8 @@ for issues, cards, and tasks.
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException, Query
 from integrations.base import IntegrationConfig, IntegrationHealth
 from integrations.project_management_integration import (
     AsanaIntegration,
@@ -27,7 +28,10 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["integrations-project-management"])
+router = APIRouter(
+    tags=["integrations-project-management"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 # =============================================================================

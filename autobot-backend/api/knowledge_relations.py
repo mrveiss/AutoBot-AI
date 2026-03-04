@@ -16,7 +16,8 @@ This eliminates the need for a separate AutoBotMemoryGraph system.
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from knowledge_factory import get_or_create_knowledge_base
 from pydantic import BaseModel, Field
 
@@ -27,7 +28,10 @@ logger = logging.getLogger(__name__)
 # Issue #380: Module-level frozenset for valid relation directions
 _VALID_DIRECTIONS = frozenset({"outgoing", "incoming", "both"})
 
-router = APIRouter(tags=["knowledge-relations"])
+router = APIRouter(
+    tags=["knowledge-relations"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 # ============================================================================

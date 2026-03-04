@@ -17,15 +17,17 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import aiofiles
-from auth_middleware import auth_middleware
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from auth_middleware import auth_middleware, check_admin_permission
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from security_layer import SecurityLayer
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(check_admin_permission)],
+)
 logger = logging.getLogger(__name__)
 
 # Issue #380: Module-level frozenset for dangerous filename characters

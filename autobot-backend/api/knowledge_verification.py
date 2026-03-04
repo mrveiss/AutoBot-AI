@@ -26,15 +26,19 @@ from api.knowledge_models import (
     VerificationConfig,
     VerificationRequest,
 )
+from auth_middleware import check_admin_permission
 from constants.threshold_constants import QueryDefaults
-from fastapi import APIRouter, HTTPException, Path, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from knowledge_factory import get_or_create_knowledge_base
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["knowledge-verification"])
+router = APIRouter(
+    tags=["knowledge-verification"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 # Verification config stored in module state (lightweight, non-persistent).
 # A future iteration may persist this to Redis (Issue #1252).

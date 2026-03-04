@@ -23,8 +23,9 @@ import re
 from pathlib import Path as PathLib
 
 import aiofiles
+from auth_middleware import check_admin_permission
 from constants.threshold_constants import TimingConstants
-from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from knowledge_factory import get_or_create_knowledge_base
 from utils.template_loader import knowledge_data_exists, load_knowledge_data
 
@@ -36,7 +37,10 @@ logger = logging.getLogger(__name__)
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 # Create router for population endpoints
-router = APIRouter(tags=["knowledge-population"])
+router = APIRouter(
+    tags=["knowledge-population"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 # ===== HELPER FUNCTIONS =====

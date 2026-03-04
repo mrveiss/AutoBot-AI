@@ -14,8 +14,9 @@ segments as path parameters.
 import logging
 from typing import Dict, Optional
 
+from auth_middleware import check_admin_permission
 from autobot_types import TaskComplexity
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from utils.advanced_cache_manager import smart_cache
 from workflow_templates import TemplateCategory, workflow_template_manager
@@ -24,7 +25,9 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 class TemplateExecutionRequest(BaseModel):

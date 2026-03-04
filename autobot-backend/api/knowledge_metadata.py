@@ -24,12 +24,16 @@ from api.knowledge_models import (
     UpdateMetadataTemplateRequest,
     ValidateMetadataRequest,
 )
-from fastapi import APIRouter, HTTPException
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException
 from knowledge import get_knowledge_base
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["knowledge-metadata"])
+router = APIRouter(
+    tags=["knowledge-metadata"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 # ============================================================================
