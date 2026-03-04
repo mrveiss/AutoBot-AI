@@ -41,6 +41,7 @@ class NodeStatus(str, enum.Enum):
     OFFLINE = "offline"
     ERROR = "error"
     MAINTENANCE = "maintenance"
+    DECOMMISSIONED = "decommissioned"
 
 
 class DeploymentStatus(str, enum.Enum):

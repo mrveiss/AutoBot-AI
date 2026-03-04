@@ -36,6 +36,7 @@ const statusClass = computed(() => {
     case 'enrolling': return 'bg-blue-500 animate-pulse'
     case 'pending': return 'bg-gray-400'
     case 'registered': return 'bg-gray-400'
+    case 'decommissioned': return 'bg-gray-300'
     default: return 'bg-gray-400'
   }
 })
