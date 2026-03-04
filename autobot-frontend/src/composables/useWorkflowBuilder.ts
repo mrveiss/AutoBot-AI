@@ -80,6 +80,26 @@ export interface WorkflowStep {
   completed_at?: string;
 }
 
+/** Workflow phase from state machine (#1380) */
+export type WorkflowPhase =
+  | 'planning'
+  | 'executing'
+  | 'validating'
+  | 'complete'
+  | 'failed';
+
+/** State machine info for a workflow (#1380) */
+export interface WorkflowStateInfo {
+  workflow_id: string;
+  goal: string;
+  current_step: WorkflowPhase;
+  active_service: string;
+  steps_completed: string[];
+  done: boolean;
+  errors: string[];
+  routing_table: Record<string, string>;
+}
+
 /** Active workflow definition */
 export interface ActiveWorkflow {
   workflow_id: string;
@@ -92,6 +112,8 @@ export interface ActiveWorkflow {
   is_paused: boolean;
   is_cancelled: boolean;
   automation_mode: AutomationMode;
+  phase?: WorkflowPhase;
+  active_service?: string;
   created_at?: string;
   started_at?: string;
   completed_at?: string;

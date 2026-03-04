@@ -104,6 +104,8 @@ class RedisKeyConstants:
     WORKFLOW_CLASSIFICATION_KEYWORDS: str = (
         f"{NAMESPACE}:workflow:classification:keywords"
     )
+    # Workflow state machine (#1380)
+    WORKFLOW_STATE_PREFIX: str = f"{NAMESPACE}:workflow:state"
 
     # Sandbox security
     SANDBOX_SECURITY_EVENTS: str = f"{NAMESPACE}:sandbox:security:events"

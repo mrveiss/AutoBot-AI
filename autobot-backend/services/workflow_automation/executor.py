@@ -25,6 +25,7 @@ from .models import (
     WorkflowStep,
     WorkflowStepStatus,
 )
+from .state_machine import WorkflowPhase, WorkflowStateMachine
 from .step_evaluator import WorkflowStepEvaluator
 
 if TYPE_CHECKING:
@@ -46,6 +47,8 @@ class WorkflowExecutor:
         self._plan_approval_events: Dict[str, asyncio.Event] = {}
         # Issue #1367: Called when a workflow finishes (completed/cancelled)
         self.on_workflow_finished: Optional[Callable[[str], None]] = None
+        # Issue #1380: State machine for explicit routing
+        self.state_machine = WorkflowStateMachine()
 
     async def start_execution(
         self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
@@ -53,6 +56,15 @@ class WorkflowExecutor:
         """Start executing automated workflow"""
         workflow.started_at = datetime.now()
         workflow.prometheus_start_time = time.time()
+
+        # Issue #1380: Create state machine entry
+        sm_state = await self.state_machine.create(
+            workflow_id=workflow.workflow_id,
+            goal=workflow.description,
+        )
+        await self.state_machine.transition(sm_state, WorkflowPhase.EXECUTING.value)
+        workflow.phase = WorkflowPhase.EXECUTING.value
+        workflow.active_service = sm_state.active_service
 
         # Update active workflows count in Prometheus
         workflow_type = "automated_workflow"
@@ -227,6 +239,55 @@ class WorkflowExecutor:
             workflow_type=workflow_type, step_type=step_type, status=status
         )
 
+    # =========================================================================
+    # Issue #1380: State machine helpers
+    # =========================================================================
+
+    async def _sm_transition(
+        self,
+        workflow: ActiveWorkflow,
+        to_phase: str,
+        error: Optional[str] = None,
+    ) -> None:
+        """Transition workflow state machine and sync phase."""
+        try:
+            sm_state = await self.state_machine.load(workflow.workflow_id)
+            if sm_state:
+                sm_state = await self.state_machine.transition(
+                    sm_state, to_phase, error=error
+                )
+                workflow.phase = sm_state.current_step
+                workflow.active_service = sm_state.active_service
+        except Exception as exc:
+            logger.warning(
+                "State machine transition failed for %s: %s",
+                workflow.workflow_id,
+                exc,
+            )
+
+    async def _sm_record_step(
+        self,
+        workflow: ActiveWorkflow,
+        step_id: str,
+    ) -> None:
+        """Record a completed step in the state machine."""
+        try:
+            sm_state = await self.state_machine.load(workflow.workflow_id)
+            if sm_state:
+                await self.state_machine.transition(
+                    sm_state,
+                    WorkflowPhase.EXECUTING.value,
+                    step_id=step_id,
+                )
+        except Exception as exc:
+            logger.warning(
+                "State machine step record failed for %s: %s",
+                workflow.workflow_id,
+                exc,
+            )
+
+    # =========================================================================
+
     async def _handle_step_execution_failure(
         self,
         workflow: ActiveWorkflow,
@@ -248,6 +309,13 @@ class WorkflowExecutor:
         current_step.execution_result = {"error": str(error)}
 
         self._record_step_metric("failed")
+
+        # Issue #1380: Record failure in state machine
+        await self._sm_transition(
+            workflow,
+            WorkflowPhase.FAILED.value,
+            error=str(error),
+        )
 
         workflow.is_paused = True
         await self.messenger.send_message(
@@ -287,6 +355,9 @@ class WorkflowExecutor:
             current_step.completed_at = datetime.now()
 
             self._record_step_metric("completed")
+
+            # Issue #1380: Record step completion in state machine
+            await self._sm_record_step(workflow, step_id)
 
             workflow.current_step_index += 1
             await asyncio.sleep(TimingConstants.SERVICE_STARTUP_DELAY)
@@ -395,6 +466,9 @@ class WorkflowExecutor:
         """Complete workflow execution"""
         workflow.completed_at = datetime.now()
 
+        # Issue #1380: Transition state machine to complete
+        await self._sm_transition(workflow, WorkflowPhase.COMPLETE.value)
+
         self._record_workflow_completion_metrics(workflow, workflows)
 
         await self.messenger.send_message(
@@ -438,6 +512,11 @@ class WorkflowExecutor:
         """Cancel workflow execution"""
         workflow.is_cancelled = True
         workflow.completed_at = datetime.now()
+
+        # Issue #1380: Transition state machine to failed
+        await self._sm_transition(
+            workflow, WorkflowPhase.FAILED.value, error="cancelled"
+        )
 
         # Issue #390: Clear any pending approval when workflow is cancelled
         self.clear_pending_approval(workflow.workflow_id)

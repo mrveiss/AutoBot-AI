@@ -47,6 +47,12 @@
             <div class="header-meta">
               <span><i class="fas fa-calendar"></i> {{ $t('workflow.runner.started') }} {{ formatTime(currentWorkflow.started_at) }}</span>
               <span><i class="fas fa-cog"></i> {{ currentWorkflow.automation_mode }}</span>
+              <span v-if="currentWorkflow.phase" class="phase-badge" :class="currentWorkflow.phase">
+                <i class="fas fa-project-diagram"></i> {{ formatPhase(currentWorkflow.phase) }}
+              </span>
+              <span v-if="currentWorkflow.active_service" class="service-badge">
+                <i class="fas fa-server"></i> {{ currentWorkflow.active_service }}
+              </span>
             </div>
           </div>
           <div class="header-actions">
@@ -169,6 +175,10 @@ function formatStatus(status: string): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
+function formatPhase(phase: string): string {
+  return phase.charAt(0).toUpperCase() + phase.slice(1);
+}
+
 function formatTime(timestamp?: string): string {
   if (!timestamp) return '-';
   return new Date(timestamp).toLocaleTimeString();
@@ -219,8 +229,15 @@ function formatResult(result: Record<string, unknown>): string {
 .workflow-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-default); }
 .header-info h2 { margin: 0 0 4px; font-size: 18px; color: var(--text-primary); }
 .header-info p { margin: 0 0 10px; font-size: 13px; color: var(--text-secondary); }
-.header-meta { display: flex; gap: 16px; font-size: 12px; color: var(--text-tertiary); }
+.header-meta { display: flex; gap: 16px; font-size: 12px; color: var(--text-tertiary); flex-wrap: wrap; }
 .header-meta span { display: flex; align-items: center; gap: 6px; }
+.phase-badge { padding: 2px 8px; border-radius: 10px; font-weight: 500; background: var(--bg-tertiary); }
+.phase-badge.planning { background: var(--color-info-bg); color: var(--color-info); }
+.phase-badge.executing { background: var(--color-primary-bg); color: var(--color-primary); }
+.phase-badge.validating { background: var(--color-warning-bg); color: var(--color-warning); }
+.phase-badge.complete { background: var(--color-success-bg); color: var(--color-success); }
+.phase-badge.failed { background: var(--color-error-bg); color: var(--color-error); }
+.service-badge { padding: 2px 8px; border-radius: 10px; background: var(--bg-tertiary); color: var(--text-secondary); font-family: monospace; }
 .header-actions { display: flex; gap: 10px; }
 
 .progress-overview { padding: 20px; background: var(--bg-secondary); }

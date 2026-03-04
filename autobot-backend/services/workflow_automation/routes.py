@@ -464,6 +464,35 @@ async def get_pending_approval(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =========================================================================
+# Issue #1380: State Machine Inspection
+# =========================================================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_workflow_state",
+    error_code_prefix="WORKFLOW_AUTOMATION",
+)
+@router.get("/workflow_state/{workflow_id}")
+async def get_workflow_state(
+    workflow_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the state-machine state for a workflow (#1380)."""
+    try:
+        sm = get_workflow_manager().executor.state_machine
+        state = await sm.load(workflow_id)
+        if state:
+            return {"success": True, "state": state.model_dump()}
+        raise HTTPException(status_code=404, detail="Workflow state not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get workflow state: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # WebSocket endpoint for real-time workflow communication
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
