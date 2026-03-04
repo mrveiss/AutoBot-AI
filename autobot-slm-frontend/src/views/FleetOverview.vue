@@ -26,6 +26,7 @@ import NodeLifecyclePanel from '@/components/fleet/NodeLifecyclePanel.vue'
 import NodeServicesPanel from '@/components/fleet/NodeServicesPanel.vue'
 import NPUWorkersTab from '@/components/fleet/NPUWorkersTab.vue'
 import RoleManagementModal from '@/components/RoleManagementModal.vue'
+import DecommissionModal from '@/components/fleet/DecommissionModal.vue'
 import InfrastructureView from '@/views/InfrastructureView.vue'
 
 const logger = createLogger('FleetOverview')
@@ -69,6 +70,7 @@ const showRoleModal = ref(false)
 const showLifecyclePanel = ref(false)
 const showServicesPanel = ref(false)
 const showConnectionTestResult = ref(false)
+const showDecommissionModal = ref(false)
 
 // Selected node for actions
 const selectedNode = ref<SLMNode | null>(null)
@@ -201,6 +203,9 @@ function handleNodeAction(action: string, nodeId: string): void {
     case 'services':
       openServicesPanel(node)
       break
+    case 'decommission':
+      showDecommissionModal.value = true
+      break
     case 'restart':
       handleRestart(nodeId)
       break
@@ -282,6 +287,16 @@ function openRoleModal(node: SLMNode): void {
 function closeRoleModal(): void {
   showRoleModal.value = false
   selectedNodeForRoles.value = null
+}
+
+function closeDecommissionModal(): void {
+  showDecommissionModal.value = false
+}
+
+async function handleDecommissioned(): Promise<void> {
+  showDecommissionModal.value = false
+  selectedNode.value = null
+  await refreshFleet()
 }
 
 function openLifecyclePanel(node: SLMNode): void {
@@ -551,6 +566,14 @@ async function handleRestart(nodeId: string): Promise<void> {
       :hostname="selectedNodeForRoles.hostname"
       @close="closeRoleModal"
       @saved="refreshFleet"
+    />
+
+    <!-- Decommission Modal (Issue #1369) -->
+    <DecommissionModal
+      v-if="showDecommissionModal && selectedNode"
+      :node="selectedNode"
+      @close="closeDecommissionModal"
+      @decommissioned="handleDecommissioned"
     />
 
     <!-- Connection Test Result Modal (Issue #754: role=dialog) -->
