@@ -6,25 +6,25 @@
           <i class="fas fa-terminal"></i>
         </div>
         <div class="command-title">
-          <h3>Command Permission Required</h3>
-          <p class="command-subtitle">{{ purpose || 'The AI assistant needs to run a command' }}</p>
+          <h3>{{ t('ui.commandPermission.title') }}</h3>
+          <p class="command-subtitle">{{ purpose || t('ui.commandPermission.defaultPurpose') }}</p>
         </div>
       </div>
 
       <div class="command-body">
         <div class="command-details">
-          <h4>Command Details:</h4>
+          <h4>{{ t('ui.commandPermission.commandDetails') }}:</h4>
           <div class="operation-info">
             <div class="info-item">
-              <span class="label">Command:</span>
-              <code class="command">{{ command || 'system operation' }}</code>
+              <span class="label">{{ t('ui.commandPermission.commandLabel') }}:</span>
+              <code class="command">{{ command || t('ui.commandPermission.systemOperation') }}</code>
             </div>
             <div class="info-item" v-if="purpose">
-              <span class="label">Purpose:</span>
+              <span class="label">{{ t('ui.commandPermission.purposeLabel') }}:</span>
               <span class="purpose">{{ purpose }}</span>
             </div>
             <div class="info-item" v-if="riskLevel">
-              <span class="label">Risk Level:</span>
+              <span class="label">{{ t('ui.commandPermission.riskLevelLabel') }}:</span>
               <StatusBadge :variant="getRiskVariant(riskLevel)" size="small">{{ riskLevel }}</StatusBadge>
             </div>
           </div>
@@ -41,9 +41,9 @@
                 aria-describedby="remember-help"
               />
               <span class="checkmark"></span>
-              Remember my choice for similar commands this session
+              {{ t('ui.commandPermission.rememberChoice') }}
             </label>
-            <div id="remember-help" class="sr-only">This will apply your decision to similar commands during this session</div>
+            <div id="remember-help" class="sr-only">{{ t('ui.commandPermission.rememberHelp') }}</div>
           </div>
 
           <div class="warning-message" v-if="error">
@@ -55,14 +55,14 @@
         <!-- Comment Input Section -->
         <div v-if="showCommentInput" class="comment-section">
           <div class="comment-header">
-            <h4>Provide Command Feedback</h4>
-            <p>Suggest modifications, alternative commands, or execution order changes:</p>
+            <h4>{{ t('ui.commandPermission.feedbackTitle') }}</h4>
+            <p>{{ t('ui.commandPermission.feedbackDescription') }}</p>
           </div>
 
           <div class="comment-input-group">
             <textarea
               v-model="commentText"
-              placeholder="e.g., 'Use ip addr instead of ifconfig' or 'Run this after checking disk space first'"
+              :placeholder="t('ui.commandPermission.feedbackPlaceholder')"
               class="comment-textarea"
               rows="3"
               :disabled="isProcessing"
@@ -75,7 +75,7 @@
               @click="cancelComment"
               :disabled="isProcessing">
               <i class="fas fa-times"></i>
-              Cancel
+              {{ t('ui.commandPermission.cancel') }}
             </BaseButton>
             <BaseButton
               variant="primary"
@@ -83,7 +83,7 @@
               :disabled="!commentText.trim()"
               :loading="isProcessing">
               <i class="fas fa-paper-plane"></i>
-              {{ isProcessing ? 'Sending...' : 'Send Feedback' }}
+              {{ isProcessing ? t('ui.commandPermission.sending') : t('ui.commandPermission.sendFeedback') }}
             </BaseButton>
           </div>
         </div>
@@ -97,29 +97,29 @@
             :disabled="isProcessing"
             aria-label="Deny">
             <i class="fas fa-times"></i>
-            Deny
+            {{ t('ui.commandPermission.deny') }}
           </BaseButton>
           <BaseButton
             variant="warning"
             @click="handleComment"
             :disabled="isProcessing"
-            aria-label="Comment">
+            :aria-label="t('ui.commandPermission.comment')">
             <i class="fas fa-comment"></i>
-            Comment
+            {{ t('ui.commandPermission.comment') }}
           </BaseButton>
           <BaseButton
             variant="success"
             @click="handleAllow"
             :loading="isProcessing"
-            aria-label="Allow">
+            :aria-label="t('ui.commandPermission.allow')">
             <i class="fas fa-check"></i>
-            {{ isProcessing ? 'Executing...' : 'Allow' }}
+            {{ isProcessing ? t('ui.commandPermission.executing') : t('ui.commandPermission.allow') }}
           </BaseButton>
         </div>
 
         <div class="security-note">
           <i class="fas fa-info-circle"></i>
-          <span>Commands are executed in a secure environment and logged for security.</span>
+          <span>{{ t('ui.commandPermission.securityNote') }}</span>
         </div>
       </div>
     </div>
@@ -128,6 +128,7 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { apiService } from '@/services/api';
 import appConfig from '@/config/AppConfig.js';
 import StatusBadge from '@/components/ui/StatusBadge.vue';
@@ -180,6 +181,7 @@ export default {
   },
   emits: ['approved', 'denied', 'commented', 'close'],
   setup(props, { emit }) {
+    const { t } = useI18n();
     const { isOpen: showDialog } = useModal('command-permission-dialog');
     const { execute: executeAllow, loading: isProcessingAllow, error: errorAllow } = useAsyncOperation();
     const { execute: executeComment, loading: isProcessingComment, error: errorComment } = useAsyncOperation();
@@ -195,7 +197,7 @@ export default {
     const allowCommandFn = async () => {
       // Verify terminal_session_id is available
       if (!props.terminalSessionId) {
-        throw new Error('Missing terminal session ID - cannot approve command');
+        throw new Error(t('ui.commandPermission.missingSessionId'));
       }
 
       // REFACTORED: Use AppConfig for dynamic API URL resolution
@@ -253,7 +255,7 @@ export default {
         closeDialog();
       } else {
         logger.error('Status did NOT match - showing error');
-        throw new Error(data.error || 'Command execution failed');
+        throw new Error(data.error || t('ui.commandPermission.executionFailed'));
       }
     };
 
@@ -319,7 +321,7 @@ export default {
 
     const submitCommentFn = async () => {
       if (!commentText.value.trim()) {
-        throw new Error('Please enter a comment');
+        throw new Error(t('ui.commandPermission.enterComment'));
       }
 
       // Send comment to backend
@@ -399,7 +401,8 @@ export default {
       submitComment,
       cancelComment,
       updateShow,
-      getRiskVariant
+      getRiskVariant,
+      t
     };
   },
   watch: {

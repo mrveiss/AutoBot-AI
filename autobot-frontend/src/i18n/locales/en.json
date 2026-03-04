@@ -3852,6 +3852,9 @@
       "takingLonger": "This is taking longer than expected...",
       "cancelAndContinue": "Cancel and Continue",
       "updating": "Updating..."
+    },
+    "skeletonLoader": {
+      "loadingContent": "Loading content"
     }
   },
   "base": {
@@ -5331,7 +5334,15 @@
       "errorNetworkConnectivity": "Network connectivity issues. Please check your connection and try again.",
       "errorConfigTimeout": "Configuration service timeout. The backend may be under heavy load.",
       "errorConfigFailed": "Failed to get desktop configuration. Please check backend logs.",
-      "errorVncConnection": "VNC connection failed: {error}"
+      "errorVncConnection": "VNC connection failed: {error}",
+      "exitFullscreen": "Exit Fullscreen",
+      "desktopActions": "Desktop Actions",
+      "download": "Download",
+      "cancel": "Cancel",
+      "errorServiceTimeout": "Desktop service timed out. Please try again.",
+      "errorServiceDisabled": "Desktop service is currently disabled.",
+      "errorInitFailed": "Failed to initialize desktop connection.",
+      "errorClipboardRead": "Failed to read clipboard contents."
     },
     "popoutBrowser": {
       "title": "Research Browser",
@@ -5363,7 +5374,37 @@
       "takeControl": "Take Control",
       "dismiss": "Dismiss",
       "consoleInput": "Enter JavaScript command...",
-      "run": "Run"
+      "run": "Run",
+      "sessionLabel": "Session: {id}...",
+      "openVnc": "Open VNC Browser (Visual Control)",
+      "playwrightAutomation": "Playwright Automation",
+      "testFrontend": "Test Frontend",
+      "testMessage": "Test Message",
+      "close": "Close",
+      "back": "Back",
+      "forward": "Forward",
+      "searching": "Searching...",
+      "running": "Running...",
+      "runTests": "Run Tests",
+      "searchResultCount": "Search: {count} results",
+      "testResultCount": "Tests: {passed}/{total} passed",
+      "connectingPlaywright": "Connecting to Playwright service...",
+      "playwrightConnectionFailed": "Playwright service connection failed",
+      "retryConnection": "Retry Connection",
+      "headlessInstructions": "Enter a URL in the address bar above to navigate. Results will be logged below.",
+      "currentStatus": "Current Status:",
+      "statusLabel": "Status:",
+      "urlLabel": "URL:",
+      "titleLabel": "Title:",
+      "recentResults": "Recent Automation Results",
+      "foundResults": "Found {count} results",
+      "getStarted": "Use automation controls above to get started",
+      "manualBrowserDesc": "Direct control via VNC interface",
+      "launching": "Launching...",
+      "launchDesc": "This will open a live browser that you can control directly",
+      "initializingSession": "Initializing browser session...",
+      "sessionId": "Session ID: {id}",
+      "notAvailable": "Not available"
     }
   },
   "serviceMessages": {

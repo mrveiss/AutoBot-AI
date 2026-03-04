@@ -16,7 +16,7 @@
       </div>
       <div class="no-host-selected" v-else>
         <i class="fas fa-server"></i>
-        <span>Select Host</span>
+        <span>{{ t('ui.hostSelector.selectHost') }}</span>
       </div>
       <i class="fas fa-chevron-down expand-icon"></i>
     </div>
@@ -24,7 +24,7 @@
     <!-- Expanded state - shows host list -->
     <div v-else class="host-selector-expanded">
       <div class="selector-header">
-        <h4>Infrastructure Hosts</h4>
+        <h4>{{ t('ui.hostSelector.infrastructureHosts') }}</h4>
         <button class="btn-close" @click="toggleExpanded">
           <i class="fas fa-times"></i>
         </button>
@@ -51,7 +51,7 @@
           :class="{ active: !capabilityFilter }"
           @click="setCapabilityFilter(null)"
         >
-          All
+          {{ t('ui.hostSelector.all') }}
         </button>
       </div>
 
@@ -90,10 +90,10 @@
         <div v-if="filteredHosts.length === 0" class="empty-state">
           <i class="fas fa-server"></i>
           <p v-if="hosts.length === 0">
-            No hosts configured. Add hosts in Secrets Management.
+            {{ t('ui.hostSelector.noHostsConfigured') }}
           </p>
           <p v-else>
-            No hosts match the current filter.
+            {{ t('ui.hostSelector.noHostsMatchFilter') }}
           </p>
         </div>
       </div>
@@ -101,16 +101,16 @@
       <!-- Loading state -->
       <div v-else class="loading-state">
         <i class="fas fa-spinner fa-spin"></i>
-        <span>Loading hosts...</span>
+        <span>{{ t('ui.hostSelector.loadingHosts') }}</span>
       </div>
 
       <!-- Actions -->
       <div class="selector-actions">
         <button class="btn-secondary" @click="refreshHosts">
-          <i class="fas fa-sync-alt"></i> Refresh
+          <i class="fas fa-sync-alt"></i> {{ t('ui.hostSelector.refresh') }}
         </button>
         <button class="btn-primary" @click="openSecretsManager">
-          <i class="fas fa-plus"></i> Add Host
+          <i class="fas fa-plus"></i> {{ t('ui.hostSelector.addHost') }}
         </button>
       </div>
     </div>
@@ -119,10 +119,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
 const logger = createLogger('HostSelector');
+const { t } = useI18n();
 
 /**
  * Infrastructure host type for SSH/VNC connections.

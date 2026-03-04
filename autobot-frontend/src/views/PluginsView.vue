@@ -4,10 +4,10 @@
       <!-- Header -->
       <div class="plugins-header">
         <div class="header-content">
-          <h1 class="page-title">Plugin Manager</h1>
-          <p class="page-subtitle">Browse, install, and manage AutoBot plugins</p>
+          <h1 class="page-title">{{ $t('views.plugins.title') }}</h1>
+          <p class="page-subtitle">{{ $t('views.plugins.subtitle') }}</p>
         </div>
-        <button class="btn-refresh" :disabled="loading" @click="refresh" title="Refresh">
+        <button class="btn-refresh" :disabled="loading" @click="refresh" :title="$t('views.plugins.refresh')">
           <svg
             class="refresh-icon"
             :class="{ spinning: loading }"
@@ -52,7 +52,7 @@
               d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
             />
           </svg>
-          Installed
+          {{ $t('views.plugins.installed') }}
           <span class="tab-badge">{{ plugins.length }}</span>
         </button>
         <button
@@ -68,7 +68,7 @@
               d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
             />
           </svg>
-          Discover
+          {{ $t('views.plugins.discover') }}
           <span class="tab-badge">{{ discovered.length }}</span>
         </button>
       </div>
@@ -84,7 +84,7 @@
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
             />
           </svg>
-          <span>Loading plugins...</span>
+          <span>{{ $t('views.plugins.loadingPlugins') }}</span>
         </div>
 
         <div v-else-if="plugins.length === 0" class="empty-state">
@@ -96,10 +96,8 @@
               d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
             />
           </svg>
-          <p class="empty-title">No plugins loaded</p>
-          <p class="empty-subtitle">
-            Switch to the <strong>Discover</strong> tab to browse and install available plugins.
-          </p>
+          <p class="empty-title">{{ $t('views.plugins.noPluginsLoaded') }}</p>
+          <p class="empty-subtitle">{{ $t('views.plugins.noPluginsHint') }}</p>
         </div>
 
         <div v-else class="plugin-grid">
@@ -143,24 +141,24 @@
                 class="action-btn action-enable"
                 :disabled="actionLoading[plugin.name]"
                 @click="handleEnable(plugin.name)"
-                title="Enable"
+                :title="$t('views.plugins.enable')"
               >
-                Enable
+                {{ $t('views.plugins.enable') }}
               </button>
               <button
                 v-else-if="plugin.status === 'enabled'"
                 class="action-btn action-disable"
                 :disabled="actionLoading[plugin.name]"
                 @click="handleDisable(plugin.name)"
-                title="Disable"
+                :title="$t('views.plugins.disable')"
               >
-                Disable
+                {{ $t('views.plugins.disable') }}
               </button>
               <button
                 class="action-btn action-reload"
                 :disabled="actionLoading[plugin.name]"
                 @click="handleReload(plugin.name)"
-                title="Reload"
+                :title="$t('views.plugins.reload')"
               >
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="btn-icon">
                   <path
@@ -175,7 +173,7 @@
                 class="action-btn action-unload"
                 :disabled="actionLoading[plugin.name]"
                 @click="handleUnload(plugin.name)"
-                title="Unload"
+                :title="$t('views.plugins.unload')"
               >
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="btn-icon">
                   <path
@@ -202,7 +200,7 @@
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
             />
           </svg>
-          <span>Discovering plugins...</span>
+          <span>{{ $t('views.plugins.discoveringPlugins') }}</span>
         </div>
 
         <div v-else-if="uninstalledPlugins.length === 0" class="empty-state">
@@ -214,10 +212,8 @@
               d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
             />
           </svg>
-          <p class="empty-title">No new plugins found</p>
-          <p class="empty-subtitle">
-            All discovered plugins are already installed, or no plugin directories are configured.
-          </p>
+          <p class="empty-title">{{ $t('views.plugins.noNewPlugins') }}</p>
+          <p class="empty-subtitle">{{ $t('views.plugins.noNewPluginsHint') }}</p>
         </div>
 
         <div v-else class="plugin-grid">
@@ -237,7 +233,7 @@
                   />
                 </svg>
               </div>
-              <span class="status-badge status-unloaded">available</span>
+              <span class="status-badge status-unloaded">{{ $t('views.plugins.available') }}</span>
             </div>
 
             <div class="card-body">
@@ -245,7 +241,7 @@
               <p class="plugin-desc">{{ manifest.description }}</p>
               <p class="plugin-meta">v{{ manifest.version }} · {{ manifest.author }}</p>
               <div v-if="manifest.dependencies.length > 0" class="deps-list">
-                <span class="deps-label">Requires:</span>
+                <span class="deps-label">{{ $t('views.plugins.requires') }}:</span>
                 <span v-for="dep in manifest.dependencies" :key="dep" class="hook-tag">
                   {{ dep }}
                 </span>
@@ -266,7 +262,7 @@
                     d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
                   />
                 </svg>
-                Install
+                {{ $t('views.plugins.install') }}
               </button>
             </div>
           </div>
@@ -276,10 +272,10 @@
 
     <!-- Plugin Detail Modal -->
     <div v-if="selectedPlugin" class="modal-overlay" @click.self="closeDetail">
-      <div class="modal-panel" role="dialog" aria-modal="true" aria-label="Plugin details">
+      <div class="modal-panel" role="dialog" aria-modal="true" :aria-label="$t('views.plugins.pluginDetails')">
         <div class="modal-header">
           <h2 class="modal-title">{{ selectedPlugin.display_name }}</h2>
-          <button class="modal-close" @click="closeDetail" aria-label="Close">
+          <button class="modal-close" @click="closeDetail" :aria-label="$t('views.plugins.close')">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -289,16 +285,16 @@
         <div class="modal-body">
           <!-- Info Grid -->
           <dl class="info-grid">
-            <dt>Name</dt><dd>{{ selectedPlugin.name }}</dd>
-            <dt>Version</dt><dd>{{ selectedPlugin.version }}</dd>
-            <dt>Author</dt><dd>{{ selectedPlugin.author }}</dd>
-            <dt>Status</dt>
+            <dt>{{ $t('views.plugins.name') }}</dt><dd>{{ selectedPlugin.name }}</dd>
+            <dt>{{ $t('views.plugins.version') }}</dt><dd>{{ selectedPlugin.version }}</dd>
+            <dt>{{ $t('views.plugins.author') }}</dt><dd>{{ selectedPlugin.author }}</dd>
+            <dt>{{ $t('views.plugins.status') }}</dt>
             <dd>
               <span :class="['status-badge', `status-${selectedPlugin.status}`]">
                 {{ selectedPlugin.status }}
               </span>
             </dd>
-            <dt v-if="selectedPlugin.hooks.length > 0">Hooks</dt>
+            <dt v-if="selectedPlugin.hooks.length > 0">{{ $t('views.plugins.hooks') }}</dt>
             <dd v-if="selectedPlugin.hooks.length > 0">
               <span v-for="hook in selectedPlugin.hooks" :key="hook" class="hook-tag">
                 {{ hook }}
@@ -311,17 +307,17 @@
           <!-- Config Editor -->
           <div class="config-section">
             <div class="config-header">
-              <h3 class="config-title">Configuration</h3>
+              <h3 class="config-title">{{ $t('views.plugins.configuration') }}</h3>
               <button
                 v-if="!editingConfig"
                 class="config-edit-btn"
                 @click="startEditConfig"
               >
-                Edit
+                {{ $t('views.plugins.edit') }}
               </button>
             </div>
 
-            <div v-if="configLoading" class="config-loading">Loading config...</div>
+            <div v-if="configLoading" class="config-loading">{{ $t('views.plugins.loadingConfig') }}</div>
 
             <div v-else-if="editingConfig">
               <textarea
@@ -329,17 +325,17 @@
                 class="config-editor"
                 rows="8"
                 spellcheck="false"
-                aria-label="Plugin configuration JSON"
+                :aria-label="$t('views.plugins.configJsonLabel')"
               />
               <div v-if="configError" class="config-error">{{ configError }}</div>
               <div class="config-actions">
-                <button class="action-btn action-enable" @click="saveConfig">Save</button>
-                <button class="action-btn action-disable" @click="cancelEditConfig">Cancel</button>
+                <button class="action-btn action-enable" @click="saveConfig">{{ $t('views.plugins.save') }}</button>
+                <button class="action-btn action-disable" @click="cancelEditConfig">{{ $t('views.plugins.cancel') }}</button>
               </div>
             </div>
 
             <pre v-else-if="pluginConfig !== null" class="config-display">{{ JSON.stringify(pluginConfig, null, 2) }}</pre>
-            <p v-else class="config-empty">No configuration stored for this plugin.</p>
+            <p v-else class="config-empty">{{ $t('views.plugins.noConfig') }}</p>
           </div>
         </div>
       </div>
@@ -349,8 +345,12 @@
 
 <script setup lang="ts">
 // Issue #929 - Plugin Manager UI
+// Issue #1359: i18n string extraction
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { usePlugins, type PluginInfo, type PluginManifest } from '@/composables/usePlugins'
+
+const { t } = useI18n()
 
 const {
   plugins,
@@ -476,7 +476,7 @@ async function saveConfig() {
   try {
     parsed = JSON.parse(configText.value)
   } catch {
-    configError.value = 'Invalid JSON — please fix before saving.'
+    configError.value = t('views.plugins.invalidJson')
     return
   }
   const ok = await updatePluginConfig(selectedPlugin.value.name, parsed)
@@ -484,7 +484,7 @@ async function saveConfig() {
     pluginConfig.value = parsed
     editingConfig.value = false
   } else {
-    configError.value = error.value ?? 'Failed to save configuration.'
+    configError.value = error.value ?? t('views.plugins.saveFailed')
   }
 }
 

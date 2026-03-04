@@ -12,16 +12,16 @@ Issue #753: Additional Customization (Font Size, Accent Colors, Layout Density)
     <div class="panel-header">
       <h3 class="panel-title">
         <i class="fas fa-sliders-h" aria-hidden="true"></i>
-        Preferences
+        {{ t('ui.preferences.title') }}
       </h3>
       <button
         @click="handleReset"
         class="reset-btn"
         type="button"
-        aria-label="Reset all preferences to defaults"
+        :aria-label="t('ui.preferences.resetAll')"
       >
         <i class="fas fa-undo" aria-hidden="true"></i>
-        Reset
+        {{ t('ui.preferences.reset') }}
       </button>
     </div>
 
@@ -30,9 +30,9 @@ Issue #753: Additional Customization (Font Size, Accent Colors, Layout Density)
       <fieldset class="preference-section">
         <legend class="preference-label">
           <i class="fas fa-font" aria-hidden="true"></i>
-          Font Size
+          {{ t('ui.preferences.fontSize') }}
         </legend>
-        <div class="option-group" role="radiogroup" aria-label="Font size options">
+        <div class="option-group" role="radiogroup" :aria-label="t('ui.preferences.fontSizeOptions')">
           <button
             v-for="size in fontSizeOptions"
             :key="size.value"
@@ -40,7 +40,7 @@ Issue #753: Additional Customization (Font Size, Accent Colors, Layout Density)
             @keydown.enter="handleSetFontSize(size.value)"
             @keydown.space.prevent="handleSetFontSize(size.value)"
             :class="['option-btn', { active: fontSize === size.value }]"
-            :aria-label="`Set font size to ${size.label}`"
+            :aria-label="t('ui.preferences.setFontSize', { size: size.label })"
             :aria-pressed="fontSize === size.value"
             role="button"
             type="button"
@@ -54,9 +54,9 @@ Issue #753: Additional Customization (Font Size, Accent Colors, Layout Density)
       <fieldset class="preference-section">
         <legend class="preference-label">
           <i class="fas fa-palette" aria-hidden="true"></i>
-          Accent Color
+          {{ t('ui.preferences.accentColor') }}
         </legend>
-        <div class="color-grid" role="radiogroup" aria-label="Accent color options">
+        <div class="color-grid" role="radiogroup" :aria-label="t('ui.preferences.accentColorOptions')">
           <button
             v-for="color in accentColorOptions"
             :key="color.value"
@@ -65,7 +65,7 @@ Issue #753: Additional Customization (Font Size, Accent Colors, Layout Density)
             @keydown.space.prevent="handleSetAccentColor(color.value)"
             :class="['color-btn', { active: accentColor === color.value }]"
             :data-color="color.value"
-            :aria-label="`Set accent color to ${color.label}`"
+            :aria-label="t('ui.preferences.setAccentColor', { color: color.label })"
             :aria-pressed="accentColor === color.value"
             role="button"
             type="button"
@@ -80,9 +80,9 @@ Issue #753: Additional Customization (Font Size, Accent Colors, Layout Density)
       <fieldset class="preference-section">
         <legend class="preference-label">
           <i class="fas fa-th" aria-hidden="true"></i>
-          Layout Density
+          {{ t('ui.preferences.layoutDensity') }}
         </legend>
-        <div class="option-group" role="radiogroup" aria-label="Layout density options">
+        <div class="option-group" role="radiogroup" :aria-label="t('ui.preferences.layoutDensityOptions')">
           <button
             v-for="density in layoutDensityOptions"
             :key="density.value"
@@ -90,7 +90,7 @@ Issue #753: Additional Customization (Font Size, Accent Colors, Layout Density)
             @keydown.enter="handleSetLayoutDensity(density.value)"
             @keydown.space.prevent="handleSetLayoutDensity(density.value)"
             :class="['option-btn', { active: layoutDensity === density.value }]"
-            :aria-label="`Set layout density to ${density.label}`"
+            :aria-label="t('ui.preferences.setLayoutDensity', { density: density.label })"
             :aria-pressed="layoutDensity === density.value"
             role="button"
             type="button"
@@ -109,11 +109,13 @@ Issue #753: Additional Customization (Font Size, Accent Colors, Layout Density)
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { usePreferences, type FontSize, type AccentColor, type LayoutDensity } from '@/composables/usePreferences'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('PreferencesPanel')
+const { t } = useI18n()
 
 // Initialize preferences
 const {
@@ -130,27 +132,27 @@ const {
 const announcement = ref('')
 
 // Font size options
-const fontSizeOptions = [
-  { value: 'small' as FontSize, label: 'Small' },
-  { value: 'medium' as FontSize, label: 'Medium' },
-  { value: 'large' as FontSize, label: 'Large' }
-]
+const fontSizeOptions = computed(() => [
+  { value: 'small' as FontSize, label: t('ui.preferences.small') },
+  { value: 'medium' as FontSize, label: t('ui.preferences.medium') },
+  { value: 'large' as FontSize, label: t('ui.preferences.large') }
+])
 
 // Accent color options (CSS variables for preview colors)
-const accentColorOptions = [
-  { value: 'teal' as AccentColor, label: 'Teal' },
-  { value: 'emerald' as AccentColor, label: 'Emerald' },
-  { value: 'blue' as AccentColor, label: 'Blue' },
-  { value: 'purple' as AccentColor, label: 'Purple' },
-  { value: 'orange' as AccentColor, label: 'Orange' }
-]
+const accentColorOptions = computed(() => [
+  { value: 'teal' as AccentColor, label: t('ui.preferences.teal') },
+  { value: 'emerald' as AccentColor, label: t('ui.preferences.emerald') },
+  { value: 'blue' as AccentColor, label: t('ui.preferences.blue') },
+  { value: 'purple' as AccentColor, label: t('ui.preferences.purple') },
+  { value: 'orange' as AccentColor, label: t('ui.preferences.orange') }
+])
 
 // Layout density options
-const layoutDensityOptions = [
-  { value: 'compact' as LayoutDensity, label: 'Compact' },
-  { value: 'comfortable' as LayoutDensity, label: 'Comfortable' },
-  { value: 'spacious' as LayoutDensity, label: 'Spacious' }
-]
+const layoutDensityOptions = computed(() => [
+  { value: 'compact' as LayoutDensity, label: t('ui.preferences.compact') },
+  { value: 'comfortable' as LayoutDensity, label: t('ui.preferences.comfortable') },
+  { value: 'spacious' as LayoutDensity, label: t('ui.preferences.spacious') }
+])
 
 // Helper function to announce changes to screen readers
 function announceChange(message: string): void {
@@ -163,25 +165,25 @@ function announceChange(message: string): void {
 // Event handlers with screen reader announcements
 function handleSetFontSize(size: FontSize) {
   setFontSize(size)
-  announceChange(`Font size changed to ${size}`)
+  announceChange(t('ui.preferences.fontSizeChanged', { size }))
   logger.debug(`Font size changed to: ${size}`)
 }
 
 function handleSetAccentColor(color: AccentColor) {
   setAccentColor(color)
-  announceChange(`Accent color changed to ${color}`)
+  announceChange(t('ui.preferences.accentColorChanged', { color }))
   logger.debug(`Accent color changed to: ${color}`)
 }
 
 function handleSetLayoutDensity(density: LayoutDensity) {
   setLayoutDensity(density)
-  announceChange(`Layout density changed to ${density}`)
+  announceChange(t('ui.preferences.layoutDensityChanged', { density }))
   logger.debug(`Layout density changed to: ${density}`)
 }
 
 function handleReset() {
   resetPreferences()
-  announceChange('All preferences reset to defaults')
+  announceChange(t('ui.preferences.preferencesReset'))
   logger.debug('Preferences reset to defaults')
 }
 </script>

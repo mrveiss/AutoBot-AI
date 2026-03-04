@@ -5,8 +5,8 @@
       <div class="flex items-center space-x-3">
         <i class="fas fa-window-restore text-green-600 text-xl"></i>
         <div>
-          <h3 class="text-lg font-semibold text-autobot-text-primary">Browser Sessions</h3>
-          <p class="text-sm text-autobot-text-muted">Manage persistent browser sessions</p>
+          <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('browser.sessionManager.title') }}</h3>
+          <p class="text-sm text-autobot-text-muted">{{ $t('browser.sessionManager.subtitle') }}</p>
         </div>
       </div>
 
@@ -17,7 +17,7 @@
           @click="showCreateModal = true"
         >
           <i class="fas fa-plus mr-1"></i>
-          New Session
+          {{ $t('browser.sessionManager.newSession') }}
         </BaseButton>
       </div>
     </div>
@@ -30,7 +30,7 @@
         </div>
         <div>
           <div class="stat-value">{{ activeSessions.length }}</div>
-          <div class="stat-label">Active</div>
+          <div class="stat-label">{{ $t('browser.sessionManager.statActive') }}</div>
         </div>
       </div>
 
@@ -40,7 +40,7 @@
         </div>
         <div>
           <div class="stat-value">{{ idleSessions.length }}</div>
-          <div class="stat-label">Idle</div>
+          <div class="stat-label">{{ $t('browser.sessionManager.statIdle') }}</div>
         </div>
       </div>
 
@@ -50,7 +50,7 @@
         </div>
         <div>
           <div class="stat-value">{{ persistentSessions.length }}</div>
-          <div class="stat-label">Persistent</div>
+          <div class="stat-label">{{ $t('browser.sessionManager.statPersistent') }}</div>
         </div>
       </div>
 
@@ -60,7 +60,7 @@
         </div>
         <div>
           <div class="stat-value">{{ sessions.length }}</div>
-          <div class="stat-label">Total</div>
+          <div class="stat-label">{{ $t('browser.sessionManager.statTotal') }}</div>
         </div>
       </div>
     </div>
@@ -70,13 +70,13 @@
       <div v-if="sessions.length === 0" class="empty-state">
         <EmptyState
           icon="fas fa-window-restore"
-          title="No Sessions"
-          message="Create a browser session to get started"
+          :title="$t('browser.sessionManager.noSessionsTitle')"
+          :message="$t('browser.sessionManager.noSessionsMessage')"
         >
           <template #actions>
             <BaseButton variant="primary" @click="showCreateModal = true">
               <i class="fas fa-plus mr-2"></i>
-              Create Session
+              {{ $t('browser.sessionManager.createSession') }}
             </BaseButton>
           </template>
         </EmptyState>
@@ -115,11 +115,11 @@
             <div class="info-grid">
               <div class="info-item">
                 <i class="fas fa-calendar text-autobot-text-muted"></i>
-                <span class="text-sm text-autobot-text-secondary">Created {{ formatDate(session.created_at) }}</span>
+                <span class="text-sm text-autobot-text-secondary">{{ $t('browser.sessionManager.created') }} {{ formatDate(session.created_at) }}</span>
               </div>
               <div class="info-item">
                 <i class="fas fa-clock text-autobot-text-muted"></i>
-                <span class="text-sm text-autobot-text-secondary">Active {{ formatTimeAgo(session.last_activity) }}</span>
+                <span class="text-sm text-autobot-text-secondary">{{ $t('browser.sessionManager.active') }} {{ formatTimeAgo(session.last_activity) }}</span>
               </div>
             </div>
           </div>
@@ -133,7 +133,7 @@
               @click="pauseSession(session.id)"
             >
               <i class="fas fa-pause mr-1"></i>
-              Pause
+              {{ $t('browser.sessionManager.pause') }}
             </BaseButton>
 
             <BaseButton
@@ -143,7 +143,7 @@
               @click="resumeSession(session.id)"
             >
               <i class="fas fa-play mr-1"></i>
-              Resume
+              {{ $t('browser.sessionManager.resume') }}
             </BaseButton>
 
             <BaseButton
@@ -152,13 +152,13 @@
               @click="openSession(session.id)"
             >
               <i class="fas fa-external-link-alt mr-1"></i>
-              Open
+              {{ $t('browser.sessionManager.open') }}
             </BaseButton>
 
             <button
               @click="duplicateSession(session.id)"
               class="action-btn"
-              title="Duplicate Session"
+              :title="$t('browser.sessionManager.duplicateSession')"
             >
               <i class="fas fa-copy"></i>
             </button>
@@ -167,7 +167,7 @@
               v-if="session.status !== 'idle'"
               @click="closeSession(session.id)"
               class="action-btn"
-              title="Close Session"
+              :title="$t('browser.sessionManager.closeSession')"
             >
               <i class="fas fa-times"></i>
             </button>
@@ -175,7 +175,7 @@
             <button
               @click="deleteSession(session.id)"
               class="action-btn text-red-600"
-              title="Delete Session"
+              :title="$t('browser.sessionManager.deleteSession')"
             >
               <i class="fas fa-trash"></i>
             </button>
@@ -188,7 +188,7 @@
     <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
       <div class="modal-content">
         <div class="modal-header">
-          <h3 class="text-lg font-semibold">Create Browser Session</h3>
+          <h3 class="text-lg font-semibold">{{ $t('browser.sessionManager.createBrowserSession') }}</h3>
           <button @click="showCreateModal = false" class="text-autobot-text-muted hover:text-autobot-text-secondary">
             <i class="fas fa-times"></i>
           </button>
@@ -196,7 +196,7 @@
 
         <div class="modal-body">
           <div class="form-group">
-            <label class="form-label">Starting URL</label>
+            <label class="form-label">{{ $t('browser.sessionManager.startingUrl') }}</label>
             <input
               v-model="newSession.url"
               type="url"
@@ -210,7 +210,7 @@
 
         <div class="modal-footer">
           <BaseButton variant="outline" @click="showCreateModal = false">
-            Cancel
+            {{ $t('browser.sessionManager.cancel') }}
           </BaseButton>
           <BaseButton
             variant="primary"
@@ -218,7 +218,7 @@
             :disabled="!isFormValid"
           >
             <i class="fas fa-plus mr-1"></i>
-            Create Session
+            {{ $t('browser.sessionManager.createSession') }}
           </BaseButton>
         </div>
       </div>
@@ -228,6 +228,7 @@
 
 <script lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useBrowserAutomation } from '@/composables/useBrowserAutomation'
 import BaseButton from '@/components/base/BaseButton.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
@@ -245,6 +246,7 @@ export default {
     EmptyState
   },
   setup() {
+    const { t } = useI18n()
     const {
       sessions,
       launchSession,
@@ -341,7 +343,7 @@ export default {
     }
 
     const deleteSession = (sessionId: string) => {
-      if (confirm('Are you sure you want to delete this session?')) {
+      if (confirm(t('browser.sessionManager.deleteConfirm'))) {
         deleteSessionHandler(sessionId)
         logger.info('Deleted session', { id: sessionId })
       }

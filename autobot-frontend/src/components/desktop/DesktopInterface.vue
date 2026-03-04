@@ -2,10 +2,10 @@
   <div class="desktop-interface">
     <div class="desktop-header">
       <h2 class="text-lg font-semibold text-autobot-text-primary">
-        Remote Desktop Access
+        {{ $t('desktop.interface.title') }}
       </h2>
       <p class="text-sm text-autobot-text-secondary">
-        Access the full XFCE desktop environment for system administration and GUI applications
+        {{ $t('desktop.interface.description') }}
       </p>
     </div>
 
@@ -21,18 +21,18 @@
       >
         <template #loading-message>
           <div class="text-center">
-            <p class="text-autobot-text-secondary">Connecting to desktop...</p>
-            <p class="text-sm text-autobot-text-muted mt-2">{{ connectionStatus }}</p>
+            <p class="text-autobot-text-secondary">{{ $t('desktop.interface.connecting') }}</p>
+            <p class="text-sm text-autobot-text-muted mt-2">{{ connectionStatusDisplay }}</p>
           </div>
         </template>
 
         <template #error-content>
           <div class="text-center p-6">
             <div class="text-4xl mb-4">⚠️</div>
-            <h3 class="text-lg font-semibold mb-2">Desktop Connection Error</h3>
+            <h3 class="text-lg font-semibold mb-2">{{ $t('desktop.interface.connectionError') }}</h3>
             <p class="text-autobot-text-secondary mb-4">{{ error }}</p>
             <button @click="reconnect" class="px-4 py-2 bg-electric-600 text-white rounded hover:bg-electric-700">
-              Reconnect
+              {{ $t('desktop.interface.reconnect') }}
             </button>
           </div>
         </template>
@@ -53,34 +53,34 @@
 
     <div class="desktop-controls">
       <button @click="toggleFullscreen" class="control-btn">
-        <span v-if="isFullscreen">Exit Fullscreen</span>
-        <span v-else>Fullscreen</span>
+        <span v-if="isFullscreen">{{ $t('desktop.interface.exitFullscreen') }}</span>
+        <span v-else>{{ $t('desktop.interface.fullscreen') }}</span>
       </button>
       <button @click="reconnect" class="control-btn">
-        Reconnect
+        {{ $t('desktop.interface.reconnect') }}
       </button>
       <div class="connection-status">
-        <span :class="connectionStatusClass">{{ connectionStatus }}</span>
+        <span :class="connectionStatusClass">{{ connectionStatusDisplay }}</span>
       </div>
     </div>
 
     <!-- Desktop Actions Toolbar (Issue #74) -->
     <div class="desktop-actions">
       <div class="actions-label text-sm font-medium text-autobot-text-secondary">
-        Desktop Actions:
+        {{ $t('desktop.interface.desktopActions') }}
       </div>
       <div class="actions-buttons">
-        <button @click="takeScreenshot" class="action-btn" title="Take Screenshot">
-          📷 Screenshot
+        <button @click="takeScreenshot" class="action-btn" :title="$t('desktop.interface.screenshot')">
+          📷 {{ $t('desktop.interface.screenshot') }}
         </button>
-        <button @click="showTypeDialog = true" class="action-btn" title="Type Text">
-          ⌨️ Type Text
+        <button @click="showTypeDialog = true" class="action-btn" :title="$t('desktop.interface.typeText')">
+          ⌨️ {{ $t('desktop.interface.typeText') }}
         </button>
-        <button @click="sendCtrlAltDel" class="action-btn" title="Send Ctrl+Alt+Del">
-          🔴 Ctrl+Alt+Del
+        <button @click="sendCtrlAltDel" class="action-btn" :title="$t('desktop.interface.ctrlAltDel')">
+          🔴 {{ $t('desktop.interface.ctrlAltDel') }}
         </button>
-        <button @click="pasteFromClipboard" class="action-btn" title="Paste Clipboard">
-          📋 Paste
+        <button @click="pasteFromClipboard" class="action-btn" :title="$t('desktop.interface.paste')">
+          📋 {{ $t('desktop.interface.paste') }}
         </button>
       </div>
     </div>
@@ -90,7 +90,7 @@
       <div v-if="showScreenshotModal" class="screenshot-modal" @click="showScreenshotModal = false">
         <div class="screenshot-content" @click.stop>
           <div class="screenshot-header">
-            <h3 class="text-lg font-semibold text-autobot-text-primary">Desktop Screenshot</h3>
+            <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('desktop.interface.screenshotTitle') }}</h3>
             <button @click="showScreenshotModal = false" class="close-btn">×</button>
           </div>
           <div class="screenshot-body">
@@ -98,10 +98,10 @@
           </div>
           <div class="screenshot-footer">
             <button @click="downloadScreenshot" class="download-btn">
-              💾 Download
+              💾 {{ $t('desktop.interface.download') }}
             </button>
             <button @click="showScreenshotModal = false" class="cancel-btn">
-              Close
+              {{ $t('desktop.interface.close') }}
             </button>
           </div>
         </div>
@@ -111,23 +111,23 @@
       <div v-if="showTypeDialog" class="type-dialog-modal" @click="showTypeDialog = false">
         <div class="type-dialog-content" @click.stop>
           <div class="type-dialog-header">
-            <h3 class="text-lg font-semibold text-autobot-text-primary">Type Text on Desktop</h3>
+            <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('desktop.interface.typeTextTitle') }}</h3>
             <button @click="showTypeDialog = false" class="close-btn">×</button>
           </div>
           <div class="type-dialog-body">
             <textarea
               v-model="textToType"
-              placeholder="Enter text to type on the desktop..."
+              :placeholder="$t('desktop.interface.typeTextPlaceholder')"
               class="type-textarea"
               rows="4"
             ></textarea>
           </div>
           <div class="type-dialog-footer">
             <button @click="handleTypeText" :disabled="!textToType.trim()" class="type-btn">
-              ⌨️ Type
+              ⌨️ {{ $t('desktop.interface.typeTextSend') }}
             </button>
             <button @click="showTypeDialog = false" class="cancel-btn">
-              Cancel
+              {{ $t('desktop.interface.cancel') }}
             </button>
           </div>
         </div>
@@ -138,6 +138,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 // MIGRATED: Removed environment.js, using AppConfig.js only
 import appConfig from '@/config/AppConfig.js'
 import UnifiedLoadingView from '@/components/ui/UnifiedLoadingView.vue'
@@ -145,6 +146,7 @@ import { useAsyncOperation } from '@/composables/useAsyncOperation'
 import { useVncControls } from '@/composables/useVncControls'
 import { createLogger } from '@/utils/debugUtils'
 
+const { t } = useI18n()
 const logger = createLogger('DesktopInterface')
 
 // Async operation composables
@@ -163,6 +165,19 @@ const loading = ref(true)
 const error = ref(null)
 const isFullscreen = ref(false)
 const connectionStatus = ref('Connecting...')
+
+const connectionStatusDisplay = computed(() => {
+  const statusMap = {
+    'Connecting...': t('desktop.interface.statusConnecting'),
+    'Connected': t('desktop.interface.statusConnected'),
+    'Disconnected': t('desktop.interface.statusDisconnected'),
+    'Configuration Error': t('desktop.interface.statusConfigError'),
+    'Network Error': t('desktop.interface.statusNetworkError'),
+    'Timeout': t('desktop.interface.statusTimeout'),
+    'Error': t('desktop.interface.statusConfigError')
+  }
+  return statusMap[connectionStatus.value] || connectionStatus.value
+})
 
 // VNC connection URL - will be loaded asynchronously from AppConfig
 const vncUrl = ref('') // Will be loaded on mount
@@ -184,16 +199,16 @@ const loadVncUrl = async () => {
     // CRITICAL: No fallbacks - config failure is real failure
     // Desktop cannot function without proper configuration
     if (err.message && err.message.includes('Failed to fetch')) {
-      error.value = 'Backend configuration service unavailable. Desktop requires configuration to function.';
+      error.value = t('desktop.interface.errorBackendUnavailable');
       connectionStatus.value = 'Configuration Error';
     } else if (err.message && err.message.includes('Network Error')) {
-      error.value = 'Network connectivity issues. Cannot retrieve desktop configuration.';
+      error.value = t('desktop.interface.errorNetworkConnectivity');
       connectionStatus.value = 'Network Error';
     } else if (err.message && err.message.includes('timeout')) {
-      error.value = 'Configuration service timeout. Desktop configuration unavailable.';
+      error.value = t('desktop.interface.errorConfigTimeout');
       connectionStatus.value = 'Timeout';
     } else {
-      error.value = `Configuration error: ${err.message}. Desktop requires valid configuration.`;
+      error.value = t('desktop.interface.errorConfigFailed');
       connectionStatus.value = 'Configuration Error';
     }
 
@@ -277,16 +292,16 @@ const checkConnection = async () => {
     connectionStatus.value = 'Disconnected'
 
     if (err.name === 'AbortError') {
-      error.value = 'Desktop service connection timeout. Service may be starting up.';
+      error.value = t('desktop.interface.errorServiceTimeout');
     } else {
       const isServiceDisabled = err.message.includes('Connection refused') ||
                                 err.message.includes('Network Error') ||
                                 err.message.includes('Failed to fetch');
 
       if (isServiceDisabled) {
-        error.value = 'Desktop service is currently disabled. Start AutoBot with desktop access enabled to use this feature.';
+        error.value = t('desktop.interface.errorServiceDisabled');
       } else {
-        error.value = `Cannot connect to desktop service: ${err.message}`;
+        error.value = t('desktop.interface.errorVncConnection', { error: err.message });
       }
     }
     loading.value = false
@@ -303,14 +318,14 @@ const handleDesktopError = (error) => {
   logger.error('Desktop connection error:', error)
   loading.value = false
   connectionStatus.value = 'Error'
-  error.value = `Desktop service error: ${error.message || error}`
+  error.value = t('desktop.interface.errorVncConnection', { error: error.message || error })
 }
 
 const handleDesktopTimeout = () => {
   logger.warn('Desktop connection timeout')
   loading.value = false
   connectionStatus.value = 'Timeout'
-  error.value = 'Desktop service connection timed out. Service may be starting up.'
+  error.value = t('desktop.interface.errorServiceTimeout')
 }
 
 let connectionCheckInterval
@@ -324,7 +339,7 @@ onMounted(async () => {
     // Fallback to default state
     loading.value = false
     connectionStatus.value = 'Configuration Error'
-    error.value = 'Failed to initialize desktop interface. Please refresh the page.'
+    error.value = t('desktop.interface.errorInitFailed')
   }
 
   // Initial connection check
@@ -385,7 +400,7 @@ async function pasteFromClipboard() {
     }
   } catch (err) {
     logger.error('Clipboard read failed:', err)
-    error.value = 'Failed to read clipboard'
+    error.value = t('desktop.interface.errorClipboardRead')
   }
 }
 

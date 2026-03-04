@@ -1,26 +1,27 @@
 <!-- AutoBot - AI-Powered Automation Platform -->
 <!-- Copyright (c) 2025 mrveiss -->
 <!-- Author: mrveiss -->
+<!-- Issue #1359: i18n string extraction -->
 <template>
   <div class="custom-dashboard view-container-flex">
     <!-- Header -->
     <div class="dashboard-header">
       <div class="header-content">
         <h1><i class="fas fa-th-large"></i> {{ dashboardTitle }}</h1>
-        <p class="header-description">Customizable dashboard with drag-and-drop widgets</p>
+        <p class="header-description">{{ $t('views.customDashboard.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <button @click="toggleEditMode" class="action-btn" :class="{ active: isEditMode }">
           <i :class="isEditMode ? 'fas fa-check' : 'fas fa-edit'"></i>
-          {{ isEditMode ? 'Done' : 'Edit Layout' }}
+          {{ isEditMode ? $t('views.customDashboard.done') : $t('views.customDashboard.editLayout') }}
         </button>
         <button @click="addWidget" class="action-btn" v-if="isEditMode">
           <i class="fas fa-plus"></i>
-          Add Widget
+          {{ $t('views.customDashboard.addWidget') }}
         </button>
         <button @click="saveDashboard" class="action-btn primary">
           <i class="fas fa-save"></i>
-          Save
+          {{ $t('views.customDashboard.save') }}
         </button>
         <div class="dashboard-selector">
           <select v-model="currentDashboardId" @change="loadDashboard">
@@ -28,7 +29,7 @@
               {{ dash.name }}
             </option>
           </select>
-          <button @click="createNewDashboard" class="icon-btn" title="Create new dashboard">
+          <button @click="createNewDashboard" class="icon-btn" :title="$t('views.customDashboard.createNewDashboard')">
             <i class="fas fa-plus"></i>
           </button>
         </div>
@@ -38,10 +39,10 @@
     <!-- Widget Palette (Edit Mode) -->
     <transition name="slide-down">
       <div v-if="isEditMode" class="widget-palette">
-        <h4>Available Widgets</h4>
+        <h4>{{ $t('views.customDashboard.availableWidgets') }}</h4>
         <div class="palette-widgets">
           <div
-            v-for="widget in availableWidgets"
+            v-for="widget in availableWidgetDefs"
             :key="widget.type"
             class="palette-widget"
             draggable="true"
@@ -78,16 +79,16 @@
             {{ widget.title }}
           </h3>
           <div class="widget-actions" v-if="isEditMode">
-            <button @click="configureWidget(widget)" title="Configure">
+            <button @click="configureWidget(widget)" :title="$t('views.customDashboard.configure')">
               <i class="fas fa-cog"></i>
             </button>
-            <button @click="resizeWidget(widget, 'expand')" title="Expand">
+            <button @click="resizeWidget(widget, 'expand')" :title="$t('views.customDashboard.expand')">
               <i class="fas fa-expand-alt"></i>
             </button>
-            <button @click="resizeWidget(widget, 'shrink')" title="Shrink">
+            <button @click="resizeWidget(widget, 'shrink')" :title="$t('views.customDashboard.shrink')">
               <i class="fas fa-compress-alt"></i>
             </button>
-            <button @click="removeWidget(widget.id)" class="remove-btn" title="Remove">
+            <button @click="removeWidget(widget.id)" class="remove-btn" :title="$t('views.customDashboard.remove')">
               <i class="fas fa-times"></i>
             </button>
           </div>
@@ -109,11 +110,11 @@
         <div class="empty-icon">
           <i class="fas fa-th-large"></i>
         </div>
-        <h3>No Widgets Added</h3>
-        <p>Click "Edit Layout" to add widgets to your dashboard</p>
+        <h3>{{ $t('views.customDashboard.noWidgets') }}</h3>
+        <p>{{ $t('views.customDashboard.noWidgetsHint') }}</p>
         <button @click="toggleEditMode" class="action-btn primary">
           <i class="fas fa-plus"></i>
-          Add Your First Widget
+          {{ $t('views.customDashboard.addFirstWidget') }}
         </button>
       </div>
     </div>
@@ -122,46 +123,46 @@
     <div v-if="showConfigModal" class="modal-overlay" @click.self="showConfigModal = false">
       <div class="modal-content">
         <div class="modal-header">
-          <h4><i class="fas fa-cog"></i> Configure Widget</h4>
+          <h4><i class="fas fa-cog"></i> {{ $t('views.customDashboard.configureWidget') }}</h4>
           <button @click="showConfigModal = false" class="close-btn">
             <i class="fas fa-times"></i>
           </button>
         </div>
         <div class="modal-body" v-if="configWidget">
           <div class="form-group">
-            <label>Title</label>
+            <label>{{ $t('views.customDashboard.widgetTitle') }}</label>
             <input v-model="configWidget.title" type="text" />
           </div>
           <div class="form-group">
-            <label>Refresh Interval (seconds)</label>
+            <label>{{ $t('views.customDashboard.refreshInterval') }}</label>
             <input v-model.number="configWidget.refreshInterval" type="number" min="5" />
           </div>
           <div class="form-group" v-if="hasHeightConfig(configWidget.type)">
-            <label>Height (px)</label>
+            <label>{{ $t('views.customDashboard.heightPx') }}</label>
             <input v-model.number="configWidget.props.height" type="number" min="200" />
           </div>
           <!-- Type-specific config options -->
           <div v-if="configWidget.type === 'heatmap'" class="form-group">
-            <label>Metric</label>
+            <label>{{ $t('views.customDashboard.metric') }}</label>
             <select v-model="configWidget.props.metric">
               <option value="cpu">CPU</option>
-              <option value="memory">Memory</option>
-              <option value="disk">Disk</option>
-              <option value="network">Network</option>
+              <option value="memory">{{ $t('views.customDashboard.memory') }}</option>
+              <option value="disk">{{ $t('views.customDashboard.disk') }}</option>
+              <option value="network">{{ $t('views.customDashboard.network') }}</option>
             </select>
           </div>
           <div v-if="configWidget.type === 'chart'" class="form-group">
-            <label>Chart Type</label>
+            <label>{{ $t('views.customDashboard.chartType') }}</label>
             <select v-model="configWidget.props.chartType">
-              <option value="line">Line</option>
-              <option value="area">Area</option>
-              <option value="bar">Bar</option>
+              <option value="line">{{ $t('views.customDashboard.line') }}</option>
+              <option value="area">{{ $t('views.customDashboard.area') }}</option>
+              <option value="bar">{{ $t('views.customDashboard.bar') }}</option>
             </select>
           </div>
         </div>
         <div class="modal-footer">
-          <button @click="showConfigModal = false" class="action-btn">Cancel</button>
-          <button @click="saveWidgetConfig" class="action-btn primary">Save Changes</button>
+          <button @click="showConfigModal = false" class="action-btn">{{ $t('views.customDashboard.cancel') }}</button>
+          <button @click="saveWidgetConfig" class="action-btn primary">{{ $t('views.customDashboard.saveChanges') }}</button>
         </div>
       </div>
     </div>
@@ -170,29 +171,29 @@
     <div v-if="showNewDashboardModal" class="modal-overlay" @click.self="showNewDashboardModal = false">
       <div class="modal-content">
         <div class="modal-header">
-          <h4><i class="fas fa-plus-circle"></i> Create Dashboard</h4>
+          <h4><i class="fas fa-plus-circle"></i> {{ $t('views.customDashboard.createDashboard') }}</h4>
           <button @click="showNewDashboardModal = false" class="close-btn">
             <i class="fas fa-times"></i>
           </button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>Dashboard Name</label>
-            <input v-model="newDashboardName" type="text" placeholder="My Dashboard" />
+            <label>{{ $t('views.customDashboard.dashboardName') }}</label>
+            <input v-model="newDashboardName" type="text" :placeholder="$t('views.customDashboard.myDashboard')" />
           </div>
           <div class="form-group">
-            <label>Template</label>
+            <label>{{ $t('views.customDashboard.template') }}</label>
             <select v-model="newDashboardTemplate">
-              <option value="blank">Blank</option>
-              <option value="monitoring">System Monitoring</option>
-              <option value="agents">Agent Activity</option>
-              <option value="workflows">Workflows</option>
+              <option value="blank">{{ $t('views.customDashboard.blank') }}</option>
+              <option value="monitoring">{{ $t('views.customDashboard.systemMonitoring') }}</option>
+              <option value="agents">{{ $t('views.customDashboard.agentActivity') }}</option>
+              <option value="workflows">{{ $t('views.customDashboard.workflows') }}</option>
             </select>
           </div>
         </div>
         <div class="modal-footer">
-          <button @click="showNewDashboardModal = false" class="action-btn">Cancel</button>
-          <button @click="confirmCreateDashboard" class="action-btn primary">Create</button>
+          <button @click="showNewDashboardModal = false" class="action-btn">{{ $t('views.customDashboard.cancel') }}</button>
+          <button @click="confirmCreateDashboard" class="action-btn primary">{{ $t('views.customDashboard.create') }}</button>
         </div>
       </div>
     </div>
@@ -201,7 +202,7 @@
     <div v-if="showAddWidgetModal" class="modal-overlay" @click.self="showAddWidgetModal = false">
       <div class="modal-content wide">
         <div class="modal-header">
-          <h4><i class="fas fa-plus-circle"></i> Add Widget</h4>
+          <h4><i class="fas fa-plus-circle"></i> {{ $t('views.customDashboard.addWidgetTitle') }}</h4>
           <button @click="showAddWidgetModal = false" class="close-btn">
             <i class="fas fa-times"></i>
           </button>
@@ -209,7 +210,7 @@
         <div class="modal-body">
           <div class="widget-gallery">
             <div
-              v-for="widget in availableWidgets"
+              v-for="widget in availableWidgetDefs"
               :key="widget.type"
               class="widget-option"
               @click="confirmAddWidget(widget)"
@@ -231,8 +232,10 @@
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
+// Issue #1359: i18n string extraction
 
 import { ref, computed, onMounted, shallowRef, markRaw } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 
 // Import visualization components
@@ -241,7 +244,7 @@ import WorkflowVisualization from '@/components/visualizations/WorkflowVisualiza
 import AgentActivityVisualization from '@/components/visualizations/AgentActivityVisualization.vue'
 import SystemArchitectureDiagram from '@/components/visualizations/SystemArchitectureDiagram.vue'
 
-
+const { t } = useI18n()
 const logger = createLogger('CustomDashboard')
 
 // ============================================================================
@@ -303,45 +306,45 @@ const componentRegistry = shallowRef<Record<string, unknown>>({
   architecture: markRaw(SystemArchitectureDiagram)
 })
 
-// Available widget definitions
-const availableWidgets: WidgetDefinition[] = [
+// Available widget definitions (computed for i18n reactivity)
+const availableWidgetDefs = computed<WidgetDefinition[]>(() => [
   {
     type: 'heatmap',
-    name: 'Resource Heatmap',
+    name: t('views.customDashboard.widgetHeatmap'),
     icon: 'fas fa-th',
-    description: 'Visualize resource usage patterns over time',
+    description: t('views.customDashboard.widgetHeatmapDesc'),
     defaultWidth: 2,
     defaultHeight: 300,
     defaultProps: { height: 300, metric: 'cpu' }
   },
   {
     type: 'workflow',
-    name: 'Workflow Visualization',
+    name: t('views.customDashboard.widgetWorkflow'),
     icon: 'fas fa-project-diagram',
-    description: 'Interactive workflow execution flowcharts',
+    description: t('views.customDashboard.widgetWorkflowDesc'),
     defaultWidth: 2,
     defaultHeight: 400,
     defaultProps: { height: 400 }
   },
   {
     type: 'agents',
-    name: 'Agent Activity',
+    name: t('views.customDashboard.widgetAgents'),
     icon: 'fas fa-robot',
-    description: 'Real-time agent activity monitoring',
+    description: t('views.customDashboard.widgetAgentsDesc'),
     defaultWidth: 2,
     defaultHeight: 400,
     defaultProps: { height: 400 }
   },
   {
     type: 'architecture',
-    name: 'System Architecture',
+    name: t('views.customDashboard.widgetArchitecture'),
     icon: 'fas fa-sitemap',
-    description: 'Interactive system architecture diagram',
+    description: t('views.customDashboard.widgetArchitectureDesc'),
     defaultWidth: 3,
     defaultHeight: 500,
     defaultProps: { height: 500 }
   },
-]
+])
 
 // ============================================================================
 // Computed
@@ -349,7 +352,7 @@ const availableWidgets: WidgetDefinition[] = [
 
 const dashboardTitle = computed(() => {
   const dash = availableDashboards.value.find(d => d.id === currentDashboardId.value)
-  return dash?.name || 'Custom Dashboard'
+  return dash?.name || t('views.customDashboard.defaultTitle')
 })
 
 // ============================================================================
@@ -542,7 +545,7 @@ function getWidgetComponent(type: string) {
 }
 
 function getWidgetIcon(type: string): string {
-  const def = availableWidgets.find(w => w.type === type)
+  const def = availableWidgetDefs.value.find(w => w.type === type)
   return def?.icon || 'fas fa-puzzle-piece'
 }
 
@@ -588,7 +591,7 @@ function handleDrop(event: DragEvent) {
 
   if (widgetType) {
     // Adding new widget from palette
-    const widgetDef = availableWidgets.find(w => w.type === widgetType)
+    const widgetDef = availableWidgetDefs.value.find(w => w.type === widgetType)
     if (widgetDef) {
       confirmAddWidget(widgetDef)
     }

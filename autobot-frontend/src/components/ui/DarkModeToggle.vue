@@ -11,8 +11,8 @@ Issue #753: Dark/Light Mode Refinement
   <button
     @click="toggleDarkMode"
     class="dark-mode-toggle"
-    :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
-    aria-label="Toggle dark mode"
+    :title="isDark ? t('ui.darkModeToggle.switchToLight') : t('ui.darkModeToggle.switchToDark')"
+    :aria-label="t('ui.darkModeToggle.toggleDarkMode')"
   >
     <transition name="icon-fade" mode="out-in">
       <i v-if="isDark" key="moon" class="fas fa-moon"></i>
@@ -23,8 +23,10 @@ Issue #753: Dark/Light Mode Refinement
 
 <script setup lang="ts">
 import { useTheme } from '@/composables/useTheme'
+import { useI18n } from 'vue-i18n'
 
 const { isDark, toggleTheme } = useTheme()
+const { t } = useI18n()
 
 function toggleDarkMode() {
   toggleTheme()

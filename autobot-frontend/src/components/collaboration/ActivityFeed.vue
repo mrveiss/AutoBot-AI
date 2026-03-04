@@ -9,7 +9,10 @@
  */
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSessionCollaboration, type CollaboratorActivity } from '@/composables/useSessionCollaboration'
+
+const { t } = useI18n()
 
 const { recentCollaboratorActivities, sessionPresence, isConnected } = useSessionCollaboration()
 
@@ -21,9 +24,9 @@ const formatTime = (date: Date): string => {
   const minutes = Math.floor(seconds / 60)
   const hours = Math.floor(minutes / 60)
 
-  if (seconds < 60) return 'just now'
-  if (minutes < 60) return `${minutes}m ago`
-  if (hours < 24) return `${hours}h ago`
+  if (seconds < 60) return t('collaboration.activityFeed.justNow')
+  if (minutes < 60) return t('collaboration.activityFeed.minutesAgo', { count: minutes })
+  if (hours < 24) return t('collaboration.activityFeed.hoursAgo', { count: hours })
   return date.toLocaleDateString()
 }
 
@@ -70,7 +73,7 @@ const onlineCount = computed(() => {
   <div class="activity-feed bg-autobot-bg-secondary rounded-lg p-4 h-full flex flex-col">
     <!-- Header -->
     <div class="flex items-center justify-between mb-3">
-      <h3 class="text-sm font-semibold text-autobot-text-primary">Activity Feed</h3>
+      <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('collaboration.activityFeed.title') }}</h3>
       <div class="flex items-center gap-2">
         <span
           :class="[
@@ -79,7 +82,7 @@ const onlineCount = computed(() => {
           ]"
         />
         <span class="text-xs text-autobot-text-muted">
-          {{ onlineCount }} online
+          {{ $t('collaboration.activityFeed.onlineCount', { count: onlineCount }) }}
         </span>
       </div>
     </div>
@@ -119,7 +122,7 @@ const onlineCount = computed(() => {
           >
             <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-yellow-500/20 text-yellow-400">
               <i class="bi bi-key mr-1" />
-              {{ activity.activity.secretsUsed.length }} secret(s)
+              {{ $t('collaboration.activityFeed.secretsCount', { count: activity.activity.secretsUsed.length }) }}
             </span>
           </div>
         </div>
@@ -131,8 +134,8 @@ const onlineCount = computed(() => {
         class="flex flex-col items-center justify-center py-8 text-autobot-text-muted"
       >
         <i class="bi bi-activity text-2xl mb-2" />
-        <span class="text-sm">No recent activity</span>
-        <span class="text-xs">Activities from collaborators will appear here</span>
+        <span class="text-sm">{{ $t('collaboration.activityFeed.noRecentActivity') }}</span>
+        <span class="text-xs">{{ $t('collaboration.activityFeed.activitiesWillAppear') }}</span>
       </div>
     </div>
   </div>

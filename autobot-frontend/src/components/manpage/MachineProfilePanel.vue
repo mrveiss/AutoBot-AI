@@ -1,7 +1,7 @@
 <template>
   <BasePanel variant="bordered" size="medium">
     <template #header>
-      <h3><i class="fas fa-desktop"></i> Current Machine Profile</h3>
+      <h3><i class="fas fa-desktop"></i> {{ $t('manpage.machineProfile.title') }}</h3>
       <BaseButton
         size="sm"
         variant="outline"
@@ -9,49 +9,49 @@
         :disabled="loading"
       >
         <i class="fas fa-sync" :class="{ 'fa-spin': loading }"></i>
-        Refresh
+        {{ $t('manpage.machineProfile.refresh') }}
       </BaseButton>
     </template>
 
     <div v-if="profile && !loading" class="machine-info">
       <div class="info-grid">
         <div class="info-item">
-          <label>Machine ID:</label>
-          <span class="mono">{{ profile.machine_id || 'Not detected' }}</span>
+          <label>{{ $t('manpage.machineProfile.machineId') }}</label>
+          <span class="mono">{{ profile.machine_id || $t('manpage.machineProfile.notDetected') }}</span>
         </div>
         <div class="info-item">
-          <label>OS Type:</label>
+          <label>{{ $t('manpage.machineProfile.osType') }}</label>
           <span class="badge" :class="osBadgeClass">
-            {{ profile.os_type || 'Unknown' }}
+            {{ profile.os_type || $t('manpage.machineProfile.unknown') }}
           </span>
         </div>
         <div class="info-item">
-          <label>Distribution:</label>
-          <span>{{ profile.distro || 'N/A' }}</span>
+          <label>{{ $t('manpage.machineProfile.distribution') }}</label>
+          <span>{{ profile.distro || $t('manpage.machineProfile.na') }}</span>
         </div>
         <div class="info-item">
-          <label>Package Manager:</label>
-          <span class="mono">{{ profile.package_manager || 'Unknown' }}</span>
+          <label>{{ $t('manpage.machineProfile.packageManager') }}</label>
+          <span class="mono">{{ profile.package_manager || $t('manpage.machineProfile.unknown') }}</span>
         </div>
         <div class="info-item">
-          <label>Available Tools:</label>
+          <label>{{ $t('manpage.machineProfile.availableTools') }}</label>
           <span class="highlight">{{ (profile.available_tools || []).length }}</span>
         </div>
         <div class="info-item">
-          <label>Architecture:</label>
-          <span>{{ profile.architecture || 'Unknown' }}</span>
+          <label>{{ $t('manpage.machineProfile.architecture') }}</label>
+          <span>{{ profile.architecture || $t('manpage.machineProfile.unknown') }}</span>
         </div>
       </div>
     </div>
 
     <div v-else-if="!loading" class="no-data">
       <i class="fas fa-exclamation-triangle"></i>
-      Machine profile not loaded. Click refresh to detect current machine.
+      {{ $t('manpage.machineProfile.noData') }}
     </div>
 
     <div v-if="loading" class="loading">
       <i class="fas fa-spinner fa-spin"></i>
-      Detecting machine profile...
+      {{ $t('manpage.machineProfile.loading') }}
     </div>
   </BasePanel>
 </template>

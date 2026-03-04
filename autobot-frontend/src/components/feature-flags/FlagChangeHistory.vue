@@ -1,9 +1,9 @@
 <template>
   <div class="flag-change-history">
     <div class="section-header">
-      <h3><i class="fas fa-history"></i> Change History</h3>
+      <h3><i class="fas fa-history"></i> {{ $t('featureFlags.changeHistory.title') }}</h3>
       <p class="description">
-        Track all changes to feature flag configuration for audit purposes
+        {{ $t('featureFlags.changeHistory.description') }}
       </p>
     </div>
 
@@ -17,8 +17,8 @@
       <div class="empty-icon">
         <i class="fas fa-clock"></i>
       </div>
-      <h4>No History Available</h4>
-      <p>No configuration changes have been recorded yet.</p>
+      <h4>{{ $t('featureFlags.changeHistory.noChanges') }}</h4>
+      <p>{{ $t('featureFlags.changeHistory.noChanges') }}</p>
     </div>
 
     <!-- History Timeline -->

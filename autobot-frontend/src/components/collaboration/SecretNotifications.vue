@@ -8,11 +8,13 @@
  */
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   useSessionCollaboration,
   type SecretSharingNotification
 } from '@/composables/useSessionCollaboration'
 
+const { t } = useI18n()
 const { secretNotifications, clearSecretNotifications } = useSessionCollaboration()
 
 // Format timestamp
@@ -68,7 +70,7 @@ const dismissAll = () => {
       <div class="flex items-center justify-between px-4 py-2 bg-autobot-bg-tertiary border-b border-autobot-border">
         <div class="flex items-center gap-2">
           <i class="bi bi-shield-lock text-yellow-400" />
-          <span class="text-sm font-medium text-autobot-text-primary">Secret Updates</span>
+          <span class="text-sm font-medium text-autobot-text-primary">{{ $t('collaboration.secretNotifications.title') }}</span>
           <span class="px-1.5 py-0.5 text-xs rounded-full bg-yellow-500/20 text-yellow-400">
             {{ secretNotifications.length }}
           </span>
@@ -77,7 +79,7 @@ const dismissAll = () => {
           class="text-xs text-autobot-text-muted hover:text-autobot-text-primary transition-colors"
           @click="dismissAll"
         >
-          Clear all
+          {{ $t('collaboration.secretNotifications.clearAll') }}
         </button>
       </div>
 
@@ -103,7 +105,7 @@ const dismissAll = () => {
                 {{ notification.secretName }}
               </div>
               <div class="text-xs opacity-75">
-                {{ notification.action === 'shared' ? 'Shared by' : 'Revoked by' }}
+                {{ notification.action === 'shared' ? $t('collaboration.secretNotifications.sharedBy') : $t('collaboration.secretNotifications.revokedBy') }}
                 <span class="font-medium">{{ notification.sharedByUsername }}</span>
               </div>
             </div>

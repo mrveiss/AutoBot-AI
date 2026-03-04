@@ -3,7 +3,7 @@
     <div class="file-upload-inline-wrapper">
       <label for="visible-file-input" class="file-input-label">
         <i class="fas fa-cloud-upload-alt"></i>
-        Drag & drop or click:
+        {{ $t('fileBrowser.upload.dragAndDrop') }}
       </label>
 
       <!-- Visible file input -->

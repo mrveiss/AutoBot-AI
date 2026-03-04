@@ -6,14 +6,14 @@
         <button @click="captureAndAnalyze" class="btn-capture" :disabled="analyzing">
           <i v-if="analyzing" class="fas fa-spinner fa-spin"></i>
           <i v-else class="fas fa-camera"></i>
-          {{ analyzing ? 'Analyzing...' : 'Capture & Analyze' }}
+          {{ analyzing ? t('vision.screenCapture.analyzing') : t('vision.screenCapture.captureAndAnalyze') }}
         </button>
 
         <div class="auto-refresh-toggle">
           <label class="toggle-label">
             <input type="checkbox" v-model="autoRefresh" />
             <span class="toggle-switch"></span>
-            Auto-refresh
+            {{ t('vision.screenCapture.autoRefresh') }}
           </label>
           <select v-model="refreshInterval" :disabled="!autoRefresh" class="interval-select">
             <option :value="5000">5s</option>
@@ -26,9 +26,9 @@
 
       <div class="controls-right">
         <div class="filter-group">
-          <label>Element Type</label>
+          <label>{{ t('vision.screenCapture.elementTypeLabel') }}</label>
           <select v-model="elementTypeFilter">
-            <option value="">All Types</option>
+            <option value="">{{ t('vision.screenCapture.allTypes') }}</option>
             <option v-for="type in elementTypes" :key="type.value" :value="type.value">
               {{ type.name }}
             </option>
@@ -36,7 +36,7 @@
         </div>
 
         <div class="filter-group">
-          <label>Min Confidence</label>
+          <label>{{ t('vision.screenCapture.minConfidence') }}</label>
           <input
             type="range"
             v-model.number="confidenceThreshold"
@@ -54,15 +54,15 @@
       <!-- Analysis View -->
       <div class="analysis-panel" v-if="analysisResult">
         <div class="panel-header">
-          <h4>Screen Analysis</h4>
+          <h4>{{ t('vision.screenCapture.screenAnalysis') }}</h4>
           <div class="analysis-meta">
             <span class="element-count">
               <i class="fas fa-cube"></i>
-              {{ filteredElements.length }} elements
+              {{ t('vision.screenCapture.elements', { count: filteredElements.length }) }}
             </span>
             <span class="confidence">
               <i class="fas fa-chart-line"></i>
-              {{ (analysisResult.confidence_score * 100).toFixed(1) }}% confidence
+              {{ t('vision.screenCapture.confidenceScore', { score: (analysisResult.confidence_score * 100).toFixed(1) }) }}
             </span>
             <span class="timestamp">
               <i class="fas fa-clock"></i>
@@ -73,7 +73,7 @@
 
         <!-- Elements List -->
         <div class="elements-section">
-          <h5>Detected Elements</h5>
+          <h5>{{ t('vision.screenCapture.detectedElements') }}</h5>
           <div class="elements-list">
             <div
               v-for="element in filteredElements"
@@ -98,14 +98,14 @@
 
             <div v-if="filteredElements.length === 0" class="no-elements">
               <i class="fas fa-search"></i>
-              <span>No elements match current filters</span>
+              <span>{{ t('vision.screenCapture.noElementsMatch') }}</span>
             </div>
           </div>
         </div>
 
         <!-- Text Regions -->
         <div class="text-section" v-if="analysisResult.text_regions.length > 0">
-          <h5>Text Regions (OCR)</h5>
+          <h5>{{ t('vision.screenCapture.textRegionsOcr') }}</h5>
           <div class="text-regions">
             <div
               v-for="(region, idx) in analysisResult.text_regions"
@@ -119,7 +119,7 @@
 
         <!-- Layout Info -->
         <div class="layout-section" v-if="analysisResult.layout_structure">
-          <h5>Layout Structure</h5>
+          <h5>{{ t('vision.screenCapture.layoutStructure') }}</h5>
           <div class="layout-info">
             <pre>{{ JSON.stringify(analysisResult.layout_structure, null, 2) }}</pre>
           </div>
@@ -131,8 +131,8 @@
         <div class="empty-icon">
           <i class="fas fa-desktop"></i>
         </div>
-        <h3>No Screen Analysis</h3>
-        <p>Click "Capture & Analyze" to analyze the current screen</p>
+        <h3>{{ t('vision.screenCapture.noScreenAnalysis') }}</h3>
+        <p>{{ t('vision.screenCapture.noScreenAnalysisHint') }}</p>
       </div>
     </div>
 
@@ -140,48 +140,48 @@
     <div v-if="selectedElement" class="element-detail-overlay" @click.self="selectedElement = null">
       <div class="element-detail-modal">
         <div class="modal-header">
-          <h4>Element Details</h4>
+          <h4>{{ t('vision.screenCapture.elementDetails') }}</h4>
           <button @click="selectedElement = null" class="btn-close">
             <i class="fas fa-times"></i>
           </button>
         </div>
         <div class="modal-content">
           <div class="detail-row">
-            <span class="label">ID</span>
+            <span class="label">{{ t('vision.screenCapture.id') }}</span>
             <span class="value">{{ selectedElement.element_id }}</span>
           </div>
           <div class="detail-row">
-            <span class="label">Type</span>
+            <span class="label">{{ t('vision.screenCapture.type') }}</span>
             <span class="value">{{ selectedElement.element_type }}</span>
           </div>
           <div class="detail-row">
-            <span class="label">Confidence</span>
+            <span class="label">{{ t('vision.screenCapture.confidence') }}</span>
             <span class="value">{{ (selectedElement.confidence * 100).toFixed(1) }}%</span>
           </div>
           <div class="detail-row" v-if="selectedElement.text_content">
-            <span class="label">Text</span>
+            <span class="label">{{ t('vision.screenCapture.text') }}</span>
             <span class="value">{{ selectedElement.text_content }}</span>
           </div>
           <div class="detail-row">
-            <span class="label">Position</span>
+            <span class="label">{{ t('vision.screenCapture.position') }}</span>
             <span class="value">
               x: {{ selectedElement.bbox.x }}, y: {{ selectedElement.bbox.y }}
             </span>
           </div>
           <div class="detail-row">
-            <span class="label">Size</span>
+            <span class="label">{{ t('vision.screenCapture.size') }}</span>
             <span class="value">
               {{ selectedElement.bbox.width }} x {{ selectedElement.bbox.height }}
             </span>
           </div>
           <div class="detail-row">
-            <span class="label">Center</span>
+            <span class="label">{{ t('vision.screenCapture.center') }}</span>
             <span class="value">
               ({{ selectedElement.center_point[0] }}, {{ selectedElement.center_point[1] }})
             </span>
           </div>
           <div class="detail-row" v-if="selectedElement.possible_interactions.length > 0">
-            <span class="label">Interactions</span>
+            <span class="label">{{ t('vision.screenCapture.interactions') }}</span>
             <div class="interactions-list">
               <span
                 v-for="interaction in selectedElement.possible_interactions"
@@ -200,6 +200,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useToast } from '@/composables/useToast';
 import {
@@ -209,6 +210,7 @@ import {
   type ElementTypeInfo,
 } from '@/utils/VisionMultimodalApiClient';
 
+const { t } = useI18n();
 const logger = createLogger('ScreenCaptureViewer');
 const { showToast } = useToast();
 
@@ -271,11 +273,11 @@ const captureAndAnalyze = async () => {
       emit('analysis-complete', response.data);
       logger.debug('Screen analysis complete:', response.data);
     } else {
-      showToast(response.error || 'Analysis failed', 'error');
+      showToast(response.error || t('vision.screenCapture.toastAnalysisFailed'), 'error');
       logger.error('Analysis failed:', response.error);
     }
   } catch (err) {
-    showToast('Failed to analyze screen', 'error');
+    showToast(t('vision.screenCapture.toastFailedToAnalyze'), 'error');
     logger.error('Analysis error:', err);
   } finally {
     analyzing.value = false;

@@ -12,7 +12,7 @@
   <div class="workflow-visualization">
     <div class="workflow-header">
       <div class="header-info">
-        <h3>{{ workflow?.name || 'Workflow Execution' }}</h3>
+        <h3>{{ workflow?.name || t('visualizations.workflowViz.defaultTitle') }}</h3>
         <span class="workflow-id" v-if="workflow?.id">ID: {{ workflow.id }}</span>
       </div>
       <div class="header-actions">
@@ -20,10 +20,10 @@
           <i :class="statusIcon"></i>
           {{ statusText }}
         </div>
-        <button @click="toggleLayout" class="layout-btn" title="Toggle layout">
+        <button @click="toggleLayout" class="layout-btn" :title="t('visualizations.workflowViz.toggleLayout')">
           <i :class="layoutMode === 'horizontal' ? 'fas fa-arrows-alt-v' : 'fas fa-arrows-alt-h'"></i>
         </button>
-        <button @click="fitToView" class="fit-btn" title="Fit to view">
+        <button @click="fitToView" class="fit-btn" :title="t('visualizations.workflowViz.fitToView')">
           <i class="fas fa-expand"></i>
         </button>
       </div>
@@ -193,11 +193,11 @@
 
       <!-- Zoom controls -->
       <div class="zoom-controls">
-        <button @click="zoomIn" title="Zoom in">
+        <button @click="zoomIn" :title="t('visualizations.workflowViz.zoomIn')">
           <i class="fas fa-plus"></i>
         </button>
         <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-        <button @click="zoomOut" title="Zoom out">
+        <button @click="zoomOut" :title="t('visualizations.workflowViz.zoomOut')">
           <i class="fas fa-minus"></i>
         </button>
       </div>
@@ -208,7 +208,7 @@
           class="progress-fill"
           :style="{ width: `${progressPercent}%` }"
         ></div>
-        <span class="progress-text">{{ completedSteps }}/{{ totalSteps }} steps</span>
+        <span class="progress-text">{{ t('visualizations.workflowViz.stepsProgress', { completed: completedSteps, total: totalSteps }) }}</span>
       </div>
     </div>
 
@@ -230,29 +230,29 @@
 
         <div class="details-content">
           <div class="detail-row">
-            <span class="label">Status:</span>
+            <span class="label">{{ t('visualizations.workflowViz.statusLabel') }}</span>
             <span class="value status-badge" :class="selectedNode.status">
               {{ formatStatus(selectedNode.status) }}
             </span>
           </div>
           <div class="detail-row" v-if="selectedNode.duration">
-            <span class="label">Duration:</span>
+            <span class="label">{{ t('visualizations.workflowViz.duration') }}</span>
             <span class="value">{{ formatDuration(selectedNode.duration) }}</span>
           </div>
           <div class="detail-row" v-if="selectedNode.startTime">
-            <span class="label">Started:</span>
+            <span class="label">{{ t('visualizations.workflowViz.started') }}</span>
             <span class="value">{{ formatTime(selectedNode.startTime) }}</span>
           </div>
           <div class="detail-row" v-if="selectedNode.endTime">
-            <span class="label">Ended:</span>
+            <span class="label">{{ t('visualizations.workflowViz.ended') }}</span>
             <span class="value">{{ formatTime(selectedNode.endTime) }}</span>
           </div>
           <div class="detail-row" v-if="selectedNode.error">
-            <span class="label">Error:</span>
+            <span class="label">{{ t('visualizations.workflowViz.errorLabel') }}</span>
             <span class="value error">{{ selectedNode.error }}</span>
           </div>
           <div class="detail-row" v-if="selectedNode.output">
-            <span class="label">Output:</span>
+            <span class="label">{{ t('visualizations.workflowViz.outputLabel') }}</span>
             <pre class="output">{{ selectedNode.output }}</pre>
           </div>
         </div>
@@ -263,7 +263,10 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
+
+const { t } = useI18n()
 
 const logger = createLogger('WorkflowVisualization')
 
@@ -380,10 +383,10 @@ const statusIcon = computed(() => {
 
 const statusText = computed(() => {
   switch (workflowStatus.value) {
-    case 'running': return 'Running'
-    case 'completed': return 'Completed'
-    case 'failed': return 'Failed'
-    default: return 'Pending'
+    case 'running': return t('visualizations.workflowViz.running')
+    case 'completed': return t('visualizations.workflowViz.completed')
+    case 'failed': return t('visualizations.workflowViz.failed')
+    default: return t('visualizations.workflowViz.pending')
   }
 })
 
@@ -494,8 +497,14 @@ function formatNodeType(type: string): string {
 }
 
 function formatStatus(status?: string): string {
-  if (!status) return 'Unknown'
-  return status.charAt(0).toUpperCase() + status.slice(1)
+  if (!status) return t('visualizations.workflowViz.unknown')
+  const statusMap: Record<string, string> = {
+    pending: t('visualizations.workflowViz.pending'),
+    running: t('visualizations.workflowViz.running'),
+    completed: t('visualizations.workflowViz.completed'),
+    failed: t('visualizations.workflowViz.failed')
+  }
+  return statusMap[status] || status.charAt(0).toUpperCase() + status.slice(1)
 }
 
 function formatDuration(ms: number): string {

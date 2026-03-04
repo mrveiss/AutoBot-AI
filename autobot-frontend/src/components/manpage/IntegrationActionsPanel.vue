@@ -1,7 +1,7 @@
 <template>
   <div class="integration-actions">
     <div class="section-header">
-      <h3><i class="fas fa-cogs"></i> Integration Actions</h3>
+      <h3><i class="fas fa-cogs"></i> {{ $t('manpage.integrationActions.title') }}</h3>
     </div>
 
     <div class="action-buttons">
@@ -12,7 +12,7 @@
         :loading="loading.initialize"
       >
         <i class="fas fa-rocket"></i>
-        Initialize Machine Knowledge
+        {{ $t('manpage.integrationActions.initializeMachineKnowledge') }}
       </BaseButton>
 
       <BaseButton
@@ -22,7 +22,7 @@
         :loading="loading.integrate"
       >
         <i class="fas fa-book-open"></i>
-        Integrate Man Pages
+        {{ $t('manpage.integrationActions.integrateManPages') }}
       </BaseButton>
 
       <BaseButton
@@ -32,7 +32,7 @@
         :loading="loading.search"
       >
         <i class="fas fa-search"></i>
-        Test Search
+        {{ $t('manpage.integrationActions.testSearch') }}
       </BaseButton>
     </div>
 
@@ -40,16 +40,16 @@
 
     <div class="action-info">
       <div class="info-item">
-        <strong>Initialize Machine Knowledge:</strong>
-        Detects your machine and creates machine-specific knowledge including man page integration.
+        <strong>{{ $t('manpage.integrationActions.initializeMachineKnowledge') }}:</strong>
+        {{ $t('manpage.integrationActions.initializeDesc') }}
       </div>
       <div class="info-item">
-        <strong>Integrate Man Pages:</strong>
-        Extracts manual pages for available Linux commands (Linux only).
+        <strong>{{ $t('manpage.integrationActions.integrateManPages') }}:</strong>
+        {{ $t('manpage.integrationActions.integrateDesc') }}
       </div>
       <div class="info-item">
-        <strong>Test Search:</strong>
-        Tests searching through integrated man page knowledge.
+        <strong>{{ $t('manpage.integrationActions.testSearch') }}:</strong>
+        {{ $t('manpage.integrationActions.testSearchDesc') }}
       </div>
     </div>
   </div>

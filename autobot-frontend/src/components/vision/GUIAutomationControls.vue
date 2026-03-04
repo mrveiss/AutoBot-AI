@@ -3,13 +3,13 @@
     <!-- Header Section -->
     <div class="automation-header">
       <div class="header-info">
-        <h3>GUI Automation Opportunities</h3>
-        <p>Discover and interact with UI elements on the current screen</p>
+        <h3>{{ t('vision.guiAutomation.title') }}</h3>
+        <p>{{ t('vision.guiAutomation.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <button @click="$emit('refresh')" class="btn-refresh" :disabled="loading">
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
-          Refresh
+          {{ t('vision.guiAutomation.refresh') }}
         </button>
       </div>
     </div>
@@ -17,7 +17,7 @@
     <!-- Loading State -->
     <div v-if="loading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Analyzing screen for automation opportunities...</span>
+      <span>{{ t('vision.guiAutomation.analyzingScreen') }}</span>
     </div>
 
     <!-- Opportunities List -->
@@ -47,11 +47,11 @@
           <div class="card-actions">
             <button @click.stop="executeAction(opportunity)" class="btn-execute" :disabled="executing">
               <i :class="executing ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
-              {{ executing ? 'Verifying...' : 'Execute' }}
+              {{ executing ? t('vision.guiAutomation.verifying') : t('vision.guiAutomation.execute') }}
             </button>
             <button @click.stop="viewDetails(opportunity)" class="btn-details">
               <i class="fas fa-info-circle"></i>
-              Details
+              {{ t('vision.guiAutomation.details') }}
             </button>
           </div>
         </div>
@@ -63,14 +63,14 @@
       <div class="empty-icon">
         <i class="fas fa-robot"></i>
       </div>
-      <h4>No Automation Opportunities Found</h4>
-      <p>Click "Refresh" to analyze the current screen for interactive elements</p>
+      <h4>{{ t('vision.guiAutomation.noOpportunities') }}</h4>
+      <p>{{ t('vision.guiAutomation.noOpportunitiesHint') }}</p>
     </div>
 
     <!-- Element Types Reference -->
     <div class="reference-section">
       <div class="reference-header" @click="showElementTypes = !showElementTypes">
-        <h4><i class="fas fa-cube"></i> Element Types Reference</h4>
+        <h4><i class="fas fa-cube"></i> {{ t('vision.guiAutomation.elementTypesRef') }}</h4>
         <i :class="showElementTypes ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
       </div>
       <div v-if="showElementTypes" class="reference-content">
@@ -95,7 +95,7 @@
     <!-- Interaction Types Reference -->
     <div class="reference-section">
       <div class="reference-header" @click="showInteractionTypes = !showInteractionTypes">
-        <h4><i class="fas fa-mouse-pointer"></i> Interaction Types Reference</h4>
+        <h4><i class="fas fa-mouse-pointer"></i> {{ t('vision.guiAutomation.interactionTypesRef') }}</h4>
         <i :class="showInteractionTypes ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
       </div>
       <div v-if="showInteractionTypes" class="reference-content">
@@ -116,40 +116,40 @@
     <div v-if="selectedOpportunity" class="detail-overlay" @click.self="selectedOpportunity = null">
       <div class="detail-modal">
         <div class="modal-header">
-          <h4>Automation Details</h4>
+          <h4>{{ t('vision.guiAutomation.automationDetails') }}</h4>
           <button @click="selectedOpportunity = null" class="btn-close">
             <i class="fas fa-times"></i>
           </button>
         </div>
         <div class="modal-content">
           <div class="detail-section">
-            <label>Element ID</label>
+            <label>{{ t('vision.guiAutomation.elementId') }}</label>
             <span>{{ selectedOpportunity.element_id }}</span>
           </div>
           <div class="detail-section">
-            <label>Element Type</label>
+            <label>{{ t('vision.guiAutomation.elementType') }}</label>
             <span>{{ selectedOpportunity.element_type }}</span>
           </div>
           <div class="detail-section">
-            <label>Action</label>
+            <label>{{ t('vision.guiAutomation.action') }}</label>
             <span>{{ selectedOpportunity.action }}</span>
           </div>
           <div class="detail-section">
-            <label>Confidence</label>
+            <label>{{ t('vision.guiAutomation.confidence') }}</label>
             <span>{{ (selectedOpportunity.confidence * 100).toFixed(1) }}%</span>
           </div>
           <div class="detail-section">
-            <label>Description</label>
+            <label>{{ t('vision.guiAutomation.descriptionLabel') }}</label>
             <span>{{ selectedOpportunity.description }}</span>
           </div>
         </div>
         <div class="modal-actions">
           <button @click="executeAction(selectedOpportunity)" class="btn-primary" :disabled="executing">
             <i :class="executing ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
-            {{ executing ? 'Verifying...' : 'Execute Action' }}
+            {{ executing ? t('vision.guiAutomation.verifying') : t('vision.guiAutomation.executeAction') }}
           </button>
           <button @click="selectedOpportunity = null" class="btn-secondary">
-            Close
+            {{ t('vision.guiAutomation.close') }}
           </button>
         </div>
       </div>
@@ -159,6 +159,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useToast } from '@/composables/useToast';
 import {
@@ -168,6 +169,7 @@ import {
   type InteractionTypeInfo,
 } from '@/utils/VisionMultimodalApiClient';
 
+const { t } = useI18n();
 const logger = createLogger('GUIAutomationControls');
 const { showToast } = useToast();
 
@@ -227,7 +229,7 @@ const executeAction = async (opportunity: AutomationOpportunity) => {
       min_confidence: opportunity.confidence * 0.8,
     });
     if (!res.success || !res.data) {
-      showToast(`Failed to verify element: ${res.error || 'Unknown error'}`, 'error');
+      showToast(t('vision.guiAutomation.toastVerifyFailed', { error: res.error || 'Unknown error' }), 'error');
       return;
     }
     const found = res.data.elements?.some(
@@ -235,19 +237,19 @@ const executeAction = async (opportunity: AutomationOpportunity) => {
     );
     if (found) {
       showToast(
-        `Element "${opportunity.element_id}" verified — "${opportunity.action}" ready`,
+        t('vision.guiAutomation.toastElementVerified', { elementId: opportunity.element_id, action: opportunity.action }),
         'success',
       );
     } else {
       showToast(
-        `Element "${opportunity.element_id}" no longer detected. Refresh to update.`,
+        t('vision.guiAutomation.toastElementGone', { elementId: opportunity.element_id }),
         'warning',
       );
     }
     emit('refresh');
   } catch (err) {
     logger.error('Execute action failed:', err);
-    showToast('Action execution failed. Check console for details.', 'error');
+    showToast(t('vision.guiAutomation.toastExecutionFailed'), 'error');
   } finally {
     executing.value = false;
   }

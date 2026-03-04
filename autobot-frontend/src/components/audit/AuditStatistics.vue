@@ -8,7 +8,7 @@
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ formatNumber(statistics?.total_entries || 0) }}</span>
-          <span class="stat-label">Total Events</span>
+          <span class="stat-label">{{ $t('audit.statistics.totalEvents') }}</span>
         </div>
       </div>
 
@@ -19,7 +19,7 @@
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ formatNumber(statistics?.success_count || 0) }}</span>
-          <span class="stat-label">Successful</span>
+          <span class="stat-label">{{ $t('audit.statistics.successful') }}</span>
         </div>
       </div>
 
@@ -30,7 +30,7 @@
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ formatNumber(statistics?.denied_count || 0) }}</span>
-          <span class="stat-label">Denied</span>
+          <span class="stat-label">{{ $t('audit.statistics.denied') }}</span>
         </div>
       </div>
 
@@ -41,7 +41,7 @@
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ formatNumber(statistics?.failed_count || 0) }}</span>
-          <span class="stat-label">Failed</span>
+          <span class="stat-label">{{ $t('audit.statistics.failed') }}</span>
         </div>
       </div>
 
@@ -63,7 +63,7 @@
               ></div>
             </div>
           </div>
-          <span class="stat-label">Success Rate</span>
+          <span class="stat-label">{{ $t('audit.statistics.successRate') }}</span>
         </div>
       </div>
 
@@ -83,7 +83,7 @@
     <div v-if="statistics?.top_operations?.length" class="stat-section">
       <h4 class="section-title">
         <i class="fas fa-fire"></i>
-        Top Operations
+        {{ $t('audit.statistics.topOperations') }}
       </h4>
       <div class="top-list">
         <div
@@ -102,7 +102,7 @@
     <div v-if="statistics?.top_users?.length" class="stat-section">
       <h4 class="section-title">
         <i class="fas fa-users"></i>
-        Most Active Users
+        {{ $t('audit.statistics.mostActiveUsers') }}
       </h4>
       <div class="top-list">
         <div
@@ -113,7 +113,7 @@
         >
           <span class="top-rank">{{ index + 1 }}</span>
           <span class="top-name">{{ item.user_id }}</span>
-          <span class="top-count">{{ formatNumber(item.count) }} events</span>
+          <span class="top-count">{{ formatNumber(item.count) }} {{ $t('audit.statistics.events') }}</span>
         </div>
       </div>
     </div>
@@ -121,7 +121,7 @@
     <!-- Loading Overlay -->
     <div v-if="loading" class="loading-overlay">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Loading statistics...</span>
+      <span>{{ $t('audit.statistics.loading') }}</span>
     </div>
   </div>
 </template>

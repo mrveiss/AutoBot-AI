@@ -64,7 +64,7 @@ const props = defineProps<{
       <div
         v-if="myPresence"
         class="relative"
-        :title="`You (${myPresence.status})`"
+        :title="$t('collaboration.presence.youStatus', { status: myPresence.status })"
       >
         <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-medium text-white ring-2 ring-autobot-bg-secondary">
           {{ getInitials(myPresence.username) }}
@@ -84,7 +84,7 @@ const props = defineProps<{
           :key="collaborator.userId"
           class="relative"
           :style="{ zIndex: 3 - index }"
-          :title="`${collaborator.username} (${collaborator.status}) - ${collaborator.currentTab || 'unknown'} tab`"
+          :title="$t('collaboration.presence.collaboratorTooltip', { name: collaborator.username, status: collaborator.status, tab: collaborator.currentTab || $t('collaboration.presence.unknownTab') })"
         >
           <div class="w-7 h-7 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-xs font-medium text-autobot-text-primary ring-2 ring-autobot-bg-secondary">
             {{ getInitials(collaborator.username) }}
@@ -112,14 +112,14 @@ const props = defineProps<{
         class="ml-2 text-xs text-red-400 flex items-center gap-1"
       >
         <i class="bi bi-exclamation-triangle" />
-        Offline
+        {{ $t('collaboration.presence.offline') }}
       </span>
     </div>
 
     <!-- Expanded View -->
     <div v-else class="space-y-2">
       <div class="text-xs font-medium text-autobot-text-muted mb-2">
-        Participants ({{ sessionPresence.length }})
+        {{ $t('collaboration.presence.participants', { count: sessionPresence.length }) }}
       </div>
 
       <!-- My entry -->
@@ -143,11 +143,11 @@ const props = defineProps<{
             <span class="text-sm font-medium text-autobot-text-primary truncate">
               {{ myPresence.username }}
             </span>
-            <span class="text-xs text-blue-400">(you)</span>
+            <span class="text-xs text-blue-400">{{ $t('collaboration.presence.you') }}</span>
           </div>
           <div class="flex items-center gap-1 text-xs text-autobot-text-muted">
             <i :class="`bi bi-${getTabIcon(myPresence.currentTab)}`" />
-            <span>{{ myPresence.currentTab || 'unknown' }} tab</span>
+            <span>{{ $t('collaboration.presence.tabLabel', { tab: myPresence.currentTab || $t('collaboration.presence.unknownTab') }) }}</span>
           </div>
         </div>
       </div>
@@ -175,7 +175,7 @@ const props = defineProps<{
           </div>
           <div class="flex items-center gap-1 text-xs text-autobot-text-muted">
             <i :class="`bi bi-${getTabIcon(collaborator.currentTab)}`" />
-            <span>{{ collaborator.currentTab || 'unknown' }} tab</span>
+            <span>{{ $t('collaboration.presence.tabLabel', { tab: collaborator.currentTab || $t('collaboration.presence.unknownTab') }) }}</span>
           </div>
         </div>
         <div class="text-xs text-autobot-text-muted">
@@ -189,7 +189,7 @@ const props = defineProps<{
         class="text-center py-4 text-autobot-text-muted"
       >
         <i class="bi bi-people text-lg mb-1" />
-        <div class="text-xs">No participants yet</div>
+        <div class="text-xs">{{ $t('collaboration.presence.noParticipants') }}</div>
       </div>
     </div>
   </div>

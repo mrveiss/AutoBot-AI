@@ -108,6 +108,15 @@ export interface PatternStorageStats {
   collection_name: string
 }
 
+export interface PartialResults {
+  regex?: any[]
+  complexity?: any[]
+  modularization?: any[]
+  other_patterns?: any[]
+  files_processed?: number
+  total_files?: number
+}
+
 export interface AnalysisTaskStatus {
   task_id: string
   status: 'pending' | 'running' | 'completed' | 'failed'
@@ -116,6 +125,7 @@ export interface AnalysisTaskStatus {
   result?: PatternAnalysisReport
   error?: string
   reason?: string  // orphaned, timeout, manual (#1250)
+  partial_results?: PartialResults
 }
 
 /**
@@ -355,6 +365,50 @@ export function usePatternAnalysis() {
           const data = await response.json()
           taskStatus.value = data
           consecutiveErrors = 0 // Reset on success
+
+          // Apply partial results while analysis is running
+          if (data.partial_results && data.status === 'running') {
+            const pr = data.partial_results
+            if (pr.regex?.length) {
+              regexOpportunities.value = pr.regex
+            }
+            if (pr.complexity?.length) {
+              complexityHotspots.value = pr.complexity
+            }
+            if (pr.modularization?.length || pr.other_patterns?.length) {
+              refactoringSuggestions.value = [
+                ...(pr.modularization || []),
+                ...(pr.other_patterns || []),
+              ]
+            }
+            // Build incremental summary so UI can show results
+            const partialTotal =
+              (pr.regex?.length || 0) +
+              (pr.complexity?.length || 0) +
+              (pr.modularization?.length || 0) +
+              (pr.other_patterns?.length || 0)
+            if (partialTotal > 0) {
+              analysisReport.value = {
+                analysis_summary: {
+                  scan_path: '',
+                  timestamp: new Date().toISOString(),
+                  files_analyzed: pr.files_processed || 0,
+                  lines_analyzed: 0,
+                  duration_seconds: 0,
+                  total_patterns_found: partialTotal,
+                  potential_loc_reduction: 0,
+                  complexity_score: 'N/A',
+                },
+                pattern_counts: {},
+                severity_distribution: {},
+                duplicate_patterns: [],
+                regex_opportunities: pr.regex || [],
+                complexity_hotspots: pr.complexity || [],
+                modularization_suggestions: pr.modularization || [],
+                other_patterns: pr.other_patterns || [],
+              }
+            }
+          }
 
           if (data.status === 'completed' && data.result) {
             analysisReport.value = data.result

@@ -3,8 +3,8 @@
       <!-- Page Header -->
       <div class="page-header">
         <div class="page-header-content">
-          <h2 class="page-title">Audit Logs</h2>
-          <p class="page-subtitle">Security audit trail and activity monitoring</p>
+          <h2 class="page-title">{{ $t('views.auditLogs.title') }}</h2>
+          <p class="page-subtitle">{{ $t('views.auditLogs.subtitle') }}</p>
         </div>
         <div class="header-actions">
           <button
@@ -12,11 +12,11 @@
             @click="togglePolling"
           >
             <i :class="isPolling ? 'fas fa-pause' : 'fas fa-play'"></i>
-            {{ isPolling ? 'Pause Updates' : 'Auto-refresh' }}
+            {{ isPolling ? $t('views.auditLogs.pauseUpdates') : $t('views.auditLogs.autoRefresh') }}
           </button>
           <button class="btn-action-danger" @click="showCleanupModal = true">
             <i class="fas fa-trash-alt"></i>
-            Cleanup
+            {{ $t('views.auditLogs.cleanup') }}
           </button>
         </div>
       </div>
@@ -28,21 +28,21 @@
           @click="activeTab = 'dashboard'"
         >
           <i class="fas fa-chart-pie"></i>
-          Dashboard
+          {{ $t('views.auditLogs.dashboard') }}
         </button>
         <button
           :class="['tab-btn', { active: activeTab === 'logs' }]"
           @click="activeTab = 'logs'"
         >
           <i class="fas fa-list-alt"></i>
-          Audit Logs
+          {{ $t('views.auditLogs.auditLogs') }}
         </button>
         <button
           :class="['tab-btn', { active: activeTab === 'failures' }]"
           @click="loadFailuresTab"
         >
           <i class="fas fa-exclamation-triangle"></i>
-          Failed Operations
+          {{ $t('views.auditLogs.failedOperations') }}
         </button>
       </div>
 
@@ -94,17 +94,17 @@
       <div v-if="activeTab === 'failures'" class="tab-content">
         <div class="failures-header">
           <div class="failure-filter">
-            <label for="failure-hours">Time Range:</label>
+            <label for="failure-hours">{{ $t('views.auditLogs.timeRange') }}</label>
             <select
               id="failure-hours"
               v-model="failureHours"
               @change="loadFailedOperations(failureHours)"
             >
-              <option :value="1">Last Hour</option>
-              <option :value="6">Last 6 Hours</option>
-              <option :value="24">Last 24 Hours</option>
-              <option :value="48">Last 48 Hours</option>
-              <option :value="168">Last 7 Days</option>
+              <option :value="1">{{ $t('views.auditLogs.lastHour') }}</option>
+              <option :value="6">{{ $t('views.auditLogs.last6Hours') }}</option>
+              <option :value="24">{{ $t('views.auditLogs.last24Hours') }}</option>
+              <option :value="48">{{ $t('views.auditLogs.last48Hours') }}</option>
+              <option :value="168">{{ $t('views.auditLogs.last7Days') }}</option>
             </select>
           </div>
         </div>
@@ -143,7 +143,7 @@
           <div class="modal-header">
             <h3>
               <i class="fas fa-trash-alt"></i>
-              Cleanup Audit Logs
+              {{ $t('views.auditLogs.cleanupTitle') }}
             </h3>
             <button class="modal-close" @click="showCleanupModal = false">
               <i class="fas fa-times"></i>
@@ -152,29 +152,29 @@
           <div class="modal-body">
             <div class="warning-banner">
               <i class="fas fa-exclamation-triangle"></i>
-              <span>This action is irreversible. Deleted logs cannot be recovered.</span>
+              <span>{{ $t('views.auditLogs.cleanupWarning') }}</span>
             </div>
             <div class="cleanup-form">
-              <label for="days-to-keep">Keep logs from the last:</label>
+              <label for="days-to-keep">{{ $t('views.auditLogs.keepLogsLabel') }}</label>
               <select id="days-to-keep" v-model="cleanupDays">
-                <option :value="7">7 days</option>
-                <option :value="30">30 days</option>
-                <option :value="60">60 days</option>
-                <option :value="90">90 days (default)</option>
-                <option :value="180">180 days</option>
-                <option :value="365">1 year</option>
+                <option :value="7">{{ $t('views.auditLogs.days7') }}</option>
+                <option :value="30">{{ $t('views.auditLogs.days30') }}</option>
+                <option :value="60">{{ $t('views.auditLogs.days60') }}</option>
+                <option :value="90">{{ $t('views.auditLogs.days90Default') }}</option>
+                <option :value="180">{{ $t('views.auditLogs.days180') }}</option>
+                <option :value="365">{{ $t('views.auditLogs.days365') }}</option>
               </select>
             </div>
             <div class="cleanup-confirm">
               <label>
                 <input type="checkbox" v-model="cleanupConfirmed" />
-                I understand this will permanently delete old audit logs
+                {{ $t('views.auditLogs.cleanupConfirm') }}
               </label>
             </div>
           </div>
           <div class="modal-footer">
             <button class="btn-action-secondary" @click="showCleanupModal = false">
-              Cancel
+              {{ $t('views.auditLogs.cancel') }}
             </button>
             <button
               class="btn-action-danger"
@@ -182,7 +182,7 @@
               @click="performCleanup"
             >
               <i class="fas fa-trash-alt"></i>
-              Delete Old Logs
+              {{ $t('views.auditLogs.deleteOldLogs') }}
             </button>
           </div>
         </div>
@@ -191,7 +191,9 @@
 </template>
 
 <script setup lang="ts">
+// Issue #1359: i18n string extraction
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuditState } from '@/composables/useAuditApi'
 import AuditStatistics from '@/components/audit/AuditStatistics.vue'
 import AuditFilters from '@/components/audit/AuditFilters.vue'
@@ -200,6 +202,7 @@ import AuditTimeline from '@/components/audit/AuditTimeline.vue'
 import type { AuditFilter, AuditEntry } from '@/types/audit'
 import { createLogger } from '@/utils/debugUtils'
 
+const { t } = useI18n()
 const logger = createLogger('AuditLogsView')
 
 // Use the audit state composable
@@ -252,7 +255,7 @@ onMounted(async () => {
     await Promise.all([loadLogs(), loadStatistics(), loadOperationCategories()])
     logger.debug('Audit data loaded successfully')
   } catch (error) {
-    initError.value = 'Failed to load audit data. Please refresh the page or check your connection.'
+    initError.value = t('views.auditLogs.initError')
     logger.error('Failed to initialize audit view:', error)
   }
 })

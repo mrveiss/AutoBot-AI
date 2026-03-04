@@ -6,8 +6,8 @@
           <i class="fas fa-server"></i>
         </div>
         <div class="dialog-title">
-          <h3>Select Host for SSH Action</h3>
-          <p class="dialog-subtitle">{{ purpose || 'Choose a host to execute the command' }}</p>
+          <h3>{{ t('ui.hostSelection.title') }}</h3>
+          <p class="dialog-subtitle">{{ purpose || t('ui.hostSelection.defaultPurpose') }}</p>
         </div>
         <button
           v-if="!isProcessing"
@@ -22,7 +22,7 @@
       <div class="dialog-body">
         <!-- Command Preview -->
         <div v-if="command" class="command-preview">
-          <h4>Command to Execute:</h4>
+          <h4>{{ t('ui.hostSelection.commandToExecute') }}:</h4>
           <div class="command-box">
             <code>{{ command }}</code>
           </div>
@@ -30,20 +30,20 @@
 
         <!-- Host Selection -->
         <div class="host-selection-section">
-          <h4>Available Hosts:</h4>
+          <h4>{{ t('ui.hostSelection.availableHosts') }}:</h4>
 
           <!-- Loading State -->
           <div v-if="loading" class="loading-state">
             <i class="fas fa-spinner fa-spin"></i>
-            <span>Loading hosts...</span>
+            <span>{{ t('ui.hostSelection.loadingHosts') }}</span>
           </div>
 
           <!-- No Hosts State -->
           <div v-else-if="hosts.length === 0" class="empty-state">
             <i class="fas fa-exclamation-circle"></i>
-            <span>No infrastructure hosts configured.</span>
+            <span>{{ t('ui.hostSelection.noHostsConfigured') }}</span>
             <button @click="openSecretsManager" class="add-host-link">
-              <i class="fas fa-plus"></i> Add a host
+              <i class="fas fa-plus"></i> {{ t('ui.hostSelection.addHost') }}
             </button>
           </div>
 
@@ -75,7 +75,7 @@
                 <div class="host-name">
                   {{ host.name }}
                   <span v-if="host.id === defaultHostId" class="default-badge">
-                    <i class="fas fa-star"></i> Default
+                    <i class="fas fa-star"></i> {{ t('ui.hostSelection.default') }}
                   </span>
                 </div>
                 <div class="host-details">
@@ -95,7 +95,7 @@
                   v-if="host.id !== defaultHostId"
                   class="set-default-btn"
                   @click.stop="setAsDefault(host)"
-                  title="Set as default"
+                  :title="t('ui.hostSelection.setAsDefault')"
                   :disabled="isProcessing"
                 >
                   <i class="fas fa-star"></i>
@@ -114,7 +114,7 @@
               :disabled="isProcessing"
             />
             <span class="checkmark"></span>
-            Use this host for all SSH commands this session
+            {{ t('ui.hostSelection.rememberChoice') }}
           </label>
         </div>
 
@@ -133,7 +133,7 @@
             :disabled="isProcessing"
           >
             <i class="fas fa-times"></i>
-            Cancel
+            {{ t('ui.hostSelection.cancel') }}
           </button>
           <button
             class="btn btn-primary"
@@ -142,13 +142,13 @@
           >
             <i v-if="isProcessing" class="fas fa-spinner fa-spin"></i>
             <i v-else class="fas fa-check"></i>
-            {{ isProcessing ? 'Connecting...' : 'Connect & Execute' }}
+            {{ isProcessing ? t('ui.hostSelection.connecting') : t('ui.hostSelection.connectAndExecute') }}
           </button>
         </div>
 
         <div class="security-note">
           <i class="fas fa-lock"></i>
-          <span>Connection credentials are encrypted and never exposed.</span>
+          <span>{{ t('ui.hostSelection.securityNote') }}</span>
         </div>
       </div>
     </div>
@@ -157,11 +157,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { secretsApiClient } from '@/utils/SecretsApiClient';
 import { getBackendUrl } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 
 const logger = createLogger('HostSelectionDialog');
+const { t } = useI18n();
 
 // Types
 interface InfrastructureHost {
@@ -284,7 +286,7 @@ const loadHosts = async () => {
     logger.info('Loaded infrastructure hosts:', { count: hosts.value.length });
   } catch (err) {
     logger.error('Failed to load hosts:', err);
-    error.value = 'Failed to load infrastructure hosts';
+    error.value = t('ui.hostSelection.failedToLoadHosts');
   } finally {
     loading.value = false;
   }
@@ -321,13 +323,13 @@ const openSecretsManager = () => {
 // Handle confirm selection
 const handleConfirm = async () => {
   if (!selectedHostId.value) {
-    error.value = 'Please select a host';
+    error.value = t('ui.hostSelection.pleaseSelectHost');
     return;
   }
 
   const selectedHost = hosts.value.find(h => h.id === selectedHostId.value);
   if (!selectedHost) {
-    error.value = 'Selected host not found';
+    error.value = t('ui.hostSelection.hostNotFound');
     return;
   }
 
@@ -349,7 +351,7 @@ const handleConfirm = async () => {
     closeDialog();
   } catch (err) {
     logger.error('Failed to confirm host selection:', err);
-    error.value = 'Failed to connect to host';
+    error.value = t('ui.hostSelection.failedToConnect');
   } finally {
     isProcessing.value = false;
   }

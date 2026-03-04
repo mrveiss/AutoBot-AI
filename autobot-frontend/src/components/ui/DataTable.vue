@@ -25,7 +25,7 @@
               :role="column.sortable ? 'button' : undefined"
               :tabindex="column.sortable ? 0 : undefined"
               :aria-sort="column.sortable && sortKey === column.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : (column.sortable ? 'none' : undefined)"
-              :aria-label="column.sortable ? `Sort by ${column.label}` : undefined"
+              :aria-label="column.sortable ? t('ui.dataTable.sortBy', { column: column.label }) : undefined"
               @keydown.enter="column.sortable ? handleSort(column.key) : null"
               @keydown.space.prevent="column.sortable ? handleSort(column.key) : null"
             >
@@ -37,7 +37,7 @@
                 aria-hidden="true"
               ></i>
             </th>
-            <th v-if="$slots.actions" class="actions-column">Actions</th>
+            <th v-if="$slots.actions" class="actions-column">{{ t('ui.dataTable.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -50,8 +50,8 @@
             <td :colspan="columns.length + ($slots.actions ? 1 : 0)" class="empty-cell">
               <EmptyState
                 :icon="emptyIcon"
-                :title="emptyTitle"
-                :message="emptyMessage"
+                :title="emptyTitle || t('ui.dataTable.noDataAvailable')"
+                :message="emptyMessage || t('ui.dataTable.noItemsToDisplay')"
                 compact
               />
             </td>
@@ -80,7 +80,7 @@
         <i class="fas fa-chevron-left"></i>
       </button>
       <span class="pagination-info">
-        Page {{ currentPage }} of {{ totalPages }}
+        {{ t('ui.dataTable.pageOf', { current: currentPage, total: totalPages }) }}
       </span>
       <button
         class="pagination-btn"
@@ -95,6 +95,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import EmptyState from './EmptyState.vue'
 import LoadingSpinner from './LoadingSpinner.vue'
 
@@ -155,14 +156,14 @@ interface Props {
   emptyMessage?: string
 }
 
+const { t } = useI18n()
+
 const props = withDefaults(defineProps<Props>(), {
   showHeader: true,
   pagination: false,
   itemsPerPage: 10,
   loading: false,
-  emptyIcon: 'fas fa-inbox',
-  emptyTitle: 'No data available',
-  emptyMessage: 'There are no items to display'
+  emptyIcon: 'fas fa-inbox'
 })
 
 const emit = defineEmits<{

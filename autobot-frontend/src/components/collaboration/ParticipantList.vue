@@ -9,9 +9,11 @@
  */
 
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSessionCollaboration, type UserPresence } from '@/composables/useSessionCollaboration'
 import { useChatStore } from '@/stores/useChatStore'
 
+const { t } = useI18n()
 const chatStore = useChatStore()
 const { sessionPresence, myPresence, isConnected } = useSessionCollaboration()
 
@@ -61,11 +63,11 @@ const participantsWithRoles = computed<ParticipantWithRole[]>(() => {
 const getRoleBadge = (role: ParticipantWithRole['role']): { color: string; label: string } => {
   switch (role) {
     case 'owner':
-      return { color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', label: 'Owner' }
+      return { color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', label: t('collaboration.participants.roleOwner') }
     case 'collaborator':
-      return { color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', label: 'Editor' }
+      return { color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', label: t('collaboration.participants.roleEditor') }
     case 'viewer':
-      return { color: 'bg-autobot-bg-tertiary text-autobot-text-muted border-autobot-border', label: 'Viewer' }
+      return { color: 'bg-autobot-bg-tertiary text-autobot-text-muted border-autobot-border', label: t('collaboration.participants.roleViewer') }
   }
 }
 
@@ -102,7 +104,7 @@ const changeRole = (userId: string, newRole: 'owner' | 'collaborator' | 'viewer'
 
 // Remove participant
 const removeParticipant = (userId: string) => {
-  if (!window.confirm('Remove this participant from the session?')) return
+  if (!window.confirm(t('collaboration.participants.removeConfirm'))) return
   removingUserId.value = userId
   emit('removeParticipant', userId)
   setTimeout(() => {
@@ -122,7 +124,7 @@ const inviteParticipant = () => {
     <div class="flex items-center justify-between mb-3">
       <div class="flex items-center gap-2">
         <h3 class="text-sm font-semibold text-autobot-text-primary">
-          Participants
+          {{ $t('collaboration.participants.title') }}
         </h3>
         <span
           v-if="isConnected"
@@ -134,11 +136,11 @@ const inviteParticipant = () => {
       <button
         v-if="isOwner && allowManagement"
         class="px-2 py-1 text-xs rounded bg-blue-500 hover:bg-blue-600 text-white transition-colors flex items-center gap-1"
-        aria-label="Invite participant"
+        :aria-label="$t('collaboration.participants.inviteParticipant')"
         @click="inviteParticipant"
       >
         <i class="bi bi-person-plus" />
-        <span v-if="!compact">Invite</span>
+        <span v-if="!compact">{{ $t('collaboration.participants.invite') }}</span>
       </button>
     </div>
 
@@ -149,7 +151,7 @@ const inviteParticipant = () => {
       role="alert"
     >
       <i class="bi bi-exclamation-triangle" />
-      <span>Collaboration offline - reconnecting...</span>
+      <span>{{ $t('collaboration.participants.collaborationOffline') }}</span>
     </div>
 
     <!-- Participant list -->
@@ -194,7 +196,7 @@ const inviteParticipant = () => {
                   v-if="participant.userId === myPresence?.userId"
                   class="text-xs text-blue-400"
                 >
-                  (you)
+                  {{ $t('collaboration.participants.you') }}
                 </span>
               </div>
               <div v-if="!compact" class="text-xs text-autobot-text-muted truncate mb-1">
@@ -210,7 +212,7 @@ const inviteParticipant = () => {
                       ? 'cursor-pointer hover:opacity-80'
                       : 'cursor-default'
                   ]"
-                  :aria-label="`Change role for ${participant.username}`"
+                  :aria-label="$t('collaboration.participants.changeRoleFor', { name: participant.username })"
                   @click="toggleRoleMenu(participant.userId)"
                 >
                   {{ getRoleBadge(participant.role).label }}
@@ -258,7 +260,7 @@ const inviteParticipant = () => {
                   @click="removeParticipant(participant.userId)"
                 >
                   <i class="bi bi-person-x mr-1" />
-                  Remove
+                  {{ $t('collaboration.participants.remove') }}
                 </button>
               </div>
             </div>
@@ -272,8 +274,8 @@ const inviteParticipant = () => {
         class="text-center py-6 text-autobot-text-muted"
       >
         <i class="bi bi-people text-2xl mb-2" />
-        <div class="text-sm">No participants yet</div>
-        <div class="text-xs">Invite others to collaborate</div>
+        <div class="text-sm">{{ $t('collaboration.participants.noParticipants') }}</div>
+        <div class="text-xs">{{ $t('collaboration.participants.inviteToCollaborate') }}</div>
       </div>
     </div>
   </div>

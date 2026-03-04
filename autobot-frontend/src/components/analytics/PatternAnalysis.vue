@@ -9,7 +9,7 @@
       </button>
     </h3>
 
-    <!-- Loading State -->
+    <!-- Progress Bar (shown above results while analyzing) -->
     <div v-if="analyzing" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
       <span v-if="taskStatus">{{ taskStatus.current_step || $t('analytics.patterns.analyzingCode') }}</span>
@@ -17,10 +17,13 @@
       <div v-if="taskStatus?.progress" class="mini-progress">
         <div class="mini-progress-bar" :style="{ width: taskStatus.progress + '%' }"></div>
       </div>
+      <span v-if="taskStatus?.partial_results?.files_processed" class="files-progress">
+        {{ taskStatus.partial_results.files_processed }} / {{ taskStatus.partial_results.total_files }} files
+      </span>
     </div>
 
     <!-- Interrupted State (#1250) -->
-    <div v-else-if="wasInterrupted" class="interrupted-state">
+    <div v-if="!analyzing && wasInterrupted" class="interrupted-state">
       <i class="fas fa-info-circle"></i>
       {{ $t('analytics.patterns.interrupted') }}
       <button @click="runAnalysis" :disabled="!rootPath" class="rerun-btn">
@@ -32,15 +35,15 @@
     </div>
 
     <!-- Error State -->
-    <div v-else-if="error" class="error-state">
+    <div v-if="!analyzing && !wasInterrupted && error" class="error-state">
       <i class="fas fa-exclamation-triangle"></i> {{ error }}
       <button @click="reset" class="retry-btn">
         <i class="fas fa-redo"></i> {{ $t('analytics.patterns.reset') }}
       </button>
     </div>
 
-    <!-- Results -->
-    <div v-else-if="hasResults" class="section-content">
+    <!-- Results (shown alongside progress bar when partial results arrive) -->
+    <div v-if="hasResults" class="section-content">
       <!-- Summary Cards -->
       <div class="pattern-summary-cards">
         <div class="summary-card">
@@ -245,7 +248,7 @@
     </div>
 
     <!-- Empty State -->
-    <div v-else class="empty-state">
+    <div v-if="!analyzing && !wasInterrupted && !error && !hasResults" class="empty-state">
       <i class="fas fa-puzzle-piece"></i>
       <p>{{ $t('analytics.patterns.noAnalysis') }}</p>
       <p class="empty-hint">{{ $t('analytics.patterns.emptyHint') }}</p>
@@ -533,6 +536,11 @@ defineExpose({
   height: 100%;
   background: var(--color-purple);
   transition: width var(--duration-300) var(--ease-in-out);
+}
+
+.files-progress {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .error-state {

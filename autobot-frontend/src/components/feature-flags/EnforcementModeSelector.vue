@@ -1,9 +1,9 @@
 <template>
   <div class="enforcement-mode-selector">
     <div class="selector-header">
-      <h3><i class="fas fa-shield-alt"></i> Enforcement Mode</h3>
+      <h3><i class="fas fa-shield-alt"></i> {{ $t('featureFlags.modeSelector.title') }}</h3>
       <p class="description">
-        Control how access control violations are handled across the system
+        {{ $t('featureFlags.modeSelector.description') }}
       </p>
     </div>
 
@@ -24,7 +24,7 @@
         <div class="option-content">
           <div class="option-header">
             <span class="option-title">{{ option.label }}</span>
-            <span v-if="currentMode === option.value" class="current-badge">Current</span>
+            <span v-if="currentMode === option.value" class="current-badge">{{ $t('featureFlags.modeSelector.current') }}</span>
             <LoadingSpinner v-if="loading && pendingMode === option.value" size="sm" />
           </div>
           <p class="option-description">{{ option.description }}</p>
@@ -51,25 +51,28 @@
     <div class="mode-warning" v-if="currentMode === 'enforced'">
       <i class="fas fa-exclamation-triangle"></i>
       <div class="warning-content">
-        <strong>Full Enforcement Active</strong>
-        <p>Unauthorized access attempts will be blocked. Ensure your access control rules are correctly configured.</p>
+        <strong>{{ $t('featureFlags.modeSelector.warningTitle') }}</strong>
+        <p>{{ $t('featureFlags.modeSelector.warningDesc') }}</p>
       </div>
     </div>
 
     <div class="mode-info" v-if="currentMode === 'log_only'">
       <i class="fas fa-info-circle"></i>
       <div class="info-content">
-        <strong>Log-Only Mode</strong>
-        <p>Violations are being logged but not blocked. Review the Access Metrics to ensure rules are working correctly before enabling enforcement.</p>
+        <strong>{{ $t('featureFlags.modeSelector.infoTitle') }}</strong>
+        <p>{{ $t('featureFlags.modeSelector.infoDesc') }}</p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { EnforcementMode } from '@/utils/FeatureFlagsApiClient';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   currentMode: EnforcementMode;
@@ -82,41 +85,41 @@ const emit = defineEmits<{
 
 const pendingMode = ref<EnforcementMode | null>(null);
 
-const modeOptions = [
+const modeOptions = computed(() => [
   {
     value: 'disabled' as EnforcementMode,
-    label: 'Disabled',
+    label: t('featureFlags.modeSelector.modeDisabled'),
     icon: 'fas fa-ban',
-    description: 'Access control is completely disabled. No validation or logging occurs.',
+    description: t('featureFlags.modeSelector.modeDisabledDesc'),
     details: [
-      { type: 'neutral', icon: 'fas fa-times', text: 'No validation' },
-      { type: 'neutral', icon: 'fas fa-times', text: 'No logging' },
-      { type: 'neutral', icon: 'fas fa-times', text: 'No blocking' },
+      { type: 'neutral', icon: 'fas fa-times', text: t('featureFlags.modeSelector.modeDisabledDetail1') },
+      { type: 'neutral', icon: 'fas fa-times', text: t('featureFlags.modeSelector.modeDisabledDetail2') },
+      { type: 'neutral', icon: 'fas fa-times', text: t('featureFlags.modeSelector.modeDisabledDetail3') },
     ],
   },
   {
     value: 'log_only' as EnforcementMode,
-    label: 'Log Only',
+    label: t('featureFlags.modeSelector.modeLogOnly'),
     icon: 'fas fa-clipboard-list',
-    description: 'Violations are validated and logged, but access is not blocked. Ideal for testing.',
+    description: t('featureFlags.modeSelector.modeLogOnlyDesc'),
     details: [
-      { type: 'success', icon: 'fas fa-check', text: 'Validates requests' },
-      { type: 'success', icon: 'fas fa-check', text: 'Logs violations' },
-      { type: 'warning', icon: 'fas fa-times', text: 'Does not block' },
+      { type: 'success', icon: 'fas fa-check', text: t('featureFlags.modeSelector.modeLogOnlyDetail1') },
+      { type: 'success', icon: 'fas fa-check', text: t('featureFlags.modeSelector.modeLogOnlyDetail2') },
+      { type: 'warning', icon: 'fas fa-times', text: t('featureFlags.modeSelector.modeLogOnlyDetail3') },
     ],
   },
   {
     value: 'enforced' as EnforcementMode,
-    label: 'Enforced',
+    label: t('featureFlags.modeSelector.modeEnforced'),
     icon: 'fas fa-shield-alt',
-    description: 'Full enforcement mode. Unauthorized access attempts are blocked and logged.',
+    description: t('featureFlags.modeSelector.modeEnforcedDesc'),
     details: [
-      { type: 'success', icon: 'fas fa-check', text: 'Validates requests' },
-      { type: 'success', icon: 'fas fa-check', text: 'Logs violations' },
-      { type: 'error', icon: 'fas fa-ban', text: 'Blocks unauthorized' },
+      { type: 'success', icon: 'fas fa-check', text: t('featureFlags.modeSelector.modeEnforcedDetail1') },
+      { type: 'success', icon: 'fas fa-check', text: t('featureFlags.modeSelector.modeEnforcedDetail2') },
+      { type: 'error', icon: 'fas fa-ban', text: t('featureFlags.modeSelector.modeEnforcedDetail3') },
     ],
   },
-];
+]);
 
 const selectMode = (mode: EnforcementMode) => {
   if (mode === props.currentMode || props.loading) return;

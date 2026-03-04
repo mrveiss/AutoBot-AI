@@ -7,6 +7,7 @@
   Container view for vision analysis, image processing, and automation features.
   Issue #777: Frontend for Vision & Multimodal AI Features.
   Issue #1301: Restored after accidental deletion in #1242.
+  Issue #1359: i18n string extraction.
 -->
 <template>
   <div class="vision-view">
@@ -34,16 +35,16 @@
               d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
             />
           </svg>
-          Vision & AI
+          {{ $t('views.vision.title') }}
         </h3>
       </div>
 
-      <nav class="sidebar-nav" aria-label="Vision AI navigation">
+      <nav class="sidebar-nav" :aria-label="$t('views.vision.navLabel')">
         <router-link
           to="/vision/analyze"
           class="nav-item"
           :class="{ active: $route.path === '/vision/analyze' }"
-          aria-label="Screen analysis"
+          :aria-label="$t('views.vision.screenAnalysis')"
         >
           <svg
             class="item-icon"
@@ -59,14 +60,14 @@
               d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
             />
           </svg>
-          <span>Screen Analysis</span>
+          <span>{{ $t('views.vision.screenAnalysis') }}</span>
         </router-link>
 
         <router-link
           to="/vision/video"
           class="nav-item"
           :class="{ active: $route.path === '/vision/video' }"
-          aria-label="Video processing"
+          :aria-label="$t('views.vision.videoProcessing')"
         >
           <svg
             class="item-icon"
@@ -82,14 +83,14 @@
               d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
             />
           </svg>
-          <span>Video Processing</span>
+          <span>{{ $t('views.vision.videoProcessing') }}</span>
         </router-link>
 
         <router-link
           to="/vision/gallery"
           class="nav-item"
           :class="{ active: $route.path === '/vision/gallery' }"
-          aria-label="Media gallery"
+          :aria-label="$t('views.vision.mediaGallery')"
         >
           <svg
             class="item-icon"
@@ -105,14 +106,14 @@
               d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
             />
           </svg>
-          <span>Media Gallery</span>
+          <span>{{ $t('views.vision.mediaGallery') }}</span>
         </router-link>
 
         <router-link
           to="/vision/automation"
           class="nav-item"
           :class="{ active: $route.path === '/vision/automation' }"
-          aria-label="Vision automation"
+          :aria-label="$t('views.vision.automation')"
         >
           <svg
             class="item-icon"
@@ -128,7 +129,7 @@
               d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
             />
           </svg>
-          <span>Automation</span>
+          <span>{{ $t('views.vision.automation') }}</span>
         </router-link>
       </nav>
 
@@ -150,9 +151,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { visionMultimodalApiClient } from '@/utils/VisionMultimodalApiClient';
 
+const { t } = useI18n();
 const logger = createLogger('VisionView');
 
 const serviceStatus = ref<'healthy' | 'degraded' | 'offline'>(
@@ -166,9 +169,9 @@ const statusClass = computed(() => ({
 }));
 
 const statusText = computed(() => {
-  if (serviceStatus.value === 'healthy') return 'Vision service online';
-  if (serviceStatus.value === 'degraded') return 'Service degraded';
-  return 'Service offline';
+  if (serviceStatus.value === 'healthy') return t('views.vision.serviceOnline');
+  if (serviceStatus.value === 'degraded') return t('views.vision.serviceDegraded');
+  return t('views.vision.serviceOffline');
 });
 
 const checkServiceHealth = async () => {

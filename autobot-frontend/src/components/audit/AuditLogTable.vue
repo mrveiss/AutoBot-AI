@@ -4,16 +4,16 @@
     <div class="table-header">
       <div class="table-info">
         <span class="result-count">
-          {{ entries.length }} {{ entries.length === 1 ? 'entry' : 'entries' }}
-          <span v-if="hasMore" class="more-indicator">(more available)</span>
+          {{ t('audit.logTable.entriesCount', { count: entries.length }, entries.length) }}
+          <span v-if="hasMore" class="more-indicator">{{ $t('audit.logTable.moreAvailable') }}</span>
         </span>
       </div>
       <div class="table-actions">
         <button
           class="btn btn-icon"
           @click="$emit('refresh')"
-          title="Refresh"
-          aria-label="Refresh audit log entries"
+          :title="$t('audit.logTable.refresh')"
+          :aria-label="$t('audit.logTable.refreshAriaLabel')"
         >
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }" aria-hidden="true"></i>
         </button>
@@ -21,20 +21,20 @@
           <button
             class="btn btn-secondary"
             @click="toggleExportMenu"
-            aria-label="Export audit logs"
+            :aria-label="$t('audit.logTable.exportAriaLabel')"
             :aria-expanded="showExportMenu"
           >
             <i class="fas fa-download" aria-hidden="true"></i>
-            Export
+            {{ $t('audit.logTable.export') }}
           </button>
           <div v-if="showExportMenu" class="dropdown-menu" role="menu">
-            <button @click="exportLogs('json')" role="menuitem" aria-label="Export as JSON">
+            <button @click="exportLogs('json')" role="menuitem" :aria-label="$t('audit.logTable.exportJsonAriaLabel')">
               <i class="fas fa-file-code" aria-hidden="true"></i>
-              Export JSON
+              {{ $t('audit.logTable.exportJson') }}
             </button>
-            <button @click="exportLogs('csv')" role="menuitem" aria-label="Export as CSV">
+            <button @click="exportLogs('csv')" role="menuitem" :aria-label="$t('audit.logTable.exportCsvAriaLabel')">
               <i class="fas fa-file-csv" aria-hidden="true"></i>
-              Export CSV
+              {{ $t('audit.logTable.exportCsv') }}
             </button>
           </div>
         </div>
@@ -52,11 +52,11 @@
               role="button"
               tabindex="0"
               :aria-sort="sortField === 'timestamp' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"
-              aria-label="Sort by timestamp"
+              :aria-label="$t('audit.logTable.sortByTimestamp')"
               @keydown.enter="sortBy('timestamp')"
               @keydown.space.prevent="sortBy('timestamp')"
             >
-              <span>Timestamp</span>
+              <span>{{ $t('audit.logTable.timestamp') }}</span>
               <i v-if="sortField === 'timestamp'" :class="sortIcon" aria-hidden="true"></i>
             </th>
             <th
@@ -65,18 +65,18 @@
               role="button"
               tabindex="0"
               :aria-sort="sortField === 'operation' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"
-              aria-label="Sort by operation"
+              :aria-label="$t('audit.logTable.sortByOperation')"
               @keydown.enter="sortBy('operation')"
               @keydown.space.prevent="sortBy('operation')"
             >
-              <span>Operation</span>
+              <span>{{ $t('audit.logTable.operation') }}</span>
               <i v-if="sortField === 'operation'" :class="sortIcon" aria-hidden="true"></i>
             </th>
-            <th class="col-result">Result</th>
-            <th class="col-user">User</th>
-            <th class="col-session">Session</th>
-            <th class="col-vm">VM</th>
-            <th class="col-actions">Actions</th>
+            <th class="col-result">{{ $t('audit.logTable.result') }}</th>
+            <th class="col-user">{{ $t('audit.logTable.user') }}</th>
+            <th class="col-session">{{ $t('audit.logTable.session') }}</th>
+            <th class="col-vm">{{ $t('audit.logTable.vm') }}</th>
+            <th class="col-actions">{{ $t('audit.logTable.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -127,7 +127,7 @@
               <button
                 class="btn btn-icon btn-small"
                 @click.stop="showDetails(entry)"
-                title="View Details"
+                :title="$t('audit.logTable.viewDetails')"
               >
                 <i class="fas fa-eye"></i>
               </button>
@@ -136,7 +136,7 @@
           <tr v-if="entries.length === 0 && !loading">
             <td colspan="7" class="empty-state">
               <i class="fas fa-inbox"></i>
-              <span>No audit logs found</span>
+              <span>{{ $t('audit.logTable.noLogs') }}</span>
             </td>
           </tr>
         </tbody>
@@ -151,15 +151,15 @@
         @click="$emit('prev-page')"
       >
         <i class="fas fa-chevron-left"></i>
-        Previous
+        {{ $t('audit.logTable.previous') }}
       </button>
-      <span class="page-info">Page {{ currentPage }}</span>
+      <span class="page-info">{{ $t('audit.logTable.pageOf', { page: currentPage }) }}</span>
       <button
         class="btn btn-secondary"
         :disabled="!hasMore"
         @click="$emit('next-page')"
       >
-        Next
+        {{ $t('audit.logTable.next') }}
         <i class="fas fa-chevron-right"></i>
       </button>
     </div>
@@ -168,7 +168,7 @@
     <div v-if="selectedEntry" class="modal-overlay" @click="closeDetails">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h3>Audit Entry Details</h3>
+          <h3>{{ $t('audit.logTable.entryDetails') }}</h3>
           <button class="btn btn-icon" @click="closeDetails">
             <i class="fas fa-times"></i>
           </button>
@@ -176,50 +176,50 @@
         <div class="modal-body">
           <div class="detail-grid">
             <div class="detail-item">
-              <label>ID</label>
+              <label>{{ $t('audit.logTable.id') }}</label>
               <span class="mono">{{ selectedEntry.id }}</span>
             </div>
             <div class="detail-item">
-              <label>Timestamp</label>
+              <label>{{ $t('audit.logTable.timestamp') }}</label>
               <span>{{ formatTimestamp(selectedEntry.timestamp) }}</span>
             </div>
             <div class="detail-item">
-              <label>Operation</label>
+              <label>{{ $t('audit.logTable.operation') }}</label>
               <span>{{ formatOperationName(selectedEntry.operation) }}</span>
             </div>
             <div class="detail-item">
-              <label>Result</label>
+              <label>{{ $t('audit.logTable.result') }}</label>
               <span :class="['result-badge', `badge-${selectedEntry.result}`]">
                 <i :class="resultIcon(selectedEntry.result)"></i>
                 {{ selectedEntry.result }}
               </span>
             </div>
             <div class="detail-item">
-              <label>User ID</label>
+              <label>{{ $t('audit.logTable.userId') }}</label>
               <span>{{ selectedEntry.user_id || '-' }}</span>
             </div>
             <div class="detail-item">
-              <label>Session ID</label>
+              <label>{{ $t('audit.logTable.sessionId') }}</label>
               <span class="mono">{{ selectedEntry.session_id || '-' }}</span>
             </div>
             <div class="detail-item">
-              <label>VM Name</label>
+              <label>{{ $t('audit.logTable.vmName') }}</label>
               <span>{{ selectedEntry.vm_name || '-' }}</span>
             </div>
             <div class="detail-item">
-              <label>VM Source</label>
+              <label>{{ $t('audit.logTable.vmSource') }}</label>
               <span>{{ selectedEntry.vm_source || '-' }}</span>
             </div>
             <div class="detail-item">
-              <label>IP Address</label>
+              <label>{{ $t('audit.logTable.ipAddress') }}</label>
               <span class="mono">{{ selectedEntry.ip_address || '-' }}</span>
             </div>
             <div v-if="selectedEntry.error_message" class="detail-item detail-full">
-              <label>Error Message</label>
+              <label>{{ $t('audit.logTable.errorMessage') }}</label>
               <span class="error-message">{{ selectedEntry.error_message }}</span>
             </div>
             <div v-if="hasDetails" class="detail-item detail-full">
-              <label>Details</label>
+              <label>{{ $t('audit.logTable.details') }}</label>
               <pre class="details-json">{{ formatDetails(selectedEntry.details) }}</pre>
             </div>
           </div>
@@ -230,13 +230,14 @@
     <!-- Loading Overlay -->
     <div v-if="loading" class="loading-overlay">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Loading audit logs...</span>
+      <span>{{ $t('audit.logTable.loading') }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { AuditEntry } from '@/types/audit'
 import { formatAuditTimestamp, formatAuditRelativeTime, AUDIT_RESULT_CONFIG } from '@/types/audit'
 
@@ -264,6 +265,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<Emits>()
+const { t } = useI18n()
 
 const selectedEntry = ref<AuditEntry | null>(null)
 const showExportMenu = ref(false)

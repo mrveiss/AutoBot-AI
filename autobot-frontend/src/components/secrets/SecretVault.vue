@@ -8,9 +8,11 @@
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useChatStore, type SessionSecret } from '@/stores/useChatStore'
 import { useSessionActivityLogger, type SecretType } from '@/composables/useSessionActivityLogger'
 
+const { t } = useI18n()
 const chatStore = useChatStore()
 const { linkSecretToSession, logSecretUsage } = useSessionActivityLogger()
 
@@ -146,11 +148,11 @@ const getTypeIcon = (type: SecretType): string => {
 const getScopeBadge = (scope: SessionSecret['scope']): { color: string; label: string } => {
   switch (scope) {
     case 'user':
-      return { color: 'bg-blue-500/20 text-blue-400', label: 'Personal' }
+      return { color: 'bg-blue-500/20 text-blue-400', label: t('secrets.vault.scopePersonal') }
     case 'session':
-      return { color: 'bg-green-500/20 text-green-400', label: 'Session' }
+      return { color: 'bg-green-500/20 text-green-400', label: t('secrets.vault.scopeSession') }
     case 'shared':
-      return { color: 'bg-purple-500/20 text-purple-400', label: 'Shared' }
+      return { color: 'bg-purple-500/20 text-purple-400', label: t('secrets.vault.scopeShared') }
   }
 }
 
@@ -182,7 +184,7 @@ const shareSecret = (secretId: string) => {
 
 // Revoke secret
 const revokeSecret = (secretId: string) => {
-  if (!window.confirm('Are you sure you want to revoke access to this secret?')) return
+  if (!window.confirm(t('secrets.vault.revokeConfirm'))) return
   emit('revoke', secretId)
 }
 
@@ -192,14 +194,14 @@ const formatDate = (date: Date): string => {
 }
 
 // Secret type options
-const typeOptions: Array<{ value: SecretType | 'all'; label: string }> = [
-  { value: 'all', label: 'All' },
-  { value: 'ssh_key', label: 'SSH Keys' },
-  { value: 'password', label: 'Passwords' },
-  { value: 'api_key', label: 'API Keys' },
-  { value: 'token', label: 'Tokens' },
-  { value: 'certificate', label: 'Certificates' }
-]
+const typeOptions = computed<Array<{ value: SecretType | 'all'; label: string }>>(() => [
+  { value: 'all', label: t('secrets.vault.typeAll') },
+  { value: 'ssh_key', label: t('secrets.vault.typeSshKeys') },
+  { value: 'password', label: t('secrets.vault.typePasswords') },
+  { value: 'api_key', label: t('secrets.vault.typeApiKeys') },
+  { value: 'token', label: t('secrets.vault.typeTokens') },
+  { value: 'certificate', label: t('secrets.vault.typeCertificates') }
+])
 </script>
 
 <template>
@@ -209,15 +211,15 @@ const typeOptions: Array<{ value: SecretType | 'all'; label: string }> = [
       <div class="flex items-center justify-between mb-3">
         <h3 class="text-lg font-semibold text-gray-200">
           <i class="bi bi-shield-lock mr-2" />
-          Secret Vault
+          {{ $t('secrets.vault.title') }}
         </h3>
         <button
           class="px-3 py-1.5 text-sm rounded bg-blue-500 hover:bg-blue-600 text-white transition-colors flex items-center gap-2"
-          aria-label="Add secret"
+          :aria-label="$t('secrets.vault.addSecretAriaLabel')"
           @click="showAddSecret = true"
         >
           <i class="bi bi-plus-lg" />
-          <span>Add Secret</span>
+          <span>{{ $t('secrets.vault.addSecret') }}</span>
         </button>
       </div>
 
@@ -229,7 +231,7 @@ const typeOptions: Array<{ value: SecretType | 'all'; label: string }> = [
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Search secrets..."
+            :placeholder="$t('secrets.vault.searchPlaceholder')"
             class="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           >
         </div>
@@ -299,7 +301,7 @@ const typeOptions: Array<{ value: SecretType | 'all'; label: string }> = [
               >
               <button
                 class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors"
-                :aria-label="revealedSecrets.has(secret.id) ? 'Hide secret' : 'Reveal secret'"
+                :aria-label="revealedSecrets.has(secret.id) ? $t('secrets.vault.hideSecret') : $t('secrets.vault.revealSecret')"
                 @click="toggleReveal(secret.id)"
               >
                 <i :class="revealedSecrets.has(secret.id) ? 'bi bi-eye-slash' : 'bi bi-eye'" />
@@ -311,11 +313,11 @@ const typeOptions: Array<{ value: SecretType | 'all'; label: string }> = [
           <div class="flex items-center gap-4 text-xs text-gray-500 mb-3">
             <span>
               <i class="bi bi-calendar mr-1" />
-              Created {{ formatDate(secret.createdAt) }}
+              {{ $t('secrets.vault.created', { date: formatDate(secret.createdAt) }) }}
             </span>
             <span v-if="secret.lastUsed">
               <i class="bi bi-clock mr-1" />
-              Used {{ formatDate(secret.lastUsed) }}
+              {{ $t('secrets.vault.used', { date: formatDate(secret.lastUsed) }) }}
             </span>
           </div>
 
@@ -323,29 +325,29 @@ const typeOptions: Array<{ value: SecretType | 'all'; label: string }> = [
           <div class="flex items-center gap-2 flex-wrap">
             <button
               class="px-3 py-1.5 text-xs rounded bg-gray-600 hover:bg-gray-500 text-gray-200 transition-colors flex items-center gap-1"
-              aria-label="Copy to clipboard"
+              :aria-label="$t('secrets.vault.copyAriaLabel')"
               @click="copySecret(secret)"
             >
               <i class="bi bi-clipboard" />
-              Copy
+              {{ $t('secrets.vault.copyBtn') }}
             </button>
             <button
               v-if="secret.scope === 'user'"
               class="px-3 py-1.5 text-xs rounded bg-blue-600 hover:bg-blue-500 text-white transition-colors flex items-center gap-1"
-              aria-label="Share with session"
+              :aria-label="$t('secrets.vault.shareAriaLabel')"
               @click="shareSecret(secret.id)"
             >
               <i class="bi bi-share" />
-              Share
+              {{ $t('secrets.vault.shareBtn') }}
             </button>
             <button
               v-if="secret.scope === 'shared'"
               class="px-3 py-1.5 text-xs rounded bg-red-600 hover:bg-red-500 text-white transition-colors flex items-center gap-1"
-              aria-label="Revoke access"
+              :aria-label="$t('secrets.vault.revokeAriaLabel')"
               @click="revokeSecret(secret.id)"
             >
               <i class="bi bi-x-circle" />
-              Revoke
+              {{ $t('secrets.vault.revokeBtn') }}
             </button>
           </div>
         </div>
@@ -357,9 +359,9 @@ const typeOptions: Array<{ value: SecretType | 'all'; label: string }> = [
         class="flex flex-col items-center justify-center py-12 text-gray-500"
       >
         <i class="bi bi-shield-lock text-4xl mb-3" />
-        <div class="text-sm font-medium mb-1">No secrets found</div>
+        <div class="text-sm font-medium mb-1">{{ $t('secrets.vault.noSecrets') }}</div>
         <div class="text-xs text-gray-600">
-          {{ searchQuery ? 'Try a different search' : 'Add a secret to get started' }}
+          {{ searchQuery ? $t('secrets.vault.noSecretsSearch') : $t('secrets.vault.noSecretsHint') }}
         </div>
       </div>
     </div>

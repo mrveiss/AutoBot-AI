@@ -18,7 +18,7 @@
                 :checked="allSelected"
                 @change="toggleSelectAll"
                 class="checkbox-input"
-                aria-label="Select all rows"
+                :aria-label="t('base.table.selectAllRows')"
               />
             </th>
 
@@ -57,7 +57,7 @@
             </th>
 
             <!-- Actions Column -->
-            <th v-if="$slots.actions" class="actions-header">Actions</th>
+            <th v-if="$slots.actions" class="actions-header">{{ t('base.table.actions') }}</th>
           </tr>
         </thead>
 
@@ -68,7 +68,7 @@
             <td :colspan="totalColumns" class="empty-cell">
               <slot name="empty">
                 <div class="empty-state">
-                  <p class="empty-text">No data available</p>
+                  <p class="empty-text">{{ t('base.table.noDataAvailable') }}</p>
                 </div>
               </slot>
             </td>
@@ -94,7 +94,7 @@
                 @change="toggleRowSelection(row[rowKey])"
                 @click.stop
                 class="checkbox-input"
-                :aria-label="`Select row ${index + 1}`"
+                :aria-label="t('base.table.selectRow', { row: index + 1 })"
               />
             </td>
 
@@ -134,6 +134,7 @@
 
 <script setup lang="ts">
 import { ref, computed, useSlots } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 interface TableColumn {
   key: string
@@ -158,6 +159,8 @@ interface Props {
   selectable?: boolean
   rowClickable?: boolean
 }
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<Props>(), {
   rowKey: 'id',

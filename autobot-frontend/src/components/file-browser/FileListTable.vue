@@ -4,22 +4,22 @@
       <thead>
         <tr>
           <th @click="$emit('sort', 'name')" class="sortable">
-            Name
+            {{ $t('fileBrowser.fileList.name') }}
             <i :class="getSortIcon('name')" class="sort-icon"></i>
           </th>
           <th @click="$emit('sort', 'type')" class="sortable">
-            Type
+            {{ $t('fileBrowser.fileList.type') }}
             <i :class="getSortIcon('type')" class="sort-icon"></i>
           </th>
           <th @click="$emit('sort', 'size')" class="sortable">
-            Size
+            {{ $t('fileBrowser.fileList.size') }}
             <i :class="getSortIcon('size')" class="sort-icon"></i>
           </th>
           <th @click="$emit('sort', 'modified')" class="sortable">
-            Modified
+            {{ $t('fileBrowser.fileList.modified') }}
             <i :class="getSortIcon('modified')" class="sort-icon"></i>
           </th>
-          <th>Actions</th>
+          <th>{{ $t('fileBrowser.fileList.actions') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -44,7 +44,7 @@
               {{ file.name }}
             </span>
           </td>
-          <td>{{ file.is_dir ? 'Directory' : getFileType(file.name) }}</td>
+          <td>{{ file.is_dir ? $t('fileBrowser.fileList.directory') : getFileType(file.name) }}</td>
           <td>{{ file.is_dir ? '-' : formatSize(file.size) }}</td>
           <td>{{ formatDate(file.last_modified) }}</td>
           <td>
@@ -55,8 +55,8 @@
                 size="sm"
                 @click.stop="$emit('view-file', file)"
                 class="action-btn view-btn"
-                aria-label="View file"
-                title="View file"
+                :aria-label="$t('fileBrowser.fileList.previewFile')"
+                :title="$t('fileBrowser.fileList.preview')"
               >
                 <i class="fas fa-eye" aria-hidden="true"></i>
               </BaseButton>
@@ -66,8 +66,8 @@
                 size="sm"
                 @click.stop="$emit('navigate', file.path)"
                 class="action-btn open-btn"
-                aria-label="Open directory"
-                title="Open directory"
+                :aria-label="$t('fileBrowser.fileList.openDirectory')"
+                :title="$t('fileBrowser.fileList.open')"
               >
                 <i class="fas fa-folder-open" aria-hidden="true"></i>
               </BaseButton>
@@ -76,8 +76,8 @@
                 size="sm"
                 @click.stop="$emit('rename-file', file)"
                 class="action-btn rename-btn"
-                aria-label="Rename"
-                title="Rename"
+                :aria-label="$t('fileBrowser.fileList.renameItem')"
+                :title="$t('fileBrowser.fileList.rename')"
               >
                 <i class="fas fa-edit" aria-hidden="true"></i>
               </BaseButton>
@@ -86,8 +86,8 @@
                 size="sm"
                 @click.stop="$emit('delete-file', file)"
                 class="action-btn delete-btn"
-                aria-label="Delete"
-                title="Delete"
+                :aria-label="$t('fileBrowser.fileList.deleteItem')"
+                :title="$t('fileBrowser.fileList.delete')"
               >
                 <i class="fas fa-trash" aria-hidden="true"></i>
               </BaseButton>
@@ -99,7 +99,7 @@
     <EmptyState
       v-else
       icon="fas fa-folder-open"
-      :message="`No files or directories found${currentPath ? ' in ' + currentPath : ''}`"
+      :message="$t('fileBrowser.fileList.noFiles')"
     />
   </div>
 </template>

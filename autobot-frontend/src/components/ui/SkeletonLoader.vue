@@ -1,5 +1,5 @@
 <template>
-  <div class="skeleton-loader" :class="containerClass">
+  <div class="skeleton-loader" :class="containerClass" role="progressbar" :aria-label="t('ui.skeletonLoader.loadingContent')">
     <!-- Predefined layouts -->
     <div v-if="variant === 'chat-message'" class="skeleton-chat-message">
       <div class="skeleton-avatar"></div>
@@ -56,6 +56,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 interface Props {
   variant?: 'chat-message' | 'knowledge-card' | 'file-list' | 'stats-cards' | 'custom'
@@ -310,12 +313,6 @@ const lineClass = computed(() => ({
   color: var(--text-secondary);
   margin-bottom: var(--spacing-2);
   font-weight: var(--font-medium);
-}
-
-/* Accessibility */
-.skeleton-loader {
-  role: progressbar;
-  aria-label: 'Loading content';
 }
 
 /* Reduced motion support */

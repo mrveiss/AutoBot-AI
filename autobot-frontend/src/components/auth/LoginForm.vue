@@ -4,20 +4,20 @@
       <div class="login-header">
         <div class="logo">
           <h1>AutoBot</h1>
-          <p class="subtitle">Secure Access Portal</p>
+          <p class="subtitle">{{ $t('auth.login.subtitle') }}</p>
         </div>
       </div>
 
       <form @submit.prevent="handleLogin" class="login-form">
         <div class="form-group">
-          <label for="username" class="form-label">Username</label>
+          <label for="username" class="form-label">{{ $t('auth.login.usernameLabel') }}</label>
           <input
             id="username"
             v-model="credentials.username"
             type="text"
             class="form-input"
             :class="{ 'error': validationErrors.username }"
-            placeholder="Enter your username"
+            :placeholder="$t('auth.login.usernamePlaceholder')"
             required
             autocomplete="username"
             :disabled="isLoading"
@@ -28,7 +28,7 @@
         </div>
 
         <div class="form-group">
-          <label for="password" class="form-label">Password</label>
+          <label for="password" class="form-label">{{ $t('auth.login.passwordLabel') }}</label>
           <div class="password-input-wrapper">
             <input
               id="password"
@@ -36,7 +36,7 @@
               :type="showPassword ? 'text' : 'password'"
               class="form-input"
               :class="{ 'error': validationErrors.password }"
-              placeholder="Enter your password"
+              :placeholder="$t('auth.login.passwordPlaceholder')"
               required
               autocomplete="current-password"
               :disabled="isLoading"
@@ -73,23 +73,25 @@
           :disabled="isLoading || !isFormValid"
         >
           <span v-if="isLoading" class="loading-spinner"></span>
-          <span v-else>Sign In</span>
+          <span v-else>{{ $t('auth.login.signIn') }}</span>
         </button>
 
       </form>
     </div>
 
     <div class="login-footer">
-      <p>AutoBot Security Portal - Authenticated Access Required</p>
+      <p>{{ $t('auth.login.footer') }}</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { useRouter } from 'vue-router'
 
+const { t } = useI18n()
 const logger = createLogger('LoginForm')
 import { useUserStore, type UserProfile } from '@/stores/useUserStore'
 import ApiClient from '@/utils/ApiClient'
@@ -126,24 +128,24 @@ function validateUsername() {
   validationErrors.username = ''
 
   if (!credentials.username) {
-    validationErrors.username = 'Username is required'
+    validationErrors.username = t('auth.login.usernameRequired')
     return false
   }
 
   if (credentials.username.length < 2) {
-    validationErrors.username = 'Username must be at least 2 characters'
+    validationErrors.username = t('auth.login.usernameTooShort')
     return false
   }
 
   if (credentials.username.length > 50) {
-    validationErrors.username = 'Username is too long'
+    validationErrors.username = t('auth.login.usernameTooLong')
     return false
   }
 
   // Basic sanitization check
   const validPattern = /^[a-zA-Z0-9_\-.]+$/
   if (!validPattern.test(credentials.username)) {
-    validationErrors.username = 'Username contains invalid characters'
+    validationErrors.username = t('auth.login.usernameInvalidChars')
     return false
   }
 
@@ -154,12 +156,12 @@ function validatePassword() {
   validationErrors.password = ''
 
   if (!credentials.password) {
-    validationErrors.password = 'Password is required'
+    validationErrors.password = t('auth.login.passwordRequired')
     return false
   }
 
   if (credentials.password.length > 128) {
-    validationErrors.password = 'Password is too long'
+    validationErrors.password = t('auth.login.passwordTooLong')
     return false
   }
 
@@ -229,7 +231,7 @@ async function handleLogin() {
       await router.push('/chat')
 
     } else {
-      loginError.value = response.message || 'Login failed. Please check your credentials.'
+      loginError.value = response.message || t('auth.login.loginFailed')
     }
 
   } catch (error: any) {
@@ -239,15 +241,15 @@ async function handleLogin() {
     const statusMatch = error.message?.match(/HTTP (\d+)/)
     const status = statusMatch ? parseInt(statusMatch[1]) : 0
     if (status === 401) {
-      loginError.value = 'Invalid username or password'
+      loginError.value = t('auth.login.invalidCredentials')
     } else if (status === 423) {
-      lockoutMessage.value = 'Account temporarily locked due to multiple failed attempts'
+      lockoutMessage.value = t('auth.login.accountLocked')
     } else if (status === 429) {
-      loginError.value = 'Too many login attempts. Please try again later.'
+      loginError.value = t('auth.login.tooManyAttempts')
     } else if (status >= 500) {
-      loginError.value = 'Server error. Please try again later.'
+      loginError.value = t('auth.login.serverError')
     } else {
-      loginError.value = error.message || 'An unexpected error occurred'
+      loginError.value = error.message || t('auth.login.unexpectedError')
     }
   } finally {
     isLoading.value = false

@@ -6,9 +6,9 @@
         <div class="notice-inner">
           <i class="fas fa-shield-alt notice-icon"></i>
           <div class="notice-content">
-            <h3 class="notice-title">Security Notice</h3>
+            <h3 class="notice-title">{{ $t('views.secrets.noticeTitle') }}</h3>
             <p class="notice-text">
-              All secrets are encrypted and stored securely. Never share your API keys or access tokens.
+              {{ $t('views.secrets.noticeText') }}
             </p>
           </div>
         </div>
@@ -23,6 +23,9 @@
 <script setup lang="ts">
 // View-level component for secrets management layout
 // Issue #753: Design token usage instead of Tailwind utilities
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 </script>
 
 <style scoped>

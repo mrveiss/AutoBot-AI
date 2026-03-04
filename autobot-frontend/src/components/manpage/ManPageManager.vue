@@ -4,7 +4,7 @@
     <!-- Machine Profile Section -->
     <BasePanel variant="bordered" size="medium">
       <template #header>
-        <h3><i class="fas fa-desktop"></i> Current Machine Profile</h3>
+        <h3><i class="fas fa-desktop"></i> {{ $t('manpage.manager.title') }}</h3>
         <BaseButton
           size="sm"
           variant="outline"
@@ -12,56 +12,56 @@
           :disabled="loading?.profile"
         >
           <i class="fas fa-sync" :class="{ 'fa-spin': loading?.profile }"></i>
-          Refresh
+          {{ $t('manpage.manager.refresh') }}
         </BaseButton>
       </template>
 
       <div v-if="machineProfile && !loading?.profile" class="machine-info">
         <div class="info-grid">
           <div class="info-item">
-            <label>Machine ID:</label>
-            <span class="mono">{{ machineProfile.machine_id || 'Not detected' }}</span>
+            <label>{{ $t('manpage.manager.machineId') }}</label>
+            <span class="mono">{{ machineProfile.machine_id || $t('manpage.manager.notDetected') }}</span>
           </div>
           <div class="info-item">
-            <label>OS Type:</label>
+            <label>{{ $t('manpage.manager.osType') }}</label>
             <span class="badge" :class="getOSBadgeClass(machineProfile.os_type)">
-              {{ machineProfile.os_type || 'Unknown' }}
+              {{ machineProfile.os_type || $t('manpage.manager.unknown') }}
             </span>
           </div>
           <div class="info-item">
-            <label>Distribution:</label>
-            <span>{{ machineProfile.distro || 'N/A' }}</span>
+            <label>{{ $t('manpage.manager.distribution') }}</label>
+            <span>{{ machineProfile.distro || $t('manpage.manager.na') }}</span>
           </div>
           <div class="info-item">
-            <label>Package Manager:</label>
-            <span class="mono">{{ machineProfile.package_manager || 'Unknown' }}</span>
+            <label>{{ $t('manpage.manager.packageManager') }}</label>
+            <span class="mono">{{ machineProfile.package_manager || $t('manpage.manager.unknown') }}</span>
           </div>
           <div class="info-item">
-            <label>Available Tools:</label>
+            <label>{{ $t('manpage.manager.availableTools') }}</label>
             <span class="highlight">{{ (machineProfile.available_tools || []).length }}</span>
           </div>
           <div class="info-item">
-            <label>Architecture:</label>
-            <span>{{ machineProfile.architecture || 'Unknown' }}</span>
+            <label>{{ $t('manpage.manager.architecture') }}</label>
+            <span>{{ machineProfile.architecture || $t('manpage.manager.unknown') }}</span>
           </div>
         </div>
       </div>
 
       <div v-else-if="!loading?.profile" class="no-data">
         <i class="fas fa-exclamation-triangle"></i>
-        Machine profile not loaded. Click refresh to detect current machine.
+        {{ $t('manpage.manager.noProfile') }}
       </div>
 
       <div v-if="loading?.profile" class="loading">
         <i class="fas fa-spinner fa-spin"></i>
-        Detecting machine profile...
+        {{ $t('manpage.manager.detectingProfile') }}
       </div>
     </BasePanel>
 
     <!-- Integration Status Section -->
     <BasePanel variant="bordered" size="medium">
       <template #header>
-        <h3><i class="fas fa-chart-bar"></i> Integration Status</h3>
+        <h3><i class="fas fa-chart-bar"></i> {{ $t('manpage.manager.integrationStatus') }}</h3>
         <BaseButton
           size="sm"
           variant="outline"
@@ -69,7 +69,7 @@
           :disabled="loading?.status"
         >
           <i class="fas fa-sync" :class="{ 'fa-spin': loading?.status }"></i>
-          Refresh
+          {{ $t('manpage.manager.refresh') }}
         </BaseButton>
       </template>
 
@@ -77,15 +77,15 @@
         <div v-if="integrationStatus.status === 'not_integrated'" class="not-integrated">
           <i class="fas fa-info-circle"></i>
           <div>
-            <strong>Man pages not yet integrated</strong>
-            <p>Click "Integrate Man Pages" below to extract documentation from your system.</p>
+            <strong>{{ $t('manpage.manager.notIntegrated') }}</strong>
+            <p>{{ $t('manpage.manager.notIntegratedDesc') }}</p>
           </div>
         </div>
 
         <div v-else-if="integrationStatus.status === 'error'" class="error">
           <i class="fas fa-exclamation-circle"></i>
           <div>
-            <strong>Integration Error</strong>
+            <strong>{{ $t('manpage.manager.integrationError') }}</strong>
             <p>{{ integrationStatus.message }}</p>
           </div>
         </div>
@@ -94,29 +94,29 @@
           <div class="stats-grid">
             <div class="stat-item">
               <div class="stat-number">{{ integrationStatus.successful || 0 }}</div>
-              <div class="stat-label">Successful</div>
+              <div class="stat-label">{{ $t('manpage.manager.successful') }}</div>
             </div>
             <div class="stat-item">
               <div class="stat-number">{{ integrationStatus.processed || 0 }}</div>
-              <div class="stat-label">Processed</div>
+              <div class="stat-label">{{ $t('manpage.manager.processed') }}</div>
             </div>
             <div class="stat-item">
               <div class="stat-number">{{ integrationStatus.current_man_page_files || 0 }}</div>
-              <div class="stat-label">Knowledge Files</div>
+              <div class="stat-label">{{ $t('manpage.manager.knowledgeFiles') }}</div>
             </div>
             <div class="stat-item">
               <div class="stat-number">{{ integrationStatus.total_available_tools || 0 }}</div>
-              <div class="stat-label">Available Tools</div>
+              <div class="stat-label">{{ $t('manpage.manager.availableTools') }}</div>
             </div>
           </div>
 
           <div v-if="integrationStatus.integration_date" class="integration-date">
             <i class="fas fa-clock"></i>
-            Last integrated: {{ formatDate(integrationStatus.integration_date) }}
+            {{ $t('manpage.manager.lastIntegrated') }} {{ formatDate(integrationStatus.integration_date) }}
           </div>
 
           <div v-if="integrationStatus.available_commands" class="available-commands">
-            <h4>Integrated Commands ({{ integrationStatus.available_commands.length }}):</h4>
+            <h4>{{ $t('manpage.manager.integratedCommands', { count: integrationStatus.available_commands.length }) }}</h4>
             <div class="command-tags">
               <span
                 v-for="command in integrationStatus.available_commands"
@@ -132,14 +132,14 @@
 
       <div v-if="loading?.status" class="loading">
         <i class="fas fa-spinner fa-spin"></i>
-        Loading integration status...
+        {{ $t('manpage.manager.loadingStatus') }}
       </div>
     </BasePanel>
 
     <!-- Integration Actions -->
     <div class="integration-actions">
       <div class="section-header">
-        <h3><i class="fas fa-cogs"></i> Integration Actions</h3>
+        <h3><i class="fas fa-cogs"></i> {{ $t('manpage.manager.integrationActions') }}</h3>
       </div>
 
       <div class="action-buttons">
@@ -150,7 +150,7 @@
           :loading="loading?.initialize"
         >
           <i class="fas fa-rocket"></i>
-          Initialize Machine Knowledge
+          {{ $t('manpage.manager.initializeMachineKnowledge') }}
         </BaseButton>
 
         <BaseButton
@@ -160,7 +160,7 @@
           :loading="loading?.integrate"
         >
           <i class="fas fa-book-open"></i>
-          Integrate Man Pages
+          {{ $t('manpage.manager.integrateManPages') }}
         </BaseButton>
 
         <BaseButton
@@ -170,21 +170,21 @@
           :loading="loading?.search"
         >
           <i class="fas fa-search"></i>
-          Test Search
+          {{ $t('manpage.manager.testSearch') }}
         </BaseButton>
       </div>
 
       <!-- Real-time Progress Tracking -->
       <BasePanel v-if="showProgressTracking" variant="bordered" size="medium">
         <template #header>
-          <h3><i class="fas fa-tasks"></i> Progress Tracking</h3>
+          <h3><i class="fas fa-tasks"></i> {{ $t('manpage.manager.progressTitle') }}</h3>
           <BaseButton
             size="sm"
             variant="outline"
             @click="showProgressTracking = false"
           >
             <i class="fas fa-times"></i>
-            Hide
+            {{ $t('manpage.manager.hideProgress') }}
           </BaseButton>
         </template>
 
@@ -192,7 +192,7 @@
           <!-- Overall Progress -->
           <div class="progress-item">
             <div class="progress-label">
-              <span>{{ progressState.currentTask || 'Waiting...' }}</span>
+              <span>{{ progressState.currentTask || $t('manpage.progressTracking.waiting') }}</span>
               <span class="progress-percentage">{{ Math.round(progressState.overallProgress) }}%</span>
             </div>
             <div class="progress-bar">
@@ -207,7 +207,7 @@
           <!-- Task-specific Progress -->
           <div v-if="progressState.taskProgress > 0" class="progress-item">
             <div class="progress-label">
-              <span>{{ progressState.taskDetail || 'Processing...' }}</span>
+              <span>{{ progressState.taskDetail || $t('manpage.progressTracking.processing') }}</span>
               <span class="progress-percentage">{{ Math.round(progressState.taskProgress) }}%</span>
             </div>
             <div class="progress-bar">
@@ -236,7 +236,7 @@
           <div class="connection-status">
             <i :class="websocketConnected ? 'fas fa-plug connected-icon' : 'fas fa-plug disconnected-icon'"></i>
             <span :class="websocketConnected ? 'connected-text' : 'disconnected-text'">
-              {{ websocketConnected ? 'Connected' : 'Disconnected' }}
+              {{ websocketConnected ? $t('manpage.progressTracking.connected') : $t('manpage.progressTracking.disconnected') }}
             </span>
           </div>
         </div>
@@ -244,16 +244,16 @@
 
       <div class="action-info">
         <div class="info-item">
-          <strong>Initialize Machine Knowledge:</strong>
-          Detects your machine and creates machine-specific knowledge including man page integration.
+          <strong>{{ $t('manpage.manager.initializeMachineKnowledge') }}:</strong>
+          {{ $t('manpage.integrationActions.initializeDesc') }}
         </div>
         <div class="info-item">
-          <strong>Integrate Man Pages:</strong>
-          Extracts manual pages for available Linux commands (Linux only).
+          <strong>{{ $t('manpage.manager.integrateManPages') }}:</strong>
+          {{ $t('manpage.integrationActions.integrateDesc') }}
         </div>
         <div class="info-item">
-          <strong>Test Search:</strong>
-          Tests searching through integrated man page knowledge.
+          <strong>{{ $t('manpage.manager.testSearch') }}:</strong>
+          {{ $t('manpage.integrationActions.testSearchDesc') }}
         </div>
       </div>
     </div>
@@ -261,7 +261,7 @@
     <!-- Search Section -->
     <BasePanel v-if="showSearch" variant="bordered" size="medium">
       <template #header>
-        <h3><i class="fas fa-search"></i> Search Man Page Knowledge</h3>
+        <h3><i class="fas fa-search"></i> {{ $t('manpage.manager.searchTitle') }}</h3>
       </template>
 
       <div class="search-input">
@@ -269,7 +269,7 @@
           v-model="searchQuery"
           @keyup.enter="searchManPages"
           type="text"
-          placeholder="Search for commands, patterns, network tools, etc..."
+          :placeholder="$t('manpage.manager.searchPlaceholder')"
           class="form-input"
         >
         <BaseButton
@@ -278,24 +278,24 @@
           :disabled="!searchQuery.trim() || loading?.search"
         >
           <i class="fas fa-search"></i>
-          Search
+          {{ $t('manpage.manager.search') }}
         </BaseButton>
       </div>
 
       <div v-if="searchResults" class="search-results">
-        <h4>Search Results for "{{ lastSearchQuery }}":</h4>
+        <h4>{{ $t('manpage.manager.resultsFor', { query: lastSearchQuery }) }}</h4>
 
         <EmptyState
           v-if="searchResults.length === 0"
           icon="fas fa-info-circle"
-          message='No results found. Try different keywords like "network", "file", "process".'
+          :message="$t('manpage.manager.noResults')"
         />
 
         <div v-else class="result-list">
           <div v-for="result in searchResults" :key="result.command" class="result-item">
             <div class="result-header">
               <strong>{{ result.command }}</strong>
-              <span class="relevance-score">Score: {{ result.relevance_score }}</span>
+              <span class="relevance-score">{{ $t('manpage.manager.score', { score: result.relevance_score }) }}</span>
             </div>
             <div class="result-purpose">{{ result.purpose }}</div>
             <div class="result-meta">
@@ -317,6 +317,7 @@
 
 <script>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -336,6 +337,8 @@ export default {
     BasePanel
   },
   setup() {
+    const { t } = useI18n()
+
     // Use the shared composable
     const {
       fetchMachineProfile: fetchMachineProfileAPI,
@@ -436,11 +439,11 @@ export default {
 
         if (profile) {
           machineProfile.value = profile
-          setProgressMessage('Machine profile refreshed successfully', 'success')
+          setProgressMessage(t('manpage.manager.profileRefreshed'), 'success')
         } else {
           // Handle API errors gracefully
           machineProfile.value = null
-          setProgressMessage('Machine profile not available (backend restart required)', 'warning')
+          setProgressMessage(t('manpage.manager.noProfile'), 'warning')
         }
       } catch (error) {
         logger.error('Error refreshing machine profile:', error)
@@ -482,7 +485,7 @@ export default {
     const initializeMachineKnowledge = async () => {
       if (loading.value.initialize) return // Prevent concurrent calls
       loading.value.initialize = true
-      setProgressMessage('Initializing machine-aware knowledge...', 'info', 0)
+      setProgressMessage(t('manpage.manager.initializingKnowledge'), 'info', 0)
 
       try {
         const response = await initializeMachineKnowledgeAPI(false)
@@ -508,7 +511,7 @@ export default {
 
     const integrateManPages = async () => {
       if (!canIntegrate.value) {
-        setProgressMessage('Man page integration requires a Linux system', 'warning')
+        setProgressMessage(t('manpage.manager.linuxOnly'), 'warning')
         return
       }
 
@@ -537,7 +540,7 @@ export default {
 
     const searchManPages = async () => {
       if (!searchQuery.value.trim()) {
-        setProgressMessage('Please enter a search query', 'warning')
+        setProgressMessage(t('manpage.manager.enterQuery'), 'warning')
         return
       }
 
@@ -614,10 +617,10 @@ export default {
 
       try {
         loading.value.initialize = true
-        setProgressMessage('Initializing machine knowledge...', 'info', 0)
+        setProgressMessage(t('manpage.manager.initializingKnowledge'), 'info', 0)
 
-        updateProgress('Initializing Machine Knowledge', 10, 'Starting initialization...')
-        addProgressMessage('Starting machine knowledge initialization', 'info')
+        updateProgress(t('manpage.manager.initializeMachineKnowledge'), 10, t('manpage.manager.initializingKnowledge'))
+        addProgressMessage(t('manpage.manager.initializingKnowledge'), 'info')
 
         const response = await initializeMachineKnowledgeAPI(false)
 
@@ -625,9 +628,9 @@ export default {
           throw new Error(response.message || 'Initialization failed')
         }
 
-        updateProgress('Machine Knowledge Initialized', 100, 'Initialization complete', 100, 'success')
-        addProgressMessage('Machine knowledge initialization completed', 'success')
-        setProgressMessage('Machine knowledge initialized successfully!', 'success')
+        updateProgress(t('manpage.manager.initializeMachineKnowledge'), 100, t('manpage.manager.initComplete'), 100, 'success')
+        addProgressMessage(t('manpage.manager.initComplete'), 'success')
+        setProgressMessage(t('manpage.manager.initComplete'), 'success')
 
         await refreshMachineProfile()
         await refreshIntegrationStatus()
@@ -648,10 +651,10 @@ export default {
 
       try {
         loading.value.integrate = true
-        setProgressMessage('Integrating man pages...', 'info', 0)
+        setProgressMessage(t('manpage.manager.integrateManPages'), 'info', 0)
 
-        updateProgress('Integrating Man Pages', 10, 'Starting man page extraction...')
-        addProgressMessage('Starting man page integration', 'info')
+        updateProgress(t('manpage.manager.integrateManPages'), 10, t('manpage.manager.integrateManPages'))
+        addProgressMessage(t('manpage.manager.integrateManPages'), 'info')
 
         const response = await integrateManPagesAPI()
 
@@ -659,9 +662,9 @@ export default {
           throw new Error(response.message || 'Integration failed')
         }
 
-        updateProgress('Man Pages Integrated', 100, 'Integration complete', 100, 'success')
-        addProgressMessage('Man page integration completed', 'success')
-        setProgressMessage('Man pages integrated successfully!', 'success')
+        updateProgress(t('manpage.manager.integrateManPages'), 100, t('manpage.manager.integrationComplete'), 100, 'success')
+        addProgressMessage(t('manpage.manager.integrationComplete'), 'success')
+        setProgressMessage(t('manpage.manager.integrationComplete'), 'success')
 
         await refreshIntegrationStatus()
 
