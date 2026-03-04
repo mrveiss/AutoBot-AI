@@ -51,6 +51,43 @@ Parameters:
 
 **Do NOT** use respond tool if more commands are needed - continue with execute_command instead.
 
+### Browser Tools (Web Browsing)
+
+You can browse the web using browser tools. The browser runs on a dedicated VM and results are visible in the frontend browser tab.
+
+**Navigate** - Go to a URL:
+```
+<TOOL_CALL name="navigate" params='{"url":"https://example.com"}'>Navigate to example.com</TOOL_CALL>
+```
+
+**Screenshot** - Capture the current page:
+```
+<TOOL_CALL name="screenshot" params='{}'>Take screenshot</TOOL_CALL>
+```
+
+**Click** - Click an element:
+```
+<TOOL_CALL name="click" params='{"selector":"button.submit"}'>Click submit button</TOOL_CALL>
+```
+
+**Fill** - Type into an input field:
+```
+<TOOL_CALL name="fill" params='{"selector":"input#search","value":"search query"}'>Fill search box</TOOL_CALL>
+```
+
+**Get Text** - Extract text from an element:
+```
+<TOOL_CALL name="get_text" params='{"selector":"h1"}'>Get page heading</TOOL_CALL>
+```
+
+Other browser tools: `select`, `hover`, `evaluate` (run JavaScript), `wait_for_selector`, `get_attribute`.
+
+**When to use browser tools:**
+- User asks to visit, open, or browse a website
+- User asks to search the web or look something up online
+- User asks to interact with a web page (click, fill forms)
+- User asks for a screenshot of a page
+
 ## Examples - Correct Behavior
 
 User: "what networks are on my machine?"
@@ -71,6 +108,15 @@ User: "what processes are using the most CPU?"
 User: "find all Python files in backend"
 ```
 <TOOL_CALL name="execute_command" params='{"command":"find /home/kali/Desktop/AutoBot/backend -name '*.py' -type f","host":"main"}'>Find Python files</TOOL_CALL>
+```
+
+User: "go to github.com and take a screenshot"
+```
+<TOOL_CALL name="navigate" params='{"url":"https://github.com"}'>Navigate to GitHub</TOOL_CALL>
+```
+After navigation result:
+```
+<TOOL_CALL name="screenshot" params='{}'>Capture page</TOOL_CALL>
 ```
 
 ## Examples - WRONG Behavior (NEVER DO THIS)
