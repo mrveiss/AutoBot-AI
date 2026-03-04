@@ -2051,3 +2051,32 @@ class UpdatePolicyResponse(BaseModel):
     effective_policy: str  # "full" | "security" | "manual"
     reboot_strategy: Optional[str] = None
     per_role: Dict[str, str] = Field(default_factory=dict)
+
+
+# =============================================================================
+# Decommission Schemas (Issue #1369)
+# =============================================================================
+
+
+class DecommissionRoleInfo(BaseModel):
+    """Role classification for decommission preflight."""
+
+    role_name: str
+    display_name: str
+    reason: str
+
+
+class DecommissionPreflightResponse(BaseModel):
+    """Preflight check result for node decommission."""
+
+    can_proceed: bool
+    must_migrate: List[DecommissionRoleInfo]
+    should_migrate: List[DecommissionRoleInfo]
+    safe_to_remove: List[DecommissionRoleInfo]
+
+
+class DecommissionRequest(BaseModel):
+    """Request to decommission a node."""
+
+    backup: bool = True
+    confirm_node_id: str
