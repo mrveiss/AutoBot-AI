@@ -530,6 +530,7 @@ import {
   type ExecutionStrategy,
 } from '@/composables/useWorkflowBuilder';
 import type { WorkflowTemplateSummary } from '@/types/workflowTemplates';
+import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue';
 import WorkflowTemplateGallery from '@/components/workflow/WorkflowTemplateGallery.vue';
@@ -603,6 +604,9 @@ const {
   connectWebSocket,
   disconnectWebSocket,
 } = useWorkflowBuilder();
+
+// Issue #1367: Fetch full template detail when summary lacks steps
+const { fetchTemplateDetail } = useWorkflowTemplates();
 
 // Local State
 const activeSection = ref<SectionType>('overview');
@@ -809,10 +813,15 @@ async function handleSaveWorkflow(name: string, description: string): Promise<vo
 }
 
 async function handleTemplateSelected(template: WorkflowTemplate | WorkflowTemplateSummary): Promise<void> {
-  const full = template as WorkflowTemplate;
+  let full = template as WorkflowTemplate;
+  // Issue #1367: API summaries lack steps — fetch full detail
   if (!full.steps?.length) {
-    showToast('Template has no steps to load', 'warning');
-    return;
+    const detail = await fetchTemplateDetail(template.id);
+    if (!detail?.steps?.length) {
+      showToast('Template has no steps to load', 'warning');
+      return;
+    }
+    full = { ...template, steps: detail.steps } as WorkflowTemplate;
   }
   clearCanvas();
   full.steps.forEach((step, index) => {

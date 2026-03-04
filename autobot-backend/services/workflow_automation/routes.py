@@ -207,6 +207,28 @@ async def get_active_workflows(
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="get_completed_workflows",
+    error_code_prefix="WORKFLOW_AUTOMATION",
+)
+@router.get("/completed_workflows")
+async def get_completed_workflows(
+    current_user: dict = Depends(get_current_user),
+):
+    """Return completed workflow history (#1367)."""
+    try:
+        workflows = get_workflow_manager().get_completed_workflows()
+        return {
+            "success": True,
+            "workflows": workflows,
+            "count": len(workflows),
+        }
+    except Exception as e:
+        logger.error("Failed to get completed workflows: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="create_workflow_from_chat",
     error_code_prefix="WORKFLOW_AUTOMATION",
 )

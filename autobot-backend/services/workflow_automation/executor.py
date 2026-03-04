@@ -11,7 +11,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING, Callable, Dict, Optional
 
 from constants.threshold_constants import TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -44,6 +44,8 @@ class WorkflowExecutor:
         # Issue #390: Track pending plan approvals
         self._pending_plan_approvals: Dict[str, PlanApprovalRequest] = {}
         self._plan_approval_events: Dict[str, asyncio.Event] = {}
+        # Issue #1367: Called when a workflow finishes (completed/cancelled)
+        self.on_workflow_finished: Optional[Callable[[str], None]] = None
 
     async def start_execution(
         self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
@@ -399,6 +401,10 @@ class WorkflowExecutor:
             workflow.session_id, self._build_completion_message(workflow)
         )
 
+        # Issue #1367: Archive to completed history
+        if self.on_workflow_finished:
+            self.on_workflow_finished(workflow.workflow_id)
+
     def _record_cancellation_metrics(
         self, workflow: ActiveWorkflow, workflows: Dict[str, ActiveWorkflow]
     ) -> None:
@@ -442,6 +448,10 @@ class WorkflowExecutor:
             workflow.session_id,
             {"type": "workflow_cancelled", "workflow_id": workflow.workflow_id},
         )
+
+        # Issue #1367: Archive to completed history
+        if self.on_workflow_finished:
+            self.on_workflow_finished(workflow.workflow_id)
 
     # =========================================================================
     # Issue #390: Plan Approval System - Present Plan Before Execution

@@ -38,10 +38,14 @@ class WorkflowAutomationManager:
         """Initialize manager with workflow state and specialized components."""
         # Core state
         self.active_workflows: Dict[str, ActiveWorkflow] = {}
+        # Issue #1367: Completed workflow history (persists until restart)
+        self.completed_workflows: Dict[str, ActiveWorkflow] = {}
 
         # Composition: delegate to specialized components
         self.messenger = WorkflowMessenger()
         self.executor = WorkflowExecutor(self.messenger)
+        # Issue #1367: Archive finished workflows to completed history
+        self.executor.on_workflow_finished = self.archive_completed_workflow
         self.controller = WorkflowController(self.messenger, self.executor)
         self.template_manager = WorkflowTemplateManager()
 
@@ -157,11 +161,12 @@ class WorkflowAutomationManager:
         )
 
     def get_workflow_status(self, workflow_id: str) -> Optional[Metadata]:
-        """Get current workflow status (Issue #372 - uses model method)."""
-        if workflow_id not in self.active_workflows:
+        """Get workflow status from active or completed (#372, #1367)."""
+        workflow = self.active_workflows.get(workflow_id)
+        if not workflow:
+            workflow = self.completed_workflows.get(workflow_id)
+        if not workflow:
             return None
-
-        workflow = self.active_workflows[workflow_id]
         return workflow.to_status_dict()
 
     def get_template_workflow(
@@ -173,6 +178,27 @@ class WorkflowAutomationManager:
     def list_templates(self) -> List[str]:
         """List available workflow templates"""
         return self.template_manager.list_templates()
+
+    # =========================================================================
+    # Issue #1367: Completed Workflow History
+    # =========================================================================
+
+    MAX_COMPLETED_HISTORY = 100
+
+    def archive_completed_workflow(self, workflow_id: str) -> None:
+        """Move finished workflow from active to completed (#1367)."""
+        workflow = self.active_workflows.pop(workflow_id, None)
+        if not workflow:
+            return
+        self.completed_workflows[workflow_id] = workflow
+        while len(self.completed_workflows) > self.MAX_COMPLETED_HISTORY:
+            oldest_key = next(iter(self.completed_workflows))
+            del self.completed_workflows[oldest_key]
+        logger.info("Archived workflow %s to completed history", workflow_id)
+
+    def get_completed_workflows(self) -> List[Metadata]:
+        """Return all completed workflow statuses (#1367)."""
+        return [wf.to_status_dict() for wf in self.completed_workflows.values()]
 
     # =========================================================================
     # Issue #390: Plan Approval System Methods
