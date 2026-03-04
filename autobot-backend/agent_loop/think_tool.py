@@ -111,6 +111,17 @@ Validate my assumptions:
 
 Provide your reasoning and conclusion.
 """,
+    ThinkCategory.SELF_REFLECTION: """
+Evaluate the quality of this response against the original query (RLM pattern):
+
+1. Does the response directly answer the query?
+2. Is the response accurate and complete?
+3. Are there important aspects the response missed?
+4. Is the reasoning sound and well-structured?
+5. Would a follow-up pass with specific guidance produce a better answer?
+
+Provide your quality score (0.0-1.0) and specific critique.
+""",
     ThinkCategory.GENERAL: """
 Think through this situation:
 

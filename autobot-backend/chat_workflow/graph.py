@@ -8,11 +8,18 @@ Issue #1043: Replaces hand-rolled streaming architecture with LangGraph
 StateGraph for native message identity, deduplication, and interrupt-based
 command approval.
 
+Issue #1373: Added RLM (Recursive Language Model) self-reflection node.
+After generate_response, when no tool calls are present the graph routes
+through reflect_on_response which scores the answer.  If quality is below
+the threshold AND reflections haven't been exhausted, the graph loops
+back to generate_response with a refinement hint injected into the prompt.
+
 Architecture:
     - Graph state (ChatState) is the single source of truth for messages
     - Redis checkpointer provides thread-based persistence
     - LangGraph interrupts replace polling for command approval
     - Graph nodes delegate to existing ChatWorkflowManager business logic
+    - RLM reflection evaluates response quality before persisting
 """
 
 import logging
@@ -72,6 +79,11 @@ class ChatState(TypedDict, total=False):
     # Output messages streamed to frontend
     workflow_messages: List[Dict[str, Any]]
 
+    # RLM self-reflection (#1373)
+    reflection_count: int
+    reflection_history: List[Dict[str, Any]]
+    rlm_refinement_hint: str
+
     # Error tracking
     error: Optional[str]
 
@@ -107,6 +119,10 @@ async def initialize_session(state: ChatState, config: dict) -> dict:
             "workflow_messages": [],
             "tool_calls": [],
             "should_continue": False,
+            # RLM state (#1373)
+            "reflection_count": 0,
+            "reflection_history": [],
+            "rlm_refinement_hint": "",
         }
     except Exception as exc:
         logger.error("initialize_session failed: %s", exc, exc_info=True)
@@ -186,12 +202,27 @@ async def prepare_llm(state: ChatState, config: dict) -> dict:
 
 
 def _build_llm_iteration_context(state: ChatState):
-    """Helper for generate_response. Ref: #1088.
+    """Helper for generate_response. Ref: #1088, #1373.
 
     Reconstructs an LLMIterationContext from the current graph state so that
     generate_response can delegate to the manager's continuation loop method.
+
+    When an RLM refinement hint is present (set by reflect_on_response), it
+    is appended to the initial prompt so the LLM focuses on the identified
+    deficiency in the next pass.
     """
     from .models import LLMIterationContext
+
+    initial_prompt = state["llm_params"].get("initial_prompt") or ""
+
+    # Inject RLM refinement hint when looping back (#1373)
+    hint = state.get("rlm_refinement_hint", "")
+    if hint:
+        initial_prompt = (
+            f"{initial_prompt}\n\n"
+            f"[Self-reflection feedback — please improve your answer: "
+            f"{hint}]"
+        )
 
     return LLMIterationContext(
         ollama_endpoint=state["llm_params"]["ollama_endpoint"],
@@ -203,7 +234,7 @@ def _build_llm_iteration_context(state: ChatState):
         workflow_messages=[],
         execution_history=list(state.get("execution_history", [])),
         system_prompt=state["llm_params"].get("system_prompt"),
-        initial_prompt=state["llm_params"].get("initial_prompt"),
+        initial_prompt=initial_prompt,
         message=state["user_message"],
     )
 
@@ -283,6 +314,53 @@ async def generate_response(state: ChatState, config: dict) -> dict:
         "all_llm_responses": all_responses,
         "tool_calls": parsed_tool_calls,
         "workflow_messages": messages,
+    }
+
+
+async def reflect_on_response(state: ChatState, config: dict) -> dict:
+    """RLM self-reflection: evaluate LLM response quality (#1373).
+
+    Uses ResponseQualityEvaluator to score the latest LLM response.
+    If the score is below the configured threshold and the reflection
+    budget hasn't been exhausted, sets rlm_refinement_hint so the next
+    generate_response pass can incorporate it.
+    """
+    from rlm import ResponseQualityEvaluator, RLMConfig
+
+    rlm_cfg = config["configurable"].get("rlm_config") or RLMConfig()
+
+    # Fast-path: RLM disabled or no response to evaluate
+    if not rlm_cfg.enabled:
+        return {}
+
+    llm_response = state.get("llm_response", "")
+    if not llm_response:
+        return {}
+
+    reflection_count = state.get("reflection_count", 0)
+    history = list(state.get("reflection_history", []))
+
+    evaluator = ResponseQualityEvaluator(config=rlm_cfg)
+    result = await evaluator.evaluate(
+        query=state["user_message"],
+        response=llm_response,
+        iteration=reflection_count + 1,
+    )
+
+    history.append(result.to_dict())
+
+    logger.info(
+        "RLM reflect: score=%.2f verdict=%s iter=%d/%d",
+        result.quality_score,
+        result.verdict.name,
+        reflection_count + 1,
+        rlm_cfg.max_reflections,
+    )
+
+    return {
+        "reflection_count": reflection_count + 1,
+        "reflection_history": history,
+        "rlm_refinement_hint": result.refinement_hint,
     }
 
 
@@ -459,7 +537,12 @@ def route_after_intent(state: ChatState) -> str:
 
 
 def route_after_generation(state: ChatState) -> str:
-    """Route after LLM response generation."""
+    """Route after LLM response generation.
+
+    Issue #1373: When there are no tool calls, route through
+    reflect_on_response before persisting so the RLM evaluator
+    can decide whether to refine the answer.
+    """
     if state.get("error"):
         return "persist_conversation"
 
@@ -470,6 +553,31 @@ def route_after_generation(state: ChatState) -> str:
         return "request_approval"
     if tool_calls:
         return "execute_tools"
+    # No tool calls → run RLM self-reflection before persisting
+    return "reflect_on_response"
+
+
+def route_after_reflection(state: ChatState) -> str:
+    """Route after RLM self-reflection (#1373).
+
+    If the evaluator returned REFINE and the reflection budget isn't
+    exhausted, loop back to generate_response.  Otherwise persist.
+    """
+    from rlm.types import RLMConfig
+
+    history = state.get("reflection_history", [])
+    if not history:
+        return "persist_conversation"
+
+    latest = history[-1]
+    verdict = latest.get("verdict", "ACCEPT")
+    reflection_count = state.get("reflection_count", 0)
+
+    # Use default config ceiling — the actual config is in the node
+    max_reflections = RLMConfig().max_reflections
+
+    if verdict == "REFINE" and reflection_count < max_reflections:
+        return "generate_response"
     return "persist_conversation"
 
 
@@ -490,16 +598,19 @@ def route_after_execution(state: ChatState) -> str:
 def build_chat_graph() -> StateGraph:
     """Build the chat workflow StateGraph.
 
-    Graph topology:
-        START → initialize_session → detect_intent
-            → [END if special intent]
-            → prepare_llm → generate_response
-                → [request_approval if needs approval] → execute_tools
-                → [execute_tools if has tools]
-                → [persist_conversation if no tools]
-            execute_tools → [generate_response if should_continue]
-                          → [persist_conversation if done]
-            persist_conversation → END
+    Graph topology (#1373 — RLM reflection loop added):
+        START -> initialize_session -> detect_intent
+            -> [END if special intent]
+            -> prepare_llm -> generate_response
+                -> [request_approval if needs approval] -> execute_tools
+                -> [execute_tools if has tools]
+                -> [reflect_on_response if no tools]
+            reflect_on_response
+                -> [generate_response if REFINE and budget remains]
+                -> [persist_conversation if ACCEPT or budget exhausted]
+            execute_tools -> [generate_response if should_continue]
+                          -> [persist_conversation if done]
+            persist_conversation -> END
     """
     builder = StateGraph(ChatState)
 
@@ -508,6 +619,7 @@ def build_chat_graph() -> StateGraph:
     builder.add_node("detect_intent", detect_intent)
     builder.add_node("prepare_llm", prepare_llm)
     builder.add_node("generate_response", generate_response)
+    builder.add_node("reflect_on_response", reflect_on_response)
     builder.add_node("request_approval", request_approval)
     builder.add_node("execute_tools", execute_tools)
     builder.add_node("persist_conversation", persist_conversation)
@@ -518,6 +630,7 @@ def build_chat_graph() -> StateGraph:
     builder.add_conditional_edges("detect_intent", route_after_intent)
     builder.add_edge("prepare_llm", "generate_response")
     builder.add_conditional_edges("generate_response", route_after_generation)
+    builder.add_conditional_edges("reflect_on_response", route_after_reflection)
     builder.add_edge("request_approval", "execute_tools")
     builder.add_conditional_edges("execute_tools", route_after_execution)
     builder.add_edge("persist_conversation", END)
