@@ -21,6 +21,7 @@ from services.context_sufficiency import (
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
 from services.rag_config import RAGConfig, get_rag_config
 from services.semantic_query_cache import get_semantic_query_cache
+from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cache
 from type_defs.common import Metadata
 
 from autobot_shared.logging_manager import get_llm_logger
@@ -184,6 +185,66 @@ class RAGService:
                 return await self._fallback_basic_search(query, max_results)
             raise
 
+    async def _check_topic_cache(
+        self, query: str
+    ) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+        """Check topic retrieval cache for related chunks. Issue #1376."""
+        try:
+            from knowledge.facts import _generate_embedding_with_npu_fallback
+
+            embedding = await _generate_embedding_with_npu_fallback(query)
+            if embedding is None:
+                return None
+            topic_cache = await get_topic_retrieval_cache()
+            chunks = await topic_cache.lookup(embedding)
+            if chunks is None:
+                return None
+            results = [
+                SearchResult(
+                    content=c.content,
+                    metadata={**c.metadata, "source": "topic_cache"},
+                    semantic_score=c.score,
+                    keyword_score=0.0,
+                    hybrid_score=c.score,
+                    relevance_rank=i + 1,
+                    source_path=c.metadata.get("source_path", "topic_cache"),
+                )
+                for i, c in enumerate(chunks)
+            ]
+            metrics = RAGMetrics()
+            metrics.total_time = 0.0
+            metrics.final_results_count = len(results)
+            return results, metrics
+        except Exception as exc:
+            logger.debug("Topic cache check failed: %s", exc)
+            return None
+
+    async def _store_in_topic_cache(self, results: List[SearchResult]) -> None:
+        """Store search results in topic retrieval cache. Issue #1376."""
+        if not results:
+            return
+        try:
+            from knowledge.facts import _generate_embedding_with_npu_fallback
+
+            embeddings = []
+            chunks = []
+            for r in results[:10]:
+                emb = await _generate_embedding_with_npu_fallback(r.content)
+                if emb is not None:
+                    embeddings.append(emb)
+                    chunks.append(
+                        CachedChunk(
+                            content=r.content,
+                            metadata=r.metadata or {},
+                            score=r.hybrid_score,
+                        )
+                    )
+            if embeddings:
+                topic_cache = await get_topic_retrieval_cache()
+                await topic_cache.store(embeddings, chunks)
+        except Exception as exc:
+            logger.debug("Topic cache store failed: %s", exc)
+
     async def _check_semantic_cache(
         self, query: str
     ) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
@@ -242,36 +303,18 @@ class RAGService:
         except Exception as exc:
             logger.debug("Semantic cache store failed: %s", exc)
 
-    async def advanced_search(
+    async def _check_cache_tiers(
         self,
         query: str,
-        max_results: int = 5,
-        enable_reranking: bool = True,
-        timeout: Optional[float] = None,
-        categories: Optional[List[str]] = None,
-    ) -> Tuple[List[SearchResult], RAGMetrics]:
+        max_results: int,
+        enable_reranking: bool,
+        categories: Optional[List[str]],
+    ) -> Optional[Tuple[List[SearchResult], RAGMetrics, str]]:
+        """Check all cache tiers before falling through to ChromaDB. Ref: #1376.
+
+        Returns (results, metrics, cache_key) on hit, None on miss.
+        The cache_key is always returned for downstream use.
         """
-        Perform advanced RAG search with reranking.
-
-        Issue #556: Added categories parameter for category-based filtering.
-        Issue #665: Refactored with extracted helper methods.
-        Issue #1088: Extracted _execute_and_cache_search helper.
-        Issue #1372: Added semantic query cache tier.
-
-        Args:
-            query: Search query string
-            max_results: Maximum number of results to return
-            enable_reranking: Whether to apply cross-encoder reranking
-            timeout: Optional timeout in seconds (uses config default if not provided)
-            categories: Optional list of categories to filter results
-
-        Returns:
-            Tuple of (search_results, metrics)
-        """
-        if not self.config.enable_advanced_rag:
-            logger.info("Advanced RAG disabled in configuration")
-            return await self._fallback_basic_search(query, max_results, categories)
-
         evaluator = get_context_sufficiency_evaluator()
 
         # Tier 0: Semantic similarity cache (Issue #1372)
@@ -283,9 +326,8 @@ class RAGService:
             )
             check = await evaluator.evaluate(query, context_text, cached_at)
             if check.verdict != SufficiencyVerdict.INSUFFICIENT:
-                logger.debug("Semantic cache hit (sufficient) for: '%s...'", query[:50])
-                return sem_result
-            logger.info("Semantic cache hit rejected (insufficient): %s", check.reason)
+                return sem_result + ("",)
+            logger.info("Semantic cache hit rejected: %s", check.reason)
 
         # Tier 1: Exact-match cache
         cache_key = self._build_cache_key(
@@ -296,21 +338,58 @@ class RAGService:
             context_text = " ".join(r.content for r in cached_result[0][:3])
             check = await evaluator.evaluate(query, context_text)
             if check.verdict != SufficiencyVerdict.INSUFFICIENT:
-                logger.debug("Cache hit (sufficient) for: '%s...'", query[:50])
-                return cached_result
-            logger.info("Cache hit rejected (insufficient): %s", check.reason)
+                return cached_result + (cache_key,)
+            logger.info("Cache hit rejected: %s", check.reason)
 
-        if not await self.initialize():
-            logger.warning("RAG optimizer initialization failed, using fallback")
+        # Tier 2: Topic-level retrieval cache (Issue #1376)
+        topic_result = await self._check_topic_cache(query)
+        if topic_result is not None:
+            return topic_result + (cache_key,)
+
+        return None
+
+    async def advanced_search(
+        self,
+        query: str,
+        max_results: int = 5,
+        enable_reranking: bool = True,
+        timeout: Optional[float] = None,
+        categories: Optional[List[str]] = None,
+    ) -> Tuple[List[SearchResult], RAGMetrics]:
+        """Perform advanced RAG search with reranking.
+
+        Issue #556: categories. Issue #1372: semantic cache.
+        Issue #1376: topic cache. Issue #1374: sufficiency guard.
+        """
+        if not self.config.enable_advanced_rag:
             return await self._fallback_basic_search(query, max_results, categories)
 
+        hit = await self._check_cache_tiers(
+            query, max_results, enable_reranking, categories
+        )
+        if hit is not None:
+            return hit[0], hit[1]
+
+        if not await self.initialize():
+            logger.warning("RAG init failed, using fallback")
+            return await self._fallback_basic_search(query, max_results, categories)
+
+        cache_key = self._build_cache_key(
+            query, max_results, enable_reranking, categories
+        )
         timeout_seconds = timeout or self.config.timeout_seconds
         results, metrics = await self._execute_and_cache_search(
-            query, max_results, enable_reranking, timeout_seconds, categories, cache_key
+            query,
+            max_results,
+            enable_reranking,
+            timeout_seconds,
+            categories,
+            cache_key,
         )
 
-        # Store in semantic cache for future similarity lookups
+        # Store in semantic + topic caches for future lookups
         await self._store_in_semantic_cache(query, results)
+        await self._store_in_topic_cache(results)
 
         return results, metrics
 
