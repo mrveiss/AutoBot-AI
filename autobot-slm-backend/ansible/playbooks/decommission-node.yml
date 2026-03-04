@@ -1,0 +1,217 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+---
+# Full node decommission playbook (Issue #1369)
+#
+# Removes ALL AutoBot software, services, data, and caches from a node.
+# This is irreversible — use the preflight API to check for required
+# roles before running.
+#
+# Optional vars:
+#   backup_before_decommission - Archive data dirs first (default: false)
+#   all_data_dirs              - List of data directories to backup
+#
+# Usage:
+#   ansible-playbook playbooks/decommission-node.yml \
+#     -i inventory/production.yml -i inventory/slm-nodes.yml \
+#     --limit <node_id> \
+#     -e "backup_before_decommission=true"
+
+- name: "Decommission AutoBot node"
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    backup_dir: /opt/autobot/backups
+    backup_timestamp: "{{ ansible_date_time.epoch }}"
+    decommission_backup_path: "{{ backup_dir }}/decommission-{{ backup_timestamp }}"
+    default_data_dirs:
+      - /var/lib/redis
+      - /var/lib/postgresql
+      - /var/lib/chromadb
+      - /var/lib/autobot
+      - /usr/share/ollama/.ollama
+      - /var/lib/ollama
+
+  tasks:
+    # =======================================================================
+    # PHASE 1: OPTIONAL BACKUP
+    # =======================================================================
+    - name: "Backup data before decommission"
+      when: backup_before_decommission | default(false) | bool
+      block:
+        - name: Set data directories to back up
+          ansible.builtin.set_fact:
+            _data_dirs: "{{ all_data_dirs | default(default_data_dirs) }}"
+
+        - name: Check which data directories exist
+          ansible.builtin.stat:
+            path: "{{ item }}"
+          loop: "{{ _data_dirs }}"
+          register: _dir_checks
+
+        - name: Filter to existing directories
+          ansible.builtin.set_fact:
+            _existing_dirs: >-
+              {{ _dir_checks.results
+                 | selectattr('stat.exists', 'true')
+                 | map(attribute='item')
+                 | list }}
+
+        - name: Create backup directory
+          ansible.builtin.file:
+            path: "{{ decommission_backup_path }}"
+            state: directory
+            mode: '0750'
+          when: _existing_dirs | length > 0
+
+        - name: Archive each data directory
+          ansible.builtin.archive:
+            path: "{{ item }}"
+            dest: "{{ decommission_backup_path }}/{{ item | basename }}.tar.gz"
+            format: gz
+          loop: "{{ _existing_dirs }}"
+          when: _existing_dirs | length > 0
+
+        - name: Write backup manifest
+          ansible.builtin.copy:
+            dest: "{{ decommission_backup_path }}/manifest.yml"
+            content: |
+              hostname: {{ ansible_hostname }}
+              ip_address: {{ ansible_default_ipv4.address }}
+              timestamp: {{ ansible_date_time.iso8601 }}
+              directories: {{ _existing_dirs | to_json }}
+            mode: '0640'
+          when: _existing_dirs | length > 0
+
+    # =======================================================================
+    # PHASE 2: STOP ALL AUTOBOT SERVICES
+    # =======================================================================
+    - name: Find all autobot systemd services
+      ansible.builtin.shell: >
+        systemctl list-units 'autobot-*' --no-pager --plain --no-legend
+        | awk '{print $1}'
+      register: _autobot_services
+      changed_when: false
+
+    - name: Check for additional managed services
+      ansible.builtin.shell: >
+        systemctl list-units '{{ item }}' --no-pager --plain --no-legend
+        | awk '{print $1}'
+      loop:
+        - slm-agent.service
+        - redis-stack-server.service
+        - ollama.service
+      register: _extra_services
+      changed_when: false
+
+    - name: Build full service list
+      ansible.builtin.set_fact:
+        _all_services: >-
+          {{ (_autobot_services.stdout_lines | default([]))
+             + (_extra_services.results
+                | map(attribute='stdout_lines')
+                | flatten
+                | select('match', '.+')
+                | list) }}
+
+    - name: Stop and disable all services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop: "{{ _all_services }}"
+      ignore_errors: true
+
+    # =======================================================================
+    # PHASE 3: REMOVE SYSTEMD UNIT FILES
+    # =======================================================================
+    - name: Find autobot unit files
+      ansible.builtin.shell: >
+        find /etc/systemd/system -name 'autobot-*.service' -type f
+      register: _unit_files
+      changed_when: false
+
+    - name: Remove autobot unit files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: "{{ _unit_files.stdout_lines | default([]) }}"
+
+    - name: Remove additional managed service files
+      ansible.builtin.file:
+        path: "/etc/systemd/system/{{ item }}"
+        state: absent
+      loop:
+        - slm-agent.service
+        - redis-stack-server.service
+        - ollama.service
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    # =======================================================================
+    # PHASE 4: REMOVE APPLICATION CODE
+    # =======================================================================
+    - name: "Remove /opt/autobot contents (preserve backups)"
+      ansible.builtin.shell: |
+        find /opt/autobot -mindepth 1 -maxdepth 1 ! -name 'backups' -exec rm -rf {} +
+      args:
+        removes: /opt/autobot
+
+    # =======================================================================
+    # PHASE 5: REMOVE DATA AND LOGS
+    # =======================================================================
+    - name: Remove data, log, and config directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /var/lib/autobot
+        - /var/log/autobot
+        - /etc/autobot
+
+    # =======================================================================
+    # PHASE 6: CLEAN USER PACKAGES AND CACHES
+    # =======================================================================
+    - name: Find home directories
+      ansible.builtin.find:
+        paths: /home
+        file_type: directory
+        recurse: false
+      register: _home_dirs
+
+    - name: Remove Python user packages
+      ansible.builtin.shell: "rm -rf {{ item.path }}/.local/lib/python*"
+      loop: "{{ _home_dirs.files }}"
+      args:
+        removes: "{{ item.path }}/.local/lib"
+
+    - name: Remove pip cache
+      ansible.builtin.file:
+        path: "{{ item.path }}/.cache/pip"
+        state: absent
+      loop: "{{ _home_dirs.files }}"
+
+    - name: Remove HuggingFace cache
+      ansible.builtin.file:
+        path: "{{ item.path }}/.cache/huggingface"
+        state: absent
+      loop: "{{ _home_dirs.files }}"
+
+    # =======================================================================
+    # SUMMARY
+    # =======================================================================
+    - name: Display decommission summary
+      ansible.builtin.debug:
+        msg: |
+          Node decommission complete: {{ ansible_hostname }}
+          - IP: {{ ansible_default_ipv4.address }}
+          - Services stopped and removed
+          - Application code removed from /opt/autobot
+          - Data directories cleaned
+          - User caches cleaned
+          - Backup: {{ decommission_backup_path if (backup_before_decommission | default(false) | bool) else 'none (not requested)' }}
