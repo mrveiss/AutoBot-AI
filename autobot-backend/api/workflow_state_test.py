@@ -14,19 +14,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from api.workflow_state import (
+    ACTIVE_SET,
+    COMPLETED_TTL,
+    KEY_PREFIX,
     WorkflowState,
     WorkflowStateMachine,
     get_workflow_state_machine,
     route_next,
 )
-
-# ------------------------------------------------------------------ #
-# Key constants (mirror implementation)
-# ------------------------------------------------------------------ #
-KEY_PREFIX = "autobot:workflow:"
-ACTIVE_SET = "autobot:workflow:active"
-COMPLETED_TTL = 7 * 24 * 3600  # 7 days
-
 
 # ------------------------------------------------------------------ #
 # Fixtures
@@ -299,8 +294,8 @@ class TestWorkflowStateMachineTransition:
 
         result = await sm.transition("wf-svc", "executing")
 
-        # active_service should be set via route_next
-        assert result.active_service == route_next(result)
+        # executing with no custom executor routes to main-backend
+        assert result.active_service == "main-backend"
 
     @pytest.mark.asyncio
     @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
@@ -434,6 +429,22 @@ class TestWorkflowStateMachineFail:
 
         with pytest.raises(ValueError, match="not found"):
             await sm.fail("wf-ghost", "oops")
+
+    @pytest.mark.asyncio
+    @patch("api.workflow_state.get_redis_client", new_callable=AsyncMock)
+    async def test_fail_removes_from_active_set(self, mock_get_redis, mock_redis):
+        mock_get_redis.return_value = mock_redis
+        original = WorkflowState(
+            workflow_id="wf-fail-rm",
+            goal="fail remove test",
+            current_step="executing",
+        )
+        mock_redis.get.return_value = original.model_dump_json()
+        sm = WorkflowStateMachine()
+
+        await sm.fail("wf-fail-rm", "something broke")
+
+        mock_redis.srem.assert_called_once_with(ACTIVE_SET, "wf-fail-rm")
 
 
 class TestWorkflowStateMachineListActive:

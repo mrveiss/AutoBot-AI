@@ -39,6 +39,13 @@ ACTIVE_SET = "autobot:workflow:active"
 COMPLETED_TTL = 7 * 24 * 3600  # 7 days in seconds
 REDIS_DATABASE = "workflows"
 
+# Step name constants
+STEP_PLANNING = "planning"
+STEP_EXECUTING = "executing"
+STEP_VALIDATING = "validating"
+STEP_COMPLETE = "complete"
+STEP_FAILED = "failed"
+
 
 # ------------------------------------------------------------------ #
 # Pydantic model
@@ -50,7 +57,7 @@ class WorkflowState(BaseModel):
 
     workflow_id: str
     goal: str
-    current_step: str = "planning"
+    current_step: str = STEP_PLANNING
     active_service: str = "main-backend"
     steps_completed: List[str] = Field(default_factory=list)
     steps_remaining: List[Dict] = Field(default_factory=list)
@@ -79,14 +86,14 @@ def route_next(state: WorkflowState) -> str:
     is unrecognised.
     """
     if state.done:
-        return "complete"
+        return STEP_COMPLETE
 
     routing = {
-        "planning": "main-backend",
-        "executing": state.metadata.get("executor_service", "main-backend"),
-        "validating": "main-backend",
+        STEP_PLANNING: "main-backend",
+        STEP_EXECUTING: state.metadata.get("executor_service", "main-backend"),
+        STEP_VALIDATING: "main-backend",
     }
-    return routing.get(state.current_step, "complete")
+    return routing.get(state.current_step, STEP_COMPLETE)
 
 
 # ------------------------------------------------------------------ #
@@ -174,16 +181,17 @@ class WorkflowStateMachine:
 
     async def complete(self, workflow_id: str) -> WorkflowState:
         """Mark workflow done, remove from active, set TTL."""
-        state = await self.get(workflow_id)
-        if state is None:
+        redis = await self._redis()
+        raw = await redis.get(self._key(workflow_id))
+        if raw is None:
             raise ValueError(f"Workflow {workflow_id} not found")
+        state = WorkflowState.model_validate_json(raw)
 
         state.done = True
-        state.current_step = "complete"
+        state.current_step = STEP_COMPLETE
         state.active_service = route_next(state)
         state.updated_at = datetime.now(timezone.utc).isoformat()
 
-        redis = await self._redis()
         await redis.set(self._key(workflow_id), state.model_dump_json())
         await redis.srem(ACTIVE_SET, workflow_id)
         await redis.expire(self._key(workflow_id), COMPLETED_TTL)
@@ -192,18 +200,20 @@ class WorkflowStateMachine:
         return state
 
     async def fail(self, workflow_id: str, error: str) -> WorkflowState:
-        """Mark workflow failed, append error."""
+        """Mark workflow failed, append error, remove from active."""
         state = await self.get(workflow_id)
         if state is None:
             raise ValueError(f"Workflow {workflow_id} not found")
 
-        state.current_step = "failed"
+        state.current_step = STEP_FAILED
         state.done = True
         state.errors.append(error)
         state.active_service = route_next(state)
         state.updated_at = datetime.now(timezone.utc).isoformat()
 
         await self._persist(state)
+        redis = await self._redis()
+        await redis.srem(ACTIVE_SET, workflow_id)
 
         logger.warning("Workflow %s failed: %s", workflow_id, error)
         return state
