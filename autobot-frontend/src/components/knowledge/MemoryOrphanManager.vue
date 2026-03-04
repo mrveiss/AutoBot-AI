@@ -2,9 +2,9 @@
   <div class="memory-orphan-manager">
     <div class="section-header">
       <div class="header-content">
-        <h4><i class="fas fa-brain"></i> Memory Entity Cleanup</h4>
+        <h4><i class="fas fa-brain"></i> {{ $t('knowledge.memoryOrphan.title') }}</h4>
         <p class="header-description">
-          Find and remove memory entities from deleted conversations
+          {{ $t('knowledge.memoryOrphan.description') }}
         </p>
       </div>
     </div>
@@ -15,21 +15,21 @@
         <div class="summary-stats">
           <div class="stat-item">
             <span class="stat-value">{{ orphanScanResult.total_conversation_entities }}</span>
-            <span class="stat-label">Conversation Entities</span>
+            <span class="stat-label">{{ $t('knowledge.memoryOrphan.conversationEntities') }}</span>
           </div>
           <div class="stat-item">
             <span class="stat-value">{{ orphanScanResult.active_sessions }}</span>
-            <span class="stat-label">Active Sessions</span>
+            <span class="stat-label">{{ $t('knowledge.memoryOrphan.activeSessions') }}</span>
           </div>
           <div class="stat-item highlight">
             <span class="stat-value">{{ orphanScanResult.orphaned_count }}</span>
-            <span class="stat-label">Orphaned Entities</span>
+            <span class="stat-label">{{ $t('knowledge.memoryOrphan.orphanedEntities') }}</span>
           </div>
         </div>
 
         <!-- Orphan Preview -->
         <div v-if="orphanScanResult.orphaned_entities?.length > 0" class="orphan-preview">
-          <h5>Preview of Orphaned Entities:</h5>
+          <h5>{{ $t('knowledge.memoryOrphan.previewTitle') }}</h5>
           <div class="orphan-list">
             <div
               v-for="entity in orphanScanResult.orphaned_entities.slice(0, 10)"
@@ -48,7 +48,7 @@
             </div>
           </div>
           <p v-if="orphanScanResult.orphaned_entities.length > 10" class="orphan-more">
-            ... and {{ orphanScanResult.orphaned_entities.length - 10 }} more orphaned entities
+            {{ $t('knowledge.memoryOrphan.moreOrphans', { count: orphanScanResult.orphaned_entities.length - 10 }) }}
           </p>
         </div>
       </div>
@@ -60,9 +60,9 @@
             <div class="action-icon scan">
               <i class="fas fa-search"></i>
             </div>
-            <h5>Scan for Orphans</h5>
-            <p>Find memory entities from conversations that have been deleted</p>
-            <small class="action-meta">Non-destructive scan</small>
+            <h5>{{ $t('knowledge.memoryOrphan.scanTitle') }}</h5>
+            <p>{{ $t('knowledge.memoryOrphan.scanDescription') }}</p>
+            <small class="action-meta">{{ $t('knowledge.memoryOrphan.scanMeta') }}</small>
           </div>
           <BaseButton
             variant="secondary"
@@ -72,7 +72,7 @@
             class="action-btn"
           >
             <i v-if="!isScanning" class="fas fa-search"></i>
-            {{ isScanning ? 'Scanning...' : 'Scan Now' }}
+            {{ isScanning ? $t('knowledge.memoryOrphan.scanning') : $t('knowledge.memoryOrphan.scanNow') }}
           </BaseButton>
         </div>
 
@@ -81,10 +81,10 @@
             <div class="action-icon cleanup">
               <i class="fas fa-broom"></i>
             </div>
-            <h5>Clean Up Orphans</h5>
-            <p>Remove orphaned memory entities permanently</p>
+            <h5>{{ $t('knowledge.memoryOrphan.cleanupTitle') }}</h5>
+            <p>{{ $t('knowledge.memoryOrphan.cleanupDescription') }}</p>
             <small class="action-meta">
-              {{ orphanScanResult?.orphaned_count || 0 }} entities to clean
+              {{ $t('knowledge.memoryOrphan.entitiesToClean', { count: orphanScanResult?.orphaned_count || 0 }) }}
             </small>
           </div>
           <BaseButton
@@ -95,7 +95,7 @@
             class="action-btn"
           >
             <i v-if="!isCleaning" class="fas fa-broom"></i>
-            {{ isCleaning ? 'Cleaning...' : 'Clean Up' }}
+            {{ isCleaning ? $t('knowledge.memoryOrphan.cleaning') : $t('knowledge.memoryOrphan.cleanUp') }}
           </BaseButton>
         </div>
       </div>
@@ -114,9 +114,12 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient.ts'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+
+const { t } = useI18n()
 
 const logger = createLogger('MemoryOrphanManager')
 
@@ -203,10 +206,10 @@ const scanOrphans = async () => {
 
       if (data.data.orphaned_count > 0) {
         showStatus('warning',
-          `Found ${data.data.orphaned_count} orphaned memory entities from deleted conversations`)
+          t('knowledge.memoryOrphan.foundOrphans', { count: data.data.orphaned_count }))
       } else {
         showStatus('success',
-          `All ${data.data.total_conversation_entities} conversation entities belong to active sessions`)
+          t('knowledge.memoryOrphan.allActive', { count: data.data.total_conversation_entities }))
       }
     } else {
       throw new Error(data.message || 'Failed to scan for orphans')
@@ -214,7 +217,7 @@ const scanOrphans = async () => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     logger.error('Failed to scan for memory orphans:', error)
-    showStatus('error', errorMessage || 'An error occurred while scanning for orphaned entities')
+    showStatus('error', errorMessage || t('knowledge.memoryOrphan.scanError'))
   } finally {
     isScanning.value = false
   }
@@ -226,9 +229,7 @@ const cleanupOrphans = async () => {
 
   // Confirm before cleanup
   const confirmed = window.confirm(
-    `Are you sure you want to delete ${orphanScanResult.value.orphaned_count} orphaned memory entities?\n\n` +
-    `This will permanently remove conversation data from deleted sessions.\n` +
-    `This action cannot be undone.`
+    t('knowledge.memoryOrphan.confirmCleanup', { count: orphanScanResult.value.orphaned_count })
   )
 
   if (!confirmed) return
@@ -258,9 +259,9 @@ const cleanupOrphans = async () => {
       const failedCount = data.data.failed_count || 0
 
       if (failedCount > 0) {
-        showStatus('warning', `Deleted ${deletedCount} entities. ${failedCount} failed to delete.`)
+        showStatus('warning', t('knowledge.memoryOrphan.partialDelete', { deleted: deletedCount, failed: failedCount }))
       } else {
-        showStatus('success', `Successfully removed ${deletedCount} orphaned memory entities.`)
+        showStatus('success', t('knowledge.memoryOrphan.deleteSuccess', { count: deletedCount }))
       }
 
       // Clear the scan result after cleanup
@@ -274,7 +275,7 @@ const cleanupOrphans = async () => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     logger.error('Failed to cleanup memory orphans:', error)
-    showStatus('error', errorMessage || 'An error occurred while cleaning up orphaned entities')
+    showStatus('error', errorMessage || t('knowledge.memoryOrphan.cleanupError'))
   } finally {
     isCleaning.value = false
   }

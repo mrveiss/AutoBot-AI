@@ -4,7 +4,7 @@
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Loading document overview...</span>
+      <span>{{ $t('knowledge.summaries.overview.loading') }}</span>
     </div>
 
     <!-- Error -->
@@ -19,16 +19,16 @@
       <div class="overview-header">
         <h4>
           <i class="fas fa-file-alt"></i>
-          {{ overview.title || 'Document Overview' }}
+          {{ overview.title || $t('knowledge.summaries.overview.title') }}
         </h4>
         <div class="header-stats">
           <span class="header-stat">
             <i class="fas fa-circle"></i>
-            {{ overview.entity_count }} entities
+            {{ $t('knowledge.summaries.overview.entitiesCount', { count: overview.entity_count }) }}
           </span>
           <span class="header-stat">
             <i class="fas fa-clock"></i>
-            {{ overview.event_count }} events
+            {{ $t('knowledge.summaries.overview.eventsCount', { count: overview.event_count }) }}
           </span>
         </div>
       </div>
@@ -53,7 +53,7 @@
         class="summary-card document-level"
       >
         <div class="summary-card-header">
-          <span class="level-badge document">Document Summary</span>
+          <span class="level-badge document">{{ $t('knowledge.summaries.overview.documentSummary') }}</span>
         </div>
         <p class="summary-content">
           {{ overview.document_summary.content }}
@@ -79,7 +79,7 @@
       >
         <h5>
           <i class="fas fa-layer-group"></i>
-          Sections ({{ overview.section_summaries.length }})
+          {{ $t('knowledge.summaries.overview.sections', { count: overview.section_summaries.length }) }}
         </h5>
 
         <div
@@ -91,7 +91,7 @@
             class="summary-card-header"
             @click="toggleSection(section.id)"
           >
-            <span class="level-badge section">Section</span>
+            <span class="level-badge section">{{ $t('knowledge.summaries.overview.section') }}</span>
             <div class="section-topics-preview">
               <span
                 v-for="topic in section.key_topics.slice(0, 3)"
@@ -120,7 +120,7 @@
               @click="$emit('drill-down', section.id)"
             >
               <i class="fas fa-search-plus"></i>
-              Drill Down
+              {{ $t('knowledge.summaries.overview.drillDown') }}
             </button>
           </div>
         </div>
@@ -130,7 +130,7 @@
     <!-- No Data -->
     <div v-else class="empty-state">
       <i class="fas fa-file-alt"></i>
-      <p>Enter a document ID to view its overview</p>
+      <p>{{ $t('knowledge.summaries.overview.emptyState') }}</p>
     </div>
   </div>
 </template>

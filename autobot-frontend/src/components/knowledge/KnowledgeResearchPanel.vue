@@ -14,17 +14,20 @@
  */
 
 import { ref, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { getBackendWsUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('KnowledgeResearchPanel')
 
+const { t } = useI18n()
+
 // ── State ──────────────────────────────────────────────────────────────────
 
 const query = ref('')
 const isResearching = ref(false)
-const statusText = ref('Ready')
+const statusText = ref(t('knowledge.research.statusReady'))
 const errorMsg = ref<string | null>(null)
 
 const screenshot = ref<string | null>(null)
@@ -132,33 +135,31 @@ function _handleEvent(event: Record<string, unknown>): void {
   logger.debug('Research event:', ev, event)
 
   if (ev === 'research:searching') {
-    statusText.value = `Searching via ${event.engine || 'browser'}…`
+    statusText.value = t('knowledge.research.statusSearching', { engine: (event.engine as string) || 'browser' })
   } else if (ev === 'research:result_found') {
-    statusText.value = `Found: ${event.title || event.url}`
+    statusText.value = t('knowledge.research.statusFound', { title: (event.title as string) || (event.url as string) })
     const card = findOrCreateSource(event.url as string, event.title as string)
     card.snippet = (event.snippet as string) || ''
   } else if (ev === 'research:content_extracted') {
-    statusText.value = `Extracted content from ${_extractDomain(event.url as string)}`
+    statusText.value = t('knowledge.research.statusExtracted', { domain: _extractDomain(event.url as string) })
   } else if (ev === 'research:quality_assessed') {
     const card = findOrCreateSource(event.url as string, '')
     card.score = typeof event.score === 'number' ? event.score : null
     card.recommendation = (event.recommendation as string) || null
-    statusText.value = `Assessed ${_extractDomain(event.url as string)}: ${
-      card.score !== null ? (card.score * 100).toFixed(0) + '%' : '—'
-    }`
+    statusText.value = t('knowledge.research.statusAssessed', { domain: _extractDomain(event.url as string), score: card.score !== null ? (card.score * 100).toFixed(0) + '%' : '—' })
   } else if (ev === 'research:stored') {
     const card = findOrCreateSource(event.url as string, event.title as string)
     card.decision = 'accepted'
-    statusText.value = `Stored ${_extractDomain(event.url as string)} in knowledge base`
+    statusText.value = t('knowledge.research.statusStored', { domain: _extractDomain(event.url as string) })
   } else if (ev === 'research:completed') {
     isResearching.value = false
     stopScreenshotPolling()
-    statusText.value = `Done — ${event.total_found || 0} sources found, ${event.stored || 0} stored`
+    statusText.value = t('knowledge.research.statusDone', { found: event.total_found || 0, stored: event.stored || 0 })
   } else if (ev === 'research:error') {
     isResearching.value = false
     stopScreenshotPolling()
-    errorMsg.value = (event.message as string) || 'Research error'
-    statusText.value = 'Error'
+    errorMsg.value = (event.message as string) || t('knowledge.research.errorGeneric')
+    statusText.value = t('knowledge.research.statusError')
   }
 }
 
@@ -176,7 +177,7 @@ async function startResearch(): Promise<void> {
   errorMsg.value = null
   sources.value = []
   isResearching.value = true
-  statusText.value = 'Connecting…'
+  statusText.value = t('knowledge.research.statusConnecting')
   closeWs()
 
   await checkBrowserStatus()
@@ -188,7 +189,7 @@ async function startResearch(): Promise<void> {
     ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
-      statusText.value = 'Starting research…'
+      statusText.value = t('knowledge.research.statusStarting')
       ws!.send(JSON.stringify({ action: 'start', query: q, store: true }))
     }
 
@@ -203,7 +204,7 @@ async function startResearch(): Promise<void> {
 
     ws.onerror = (e) => {
       logger.error('Research WS error:', e)
-      errorMsg.value = 'WebSocket connection failed'
+      errorMsg.value = t('knowledge.research.errorWebSocket')
       isResearching.value = false
       stopScreenshotPolling()
     }
@@ -212,12 +213,12 @@ async function startResearch(): Promise<void> {
       if (isResearching.value) {
         isResearching.value = false
         stopScreenshotPolling()
-        statusText.value = 'Disconnected'
+        statusText.value = t('knowledge.research.statusDisconnected')
       }
     }
   } catch (e) {
     logger.error('Failed to open research WS:', e)
-    errorMsg.value = 'Failed to connect to research service'
+    errorMsg.value = t('knowledge.research.errorConnect')
     isResearching.value = false
     stopScreenshotPolling()
   }
@@ -227,7 +228,7 @@ function stopResearch(): void {
   closeWs()
   isResearching.value = false
   stopScreenshotPolling()
-  statusText.value = 'Stopped'
+  statusText.value = t('knowledge.research.statusStopped')
 }
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -277,7 +278,7 @@ onUnmounted(() => {
               v-model="query"
               type="text"
               class="query-input"
-              placeholder="Enter research query…"
+              :placeholder="$t('knowledge.research.queryPlaceholder')"
               :disabled="isResearching"
               @keydown="handleKeydown"
             />
@@ -288,7 +289,7 @@ onUnmounted(() => {
             :disabled="!query.trim()"
             @click="startResearch"
           >
-            Research
+            {{ $t('knowledge.research.btnResearch') }}
           </button>
           <button
             v-else
@@ -298,7 +299,7 @@ onUnmounted(() => {
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
               <rect x="4" y="4" width="16" height="16" rx="2" stroke-width="2" />
             </svg>
-            Stop
+            {{ $t('knowledge.research.btnStop') }}
           </button>
         </div>
 
@@ -318,7 +319,7 @@ onUnmounted(() => {
 
         <!-- Sources heading -->
         <div class="sources-header">
-          <span class="sources-title">Found Sources</span>
+          <span class="sources-title">{{ $t('knowledge.research.foundSources') }}</span>
           <span class="sources-count" v-if="sources.length">{{ sources.length }}</span>
         </div>
 
@@ -330,7 +331,7 @@ onUnmounted(() => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                 d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
             </svg>
-            <p>Enter a query and click Research to discover sources</p>
+            <p>{{ $t('knowledge.research.emptyState') }}</p>
           </div>
 
           <!-- Searching spinner -->
@@ -339,7 +340,7 @@ onUnmounted(() => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            <span>Searching…</span>
+            <span>{{ $t('knowledge.research.searching') }}</span>
           </div>
 
           <!-- Cards -->
@@ -373,26 +374,26 @@ onUnmounted(() => {
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>
-                Open
+                {{ $t('knowledge.research.open') }}
               </a>
 
               <div class="card-actions" v-if="!card.decision">
-                <button class="btn-accept" @click="acceptSource(card)" title="Accept source">
+                <button class="btn-accept" @click="acceptSource(card)" :title="$t('knowledge.research.acceptTitle')">
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                   </svg>
-                  Accept
+                  {{ $t('knowledge.research.accept') }}
                 </button>
-                <button class="btn-reject" @click="rejectSource(card)" title="Reject source">
+                <button class="btn-reject" @click="rejectSource(card)" :title="$t('knowledge.research.rejectTitle')">
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                  Reject
+                  {{ $t('knowledge.research.reject') }}
                 </button>
               </div>
 
               <span v-else class="card-decision" :class="`card-decision--${card.decision}`">
-                {{ card.decision === 'accepted' ? 'Accepted' : 'Rejected' }}
+                {{ card.decision === 'accepted' ? $t('knowledge.research.accepted') : $t('knowledge.research.rejected') }}
               </span>
             </div>
           </div>
@@ -411,13 +412,13 @@ onUnmounted(() => {
               }"
             ></span>
             <span class="status-label">
-              {{ browserConnected ? 'Browser Connected' : 'Browser Disconnected' }}
+              {{ browserConnected ? $t('knowledge.research.browserConnected') : $t('knowledge.research.browserDisconnected') }}
             </span>
           </div>
           <button
             class="screenshot-refresh-btn"
             :disabled="screenshotLoading || !browserConnected"
-            title="Refresh screenshot"
+            :title="$t('knowledge.research.refreshScreenshot')"
             @click="fetchScreenshot"
           >
             <svg
@@ -441,7 +442,7 @@ onUnmounted(() => {
           <img
             v-if="screenshot"
             :src="`data:image/png;base64,${screenshot}`"
-            alt="Live browser view"
+            :alt="$t('knowledge.research.liveBrowserView')"
             class="screenshot-img"
             :class="{ 'screenshot-img--loading': screenshotLoading }"
           />
@@ -452,7 +453,7 @@ onUnmounted(() => {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                 d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
-            <p>{{ isResearching ? 'Waiting for browser activity…' : 'Start a research query to see the browser' }}</p>
+            <p>{{ isResearching ? $t('knowledge.research.waitingBrowser') : $t('knowledge.research.startQuery') }}</p>
           </div>
         </div>
 

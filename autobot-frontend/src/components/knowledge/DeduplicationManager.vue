@@ -3,7 +3,7 @@
     <div class="manager-header">
       <h3>
         <i class="fas fa-copy"></i>
-        Duplicate & Orphan Management
+        {{ $t('knowledge.deduplication.title') }}
       </h3>
       <div class="header-actions">
         <BaseButton
@@ -15,7 +15,7 @@
           class="btn-scan"
         >
           <i v-if="!scanning" class="fas fa-search"></i>
-          Scan for Issues
+          {{ $t('knowledge.deduplication.scanForIssues') }}
         </BaseButton>
       </div>
     </div>
@@ -23,7 +23,7 @@
     <!-- Scanning State -->
     <div v-if="scanning && !scanned" class="scanning-state">
       <i class="fas fa-spinner fa-spin"></i>
-      Scanning knowledge base for duplicates and orphans...
+      {{ $t('knowledge.deduplication.scanningState') }}
     </div>
 
     <!-- Error State -->
@@ -39,25 +39,25 @@
         <div class="section-header">
           <h4>
             <i class="fas fa-clone"></i>
-            Duplicate Documents
+            {{ $t('knowledge.deduplication.duplicateDocuments') }}
           </h4>
           <span class="count-badge" :class="{ 'has-issues': duplicateStats.total_duplicates > 0 }">
-            {{ duplicateStats.total_duplicates || 0 }} duplicates
+            {{ duplicateStats.total_duplicates || 0 }} {{ $t('knowledge.deduplication.duplicates') }}
           </span>
         </div>
 
         <div v-if="duplicateStats.total_duplicates > 0" class="section-content">
           <div class="stats-summary">
             <div class="stat-item">
-              <span class="stat-label">Total Facts Scanned:</span>
+              <span class="stat-label">{{ $t('knowledge.deduplication.totalFactsScanned') }}</span>
               <span class="stat-value">{{ duplicateStats.total_facts_scanned }}</span>
             </div>
             <div class="stat-item">
-              <span class="stat-label">Duplicate Groups:</span>
+              <span class="stat-label">{{ $t('knowledge.deduplication.duplicateGroups') }}</span>
               <span class="stat-value">{{ duplicateStats.duplicate_groups_found }}</span>
             </div>
             <div class="stat-item">
-              <span class="stat-label">Total Duplicates:</span>
+              <span class="stat-label">{{ $t('knowledge.deduplication.totalDuplicates') }}</span>
               <span class="stat-value warning">{{ duplicateStats.total_duplicates }}</span>
             </div>
           </div>
@@ -77,14 +77,14 @@
                   {{ dup.title }}
                 </div>
                 <div class="group-count">
-                  {{ dup.total_copies }} copies
-                  <span class="removed-count">({{ dup.removed_count }} to remove)</span>
+                  {{ dup.total_copies }} {{ $t('knowledge.deduplication.copies') }}
+                  <span class="removed-count">{{ $t('knowledge.deduplication.toRemove', { count: dup.removed_count }) }}</span>
                 </div>
               </div>
               <div class="group-details">
                 <div class="kept-fact">
                   <i class="fas fa-check-circle"></i>
-                  Keeping: {{ dup.kept_fact_id?.substring(0, 8) }}...
+                  {{ $t('knowledge.deduplication.keeping', { id: dup.kept_fact_id?.substring(0, 8) }) }}
                   <span class="timestamp">({{ formatDate(dup.kept_created_at) }})</span>
                 </div>
               </div>
@@ -100,14 +100,14 @@
               class="btn-cleanup"
             >
               <i v-if="!cleaning" class="fas fa-trash-alt"></i>
-              {{ cleaning ? 'Removing Duplicates...' : 'Remove All Duplicates' }}
+              {{ cleaning ? $t('knowledge.deduplication.removingDuplicates') : $t('knowledge.deduplication.removeAllDuplicates') }}
             </BaseButton>
           </div>
         </div>
         <EmptyState
           v-else
           icon="fas fa-check-circle"
-          message="No duplicates found!"
+          :message="$t('knowledge.deduplication.noDuplicatesFound')"
           variant="success"
         />
       </div>
@@ -117,21 +117,21 @@
         <div class="section-header">
           <h4>
             <i class="fas fa-unlink"></i>
-            Orphaned Documents
+            {{ $t('knowledge.deduplication.orphanedDocuments') }}
           </h4>
           <span class="count-badge" :class="{ 'has-issues': orphanStats.orphaned_count > 0 }">
-            {{ orphanStats.orphaned_count || 0 }} orphans
+            {{ orphanStats.orphaned_count || 0 }} {{ $t('knowledge.deduplication.orphans') }}
           </span>
         </div>
 
         <div v-if="orphanStats.orphaned_count > 0" class="section-content">
           <div class="stats-summary">
             <div class="stat-item">
-              <span class="stat-label">Facts Checked:</span>
+              <span class="stat-label">{{ $t('knowledge.deduplication.factsChecked') }}</span>
               <span class="stat-value">{{ orphanStats.total_facts_checked }}</span>
             </div>
             <div class="stat-item">
-              <span class="stat-label">Orphaned Facts:</span>
+              <span class="stat-label">{{ $t('knowledge.deduplication.orphanedFacts') }}</span>
               <span class="stat-value warning">{{ orphanStats.orphaned_count }}</span>
             </div>
           </div>
@@ -163,14 +163,14 @@
               class="btn-cleanup"
             >
               <i v-if="!cleaning" class="fas fa-trash-alt"></i>
-              {{ cleaning ? 'Removing Orphans...' : 'Remove All Orphans' }}
+              {{ cleaning ? $t('knowledge.deduplication.removingOrphans') : $t('knowledge.deduplication.removeAllOrphans') }}
             </BaseButton>
           </div>
         </div>
         <EmptyState
           v-else
           icon="fas fa-check-circle"
-          message="No orphaned documents found!"
+          :message="$t('knowledge.deduplication.noOrphansFound')"
           variant="success"
         />
       </div>
@@ -179,13 +179,14 @@
     <!-- Initial State -->
     <div v-else class="initial-state">
       <i class="fas fa-info-circle"></i>
-      <p>Click "Scan for Issues" to check for duplicate and orphaned documents in your knowledge base.</p>
+      <p>{{ $t('knowledge.deduplication.initialStateMessage') }}</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatDate } from '@/utils/formatHelpers'
@@ -194,6 +195,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('DeduplicationManager')
+const { t } = useI18n()
 
 // Interfaces
 interface DuplicateGroup {
@@ -288,7 +290,7 @@ const scanForIssues = async () => {
 
 // Cleanup duplicates
 const cleanupDuplicates = async () => {
-  if (!confirm(`Are you sure you want to remove ${duplicateStats.value.total_duplicates} duplicate documents?\n\nThis will keep the oldest version of each document and remove newer copies.`)) {
+  if (!confirm(t('knowledge.deduplication.confirmRemoveDuplicates', { count: duplicateStats.value.total_duplicates }))) {
     return
   }
 
@@ -317,7 +319,7 @@ const cleanupDuplicates = async () => {
 
 // Cleanup orphans
 const cleanupOrphans = async () => {
-  if (!confirm(`Are you sure you want to remove ${orphanStats.value.orphaned_count} orphaned documents?\n\nThese are documents whose source files no longer exist.`)) {
+  if (!confirm(t('knowledge.deduplication.confirmRemoveOrphans', { count: orphanStats.value.orphaned_count }))) {
     return
   }
 

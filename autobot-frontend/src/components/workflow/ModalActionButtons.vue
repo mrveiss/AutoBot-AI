@@ -6,25 +6,25 @@
         @click="$emit('execute')"
         :disabled="!hasCurrentStep"
         class="execute-btn"
-        aria-label="Execute this step"
+        :aria-label="$t('workflow.modal.executeStepAriaLabel')"
       >
-        ✅ Execute This Step
+        {{ $t('workflow.modal.executeStep') }}
       </BaseButton>
       <BaseButton
         variant="secondary"
         @click="$emit('skip')"
         class="skip-btn"
-        aria-label="Skip this step"
+        :aria-label="$t('workflow.modal.skipStepAriaLabel')"
       >
-        ⏭️ Skip This Step
+        {{ $t('workflow.modal.skipStep') }}
       </BaseButton>
       <BaseButton
         variant="primary"
         @click="$emit('manual-control')"
         class="manual-btn"
-        aria-label="Take manual control"
+        :aria-label="$t('workflow.modal.manualControlAriaLabel')"
       >
-        👤 Take Manual Control
+        {{ $t('workflow.modal.manualControl') }}
       </BaseButton>
     </div>
 
@@ -33,25 +33,25 @@
         variant="info"
         @click="$emit('execute-all')"
         class="execute-all-btn"
-        aria-label="Execute all remaining steps"
+        :aria-label="$t('workflow.modal.executeAllAriaLabel')"
       >
-        🚀 Execute All Remaining
+        {{ $t('workflow.modal.executeAll') }}
       </BaseButton>
       <BaseButton
         variant="success"
         @click="$emit('save-workflow')"
         class="save-workflow-btn"
-        aria-label="Save workflow"
+        :aria-label="$t('workflow.modal.saveWorkflowAriaLabel')"
       >
-        💾 Save Workflow
+        {{ $t('workflow.modal.saveWorkflow') }}
       </BaseButton>
       <BaseButton
         variant="secondary"
         @click="$emit('toggle-advanced')"
         class="toggle-advanced-btn"
-        aria-label="Toggle advanced options"
+        :aria-label="$t('workflow.modal.toggleAdvancedAriaLabel')"
       >
-        ⚙️ {{ showAdvanced ? 'Hide' : 'Show' }} Advanced
+        {{ showAdvanced ? $t('workflow.modal.hideAdvanced') : $t('workflow.modal.showAdvanced') }}
       </BaseButton>
     </div>
   </div>

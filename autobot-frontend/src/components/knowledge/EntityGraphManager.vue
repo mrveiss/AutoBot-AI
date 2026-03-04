@@ -3,19 +3,19 @@
     <!-- Header -->
     <div class="manager-header">
       <div class="header-content">
-        <h3><i class="fas fa-sitemap"></i> Entity Graph Manager</h3>
+        <h3><i class="fas fa-sitemap"></i> {{ $t('knowledge.entityGraph.title') }}</h3>
         <p class="header-description">
-          Extract entities from text and query the knowledge graph using AI-powered retrieval
+          {{ $t('knowledge.entityGraph.description') }}
         </p>
       </div>
       <div class="header-actions">
         <button @click="refreshStats" class="action-btn" :disabled="isLoadingStats">
           <i :class="isLoadingStats ? 'fas fa-spinner fa-spin' : 'fas fa-sync'"></i>
-          Refresh Stats
+          {{ $t('knowledge.entityGraph.refreshStats') }}
         </button>
         <router-link to="/knowledge/graph" class="action-btn">
           <i class="fas fa-project-diagram"></i>
-          View Graph
+          {{ $t('knowledge.entityGraph.viewGraph') }}
         </router-link>
       </div>
     </div>
@@ -51,18 +51,18 @@
       <!-- Statistics Tab -->
       <div v-if="activeTab === 'stats'" class="tab-panel">
         <div class="stats-section">
-          <h4><i class="fas fa-chart-bar"></i> Graph Statistics</h4>
+          <h4><i class="fas fa-chart-bar"></i> {{ $t('knowledge.entityGraph.graphStatistics') }}</h4>
 
           <div v-if="isLoadingStats" class="loading-state">
             <i class="fas fa-spinner fa-spin"></i>
-            <span>Loading statistics...</span>
+            <span>{{ $t('knowledge.entityGraph.loadingStatistics') }}</span>
           </div>
 
           <div v-else-if="statsError" class="error-state">
             <i class="fas fa-exclamation-triangle"></i>
             <span>{{ statsError }}</span>
             <button @click="refreshStats" class="retry-btn">
-              <i class="fas fa-redo"></i> Retry
+              <i class="fas fa-redo"></i> {{ $t('knowledge.entityGraph.retry') }}
             </button>
           </div>
 
@@ -73,7 +73,7 @@
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ graphStats.entityCount }}</span>
-                <span class="stat-label">Total Entities</span>
+                <span class="stat-label">{{ $t('knowledge.entityGraph.totalEntities') }}</span>
               </div>
             </div>
 
@@ -83,7 +83,7 @@
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ graphStats.relationCount }}</span>
-                <span class="stat-label">Total Relations</span>
+                <span class="stat-label">{{ $t('knowledge.entityGraph.totalRelations') }}</span>
               </div>
             </div>
 
@@ -93,7 +93,7 @@
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ graphStats.entityTypes }}</span>
-                <span class="stat-label">Entity Types</span>
+                <span class="stat-label">{{ $t('knowledge.entityGraph.entityTypes') }}</span>
               </div>
             </div>
 
@@ -103,19 +103,19 @@
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ graphStats.relationTypes }}</span>
-                <span class="stat-label">Relation Types</span>
+                <span class="stat-label">{{ $t('knowledge.entityGraph.relationTypes') }}</span>
               </div>
             </div>
           </div>
 
           <!-- Service Health -->
           <div class="health-section">
-            <h5><i class="fas fa-heartbeat"></i> Service Health</h5>
+            <h5><i class="fas fa-heartbeat"></i> {{ $t('knowledge.entityGraph.serviceHealth') }}</h5>
 
             <div class="health-cards">
               <div class="health-card" :class="extractionHealth.status">
                 <div class="health-header">
-                  <span class="health-name">Entity Extraction</span>
+                  <span class="health-name">{{ $t('knowledge.entityGraph.entityExtraction') }}</span>
                   <span class="health-status">{{ extractionHealth.status }}</span>
                 </div>
                 <div class="health-components">
@@ -132,7 +132,7 @@
 
               <div class="health-card" :class="graphRagHealth.status">
                 <div class="health-header">
-                  <span class="health-name">Graph-RAG Service</span>
+                  <span class="health-name">{{ $t('knowledge.entityGraph.graphRagService') }}</span>
                   <span class="health-status">{{ graphRagHealth.status }}</span>
                 </div>
                 <div class="health-components">
@@ -151,7 +151,7 @@
 
           <!-- Recent Activity -->
           <div v-if="recentExtractions.length > 0" class="activity-section">
-            <h5><i class="fas fa-history"></i> Recent Extractions</h5>
+            <h5><i class="fas fa-history"></i> {{ $t('knowledge.entityGraph.recentExtractions') }}</h5>
             <div class="activity-list">
               <div
                 v-for="extraction in recentExtractions"
@@ -161,12 +161,11 @@
                 <div class="activity-main">
                   <span class="activity-id">{{ extraction.conversation_id }}</span>
                   <span class="activity-stats">
-                    {{ extraction.entities_created }} entities,
-                    {{ extraction.relations_created }} relations
+                    {{ $t('knowledge.entityGraph.entitiesAndRelations', { entities: extraction.entities_created, relations: extraction.relations_created }) }}
                   </span>
                 </div>
                 <span :class="['activity-status', extraction.success ? 'success' : 'error']">
-                  {{ extraction.success ? 'Success' : 'Failed' }}
+                  {{ extraction.success ? $t('knowledge.entityGraph.success') : $t('knowledge.entityGraph.failedStatus') }}
                 </span>
               </div>
             </div>
@@ -194,7 +193,8 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
@@ -203,6 +203,7 @@ import EntityExtractor from './EntityExtractor.vue'
 import GraphRAGQuery from './GraphRAGQuery.vue'
 
 const logger = createLogger('EntityGraphManager')
+const { t } = useI18n()
 const router = useRouter()
 
 // ============================================================================
@@ -239,11 +240,11 @@ interface ExtractionResult {
 // State
 // ============================================================================
 
-const tabs: Tab[] = [
-  { id: 'extract', label: 'Extract', icon: 'fas fa-brain' },
-  { id: 'query', label: 'Query', icon: 'fas fa-search-plus' },
-  { id: 'stats', label: 'Statistics', icon: 'fas fa-chart-bar' }
-]
+const tabs = computed<Tab[]>(() => [
+  { id: 'extract', label: t('knowledge.entityGraph.tabExtract'), icon: 'fas fa-brain' },
+  { id: 'query', label: t('knowledge.entityGraph.tabQuery'), icon: 'fas fa-search-plus' },
+  { id: 'stats', label: t('knowledge.entityGraph.tabStatistics'), icon: 'fas fa-chart-bar' }
+])
 
 const activeTab = ref('extract')
 const isLoadingStats = ref(false)

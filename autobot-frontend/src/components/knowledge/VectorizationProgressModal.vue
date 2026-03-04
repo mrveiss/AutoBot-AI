@@ -6,7 +6,7 @@
         <div class="modal-header">
           <div class="header-content">
             <i class="fas fa-cubes"></i>
-            <h3>Vectorization Progress</h3>
+            <h3>{{ $t('knowledge.vectorization.progressTitle') }}</h3>
           </div>
           <button class="close-btn" @click="$emit('close')">
             <i class="fas fa-times"></i>
@@ -18,19 +18,19 @@
           <div class="summary-stats">
             <div class="stat-item">
               <span class="stat-value">{{ totalDocuments }}</span>
-              <span class="stat-label">Total</span>
+              <span class="stat-label">{{ $t('knowledge.vectorization.total') }}</span>
             </div>
             <div class="stat-item stat-completed">
               <span class="stat-value">{{ completedCount }}</span>
-              <span class="stat-label">Completed</span>
+              <span class="stat-label">{{ $t('knowledge.vectorization.completed') }}</span>
             </div>
             <div class="stat-item stat-pending">
               <span class="stat-value">{{ pendingCount }}</span>
-              <span class="stat-label">In Progress</span>
+              <span class="stat-label">{{ $t('knowledge.vectorization.inProgress') }}</span>
             </div>
             <div class="stat-item stat-failed">
               <span class="stat-value">{{ failedCount }}</span>
-              <span class="stat-label">Failed</span>
+              <span class="stat-label">{{ $t('knowledge.vectorization.failed') }}</span>
             </div>
           </div>
 
@@ -51,7 +51,7 @@
           <EmptyState
             v-if="documentList.length === 0"
             icon="fas fa-inbox"
-            message="No documents being vectorized"
+            :message="$t('knowledge.vectorization.noDocuments')"
           />
 
           <div
@@ -102,7 +102,7 @@
             @click="$emit('retry-failed')"
           >
             <i class="fas fa-redo"></i>
-            Retry Failed
+            {{ $t('knowledge.vectorization.retryFailed') }}
           </button>
           <button
             v-if="allCompleted"
@@ -110,7 +110,7 @@
             @click="$emit('close')"
           >
             <i class="fas fa-check"></i>
-            Done
+            {{ $t('knowledge.vectorization.done') }}
           </button>
           <button
             v-else
@@ -118,7 +118,7 @@
             @click="$emit('cancel')"
           >
             <i class="fas fa-stop"></i>
-            Cancel
+            {{ $t('knowledge.vectorization.cancelButton') }}
           </button>
         </div>
       </div>

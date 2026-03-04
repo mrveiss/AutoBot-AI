@@ -16,6 +16,7 @@
  */
 
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
@@ -24,6 +25,8 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('KnowledgePromptEditor')
+
+const { t } = useI18n()
 
 // =============================================================================
 // Type Definitions
@@ -129,11 +132,11 @@ const categoryIcons: Record<string, string> = {
   templates: 'fas fa-file-code'
 }
 
-const categoryLabels: Record<string, string> = {
-  system: 'System Prompts',
-  agents: 'Agent Prompts',
-  templates: 'Templates'
-}
+const categoryLabels = computed<Record<string, string>>(() => ({
+  system: t('knowledge.promptEditor.categorySystem'),
+  agents: t('knowledge.promptEditor.categoryAgents'),
+  templates: t('knowledge.promptEditor.categoryTemplates')
+}))
 
 // =============================================================================
 // Methods
@@ -152,7 +155,7 @@ async function loadPrompts(): Promise<void> {
     }
   } catch (err) {
     logger.error('Failed to load prompts:', err)
-    error.value = 'Failed to load prompts'
+    error.value = t('knowledge.promptEditor.errorLoadPrompts')
   } finally {
     isLoading.value = false
   }
@@ -160,7 +163,7 @@ async function loadPrompts(): Promise<void> {
 
 function selectPrompt(prompt: Prompt): void {
   if (hasUnsavedChanges.value) {
-    if (!confirm('You have unsaved changes. Discard them?')) {
+    if (!confirm(t('knowledge.promptEditor.confirmDiscardChanges'))) {
       return
     }
   }
@@ -191,16 +194,16 @@ async function savePrompt(): Promise<void> {
       selectedPrompt.value.version = (selectedPrompt.value.version || 0) + 1
       selectedPrompt.value.lastModified = new Date().toISOString()
 
-      successMessage.value = 'Prompt saved successfully'
+      successMessage.value = t('knowledge.promptEditor.successSaved')
       setTimeout(() => {
         successMessage.value = null
       }, 3000)
     } else {
-      error.value = data?.message || 'Failed to save prompt'
+      error.value = data?.message || t('knowledge.promptEditor.errorSavePrompt')
     }
   } catch (err) {
     logger.error('Failed to save prompt:', err)
-    error.value = 'Failed to save prompt'
+    error.value = t('knowledge.promptEditor.errorSavePrompt')
   } finally {
     isSaving.value = false
   }
@@ -237,7 +240,7 @@ async function loadHistory(): Promise<void> {
 async function revertToVersion(version: PromptVersion): Promise<void> {
   if (!selectedPrompt.value) return
 
-  if (!confirm(`Revert to version ${version.version}? This will create a new version.`)) {
+  if (!confirm(t('knowledge.promptEditor.confirmRevert', { version: version.version }))) {
     return
   }
 
@@ -254,11 +257,11 @@ async function revertToVersion(version: PromptVersion): Promise<void> {
       selectedPrompt.value.content = version.content
       editedContent.value = version.content
       showHistoryModal.value = false
-      successMessage.value = 'Reverted to previous version'
+      successMessage.value = t('knowledge.promptEditor.successReverted')
     }
   } catch (err) {
     logger.error('Failed to revert:', err)
-    error.value = 'Failed to revert to previous version'
+    error.value = t('knowledge.promptEditor.errorRevert')
   } finally {
     isSaving.value = false
   }
@@ -269,7 +272,7 @@ function getCategoryIcon(category: string): string {
 }
 
 function formatDate(dateString?: string): string {
-  if (!dateString) return 'Unknown'
+  if (!dateString) return t('knowledge.promptEditor.unknown')
   return new Date(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -306,8 +309,8 @@ onBeforeUnmount(() => {
     <!-- Header -->
     <div class="editor-header">
       <div class="header-left">
-        <h2>Prompt Editor</h2>
-        <p class="subtitle">Manage system and agent prompts</p>
+        <h2>{{ $t('knowledge.promptEditor.title') }}</h2>
+        <p class="subtitle">{{ $t('knowledge.promptEditor.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <div class="search-box">
@@ -315,15 +318,15 @@ onBeforeUnmount(() => {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Search prompts..."
+            :placeholder="$t('knowledge.promptEditor.searchPlaceholder')"
             class="search-input"
           />
         </div>
         <select v-model="selectedCategory" class="category-filter">
-          <option value="all">All Categories</option>
-          <option value="system">System</option>
-          <option value="agents">Agents</option>
-          <option value="templates">Templates</option>
+          <option value="all">{{ $t('knowledge.promptEditor.allCategories') }}</option>
+          <option value="system">{{ $t('knowledge.promptEditor.filterSystem') }}</option>
+          <option value="agents">{{ $t('knowledge.promptEditor.filterAgents') }}</option>
+          <option value="templates">{{ $t('knowledge.promptEditor.filterTemplates') }}</option>
         </select>
       </div>
     </div>
@@ -346,7 +349,7 @@ onBeforeUnmount(() => {
       <aside class="prompt-sidebar">
         <div v-if="isLoading" class="loading-state">
           <i class="fas fa-spinner fa-spin"></i>
-          <span>Loading prompts...</span>
+          <span>{{ $t('knowledge.promptEditor.loadingPrompts') }}</span>
         </div>
 
         <div v-else class="prompt-list">
@@ -375,7 +378,7 @@ onBeforeUnmount(() => {
           <EmptyState
             v-if="filteredPrompts.length === 0"
             icon="fas fa-search"
-            :message="searchQuery ? 'No prompts match your search' : 'No prompts found'"
+            :message="searchQuery ? $t('knowledge.promptEditor.noSearchResults') : $t('knowledge.promptEditor.noPrompts')"
           />
         </div>
       </aside>
@@ -384,7 +387,7 @@ onBeforeUnmount(() => {
       <div class="editor-area">
         <div v-if="!selectedPrompt" class="editor-empty">
           <i class="fas fa-edit"></i>
-          <p>Select a prompt to edit</p>
+          <p>{{ $t('knowledge.promptEditor.selectPrompt') }}</p>
         </div>
 
         <template v-else>
@@ -396,7 +399,7 @@ onBeforeUnmount(() => {
                 v{{ selectedPrompt.version }}
               </span>
               <span v-if="hasUnsavedChanges" class="unsaved-badge">
-                Unsaved changes
+                {{ $t('knowledge.promptEditor.unsavedChanges') }}
               </span>
             </div>
             <div class="toolbar-actions">
@@ -406,7 +409,7 @@ onBeforeUnmount(() => {
                 @click="loadHistory"
               >
                 <i class="fas fa-history"></i>
-                History
+                {{ $t('knowledge.promptEditor.history') }}
               </BaseButton>
               <BaseButton
                 variant="ghost"
@@ -415,7 +418,7 @@ onBeforeUnmount(() => {
                 :disabled="!hasUnsavedChanges"
               >
                 <i class="fas fa-undo"></i>
-                Revert
+                {{ $t('knowledge.promptEditor.revert') }}
               </BaseButton>
               <BaseButton
                 variant="primary"
@@ -425,7 +428,7 @@ onBeforeUnmount(() => {
               >
                 <i v-if="isSaving" class="fas fa-spinner fa-spin"></i>
                 <i v-else class="fas fa-save"></i>
-                Save
+                {{ $t('knowledge.promptEditor.save') }}
               </BaseButton>
             </div>
           </div>
@@ -435,7 +438,7 @@ onBeforeUnmount(() => {
             <textarea
               v-model="editedContent"
               class="prompt-textarea"
-              placeholder="Enter prompt content..."
+              :placeholder="$t('knowledge.promptEditor.contentPlaceholder')"
               spellcheck="false"
             ></textarea>
           </div>
@@ -445,11 +448,11 @@ onBeforeUnmount(() => {
             <div class="footer-stats">
               <span class="stat">
                 <i class="fas fa-font"></i>
-                {{ characterCount }} characters
+                {{ $t('knowledge.promptEditor.characters', { count: characterCount }) }}
               </span>
               <span v-if="detectedVariables.length > 0" class="stat variables">
                 <i class="fas fa-code"></i>
-                {{ detectedVariables.length }} variables
+                {{ $t('knowledge.promptEditor.variables', { count: detectedVariables.length }) }}
               </span>
             </div>
             <div v-if="detectedVariables.length > 0" class="variable-tags">
@@ -469,20 +472,20 @@ onBeforeUnmount(() => {
     <!-- History Modal -->
     <BaseModal
       v-model="showHistoryModal"
-      title="Version History"
+      :title="$t('knowledge.promptEditor.versionHistory')"
       size="large"
       @close="showHistoryModal = false"
     >
       <div class="history-modal">
         <div v-if="isLoadingHistory" class="loading-state">
           <i class="fas fa-spinner fa-spin"></i>
-          <span>Loading history...</span>
+          <span>{{ $t('knowledge.promptEditor.loadingHistory') }}</span>
         </div>
 
         <EmptyState
           v-else-if="promptHistory.length === 0"
           icon="fas fa-history"
-          message="No version history available"
+          :message="$t('knowledge.promptEditor.noHistory')"
         />
 
         <div v-else class="history-list">
@@ -494,7 +497,7 @@ onBeforeUnmount(() => {
             @click="selectedVersion = version"
           >
             <div class="version-info">
-              <span class="version-number">Version {{ version.version }}</span>
+              <span class="version-number">{{ $t('knowledge.promptEditor.versionNumber', { version: version.version }) }}</span>
               <span class="version-date">{{ formatDate(version.timestamp) }}</span>
             </div>
             <BaseButton
@@ -503,14 +506,14 @@ onBeforeUnmount(() => {
               @click.stop="revertToVersion(version)"
             >
               <i class="fas fa-undo"></i>
-              Revert
+              {{ $t('knowledge.promptEditor.revert') }}
             </BaseButton>
           </div>
         </div>
 
         <!-- Version Preview -->
         <div v-if="selectedVersion" class="version-preview">
-          <h4>Preview - Version {{ selectedVersion.version }}</h4>
+          <h4>{{ $t('knowledge.promptEditor.previewVersion', { version: selectedVersion.version }) }}</h4>
           <pre class="version-content">{{ selectedVersion.content }}</pre>
         </div>
       </div>

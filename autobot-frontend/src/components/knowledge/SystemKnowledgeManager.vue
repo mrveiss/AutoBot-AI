@@ -1,14 +1,14 @@
 <template>
   <div class="system-knowledge-manager">
     <div class="header">
-      <p class="subtitle">Initialize, reindex, and repopulate knowledge base</p>
+      <p class="subtitle">{{ $t('knowledge.systemKnowledge.subtitle') }}</p>
     </div>
 
     <!-- Host Selection for Man Pages -->
     <div class="host-selection">
-      <label for="host-select">Target Host for Man Pages:</label>
+      <label for="host-select">{{ $t('knowledge.systemKnowledge.targetHost') }}</label>
       <select id="host-select" v-model="selectedHost" class="host-select">
-        <option value="all">All Hosts</option>
+        <option value="all">{{ $t('knowledge.systemKnowledge.allHosts') }}</option>
         <option v-for="machine in machines" :key="machine.id" :value="machine.ip">
           {{ machine.name }} ({{ machine.ip }})
         </option>
@@ -22,7 +22,7 @@
           <div class="status-icon">📚</div>
           <div class="status-content">
             <h3>{{ stats.total_facts || 0 }}</h3>
-            <p>Total Facts</p>
+            <p>{{ $t('knowledge.systemKnowledge.totalFacts') }}</p>
           </div>
         </div>
       </BasePanel>
@@ -32,7 +32,7 @@
           <div class="status-icon">🔍</div>
           <div class="status-content">
             <h3>{{ stats.total_vectors || 0 }}</h3>
-            <p>Searchable Vectors</p>
+            <p>{{ $t('knowledge.systemKnowledge.searchableVectors') }}</p>
           </div>
         </div>
       </BasePanel>
@@ -42,7 +42,7 @@
           <div class="status-icon">⚙️</div>
           <div class="status-content">
             <h3>{{ commandsIndexed || 0 }}</h3>
-            <p>Commands Indexed</p>
+            <p>{{ $t('knowledge.systemKnowledge.commandsIndexed') }}</p>
           </div>
         </div>
       </BasePanel>
@@ -52,7 +52,7 @@
           <div class="status-icon">📄</div>
           <div class="status-content">
             <h3>{{ docsIndexed || 0 }}</h3>
-            <p>Docs Indexed</p>
+            <p>{{ $t('knowledge.systemKnowledge.docsIndexed') }}</p>
           </div>
         </div>
       </BasePanel>
@@ -68,7 +68,7 @@
         class="btn-highlight"
       >
         <span class="icon">🧬</span>
-        {{ isVectorizing ? 'Vectorizing...' : getVectorizeButtonText() }}
+        {{ isVectorizing ? $t('knowledge.systemKnowledge.vectorizing') : getVectorizeButtonText() }}
       </BaseButton>
 
       <BaseButton
@@ -78,7 +78,7 @@
         title="Create vector embeddings for search functionality"
       >
         <span class="icon">🚀</span>
-        {{ isInitializing ? 'Initializing...' : 'Initialize Machine Knowledge' }}
+        {{ isInitializing ? $t('knowledge.systemKnowledge.initializing') : $t('knowledge.systemKnowledge.initializeMachineKnowledge') }}
       </BaseButton>
 
       <BaseButton
@@ -88,7 +88,7 @@
         title="Reindex all documents in the knowledge base"
       >
         <span class="icon">🔄</span>
-        {{ isReindexing ? 'Reindexing...' : 'Reindex Documents' }}
+        {{ isReindexing ? $t('knowledge.systemKnowledge.reindexing') : $t('knowledge.systemKnowledge.reindexDocuments') }}
       </BaseButton>
 
       <BaseButton
@@ -97,7 +97,7 @@
         :loading="isRefreshing"
       >
         <span class="icon">📋</span>
-        {{ isRefreshing ? 'Refreshing...' : 'Refresh Man Pages' }}
+        {{ isRefreshing ? $t('knowledge.systemKnowledge.refreshing') : $t('knowledge.systemKnowledge.refreshManPages') }}
       </BaseButton>
 
       <BaseButton
@@ -106,7 +106,7 @@
         :loading="isPopulating"
       >
         <span class="icon">⚙️</span>
-        {{ isPopulating ? 'Populating...' : 'Populate Common Commands' }}
+        {{ isPopulating ? $t('knowledge.systemKnowledge.populating') : $t('knowledge.systemKnowledge.populateCommands') }}
       </BaseButton>
 
       <BaseButton
@@ -115,7 +115,7 @@
         :loading="isDocPopulating"
       >
         <span class="icon">📖</span>
-        {{ isDocPopulating ? 'Populating...' : 'Index AutoBot Docs' }}
+        {{ isDocPopulating ? $t('knowledge.systemKnowledge.populating') : $t('knowledge.systemKnowledge.indexAutoBotDocs') }}
       </BaseButton>
 
       <BaseButton
@@ -124,7 +124,7 @@
         :disabled="isLoading"
       >
         <span class="icon">📊</span>
-        Refresh Stats
+        {{ $t('knowledge.systemKnowledge.refreshStats') }}
       </BaseButton>
     </div>
 
@@ -145,7 +145,7 @@
         {{ lastResult.status === 'success' ? '✅' : '❌' }}
       </div>
       <div class="result-content">
-        <h4>{{ lastResult.status === 'success' ? 'Success' : 'Error' }}</h4>
+        <h4>{{ lastResult.status === 'success' ? $t('knowledge.systemKnowledge.success') : $t('knowledge.systemKnowledge.error') }}</h4>
         <p>{{ lastResult.message }}</p>
         <div v-if="lastResult.details" class="result-details">
           <p v-for="(value, key) in lastResult.details" :key="key">
@@ -158,7 +158,7 @@
     <!-- Info Section -->
     <BasePanel variant="bordered" size="medium">
       <template #header>
-        <h3>ℹ️ About System Knowledge</h3>
+        <h3>ℹ️ {{ $t('knowledge.systemKnowledge.aboutTitle') }}</h3>
       </template>
       <div class="info-content">
         <p>
@@ -190,7 +190,7 @@
 
     <!-- Recent Activity Log -->
     <div v-if="activityLog.length > 0" class="activity-log">
-      <h3>📝 Recent Activity</h3>
+      <h3>📝 {{ $t('knowledge.systemKnowledge.recentActivity') }}</h3>
       <div class="log-entries">
         <div v-for="(entry, index) in activityLog" :key="index" class="log-entry">
           <span class="log-time">{{ entry.time }}</span>
@@ -204,6 +204,7 @@
 
 <script>
 import { ref, onMounted, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useKnowledgeBase } from '@/composables/useKnowledgeBase';
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore';  // NEW: Use shared store
 import { useAsyncOperation } from '@/composables/useAsyncOperation';
@@ -223,6 +224,8 @@ export default {
   },
 
   setup() {
+    const { t } = useI18n();
+
     // Use the shared composable
     const {
       initializeMachineKnowledge: initializeMachineKnowledgeAPI,
@@ -293,7 +296,7 @@ export default {
     const initializeMachineKnowledge = async () => {
       if (isInitializing.value) return;
 
-      if (!confirm('Initialize machine knowledge? This creates vector embeddings for search. Continue?')) {
+      if (!confirm(t('knowledge.systemKnowledge.confirmInitialize'))) {
         return;
       }
 
@@ -350,7 +353,7 @@ export default {
     const reindexDocuments = async () => {
       if (isReindexing.value) return;
 
-      if (!confirm('Reindex all documents? This will rebuild the knowledge base. Continue?')) {
+      if (!confirm(t('knowledge.systemKnowledge.confirmReindex'))) {
         return;
       }
 
@@ -408,7 +411,7 @@ export default {
     const refreshSystemKnowledge = async () => {
       if (isRefreshing.value) return;
 
-      if (!confirm('This will index ALL man pages on the system. This may take 5-10 minutes. Continue?')) {
+      if (!confirm(t('knowledge.systemKnowledge.confirmRefreshManPages'))) {
         return;
       }
 
@@ -568,7 +571,7 @@ export default {
       if (isDocPopulating.value) return;
 
       // Ask if user wants to force reindex all files
-      const forceReindex = confirm('Index AutoBot documentation?\n\nChoose:\n- OK: Force reindex ALL 182 docs files (ignores cache)\n- Cancel: Quick update (only new/changed files)');
+      const forceReindex = confirm(t('knowledge.systemKnowledge.confirmIndexDocs'));
 
       isDocPopulating.value = true;
       progressMessage.value = forceReindex ? 'Force reindexing ALL AutoBot documentation...' : 'Indexing AutoBot documentation...';
@@ -619,15 +622,7 @@ export default {
       const totalVectors = stats.value.total_vectors || 0;
       const needsVectorization = totalFacts - totalVectors;
 
-      if (!confirm(
-        `Generate vector embeddings using batched processing?\n\n` +
-        `Total Facts: ${totalFacts}\n` +
-        `Already Vectorized: ${totalVectors}\n` +
-        `Needs Vectorization: ${needsVectorization}\n\n` +
-        `Process: 50 facts per batch, 0.5s delay between batches\n` +
-        `This prevents resource lockup and can be run periodically.\n\n` +
-        `Continue?`
-      )) {
+      if (!confirm(t('knowledge.systemKnowledge.confirmVectorize', { totalFacts, totalVectors, needsVectorization }))) {
         return;
       }
 
@@ -711,12 +706,12 @@ export default {
       // Facts are chunked into multiple vectors (typically 5-6 vectors per fact)
       // If vectors > facts, system is working correctly (chunking enabled)
       if (totalVectors >= totalFacts) {
-        return `Vectorize Facts (✓ ${totalVectors.toLocaleString()} vectors from ${totalFacts.toLocaleString()} facts)`;
+        return t('knowledge.systemKnowledge.vectorizeComplete', { vectors: totalVectors.toLocaleString(), facts: totalFacts.toLocaleString() });
       }
 
       // If vectors < facts, some facts need vectorization
       const pending = totalFacts - totalVectors;
-      return `Vectorize Facts (${pending.toLocaleString()} pending)`;
+      return t('knowledge.systemKnowledge.vectorizePending', { pending: pending.toLocaleString() });
     };
 
     onMounted(async () => {
@@ -732,6 +727,7 @@ export default {
     });
 
     return {
+      t,
       stats,
       commandsIndexed,
       docsIndexed,

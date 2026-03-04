@@ -20,11 +20,11 @@
       </div>
 
       <div class="widget-controls">
-        <button v-if="hasApprovalPending" @click.stop="openApprovals" class="btn-approval" aria-label="Warning">
+        <button v-if="hasApprovalPending" @click.stop="openApprovals" class="btn-approval" :aria-label="$t('workflow.progress.warningAriaLabel')">
           <i class="fas fa-exclamation-circle"></i>
-          Approval Required
+          {{ $t('workflow.progress.approvalRequired') }}
         </button>
-        <button @click.stop="toggleExpanded" class="btn-toggle" aria-label="Expand">
+        <button @click.stop="toggleExpanded" class="btn-toggle" :aria-label="$t('workflow.progress.expandAriaLabel')">
           <i :class="expanded ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
         </button>
       </div>
@@ -33,23 +33,23 @@
     <div v-if="expanded" class="widget-content">
       <div class="workflow-details">
         <div class="detail-row">
-          <span class="label">Classification:</span>
+          <span class="label">{{ $t('workflow.progress.classification') }}</span>
           <span class="value" :class="activeWorkflow.classification">
             {{ activeWorkflow.classification }}
           </span>
         </div>
         <div class="detail-row">
-          <span class="label">Estimated Duration:</span>
+          <span class="label">{{ $t('workflow.progress.estimatedDuration') }}</span>
           <span class="value">{{ activeWorkflow.estimated_duration }}</span>
         </div>
         <div class="detail-row">
-          <span class="label">Agents Involved:</span>
+          <span class="label">{{ $t('workflow.progress.agentsInvolved') }}</span>
           <span class="value">{{ activeWorkflow.agents_involved.join(', ') }}</span>
         </div>
       </div>
 
       <div class="current-step" v-if="currentStepInfo">
-        <h5>Current Step:</h5>
+        <h5>{{ $t('workflow.progress.currentStep') }}</h5>
         <div class="step-info">
           <div class="step-title">{{ currentStepInfo.description }}</div>
           <div class="step-meta">
@@ -62,13 +62,13 @@
       </div>
 
       <div class="widget-actions">
-        <button @click="openFullWorkflowView" class="btn-view" aria-label="Button">
+        <button @click="openFullWorkflowView" class="btn-view" :aria-label="$t('workflow.progress.viewAriaLabel')">
           <i class="fas fa-external-link-alt"></i>
-          View Full Workflow
+          {{ $t('workflow.progress.viewFullWorkflow') }}
         </button>
-        <button @click="cancelWorkflow" class="btn-cancel" aria-label="Cancel">
+        <button @click="cancelWorkflow" class="btn-cancel" :aria-label="$t('workflow.progress.cancelAriaLabel')">
           <i class="fas fa-stop"></i>
-          Cancel
+          {{ $t('workflow.progress.cancel') }}
         </button>
       </div>
     </div>
@@ -77,8 +77,11 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { apiService } from '@/services/api'
+
+const { t } = useI18n()
 
 const logger = createLogger('WorkflowProgressWidget')
 
@@ -146,7 +149,7 @@ const openFullWorkflowView = () => {
 }
 
 const cancelWorkflow = async () => {
-  if (!confirm('Are you sure you want to cancel this workflow?')) return
+  if (!confirm(t('workflow.progress.cancelConfirm'))) return
 
   try {
     await apiService.delete(`/api/workflow/workflow/${props.workflowId}`)

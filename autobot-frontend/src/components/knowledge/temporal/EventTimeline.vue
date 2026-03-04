@@ -2,24 +2,24 @@
 <template>
   <div class="event-timeline">
     <div class="timeline-header">
-      <h4><i class="fas fa-stream"></i> Event Timeline</h4>
+      <h4><i class="fas fa-stream"></i> {{ $t('knowledge.temporal.events.title') }}</h4>
       <span v-if="events.length > 0" class="event-count">
-        {{ events.length }} events
+        {{ $t('knowledge.temporal.events.eventCount', { count: events.length }) }}
       </span>
     </div>
 
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Loading timeline...</span>
+      <span>{{ $t('knowledge.temporal.events.loading') }}</span>
     </div>
 
     <!-- Empty -->
     <div v-else-if="events.length === 0" class="empty-state">
       <i class="fas fa-calendar-times"></i>
-      <p>No events to display</p>
+      <p>{{ $t('knowledge.temporal.events.noEvents') }}</p>
       <p class="empty-hint">
-        Use the filter panel to search for events
+        {{ $t('knowledge.temporal.events.emptyHint') }}
       </p>
     </div>
 
@@ -102,7 +102,7 @@
               v-if="event.causal_links.length > 0"
               class="causal-links"
             >
-              <span class="links-label">Causal Links:</span>
+              <span class="links-label">{{ $t('knowledge.temporal.events.causalLinks') }}:</span>
               <span
                 v-for="link in event.causal_links"
                 :key="link"
@@ -112,7 +112,7 @@
               </span>
             </div>
             <div class="event-entity">
-              <span class="entity-label">Entity:</span>
+              <span class="entity-label">{{ $t('knowledge.temporal.events.entity') }}:</span>
               <span>{{ event.entity_name }}</span>
             </div>
           </div>
@@ -128,6 +128,7 @@
 // Author: mrveiss
 
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { TemporalEvent } from '@/composables/useKnowledgeGraph'
 import {
   getEventTypeColor as getEventColor,
@@ -139,6 +140,7 @@ const props = defineProps<{
   loading: boolean
 }>()
 
+const { t } = useI18n()
 const expandedEvent = ref<string | null>(null)
 
 function formatTimestamp(event: TemporalEvent): string {
@@ -146,7 +148,7 @@ function formatTimestamp(event: TemporalEvent): string {
     const date = new Date(event.timestamp)
     return date.toLocaleString()
   }
-  return event.temporal_expression ?? 'Unknown time'
+  return event.temporal_expression ?? t('knowledge.temporal.events.unknownTime')
 }
 
 function formatDateMarker(event: TemporalEvent): string {

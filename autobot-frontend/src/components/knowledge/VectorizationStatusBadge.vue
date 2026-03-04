@@ -11,6 +11,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 interface Props {
   status: 'vectorized' | 'pending' | 'failed' | 'unknown'
@@ -63,26 +66,26 @@ const iconClass = computed(() => {
 const labelText = computed(() => {
   switch (props.status) {
     case 'vectorized':
-      return 'Vectorized'
+      return t('knowledge.vectorization.statusVectorized')
     case 'pending':
-      return 'Pending'
+      return t('knowledge.vectorization.statusPending')
     case 'failed':
-      return 'Failed'
+      return t('knowledge.vectorization.statusFailed')
     default:
-      return 'Unknown'
+      return t('knowledge.vectorization.statusUnknown')
   }
 })
 
 const tooltipText = computed(() => {
   switch (props.status) {
     case 'vectorized':
-      return 'Document has been vectorized and is available for semantic search'
+      return t('knowledge.vectorization.tooltipVectorized')
     case 'pending':
-      return 'Vectorization pending - document will be processed automatically'
+      return t('knowledge.vectorization.tooltipPending')
     case 'failed':
-      return 'Vectorization failed - click to retry'
+      return t('knowledge.vectorization.tooltipFailed')
     default:
-      return 'Vectorization status unknown'
+      return t('knowledge.vectorization.tooltipUnknown')
   }
 })
 </script>

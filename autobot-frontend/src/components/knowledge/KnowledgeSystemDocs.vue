@@ -16,6 +16,7 @@
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
@@ -24,6 +25,8 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('KnowledgeSystemDocs')
+
+const { t } = useI18n()
 
 // =============================================================================
 // Type Definitions
@@ -114,7 +117,7 @@ async function loadDocCategories(): Promise<void> {
     }
   } catch (err) {
     logger.error('Failed to load doc categories:', err)
-    error.value = 'Failed to load documentation categories'
+    error.value = t('knowledge.systemDocs.errorLoadCategories')
   } finally {
     isLoading.value = false
   }
@@ -135,7 +138,7 @@ async function loadCategoryDocs(category: DocCategory): Promise<void> {
     }
   } catch (err) {
     logger.error('Failed to load category docs:', err)
-    error.value = 'Failed to load documents'
+    error.value = t('knowledge.systemDocs.errorLoadDocs')
   } finally {
     isLoading.value = false
   }
@@ -162,7 +165,7 @@ async function loadDocContent(doc: SystemDoc): Promise<void> {
     }
   } catch (err) {
     logger.error('Failed to load doc content:', err)
-    error.value = 'Failed to load document content'
+    error.value = t('knowledge.systemDocs.errorLoadContent')
   } finally {
     isLoading.value = false
   }
@@ -205,7 +208,7 @@ async function copyToClipboard(): Promise<void> {
     }, 2000)
   } catch (err) {
     logger.error('Failed to copy to clipboard:', err)
-    error.value = 'Failed to copy to clipboard'
+    error.value = t('knowledge.systemDocs.errorCopy')
   }
 }
 
@@ -241,7 +244,7 @@ async function exportDoc(format: 'json' | 'markdown'): Promise<void> {
     URL.revokeObjectURL(url)
   } catch (err) {
     logger.error('Failed to export document:', err)
-    error.value = 'Failed to export document'
+    error.value = t('knowledge.systemDocs.errorExport')
   } finally {
     isExporting.value = false
   }
@@ -280,7 +283,7 @@ async function exportAllDocs(format: 'json' | 'markdown'): Promise<void> {
     URL.revokeObjectURL(url)
   } catch (err) {
     logger.error('Failed to export all documents:', err)
-    error.value = 'Failed to export documents'
+    error.value = t('knowledge.systemDocs.errorExportAll')
   } finally {
     isExporting.value = false
   }
@@ -327,8 +330,8 @@ onMounted(() => {
     <!-- Header -->
     <div class="docs-header">
       <div class="header-left">
-        <h2>System Documentation</h2>
-        <p class="subtitle">Browse and export AutoBot documentation</p>
+        <h2>{{ $t('knowledge.systemDocs.title') }}</h2>
+        <p class="subtitle">{{ $t('knowledge.systemDocs.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <div class="search-box">
@@ -336,14 +339,14 @@ onMounted(() => {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Search documentation..."
+            :placeholder="$t('knowledge.systemDocs.searchPlaceholder')"
             class="search-input"
           />
         </div>
         <div class="export-dropdown" v-if="selectedCategory">
           <BaseButton variant="outline" class="export-btn">
             <i class="fas fa-download"></i>
-            Export All
+            {{ $t('knowledge.systemDocs.exportAll') }}
           </BaseButton>
           <div class="dropdown-menu">
             <button @click="exportAllDocs('markdown')">
@@ -372,7 +375,7 @@ onMounted(() => {
       <aside class="docs-sidebar">
         <div v-if="isLoading && categories.length === 0" class="loading-state">
           <i class="fas fa-spinner fa-spin"></i>
-          <span>Loading categories...</span>
+          <span>{{ $t('knowledge.systemDocs.loadingCategories') }}</span>
         </div>
 
         <div v-else class="category-tree">
@@ -423,19 +426,19 @@ onMounted(() => {
       <div class="docs-list">
         <div v-if="isLoading" class="loading-state">
           <i class="fas fa-spinner fa-spin"></i>
-          <span>Loading documents...</span>
+          <span>{{ $t('knowledge.systemDocs.loadingDocs') }}</span>
         </div>
 
         <EmptyState
           v-else-if="!selectedCategory"
           icon="fas fa-folder-open"
-          message="Select a category to browse documents"
+          :message="$t('knowledge.systemDocs.selectCategory')"
         />
 
         <EmptyState
           v-else-if="filteredDocs.length === 0"
           icon="fas fa-file-alt"
-          :message="searchQuery ? 'No documents match your search' : 'No documents in this category'"
+          :message="searchQuery ? $t('knowledge.systemDocs.noSearchResults') : $t('knowledge.systemDocs.noDocs')"
         />
 
         <div v-else class="doc-items">
@@ -459,7 +462,7 @@ onMounted(() => {
       <div class="docs-preview">
         <div v-if="!hasSelectedDoc" class="preview-empty">
           <i class="fas fa-file-alt"></i>
-          <p>Select a document to preview</p>
+          <p>{{ $t('knowledge.systemDocs.selectDocument') }}</p>
         </div>
 
         <div v-else class="preview-content">
@@ -473,7 +476,7 @@ onMounted(() => {
                 @click="copyToClipboard"
               >
                 <i :class="copySuccess ? 'fas fa-check' : 'fas fa-copy'"></i>
-                {{ copySuccess ? 'Copied!' : 'Copy' }}
+                {{ copySuccess ? $t('knowledge.systemDocs.copied') : $t('knowledge.systemDocs.copy') }}
               </BaseButton>
               <BaseButton
                 variant="ghost"
@@ -482,7 +485,7 @@ onMounted(() => {
                 :disabled="isExporting"
               >
                 <i class="fas fa-download"></i>
-                Export
+                {{ $t('knowledge.systemDocs.export') }}
               </BaseButton>
             </div>
           </div>
@@ -494,7 +497,7 @@ onMounted(() => {
             </span>
             <span class="meta-item">
               <i class="fas fa-file-word"></i>
-              {{ docWordCount }} words
+              {{ $t('knowledge.systemDocs.words', { count: docWordCount }) }}
             </span>
           </div>
 

@@ -18,8 +18,10 @@ import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('ConnectorConfigModal')
+const { t } = useI18n()
 
 const props = defineProps<{
   modelValue: boolean
@@ -70,38 +72,38 @@ const dbTimestampColumn = ref('')
 const isEditing = computed(() => props.editConnector !== null)
 
 const modalTitle = computed(() =>
-  isEditing.value ? 'Edit Connector' : 'Add Connector'
+  isEditing.value ? t('knowledge.connectors.config.editTitle') : t('knowledge.connectors.config.addTitle')
 )
 
 // =========================================================================
 // Type Definitions for Wizard Cards
 // =========================================================================
 
-const typeCards = [
+const typeCards = computed(() => [
   {
     type: 'file_server' as ConnectorType,
-    label: 'File Server',
-    description: 'Monitor a directory for new and changed files'
+    label: t('knowledge.connectors.config.typeFileServer'),
+    description: t('knowledge.connectors.config.typeFileServerDesc')
   },
   {
     type: 'web_crawler' as ConnectorType,
-    label: 'Web Crawler',
-    description: 'Crawl and index web pages by URL'
+    label: t('knowledge.connectors.config.typeWebCrawler'),
+    description: t('knowledge.connectors.config.typeWebCrawlerDesc')
   },
   {
     type: 'database' as ConnectorType,
-    label: 'Database',
-    description: 'Query a database and index result rows'
+    label: t('knowledge.connectors.config.typeDatabase'),
+    description: t('knowledge.connectors.config.typeDatabaseDesc')
   }
-]
+])
 
-const scheduleOptions = [
-  { value: 'manual', label: 'Manual only', cron: null },
-  { value: '15min', label: 'Every 15 minutes', cron: '*/15 * * * *' },
-  { value: 'hourly', label: 'Every hour', cron: '0 * * * *' },
-  { value: 'daily', label: 'Daily', cron: '0 0 * * *' },
-  { value: 'weekly', label: 'Weekly', cron: '0 0 * * 0' }
-]
+const scheduleOptions = computed(() => [
+  { value: 'manual', label: t('knowledge.connectors.config.scheduleManual'), cron: null },
+  { value: '15min', label: t('knowledge.connectors.config.schedule15min'), cron: '*/15 * * * *' },
+  { value: 'hourly', label: t('knowledge.connectors.config.scheduleHourly'), cron: '0 * * * *' },
+  { value: 'daily', label: t('knowledge.connectors.config.scheduleDaily'), cron: '0 0 * * *' },
+  { value: 'weekly', label: t('knowledge.connectors.config.scheduleWeekly'), cron: '0 0 * * 0' }
+])
 
 // =========================================================================
 // Populate form when editing
@@ -129,7 +131,7 @@ function populateFromConfig(cfg: ConnectorConfig) {
   scheduleCron.value = cfg.schedule_cron
 
   // Reverse-map cron to schedule option
-  const match = scheduleOptions.find(o => o.cron === cfg.schedule_cron)
+  const match = scheduleOptions.value.find(o => o.cron === cfg.schedule_cron)
   scheduleOption.value = match ? match.value : 'manual'
 
   const c = cfg.config || {}
@@ -288,7 +290,7 @@ function selectType(type: ConnectorType) {
 }
 
 function onScheduleChange() {
-  const opt = scheduleOptions.find(o => o.value === scheduleOption.value)
+  const opt = scheduleOptions.value.find(o => o.value === scheduleOption.value)
   scheduleCron.value = opt ? opt.cron : null
 }
 
@@ -336,7 +338,7 @@ async function handleSave() {
     emit('saved', result)
     emit('update:modelValue', false)
   } catch (error: any) {
-    saveError.value = error.message || 'Failed to save connector'
+    saveError.value = error.message || t('knowledge.connectors.config.saveFailed')
     logger.error('Failed to save connector: %s', error)
   } finally {
     saving.value = false
@@ -374,7 +376,7 @@ function closeModal() {
     <!-- Step 1: Type Selection -->
     <div v-if="currentStep === 1" class="step-content">
       <p class="step-description">
-        Select the type of data source to connect.
+        {{ $t('knowledge.connectors.config.selectTypeDesc') }}
       </p>
       <div class="type-grid">
         <button
@@ -436,14 +438,14 @@ function closeModal() {
     <!-- Step 2: Configuration -->
     <div v-if="currentStep === 2" class="step-content">
       <p class="step-description">
-        Configure the connection details.
+        {{ $t('knowledge.connectors.config.configureDetailsDesc') }}
       </p>
 
       <!-- File Server Fields -->
       <template v-if="connectorType === 'file_server'">
         <div class="form-group">
           <label class="form-label" for="fs-base-path">
-            Base Path
+            {{ $t('knowledge.connectors.config.basePath') }}
           </label>
           <input
             id="fs-base-path"
@@ -455,7 +457,7 @@ function closeModal() {
         </div>
         <div class="form-group">
           <label class="form-label" for="fs-include">
-            Include Patterns
+            {{ $t('knowledge.connectors.config.includePatterns') }}
           </label>
           <input
             id="fs-include"
@@ -465,12 +467,12 @@ function closeModal() {
             placeholder="*.pdf, *.md, *.txt"
           />
           <span class="form-hint">
-            Comma-separated glob patterns
+            {{ $t('knowledge.connectors.config.commaSeparatedGlob') }}
           </span>
         </div>
         <div class="form-group">
           <label class="form-label" for="fs-exclude">
-            Exclude Patterns
+            {{ $t('knowledge.connectors.config.excludePatterns') }}
           </label>
           <input
             id="fs-exclude"
@@ -480,12 +482,12 @@ function closeModal() {
             placeholder="*.tmp, .git/*"
           />
           <span class="form-hint">
-            Comma-separated glob patterns
+            {{ $t('knowledge.connectors.config.commaSeparatedGlob') }}
           </span>
         </div>
         <div class="form-group">
           <label class="form-label" for="fs-max-size">
-            Max File Size (MB)
+            {{ $t('knowledge.connectors.config.maxFileSize') }}
           </label>
           <input
             id="fs-max-size"
@@ -501,7 +503,7 @@ function closeModal() {
       <!-- Web Crawler Fields -->
       <template v-if="connectorType === 'web_crawler'">
         <div class="form-group">
-          <label class="form-label" for="wc-urls">URLs</label>
+          <label class="form-label" for="wc-urls">{{ $t('knowledge.connectors.config.urls') }}</label>
           <textarea
             id="wc-urls"
             v-model="wcUrls"
@@ -510,12 +512,12 @@ function closeModal() {
             placeholder="https://example.com&#10;https://docs.example.com"
           ></textarea>
           <span class="form-hint">
-            One URL per line
+            {{ $t('knowledge.connectors.config.oneUrlPerLine') }}
           </span>
         </div>
         <div class="form-group">
           <label class="form-label" for="wc-depth">
-            Max Crawl Depth
+            {{ $t('knowledge.connectors.config.maxCrawlDepth') }}
           </label>
           <input
             id="wc-depth"
@@ -532,7 +534,7 @@ function closeModal() {
       <template v-if="connectorType === 'database'">
         <div class="form-group">
           <label class="form-label" for="db-conn">
-            Connection String
+            {{ $t('knowledge.connectors.config.connectionString') }}
           </label>
           <input
             id="db-conn"
@@ -544,7 +546,7 @@ function closeModal() {
         </div>
         <div class="form-group">
           <label class="form-label" for="db-query">
-            SQL Query
+            {{ $t('knowledge.connectors.config.sqlQuery') }}
           </label>
           <textarea
             id="db-query"
@@ -557,7 +559,7 @@ function closeModal() {
         <div class="form-row">
           <div class="form-group">
             <label class="form-label" for="db-id-col">
-              ID Column
+              {{ $t('knowledge.connectors.config.idColumn') }}
             </label>
             <input
               id="db-id-col"
@@ -569,7 +571,7 @@ function closeModal() {
           </div>
           <div class="form-group">
             <label class="form-label" for="db-ts-col">
-              Timestamp Column
+              {{ $t('knowledge.connectors.config.timestampColumn') }}
             </label>
             <input
               id="db-ts-col"
@@ -582,7 +584,7 @@ function closeModal() {
         </div>
         <div class="form-group">
           <label class="form-label" for="db-content-cols">
-            Content Columns
+            {{ $t('knowledge.connectors.config.contentColumns') }}
           </label>
           <input
             id="db-content-cols"
@@ -592,7 +594,7 @@ function closeModal() {
             placeholder="title, body, summary"
           />
           <span class="form-hint">
-            Comma-separated column names to index
+            {{ $t('knowledge.connectors.config.commaSeparatedColumns') }}
           </span>
         </div>
       </template>
@@ -601,11 +603,11 @@ function closeModal() {
     <!-- Step 3: Schedule -->
     <div v-if="currentStep === 3" class="step-content">
       <p class="step-description">
-        Configure sync schedule and verification mode.
+        {{ $t('knowledge.connectors.config.scheduleDesc') }}
       </p>
 
       <div class="form-group">
-        <label class="form-label">Sync Schedule</label>
+        <label class="form-label">{{ $t('knowledge.connectors.config.syncSchedule') }}</label>
         <div class="schedule-options">
           <label
             v-for="opt in scheduleOptions"
@@ -626,7 +628,7 @@ function closeModal() {
       </div>
 
       <div class="form-group">
-        <label class="form-label">Verification Mode</label>
+        <label class="form-label">{{ $t('knowledge.connectors.config.verificationMode') }}</label>
         <div class="mode-toggle">
           <button
             class="mode-btn"
@@ -634,7 +636,7 @@ function closeModal() {
             @click="verificationMode = 'autonomous'"
             type="button"
           >
-            Autonomous
+            {{ $t('knowledge.connectors.config.autonomous') }}
           </button>
           <button
             class="mode-btn"
@@ -642,12 +644,11 @@ function closeModal() {
             @click="verificationMode = 'collaborative'"
             type="button"
           >
-            Collaborative
+            {{ $t('knowledge.connectors.config.collaborative') }}
           </button>
         </div>
         <span class="form-hint">
-          Autonomous auto-approves high-quality sources.
-          Collaborative requires manual review.
+          {{ $t('knowledge.connectors.config.verificationHint') }}
         </span>
       </div>
 
@@ -658,7 +659,7 @@ function closeModal() {
             v-model="enabled"
             class="toggle-checkbox"
           />
-          <span class="toggle-label">Enabled</span>
+          <span class="toggle-label">{{ $t('knowledge.connectors.config.enabled') }}</span>
         </label>
       </div>
     </div>
@@ -666,12 +667,12 @@ function closeModal() {
     <!-- Step 4: Name & Save -->
     <div v-if="currentStep === 4" class="step-content">
       <p class="step-description">
-        Name the connector and save.
+        {{ $t('knowledge.connectors.config.nameAndSaveDesc') }}
       </p>
 
       <div class="form-group">
         <label class="form-label" for="connector-name">
-          Connector Name
+          {{ $t('knowledge.connectors.config.connectorName') }}
         </label>
         <input
           id="connector-name"
@@ -690,7 +691,7 @@ function closeModal() {
           :loading="testing"
           @click="testConnection"
         >
-          Test Connection
+          {{ $t('knowledge.connectors.config.testConnection') }}
         </BaseButton>
         <div v-if="testResult" class="test-result" :class="testResult.success ? 'test-ok' : 'test-fail'">
           {{ testResult.message }}
@@ -710,11 +711,11 @@ function closeModal() {
         variant="ghost"
         @click="prevStep"
       >
-        Back
+        {{ $t('knowledge.connectors.config.back') }}
       </BaseButton>
       <div class="actions-spacer"></div>
       <BaseButton variant="ghost" @click="closeModal">
-        Cancel
+        {{ $t('knowledge.connectors.config.cancel') }}
       </BaseButton>
       <BaseButton
         v-if="currentStep < totalSteps"
@@ -722,7 +723,7 @@ function closeModal() {
         :disabled="!canProceed"
         @click="nextStep"
       >
-        Next
+        {{ $t('knowledge.connectors.config.next') }}
       </BaseButton>
       <BaseButton
         v-if="currentStep === totalSteps"
@@ -731,7 +732,7 @@ function closeModal() {
         :disabled="!canProceed"
         @click="handleSave"
       >
-        {{ isEditing ? 'Update' : 'Create' }}
+        {{ isEditing ? $t('knowledge.connectors.config.update') : $t('knowledge.connectors.config.create') }}
       </BaseButton>
     </template>
   </BaseModal>

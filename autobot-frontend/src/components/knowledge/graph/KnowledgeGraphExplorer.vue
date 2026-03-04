@@ -2,9 +2,9 @@
 <template>
   <div class="graph-explorer">
     <div class="explorer-header">
-      <h4><i class="fas fa-project-diagram"></i> Entity Explorer</h4>
+      <h4><i class="fas fa-project-diagram"></i> {{ $t('knowledge.graph.explorer.title') }}</h4>
       <p class="header-description">
-        Search and browse entities in the knowledge graph
+        {{ $t('knowledge.graph.explorer.description') }}
       </p>
     </div>
 
@@ -15,13 +15,13 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search entities by name or description..."
+          :placeholder="$t('knowledge.graph.explorer.searchPlaceholder')"
           class="search-input"
           @keydown.enter="handleSearch"
         />
         <button
           class="search-btn"
-          aria-label="Search entities"
+          :aria-label="$t('knowledge.graph.explorer.searchAriaLabel')"
           :disabled="loading || !searchQuery.trim()"
           @click="handleSearch"
         >
@@ -31,7 +31,7 @@
 
       <!-- Type Filters -->
       <div class="type-filters">
-        <span class="filter-label">Types:</span>
+        <span class="filter-label">{{ $t('knowledge.graph.explorer.typesLabel') }}</span>
         <label
           v-for="entityType in entityTypes"
           :key="entityType"
@@ -61,7 +61,7 @@
     <!-- Loading State -->
     <div v-if="loading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Searching entities...</span>
+      <span>{{ $t('knowledge.graph.explorer.searching') }}</span>
     </div>
 
     <!-- Empty State -->
@@ -70,7 +70,7 @@
       class="empty-state"
     >
       <i class="fas fa-search"></i>
-      <p>No entities found matching your search</p>
+      <p>{{ $t('knowledge.graph.explorer.noResults') }}</p>
     </div>
 
     <!-- Results Grid -->
@@ -105,7 +105,7 @@
           </span>
           <span class="source-count">
             <i class="fas fa-file-alt"></i>
-            {{ entity.source_document_ids.length }} sources
+            {{ $t('knowledge.graph.explorer.sourcesCount', { count: entity.source_document_ids.length }) }}
           </span>
         </div>
       </div>

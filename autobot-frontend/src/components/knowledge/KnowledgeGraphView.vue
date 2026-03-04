@@ -4,24 +4,24 @@
     <!-- Sidebar -->
     <aside class="graph-sidebar">
       <div class="sidebar-header">
-        <h3><i class="fas fa-project-diagram"></i> Knowledge Graph</h3>
+        <h3><i class="fas fa-project-diagram"></i> {{ $t('knowledge.graphView.title') }}</h3>
       </div>
 
       <!-- Quick Stats -->
       <div class="quick-stats">
         <div class="stat-row">
           <i class="fas fa-circle"></i>
-          <span class="stat-label">Entities</span>
+          <span class="stat-label">{{ $t('knowledge.graphView.entities') }}</span>
           <span class="stat-value">{{ stats.entityCount }}</span>
         </div>
         <div class="stat-row">
           <i class="fas fa-clock"></i>
-          <span class="stat-label">Events</span>
+          <span class="stat-label">{{ $t('knowledge.graphView.events') }}</span>
           <span class="stat-value">{{ stats.eventCount }}</span>
         </div>
         <div class="stat-row">
           <i class="fas fa-layer-group"></i>
-          <span class="stat-label">Summaries</span>
+          <span class="stat-label">{{ $t('knowledge.graphView.summaries') }}</span>
           <span class="stat-value">{{ stats.summaryCount }}</span>
         </div>
       </div>
@@ -44,7 +44,7 @@
       <div class="sidebar-footer">
         <router-link to="/knowledge" class="back-link">
           <i class="fas fa-arrow-left"></i>
-          Back to Knowledge Base
+          {{ $t('knowledge.graphView.backToKnowledgeBase') }}
         </router-link>
       </div>
     </aside>
@@ -61,12 +61,10 @@
         <div class="welcome-card">
           <h2>
             <i class="fas fa-project-diagram"></i>
-            Knowledge Graph Pipeline
+            {{ $t('knowledge.graphView.knowledgeGraphPipeline') }}
           </h2>
           <p>
-            Extract entities, relationships, and temporal events from
-            documents. Generate hierarchical summaries with drill-down
-            capability.
+            {{ $t('knowledge.graphView.welcomeDescription') }}
           </p>
 
           <div class="feature-grid">
@@ -93,39 +91,41 @@
 // Author: mrveiss
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useKnowledgeGraph } from '@/composables/useKnowledgeGraph'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const { stats } = useKnowledgeGraph()
 
-const tabs = [
+const tabs = computed(() => [
   {
     route: '/knowledge/graph/pipeline',
-    label: 'Pipeline',
+    label: t('knowledge.graphView.pipeline'),
     icon: 'fas fa-play-circle',
-    description: 'Run document processing pipelines to extract knowledge',
+    description: t('knowledge.graphView.pipelineDescription'),
   },
   {
     route: '/knowledge/graph/entities',
-    label: 'Entities',
+    label: t('knowledge.graphView.entitiesTab'),
     icon: 'fas fa-project-diagram',
-    description: 'Search and explore entities and their relationships',
+    description: t('knowledge.graphView.entitiesDescription'),
   },
   {
     route: '/knowledge/graph/timeline',
-    label: 'Timeline',
+    label: t('knowledge.graphView.timeline'),
     icon: 'fas fa-stream',
-    description: 'View temporal events and causal chains',
+    description: t('knowledge.graphView.timelineDescription'),
   },
   {
     route: '/knowledge/graph/summaries',
-    label: 'Summaries',
+    label: t('knowledge.graphView.summariesTab'),
     icon: 'fas fa-layer-group',
-    description: 'Browse hierarchical document summaries',
+    description: t('knowledge.graphView.summariesDescription'),
   },
-]
+])
 
 const isRootRoute = computed(() => {
   return route.path === '/knowledge/graph' ||

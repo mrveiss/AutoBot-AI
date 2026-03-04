@@ -3,9 +3,9 @@
     <!-- Header -->
     <div class="maintenance-header">
       <div class="header-content">
-        <h2><i class="fas fa-tools"></i> Knowledge Base Maintenance</h2>
+        <h2><i class="fas fa-tools"></i> {{ $t('knowledge.maintenance.title') }}</h2>
         <p class="header-subtitle">
-          Monitor and maintain knowledge base health, handle duplicates, and clean up orphaned data
+          {{ $t('knowledge.maintenance.subtitle') }}
         </p>
       </div>
       <div class="header-actions">
@@ -17,7 +17,7 @@
           :loading="isRefreshing"
         >
           <i v-if="!isRefreshing" class="fas fa-sync"></i>
-          {{ isRefreshing ? 'Refreshing...' : 'Refresh All' }}
+          {{ isRefreshing ? $t('knowledge.maintenance.refreshing') : $t('knowledge.maintenance.refreshAll') }}
         </BaseButton>
       </div>
     </div>
@@ -25,7 +25,7 @@
     <!-- Health Dashboard Summary -->
     <div class="health-dashboard">
       <div class="section-title">
-        <h3><i class="fas fa-heartbeat"></i> Health Dashboard</h3>
+        <h3><i class="fas fa-heartbeat"></i> {{ $t('knowledge.maintenance.healthDashboard') }}</h3>
         <span v-if="healthDashboard" :class="['health-status-badge', healthDashboard.status]">
           {{ healthDashboard.status }}
         </span>
@@ -33,7 +33,7 @@
 
       <div v-if="isLoadingHealth" class="loading-state">
         <i class="fas fa-spinner fa-spin"></i>
-        <span>Loading health metrics...</span>
+        <span>{{ $t('knowledge.maintenance.loadingHealth') }}</span>
       </div>
 
       <div v-else-if="healthDashboard" class="health-grid">
@@ -44,7 +44,7 @@
           </div>
           <div class="card-content">
             <span class="card-value">{{ healthDashboard.stats.total_facts }}</span>
-            <span class="card-label">Total Facts</span>
+            <span class="card-label">{{ $t('knowledge.maintenance.totalFacts') }}</span>
           </div>
         </div>
 
@@ -54,7 +54,7 @@
           </div>
           <div class="card-content">
             <span class="card-value">{{ healthDashboard.stats.total_vectors }}</span>
-            <span class="card-label">Total Vectors</span>
+            <span class="card-label">{{ $t('knowledge.maintenance.totalVectors') }}</span>
           </div>
         </div>
 
@@ -64,7 +64,7 @@
           </div>
           <div class="card-content">
             <span class="card-value">{{ formatFileSize(healthDashboard.stats.db_size) }}</span>
-            <span class="card-label">Database Size</span>
+            <span class="card-label">{{ $t('knowledge.maintenance.databaseSize') }}</span>
           </div>
         </div>
 
@@ -74,13 +74,13 @@
           </div>
           <div class="card-content">
             <span class="card-value">{{ healthDashboard.quality.overall_score }}%</span>
-            <span class="card-label">Quality Score</span>
+            <span class="card-label">{{ $t('knowledge.maintenance.qualityScore') }}</span>
           </div>
         </div>
 
         <!-- Quality Dimensions -->
         <div v-if="healthDashboard?.quality?.dimensions" class="quality-dimensions">
-          <h4>Quality Dimensions</h4>
+          <h4>{{ $t('knowledge.maintenance.qualityDimensions') }}</h4>
           <div class="dimension-bars">
             <div
               v-for="(score, dimension) in healthDashboard.quality.dimensions"
@@ -104,22 +104,22 @@
 
         <!-- Issues Summary -->
         <div v-if="healthDashboard?.quality" class="issues-summary">
-          <h4>Issues Found</h4>
+          <h4>{{ $t('knowledge.maintenance.issuesFound') }}</h4>
           <div class="issues-counts">
             <div class="issue-count critical">
               <i class="fas fa-exclamation-circle"></i>
-              <span>{{ healthDashboard.quality.critical_issues ?? 0 }} Critical</span>
+              <span>{{ healthDashboard.quality.critical_issues ?? 0 }} {{ $t('knowledge.maintenance.critical') }}</span>
             </div>
             <div class="issue-count warning">
               <i class="fas fa-exclamation-triangle"></i>
-              <span>{{ healthDashboard.quality.warnings ?? 0 }} Warnings</span>
+              <span>{{ healthDashboard.quality.warnings ?? 0 }} {{ $t('knowledge.maintenance.warnings') }}</span>
             </div>
           </div>
         </div>
 
         <!-- Recommendations -->
         <div v-if="healthDashboard.top_recommendations?.length" class="recommendations">
-          <h4>Top Recommendations</h4>
+          <h4>{{ $t('knowledge.maintenance.topRecommendations') }}</h4>
           <ul class="recommendation-list">
             <li v-for="(rec, idx) in healthDashboard.top_recommendations" :key="idx">
               <i class="fas fa-lightbulb"></i>
@@ -131,7 +131,7 @@
 
       <div v-else class="empty-state">
         <i class="fas fa-info-circle"></i>
-        <p>Unable to load health metrics. Click "Refresh All" to try again.</p>
+        <p>{{ $t('knowledge.maintenance.healthError') }}</p>
       </div>
     </div>
 
@@ -164,12 +164,12 @@
     <!-- Maintenance History (future enhancement) -->
     <div class="maintenance-history">
       <div class="section-title">
-        <h3><i class="fas fa-history"></i> Maintenance History</h3>
+        <h3><i class="fas fa-history"></i> {{ $t('knowledge.maintenance.maintenanceHistory') }}</h3>
       </div>
       <div class="history-content">
         <div v-if="maintenanceHistory.length === 0" class="empty-history">
           <i class="fas fa-calendar-check"></i>
-          <p>No maintenance operations recorded in this session</p>
+          <p>{{ $t('knowledge.maintenance.noHistory') }}</p>
         </div>
         <div v-else class="history-list">
           <div

@@ -4,19 +4,19 @@
     <div class="history-filters">
       <div class="search-box">
         <i class="fas fa-search"></i>
-        <input v-model="searchQuery" placeholder="Search workflows..." />
+        <input v-model="searchQuery" :placeholder="$t('workflow.history.searchPlaceholder')" />
       </div>
       <div class="filter-group">
         <select v-model="statusFilter">
-          <option value="">All Status</option>
-          <option value="completed">Completed</option>
-          <option value="failed">Failed</option>
-          <option value="cancelled">Cancelled</option>
+          <option value="">{{ $t('workflow.history.allStatus') }}</option>
+          <option value="completed">{{ $t('workflow.history.completed') }}</option>
+          <option value="failed">{{ $t('workflow.history.failed') }}</option>
+          <option value="cancelled">{{ $t('workflow.history.cancelled') }}</option>
         </select>
         <select v-model="sortOrder">
-          <option value="newest">Newest First</option>
-          <option value="oldest">Oldest First</option>
-          <option value="name">Name A-Z</option>
+          <option value="newest">{{ $t('workflow.history.newestFirst') }}</option>
+          <option value="oldest">{{ $t('workflow.history.oldestFirst') }}</option>
+          <option value="name">{{ $t('workflow.history.nameAZ') }}</option>
         </select>
       </div>
     </div>
@@ -24,8 +24,8 @@
     <!-- History List -->
     <div v-if="filteredWorkflows.length === 0" class="empty-state">
       <i class="fas fa-history"></i>
-      <h3>No Workflow History</h3>
-      <p>Completed workflows will appear here</p>
+      <h3>{{ $t('workflow.history.noHistory') }}</h3>
+      <p>{{ $t('workflow.history.noHistoryDescription') }}</p>
     </div>
 
     <div v-else class="history-list">
@@ -37,21 +37,21 @@
           <span class="item-name">{{ wf.name }}</span>
           <span class="item-desc">{{ wf.description }}</span>
           <div class="item-meta">
-            <span><i class="fas fa-list-ol"></i> {{ wf.total_steps }} steps</span>
+            <span><i class="fas fa-list-ol"></i> {{ $t('workflow.history.stepsCount', { count: wf.total_steps }) }}</span>
             <span><i class="fas fa-clock"></i> {{ formatDuration(wf) }}</span>
             <span><i class="fas fa-calendar"></i> {{ formatDate(wf.created_at) }}</span>
           </div>
         </div>
         <div class="item-stats">
-          <div class="stat success"><span>{{ getCompletedCount(wf) }}</span> passed</div>
-          <div class="stat failed" v-if="getFailedCount(wf) > 0"><span>{{ getFailedCount(wf) }}</span> failed</div>
-          <div class="stat skipped" v-if="getSkippedCount(wf) > 0"><span>{{ getSkippedCount(wf) }}</span> skipped</div>
+          <div class="stat success"><span>{{ getCompletedCount(wf) }}</span> {{ $t('workflow.history.passed') }}</div>
+          <div class="stat failed" v-if="getFailedCount(wf) > 0"><span>{{ getFailedCount(wf) }}</span> {{ $t('workflow.history.failedLabel') }}</div>
+          <div class="stat skipped" v-if="getSkippedCount(wf) > 0"><span>{{ getSkippedCount(wf) }}</span> {{ $t('workflow.history.skipped') }}</div>
         </div>
         <div class="item-actions">
-          <button class="btn-icon" @click.stop="$emit('view-workflow', wf.workflow_id)" title="View Details">
+          <button class="btn-icon" @click.stop="$emit('view-workflow', wf.workflow_id)" :title="$t('workflow.history.viewDetails')">
             <i class="fas fa-eye"></i>
           </button>
-          <button class="btn-icon" @click.stop="$emit('re-run', wf.workflow_id)" title="Re-run">
+          <button class="btn-icon" @click.stop="$emit('re-run', wf.workflow_id)" :title="$t('workflow.history.reRun')">
             <i class="fas fa-redo"></i>
           </button>
         </div>
@@ -61,18 +61,25 @@
     <!-- Pagination -->
     <div v-if="totalPages > 1" class="pagination">
       <button :disabled="currentPage === 1" @click="currentPage--"><i class="fas fa-chevron-left"></i></button>
-      <span>Page {{ currentPage }} of {{ totalPages }}</span>
+      <span>{{ $t('workflow.history.pageOf', { current: currentPage, total: totalPages }) }}</span>
       <button :disabled="currentPage === totalPages" @click="currentPage++"><i class="fas fa-chevron-right"></i></button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+// Issue #1367: Merge active (finished) + persisted completed workflows
 import { ref, computed } from 'vue';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
 
-const props = defineProps<{ workflows: ActiveWorkflow[] }>();
-defineEmits<{ (e: 'view-workflow', id: string): void; (e: 're-run', id: string): void }>();
+const props = defineProps<{
+  workflows: ActiveWorkflow[];
+  completedWorkflows?: ActiveWorkflow[];
+}>();
+defineEmits<{
+  (e: 'view-workflow', id: string): void;
+  (e: 're-run', id: string): void;
+}>();
 
 const searchQuery = ref('');
 const statusFilter = ref('');
@@ -80,30 +87,60 @@ const sortOrder = ref('newest');
 const currentPage = ref(1);
 const perPage = 10;
 
+/** Merge active finished + persisted completed, deduplicate by id */
+const allHistoryWorkflows = computed(() => {
+  const map = new Map<string, ActiveWorkflow>();
+  // Persisted completed first (lower priority for dedup)
+  for (const wf of props.completedWorkflows ?? []) {
+    map.set(wf.workflow_id, wf);
+  }
+  // Active finished overwrite (fresher data)
+  for (const wf of props.workflows) {
+    if (wf.completed_at || wf.is_cancelled) {
+      map.set(wf.workflow_id, wf);
+    }
+  }
+  return [...map.values()];
+});
+
 const filteredWorkflows = computed(() => {
-  let result = [...props.workflows].filter(wf => wf.completed_at || wf.is_cancelled);
+  let result = [...allHistoryWorkflows.value];
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase();
-    result = result.filter(wf => wf.name.toLowerCase().includes(q) || wf.description.toLowerCase().includes(q));
+    result = result.filter(
+      wf => wf.name.toLowerCase().includes(q)
+        || wf.description.toLowerCase().includes(q),
+    );
   }
   if (statusFilter.value) {
     result = result.filter(wf => {
-      if (statusFilter.value === 'completed') return wf.completed_at && !wf.is_cancelled && getFailedCount(wf) === 0;
+      if (statusFilter.value === 'completed') {
+        return wf.completed_at && !wf.is_cancelled
+          && getFailedCount(wf) === 0;
+      }
       if (statusFilter.value === 'failed') return getFailedCount(wf) > 0;
       if (statusFilter.value === 'cancelled') return wf.is_cancelled;
       return true;
     });
   }
   result.sort((a, b) => {
-    if (sortOrder.value === 'newest') return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-    if (sortOrder.value === 'oldest') return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
+    if (sortOrder.value === 'newest') {
+      return new Date(b.created_at || 0).getTime()
+        - new Date(a.created_at || 0).getTime();
+    }
+    if (sortOrder.value === 'oldest') {
+      return new Date(a.created_at || 0).getTime()
+        - new Date(b.created_at || 0).getTime();
+    }
     return a.name.localeCompare(b.name);
   });
   const start = (currentPage.value - 1) * perPage;
   return result.slice(start, start + perPage);
 });
 
-const totalPages = computed(() => Math.ceil(props.workflows.filter(wf => wf.completed_at || wf.is_cancelled).length / perPage));
+const totalPages = computed(
+  () => Math.ceil(allHistoryWorkflows.value.length / perPage),
+);
 
 function getStatusClass(wf: ActiveWorkflow): string {
   if (wf.is_cancelled) return 'cancelled';

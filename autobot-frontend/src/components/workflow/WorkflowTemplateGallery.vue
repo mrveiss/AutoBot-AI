@@ -3,7 +3,7 @@
     <div class="gallery-header">
       <div class="search-box">
         <i class="fas fa-search"></i>
-        <input v-model="searchQuery" placeholder="Search templates..." />
+        <input v-model="searchQuery" :placeholder="$t('workflow.templates.searchPlaceholder')" />
       </div>
       <div class="category-filters">
         <button v-for="cat in categories" :key="cat" class="filter-btn" :class="{ active: selectedCategory === cat }" @click="onCategoryChange(cat)">
@@ -17,17 +17,17 @@
     <div v-if="apiError" class="error-state">
       <i class="fas fa-exclamation-triangle"></i>
       <p>{{ apiError }}</p>
-      <button class="btn-secondary" @click="retryLoad"><i class="fas fa-redo"></i> Retry</button>
+      <button class="btn-secondary" @click="retryLoad"><i class="fas fa-redo"></i> {{ $t('workflow.templates.retry') }}</button>
     </div>
 
     <div v-else-if="effectiveLoading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Loading templates...</span>
+      <span>{{ $t('workflow.templates.loading') }}</span>
     </div>
 
     <div v-else-if="filteredTemplates.length === 0" class="empty-state">
       <i class="fas fa-clone"></i>
-      <p>No templates match your search</p>
+      <p>{{ $t('workflow.templates.noMatch') }}</p>
     </div>
 
     <div v-else class="templates-grid">
@@ -40,13 +40,13 @@
           <p>{{ template.description }}</p>
           <div class="template-meta">
             <span class="category-badge">{{ template.category }}</span>
-            <span v-if="getStepsCount(template)" class="steps-count"><i class="fas fa-list-ol"></i> {{ getStepsCount(template) }} steps</span>
+            <span v-if="getStepsCount(template)" class="steps-count"><i class="fas fa-list-ol"></i> {{ $t('workflow.templates.stepsCount', { count: getStepsCount(template) }) }}</span>
             <span v-if="template.estimated_duration_minutes" class="duration"><i class="fas fa-clock"></i> {{ template.estimated_duration_minutes }}m</span>
           </div>
         </div>
         <div class="template-actions">
-          <button class="btn-icon" @click.stop="previewTemplate = template" title="Preview"><i class="fas fa-eye"></i></button>
-          <button class="btn-run" @click.stop="$emit('run-template', template)" title="Run Now"><i class="fas fa-play"></i></button>
+          <button class="btn-icon" @click.stop="previewTemplate = template" :title="$t('workflow.templates.preview')"><i class="fas fa-eye"></i></button>
+          <button class="btn-run" @click.stop="$emit('run-template', template)" :title="$t('workflow.templates.runNow')"><i class="fas fa-play"></i></button>
         </div>
       </div>
     </div>
@@ -63,13 +63,13 @@
 
           <!-- Template metadata -->
           <div v-if="previewTemplate.agents_involved?.length" class="preview-agents">
-            <h4>Agents Involved</h4>
+            <h4>{{ $t('workflow.templates.agentsInvolved') }}</h4>
             <div class="agent-tags">
               <span v-for="agent in previewTemplate.agents_involved" :key="agent" class="agent-tag">{{ agent }}</span>
             </div>
           </div>
 
-          <h4>Steps</h4>
+          <h4>{{ $t('workflow.templates.steps') }}</h4>
           <div class="preview-steps">
             <div v-for="(step, i) in getTemplateSteps(previewTemplate)" :key="i" class="preview-step">
               <span class="step-num">{{ i + 1 }}</span>
@@ -78,15 +78,15 @@
                 <code v-if="step.command">{{ step.command }}</code>
                 <div class="step-meta">
                   <span v-if="step.risk_level" class="risk" :class="step.risk_level">{{ step.risk_level }}</span>
-                  <span v-if="step.requires_confirmation"><i class="fas fa-shield-alt"></i> Requires confirmation</span>
+                  <span v-if="step.requires_confirmation"><i class="fas fa-shield-alt"></i> {{ $t('workflow.templates.requiresConfirmation') }}</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
         <div class="preview-actions">
-          <button class="btn-secondary" @click="$emit('select-template', previewTemplate)"><i class="fas fa-edit"></i> Edit in Canvas</button>
-          <button class="btn-primary" @click="$emit('run-template', previewTemplate)"><i class="fas fa-play"></i> Run Workflow</button>
+          <button class="btn-secondary" @click="$emit('select-template', previewTemplate)"><i class="fas fa-edit"></i> {{ $t('workflow.templates.editInCanvas') }}</button>
+          <button class="btn-primary" @click="$emit('run-template', previewTemplate)"><i class="fas fa-play"></i> {{ $t('workflow.templates.runWorkflow') }}</button>
         </div>
       </div>
     </Transition>

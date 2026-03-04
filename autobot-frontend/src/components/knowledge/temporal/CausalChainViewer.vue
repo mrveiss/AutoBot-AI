@@ -2,9 +2,9 @@
 <template>
   <div class="causal-chain-viewer">
     <div class="chain-header">
-      <h4><i class="fas fa-code-branch"></i> Causal Chain</h4>
+      <h4><i class="fas fa-code-branch"></i> {{ $t('knowledge.temporal.causalChain.title') }}</h4>
       <p class="header-description">
-        Trace the chain of causally linked events
+        {{ $t('knowledge.temporal.causalChain.description') }}
       </p>
     </div>
 
@@ -12,7 +12,7 @@
     <div class="chain-controls">
       <div class="control-group">
         <label for="max-depth">
-          Max Depth: <strong>{{ maxDepth }}</strong>
+          {{ $t('knowledge.temporal.causalChain.maxDepth') }}: <strong>{{ maxDepth }}</strong>
         </label>
         <input
           id="max-depth"
@@ -29,7 +29,7 @@
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Tracing causal chain...</span>
+      <span>{{ $t('knowledge.temporal.causalChain.tracing') }}</span>
     </div>
 
     <!-- Chain Display -->
@@ -55,7 +55,7 @@
               class="depth-badge"
               :style="{ backgroundColor: getDepthColor(index) }"
             >
-              {{ index === 0 ? 'Root' : `Depth ${index}` }}
+              {{ index === 0 ? $t('knowledge.temporal.causalChain.root') : $t('knowledge.temporal.causalChain.depth', { level: index }) }}
             </span>
             <span class="event-time">
               {{ event.timestamp
@@ -90,7 +90,7 @@
     <!-- Empty -->
     <div v-else class="empty-state">
       <i class="fas fa-code-branch"></i>
-      <p>No causal chain found for this event</p>
+      <p>{{ $t('knowledge.temporal.causalChain.emptyState') }}</p>
     </div>
   </div>
 </template>

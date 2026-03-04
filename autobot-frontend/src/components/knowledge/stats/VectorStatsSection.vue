@@ -1,13 +1,13 @@
 <template>
   <div v-if="stats" class="vector-stats-section">
     <div class="section-header">
-      <h3><i class="fas fa-project-diagram"></i> Vector Database Statistics</h3>
+      <h3><i class="fas fa-project-diagram"></i> {{ $t('knowledge.stats.vector.title') }}</h3>
       <button @click="$emit('refresh')"
               :disabled="loading"
               class="refresh-btn"
-              aria-label="Refresh vector database statistics">
+              :aria-label="$t('knowledge.stats.vector.refreshAriaLabel')">
         <i class="fas fa-sync" :class="{ 'fa-spin': loading }" aria-hidden="true"></i>
-        Refresh
+        {{ $t('knowledge.stats.vector.refresh') }}
       </button>
     </div>
 
@@ -17,9 +17,9 @@
           <i class="fas fa-lightbulb"></i>
         </div>
         <div class="vector-stat-content">
-          <h4>Total Facts</h4>
+          <h4>{{ $t('knowledge.stats.vector.totalFacts') }}</h4>
           <p class="vector-stat-value">{{ stats.total_facts || 0 }}</p>
-          <p class="vector-stat-label">Knowledge items stored</p>
+          <p class="vector-stat-label">{{ $t('knowledge.stats.vector.knowledgeItemsStored') }}</p>
         </div>
       </BasePanel>
 
@@ -28,12 +28,12 @@
           <i class="fas fa-cubes"></i>
         </div>
         <div class="vector-stat-content">
-          <h4>Total Vectors</h4>
+          <h4>{{ $t('knowledge.stats.vector.totalVectors') }}</h4>
           <p class="vector-stat-value">{{ stats.total_vectors || 0 }}</p>
           <p v-if="needsVectorization" class="vector-stat-label warning">
-            <i class="fas fa-exclamation-triangle"></i> Not vectorized
+            <i class="fas fa-exclamation-triangle"></i> {{ $t('knowledge.stats.vector.notVectorized') }}
           </p>
-          <p v-else class="vector-stat-label">Embeddings generated</p>
+          <p v-else class="vector-stat-label">{{ $t('knowledge.stats.vector.embeddingsGenerated') }}</p>
         </div>
       </BasePanel>
 
@@ -42,9 +42,9 @@
           <i class="fas fa-database"></i>
         </div>
         <div class="vector-stat-content">
-          <h4>Database Size</h4>
+          <h4>{{ $t('knowledge.stats.vector.databaseSize') }}</h4>
           <p class="vector-stat-value">{{ formatFileSize(stats.db_size || 0) }}</p>
-          <p class="vector-stat-label">Storage used</p>
+          <p class="vector-stat-label">{{ $t('knowledge.stats.vector.storageUsed') }}</p>
         </div>
       </BasePanel>
 
@@ -53,11 +53,11 @@
           <i class="fas fa-check-circle"></i>
         </div>
         <div class="vector-stat-content">
-          <h4>Status</h4>
+          <h4>{{ $t('knowledge.stats.vector.status') }}</h4>
           <StatusBadge :variant="getStatusVariant(stats.status)" size="small" class="vector-stat-value">
-            {{ stats.status || 'unknown' }}
+            {{ stats.status || $t('knowledge.stats.vector.unknown') }}
           </StatusBadge>
-          <p class="vector-stat-label">RAG: {{ stats.rag_available ? 'Available' : 'Unavailable' }}</p>
+          <p class="vector-stat-label">{{ $t('knowledge.stats.vector.rag') }}: {{ stats.rag_available ? $t('knowledge.stats.vector.available') : $t('knowledge.stats.vector.unavailable') }}</p>
         </div>
       </BasePanel>
     </div>
@@ -68,22 +68,20 @@
         <i class="fas fa-info-circle"></i>
       </div>
       <div class="notice-content">
-        <h4>Vector Embeddings Not Generated</h4>
+        <h4>{{ $t('knowledge.stats.vector.embeddingsNotGenerated') }}</h4>
         <p>
-          You have <strong>{{ stats.total_facts }} facts</strong> stored in the knowledge base,
-          but they haven't been vectorized yet. Vector embeddings enable semantic search and RAG capabilities.
+          {{ $t('knowledge.stats.vector.embeddingsNotGeneratedDesc', { count: stats.total_facts }) }}
         </p>
         <p class="notice-hint">
           <i class="fas fa-lightbulb"></i>
-          Vectors are typically generated automatically when facts are added through the proper ingestion pipeline.
-          If you imported facts manually, they may need to be re-indexed to generate embeddings.
+          {{ $t('knowledge.stats.vector.embeddingsHint') }}
         </p>
       </div>
     </div>
 
     <!-- Vector Categories Distribution Chart -->
     <div class="vector-chart-section">
-      <h4><i class="fas fa-chart-pie"></i> Vector Distribution by Category</h4>
+      <h4><i class="fas fa-chart-pie"></i> {{ $t('knowledge.stats.vector.distributionByCategory') }}</h4>
       <div class="vector-categories-chart">
         <div
           v-for="(category, idx) in stats.categories"
@@ -92,7 +90,7 @@
         >
           <div class="category-info">
             <span class="category-name">{{ formatCategoryName(category) }}</span>
-            <span class="category-count">{{ getCategoryFactCount(category) }} facts</span>
+            <span class="category-count">{{ $t('knowledge.stats.vector.factsCount', { count: getCategoryFactCount(category) }) }}</span>
           </div>
           <div class="category-progress">
             <div
@@ -109,56 +107,56 @@
 
     <!-- Vector Index Health -->
     <div class="vector-health-section">
-      <h4><i class="fas fa-heartbeat"></i> Vector Index Health</h4>
+      <h4><i class="fas fa-heartbeat"></i> {{ $t('knowledge.stats.vector.indexHealth') }}</h4>
       <div class="health-indicators">
         <div class="health-item" :class="{ active: stats.initialized }">
           <i class="fas fa-check-circle"></i>
-          <span>Initialized</span>
+          <span>{{ $t('knowledge.stats.vector.initialized') }}</span>
         </div>
         <div class="health-item" :class="{ active: stats.llama_index_configured }">
           <i class="fas fa-cube"></i>
-          <span>LlamaIndex</span>
+          <span>{{ $t('knowledge.stats.vector.llamaIndex') }}</span>
         </div>
         <div class="health-item" :class="{ active: stats.llama_index_configured }">
           <i class="fas fa-link"></i>
-          <span>LangChain</span>
+          <span>{{ $t('knowledge.stats.vector.langChain') }}</span>
         </div>
         <div class="health-item" :class="{ active: stats.index_available }">
           <i class="fas fa-layer-group"></i>
-          <span>Index Available</span>
+          <span>{{ $t('knowledge.stats.vector.indexAvailable') }}</span>
         </div>
         <div class="health-item" :class="{ active: stats.rag_available }">
           <i class="fas fa-brain"></i>
-          <span>RAG Available</span>
+          <span>{{ $t('knowledge.stats.vector.ragAvailable') }}</span>
         </div>
       </div>
       <div class="health-details">
         <div class="detail-item">
-          <label>Redis DB:</label>
+          <label>{{ $t('knowledge.stats.vector.redisDb') }}:</label>
           <span class="mono">{{ stats.redis_db }}</span>
         </div>
         <div class="detail-item">
-          <label>Index Name:</label>
+          <label>{{ $t('knowledge.stats.vector.indexName') }}:</label>
           <span class="mono">{{ stats.index_name }}</span>
         </div>
         <div class="detail-item">
-          <label>Vector Framework:</label>
+          <label>{{ $t('knowledge.stats.vector.vectorFramework') }}:</label>
           <span class="mono">LlamaIndex + LangChain</span>
         </div>
         <div class="detail-item">
-          <label>Embedding Model:</label>
+          <label>{{ $t('knowledge.stats.vector.embeddingModel') }}:</label>
           <span class="mono">{{ embeddingModelDisplay }}</span>
         </div>
         <div class="detail-item">
-          <label>Text Splitter:</label>
+          <label>{{ $t('knowledge.stats.vector.textSplitter') }}:</label>
           <span class="mono">LangChain RecursiveCharacterTextSplitter</span>
         </div>
         <div class="detail-item">
-          <label>Last Updated:</label>
+          <label>{{ $t('knowledge.stats.vector.lastUpdated') }}:</label>
           <span>{{ formatDateTime(stats.last_updated) }}</span>
         </div>
         <div class="detail-item">
-          <label>Indexed Documents:</label>
+          <label>{{ $t('knowledge.stats.vector.indexedDocuments') }}:</label>
           <span>{{ stats.indexed_documents || 0 }}</span>
         </div>
       </div>
@@ -180,6 +178,7 @@
  */
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import BasePanel from '@/components/base/BasePanel.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import {
@@ -219,6 +218,7 @@ interface Emits {
 
 const props = defineProps<Props>()
 defineEmits<Emits>()
+const { t } = useI18n()
 
 const needsVectorization = computed(() => {
   if (!props.stats) return false
@@ -228,12 +228,12 @@ const needsVectorization = computed(() => {
 })
 
 const embeddingModelDisplay = computed(() => {
-  if (!props.stats) return 'Loading...'
+  if (!props.stats) return t('knowledge.stats.vector.loading')
   const model = props.stats.embedding_model
   const dimensions = props.stats.embedding_dimensions
   if (model && dimensions) return `${model} (${dimensions}-dim)`
   if (model) return model
-  return 'Not configured'
+  return t('knowledge.stats.vector.notConfigured')
 })
 
 const getStatusVariant = (status: string): 'success' | 'danger' | 'secondary' => {

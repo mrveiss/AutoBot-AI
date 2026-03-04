@@ -7,21 +7,21 @@
         @click="manageTab = 'upload'"
         :class="['manage-tab-btn', { active: manageTab === 'upload' }]"
       >
-        <i class="fas fa-upload mr-2"></i>Upload
+        <i class="fas fa-upload mr-2"></i>{{ $t('knowledge.entries.uploadTab') }}
       </BaseButton>
       <BaseButton
         variant="ghost"
         @click="manageTab = 'manage'"
         :class="['manage-tab-btn', { active: manageTab === 'manage' }]"
       >
-        <i class="fas fa-edit mr-2"></i>Manage
+        <i class="fas fa-edit mr-2"></i>{{ $t('knowledge.entries.manageTab') }}
       </BaseButton>
       <BaseButton
         variant="ghost"
         @click="manageTab = 'advanced'"
         :class="['manage-tab-btn', { active: manageTab === 'advanced' }]"
       >
-        <i class="fas fa-cog mr-2"></i>Advanced
+        <i class="fas fa-cog mr-2"></i>{{ $t('knowledge.entries.advancedTab') }}
       </BaseButton>
     </div>
 
@@ -55,13 +55,13 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search entries..."
+          :placeholder="$t('knowledge.entries.searchPlaceholder')"
           class="search-input"
-          aria-label="Search knowledge base entries"
+          :aria-label="$t('knowledge.entries.searchAriaLabel')"
           @input="filterEntries"
         />
       </div>
-      <span class="total-count">{{ filteredDocuments.length }} entries</span>
+      <span class="total-count">{{ filteredDocuments.length }} {{ $t('knowledge.entries.entries') }}</span>
     </div>
 
     <!-- Issue #747: Bulk Actions Toolbar -->
@@ -84,7 +84,7 @@
     <!-- Filter bar -->
     <div class="filter-bar">
       <div class="filter-group">
-        <label for="category-filter">Category:</label>
+        <label for="category-filter">{{ $t('knowledge.entries.categoryLabel') }}</label>
         <select
           id="category-filter"
           v-model="filterCategory"
@@ -92,7 +92,7 @@
           class="filter-select"
           aria-label="Filter by category"
         >
-          <option value="">All Categories</option>
+          <option value="">{{ $t('knowledge.entries.allCategories') }}</option>
           <option v-for="cat in store.categories" :key="cat.id" :value="cat.name">
             {{ cat.name }} ({{ cat.documentCount }})
           </option>
@@ -100,7 +100,7 @@
       </div>
 
       <div class="filter-group">
-        <label for="type-filter">Type:</label>
+        <label for="type-filter">{{ $t('knowledge.entries.typeLabel') }}</label>
         <select
           id="type-filter"
           v-model="filterType"
@@ -108,16 +108,16 @@
           class="filter-select"
           aria-label="Filter by entry type"
         >
-          <option value="">All Types</option>
-          <option value="document">Documents</option>
-          <option value="webpage">Web Pages</option>
-          <option value="api">API Docs</option>
-          <option value="upload">Uploads</option>
+          <option value="">{{ $t('knowledge.entries.allTypes') }}</option>
+          <option value="document">{{ $t('knowledge.entries.documents') }}</option>
+          <option value="webpage">{{ $t('knowledge.entries.webPages') }}</option>
+          <option value="api">{{ $t('knowledge.entries.apiDocs') }}</option>
+          <option value="upload">{{ $t('knowledge.entries.uploads') }}</option>
         </select>
       </div>
 
       <div class="filter-group">
-        <label for="sort-filter">Sort by:</label>
+        <label for="sort-filter">{{ $t('knowledge.entries.sortBy') }}</label>
         <select
           id="sort-filter"
           v-model="sortBy"
@@ -125,10 +125,10 @@
           class="filter-select"
           aria-label="Sort entries by"
         >
-          <option value="updatedAt">Last Updated</option>
-          <option value="createdAt">Date Created</option>
-          <option value="title">Title</option>
-          <option value="category">Category</option>
+          <option value="updatedAt">{{ $t('knowledge.entries.lastUpdated') }}</option>
+          <option value="createdAt">{{ $t('knowledge.entries.dateCreated') }}</option>
+          <option value="title">{{ $t('knowledge.entries.titleSort') }}</option>
+          <option value="category">{{ $t('knowledge.entries.categorySort') }}</option>
         </select>
       </div>
 
@@ -138,21 +138,21 @@
         @click="clearFilters"
         class="clear-filters-btn"
       >
-        Clear Filters
+        {{ $t('knowledge.entries.clearFilters') }}
       </BaseButton>
     </div>
 
     <!-- Entries list -->
     <div v-if="store.isLoading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <p>Loading entries...</p>
+      <p>{{ $t('knowledge.entries.loadingEntries') }}</p>
     </div>
 
     <EmptyState
       v-else-if="filteredDocuments.length === 0"
       icon="fas fa-file-alt"
-      title="No entries found"
-      :message="searchQuery || filterCategory || filterType ? 'Try adjusting your filters' : 'Add your first knowledge entry'"
+      :title="$t('knowledge.entries.noEntriesFound')"
+      :message="searchQuery || filterCategory || filterType ? $t('knowledge.entries.adjustFilters') : $t('knowledge.entries.addFirstEntry')"
     />
 
     <div v-else class="entries-table">
@@ -166,12 +166,12 @@
                 @change="toggleSelectAll"
               />
             </th>
-            <th>Title</th>
-            <th>Category</th>
-            <th>Type</th>
-            <th>Tags</th>
-            <th>Updated</th>
-            <th>Actions</th>
+            <th>{{ $t('knowledge.entries.thTitle') }}</th>
+            <th>{{ $t('knowledge.entries.thCategory') }}</th>
+            <th>{{ $t('knowledge.entries.thType') }}</th>
+            <th>{{ $t('knowledge.entries.thTags') }}</th>
+            <th>{{ $t('knowledge.entries.thUpdated') }}</th>
+            <th>{{ $t('knowledge.entries.thActions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -188,7 +188,7 @@
               />
             </td>
             <td class="title-cell" @click="viewEntry(entry)">
-              <span class="entry-title">{{ entry.title || 'Untitled' }}</span>
+              <span class="entry-title">{{ entry.title || $t('knowledge.entries.untitled') }}</span>
               <span
                 v-if="getVerificationStatus(entry)"
                 class="provenance-dot"
@@ -224,7 +224,7 @@
                 size="xs"
                 @click="viewEntry(entry)"
                 class="icon-btn"
-                title="View"
+                :title="$t('knowledge.entries.viewBtn')"
               >
                 <i class="fas fa-eye"></i>
               </BaseButton>
@@ -233,7 +233,7 @@
                 size="xs"
                 @click="editEntry(entry)"
                 class="icon-btn"
-                title="Edit"
+                :title="$t('knowledge.entries.editBtn')"
               >
                 <i class="fas fa-edit"></i>
               </BaseButton>
@@ -242,7 +242,7 @@
                 size="xs"
                 @click="deleteEntry(entry)"
                 class="icon-btn danger"
-                title="Delete"
+                :title="$t('knowledge.entries.deleteBtn')"
               >
                 <i class="fas fa-trash"></i>
               </BaseButton>
@@ -264,8 +264,7 @@
         </BaseButton>
 
         <span class="page-info">
-          Page {{ currentPage }} of {{ totalPages }}
-          ({{ filteredDocuments.length }} entries)
+          {{ $t('knowledge.entries.pageInfo', { current: currentPage, total: totalPages, count: filteredDocuments.length }) }}
         </span>
 
         <BaseButton
@@ -283,43 +282,43 @@
     <!-- View/Edit Dialog -->
     <BaseModal
       v-model="showDialog"
-      :title="dialogMode === 'view' ? 'View Entry' : 'Edit Entry'"
+      :title="dialogMode === 'view' ? $t('knowledge.entries.viewEntry') : $t('knowledge.entries.editEntry')"
       size="large"
       scrollable
     >
       <div v-if="currentEntry && dialogMode === 'view'" class="view-mode">
         <div class="entry-metadata">
           <div class="meta-item">
-            <label>Title:</label>
-            <span>{{ currentEntry.title || 'Untitled' }}</span>
+            <label>{{ $t('knowledge.entries.titleLabel') }}</label>
+            <span>{{ currentEntry.title || $t('knowledge.entries.untitled') }}</span>
           </div>
           <div class="meta-item">
-            <label>Category:</label>
+            <label>{{ $t('knowledge.entries.categoryViewLabel') }}</label>
             <span class="category-badge" :style="getCategoryStyle(currentEntry.category)">
               {{ currentEntry.category }}
             </span>
           </div>
           <div class="meta-item">
-            <label>Type:</label>
+            <label>{{ $t('knowledge.entries.typeViewLabel') }}</label>
             <span class="type-badge">
               <i :class="getDocumentTypeIcon(currentEntry.type)"></i>
               {{ currentEntry.type }}
             </span>
           </div>
           <div class="meta-item">
-            <label>Source:</label>
+            <label>{{ $t('knowledge.entries.sourceLabel') }}</label>
             <span>{{ currentEntry.source }}</span>
           </div>
           <div class="meta-item">
-            <label>Created:</label>
+            <label>{{ $t('knowledge.entries.createdLabel') }}</label>
             <span>{{ formatDateTime(currentEntry.createdAt) }}</span>
           </div>
           <div class="meta-item">
-            <label>Updated:</label>
+            <label>{{ $t('knowledge.entries.updatedLabel') }}</label>
             <span>{{ formatDateTime(currentEntry.updatedAt) }}</span>
           </div>
           <div v-if="currentEntry.tags.length > 0" class="meta-item tags-section">
-            <label>Tags:</label>
+            <label>{{ $t('knowledge.entries.tagsLabel') }}</label>
             <div class="tags-list">
               <span v-for="tag in currentEntry.tags" :key="tag" class="tag-chip">
                 {{ tag }}
@@ -329,14 +328,14 @@
         </div>
 
         <div class="entry-content">
-          <h4>Content</h4>
+          <h4>{{ $t('knowledge.entries.content') }}</h4>
           <div class="content-viewer" v-html="formatContent(currentEntry.content)"></div>
         </div>
       </div>
 
       <div v-else-if="currentEntry" class="edit-mode">
         <div class="form-group">
-          <label for="edit-title">Title</label>
+          <label for="edit-title">{{ $t('knowledge.entries.editTitle') }}</label>
           <input
             id="edit-title"
             v-model="editForm.title"
@@ -347,7 +346,7 @@
 
         <div class="form-row">
           <div class="form-group">
-            <label for="edit-category">Category</label>
+            <label for="edit-category">{{ $t('knowledge.entries.editCategory') }}</label>
             <select id="edit-category" v-model="editForm.category" class="form-select">
               <option v-for="cat in store.categories" :key="cat.id" :value="cat.name">
                 {{ cat.name }}
@@ -356,7 +355,7 @@
           </div>
 
           <div class="form-group">
-            <label for="edit-source">Source</label>
+            <label for="edit-source">{{ $t('knowledge.entries.editSource') }}</label>
             <input
               id="edit-source"
               v-model="editForm.source"
@@ -367,18 +366,18 @@
         </div>
 
         <div class="form-group">
-          <label for="edit-tags">Tags (comma-separated)</label>
+          <label for="edit-tags">{{ $t('knowledge.entries.editTags') }}</label>
           <input
             id="edit-tags"
             v-model="editForm.tagsInput"
             type="text"
             class="form-input"
-            placeholder="tag1, tag2, tag3"
+            :placeholder="$t('knowledge.entries.editTagsPlaceholder')"
           />
         </div>
 
         <div class="form-group">
-          <label for="edit-content">Content</label>
+          <label for="edit-content">{{ $t('knowledge.entries.editContent') }}</label>
           <textarea
             id="edit-content"
             v-model="editForm.content"
@@ -395,21 +394,21 @@
           @click="switchToEdit"
         >
           <i class="fas fa-edit"></i>
-          Edit
+          {{ $t('knowledge.entries.editBtn') }}
         </BaseButton>
         <BaseButton
           v-if="dialogMode === 'edit'"
           variant="secondary"
           @click="cancelEdit"
         >
-          Cancel
+          {{ $t('knowledge.entries.cancel') }}
         </BaseButton>
         <BaseButton
           v-if="dialogMode === 'edit'"
           variant="primary"
           @click="saveEdit"
         >
-          Save Changes
+          {{ $t('knowledge.entries.saveChanges') }}
         </BaseButton>
       </template>
     </BaseModal>
@@ -427,6 +426,7 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import type { KnowledgeDocument } from '@/stores/useKnowledgeStore'
@@ -453,6 +453,7 @@ import { createLogger } from '@/utils/debugUtils'
 type ExportFormat = 'json' | 'csv' | 'markdown'
 
 const logger = createLogger('KnowledgeEntries')
+const { t } = useI18n()
 
 const store = useKnowledgeStore()
 const controller = useKnowledgeController()
@@ -624,7 +625,7 @@ const editEntry = (entry: KnowledgeDocument) => {
 }
 
 const deleteEntry = async (entry: KnowledgeDocument) => {
-  if (!confirm(`Delete "${entry.title || 'Untitled'}"?`)) return
+  if (!confirm(t('knowledge.entries.confirmDelete', { title: entry.title || t('knowledge.entries.untitled') }))) return
 
   try {
     await controller.deleteDocument(entry.id)
@@ -634,7 +635,7 @@ const deleteEntry = async (entry: KnowledgeDocument) => {
 }
 
 const deleteSelected = async () => {
-  if (!confirm(`Delete ${selectedEntries.value.length} selected entries?`)) return
+  if (!confirm(t('knowledge.entries.confirmDeleteSelected', { count: selectedEntries.value.length }))) return
 
   try {
     await controller.bulkDeleteDocuments(selectedEntries.value)
@@ -871,10 +872,10 @@ const getVerificationLabel = (
 ): string => {
   const status = getVerificationStatus(entry)
   const labels: Record<string, string> = {
-    verified: 'Verified',
-    pending_review: 'Pending review',
-    unverified: 'Unverified',
-    rejected: 'Rejected'
+    verified: t('knowledge.entries.verified'),
+    pending_review: t('knowledge.entries.pendingReview'),
+    unverified: t('knowledge.entries.unverified'),
+    rejected: t('knowledge.entries.rejected')
   }
   return labels[status || ''] || 'Unknown'
 }

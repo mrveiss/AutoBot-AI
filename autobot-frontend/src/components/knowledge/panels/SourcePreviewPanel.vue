@@ -20,8 +20,10 @@ import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('SourcePreviewPanel')
+const { t } = useI18n()
 
 // =============================================================================
 // Type Definitions
@@ -191,14 +193,14 @@ watch(() => props.modelValue, (isOpen) => {
                 <i :class="getTypeIcon(document?.type)"></i>
               </div>
               <div class="header-info">
-                <h3 class="panel-title">{{ document?.title || 'Source Document' }}</h3>
+                <h3 class="panel-title">{{ document?.title || $t('knowledge.panels.sourcePreview.defaultTitle') }}</h3>
                 <span v-if="document?.path" class="panel-path">{{ document.path }}</span>
               </div>
             </div>
             <button
               class="close-btn"
               @click="closePanel"
-              title="Close panel"
+              :title="$t('knowledge.panels.sourcePreview.closePanel')"
             >
               <i class="fas fa-times"></i>
             </button>
@@ -208,7 +210,7 @@ watch(() => props.modelValue, (isOpen) => {
           <div class="panel-body">
             <div v-if="!hasDocument" class="empty-state">
               <i class="fas fa-file-alt"></i>
-              <p>No document selected</p>
+              <p>{{ $t('knowledge.panels.sourcePreview.noDocument') }}</p>
             </div>
 
             <template v-else>
@@ -220,11 +222,11 @@ watch(() => props.modelValue, (isOpen) => {
                 </span>
                 <span class="meta-item">
                   <i class="fas fa-file-word"></i>
-                  {{ wordCount }} words
+                  {{ $t('knowledge.panels.sourcePreview.wordCount', { count: wordCount }) }}
                 </span>
                 <span v-if="relevancePercent !== null" class="meta-item relevance">
                   <i class="fas fa-bullseye"></i>
-                  {{ relevancePercent }}% relevant
+                  {{ $t('knowledge.panels.sourcePreview.relevance', { percent: relevancePercent }) }}
                 </span>
               </div>
 
@@ -245,7 +247,7 @@ watch(() => props.modelValue, (isOpen) => {
               :disabled="!hasDocument"
             >
               <i :class="copySuccess ? 'fas fa-check' : 'fas fa-copy'"></i>
-              {{ copySuccess ? 'Copied!' : 'Copy' }}
+              {{ copySuccess ? $t('knowledge.panels.sourcePreview.copied') : $t('knowledge.panels.sourcePreview.copy') }}
             </BaseButton>
 
             <BaseButton
@@ -255,7 +257,7 @@ watch(() => props.modelValue, (isOpen) => {
               :disabled="!hasDocument"
             >
               <i class="fas fa-external-link-alt"></i>
-              Open in Knowledge Manager
+              {{ $t('knowledge.panels.sourcePreview.openInKnowledgeManager') }}
             </BaseButton>
           </footer>
         </aside>

@@ -7,13 +7,13 @@
         :class="['toggle-btn', { active: view === 'search' }]"
         @click="view = 'search'"
       >
-        <i class="fas fa-search"></i> Search
+        <i class="fas fa-search"></i> {{ $t('knowledge.summaries.page.search') }}
       </button>
       <button
         :class="['toggle-btn', { active: view === 'overview' }]"
         @click="view = 'overview'"
       >
-        <i class="fas fa-file-alt"></i> Document Overview
+        <i class="fas fa-file-alt"></i> {{ $t('knowledge.summaries.page.documentOverview') }}
       </button>
     </div>
 
@@ -26,13 +26,13 @@
     <!-- Document Overview View -->
     <div v-if="view === 'overview' && !drillDownId" class="overview-section">
       <div class="doc-id-input">
-        <label for="doc-id">Document ID</label>
+        <label for="doc-id">{{ $t('knowledge.summaries.page.documentId') }}</label>
         <div class="input-row">
           <input
             id="doc-id"
             v-model="documentId"
             type="text"
-            placeholder="Enter document ID..."
+            :placeholder="$t('knowledge.summaries.page.documentIdPlaceholder')"
             class="form-input"
             @keydown.enter="loadOverview"
           />
@@ -41,7 +41,7 @@
             :disabled="!documentId.trim()"
             @click="loadOverview"
           >
-            <i class="fas fa-eye"></i> Load
+            <i class="fas fa-eye"></i> {{ $t('knowledge.summaries.page.load') }}
           </button>
         </div>
       </div>
@@ -56,8 +56,8 @@
     <!-- Drill-Down View -->
     <div v-if="drillDownId" class="drill-down-section">
       <button class="back-btn" @click="drillDownId = null">
-        <i class="fas fa-arrow-left"></i> Back to
-        {{ view === 'search' ? 'Search' : 'Overview' }}
+        <i class="fas fa-arrow-left"></i> {{ $t('knowledge.summaries.page.backTo') }}
+        {{ view === 'search' ? $t('knowledge.summaries.page.search') : $t('knowledge.summaries.page.documentOverview') }}
       </button>
       <DrillDownViewer :summary-id="drillDownId" />
     </div>

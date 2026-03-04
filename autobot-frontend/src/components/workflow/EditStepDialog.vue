@@ -2,13 +2,13 @@
   <div v-if="show" class="edit-overlay" @click="$emit('cancel')">
     <div class="edit-dialog" @click.stop>
       <div class="edit-header">
-        <h4>Edit Step {{ stepIndex + 1 }}</h4>
+        <h4>{{ $t('workflow.editStep.title', { step: stepIndex + 1 }) }}</h4>
         <BaseButton
           variant="ghost"
           size="xs"
           @click="$emit('cancel')"
           class="close-button"
-          aria-label="Close dialog"
+          :aria-label="$t('workflow.editStep.closeAriaLabel')"
         >x</BaseButton>
       </div>
 
@@ -26,7 +26,7 @@
         </div>
 
         <div class="form-field">
-          <label for="edit-description">Description:</label>
+          <label for="edit-description">{{ $t('workflow.editStep.descriptionLabel') }}</label>
           <input
             id="edit-description"
             ref="descriptionInput"
@@ -34,7 +34,7 @@
             @input="updateField('description', ($event.target as HTMLInputElement).value)"
             type="text"
             class="form-input"
-            placeholder="Enter step description..."
+            :placeholder="$t('workflow.editStep.descriptionPlaceholder')"
           />
           <div v-if="validationErrors.description" class="field-error">
             {{ validationErrors.description }}
@@ -42,14 +42,14 @@
         </div>
 
         <div class="form-field">
-          <label for="edit-command">Command:</label>
+          <label for="edit-command">{{ $t('workflow.editStep.commandLabel') }}</label>
           <textarea
             id="edit-command"
             :value="step.command"
             @input="updateField('command', ($event.target as HTMLTextAreaElement).value)"
             class="form-textarea"
             rows="3"
-            placeholder="Enter command to execute..."
+            :placeholder="$t('workflow.editStep.commandPlaceholder')"
           ></textarea>
           <div v-if="validationErrors.command" class="field-error">
             {{ validationErrors.command }}
@@ -57,21 +57,21 @@
         </div>
 
         <div class="form-field">
-          <label for="edit-explanation">Explanation (optional):</label>
+          <label for="edit-explanation">{{ $t('workflow.editStep.explanationLabel') }}</label>
           <textarea
             id="edit-explanation"
             :value="step.explanation"
             @input="updateField('explanation', ($event.target as HTMLTextAreaElement).value)"
             class="form-textarea"
             rows="2"
-            placeholder="Explain what this step does..."
+            :placeholder="$t('workflow.editStep.explanationPlaceholder')"
           ></textarea>
         </div>
 
         <!-- Live Risk Assessment -->
         <div class="edit-risk-section">
           <div class="edit-risk-indicator" :class="riskLevel">
-            <span class="risk-label">Live Risk Assessment: {{ riskLevel.toUpperCase() }}</span>
+            <span class="risk-label">{{ $t('workflow.editStep.liveRiskAssessment', { level: riskLevel.toUpperCase() }) }}</span>
             <div class="risk-reasons">
               <div v-for="reason in riskReasons" :key="reason" class="risk-reason">
                 - {{ reason }}
@@ -87,16 +87,16 @@
           @click="$emit('save')"
           :disabled="!isFormValid || saving"
           :loading="saving"
-          aria-label="Save changes"
+          :aria-label="$t('workflow.editStep.saveAriaLabel')"
         >
-          {{ saving ? 'Saving...' : 'Save Changes' }}
+          {{ saving ? $t('workflow.editStep.saving') : $t('workflow.editStep.saveChanges') }}
         </BaseButton>
         <BaseButton
           variant="secondary"
           @click="$emit('cancel')"
           :disabled="saving"
-          aria-label="Cancel"
-        >Cancel</BaseButton>
+          :aria-label="$t('workflow.editStep.cancelAriaLabel')"
+        >{{ $t('workflow.editStep.cancel') }}</BaseButton>
       </div>
     </div>
   </div>

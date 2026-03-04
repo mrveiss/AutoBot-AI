@@ -2,9 +2,9 @@
   <div class="cleanup-statistics">
     <div class="section-header">
       <div class="header-content">
-        <h4><i class="fas fa-broom"></i> Cleanup & Optimization</h4>
+        <h4><i class="fas fa-broom"></i> {{ $t('knowledge.cleanup.title') }}</h4>
         <p class="header-description">
-          Remove empty facts, orphaned tags, and fix metadata issues
+          {{ $t('knowledge.cleanup.description') }}
         </p>
       </div>
     </div>
@@ -17,8 +17,8 @@
             <input type="checkbox" v-model="options.removeEmpty" />
             <span class="checkmark"></span>
             <span class="option-text">
-              <strong>Remove Empty Facts</strong>
-              <small>Delete facts with no content</small>
+              <strong>{{ $t('knowledge.cleanup.removeEmptyFacts') }}</strong>
+              <small>{{ $t('knowledge.cleanup.removeEmptyFactsDesc') }}</small>
             </span>
           </label>
         </div>
@@ -28,8 +28,8 @@
             <input type="checkbox" v-model="options.removeOrphanedTags" />
             <span class="checkmark"></span>
             <span class="option-text">
-              <strong>Remove Orphaned Tags</strong>
-              <small>Delete tags with no associated facts</small>
+              <strong>{{ $t('knowledge.cleanup.removeOrphanedTags') }}</strong>
+              <small>{{ $t('knowledge.cleanup.removeOrphanedTagsDesc') }}</small>
             </span>
           </label>
         </div>
@@ -39,8 +39,8 @@
             <input type="checkbox" v-model="options.fixMetadata" />
             <span class="checkmark"></span>
             <span class="option-text">
-              <strong>Fix Metadata Issues</strong>
-              <small>Repair malformed JSON metadata</small>
+              <strong>{{ $t('knowledge.cleanup.fixMetadataIssues') }}</strong>
+              <small>{{ $t('knowledge.cleanup.fixMetadataIssuesDesc') }}</small>
             </span>
           </label>
         </div>
@@ -48,30 +48,30 @@
 
       <!-- Scan Results -->
       <div v-if="scanResult" class="scan-results">
-        <h5>Scan Results</h5>
+        <h5>{{ $t('knowledge.cleanup.scanResults') }}</h5>
         <div class="results-grid">
           <div class="result-item" :class="{ 'has-issues': scanResult.issues_found.empty_facts > 0 }">
             <span class="result-icon"><i class="fas fa-file-circle-minus"></i></span>
             <span class="result-value">{{ scanResult.issues_found.empty_facts || 0 }}</span>
-            <span class="result-label">Empty Facts</span>
+            <span class="result-label">{{ $t('knowledge.cleanup.emptyFacts') }}</span>
           </div>
 
           <div class="result-item" :class="{ 'has-issues': scanResult.issues_found.orphaned_tags > 0 }">
             <span class="result-icon"><i class="fas fa-tags"></i></span>
             <span class="result-value">{{ scanResult.issues_found.orphaned_tags || 0 }}</span>
-            <span class="result-label">Orphaned Tags</span>
+            <span class="result-label">{{ $t('knowledge.cleanup.orphanedTags') }}</span>
           </div>
 
           <div class="result-item" :class="{ 'has-issues': scanResult.issues_found.malformed_metadata > 0 }">
             <span class="result-icon"><i class="fas fa-code"></i></span>
             <span class="result-value">{{ scanResult.issues_found.malformed_metadata || 0 }}</span>
-            <span class="result-label">Metadata Issues</span>
+            <span class="result-label">{{ $t('knowledge.cleanup.metadataIssues') }}</span>
           </div>
 
           <div class="result-item total">
             <span class="result-icon"><i class="fas fa-exclamation-triangle"></i></span>
             <span class="result-value">{{ getTotalIssues }}</span>
-            <span class="result-label">Total Issues</span>
+            <span class="result-label">{{ $t('knowledge.cleanup.totalIssues') }}</span>
           </div>
         </div>
       </div>
@@ -85,7 +85,7 @@
           :loading="isScanning"
         >
           <i v-if="!isScanning" class="fas fa-search"></i>
-          {{ isScanning ? 'Scanning...' : 'Scan for Issues' }}
+          {{ isScanning ? $t('knowledge.cleanup.scanning') : $t('knowledge.cleanup.scanForIssues') }}
         </BaseButton>
 
         <BaseButton
@@ -95,7 +95,7 @@
           :loading="isCleaning"
         >
           <i v-if="!isCleaning" class="fas fa-broom"></i>
-          {{ isCleaning ? 'Cleaning...' : 'Run Cleanup' }}
+          {{ isCleaning ? $t('knowledge.cleanup.cleaning') : $t('knowledge.cleanup.runCleanup') }}
         </BaseButton>
       </div>
 
@@ -113,12 +113,14 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CleanupStatistics')
+const { t } = useI18n()
 
 const emit = defineEmits<{
   (e: 'cleanup-complete', result: { action: string; details: string }): void
@@ -211,16 +213,16 @@ const runDryScan = async () => {
 
       const total = getTotalIssues.value
       if (total > 0) {
-        showStatus('warning', `Found ${total} issues that can be cleaned up`)
+        showStatus('warning', t('knowledge.cleanup.foundIssues', { count: total }))
       } else {
-        showStatus('success', 'No issues found - knowledge base is clean!')
+        showStatus('success', t('knowledge.cleanup.noIssuesFound'))
       }
     } else {
       throw new Error(data.message || 'Scan failed')
     }
   } catch (error: any) {
     logger.error('Failed to scan for issues:', error)
-    showStatus('error', error.message || 'Failed to scan for issues')
+    showStatus('error', error.message || t('knowledge.cleanup.errorScan'))
   } finally {
     isScanning.value = false
   }
@@ -231,7 +233,7 @@ const runCleanup = async () => {
   if (!scanResult.value || getTotalIssues.value === 0) return
 
   const confirmed = window.confirm(
-    `Are you sure you want to clean up ${getTotalIssues.value} issues?`
+    t('knowledge.cleanup.confirmCleanup', { count: getTotalIssues.value })
   )
 
   if (!confirmed) return
@@ -254,7 +256,7 @@ const runCleanup = async () => {
         (data.fixes_applied?.tags_cleaned || 0) +
         (data.fixes_applied?.metadata_fixed || 0)
 
-      showStatus('success', `Successfully cleaned up ${total} issues`)
+      showStatus('success', t('knowledge.cleanup.cleanupSuccess', { count: total }))
       scanResult.value = null
 
       emit('cleanup-complete', {
@@ -266,7 +268,7 @@ const runCleanup = async () => {
     }
   } catch (error: any) {
     logger.error('Failed to run cleanup:', error)
-    showStatus('error', error.message || 'Failed to run cleanup')
+    showStatus('error', error.message || t('knowledge.cleanup.errorCleanup'))
   } finally {
     isCleaning.value = false
   }

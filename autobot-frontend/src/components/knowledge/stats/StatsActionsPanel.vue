@@ -2,15 +2,15 @@
   <div class="stats-actions">
     <button @click="$emit('export')" class="action-btn">
       <i class="fas fa-download"></i>
-      Export Statistics
+      {{ $t('knowledge.stats.actions.exportStatistics') }}
     </button>
     <button @click="$emit('optimize')" class="action-btn">
       <i class="fas fa-compress"></i>
-      Optimize Database
+      {{ $t('knowledge.stats.actions.optimizeDatabase') }}
     </button>
     <button @click="$emit('generate-report')" class="action-btn primary">
       <i class="fas fa-file-chart-line"></i>
-      Generate Report
+      {{ $t('knowledge.stats.actions.generateReport') }}
     </button>
   </div>
 </template>

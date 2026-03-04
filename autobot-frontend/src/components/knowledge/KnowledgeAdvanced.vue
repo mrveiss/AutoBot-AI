@@ -1,9 +1,9 @@
 <template>
   <div class="knowledge-advanced">
     <div class="advanced-header">
-      <h3>Advanced Knowledge Management</h3>
+      <h3>{{ $t('knowledge.advanced.title') }}</h3>
       <p class="header-description">
-        Administrative tools for populating and managing the knowledge base
+        {{ $t('knowledge.advanced.description') }}
       </p>
     </div>
 
@@ -11,8 +11,8 @@
       <!-- Repopulate Section -->
       <div class="section-card">
         <div class="section-header">
-          <h4><i class="fas fa-database"></i> Knowledge Base Population</h4>
-          <p>Quickly populate the knowledge base with common documentation</p>
+          <h4><i class="fas fa-database"></i> {{ $t('knowledge.advanced.knowledgeBasePopulation') }}</h4>
+          <p>{{ $t('knowledge.advanced.populationDescription') }}</p>
         </div>
 
         <div class="action-grid">
@@ -22,9 +22,9 @@
               <div class="action-icon autobot-docs">
                 <i class="fas fa-cogs"></i>
               </div>
-              <h5>AutoBot Documentation</h5>
-              <p>Add AutoBot-specific documentation, configs, and setup guides</p>
-              <small class="action-meta">~30 documents, ~3 minutes</small>
+              <h5>{{ $t('knowledge.advanced.autobotDocumentation') }}</h5>
+              <p>{{ $t('knowledge.advanced.autobotDocsDescription') }}</p>
+              <small class="action-meta">{{ $t('knowledge.advanced.autobotDocsMeta') }}</small>
             </div>
             <BaseButton
               variant="primary"
@@ -44,9 +44,9 @@
               <div class="action-icon system-commands">
                 <i class="fas fa-terminal"></i>
               </div>
-              <h5>System Commands</h5>
-              <p>Add common Linux commands and usage examples (curl, grep, ssh, docker, etc.)</p>
-              <small class="action-meta">~150 commands, ~5 minutes</small>
+              <h5>{{ $t('knowledge.advanced.systemCommands') }}</h5>
+              <p>{{ $t('knowledge.advanced.systemCommandsDescription') }}</p>
+              <small class="action-meta">{{ $t('knowledge.advanced.systemCommandsMeta') }}</small>
             </div>
             <BaseButton
               variant="primary"
@@ -66,9 +66,9 @@
               <div class="action-icon man-pages">
                 <i class="fas fa-book"></i>
               </div>
-              <h5>Manual Pages</h5>
-              <p>Add selected system manual pages for common tools and utilities</p>
-              <small class="action-meta">~50 man pages, ~8 minutes</small>
+              <h5>{{ $t('knowledge.advanced.manualPages') }}</h5>
+              <p>{{ $t('knowledge.advanced.manualPagesDescription') }}</p>
+              <small class="action-meta">{{ $t('knowledge.advanced.manualPagesMeta') }}</small>
             </div>
             <BaseButton
               variant="primary"
@@ -87,8 +87,8 @@
       <!-- Management Section -->
       <div class="section-card">
         <div class="section-header">
-          <h4><i class="fas fa-tools"></i> Database Management</h4>
-          <p>Administrative tools for knowledge base maintenance</p>
+          <h4><i class="fas fa-tools"></i> {{ $t('knowledge.advanced.databaseManagement') }}</h4>
+          <p>{{ $t('knowledge.advanced.databaseManagementDescription') }}</p>
         </div>
 
         <div class="management-actions">
@@ -97,9 +97,9 @@
               <div class="action-icon danger">
                 <i class="fas fa-trash-alt"></i>
               </div>
-              <h5>Clear All Knowledge</h5>
-              <p>Remove all entries from the knowledge base. <strong>This action cannot be undone.</strong></p>
-              <small class="action-meta">Requires confirmation</small>
+              <h5>{{ $t('knowledge.advanced.clearAllKnowledge') }}</h5>
+              <p>{{ $t('knowledge.advanced.clearAllDescription') }} <strong>{{ $t('knowledge.advanced.clearAllWarning') }}</strong></p>
+              <small class="action-meta">{{ $t('knowledge.advanced.clearAllMeta') }}</small>
             </div>
             <BaseButton
               variant="danger"
@@ -109,7 +109,7 @@
               class="action-btn"
             >
               <i v-if="!isClearing" class="fas fa-exclamation-triangle"></i>
-              {{ isClearing ? 'Clearing...' : 'Clear All' }}
+              {{ isClearing ? $t('knowledge.advanced.clearing') : $t('knowledge.advanced.clearAll') }}
             </BaseButton>
           </div>
         </div>
@@ -118,7 +118,7 @@
       <!-- Progress Section -->
       <div v-if="showProgress" class="section-card">
         <div class="section-header">
-          <h4><i class="fas fa-chart-line"></i> Operation Progress</h4>
+          <h4><i class="fas fa-chart-line"></i> {{ $t('knowledge.advanced.operationProgress') }}</h4>
         </div>
 
         <div class="progress-container">
@@ -136,8 +136,8 @@
             ></div>
           </div>
           <div class="progress-stats">
-            <span>Items processed: {{ itemsProcessed }} / {{ totalItems }}</span>
-            <span v-if="estimatedTimeRemaining">ETA: {{ estimatedTimeRemaining }}</span>
+            <span>{{ $t('knowledge.advanced.itemsProcessed', { processed: itemsProcessed, total: totalItems }) }}</span>
+            <span v-if="estimatedTimeRemaining">{{ $t('knowledge.advanced.eta', { time: estimatedTimeRemaining }) }}</span>
           </div>
         </div>
       </div>
@@ -160,7 +160,7 @@
           size="xs"
           @click="dismissMessage(index)"
           class="dismiss-btn"
-          aria-label="Dismiss message"
+          :aria-label="$t('knowledge.advanced.dismissMessage')"
         >
           <i class="fas fa-times"></i>
         </BaseButton>
@@ -171,6 +171,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import ApiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
@@ -178,6 +179,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('KnowledgeAdvanced')
+const { t } = useI18n()
 
 const store = useKnowledgeStore()
 
@@ -221,10 +223,10 @@ const progressText = computed(() => {
 const getButtonText = (type: keyof typeof populateStatus.value) => {
   const status = populateStatus.value[type]
   switch (status) {
-    case 'loading': return 'Populating...'
-    case 'success': return 'Populated'
-    case 'error': return 'Retry'
-    default: return 'Populate'
+    case 'loading': return t('knowledge.advanced.populating')
+    case 'success': return t('knowledge.advanced.populated')
+    case 'error': return t('knowledge.advanced.retryBtn')
+    default: return t('knowledge.advanced.populate')
   }
 }
 
@@ -312,15 +314,15 @@ const populateSystemCommands = async () => {
     isPopulating.value = true
     populateStatus.value.systemCommands = 'loading'
 
-    startProgress('Populating System Commands', 150)
-    progressDetails.value = 'Adding common Linux commands and examples...'
+    startProgress(t('knowledge.advanced.progressPopulatingSystemCommands'), 150)
+    progressDetails.value = t('knowledge.advanced.progressAddingCommands')
 
     const apiResponse = await ApiClient.post('/api/knowledge_base/populate_system_commands', {})
     const response = await parseApiResponse(apiResponse)
 
     if (response.status === 'success') {
       populateStatus.value.systemCommands = 'success'
-      addStatusMessage('success', 'System Commands Added',
+      addStatusMessage('success', t('knowledge.advanced.systemCommandsAdded'),
         `Successfully added ${response.items_added} system commands to the knowledge base`)
 
       // Refresh knowledge store
@@ -331,7 +333,7 @@ const populateSystemCommands = async () => {
   } catch (error: any) {
     logger.error('Failed to populate system commands:', error)
     populateStatus.value.systemCommands = 'error'
-    addStatusMessage('error', 'System Commands Failed',
+    addStatusMessage('error', t('knowledge.advanced.systemCommandsFailed'),
       error.message || 'An error occurred while populating system commands')
   } finally {
     isPopulating.value = false
@@ -351,15 +353,15 @@ const populateManPages = async () => {
     isPopulating.value = true
     populateStatus.value.manPages = 'loading'
 
-    startProgress('Populating Manual Pages', 50)
-    progressDetails.value = 'Adding system manual pages...'
+    startProgress(t('knowledge.advanced.progressPopulatingManPages'), 50)
+    progressDetails.value = t('knowledge.advanced.progressAddingManPages')
 
     const apiResponse = await ApiClient.post('/api/knowledge_base/populate_man_pages', {})
     const response = await parseApiResponse(apiResponse)
 
     if (response.status === 'success') {
       populateStatus.value.manPages = 'success'
-      addStatusMessage('success', 'Manual Pages Added',
+      addStatusMessage('success', t('knowledge.advanced.manualPagesAdded'),
         `Successfully added ${response.items_added} manual pages to the knowledge base`)
 
       // Refresh knowledge store
@@ -370,7 +372,7 @@ const populateManPages = async () => {
   } catch (error: any) {
     logger.error('Failed to populate manual pages:', error)
     populateStatus.value.manPages = 'error'
-    addStatusMessage('error', 'Manual Pages Failed',
+    addStatusMessage('error', t('knowledge.advanced.manualPagesFailed'),
       error.message || 'An error occurred while populating manual pages')
   } finally {
     isPopulating.value = false
@@ -390,15 +392,15 @@ const populateAutoBotDocs = async () => {
     isPopulating.value = true
     populateStatus.value.autobotDocs = 'loading'
 
-    startProgress('Populating AutoBot Documentation', 30)
-    progressDetails.value = 'Adding AutoBot documentation and guides...'
+    startProgress(t('knowledge.advanced.progressPopulatingAutobotDocs'), 30)
+    progressDetails.value = t('knowledge.advanced.progressAddingAutobotDocs')
 
     const apiResponse = await ApiClient.post('/api/knowledge_base/populate_autobot_docs', {})
     const response = await parseApiResponse(apiResponse)
 
     if (response.status === 'success') {
       populateStatus.value.autobotDocs = 'success'
-      addStatusMessage('success', 'AutoBot Documentation Added',
+      addStatusMessage('success', t('knowledge.advanced.autobotDocsAdded'),
         `Successfully added ${response.items_added} AutoBot documents to the knowledge base`)
 
       // Refresh knowledge store
@@ -409,7 +411,7 @@ const populateAutoBotDocs = async () => {
   } catch (error: any) {
     logger.error('Failed to populate AutoBot docs:', error)
     populateStatus.value.autobotDocs = 'error'
-    addStatusMessage('error', 'AutoBot Documentation Failed',
+    addStatusMessage('error', t('knowledge.advanced.autobotDocsFailed'),
       error.message || 'An error occurred while populating AutoBot documentation')
   } finally {
     isPopulating.value = false
@@ -426,39 +428,32 @@ const clearAllKnowledge = async () => {
   if (isClearing.value || isPopulating.value) return
 
   // Double confirmation for destructive action
-  const firstConfirm = confirm(
-    'Are you sure you want to clear ALL knowledge base entries?\n\n' +
-    'This will permanently delete all documents, commands, and manual pages.\n' +
-    'This action CANNOT be undone.'
-  )
+  const firstConfirm = confirm(t('knowledge.advanced.confirmClearAll'))
 
   if (!firstConfirm) return
 
-  const secondConfirm = confirm(
-    'FINAL CONFIRMATION:\n\n' +
-    'Type "DELETE ALL" in the next dialog to proceed with clearing the entire knowledge base.'
-  )
+  const secondConfirm = confirm(t('knowledge.advanced.confirmClearFinal'))
 
   if (!secondConfirm) return
 
-  const userInput = prompt('Type "DELETE ALL" to confirm (case sensitive):')
+  const userInput = prompt(t('knowledge.advanced.promptDeleteAll'))
 
   if (userInput !== 'DELETE ALL') {
-    addStatusMessage('warning', 'Clear Operation Cancelled', 'Incorrect confirmation text entered')
+    addStatusMessage('warning', t('knowledge.advanced.clearCancelled'), t('knowledge.advanced.clearCancelledDetails'))
     return
   }
 
   try {
     isClearing.value = true
 
-    startProgress('Clearing Knowledge Base', 1)
-    progressDetails.value = 'Removing all entries from the knowledge base...'
+    startProgress(t('knowledge.advanced.progressClearingKB'), 1)
+    progressDetails.value = t('knowledge.advanced.progressRemovingEntries')
 
     const apiResponse = await ApiClient.post('/api/knowledge_base/clear_all', {})
     const response = await parseApiResponse(apiResponse)
 
     if (response.status === 'success') {
-      addStatusMessage('success', 'Knowledge Base Cleared',
+      addStatusMessage('success', t('knowledge.advanced.clearSuccess'),
         `Successfully removed ${response.items_removed} entries from the knowledge base`)
 
       // Refresh knowledge store
@@ -475,7 +470,7 @@ const clearAllKnowledge = async () => {
     }
   } catch (error: any) {
     logger.error('Failed to clear knowledge base:', error)
-    addStatusMessage('error', 'Clear Operation Failed',
+    addStatusMessage('error', t('knowledge.advanced.clearFailed'),
       error.message || 'An error occurred while clearing the knowledge base')
   } finally{
     isClearing.value = false

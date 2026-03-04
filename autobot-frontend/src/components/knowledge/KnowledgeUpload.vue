@@ -6,7 +6,7 @@
   <div class="knowledge-upload">
     <div class="upload-header">
       <p class="upload-description">
-        Upload documents, add web content, or create new knowledge entries
+        {{ $t('knowledge.upload.description') }}
       </p>
     </div>
 
@@ -15,41 +15,41 @@
       <div class="upload-method">
         <div class="method-header">
           <i class="fas fa-keyboard"></i>
-          <h4>Text Entry</h4>
+          <h4>{{ $t('knowledge.upload.textEntry') }}</h4>
         </div>
 
         <div class="method-content">
           <div class="form-group">
-            <label for="text-title">Title</label>
+            <label for="text-title">{{ $t('knowledge.upload.titleLabel') }}</label>
             <input
               id="text-title"
               v-model="textEntry.title"
               type="text"
               class="form-input"
-              placeholder="Enter a descriptive title..."
+              :placeholder="$t('knowledge.upload.titlePlaceholder')"
             />
           </div>
 
           <div class="form-group">
-            <label for="text-content">Content *</label>
+            <label for="text-content">{{ $t('knowledge.upload.contentLabel') }}</label>
             <textarea
               id="text-content"
               v-model="textEntry.content"
               class="form-textarea"
               rows="6"
-              placeholder="Enter your knowledge content..."
+              :placeholder="$t('knowledge.upload.contentPlaceholder')"
               required
             ></textarea>
             <div class="char-count">
-              {{ textEntry.content.length }} characters
+              {{ $t('knowledge.upload.characters', { count: textEntry.content.length }) }}
             </div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
-              <label for="text-category">Category</label>
+              <label for="text-category">{{ $t('knowledge.upload.category') }}</label>
               <select id="text-category" v-model="textEntry.category" class="form-select">
-                <option value="">Select category...</option>
+                <option value="">{{ $t('knowledge.upload.selectCategory') }}</option>
                 <option v-for="cat in store.categories" :key="cat.id" :value="cat.name">
                   {{ cat.name }}
                 </option>
@@ -57,13 +57,13 @@
             </div>
 
             <div class="form-group">
-              <label for="text-tags">Tags</label>
+              <label for="text-tags">{{ $t('knowledge.upload.tags') }}</label>
               <input
                 id="text-tags"
                 v-model="textEntry.tagsInput"
                 type="text"
                 class="form-input"
-                placeholder="Enter tags separated by commas..."
+                :placeholder="$t('knowledge.upload.tagsPlaceholder')"
                 @keyup.enter="addTextEntry"
               />
             </div>
@@ -72,26 +72,26 @@
           <!-- Issue #685: Hierarchical Access Controls -->
           <div class="form-row">
             <div class="form-group">
-              <label for="text-access-level">Access Level</label>
+              <label for="text-access-level">{{ $t('knowledge.upload.accessLevel') }}</label>
               <select id="text-access-level" v-model="textEntry.accessLevel" class="form-select">
-                <option value="user">User Content (default)</option>
-                <option value="system">System Documentation</option>
-                <option value="general">Public Knowledge</option>
-                <option value="autobot">Platform Documentation</option>
+                <option value="user">{{ $t('knowledge.upload.accessUser') }}</option>
+                <option value="system">{{ $t('knowledge.upload.accessSystem') }}</option>
+                <option value="general">{{ $t('knowledge.upload.accessGeneral') }}</option>
+                <option value="autobot">{{ $t('knowledge.upload.accessAutobot') }}</option>
               </select>
-              <small class="form-hint">Determines the type of knowledge</small>
+              <small class="form-hint">{{ $t('knowledge.upload.accessHint') }}</small>
             </div>
 
             <div class="form-group">
-              <label for="text-visibility">Visibility</label>
+              <label for="text-visibility">{{ $t('knowledge.upload.visibility') }}</label>
               <select id="text-visibility" v-model="textEntry.visibility" class="form-select">
-                <option value="private">Private (only me)</option>
-                <option value="shared">Shared (specific users)</option>
-                <option value="group">Group (team members)</option>
-                <option value="organization">Organization (all org members)</option>
-                <option value="system">System (all authenticated users)</option>
+                <option value="private">{{ $t('knowledge.upload.visPrivate') }}</option>
+                <option value="shared">{{ $t('knowledge.upload.visShared') }}</option>
+                <option value="group">{{ $t('knowledge.upload.visGroup') }}</option>
+                <option value="organization">{{ $t('knowledge.upload.visOrganization') }}</option>
+                <option value="system">{{ $t('knowledge.upload.visSystem') }}</option>
               </select>
-              <small class="form-hint">Who can access this knowledge</small>
+              <small class="form-hint">{{ $t('knowledge.upload.visibilityHint') }}</small>
             </div>
           </div>
 
@@ -101,7 +101,7 @@
             class="submit-btn"
           >
             <i class="fas fa-plus"></i>
-            Add to Knowledge Base
+            {{ $t('knowledge.upload.addToKnowledgeBase') }}
           </button>
         </div>
       </div>
@@ -110,12 +110,12 @@
       <div class="upload-method">
         <div class="method-header">
           <i class="fas fa-globe"></i>
-          <h4>Import from URL</h4>
+          <h4>{{ $t('knowledge.upload.importFromUrl') }}</h4>
         </div>
 
         <div class="method-content">
           <div class="form-group">
-            <label for="url-input">URL *</label>
+            <label for="url-input">{{ $t('knowledge.upload.urlLabel') }}</label>
             <input
               id="url-input"
               v-model="urlEntry.url"
@@ -128,7 +128,7 @@
 
           <div class="form-row">
             <div class="form-group">
-              <label for="url-category">Category</label>
+              <label for="url-category">{{ $t('knowledge.upload.category') }}</label>
               <select id="url-category" v-model="urlEntry.category" class="form-select">
                 <option value="">Select category...</option>
                 <option v-for="cat in store.categories" :key="cat.id" :value="cat.name">
@@ -138,7 +138,7 @@
             </div>
 
             <div class="form-group">
-              <label for="url-tags">Tags</label>
+              <label for="url-tags">{{ $t('knowledge.upload.tags') }}</label>
               <input
                 id="url-tags"
                 v-model="urlEntry.tagsInput"
@@ -155,7 +155,7 @@
             class="submit-btn"
           >
             <i class="fas fa-download"></i>
-            Import Content
+            {{ $t('knowledge.upload.importContent') }}
           </button>
         </div>
       </div>
@@ -164,7 +164,7 @@
       <div class="upload-method upload-method--file">
         <div class="method-header">
           <i class="fas fa-file-upload"></i>
-          <h4>Upload Files</h4>
+          <h4>{{ $t('knowledge.upload.uploadFiles') }}</h4>
           <span v-if="selectedFiles.length > 0" class="file-count-badge">
             {{ selectedFiles.length }}
           </span>
@@ -201,14 +201,14 @@
               </div>
               <p class="drop-text">
                 <template v-if="isDragging">
-                  {{ dragValid ? 'Drop files to add' : 'Invalid file type' }}
+                  {{ dragValid ? $t('knowledge.upload.dropToAdd') : $t('knowledge.upload.invalidFileType') }}
                 </template>
                 <template v-else>
-                  Drag and drop files here or <span class="browse-link">browse</span>
+                  {{ $t('knowledge.upload.dragAndDrop') }} <span class="browse-link">{{ $t('knowledge.upload.browse') }}</span>
                 </template>
               </p>
               <p v-if="!isDragging" class="drop-hint">
-                Supported: TXT, MD, PDF, DOC, DOCX, JSON, CSV, YAML, XML, HTML (max 10MB each)
+                {{ $t('knowledge.upload.supportedFormats') }}
               </p>
             </div>
           </div>
@@ -222,7 +222,7 @@
               </h5>
               <button @click="clearAllFiles" class="clear-all-btn" title="Clear all files">
                 <i class="fas fa-trash-alt"></i>
-                Clear All
+                {{ $t('knowledge.upload.clearAll') }}
               </button>
             </div>
 
@@ -295,18 +295,18 @@
                 <!-- Upload Status -->
                 <div v-if="fileItem.status === 'completed'" class="file-status success">
                   <i class="fas fa-check-circle"></i>
-                  Uploaded successfully
+                  {{ $t('knowledge.upload.uploadedSuccessfully') }}
                 </div>
                 <div v-if="fileItem.status === 'failed'" class="file-status error">
                   <i class="fas fa-exclamation-circle"></i>
-                  {{ fileItem.errorMessage || 'Upload failed' }}
+                  {{ fileItem.errorMessage || $t('knowledge.upload.uploadFailed') }}
                 </div>
 
                 <!-- File Preview Panel -->
                 <Transition name="slide">
                   <div v-if="expandedFileId === fileItem.id && fileItem.preview" class="file-preview">
                     <div class="preview-header">
-                      <span class="preview-label">Content Preview</span>
+                      <span class="preview-label">{{ $t('knowledge.upload.contentPreview') }}</span>
                       <span class="preview-chars">
                         {{ fileItem.preview.length }} / {{ fileItem.fullContentLength || '?' }} chars
                       </span>
@@ -314,7 +314,7 @@
                     <pre class="preview-content">{{ fileItem.preview }}</pre>
                     <div v-if="fileItem.previewTruncated" class="preview-truncated">
                       <i class="fas fa-info-circle"></i>
-                      Preview truncated. Full content will be uploaded.
+                      {{ $t('knowledge.upload.previewTruncated') }}
                     </div>
                   </div>
                 </Transition>
@@ -327,14 +327,14 @@
             <div class="form-row">
               <div class="form-group">
                 <label for="file-category">
-                  Category for all files
+                  {{ $t('knowledge.upload.categoryForAll') }}
                   <span v-if="hasAutoCategories" class="auto-detect-hint">
-                    (or use auto-detected)
+                    {{ $t('knowledge.upload.orAutoDetected') }}
                   </span>
                 </label>
                 <select id="file-category" v-model="fileEntry.category" class="form-select">
                   <option value="">
-                    {{ hasAutoCategories ? 'Use auto-detected categories' : 'Select category...' }}
+                    {{ hasAutoCategories ? $t('knowledge.upload.useAutoDetected') : $t('knowledge.upload.selectCategory') }}
                   </option>
                   <option v-for="cat in store.categories" :key="cat.id" :value="cat.name">
                     {{ cat.name }}
@@ -343,7 +343,7 @@
               </div>
 
               <div class="form-group">
-                <label for="file-tags">Tags for all files</label>
+                <label for="file-tags">{{ $t('knowledge.upload.tagsForAll') }}</label>
                 <input
                   id="file-tags"
                   v-model="fileEntry.tagsInput"
@@ -361,7 +361,7 @@
             >
               <template v-if="isSubmitting">
                 <i class="fas fa-spinner fa-spin"></i>
-                Uploading...
+                {{ $t('knowledge.upload.uploading') }}
               </template>
               <template v-else>
                 <i class="fas fa-cloud-upload-alt"></i>
@@ -413,6 +413,7 @@
  */
 
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers'
 import { formatFileSize } from '@/utils/formatHelpers'
@@ -424,6 +425,8 @@ import BaseAlert from '@/components/ui/BaseAlert.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('KnowledgeUpload')
+
+const { t } = useI18n()
 
 // =============================================================================
 // Type Definitions
@@ -600,7 +603,7 @@ async function addTextEntry(): Promise<void> {
       }
     )
 
-    successMessage.value = 'Text entry added successfully!'
+    successMessage.value = t('knowledge.upload.successTextAdded')
     resetFormFields(textEntry)
 
     setTimeout(() => {
@@ -609,7 +612,7 @@ async function addTextEntry(): Promise<void> {
 
   } catch (error: unknown) {
     const err = error as Error
-    errorMessage.value = err.message || 'Failed to add text entry'
+    errorMessage.value = err.message || t('knowledge.upload.errorAddText')
   } finally {
     isSubmitting.value = false
   }
@@ -641,7 +644,7 @@ async function importFromUrl(): Promise<void> {
     clearInterval(progressInterval)
     completeProgress('Import complete!')
 
-    successMessage.value = 'URL content imported successfully!'
+    successMessage.value = t('knowledge.upload.successUrlImported')
     resetFormFields(urlEntry)
 
     setTimeout(() => {
@@ -651,7 +654,7 @@ async function importFromUrl(): Promise<void> {
 
   } catch (error: unknown) {
     const err = error as Error
-    errorMessage.value = err.message || 'Failed to import URL'
+    errorMessage.value = err.message || t('knowledge.upload.errorImportUrl')
     hideProgress()
   } finally {
     isSubmitting.value = false
@@ -723,14 +726,14 @@ async function addFiles(files: File[]): Promise<void> {
   for (const file of files) {
     // Validate file size
     if (file.size > MAX_FILE_SIZE) {
-      errorMessage.value = `File "${file.name}" is too large (max 10MB)`
+      errorMessage.value = t('knowledge.upload.errorFileTooLarge', { name: file.name })
       continue
     }
 
     // Validate file type
     const ext = getFileExtension(file.name).toLowerCase()
     if (!SUPPORTED_EXTENSIONS.includes(ext)) {
-      errorMessage.value = `File "${file.name}" has unsupported format`
+      errorMessage.value = t('knowledge.upload.errorUnsupportedFormat', { name: file.name })
       continue
     }
 
@@ -886,7 +889,7 @@ async function uploadFiles(): Promise<void> {
 
   } catch (error: unknown) {
     const err = error as Error
-    errorMessage.value = err.message || 'Failed to upload files'
+    errorMessage.value = err.message || t('knowledge.upload.errorUploadFiles')
     hideProgress()
   } finally {
     isSubmitting.value = false

@@ -3,7 +3,7 @@
     <div class="knowledge-dialog" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
       <!-- Header -->
       <div class="dialog-header">
-        <h3 class="dialog-title">📚 Knowledge Management Decision</h3>
+        <h3 class="dialog-title">{{ $t('knowledge.persistence.title') }}</h3>
         <BaseButton
           variant="ghost"
           size="sm"
@@ -18,11 +18,11 @@
       <!-- Chat Context Info -->
       <div v-if="chatContext" class="context-info">
         <div class="context-topic">
-          <span class="label">Topic:</span>
-          <span class="value">{{ chatContext.topic || 'General Discussion' }}</span>
+          <span class="label">{{ $t('knowledge.persistence.topicLabel') }}</span>
+          <span class="value">{{ chatContext.topic || $t('knowledge.persistence.defaultTopic') }}</span>
         </div>
         <div class="context-keywords" v-if="chatContext.keywords?.length">
-          <span class="label">Keywords:</span>
+          <span class="label">{{ $t('knowledge.persistence.keywordsLabel') }}</span>
           <div class="keywords-list">
             <span v-for="keyword in chatContext.keywords" :key="keyword" class="keyword-tag">
               {{ keyword }}
@@ -32,18 +32,18 @@
         <div class="context-stats">
           <div class="stat">
             <span class="stat-value">{{ pendingItems.length }}</span>
-            <span class="stat-label">Knowledge Items</span>
+            <span class="stat-label">{{ $t('knowledge.persistence.knowledgeItems') }}</span>
           </div>
           <div class="stat">
             <span class="stat-value">{{ chatContext.file_count || 0 }}</span>
-            <span class="stat-label">Associated Files</span>
+            <span class="stat-label">{{ $t('knowledge.persistence.associatedFiles') }}</span>
           </div>
         </div>
       </div>
 
       <!-- Pending Knowledge Items -->
       <div class="knowledge-items">
-        <h4 class="section-title">📋 Review Knowledge Items</h4>
+        <h4 class="section-title">{{ $t('knowledge.persistence.reviewTitle') }}</h4>
         <div class="items-list">
           <div
             v-for="item in pendingItems"
@@ -83,10 +83,10 @@
                   >
                   <span class="option-label">
                     <span class="option-icon">💾</span>
-                    Add to Knowledge Base (Permanent)
+                    {{ $t('knowledge.persistence.addToKbLabel') }}
                   </span>
                   <span class="option-description">
-                    Store permanently for future reference across all chats
+                    {{ $t('knowledge.persistence.addToKbDescription') }}
                   </span>
                 </label>
 
@@ -99,10 +99,10 @@
                   >
                   <span class="option-label">
                     <span class="option-icon">⏰</span>
-                    Keep for This Session Only
+                    {{ $t('knowledge.persistence.keepTemporaryLabel') }}
                   </span>
                   <span class="option-description">
-                    Available only during this chat session
+                    {{ $t('knowledge.persistence.keepTemporaryDescription') }}
                   </span>
                 </label>
 
@@ -115,18 +115,18 @@
                   >
                   <span class="option-label">
                     <span class="option-icon">🗑️</span>
-                    Delete
+                    {{ $t('knowledge.persistence.deleteLabel') }}
                   </span>
                   <span class="option-description">
-                    Remove this knowledge item completely
+                    {{ $t('knowledge.persistence.deleteDescription') }}
                   </span>
                 </label>
               </div>
 
               <div class="item-metadata" v-if="item.metadata">
-                <span class="metadata-label">Created:</span>
+                <span class="metadata-label">{{ $t('knowledge.persistence.createdLabel') }}</span>
                 <span class="metadata-value">{{ formatDate(item.created_at) }}</span>
-                <span v-if="item.metadata.source" class="metadata-label">Source:</span>
+                <span v-if="item.metadata.source" class="metadata-label">{{ $t('knowledge.persistence.sourceLabel') }}</span>
                 <span v-if="item.metadata.source" class="metadata-value">{{ item.metadata.source }}</span>
               </div>
             </div>
@@ -136,7 +136,7 @@
 
       <!-- Bulk Actions -->
       <div class="bulk-actions" v-if="pendingItems.length > 1">
-        <h4 class="section-title">🚀 Bulk Actions</h4>
+        <h4 class="section-title">{{ $t('knowledge.persistence.bulkActionsTitle') }}</h4>
         <div class="bulk-buttons">
           <BaseButton
             variant="outline"
@@ -144,7 +144,7 @@
             class="bulk-button"
             aria-label="Select all items"
           >
-            ✅ Select All
+            {{ $t('knowledge.persistence.selectAll') }}
           </BaseButton>
           <BaseButton
             variant="outline"
@@ -152,7 +152,7 @@
             class="bulk-button"
             aria-label="Deselect all items"
           >
-            ❌ Deselect All
+            {{ $t('knowledge.persistence.deselectAll') }}
           </BaseButton>
           <BaseButton
             variant="success"
@@ -161,7 +161,7 @@
             class="bulk-button add"
             aria-label="Add selected to knowledge base"
           >
-            💾 Add Selected to KB
+            {{ $t('knowledge.persistence.addSelectedToKb') }}
           </BaseButton>
           <BaseButton
             variant="warning"
@@ -170,7 +170,7 @@
             class="bulk-button temp"
             aria-label="Keep selected temporarily"
           >
-            ⏰ Keep Selected Temporarily
+            {{ $t('knowledge.persistence.keepSelectedTemporarily') }}
           </BaseButton>
           <BaseButton
             variant="danger"
@@ -179,28 +179,28 @@
             class="bulk-button delete"
             aria-label="Delete selected items"
           >
-            🗑️ Delete Selected
+            {{ $t('knowledge.persistence.deleteSelected') }}
           </BaseButton>
         </div>
       </div>
 
       <!-- Compile Chat Option -->
       <div class="compile-section">
-        <h4 class="section-title">📖 Compile Entire Chat</h4>
+        <h4 class="section-title">{{ $t('knowledge.persistence.compileTitle') }}</h4>
         <div class="compile-description">
-          Convert the entire chat conversation into a comprehensive knowledge base entry
+          {{ $t('knowledge.persistence.compileDescription') }}
         </div>
         <div class="compile-options">
           <label class="compile-option">
             <input type="checkbox" v-model="compileOptions.includeSystemMessages">
-            Include system messages
+            {{ $t('knowledge.persistence.includeSystemMessages') }}
           </label>
           <div class="compile-title">
-            <label>Title for compiled entry:</label>
+            <label>{{ $t('knowledge.persistence.compileTitleLabel') }}</label>
             <input
               type="text"
               v-model="compileOptions.title"
-              placeholder="Enter a descriptive title..."
+              :placeholder="$t('knowledge.persistence.compileTitlePlaceholder')"
               class="title-input"
             >
           </div>
@@ -211,7 +211,7 @@
           class="compile-button"
           aria-label="Compile chat to knowledge base"
         >
-          📚 Compile Chat to Knowledge Base
+          {{ $t('knowledge.persistence.compileButton') }}
         </BaseButton>
       </div>
 
@@ -219,13 +219,13 @@
       <div class="dialog-actions">
         <div class="action-summary">
           <span v-if="decisionsCount.add_to_kb > 0" class="summary-item add">
-            💾 {{ decisionsCount.add_to_kb }} to KB
+            {{ $t('knowledge.persistence.toKbCount', { count: decisionsCount.add_to_kb }) }}
           </span>
           <span v-if="decisionsCount.keep_temporary > 0" class="summary-item temp">
-            ⏰ {{ decisionsCount.keep_temporary }} temporary
+            {{ $t('knowledge.persistence.temporaryCount', { count: decisionsCount.keep_temporary }) }}
           </span>
           <span v-if="decisionsCount.delete > 0" class="summary-item delete">
-            🗑️ {{ decisionsCount.delete }} to delete
+            {{ $t('knowledge.persistence.toDeleteCount', { count: decisionsCount.delete }) }}
           </span>
         </div>
 
@@ -237,7 +237,7 @@
             class="primary-button"
             aria-label="Apply decisions"
           >
-            ✅ Apply Decisions
+            {{ $t('knowledge.persistence.applyDecisions') }}
           </BaseButton>
           <BaseButton
             variant="secondary"
@@ -245,7 +245,7 @@
             class="secondary-button"
             aria-label="Cancel"
           >
-            ❌ Cancel
+            {{ $t('knowledge.persistence.cancel') }}
           </BaseButton>
         </div>
       </div>
@@ -255,6 +255,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useToast } from '@/composables/useToast';
 import { apiService } from '@/services/api';
 import { formatDateTime as formatDate } from '@/utils/formatHelpers';
@@ -262,6 +263,8 @@ import BaseButton from '@/components/base/BaseButton.vue';
 import { createLogger } from '@/utils/debugUtils';
 
 const logger = createLogger('KnowledgePersistenceDialog');
+
+const { t } = useI18n();
 
 // Props
 const props = defineProps({
@@ -339,7 +342,7 @@ const loadPendingItems = async () => {
     }
   } catch (error) {
     logger.error('Failed to load pending knowledge:', error);
-    showToast('Failed to load knowledge items', 'error');
+    showToast(t('knowledge.persistence.failedToLoad'), 'error');
   } finally {
     loading.value = false;
   }
@@ -352,9 +355,9 @@ const truncateContent = (content, maxLength) => {
 
 const getSuggestionText = (action) => {
   const suggestions = {
-    'add_to_kb': '💡 Suggested: Add to KB',
-    'keep_temporary': '💡 Suggested: Keep temporary',
-    'delete': '💡 Suggested: Delete'
+    'add_to_kb': t('knowledge.persistence.suggestionAddToKb'),
+    'keep_temporary': t('knowledge.persistence.suggestionKeepTemporary'),
+    'delete': t('knowledge.persistence.suggestionDelete')
   };
   return suggestions[action] || '';
 };
@@ -412,13 +415,13 @@ const applyAllDecisions = async () => {
       )
     );
 
-    showToast(`Applied ${decisions.length} knowledge decisions`, 'success');
+    showToast(t('knowledge.persistence.decisionsApplied', { count: decisions.length }), 'success');
     emit('decisions-applied', decisions);
     closeDialog();
 
   } catch (error) {
     logger.error('Failed to apply decisions:', error);
-    showToast('Failed to apply knowledge decisions', 'error');
+    showToast(t('knowledge.persistence.decisionsApplyFailed'), 'error');
   } finally {
     loading.value = false;
   }
@@ -436,14 +439,14 @@ const compileChat = async () => {
     });
 
     if (response.success) {
-      showToast('Chat compiled to knowledge base successfully', 'success');
+      showToast(t('knowledge.persistence.compiledSuccess'), 'success');
       emit('chat-compiled', response.compiled);
       closeDialog();
     }
 
   } catch (error) {
     logger.error('Failed to compile chat:', error);
-    showToast('Failed to compile chat to knowledge base', 'error');
+    showToast(t('knowledge.persistence.compileFailed'), 'error');
   } finally {
     loading.value = false;
   }

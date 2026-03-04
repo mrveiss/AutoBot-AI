@@ -4,15 +4,15 @@
     <!-- Category Selection View -->
     <div v-if="!selectedMainCategory" class="category-selection">
       <div class="selection-header">
-        <h2>Knowledge Base Categories</h2>
-        <p class="subtitle">Browse AutoBot's knowledge organized by purpose and source</p>
+        <h2>{{ $t('knowledge.categories.title') }}</h2>
+        <p class="subtitle">{{ $t('knowledge.categories.subtitle') }}</p>
       </div>
 
       <!-- Document Change Feed Section (PROMINENT) -->
       <div class="change-feed-section-wrapper">
         <div class="section-header prominent">
-          <h3><i class="fas fa-sync-alt"></i> Document Lifecycle & Vectorization</h3>
-          <span class="section-badge">Real-time Tracking</span>
+          <h3><i class="fas fa-sync-alt"></i> {{ $t('knowledge.categories.documentLifecycle') }}</h3>
+          <span class="section-badge">{{ $t('knowledge.categories.realTimeTracking') }}</span>
         </div>
         <DocumentChangeFeed />
       </div>
@@ -20,7 +20,7 @@
       <!-- Categories loading state -->
       <div v-if="isLoadingCategories" class="loading-state">
         <i class="fas fa-spinner fa-spin"></i>
-        <p>Loading categories...</p>
+        <p>{{ $t('knowledge.categories.loadingCategories') }}</p>
       </div>
 
       <!-- Categories error state -->
@@ -28,7 +28,7 @@
         <i class="fas fa-exclamation-triangle"></i>
         <p>{{ categoriesError }}</p>
         <button class="retry-btn" @click="loadMainCategories">
-          <i class="fas fa-redo"></i> Retry
+          <i class="fas fa-redo"></i> {{ $t('knowledge.categories.retryBtn') }}
         </button>
       </div>
 
@@ -43,7 +43,7 @@
           <!-- Issue #747: Edit button -->
           <button
             class="category-edit-btn"
-            title="Edit category"
+            :title="$t('knowledge.categories.editCategory')"
             @click="openCategoryEdit(category, $event)"
           >
             <i class="fas fa-pencil-alt"></i>
@@ -58,7 +58,7 @@
             <div class="category-stats">
               <div class="stat">
                 <i class="fas fa-file-alt"></i>
-                <span>{{ category.count }} facts</span>
+                <span>{{ category.count }} {{ $t('knowledge.categories.facts') }}</span>
               </div>
             </div>
           </div>
@@ -78,7 +78,7 @@
           class="back-btn"
         >
           <i class="fas fa-arrow-left"></i>
-          Back to Categories
+          {{ $t('knowledge.categories.backToCategories') }}
         </BaseButton>
         <h3>{{ getSelectedCategoryName() }}</h3>
       </div>
@@ -94,13 +94,13 @@
     >
       <div v-if="isLoadingCategoryDocs" class="loading-state">
         <i class="fas fa-spinner fa-spin"></i>
-        <p>Loading documents...</p>
+        <p>{{ $t('knowledge.categories.loadingDocuments') }}</p>
       </div>
 
       <EmptyState
         v-else-if="categoryDocuments.length === 0"
         icon="fas fa-file-alt"
-        message="No documents in this category"
+        :message="$t('knowledge.categories.noDocuments')"
       />
 
       <div v-else class="documents-grid">
@@ -128,25 +128,25 @@
     <!-- Document Details Modal -->
     <BaseModal
       v-model="showDocumentModal"
-      :title="currentDocument?.title || currentDocument?.filename || 'Document Details'"
+      :title="currentDocument?.title || currentDocument?.filename || $t('knowledge.categories.documentDetails')"
       size="large"
       @close="closeDocumentModal"
     >
       <div v-if="currentDocument">
         <div class="document-metadata">
           <div class="meta-item">
-            <strong>Path:</strong> {{ currentDocument.path }}
+            <strong>{{ $t('knowledge.categories.path') }}</strong> {{ currentDocument.path }}
           </div>
           <div class="meta-item" v-if="currentDocument.type">
-            <strong>Type:</strong> {{ currentDocument.type }}
+            <strong>{{ $t('knowledge.categories.type') }}</strong> {{ currentDocument.type }}
           </div>
           <div class="meta-item" v-if="currentDocument.size">
-            <strong>Size:</strong> {{ formatFileSize(currentDocument.size) }}
+            <strong>{{ $t('knowledge.categories.size') }}</strong> {{ formatFileSize(currentDocument.size) }}
           </div>
         </div>
 
         <div v-if="currentDocument.content" class="document-content">
-          <h4>Content Preview:</h4>
+          <h4>{{ $t('knowledge.categories.contentPreview') }}</h4>
           <pre>{{ currentDocument.content.substring(0, 2000) }}{{ currentDocument.content.length > 2000 ? '...' : '' }}</pre>
         </div>
       </div>
@@ -166,6 +166,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
@@ -179,6 +180,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('KnowledgeCategories')
+const { t } = useI18n()
 
 // Import shared document feed wrapper styles
 import '@/styles/document-feed-wrapper.css'
@@ -287,17 +289,17 @@ const loadMainCategories = async () => {
     if (response && typeof response === 'object' && 'status' in response) {
       const status = (response as { status: number }).status
       if (status === 401) {
-        categoriesError.value = 'Authentication required. Please log in to view categories.'
+        categoriesError.value = t('knowledge.categories.authRequired')
         return
       }
       if (status === 403) {
-        categoriesError.value = 'You do not have permission to view knowledge categories.'
+        categoriesError.value = t('knowledge.categories.noPermission')
         return
       }
     }
     const data = await parseApiResponse(response)
     if (!data?.categories || !Array.isArray(data.categories)) {
-      categoriesError.value = 'Invalid response from server. Please try again.'
+      categoriesError.value = t('knowledge.categories.invalidResponse')
       return
     }
     mainCategories.value = data.categories
@@ -306,11 +308,11 @@ const loadMainCategories = async () => {
     const status = (error as { status?: number; response?: { status?: number } })?.status
       ?? (error as { response?: { status?: number } })?.response?.status
     if (status === 401) {
-      categoriesError.value = 'Authentication required. Please log in to view categories.'
+      categoriesError.value = t('knowledge.categories.authRequired')
     } else if (status === 403) {
-      categoriesError.value = 'You do not have permission to view knowledge categories.'
+      categoriesError.value = t('knowledge.categories.noPermission')
     } else {
-      categoriesError.value = 'Failed to load categories. Please try again.'
+      categoriesError.value = t('knowledge.categories.loadFailed')
     }
   } finally {
     isLoadingCategories.value = false
@@ -327,7 +329,7 @@ const backToCategories = () => {
 
 const getSelectedCategoryName = () => {
   const category = mainCategories.value.find(c => c.id === selectedMainCategory.value)
-  return category?.name || 'Knowledge Browser'
+  return category?.name || t('knowledge.categories.knowledgeBrowser')
 }
 
 // Issue #747: Category edit/delete handlers

@@ -4,7 +4,7 @@
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Loading drill-down data...</span>
+      <span>{{ $t('knowledge.summaries.drillDown.loading') }}</span>
     </div>
 
     <!-- Error -->
@@ -16,7 +16,7 @@
     <!-- Content -->
     <template v-else-if="drillDownData">
       <!-- Breadcrumb Navigation -->
-      <nav class="breadcrumb-nav" aria-label="Summary hierarchy">
+      <nav class="breadcrumb-nav" :aria-label="$t('knowledge.summaries.drillDown.breadcrumbAria')">
         <span
           v-for="(crumb, index) in drillDownData.breadcrumb"
           :key="crumb.id"
@@ -75,7 +75,7 @@
         v-if="drillDownData.parent"
         class="parent-section"
       >
-        <h5><i class="fas fa-arrow-up"></i> Parent Summary</h5>
+        <h5><i class="fas fa-arrow-up"></i> {{ $t('knowledge.summaries.drillDown.parentSummary') }}</h5>
         <div
           class="parent-card"
           @click="navigateTo(drillDownData.parent.id)"
@@ -94,7 +94,7 @@
       >
         <h5>
           <i class="fas fa-arrow-down"></i>
-          Sub-summaries ({{ drillDownData.children.length }})
+          {{ $t('knowledge.summaries.drillDown.subSummaries', { count: drillDownData.children.length }) }}
         </h5>
         <div class="children-list">
           <div
@@ -129,14 +129,14 @@
       >
         <h5>
           <i class="fas fa-file-code"></i>
-          Source Chunks ({{ drillDownData.source_chunks.length }})
+          {{ $t('knowledge.summaries.drillDown.sourceChunks', { count: drillDownData.source_chunks.length }) }}
         </h5>
         <button
           class="toggle-chunks-btn"
           @click="showChunks = !showChunks"
         >
           <i :class="showChunks ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
-          {{ showChunks ? 'Hide' : 'Show' }} Source Chunks
+          {{ showChunks ? $t('knowledge.summaries.drillDown.hideSourceChunks') : $t('knowledge.summaries.drillDown.showSourceChunks') }}
         </button>
 
         <div v-if="showChunks" class="chunks-list">
@@ -155,7 +155,7 @@
     <!-- No Data -->
     <div v-else class="empty-state">
       <i class="fas fa-search-plus"></i>
-      <p>Select a summary to drill down into</p>
+      <p>{{ $t('knowledge.summaries.drillDown.emptyState') }}</p>
     </div>
   </div>
 </template>

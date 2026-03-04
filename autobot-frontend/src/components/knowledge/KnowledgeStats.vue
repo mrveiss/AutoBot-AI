@@ -12,13 +12,13 @@
     <!-- Vector Database Statistics Section -->
     <div v-if="vectorStats" class="vector-stats-section">
       <div class="section-header">
-        <h3><i class="fas fa-project-diagram"></i> Vector Database Statistics</h3>
+        <h3><i class="fas fa-project-diagram"></i> {{ $t('knowledge.stats.vectorDbTitle') }}</h3>
         <button @click="refreshVectorStats"
                 :disabled="isRefreshingVectorStats"
                 class="refresh-btn"
-                aria-label="Refresh vector database statistics">
+                :aria-label="$t('knowledge.stats.refreshVectorStats')">
           <i class="fas fa-sync" :class="{ 'fa-spin': isRefreshingVectorStats }" aria-hidden="true"></i>
-          Refresh
+          {{ $t('knowledge.stats.refresh') }}
         </button>
       </div>
 
@@ -28,9 +28,9 @@
             <i class="fas fa-lightbulb"></i>
           </div>
           <div class="vector-stat-content">
-            <h4>Total Facts</h4>
+            <h4>{{ $t('knowledge.stats.totalFacts') }}</h4>
             <p class="vector-stat-value">{{ vectorStats.total_facts || 0 }}</p>
-            <p class="vector-stat-label">Knowledge items stored</p>
+            <p class="vector-stat-label">{{ $t('knowledge.stats.knowledgeItemsStored') }}</p>
           </div>
         </BasePanel>
 
@@ -39,12 +39,12 @@
             <i class="fas fa-cubes"></i>
           </div>
           <div class="vector-stat-content">
-            <h4>Total Vectors</h4>
+            <h4>{{ $t('knowledge.stats.totalVectors') }}</h4>
             <p class="vector-stat-value">{{ vectorStats.total_vectors || 0 }}</p>
             <p v-if="needsVectorization" class="vector-stat-label warning">
-              <i class="fas fa-exclamation-triangle"></i> Not vectorized
+              <i class="fas fa-exclamation-triangle"></i> {{ $t('knowledge.stats.notVectorized') }}
             </p>
-            <p v-else class="vector-stat-label">Embeddings generated</p>
+            <p v-else class="vector-stat-label">{{ $t('knowledge.stats.embeddingsGenerated') }}</p>
           </div>
         </BasePanel>
 
@@ -53,9 +53,9 @@
             <i class="fas fa-database"></i>
           </div>
           <div class="vector-stat-content">
-            <h4>Database Size</h4>
+            <h4>{{ $t('knowledge.stats.databaseSize') }}</h4>
             <p class="vector-stat-value">{{ formatFileSize(vectorStats.db_size || 0) }}</p>
-            <p class="vector-stat-label">Storage used</p>
+            <p class="vector-stat-label">{{ $t('knowledge.stats.storageUsed') }}</p>
           </div>
         </BasePanel>
 
@@ -64,11 +64,11 @@
             <i class="fas fa-check-circle"></i>
           </div>
           <div class="vector-stat-content">
-            <h4>Status</h4>
+            <h4>{{ $t('knowledge.stats.status') }}</h4>
             <StatusBadge :variant="getStatusVariant(vectorStats.status)" size="small" class="vector-stat-value">
               {{ vectorStats.status || 'unknown' }}
             </StatusBadge>
-            <p class="vector-stat-label">RAG: {{ vectorStats.rag_available ? 'Available' : 'Unavailable' }}</p>
+            <p class="vector-stat-label">{{ $t('knowledge.stats.rag') }}: {{ vectorStats.rag_available ? $t('knowledge.stats.available') : $t('knowledge.stats.unavailable') }}</p>
           </div>
         </BasePanel>
       </div>
@@ -79,7 +79,7 @@
           <i class="fas fa-info-circle"></i>
         </div>
         <div class="notice-content">
-          <h4>Vector Embeddings Not Generated</h4>
+          <h4>{{ $t('knowledge.stats.vectorNotGenerated') }}</h4>
           <p>
             You have <strong>{{ vectorStats.total_facts }} facts</strong> stored in the knowledge base,
             but they haven't been vectorized yet. Vector embeddings enable semantic search and RAG capabilities.
@@ -94,7 +94,7 @@
 
       <!-- Vector Categories Distribution Chart -->
       <div class="vector-chart-section">
-        <h4><i class="fas fa-chart-pie"></i> Vector Distribution by Category</h4>
+        <h4><i class="fas fa-chart-pie"></i> {{ $t('knowledge.stats.vectorDistribution') }}</h4>
         <div class="vector-categories-chart">
           <div
             v-for="(category, idx) in vectorStats.categories"
@@ -103,7 +103,7 @@
           >
             <div class="category-info">
               <span class="category-name">{{ formatCategoryName(category) }}</span>
-              <span class="category-count">{{ getCategoryFactCount(category) }} facts</span>
+              <span class="category-count">{{ $t('knowledge.stats.factsCount', { count: getCategoryFactCount(category) }) }}</span>
             </div>
             <div class="category-progress">
               <div
@@ -120,11 +120,11 @@
 
       <!-- Vector Index Health -->
       <div class="vector-health-section">
-        <h4><i class="fas fa-heartbeat"></i> Vector Index Health</h4>
+        <h4><i class="fas fa-heartbeat"></i> {{ $t('knowledge.stats.vectorIndexHealth') }}</h4>
         <div class="health-indicators">
           <div class="health-item" :class="{ active: vectorStats.initialized }">
             <i class="fas fa-check-circle"></i>
-            <span>Initialized</span>
+            <span>{{ $t('knowledge.stats.initialized') }}</span>
           </div>
           <div class="health-item" :class="{ active: vectorStats.llama_index_configured }">
             <i class="fas fa-cube"></i>
@@ -136,40 +136,40 @@
           </div>
           <div class="health-item" :class="{ active: vectorStats.index_available }">
             <i class="fas fa-layer-group"></i>
-            <span>Index Available</span>
+            <span>{{ $t('knowledge.stats.indexAvailable') }}</span>
           </div>
           <div class="health-item" :class="{ active: vectorStats.rag_available }">
             <i class="fas fa-brain"></i>
-            <span>RAG Available</span>
+            <span>{{ $t('knowledge.stats.ragAvailable') }}</span>
           </div>
         </div>
         <div class="health-details">
           <div class="detail-item">
-            <label>Redis DB:</label>
+            <label>{{ $t('knowledge.stats.redisDb') }}:</label>
             <span class="mono">{{ vectorStats.redis_db }}</span>
           </div>
           <div class="detail-item">
-            <label>Index Name:</label>
+            <label>{{ $t('knowledge.stats.indexName') }}:</label>
             <span class="mono">{{ vectorStats.index_name }}</span>
           </div>
           <div class="detail-item">
-            <label>Vector Framework:</label>
+            <label>{{ $t('knowledge.stats.vectorFramework') }}:</label>
             <span class="mono">LlamaIndex + LangChain</span>
           </div>
           <div class="detail-item">
-            <label>Embedding Model:</label>
+            <label>{{ $t('knowledge.stats.embeddingModel') }}:</label>
             <span class="mono">{{ getEmbeddingModelDisplay() }}</span>
           </div>
           <div class="detail-item">
-            <label>Text Splitter:</label>
+            <label>{{ $t('knowledge.stats.textSplitter') }}:</label>
             <span class="mono">LangChain RecursiveCharacterTextSplitter</span>
           </div>
           <div class="detail-item">
-            <label>Last Updated:</label>
+            <label>{{ $t('knowledge.stats.lastUpdated') }}:</label>
             <span>{{ formatDateTimeHelper(vectorStats.last_updated) }}</span>
           </div>
           <div class="detail-item">
-            <label>Indexed Documents:</label>
+            <label>{{ $t('knowledge.stats.indexedDocuments') }}:</label>
             <span>{{ vectorStats.indexed_documents || 0 }}</span>
           </div>
         </div>
@@ -179,23 +179,23 @@
     <!-- Document Change Feed Section (PROMINENT) -->
     <div class="change-feed-section-wrapper">
       <div class="section-header prominent">
-        <h3><i class="fas fa-sync-alt"></i> Document Lifecycle & Vectorization</h3>
-        <span class="section-badge">Real-time Tracking</span>
+        <h3><i class="fas fa-sync-alt"></i> {{ $t('knowledge.stats.documentLifecycle') }}</h3>
+        <span class="section-badge">{{ $t('knowledge.stats.realTimeTracking') }}</span>
       </div>
       <DocumentChangeFeed />
     </div>
 
     <!-- Overview Cards -->
-    <div class="stats-overview" role="region" aria-label="Knowledge base overview statistics">
+    <div class="stats-overview" role="region" :aria-label="$t('knowledge.stats.overviewAriaLabel')">
       <BasePanel variant="elevated" size="small" role="article" aria-labelledby="facts-title">
         <div class="stat-icon facts" aria-hidden="true">
           <i class="fas fa-lightbulb"></i>
         </div>
         <div class="stat-content">
-          <h4 id="facts-title">Total Facts</h4>
+          <h4 id="facts-title">{{ $t('knowledge.stats.totalFacts') }}</h4>
           <p class="stat-value" aria-live="polite">{{ vectorStats?.total_facts || 0 }}</p>
-          <p class="stat-change" aria-label="Knowledge items stored in Redis database">
-            Knowledge items in Redis
+          <p class="stat-change" :aria-label="$t('knowledge.stats.knowledgeItemsInRedis')">
+            {{ $t('knowledge.stats.knowledgeItemsInRedis') }}
           </p>
         </div>
       </BasePanel>
@@ -205,12 +205,12 @@
           <i class="fas fa-file-alt"></i>
         </div>
         <div class="stat-content">
-          <h4 id="documents-title">Total Documents</h4>
+          <h4 id="documents-title">{{ $t('knowledge.stats.totalDocuments') }}</h4>
           <p class="stat-value" aria-live="polite">{{ vectorStats?.total_documents || 0 }}</p>
           <p class="stat-change" :class="{ 'needs-vectorization': needsVectorization }"
              :aria-label="needsVectorization ? 'Warning: Facts are not vectorized for semantic search' : 'Facts are vectorized and ready for semantic search'">
             <i v-if="needsVectorization" class="fas fa-exclamation-triangle" aria-hidden="true"></i>
-            {{ needsVectorization ? 'Not vectorized' : 'Vectorized for RAG' }}
+            {{ needsVectorization ? $t('knowledge.stats.notVectorized') : $t('knowledge.stats.vectorizedForRag') }}
           </p>
         </div>
       </BasePanel>
@@ -220,10 +220,10 @@
           <i class="fas fa-folder"></i>
         </div>
         <div class="stat-content">
-          <h4 id="categories-title">Categories</h4>
+          <h4 id="categories-title">{{ $t('knowledge.stats.categories') }}</h4>
           <p class="stat-value" aria-live="polite">{{ store.categoryCount }}</p>
-          <p class="stat-change" aria-label="Average documents per category">
-            {{ avgDocsPerCategory }} avg docs/category
+          <p class="stat-change" :aria-label="$t('knowledge.stats.avgDocsPerCategory')">
+            {{ $t('knowledge.stats.avgDocsPerCategoryValue', { count: avgDocsPerCategory }) }}
           </p>
         </div>
       </BasePanel>
@@ -233,10 +233,10 @@
           <i class="fas fa-tags"></i>
         </div>
         <div class="stat-content">
-          <h4>Unique Tags</h4>
+          <h4>{{ $t('knowledge.stats.uniqueTags') }}</h4>
           <p class="stat-value">{{ store.allTags.length }}</p>
           <p class="stat-change">
-            {{ avgTagsPerDoc }} avg tags/doc
+            {{ $t('knowledge.stats.avgTagsPerDoc', { count: avgTagsPerDoc }) }}
           </p>
         </div>
       </BasePanel>
@@ -246,10 +246,10 @@
           <i class="fas fa-database"></i>
         </div>
         <div class="stat-content">
-          <h4>Storage Used</h4>
+          <h4>{{ $t('knowledge.stats.storageUsedTitle') }}</h4>
           <p class="stat-value">{{ formatFileSize(totalStorageSize) }}</p>
           <p class="stat-change">
-            {{ formatFileSize(avgDocSize) }} avg/doc
+            {{ $t('knowledge.stats.avgPerDoc', { size: formatFileSize(avgDocSize) }) }}
           </p>
         </div>
       </BasePanel>
@@ -259,7 +259,7 @@
     <div class="charts-section">
       <!-- Documents by Category -->
       <BasePanel variant="bordered" size="medium">
-        <h4>Documents by Category</h4>
+        <h4>{{ $t('knowledge.stats.docsByCategory') }}</h4>
         <div class="bar-chart">
           <div
             v-for="category in topCategories"
@@ -283,7 +283,7 @@
 
       <!-- Documents by Type -->
       <BasePanel variant="bordered" size="medium">
-        <h4>Documents by Type</h4>
+        <h4>{{ $t('knowledge.stats.docsByType') }}</h4>
         <div class="pie-chart">
           <div class="type-stats">
             <div v-for="(count, type) in documentsByType" :key="type" class="type-item">
@@ -299,7 +299,7 @@
 
     <!-- Recent Activity -->
     <BasePanel variant="bordered" size="medium">
-      <h4>Recent Activity</h4>
+      <h4>{{ $t('knowledge.stats.recentActivity') }}</h4>
       <div class="activity-timeline">
         <div v-for="activity in recentActivities" :key="activity.id" class="activity-item">
           <div class="activity-icon" :class="activity.type">
@@ -313,15 +313,15 @@
         <EmptyState
           v-if="recentActivities.length === 0"
           icon="fas fa-clock"
-          message="No recent activity"
+          :message="$t('knowledge.stats.noRecentActivity')"
         />
       </div>
     </BasePanel>
 
     <!-- Tag Cloud -->
     <BasePanel variant="bordered" size="medium">
-      <h4>Popular Tags</h4>
-      <div class="tag-cloud" role="list" aria-label="Popular tags in knowledge base">
+      <h4>{{ $t('knowledge.stats.popularTags') }}</h4>
+      <div class="tag-cloud" role="list" :aria-label="$t('knowledge.stats.popularTagsAriaLabel')">
         <span
           v-for="tag in popularTags"
           :key="tag.name"
@@ -346,8 +346,8 @@
           <i class="fas fa-terminal"></i>
         </div>
         <div class="nav-card-info">
-          <h4>System Knowledge Management</h4>
-          <p>Initialize machine knowledge, integrate man pages, and manage system-level documentation.</p>
+          <h4>{{ $t('knowledge.stats.systemKnowledgeMgmt') }}</h4>
+          <p>{{ $t('knowledge.stats.systemKnowledgeDesc') }}</p>
           <div class="nav-card-features">
             <span class="feature-tag"><i class="fas fa-desktop"></i> Machine Profile</span>
             <span class="feature-tag"><i class="fas fa-book"></i> Man Pages</span>
@@ -357,7 +357,7 @@
         <router-link to="/knowledge/manage" class="nav-card-action">
           <BaseButton variant="primary" size="sm">
             <i class="fas fa-arrow-right"></i>
-            Go to Manage → Advanced
+            {{ $t('knowledge.stats.goToManage') }}
           </BaseButton>
         </router-link>
       </div>
@@ -367,15 +367,15 @@
     <div class="stats-actions">
       <button @click="exportStats" class="action-btn">
         <i class="fas fa-download"></i>
-        Export Statistics
+        {{ $t('knowledge.stats.exportStats') }}
       </button>
       <button @click="optimizeKnowledge" class="action-btn">
         <i class="fas fa-compress"></i>
-        Optimize Database
+        {{ $t('knowledge.stats.optimizeDb') }}
       </button>
       <button @click="generateReport" class="action-btn primary">
         <i class="fas fa-file-chart-line"></i>
-        Generate Report
+        {{ $t('knowledge.stats.generateReport') }}
       </button>
     </div>
   </div>
@@ -383,6 +383,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useKnowledgeController } from '@/models/controllers/index'
 // ManPageManager removed - consolidated to Manage → Advanced (Issue #678)
@@ -403,6 +404,8 @@ import { createLogger } from '@/utils/debugUtils'
 
 // Create scoped logger for KnowledgeStats
 const logger = createLogger('KnowledgeStats')
+
+const { t } = useI18n()
 
 // Import shared document feed wrapper styles
 import '@/styles/document-feed-wrapper.css'
@@ -631,7 +634,7 @@ const exportStats = async () => {
 }
 
 const optimizeKnowledge = async () => {
-  if (!confirm('Optimize knowledge base? This will clean up unused data and rebuild indexes.')) {
+  if (!confirm(t('knowledge.stats.confirmOptimize'))) {
     return
   }
 

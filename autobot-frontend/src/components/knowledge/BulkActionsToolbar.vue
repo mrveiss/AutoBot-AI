@@ -15,8 +15,11 @@
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+
+const { t } = useI18n()
 
 const logger = createLogger('BulkActionsToolbar')
 
@@ -63,9 +66,9 @@ const showMoreMenu = ref(false)
 const hasSelection = computed(() => props.selectedCount > 0)
 
 const selectionText = computed(() => {
-  if (props.selectedCount === 0) return 'None selected'
-  if (props.allMatchingSelected) return `All ${props.totalCount} matching selected`
-  return `${props.selectedCount} of ${props.totalCount} selected`
+  if (props.selectedCount === 0) return t('knowledge.bulkActions.noneSelected')
+  if (props.allMatchingSelected) return t('knowledge.bulkActions.allMatchingSelected', { count: props.totalCount })
+  return t('knowledge.bulkActions.selectedOfTotal', { selected: props.selectedCount, total: props.totalCount })
 })
 
 // =============================================================================
@@ -137,10 +140,10 @@ function handleClickOutside(event: MouseEvent): void {
           class="select-all-btn"
           @click="emit('selectAllMatching')"
         >
-          Select all {{ totalCount }} matching
+          {{ $t('knowledge.bulkActions.selectAllMatching', { count: totalCount }) }}
         </button>
         <button class="clear-btn" @click="emit('clearSelection')">
-          Clear
+          {{ $t('knowledge.bulkActions.clear') }}
         </button>
       </template>
     </div>
@@ -157,7 +160,7 @@ function handleClickOutside(event: MouseEvent): void {
             class="action-btn"
           >
             <i class="fas fa-download"></i>
-            Export
+            {{ $t('knowledge.bulkActions.export') }}
             <i class="fas fa-chevron-down dropdown-icon"></i>
           </BaseButton>
 
@@ -165,15 +168,15 @@ function handleClickOutside(event: MouseEvent): void {
             <div v-if="showExportMenu" class="dropdown-menu">
               <button class="dropdown-item" @click="handleExport('json')">
                 <i class="fas fa-file-code"></i>
-                Export as JSON
+                {{ $t('knowledge.bulkActions.exportAsJson') }}
               </button>
               <button class="dropdown-item" @click="handleExport('markdown')">
                 <i class="fas fa-file-alt"></i>
-                Export as Markdown
+                {{ $t('knowledge.bulkActions.exportAsMarkdown') }}
               </button>
               <button class="dropdown-item" @click="handleExport('csv')">
                 <i class="fas fa-file-csv"></i>
-                Export as CSV
+                {{ $t('knowledge.bulkActions.exportAsCsv') }}
               </button>
             </div>
           </Transition>
@@ -187,7 +190,7 @@ function handleClickOutside(event: MouseEvent): void {
           class="action-btn"
         >
           <i class="fas fa-folder"></i>
-          Change Category
+          {{ $t('knowledge.bulkActions.changeCategory') }}
         </BaseButton>
 
         <!-- More Actions Dropdown -->
@@ -199,7 +202,7 @@ function handleClickOutside(event: MouseEvent): void {
             class="action-btn"
           >
             <i class="fas fa-tags"></i>
-            Tags
+            {{ $t('knowledge.bulkActions.tags') }}
             <i class="fas fa-chevron-down dropdown-icon"></i>
           </BaseButton>
 
@@ -207,11 +210,11 @@ function handleClickOutside(event: MouseEvent): void {
             <div v-if="showMoreMenu" class="dropdown-menu">
               <button class="dropdown-item" @click="emit('addTags'); showMoreMenu = false">
                 <i class="fas fa-plus"></i>
-                Add Tags
+                {{ $t('knowledge.bulkActions.addTags') }}
               </button>
               <button class="dropdown-item" @click="emit('removeTags'); showMoreMenu = false">
                 <i class="fas fa-minus"></i>
-                Remove Tags
+                {{ $t('knowledge.bulkActions.removeTags') }}
               </button>
             </div>
           </Transition>
@@ -225,7 +228,7 @@ function handleClickOutside(event: MouseEvent): void {
           class="action-btn danger"
         >
           <i class="fas fa-trash-alt"></i>
-          Delete
+          {{ $t('knowledge.bulkActions.delete') }}
         </BaseButton>
       </div>
     </Transition>

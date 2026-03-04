@@ -22,7 +22,7 @@
       <input
         :value="searchQuery"
         type="text"
-        placeholder="Search files and folders..."
+        :placeholder="$t('knowledge.browserHeader.searchPlaceholder')"
         class="search-input"
         @input="$emit('search', ($event.target as HTMLInputElement).value)"
       />
@@ -32,7 +32,7 @@
         size="xs"
         @click="$emit('clear-search')"
         class="clear-btn"
-        aria-label="Clear search"
+        :aria-label="$t('knowledge.browserHeader.clearSearch')"
       >
         <i class="fas fa-times"></i>
       </BaseButton>

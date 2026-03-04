@@ -1,8 +1,8 @@
 <template>
   <div class="knowledge-search">
     <div class="search-header">
-      <h3>Knowledge Search</h3>
-      <p>Search through your knowledge base documents, facts, and stored information</p>
+      <h3>{{ $t('knowledge.search.title') }}</h3>
+      <p>{{ $t('knowledge.search.subtitle') }}</p>
     </div>
 
     <!-- Search Mode Toggle -->
@@ -13,22 +13,22 @@
           @click="useRagSearch = false"
         >
           <i class="fas fa-search"></i>
-          Traditional Search
+          {{ $t('knowledge.search.traditionalSearch') }}
         </button>
         <button
           :class="['mode-button', 'rag-button', { active: useRagSearch }]"
           @click="useRagSearch = true"
         >
           <i class="fas fa-brain"></i>
-          RAG Enhanced
+          {{ $t('knowledge.search.ragEnhanced') }}
         </button>
       </div>
       <div class="mode-description">
         <p v-if="!useRagSearch" class="traditional-desc">
-          Fast semantic search across documents
+          {{ $t('knowledge.search.traditionalDesc') }}
         </p>
         <p v-else class="rag-desc">
-          AI-powered synthesis with comprehensive analysis
+          {{ $t('knowledge.search.ragDesc') }}
         </p>
       </div>
     </div>
@@ -37,7 +37,7 @@
     <div class="category-filter">
       <label class="filter-label">
         <i class="fas fa-filter"></i>
-        Filter by Category:
+        {{ $t('knowledge.search.filterByCategory') }}
       </label>
       <div class="filter-controls">
         <select
@@ -45,7 +45,7 @@
           class="category-select"
           :disabled="loadingCategories"
         >
-          <option value="">All Categories</option>
+          <option value="">{{ $t('knowledge.search.allCategories') }}</option>
           <option
             v-for="cat in categories"
             :key="cat.id"
@@ -58,7 +58,7 @@
           v-if="selectedCategory"
           @click="clearCategoryFilter"
           class="clear-filter-button"
-          title="Clear category filter"
+          :title="$t('knowledge.search.clearCategoryFilter')"
         >
           <i class="fas fa-times"></i>
         </button>
@@ -67,13 +67,13 @@
         </span>
       </div>
       <span v-if="selectedCategory" class="active-filter-badge">
-        Filtering: {{ formatCategory(selectedCategory) }}
+        {{ $t('knowledge.search.filtering', { category: formatCategory(selectedCategory) }) }}
       </span>
       <div v-if="categoriesError" class="categories-error">
         <i class="fas fa-exclamation-triangle"></i>
         {{ categoriesError }}
         <button @click="loadCategories" class="retry-button">
-          <i class="fas fa-redo"></i> Retry
+          <i class="fas fa-redo"></i> {{ $t('knowledge.search.retry') }}
         </button>
       </div>
     </div>
@@ -82,7 +82,7 @@
     <div class="access-level-filter">
       <label class="filter-label">
         <i class="fas fa-shield-alt"></i>
-        Filter by Access Level:
+        {{ $t('knowledge.search.filterByAccessLevel') }}
       </label>
       <div class="filter-chips">
         <button
@@ -98,10 +98,10 @@
           v-if="selectedAccessLevel"
           @click="clearAccessLevelFilter"
           class="clear-chip"
-          title="Clear access level filter"
+          :title="$t('knowledge.search.clearAccessLevelFilter')"
         >
           <i class="fas fa-times"></i>
-          Clear
+          {{ $t('knowledge.search.clear') }}
         </button>
       </div>
     </div>
@@ -112,7 +112,7 @@
         <input
           v-model="searchQuery"
           type="text"
-          :placeholder="useRagSearch ? 'Ask questions about your knowledge... (e.g., Summarize key findings about...)' : 'Search knowledge base... (try keywords, questions, or topics)'"
+          :placeholder="useRagSearch ? $t('knowledge.search.ragPlaceholder') : $t('knowledge.search.searchPlaceholder')"
           @keyup.enter="handleSearch"
           class="search-input"
         >
@@ -123,7 +123,7 @@
         >
           <i v-if="isSearching" class="fas fa-spinner fa-spin"></i>
           <i v-else class="fas fa-search"></i>
-          {{ isSearching ? 'Searching...' : 'Search' }}
+          {{ isSearching ? $t('knowledge.search.searching') : $t('knowledge.search.searchBtn') }}
         </button>
       </div>
 
@@ -135,7 +135,7 @@
               v-model="ragOptions.reformulateQuery"
               type="checkbox"
             >
-            Auto-enhance query for better results
+            {{ $t('knowledge.search.autoEnhanceQuery') }}
           </label>
         </div>
         <div class="option-group">
@@ -145,14 +145,14 @@
               type="checkbox"
             >
             <span class="reranking-label">
-              Enable neural reranking
-              <span class="reranking-badge">Slower but more accurate</span>
+              {{ $t('knowledge.search.enableReranking') }}
+              <span class="reranking-badge">{{ $t('knowledge.search.rerankingBadge') }}</span>
             </span>
           </label>
         </div>
         <div class="option-group">
           <label>
-            Results limit:
+            {{ $t('knowledge.search.resultsLimit') }}
             <select v-model.number="ragOptions.limit" class="limit-select">
               <option value="5">5</option>
               <option value="10">10</option>
@@ -171,14 +171,14 @@
         <div class="synthesis-header">
           <h4>
             <i class="fas fa-brain rag-icon"></i>
-            AI Synthesis
+            {{ $t('knowledge.search.aiSynthesis') }}
           </h4>
           <div v-if="ragResponse.rag_analysis" class="analysis-badges">
             <span class="confidence-badge" :class="getConfidenceBadgeClass(ragResponse.rag_analysis.confidence)">
-              {{ Math.round(ragResponse.rag_analysis.confidence * 100) }}% confidence
+              {{ $t('knowledge.search.confidence', { value: Math.round(ragResponse.rag_analysis.confidence * 100) }) }}
             </span>
             <span class="sources-badge">
-              {{ ragResponse.rag_analysis.sources_used }} sources
+              {{ $t('knowledge.search.sourcesCount', { count: ragResponse.rag_analysis.sources_used }) }}
             </span>
           </div>
         </div>
@@ -190,7 +190,7 @@
         <div v-if="ragResponse.reformulated_query && ragResponse.reformulated_query !== ragResponse.query" class="query-reformulation">
           <p class="reformulated-note">
             <i class="fas fa-lightbulb"></i>
-            Enhanced query: "{{ ragResponse.reformulated_query }}"
+            {{ $t('knowledge.search.enhancedQuery') }}: "{{ ragResponse.reformulated_query }}"
           </p>
         </div>
       </div>
@@ -198,10 +198,10 @@
       <!-- Traditional Results Header -->
       <div v-if="hasSearchResults" class="results-header">
         <h4>
-          Found {{ searchResults.length }} results for "{{ lastSearchQuery }}"
+          {{ $t('knowledge.search.foundResults', { count: searchResults.length, query: lastSearchQuery }) }}
           <span v-if="useRagSearch" class="rag-enhanced-label">
             <i class="fas fa-brain"></i>
-            RAG Enhanced
+            {{ $t('knowledge.search.ragEnhanced') }}
           </span>
         </h4>
       </div>
@@ -215,14 +215,14 @@
           @click="openDocument(result.document)"
         >
           <div v-if="result && result.document" class="result-header">
-            <h5 class="result-title">{{ result.document.title || 'Knowledge Document' }}</h5>
+            <h5 class="result-title">{{ result.document.title || $t('knowledge.search.defaultDocTitle') }}</h5>
             <div class="score-badges">
               <span class="result-score" :class="getScoreClass(result.score)">
-                {{ Math.round(result.score * 100) }}% match
+                {{ $t('knowledge.search.matchScore', { value: Math.round(result.score * 100) }) }}
               </span>
               <span v-if="result.rerank_score" class="rerank-score" :class="getScoreClass(result.rerank_score)">
                 <i class="fas fa-brain"></i>
-                Rerank: {{ Math.round(result.rerank_score * 100) }}%
+                {{ $t('knowledge.search.rerankScore', { value: Math.round(result.rerank_score * 100) }) }}
               </span>
             </div>
           </div>
@@ -244,7 +244,7 @@
           <div class="result-footer">
             <span class="click-hint">
               <i class="fas fa-hand-pointer"></i>
-              Click to view full document
+              {{ $t('knowledge.search.clickToView') }}
             </span>
           </div>
         </div>
@@ -274,23 +274,23 @@
 
         <div v-if="loadingDocument" class="modal-loading">
           <i class="fas fa-spinner fa-spin"></i>
-          Loading document...
+          {{ $t('knowledge.search.loadingDocument') }}
         </div>
         <div v-else-if="selectedDocument?.content" class="document-text">
           {{ selectedDocument.content }}
         </div>
         <div v-else class="modal-no-content">
           <i class="fas fa-file-excel"></i>
-          <p>No content available for this document</p>
+          <p>{{ $t('knowledge.search.noContent') }}</p>
         </div>
 
         <template #actions>
           <button @click="copyDocument" class="modal-action-button">
             <i class="fas fa-copy"></i>
-            Copy Content
+            {{ $t('knowledge.search.copyContent') }}
           </button>
           <button @click="closeDocument" class="modal-action-button modal-close-action">
-            Close
+            {{ $t('knowledge.search.close') }}
           </button>
         </template>
       </BaseModal>
@@ -299,17 +299,17 @@
       <EmptyState
         v-if="!hasSearchResults"
         icon="fas fa-search"
-        message="No documents found matching your search."
+        :message="$t('knowledge.search.noResults')"
       >
         <p class="no-results-hint">
           {{ useRagSearch
-            ? 'Try rephrasing your question or using different keywords.'
-            : 'Try using different keywords or check your filters.'
+            ? $t('knowledge.search.noResultsRagHint')
+            : $t('knowledge.search.noResultsHint')
           }}
         </p>
         <div class="initialization-help">
-          <p><strong>Need to index your knowledge base?</strong></p>
-          <p>Go to <router-link to="/knowledge/manage" class="help-link">Manage → System Knowledge</router-link> and click "Initialize Machine Knowledge" to create search indexes.</p>
+          <p><strong>{{ $t('knowledge.search.needToIndex') }}</strong></p>
+          <p>{{ $t('knowledge.search.indexHelpBefore') }} <router-link to="/knowledge/manage" class="help-link">{{ $t('knowledge.search.indexHelpLink') }}</router-link> {{ $t('knowledge.search.indexHelpAfter') }}</p>
         </div>
       </EmptyState>
 
@@ -317,10 +317,10 @@
       <div v-if="useRagSearch && ragError" class="rag-error">
         <div class="error-header">
           <i class="fas fa-exclamation-triangle"></i>
-          RAG Enhancement Unavailable
+          {{ $t('knowledge.search.ragUnavailable') }}
         </div>
         <p>{{ ragError }}</p>
-        <p class="fallback-note">Showing traditional search results instead.</p>
+        <p class="fallback-note">{{ $t('knowledge.search.fallbackNote') }}</p>
       </div>
     </div>
   </div>
@@ -328,6 +328,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { KnowledgeRepository, type RagSearchResponse } from '@/models/repositories'
 import type { KnowledgeDocument, SearchResult } from '@/stores/useKnowledgeStore'
 import type { KnowledgeCategoryItem } from '@/types/knowledgeBase'
@@ -337,6 +338,8 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('KnowledgeSearch')
+
+const { t } = useI18n()
 
 // Repository instance
 const knowledgeRepo = new KnowledgeRepository()
@@ -362,12 +365,12 @@ const categoriesError = ref<string | null>(null)
 
 // Issue #685: Access level filter state
 const selectedAccessLevel = ref<string>('')
-const accessLevels = [
-  { value: 'autobot', label: 'Platform', icon: 'fas fa-robot' },
-  { value: 'general', label: 'Public', icon: 'fas fa-globe' },
-  { value: 'system', label: 'System', icon: 'fas fa-cog' },
-  { value: 'user', label: 'User', icon: 'fas fa-user' }
-]
+const accessLevels = computed(() => [
+  { value: 'autobot', label: t('knowledge.search.accessPlatform'), icon: 'fas fa-robot' },
+  { value: 'general', label: t('knowledge.search.accessPublic'), icon: 'fas fa-globe' },
+  { value: 'system', label: t('knowledge.search.accessSystem'), icon: 'fas fa-cog' },
+  { value: 'user', label: t('knowledge.search.accessUser'), icon: 'fas fa-user' }
+])
 
 // Document viewer state
 const showDocumentModal = ref(false)
@@ -555,10 +558,10 @@ const formatAccessLevel = (document: KnowledgeDocument): string => {
   if (!level) return ''
 
   const labels: Record<string, string> = {
-    'autobot': 'Platform',
-    'general': 'Public',
-    'system': 'System',
-    'user': 'User'
+    'autobot': t('knowledge.search.accessPlatform'),
+    'general': t('knowledge.search.accessPublic'),
+    'system': t('knowledge.search.accessSystem'),
+    'user': t('knowledge.search.accessUser')
   }
   return labels[level] || level.charAt(0).toUpperCase() + level.slice(1)
 }

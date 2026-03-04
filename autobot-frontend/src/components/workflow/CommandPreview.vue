@@ -1,6 +1,6 @@
 <template>
   <div class="command-section">
-    <label class="section-label">Command to Execute:</label>
+    <label class="section-label">{{ $t('workflow.commandPreview.label') }}</label>
     <div class="command-preview">
       <code>{{ command }}</code>
       <BaseButton
@@ -8,9 +8,9 @@
         size="xs"
         @click="showEditor = !showEditor"
         class="edit-command-btn"
-        aria-label="Edit command"
+        :aria-label="$t('workflow.commandPreview.editAriaLabel')"
       >
-        📝 Edit
+        {{ $t('workflow.commandPreview.edit') }}
       </BaseButton>
     </div>
 
@@ -20,14 +20,14 @@
         v-model="editedCommand"
         class="command-input"
         rows="3"
-        placeholder="Edit the command..."
+        :placeholder="$t('workflow.commandPreview.editPlaceholder')"
       ></textarea>
       <div class="editor-actions">
-        <BaseButton variant="success" size="sm" @click="saveEdit" aria-label="Save edit">
-          💾 Save
+        <BaseButton variant="success" size="sm" @click="saveEdit" :aria-label="$t('workflow.commandPreview.saveAriaLabel')">
+          {{ $t('workflow.commandPreview.save') }}
         </BaseButton>
-        <BaseButton variant="secondary" size="sm" @click="cancelEdit" aria-label="Cancel edit">
-          ❌ Cancel
+        <BaseButton variant="secondary" size="sm" @click="cancelEdit" :aria-label="$t('workflow.commandPreview.cancelAriaLabel')">
+          {{ $t('workflow.commandPreview.cancel') }}
         </BaseButton>
       </div>
     </div>

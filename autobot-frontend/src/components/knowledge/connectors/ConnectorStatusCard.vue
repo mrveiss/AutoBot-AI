@@ -11,6 +11,7 @@ import type { ConnectorConfig, ConnectorStatus } from '@/types/knowledgeBase'
 import { formatTimeAgo } from '@/utils/formatHelpers'
 import BaseBadge from '@/components/base/BaseBadge.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   config: ConnectorConfig
@@ -24,14 +25,15 @@ const emit = defineEmits<{
   viewHistory: [id: string]
 }>()
 
+const { t } = useI18n()
 const showDeleteConfirm = ref(false)
 const syncing = ref(false)
 
 const typeLabel = computed(() => {
   const map: Record<string, string> = {
-    file_server: 'File Server',
-    web_crawler: 'Web Crawler',
-    database: 'Database'
+    file_server: t('knowledge.connectors.status.typeFileServer'),
+    web_crawler: t('knowledge.connectors.status.typeWebCrawler'),
+    database: t('knowledge.connectors.status.typeDatabase')
   }
   return map[props.config.connector_type] || props.config.connector_type
 })
@@ -46,7 +48,7 @@ const typeBadgeVariant = computed(() => {
 })
 
 const lastSyncDisplay = computed(() => {
-  if (!props.status.last_sync_at) return 'Never'
+  if (!props.status.last_sync_at) return t('knowledge.connectors.status.never')
   return formatTimeAgo(props.status.last_sync_at)
 })
 
@@ -136,7 +138,7 @@ defineExpose({ resetSyncing })
             <span
               class="health-dot"
               :class="status.is_healthy ? 'healthy' : 'unhealthy'"
-              :title="status.is_healthy ? 'Healthy' : 'Unhealthy'"
+              :title="status.is_healthy ? $t('knowledge.connectors.status.healthy') : $t('knowledge.connectors.status.unhealthy')"
             ></span>
           </div>
           <BaseBadge :variant="typeBadgeVariant" size="xs">
@@ -146,24 +148,24 @@ defineExpose({ resetSyncing })
       </div>
 
       <div v-if="!config.enabled" class="disabled-badge">
-        Disabled
+        {{ $t('knowledge.connectors.status.disabled') }}
       </div>
     </div>
 
     <!-- Stats Row -->
     <div class="card-stats">
       <div class="stat">
-        <span class="stat-label">Last Sync</span>
+        <span class="stat-label">{{ $t('knowledge.connectors.status.lastSync') }}</span>
         <span class="stat-value">{{ lastSyncDisplay }}</span>
       </div>
       <div class="stat">
-        <span class="stat-label">Documents</span>
+        <span class="stat-label">{{ $t('knowledge.connectors.status.documents') }}</span>
         <span class="stat-value stat-count">
           {{ status.documents_indexed }}
         </span>
       </div>
       <div class="stat">
-        <span class="stat-label">Status</span>
+        <span class="stat-label">{{ $t('knowledge.connectors.status.status') }}</span>
         <BaseBadge :variant="syncStatusVariant" size="xs">
           {{ status.last_sync_status }}
         </BaseBadge>
@@ -213,15 +215,15 @@ defineExpose({ resetSyncing })
             />
           </svg>
         </template>
-        Sync
+        {{ $t('knowledge.connectors.status.sync') }}
       </BaseButton>
 
       <BaseButton variant="ghost" size="sm" @click="emit('viewHistory', config.connector_id)">
-        History
+        {{ $t('knowledge.connectors.status.history') }}
       </BaseButton>
 
       <BaseButton variant="ghost" size="sm" @click="emit('edit', config.connector_id)">
-        Edit
+        {{ $t('knowledge.connectors.status.edit') }}
       </BaseButton>
 
       <!-- Delete with confirmation -->
@@ -231,7 +233,7 @@ defineExpose({ resetSyncing })
           size="sm"
           @click="showDeleteConfirm = true"
         >
-          Delete
+          {{ $t('knowledge.connectors.status.delete') }}
         </BaseButton>
       </template>
       <template v-else>
@@ -240,14 +242,14 @@ defineExpose({ resetSyncing })
           size="sm"
           @click="handleDelete"
         >
-          Confirm
+          {{ $t('knowledge.connectors.status.confirm') }}
         </BaseButton>
         <BaseButton
           variant="ghost"
           size="sm"
           @click="showDeleteConfirm = false"
         >
-          Cancel
+          {{ $t('knowledge.connectors.status.cancel') }}
         </BaseButton>
       </template>
     </div>

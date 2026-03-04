@@ -2,9 +2,9 @@
   <div class="session-orphan-manager">
     <div class="section-header">
       <div class="header-content">
-        <h4><i class="fas fa-broom"></i> Session Orphan Cleanup</h4>
+        <h4><i class="fas fa-broom"></i> {{ $t('knowledge.sessionOrphan.title') }}</h4>
         <p class="header-description">
-          Find and remove KB facts from deleted conversations
+          {{ $t('knowledge.sessionOrphan.description') }}
         </p>
       </div>
     </div>
@@ -15,25 +15,25 @@
         <div class="summary-stats">
           <div class="stat-item">
             <span class="stat-value">{{ orphanScanResult.total_facts_checked }}</span>
-            <span class="stat-label">Facts Checked</span>
+            <span class="stat-label">{{ $t('knowledge.sessionOrphan.factsChecked') }}</span>
           </div>
           <div class="stat-item">
             <span class="stat-value">{{ orphanScanResult.facts_with_session_tracking }}</span>
-            <span class="stat-label">With Session Tracking</span>
+            <span class="stat-label">{{ $t('knowledge.sessionOrphan.withSessionTracking') }}</span>
           </div>
           <div class="stat-item highlight">
             <span class="stat-value">{{ orphanScanResult.orphaned_count }}</span>
-            <span class="stat-label">Orphaned Facts</span>
+            <span class="stat-label">{{ $t('knowledge.sessionOrphan.orphanedFacts') }}</span>
           </div>
           <div class="stat-item">
             <span class="stat-value">{{ orphanScanResult.orphaned_sessions }}</span>
-            <span class="stat-label">Deleted Sessions</span>
+            <span class="stat-label">{{ $t('knowledge.sessionOrphan.deletedSessions') }}</span>
           </div>
         </div>
 
         <!-- Orphan Preview -->
         <div v-if="orphanScanResult.orphaned_facts?.length > 0" class="orphan-preview">
-          <h5>Preview of Orphaned Facts:</h5>
+          <h5>{{ $t('knowledge.sessionOrphan.previewTitle') }}</h5>
           <div class="orphan-list">
             <div
               v-for="fact in orphanScanResult.orphaned_facts.slice(0, 10)"
@@ -43,7 +43,7 @@
               <div class="orphan-meta">
                 <span class="orphan-category">{{ fact.category }}</span>
                 <span v-if="fact.important" class="orphan-important">
-                  <i class="fas fa-star"></i> Important
+                  <i class="fas fa-star"></i> {{ $t('knowledge.sessionOrphan.important') }}
                 </span>
               </div>
               <p class="orphan-content-text">{{ fact.content_preview }}</p>
@@ -51,7 +51,7 @@
             </div>
           </div>
           <p v-if="orphanScanResult.orphaned_facts.length > 10" class="orphan-more">
-            ... and {{ orphanScanResult.orphaned_facts.length - 10 }} more orphaned facts
+            {{ $t('knowledge.sessionOrphan.moreOrphans', { count: orphanScanResult.orphaned_facts.length - 10 }) }}
           </p>
         </div>
       </div>
@@ -63,9 +63,9 @@
             <div class="action-icon scan">
               <i class="fas fa-search"></i>
             </div>
-            <h5>Scan for Orphans</h5>
-            <p>Find KB facts from conversations that have been deleted</p>
-            <small class="action-meta">Non-destructive scan</small>
+            <h5>{{ $t('knowledge.sessionOrphan.scanTitle') }}</h5>
+            <p>{{ $t('knowledge.sessionOrphan.scanDescription') }}</p>
+            <small class="action-meta">{{ $t('knowledge.sessionOrphan.scanMeta') }}</small>
           </div>
           <BaseButton
             variant="secondary"
@@ -75,7 +75,7 @@
             class="action-btn"
           >
             <i v-if="!isScanning" class="fas fa-search"></i>
-            {{ isScanning ? 'Scanning...' : 'Scan Now' }}
+            {{ isScanning ? $t('knowledge.sessionOrphan.scanning') : $t('knowledge.sessionOrphan.scanNow') }}
           </BaseButton>
         </div>
 
@@ -84,10 +84,10 @@
             <div class="action-icon cleanup">
               <i class="fas fa-broom"></i>
             </div>
-            <h5>Clean Up Orphans</h5>
-            <p>Remove orphaned facts (preserves facts marked as important)</p>
+            <h5>{{ $t('knowledge.sessionOrphan.cleanupTitle') }}</h5>
+            <p>{{ $t('knowledge.sessionOrphan.cleanupDescription') }}</p>
             <small class="action-meta">
-              {{ orphanScanResult?.orphaned_count || 0 }} facts to clean
+              {{ $t('knowledge.sessionOrphan.factsToClean', { count: orphanScanResult?.orphaned_count || 0 }) }}
             </small>
           </div>
           <BaseButton
@@ -98,7 +98,7 @@
             class="action-btn"
           >
             <i v-if="!isCleaningOrphans" class="fas fa-broom"></i>
-            {{ isCleaningOrphans ? 'Cleaning...' : 'Clean Up' }}
+            {{ isCleaningOrphans ? $t('knowledge.sessionOrphan.cleaning') : $t('knowledge.sessionOrphan.cleanUp') }}
           </BaseButton>
         </div>
       </div>
@@ -117,9 +117,12 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+
+const { t } = useI18n()
 
 const logger = createLogger('SessionOrphanManager')
 
@@ -196,17 +199,17 @@ const scanSessionOrphans = async () => {
 
       if (data.data.orphaned_count > 0) {
         showStatus('warning',
-          `Found ${data.data.orphaned_count} facts from ${data.data.orphaned_sessions} deleted sessions`)
+          t('knowledge.sessionOrphan.foundOrphans', { count: data.data.orphaned_count, sessions: data.data.orphaned_sessions }))
       } else {
         showStatus('success',
-          `Checked ${data.data.total_facts_checked} facts - all belong to active sessions`)
+          t('knowledge.sessionOrphan.allActive', { count: data.data.total_facts_checked }))
       }
     } else {
       throw new Error(data.message || 'Failed to scan for orphans')
     }
   } catch (error: any) {
     logger.error('Failed to scan for session orphans:', error)
-    showStatus('error', error.message || 'An error occurred while scanning for orphaned facts')
+    showStatus('error', error.message || t('knowledge.sessionOrphan.scanError'))
   } finally {
     isScanning.value = false
   }
@@ -218,9 +221,7 @@ const cleanupSessionOrphans = async () => {
 
   // Confirm before cleanup
   const confirmed = window.confirm(
-    `Are you sure you want to delete ${orphanScanResult.value.orphaned_count} orphaned facts?\n\n` +
-    `This will remove facts from ${orphanScanResult.value.orphaned_sessions} deleted conversation(s).\n` +
-    `Facts marked as "important" will be preserved.`
+    t('knowledge.sessionOrphan.confirmCleanup', { count: orphanScanResult.value.orphaned_count, sessions: orphanScanResult.value.orphaned_sessions })
   )
 
   if (!confirmed) return
@@ -240,9 +241,9 @@ const cleanupSessionOrphans = async () => {
 
     if (data.status === 'success') {
       const preserved = data.data.facts_preserved > 0
-        ? ` Preserved ${data.data.facts_preserved} important facts.`
+        ? t('knowledge.sessionOrphan.preservedSuffix', { count: data.data.facts_preserved })
         : ''
-      showStatus('success', `Removed ${data.data.facts_removed} orphaned facts.${preserved}`)
+      showStatus('success', t('knowledge.sessionOrphan.deleteSuccess', { count: data.data.facts_removed, preserved }))
 
       // Clear the scan result after cleanup
       orphanScanResult.value = null
@@ -251,7 +252,7 @@ const cleanupSessionOrphans = async () => {
     }
   } catch (error: any) {
     logger.error('Failed to cleanup session orphans:', error)
-    showStatus('error', error.message || 'An error occurred while cleaning up orphaned facts')
+    showStatus('error', error.message || t('knowledge.sessionOrphan.cleanupError'))
   } finally {
     isCleaningOrphans.value = false
   }

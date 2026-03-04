@@ -19,8 +19,10 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('CategoryEditModal')
+const { t } = useI18n()
 
 // =============================================================================
 // Type Definitions
@@ -86,20 +88,20 @@ const colorOptions = [
 ]
 
 // Predefined icon options
-const iconOptions = [
-  { value: 'fas fa-folder', label: 'Folder' },
-  { value: 'fas fa-book', label: 'Book' },
-  { value: 'fas fa-code', label: 'Code' },
-  { value: 'fas fa-cog', label: 'Settings' },
-  { value: 'fas fa-file-alt', label: 'Document' },
-  { value: 'fas fa-database', label: 'Database' },
-  { value: 'fas fa-lightbulb', label: 'Ideas' },
-  { value: 'fas fa-users', label: 'Users' },
-  { value: 'fas fa-shield-alt', label: 'Security' },
-  { value: 'fas fa-rocket', label: 'Launch' },
-  { value: 'fas fa-brain', label: 'AI/ML' },
-  { value: 'fas fa-terminal', label: 'Terminal' },
-]
+const iconOptions = computed(() => [
+  { value: 'fas fa-folder', label: t('knowledge.modals.categoryEdit.iconFolder') },
+  { value: 'fas fa-book', label: t('knowledge.modals.categoryEdit.iconBook') },
+  { value: 'fas fa-code', label: t('knowledge.modals.categoryEdit.iconCode') },
+  { value: 'fas fa-cog', label: t('knowledge.modals.categoryEdit.iconSettings') },
+  { value: 'fas fa-file-alt', label: t('knowledge.modals.categoryEdit.iconDocument') },
+  { value: 'fas fa-database', label: t('knowledge.modals.categoryEdit.iconDatabase') },
+  { value: 'fas fa-lightbulb', label: t('knowledge.modals.categoryEdit.iconIdeas') },
+  { value: 'fas fa-users', label: t('knowledge.modals.categoryEdit.iconUsers') },
+  { value: 'fas fa-shield-alt', label: t('knowledge.modals.categoryEdit.iconSecurity') },
+  { value: 'fas fa-rocket', label: t('knowledge.modals.categoryEdit.iconLaunch') },
+  { value: 'fas fa-brain', label: t('knowledge.modals.categoryEdit.iconAiMl') },
+  { value: 'fas fa-terminal', label: t('knowledge.modals.categoryEdit.iconTerminal') },
+])
 
 // =============================================================================
 // Computed
@@ -185,7 +187,7 @@ async function saveChanges(): Promise<void> {
     const data = await parseApiResponse(response)
 
     if (data?.status === 'success') {
-      successMessage.value = 'Category updated successfully'
+      successMessage.value = t('knowledge.modals.categoryEdit.updateSuccess')
       emit('updated', { ...props.category, ...formData.value })
 
       // Close modal after brief delay to show success message
@@ -193,11 +195,11 @@ async function saveChanges(): Promise<void> {
         closeModal()
       }, 1000)
     } else {
-      error.value = data?.message || 'Failed to update category'
+      error.value = data?.message || t('knowledge.modals.categoryEdit.updateFailed')
     }
   } catch (err) {
     logger.error('Failed to update category:', err)
-    error.value = err instanceof Error ? err.message : 'Failed to update category'
+    error.value = err instanceof Error ? err.message : t('knowledge.modals.categoryEdit.updateFailed')
   } finally {
     isLoading.value = false
   }
@@ -219,7 +221,7 @@ async function deleteCategory(): Promise<void> {
       emit('deleted', props.category.id)
       closeModal()
     } else {
-      error.value = data?.message || 'Failed to delete category'
+      error.value = data?.message || t('knowledge.modals.categoryEdit.deleteFailed')
       showDeleteConfirm.value = false
     }
   } catch (err) {
@@ -228,9 +230,9 @@ async function deleteCategory(): Promise<void> {
     // Handle specific error cases
     const errorMessage = err instanceof Error ? err.message : String(err)
     if (errorMessage.includes('has children')) {
-      error.value = 'Cannot delete category with sub-categories. Delete children first.'
+      error.value = t('knowledge.modals.categoryEdit.deleteHasChildren')
     } else {
-      error.value = errorMessage || 'Failed to delete category'
+      error.value = errorMessage || t('knowledge.modals.categoryEdit.deleteFailed')
     }
     showDeleteConfirm.value = false
   } finally {
@@ -265,7 +267,7 @@ function selectIcon(icon: string): void {
 <template>
   <BaseModal
     v-model="isOpen"
-    :title="`Edit Category: ${categoryTitle}`"
+    :title="t('knowledge.modals.categoryEdit.editTitle', { name: categoryTitle })"
     size="medium"
     @close="closeModal"
   >
@@ -286,15 +288,15 @@ function selectIcon(icon: string): void {
       <div v-if="showDeleteConfirm" class="delete-confirm">
         <div class="delete-warning">
           <i class="fas fa-exclamation-triangle"></i>
-          <h3>Delete Category?</h3>
+          <h3>{{ $t('knowledge.modals.categoryEdit.deleteConfirmTitle') }}</h3>
           <p>
-            Are you sure you want to delete <strong>"{{ categoryTitle }}"</strong>?
+            {{ $t('knowledge.modals.categoryEdit.deleteConfirmMessage', { name: categoryTitle }) }}
           </p>
           <p v-if="factCount > 0" class="fact-warning">
             <i class="fas fa-file-alt"></i>
-            This category contains <strong>{{ factCount }}</strong> facts that will be orphaned.
+            {{ $t('knowledge.modals.categoryEdit.factWarning', { count: factCount }) }}
           </p>
-          <p class="delete-note">This action cannot be undone.</p>
+          <p class="delete-note">{{ $t('knowledge.modals.categoryEdit.cannotUndo') }}</p>
         </div>
         <div class="delete-actions">
           <BaseButton
@@ -302,7 +304,7 @@ function selectIcon(icon: string): void {
             @click="cancelDelete"
             :disabled="isLoading"
           >
-            Cancel
+            {{ $t('knowledge.modals.categoryEdit.cancel') }}
           </BaseButton>
           <BaseButton
             variant="danger"
@@ -310,7 +312,7 @@ function selectIcon(icon: string): void {
             :disabled="isLoading"
           >
             <i v-if="isLoading" class="fas fa-spinner fa-spin"></i>
-            <span v-else>Delete Category</span>
+            <span v-else>{{ $t('knowledge.modals.categoryEdit.deleteCategory') }}</span>
           </BaseButton>
         </div>
       </div>
@@ -319,31 +321,31 @@ function selectIcon(icon: string): void {
       <div v-else class="edit-form">
         <!-- Category Info -->
         <div v-if="props.category?.path" class="category-path">
-          <label>Path</label>
+          <label>{{ $t('knowledge.modals.categoryEdit.path') }}</label>
           <span class="path-value">{{ props.category.path }}</span>
         </div>
 
         <!-- Name Field -->
         <div class="form-group">
-          <label for="category-name">Name</label>
+          <label for="category-name">{{ $t('knowledge.modals.categoryEdit.name') }}</label>
           <input
             id="category-name"
             v-model="formData.name"
             type="text"
             class="form-input"
-            placeholder="Category name"
+            :placeholder="$t('knowledge.modals.categoryEdit.namePlaceholder')"
             :disabled="isLoading"
           />
         </div>
 
         <!-- Description Field -->
         <div class="form-group">
-          <label for="category-description">Description</label>
+          <label for="category-description">{{ $t('knowledge.modals.categoryEdit.descriptionLabel') }}</label>
           <textarea
             id="category-description"
             v-model="formData.description"
             class="form-textarea"
-            placeholder="Brief description of this category"
+            :placeholder="$t('knowledge.modals.categoryEdit.descriptionPlaceholder')"
             rows="3"
             :disabled="isLoading"
           ></textarea>
@@ -351,7 +353,7 @@ function selectIcon(icon: string): void {
 
         <!-- Icon Selection -->
         <div class="form-group">
-          <label>Icon</label>
+          <label>{{ $t('knowledge.modals.categoryEdit.icon') }}</label>
           <div class="icon-picker">
             <button
               v-for="icon in iconOptions"
@@ -370,7 +372,7 @@ function selectIcon(icon: string): void {
 
         <!-- Color Selection -->
         <div class="form-group">
-          <label>Color</label>
+          <label>{{ $t('knowledge.modals.categoryEdit.color') }}</label>
           <div class="color-picker">
             <button
               v-for="color in colorOptions"
@@ -387,7 +389,7 @@ function selectIcon(icon: string): void {
 
         <!-- Preview -->
         <div class="form-group">
-          <label>Preview</label>
+          <label>{{ $t('knowledge.modals.categoryEdit.preview') }}</label>
           <div class="category-preview">
             <div
               class="preview-icon"
@@ -395,7 +397,7 @@ function selectIcon(icon: string): void {
             >
               <i :class="formData.icon"></i>
             </div>
-            <span class="preview-name">{{ formData.name || 'Category Name' }}</span>
+            <span class="preview-name">{{ formData.name || $t('knowledge.modals.categoryEdit.namePlaceholder') }}</span>
           </div>
         </div>
 
@@ -409,11 +411,11 @@ function selectIcon(icon: string): void {
               :disabled="isLoading"
             >
               <i class="fas fa-trash"></i>
-              Delete
+              {{ $t('knowledge.modals.categoryEdit.delete') }}
             </BaseButton>
             <span v-else class="delete-disabled-hint">
               <i class="fas fa-info-circle"></i>
-              Has sub-categories
+              {{ $t('knowledge.modals.categoryEdit.hasSubcategories') }}
             </span>
           </div>
           <div class="right-actions">
@@ -422,7 +424,7 @@ function selectIcon(icon: string): void {
               @click="closeModal"
               :disabled="isLoading"
             >
-              Cancel
+              {{ $t('knowledge.modals.categoryEdit.cancel') }}
             </BaseButton>
             <BaseButton
               variant="primary"
@@ -430,7 +432,7 @@ function selectIcon(icon: string): void {
               :disabled="isLoading || !hasUnsavedChanges"
             >
               <i v-if="isLoading" class="fas fa-spinner fa-spin"></i>
-              <span v-else>Save Changes</span>
+              <span v-else>{{ $t('knowledge.modals.categoryEdit.saveChanges') }}</span>
             </BaseButton>
           </div>
         </div>

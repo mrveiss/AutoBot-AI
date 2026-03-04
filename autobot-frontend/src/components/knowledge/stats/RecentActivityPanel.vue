@@ -1,6 +1,6 @@
 <template>
   <BasePanel variant="bordered" size="medium">
-    <h4>Recent Activity</h4>
+    <h4>{{ $t('knowledge.stats.recentActivity.title') }}</h4>
     <div class="activity-timeline">
       <div v-for="activity in activities" :key="activity.id" class="activity-item">
         <div class="activity-icon" :class="activity.type">
@@ -14,7 +14,7 @@
       <EmptyState
         v-if="activities.length === 0"
         icon="fas fa-clock"
-        message="No recent activity"
+        :message="$t('knowledge.stats.recentActivity.noActivity')"
       />
     </div>
   </BasePanel>

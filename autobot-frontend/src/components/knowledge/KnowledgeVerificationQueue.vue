@@ -18,20 +18,20 @@
               d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
             />
           </svg>
-          Source Verification
+          {{ $t('knowledge.verification.title') }}
         </h2>
       </div>
 
       <div class="header-right">
         <div class="mode-toggle">
-          <span class="mode-label">Mode:</span>
+          <span class="mode-label">{{ $t('knowledge.verification.modeLabel') }}</span>
           <button
             class="mode-btn"
             :class="{ active: store.verificationConfig.mode === 'autonomous' }"
             @click="setMode('autonomous')"
             :disabled="configLoading"
           >
-            Autonomous
+            {{ $t('knowledge.verification.autonomous') }}
           </button>
           <button
             class="mode-btn"
@@ -39,7 +39,7 @@
             @click="setMode('collaborative')"
             :disabled="configLoading"
           >
-            Collaborative
+            {{ $t('knowledge.verification.collaborative') }}
           </button>
         </div>
       </div>
@@ -51,35 +51,35 @@
         <span class="stat-value stat-pending">
           {{ store.pendingVerificationsTotal }}
         </span>
-        <span class="stat-label">Pending</span>
+        <span class="stat-label">{{ $t('knowledge.verification.pending') }}</span>
       </div>
       <div class="stat-item">
         <span class="stat-value stat-approved">{{ todayApproved }}</span>
-        <span class="stat-label">Approved Today</span>
+        <span class="stat-label">{{ $t('knowledge.verification.approvedToday') }}</span>
       </div>
       <div class="stat-item">
         <span class="stat-value stat-rejected">{{ todayRejected }}</span>
-        <span class="stat-label">Rejected Today</span>
+        <span class="stat-label">{{ $t('knowledge.verification.rejectedToday') }}</span>
       </div>
       <div class="stat-item">
         <span class="stat-value">
           {{ store.verificationConfig.quality_threshold.toFixed(1) }}
         </span>
-        <span class="stat-label">Quality Threshold</span>
+        <span class="stat-label">{{ $t('knowledge.verification.qualityThreshold') }}</span>
       </div>
     </div>
 
     <!-- Bulk Actions -->
     <div v-if="selectedIds.length > 0" class="bulk-toolbar">
       <span class="bulk-count">
-        {{ selectedIds.length }} selected
+        {{ $t('knowledge.verification.selectedCount', { count: selectedIds.length }) }}
       </span>
       <BaseButton
         variant="ghost"
         size="sm"
         @click="selectAllVisible"
       >
-        Select All
+        {{ $t('knowledge.verification.selectAll') }}
       </BaseButton>
       <BaseButton
         variant="success"
@@ -88,7 +88,7 @@
         :loading="bulkProcessing"
       >
         <i class="fas fa-check"></i>
-        Approve Selected
+        {{ $t('knowledge.verification.approveSelected') }}
       </BaseButton>
       <BaseButton
         variant="danger"
@@ -97,29 +97,29 @@
         :loading="bulkProcessing"
       >
         <i class="fas fa-times"></i>
-        Reject Selected
+        {{ $t('knowledge.verification.rejectSelected') }}
       </BaseButton>
       <BaseButton
         variant="ghost"
         size="sm"
         @click="clearSelection"
       >
-        Clear
+        {{ $t('knowledge.verification.clearSelection') }}
       </BaseButton>
     </div>
 
     <!-- Loading State -->
     <div v-if="store.verificationLoading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <p>Loading pending sources...</p>
+      <p>{{ $t('knowledge.verification.loading') }}</p>
     </div>
 
     <!-- Empty State -->
     <EmptyState
       v-else-if="store.pendingVerifications.length === 0"
       icon="fas fa-shield-alt"
-      title="No pending verifications"
-      message="All sources have been reviewed. New sources will appear here when they require verification."
+      :title="$t('knowledge.verification.emptyTitle')"
+      :message="$t('knowledge.verification.emptyMessage')"
     />
 
     <!-- Source Cards -->
@@ -139,7 +139,7 @@
           />
           <div class="card-title-row">
             <span class="card-title">
-              {{ source.title || source.domain || 'Untitled Source' }}
+              {{ source.title || source.domain || $t('knowledge.verification.untitled') }}
             </span>
             <QualityScoreBadge :score="source.quality_score" />
           </div>
@@ -194,7 +194,7 @@
             :loading="actionLoadingId === source.fact_id"
           >
             <i class="fas fa-check"></i>
-            Approve
+            {{ $t('knowledge.verification.approve') }}
           </BaseButton>
           <BaseButton
             variant="danger"
@@ -203,7 +203,7 @@
             :loading="actionLoadingId === source.fact_id"
           >
             <i class="fas fa-times"></i>
-            Reject
+            {{ $t('knowledge.verification.reject') }}
           </BaseButton>
         </div>
       </div>
@@ -223,7 +223,7 @@
         <i class="fas fa-chevron-left"></i>
       </BaseButton>
       <span class="page-info">
-        Page {{ currentPage }} of {{ totalPages }}
+        {{ $t('knowledge.verification.pageInfo', { current: currentPage, total: totalPages }) }}
       </span>
       <BaseButton
         variant="outline"
@@ -239,6 +239,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import { useUserStore } from '@/stores/useUserStore'
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
@@ -251,6 +252,7 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('KnowledgeVerificationQueue')
 
+const { t } = useI18n()
 const store = useKnowledgeStore()
 const userStore = useUserStore()
 
@@ -438,10 +440,10 @@ function goToPage(page: number) {
 // Formatting helpers
 function formatSourceType(type: string): string {
   const typeMap: Record<string, string> = {
-    manual_upload: 'Upload',
-    url_fetch: 'URL',
-    web_research: 'Research',
-    connector: 'Connector'
+    manual_upload: t('knowledge.verification.typeUpload'),
+    url_fetch: t('knowledge.verification.typeUrl'),
+    web_research: t('knowledge.verification.typeResearch'),
+    connector: t('knowledge.verification.typeConnector')
   }
   return typeMap[type] || type
 }

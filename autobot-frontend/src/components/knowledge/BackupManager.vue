@@ -2,9 +2,9 @@
   <div class="backup-manager">
     <div class="section-header">
       <div class="header-content">
-        <h4><i class="fas fa-database"></i> Backup & Restore</h4>
+        <h4><i class="fas fa-database"></i> {{ $t('knowledge.backup.title') }}</h4>
         <p class="header-description">
-          Create and manage knowledge base backups
+          {{ $t('knowledge.backup.description') }}
         </p>
       </div>
     </div>
@@ -12,24 +12,24 @@
     <div class="backup-content">
       <!-- Create Backup -->
       <div class="backup-section">
-        <h5>Create Backup</h5>
+        <h5>{{ $t('knowledge.backup.createBackup') }}</h5>
         <div class="backup-options">
           <label class="option-checkbox">
             <input type="checkbox" v-model="backupOptions.includeEmbeddings" />
             <span class="checkmark"></span>
-            <span>Include embeddings (larger file)</span>
+            <span>{{ $t('knowledge.backup.includeEmbeddings') }}</span>
           </label>
           <label class="option-checkbox">
             <input type="checkbox" v-model="backupOptions.compression" />
             <span class="checkmark"></span>
-            <span>Use compression</span>
+            <span>{{ $t('knowledge.backup.useCompression') }}</span>
           </label>
         </div>
         <div class="backup-description">
           <input
             type="text"
             v-model="backupOptions.description"
-            placeholder="Optional description for this backup..."
+            :placeholder="$t('knowledge.backup.descriptionPlaceholder')"
             class="description-input"
           />
         </div>
@@ -40,14 +40,14 @@
           :loading="isCreatingBackup"
         >
           <i v-if="!isCreatingBackup" class="fas fa-download"></i>
-          {{ isCreatingBackup ? 'Creating Backup...' : 'Create Backup' }}
+          {{ isCreatingBackup ? $t('knowledge.backup.creatingBackup') : $t('knowledge.backup.createBackup') }}
         </BaseButton>
       </div>
 
       <!-- Backup List -->
       <div class="backups-list-section">
         <div class="list-header">
-          <h5>Available Backups</h5>
+          <h5>{{ $t('knowledge.backup.availableBackups') }}</h5>
           <BaseButton
             variant="ghost"
             size="sm"
@@ -60,12 +60,12 @@
 
         <div v-if="isLoadingBackups" class="loading-state">
           <i class="fas fa-spinner fa-spin"></i>
-          <span>Loading backups...</span>
+          <span>{{ $t('knowledge.backup.loadingBackups') }}</span>
         </div>
 
         <div v-else-if="backups.length === 0" class="empty-state">
           <i class="fas fa-folder-open"></i>
-          <p>No backups found</p>
+          <p>{{ $t('knowledge.backup.noBackupsFound') }}</p>
         </div>
 
         <div v-else class="backups-list">
@@ -91,7 +91,7 @@
                 class="action-btn restore"
                 @click.stop="restoreBackup(backup.name)"
                 :disabled="isRestoring"
-                title="Restore this backup"
+                :title="$t('knowledge.backup.restoreTitle')"
               >
                 <i class="fas fa-upload"></i>
               </button>
@@ -99,7 +99,7 @@
                 class="action-btn delete"
                 @click.stop="deleteBackup(backup.name)"
                 :disabled="isDeletingBackup"
-                title="Delete this backup"
+                :title="$t('knowledge.backup.deleteTitle')"
               >
                 <i class="fas fa-trash"></i>
               </button>
@@ -122,11 +122,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatFileSize, formatDateTime } from '@/utils/formatHelpers'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+
+const { t } = useI18n()
 
 const logger = createLogger('BackupManager')
 
@@ -198,7 +201,7 @@ const loadBackups = async () => {
     }
   } catch (error) {
     logger.error('Failed to load backups:', error)
-    showStatus('error', 'Failed to load backups')
+    showStatus('error', t('knowledge.backup.errorLoadBackups'))
   } finally {
     isLoadingBackups.value = false
   }
@@ -217,15 +220,15 @@ const createBackup = async () => {
     const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
-      showStatus('success', `Backup created: ${data.backup_name}`)
+      showStatus('success', t('knowledge.backup.statusBackupCreated', { name: data.backup_name }))
       backupOptions.value.description = ''
       await loadBackups()
     } else {
-      throw new Error(data.message || 'Failed to create backup')
+      throw new Error(data.message || t('knowledge.backup.errorCreateBackup'))
     }
   } catch (error: any) {
     logger.error('Failed to create backup:', error)
-    showStatus('error', error.message || 'Failed to create backup')
+    showStatus('error', error.message || t('knowledge.backup.errorCreateBackup'))
   } finally {
     isCreatingBackup.value = false
   }
@@ -233,8 +236,7 @@ const createBackup = async () => {
 
 const restoreBackup = async (backupName: string) => {
   const confirmed = window.confirm(
-    `Are you sure you want to restore from "${backupName}"?\n\n` +
-    `This will first run in dry-run mode to validate the backup.`
+    t('knowledge.backup.confirmRestore', { name: backupName })
   )
 
   if (!confirmed) return
@@ -251,14 +253,12 @@ const restoreBackup = async (backupName: string) => {
     const dryRunData = await parseApiResponse(dryRunResponse)
 
     if (dryRunData.status !== 'success') {
-      throw new Error(dryRunData.message || 'Backup validation failed')
+      throw new Error(dryRunData.message || t('knowledge.backup.errorValidation'))
     }
 
     // Confirm actual restore
     const confirmRestore = window.confirm(
-      `Backup validated successfully!\n\n` +
-      `Facts in backup: ${dryRunData.total_facts_in_backup}\n\n` +
-      `Proceed with restore?`
+      t('knowledge.backup.backupValidated', { count: dryRunData.total_facts_in_backup })
     )
 
     if (!confirmRestore) return
@@ -273,13 +273,13 @@ const restoreBackup = async (backupName: string) => {
     const restoreData = await parseApiResponse(restoreResponse)
 
     if (restoreData.status === 'success') {
-      showStatus('success', `Restored ${restoreData.restored} facts from backup`)
+      showStatus('success', t('knowledge.backup.statusRestored', { count: restoreData.restored }))
     } else {
-      throw new Error(restoreData.message || 'Restore failed')
+      throw new Error(restoreData.message || t('knowledge.backup.errorRestoreBackup'))
     }
   } catch (error: any) {
     logger.error('Failed to restore backup:', error)
-    showStatus('error', error.message || 'Failed to restore backup')
+    showStatus('error', error.message || t('knowledge.backup.errorRestoreBackup'))
   } finally {
     isRestoring.value = false
   }
@@ -287,7 +287,7 @@ const restoreBackup = async (backupName: string) => {
 
 const deleteBackup = async (backupName: string) => {
   const confirmed = window.confirm(
-    `Are you sure you want to delete "${backupName}"?\n\nThis cannot be undone.`
+    t('knowledge.backup.confirmDelete', { name: backupName })
   )
 
   if (!confirmed) return
@@ -303,14 +303,14 @@ const deleteBackup = async (backupName: string) => {
     const data = await parseApiResponse(response)
 
     if (data.status === 'success') {
-      showStatus('success', 'Backup deleted')
+      showStatus('success', t('knowledge.backup.statusDeleted'))
       await loadBackups()
     } else {
-      throw new Error(data.message || 'Failed to delete backup')
+      throw new Error(data.message || t('knowledge.backup.errorDeleteBackup'))
     }
   } catch (error: any) {
     logger.error('Failed to delete backup:', error)
-    showStatus('error', error.message || 'Failed to delete backup')
+    showStatus('error', error.message || t('knowledge.backup.errorDeleteBackup'))
   } finally {
     isDeletingBackup.value = false
   }

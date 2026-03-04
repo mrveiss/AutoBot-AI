@@ -1,13 +1,13 @@
 <template>
   <div class="current-step-info">
     <div class="step-counter">
-      Step {{ currentIndex + 1 }} of {{ totalSteps }}
+      {{ $t('workflow.stepInfo.counter', { current: currentIndex + 1, total: totalSteps }) }}
     </div>
     <div class="step-description">
-      <strong>{{ step?.description || 'Execute Command' }}</strong>
+      <strong>{{ step?.description || $t('workflow.stepInfo.defaultDescription') }}</strong>
     </div>
     <div class="step-explanation">
-      {{ step?.explanation || 'AI-generated workflow step' }}
+      {{ step?.explanation || $t('workflow.stepInfo.defaultExplanation') }}
     </div>
   </div>
 </template>
