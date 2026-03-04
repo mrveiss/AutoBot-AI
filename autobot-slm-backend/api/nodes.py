@@ -971,11 +971,15 @@ async def _verify_node_not_manager(db: AsyncSession, node_id: str) -> Node:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Node not found",
         )
-    mgr_result = await db.execute(
-        select(Setting.value).where(Setting.key == "slm_manager_node")
-    )
-    manager_node = mgr_result.scalar_one_or_none()
-    if manager_node and node_id == manager_node:
+    # Block SLM Manager via node_id convention or DB setting
+    is_manager = node_id.startswith("00-")
+    if not is_manager:
+        mgr_result = await db.execute(
+            select(Setting.value).where(Setting.key == "slm_manager_node")
+        )
+        manager_node = mgr_result.scalar_one_or_none()
+        is_manager = manager_node is not None and node_id == manager_node
+    if is_manager:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Cannot decommission the SLM Manager node",
