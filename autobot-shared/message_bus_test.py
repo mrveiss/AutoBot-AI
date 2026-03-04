@@ -232,3 +232,123 @@ async def test_get_correlation_chain(bus_and_redis):
     # Should be sorted by timestamp (ascending)
     assert chain[0].msg_id == "msg-a"
     assert chain[1].msg_id == "msg-b"
+
+
+@pytest.mark.asyncio
+async def test_get_latest_no_filter(bus_and_redis):
+    """get_latest without filters should hydrate all stream entries."""
+    bus, mock_redis = bus_and_redis
+
+    msg_a = ServiceMessage(
+        msg_id="latest-a",
+        sender="main-backend",
+        receiver="slm-backend",
+        msg_type="task",
+        content='{"n": 1}',
+        correlation_id="corr-lat",
+    )
+    msg_b = ServiceMessage(
+        msg_id="latest-b",
+        sender="slm-backend",
+        receiver="main-backend",
+        msg_type="result",
+        content='{"n": 2}',
+        correlation_id="corr-lat",
+    )
+
+    # xrevrange returns list of (stream-id, field-dict) tuples
+    mock_redis.xrevrange.return_value = [
+        (
+            b"1709500000000-0",
+            {
+                b"msg_id": b"latest-a",
+                b"sender": b"main-backend",
+                b"receiver": b"slm-backend",
+                b"msg_type": b"task",
+            },
+        ),
+        (
+            b"1709500001000-0",
+            {
+                b"msg_id": b"latest-b",
+                b"sender": b"slm-backend",
+                b"receiver": b"main-backend",
+                b"msg_type": b"result",
+            },
+        ),
+    ]
+
+    # hget returns full JSON for each msg_id
+    async def mock_hget(key, field):
+        if key == "autobot:service:msg:latest-a":
+            return msg_a.model_dump_json().encode("utf-8")
+        elif key == "autobot:service:msg:latest-b":
+            return msg_b.model_dump_json().encode("utf-8")
+        return None
+
+    mock_redis.hget.side_effect = mock_hget
+
+    results = await bus.get_latest(count=10)
+
+    mock_redis.xrevrange.assert_called_once_with(
+        "autobot:service:messages",
+        count=10,
+    )
+    assert len(results) == 2
+    assert results[0].msg_id == "latest-a"
+    assert results[1].msg_id == "latest-b"
+
+
+@pytest.mark.asyncio
+async def test_get_latest_with_filter(bus_and_redis):
+    """get_latest with sender filter should skip non-matching entries."""
+    bus, mock_redis = bus_and_redis
+
+    msg_match = ServiceMessage(
+        msg_id="match-1",
+        sender="main-backend",
+        receiver="slm-backend",
+        msg_type="task",
+        content='{"ok": true}',
+        correlation_id="corr-filt",
+    )
+
+    # Stream has two entries but only one matches the sender filter
+    mock_redis.xrevrange.return_value = [
+        (
+            b"1709600000000-0",
+            {
+                b"msg_id": b"match-1",
+                b"sender": b"main-backend",
+                b"receiver": b"slm-backend",
+                b"msg_type": b"task",
+            },
+        ),
+        (
+            b"1709600001000-0",
+            {
+                b"msg_id": b"skip-1",
+                b"sender": b"browser-worker",
+                b"receiver": b"main-backend",
+                b"msg_type": b"event",
+            },
+        ),
+    ]
+
+    async def mock_hget(key, field):
+        if key == "autobot:service:msg:match-1":
+            return msg_match.model_dump_json().encode("utf-8")
+        return None
+
+    mock_redis.hget.side_effect = mock_hget
+
+    results = await bus.get_latest(count=10, sender="main-backend")
+
+    # With a filter, fetch_count should be count * 3
+    mock_redis.xrevrange.assert_called_once_with(
+        "autobot:service:messages",
+        count=30,
+    )
+    assert len(results) == 1
+    assert results[0].msg_id == "match-1"
+    assert results[0].sender == "main-backend"

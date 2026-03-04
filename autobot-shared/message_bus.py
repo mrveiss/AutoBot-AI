@@ -23,7 +23,6 @@ Usage::
     chain = await bus.get_correlation_chain(msg.correlation_id)
 """
 
-import json
 import logging
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Optional
@@ -58,7 +57,6 @@ class ServiceMessageBus:
     def __init__(self, config: Optional[ServiceMessageBusConfig] = None) -> None:
         self.config = config or ServiceMessageBusConfig()
         self._redis: Any = None
-        self._pubsub: Any = None
 
     # ------------------------------------------------------------------
     # Redis connection (lazy)
@@ -178,7 +176,14 @@ class ServiceMessageBus:
             if len(messages) >= count:
                 break
             decoded = self._decode_entry(entry_data)
-            if not self._matches_filter(decoded, sender, receiver, msg_type):
+            if not self._matches_fields(
+                decoded.get("sender", ""),
+                decoded.get("receiver", ""),
+                decoded.get("msg_type", ""),
+                sender,
+                receiver,
+                msg_type,
+            ):
                 continue
             msg = await self.get_message(decoded.get("msg_id", ""))
             if msg is not None:
@@ -207,7 +212,14 @@ class ServiceMessageBus:
                 msg = self._parse_pubsub(raw_message)
                 if msg is None:
                     continue
-                if not self._matches_msg(msg, sender, receiver, msg_type):
+                if not self._matches_fields(
+                    msg.sender,
+                    msg.receiver,
+                    msg.msg_type,
+                    sender,
+                    receiver,
+                    msg_type,
+                ):
                     continue
                 yield msg
         finally:
@@ -220,9 +232,6 @@ class ServiceMessageBus:
 
     async def close(self) -> None:
         """Release Redis connections."""
-        if self._pubsub:
-            await self._pubsub.close()
-            self._pubsub = None
         if self._redis:
             await self._redis.close()
             self._redis = None
@@ -260,34 +269,20 @@ class ServiceMessageBus:
         }
 
     @staticmethod
-    def _matches_filter(
-        decoded: dict,
+    def _matches_fields(
+        actual_sender: str,
+        actual_receiver: str,
+        actual_msg_type: str,
         sender: Optional[str],
         receiver: Optional[str],
         msg_type: Optional[str],
     ) -> bool:
-        """Check whether a decoded stream entry matches filters."""
-        if sender and decoded.get("sender") != sender:
+        """Check whether actual field values match optional filters."""
+        if sender and actual_sender != sender:
             return False
-        if receiver and decoded.get("receiver") != receiver:
+        if receiver and actual_receiver != receiver:
             return False
-        if msg_type and decoded.get("msg_type") != msg_type:
-            return False
-        return True
-
-    @staticmethod
-    def _matches_msg(
-        msg: ServiceMessage,
-        sender: Optional[str],
-        receiver: Optional[str],
-        msg_type: Optional[str],
-    ) -> bool:
-        """Check whether a ServiceMessage matches filters."""
-        if sender and msg.sender != sender:
-            return False
-        if receiver and msg.receiver != receiver:
-            return False
-        if msg_type and msg.msg_type != msg_type:
+        if msg_type and actual_msg_type != msg_type:
             return False
         return True
 
@@ -299,7 +294,7 @@ class ServiceMessageBus:
         text = data.decode("utf-8") if isinstance(data, bytes) else data
         try:
             return ServiceMessage.model_validate_json(text)
-        except (json.JSONDecodeError, Exception) as exc:
+        except Exception as exc:
             logger.warning("Failed to parse pub/sub message: %s", exc)
             return None
 
