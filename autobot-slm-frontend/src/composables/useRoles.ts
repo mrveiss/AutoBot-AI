@@ -103,6 +103,20 @@ export interface ExecuteActionResult {
   output: string
 }
 
+// Decommission types (Issue #1369)
+export interface DecommissionRoleInfo {
+  role_name: string
+  display_name: string
+  reason: string
+}
+
+export interface DecommissionPreflight {
+  can_proceed: boolean
+  must_migrate: DecommissionRoleInfo[]
+  should_migrate: DecommissionRoleInfo[]
+  safe_to_remove: DecommissionRoleInfo[]
+}
+
 export function useRoles() {
   const roles = ref<Role[]>([])
   const isLoading = ref(false)
@@ -339,6 +353,57 @@ export function useRoles() {
     }
   }
 
+  // Decommission API (Issue #1369)
+  async function decommissionPreflight(
+    nodeId: string
+  ): Promise<DecommissionPreflight | null> {
+    try {
+      const resp = await client.get<DecommissionPreflight>(
+        `/api/nodes/${nodeId}/decommission/preflight`
+      )
+      return resp.data
+    } catch (e: unknown) {
+      const err = e as {
+        response?: { data?: { detail?: string } }
+        message?: string
+      }
+      error.value =
+        err.response?.data?.detail ||
+        err.message ||
+        'Failed to fetch decommission preflight'
+      return null
+    }
+  }
+
+  async function decommissionNode(
+    nodeId: string,
+    backup: boolean,
+    confirmNodeId: string
+  ): Promise<{ success: boolean; message?: string; deployment_id?: string }> {
+    try {
+      const resp = await client.post<{
+        success: boolean
+        message: string
+        deployment_id: string
+      }>(`/api/nodes/${nodeId}/decommission`, {
+        backup,
+        confirm_node_id: confirmNodeId,
+      })
+      return resp.data
+    } catch (e: unknown) {
+      const err = e as {
+        response?: { data?: { detail?: string } }
+        message?: string
+      }
+      const msg =
+        err.response?.data?.detail ||
+        err.message ||
+        'Decommission failed'
+      error.value = msg
+      return { success: false, message: msg }
+    }
+  }
+
   return reactive({
     roles,
     isLoading,
@@ -357,5 +422,7 @@ export function useRoles() {
     migrateRole,
     fetchNodeActions,
     executeNodeAction,
+    decommissionPreflight,
+    decommissionNode,
   })
 }
