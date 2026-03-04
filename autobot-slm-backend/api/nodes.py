@@ -37,6 +37,7 @@ from models.schemas import (
     CertificateResponse,
     ConnectionTestRequest,
     ConnectionTestResponse,
+    DecommissionPreflightResponse,
     DecommissionRequest,
     EnrollRequest,
     HeartbeatRequest,
@@ -1032,7 +1033,10 @@ async def _classify_role(
     return "safe_to_remove", info
 
 
-@router.get("/{node_id}/decommission/preflight")
+@router.get(
+    "/{node_id}/decommission/preflight",
+    response_model=DecommissionPreflightResponse,
+)
 async def decommission_preflight(
     node_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
