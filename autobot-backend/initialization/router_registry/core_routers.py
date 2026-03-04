@@ -51,6 +51,7 @@ from api.prometheus_mcp import router as prometheus_mcp_router
 from api.prompts import router as prompts_router
 from api.redis import router as redis_router
 from api.sequential_thinking_mcp import router as sequential_thinking_mcp_router
+from api.service_messages import router as service_messages_router
 from api.settings import router as settings_router
 from api.structured_thinking_mcp import router as structured_thinking_mcp_router
 from api.system import router as system_router
@@ -71,6 +72,7 @@ def _get_system_routers() -> list:
     return [
         (audit_router, "", ["audit"], "audit"),
         (auth_router, "/auth", ["auth"], "auth"),
+        (service_messages_router, "", ["service-messages"], "service_messages"),
         (chat_router, "", ["chat"], "chat"),
         (collaboration_router, "", ["collaboration"], "collaboration"),
         (system_router, "/system", ["system"], "system"),
