@@ -230,8 +230,12 @@ class AdvancedCacheManager:
         data: Any,
         user_id: Optional[str] = None,
         custom_ttl: Optional[int] = None,
+        predicates: Optional[List[Dict[str, str]]] = None,
     ) -> bool:
-        """Set cached data with automatic configuration"""
+        """Set cached data with automatic configuration.
+
+        Issue #1378: Added predicates for predicate-bounded invalidation.
+        """
         await self._ensure_redis_client()
         if not self.redis_client:
             return False
@@ -250,6 +254,9 @@ class AdvancedCacheManager:
                 "data_type": data_type,
                 "version": config.version,
             }
+            # Issue #1378: Store predicate metadata for scoped invalidation
+            if predicates:
+                cache_entry["predicates"] = predicates
 
             serialized_data = json.dumps(cache_entry, default=str)
             await self.redis_client.setex(cache_key, ttl, serialized_data)
@@ -326,6 +333,62 @@ class AdvancedCacheManager:
 
         except Exception as e:
             logger.error("Error invalidating cache for %s: %s", data_type, e)
+            return 0
+
+    async def invalidate_by_predicates(
+        self,
+        data_type: str,
+        predicates: List[Dict[str, str]],
+    ) -> int:
+        """Invalidate only cache entries matching predicate filters. Issue #1378.
+
+        Scans entries of the given data_type and deletes only those whose
+        stored predicates overlap with the supplied invalidation predicates.
+        """
+        await self._ensure_redis_client()
+        if not self.redis_client or not predicates:
+            return 0
+        try:
+            from services.predicate_cache_invalidation import (
+                CachePredicate,
+                PredicateSet,
+                PredicateType,
+            )
+
+            inv_preds = [
+                CachePredicate(
+                    predicate_type=PredicateType(p["type"]),
+                    key=p["key"],
+                    value=p["value"],
+                )
+                for p in predicates
+            ]
+            pattern = f"{self.cache_prefix}{data_type}:*"
+            keys_to_delete = []
+            async for key in self.redis_client.scan_iter(match=pattern):
+                raw = await self.redis_client.get(key)
+                if not raw:
+                    continue
+                entry = json.loads(raw if isinstance(raw, str) else raw.decode("utf-8"))
+                entry_preds = entry.get("predicates", [])
+                if not entry_preds:
+                    continue
+                pset = PredicateSet.from_dict(entry_preds)
+                if pset.matches_any(inv_preds):
+                    keys_to_delete.append(key)
+
+            if keys_to_delete:
+                deleted = await self.redis_client.delete(*keys_to_delete)
+                logger.info(
+                    "Predicate INVALIDATE: %d/%d entries for %s",
+                    deleted,
+                    len(keys_to_delete),
+                    data_type,
+                )
+                return deleted
+            return 0
+        except Exception as e:
+            logger.error("Predicate invalidation error for %s: %s", data_type, e)
             return 0
 
     async def _update_stats(self, data_type: str, hit: bool):
