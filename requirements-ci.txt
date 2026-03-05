@@ -10,10 +10,10 @@
 # ===== CORE FRAMEWORK =====
 fastapi==0.115.9
 starlette==0.45.3
-python-multipart==0.0.20
+python-multipart==0.0.22
 uvicorn==0.35.0
 requests==2.32.4
-aiohttp==3.12.15
+aiohttp==3.13.3
 aiofiles==24.1.0
 aiosqlite==0.21.0
 beautifulsoup4==4.13.4
@@ -43,9 +43,9 @@ playwright==1.54.0
 
 # ===== DOCUMENT PROCESSING =====
 python-docx==1.1.2
-pypdf==6.0.0
+pypdf==6.7.5
 markdown==3.8.2
-nltk==3.9.1
+nltk==3.9.3
 
 # ===== GUI & AUTOMATION =====
 pyautogui==0.9.54
@@ -60,7 +60,7 @@ markdownify==1.2.0
 langchain==0.3.26
 langchain-community==0.3.27
 langchain-core==0.3.68
-langchain-text-splitters==0.3.8
+langchain-text-splitters==0.3.9
 langsmith==0.4.5
 llama-index-core==0.12.52
 llama-index-llms-ollama==0.6.2
