@@ -10,7 +10,7 @@
 prometheus-client>=0.20.0
 
 # Web framework
-fastapi>=0.109.0
+fastapi>=0.125.0                # SECURITY UPDATE - requires starlette >=0.52.1
 uvicorn[standard]>=0.27.0
 
 # Database - PostgreSQL (Issue #786)
@@ -27,7 +27,7 @@ typing_extensions>=4.0.0  # For Python 3.8 compatibility
 python-jose[cryptography]>=3.3.0
 passlib[bcrypt]>=1.7.4
 bcrypt>=4.0.0,<5.0.0  # bcrypt 5.0.0 incompatible with passlib
-python-multipart>=0.0.6
+python-multipart>=0.0.22          # SECURITY UPDATE - arbitrary file write fix
 
 # Async utilities
 aiofiles>=23.2.0

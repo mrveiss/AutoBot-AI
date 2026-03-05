@@ -1,7 +1,7 @@
 -e ../autobot-shared
 
 # Core
-fastapi>=0.100.0
+fastapi>=0.125.0                # SECURITY UPDATE - requires starlette >=0.52.1
 uvicorn>=0.23.0
 python-dotenv>=1.0.0
 aiofiles>=23.0.0
@@ -36,7 +36,7 @@ llama-index-embeddings-ollama>=0.1.0,<0.2.0  # Ollama embeddings (older API)
 llama-index-vector-stores-chroma>=0.1.0,<0.2.0  # ChromaDB vector store (older API)
 # LangChain 1.x ecosystem — pinned to 0.3.x minor to prevent drift (#1047)
 langchain>=0.3.0,<0.4.0               # Issue #1043: Upgraded for LangGraph compatibility
-langchain-core>=0.3.0,<0.4.0          # Issue #1043: Core abstractions for LangGraph
+langchain-core>=0.3.81,<0.4.0         # Issue #1043 + SECURITY UPDATE (injection + SSRF)
 langchain-community>=0.3.0,<0.4.0     # Issue #1043: Community integrations
 langchain-ollama>=0.3.0,<0.4.0        # Issue #1047: ChatOllama for QA chain (replaces legacy Ollama)
 langgraph>=1.0.0,<2.0.0               # Issue #1043: StateGraph for chat orchestration
@@ -49,9 +49,9 @@ PyYAML>=6.0            # SKILL.md frontmatter parsing (Phase 3 sync engine)
 praw>=7.7.0             # Reddit OAuth API for CommunityGrowthSkill
 
 # Media processing pipelines (Issue #932)
-aiohttp>=3.9.0          # Async HTTP client for link pipeline
+aiohttp>=3.13.3         # Async HTTP client - SECURITY UPDATE (7 CVE fixes)
 beautifulsoup4>=4.12.0  # HTML parsing for link pipeline
-Pillow>=10.0.0          # Image loading and EXIF extraction for image pipeline
+Pillow>=12.1.1          # Image processing - SECURITY UPDATE (OOB write fix)
 # Optional (install separately for full media support):
 # opencv-python>=4.8.0   # Frame extraction for video pipeline
 # transformers>=4.30.0   # Whisper transcription for audio pipeline
