@@ -142,16 +142,54 @@ class LLMHandlerMixin:
             logger.warning("Personality profile load failed: %s", exc)
             return ""
 
-    def _get_system_prompt(self) -> str:
+    def _resolve_language(self, request_language=None):
+        """Resolve response language from request, personality, or default.
+
+        Issue #1325: Priority order:
+        1. Per-message language param (highest)
+        2. Personality profile language_code
+        3. Default: 'en'
+        """
+        if request_language:
+            return request_language
+        try:
+            from services.personality_service import get_personality_manager
+
+            profile = get_personality_manager().get_active_profile()
+            if profile and profile.language_code:
+                return profile.language_code
+        except Exception:
+            pass
+        return "en"
+
+    def _get_language_instruction(self, language_code):
+        """Build a language instruction for the system prompt.
+
+        Issue #1325: Returns empty string for English (default).
+        """
+        if not language_code or language_code == "en":
+            return ""
+        from services.personality_service import SUPPORTED_LANGUAGES
+
+        lang_name = SUPPORTED_LANGUAGES.get(language_code, language_code)
+        return (
+            f"\n\n**Response Language:** Always respond in "
+            f"{lang_name} ({language_code})."
+        )
+
+    def _get_system_prompt(self, language=None) -> str:
         """Get system prompt with optional personality preamble.
 
         Issue #964: Personality preamble prepended when a profile is active.
+        Issue #1325: Appends language instruction when non-English.
         """
         preamble = self._get_personality_preamble()
+        resolved_lang = self._resolve_language(language)
+        lang_instruction = self._get_language_instruction(resolved_lang)
         try:
             prompt = get_prompt("chat.system_prompt_simple")
             logger.debug("[ChatWorkflowManager] Loaded simplified system prompt")
-            return preamble + prompt
+            return preamble + prompt + lang_instruction
         except Exception as e:
             logger.error("Failed to load system prompt from file: %s", e)
             return (
@@ -160,6 +198,7 @@ class LLMHandlerMixin:
 <TOOL_CALL name="execute_command" params='{"command":"cmd"}'>desc</TOOL_CALL>
 
 NEVER teach commands - ALWAYS execute them."""
+                + lang_instruction
             )
 
     def _build_conversation_context(self, session: WorkflowSession) -> str:
@@ -276,9 +315,16 @@ NEVER teach commands - ALWAYS execute them."""
             )
 
     async def _prepare_llm_request_params(
-        self, session: WorkflowSession, message: str, use_knowledge: bool = True
+        self,
+        session: WorkflowSession,
+        message: str,
+        use_knowledge: bool = True,
+        language: str = None,
     ) -> Dict[str, Any]:
-        """Prepare LLM request parameters including endpoint, model, and prompt."""
+        """Prepare LLM request parameters including endpoint, model, and prompt.
+
+        Issue #1325: Accepts language for system prompt resolution.
+        """
         selected_model = self._get_selected_model()
         # Issue #1214: Try SLM service discovery first (fleet-managed endpoint),
         # then fall back to local config-based resolution (#1070 model routing).
@@ -289,7 +335,7 @@ NEVER teach commands - ALWAYS execute them."""
             ollama_endpoint = slm_base
         else:
             ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
-        system_prompt = self._get_system_prompt()
+        system_prompt = self._get_system_prompt(language=language)
         conversation_context = self._build_conversation_context(session)
 
         # Knowledge retrieval for RAG

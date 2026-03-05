@@ -328,6 +328,11 @@ class ChatMessage(BaseModel):
     metadata: Optional[Metadata] = Field(
         default_factory=dict, description="Additional metadata"
     )
+    language: Optional[str] = Field(
+        None,
+        description="Preferred response language code (e.g. 'en', 'es', 'de'). "
+        "Overrides personality language when set.",
+    )
 
 
 class ChatResponse(BaseModel):
@@ -366,6 +371,12 @@ class EnhancedChatMessage(BaseModel):
     message_type: Optional[str] = Field("text", description="Message type")
     metadata: Optional[Metadata] = Field(
         default_factory=dict, description="Additional metadata"
+    )
+
+    language: Optional[str] = Field(
+        None,
+        description="Preferred response language code (e.g. 'en', 'es', 'de'). "
+        "Overrides personality language when set.",
     )
 
     # AI Stack specific fields
@@ -1126,12 +1137,18 @@ async def send_chat_message_by_id(
     chat_workflow_manager = await get_chat_workflow_manager(request)
     _validate_chat_services(chat_history_manager, chat_workflow_manager)
 
+    # Issue #1325: Inject language into context for system prompt resolution
+    context = request_data.get("context", {})
+    language = request_data.get("language")
+    if language:
+        context["language"] = language
+
     return _create_streaming_response(
         _stream_chat_workflow_messages(
             chat_workflow_manager,
             chat_id,
             message,
-            request_data.get("context", {}),
+            context,
             request_id,
         )
     )

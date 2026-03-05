@@ -2671,8 +2671,12 @@ before summarizing.
         self._register_user_message_in_history(session, message)
 
         use_knowledge = context.get("use_knowledge", True) if context else True
+        # Issue #1325: Extract language from context for system prompt
+        language = context.get("language") if context else None
+        if language:
+            session.metadata["language"] = language
         llm_params = await self._prepare_llm_request_params(
-            session, message, use_knowledge=use_knowledge
+            session, message, use_knowledge=use_knowledge, language=language
         )
 
         logger.info(
