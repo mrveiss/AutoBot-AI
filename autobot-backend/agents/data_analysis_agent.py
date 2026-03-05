@@ -96,7 +96,7 @@ class DataAnalysisAgent(StandardizedAgent):
         try:
             logger.info("Data Analysis Agent processing: %s...", request_text[:50])
             messages = [
-                {"role": "system", "content": self._get_system_prompt()},
+                {"role": "system", "content": self._get_localized_system_prompt()},
                 {"role": "user", "content": request_text},
             ]
             response = await self.llm_interface.chat_completion(

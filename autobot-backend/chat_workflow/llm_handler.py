@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 from async_chat_workflow import WorkflowMessage
 from constants.model_constants import ModelConstants
 from dependencies import global_config_manager
-from prompt_manager import get_prompt
+from prompt_manager import get_language_instruction, get_prompt, resolve_language
 
 from autobot_shared.http_client import get_http_client
 
@@ -143,39 +143,18 @@ class LLMHandlerMixin:
             return ""
 
     def _resolve_language(self, request_language=None):
-        """Resolve response language from request, personality, or default.
+        """Resolve response language. Delegates to prompt_manager.
 
-        Issue #1325: Priority order:
-        1. Per-message language param (highest)
-        2. Personality profile language_code
-        3. Default: 'en'
+        Issue #1327: Moved to shared utility in prompt_manager.
         """
-        if request_language:
-            return request_language
-        try:
-            from services.personality_service import get_personality_manager
-
-            profile = get_personality_manager().get_active_profile()
-            if profile and profile.language_code:
-                return profile.language_code
-        except Exception:
-            pass
-        return "en"
+        return resolve_language(request_language)
 
     def _get_language_instruction(self, language_code):
-        """Build a language instruction for the system prompt.
+        """Build language instruction. Delegates to prompt_manager.
 
-        Issue #1325: Returns empty string for English (default).
+        Issue #1327: Moved to shared utility in prompt_manager.
         """
-        if not language_code or language_code == "en":
-            return ""
-        from services.personality_service import SUPPORTED_LANGUAGES
-
-        lang_name = SUPPORTED_LANGUAGES.get(language_code, language_code)
-        return (
-            f"\n\n**Response Language:** Always respond in "
-            f"{lang_name} ({language_code})."
-        )
+        return get_language_instruction(language_code)
 
     def _get_system_prompt(self, language=None) -> str:
         """Get system prompt with optional personality preamble.
