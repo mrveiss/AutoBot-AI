@@ -88,6 +88,7 @@ async def _synthesize_and_stream(
     text: str,
     cancel_event: asyncio.Event,
     voice_id: str = "",
+    language: str = "",
 ) -> None:
     """Synthesize TTS for text and stream audio chunks to client.
 
@@ -105,7 +106,9 @@ async def _synthesize_and_stream(
 
         try:
             tts = get_tts_client()
-            wav_bytes = await tts.synthesize(chunk_text, voice_id=voice_id)
+            wav_bytes = await tts.synthesize(
+                chunk_text, voice_id=voice_id, language=language
+            )
             audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
 
             if cancel_event.is_set():
@@ -143,20 +146,21 @@ async def _tts_queue_worker(
 ) -> None:
     """Drain sentence queue, synthesizing and streaming each sequentially.
 
-    Runs as background task per WS connection. Receives (text, voice_id)
-    tuples; None is the flush sentinel that triggers tts_end.
+    Runs as background task per WS connection. Receives
+    (text, voice_id, language) tuples; None is the flush sentinel
+    that triggers tts_end.
     """
     while True:
         item = await queue.get()
         if item is None:
             await _send_json(ws, {"type": "tts_end"})
             continue
-        text, voice_id = item
+        text, voice_id, language = item
         if cancel_event.is_set():
             continue
         try:
             tts = get_tts_client()
-            wav_bytes = await tts.synthesize(text, voice_id=voice_id)
+            wav_bytes = await tts.synthesize(text, voice_id=voice_id, language=language)
             if cancel_event.is_set():
                 continue
             audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
@@ -200,6 +204,7 @@ async def _start_tts_stream(
     set_state_fn,
     get_state_fn,
     voice_id: str = "",
+    language: str = "",
 ) -> Optional[asyncio.Task]:
     """Start TTS synthesis and stream audio to client (#1031)."""
     if not text:
@@ -207,7 +212,13 @@ async def _start_tts_stream(
     cancel_event.clear()
     await set_state_fn("speaking")
     task = asyncio.create_task(
-        _synthesize_and_stream(ws, text, cancel_event, voice_id=voice_id)
+        _synthesize_and_stream(
+            ws,
+            text,
+            cancel_event,
+            voice_id=voice_id,
+            language=language,
+        )
     )
 
     async def _on_done(t: asyncio.Task) -> None:
@@ -283,6 +294,7 @@ async def _handle_ws_message(
             ctx["set_state"],
             ctx["get_state"],
             voice_id=msg.get("voice_id", ""),
+            language=msg.get("language", ""),
         )
         if result is not None:
             tts_task = result
@@ -290,8 +302,9 @@ async def _handle_ws_message(
     elif msg_type == "speak_sentence":
         text = msg.get("text", "").strip()
         voice_id = msg.get("voice_id", "")
+        language = msg.get("language", "")
         if text:
-            await ctx["sentence_queue"].put((text, voice_id))
+            await ctx["sentence_queue"].put((text, voice_id, language))
 
     elif msg_type == "flush":
         await ctx["sentence_queue"].put(None)  # sentinel

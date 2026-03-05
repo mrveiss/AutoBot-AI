@@ -211,10 +211,14 @@ export function useVoiceOutput() {
 
     try {
       const { effectiveVoiceId } = useVoiceProfiles()
+      const language = localStorage.getItem('autobot-language') || ''
       const formData = new FormData()
       formData.append('text', text)
       if (effectiveVoiceId.value) {
         formData.append('voice_id', effectiveVoiceId.value)
+      }
+      if (language) {
+        formData.append('language', language)
       }
       const response = await fetchWithAuth('/api/voice/synthesize', {
         method: 'POST',
@@ -250,10 +254,12 @@ export function useVoiceOutput() {
     try {
       const ws = await _connectTtsWs()
       const { effectiveVoiceId } = useVoiceProfiles()
+      const language = localStorage.getItem('autobot-language') || ''
       ws.send(JSON.stringify({
         type: 'speak_sentence',
         text: text.trim(),
         voice_id: effectiveVoiceId.value || '',
+        language,
       }))
     } catch {
       logger.warn('TTS WS unavailable, falling back to HTTP speak()')

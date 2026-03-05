@@ -107,6 +107,7 @@ async def voice_synthesize_api(
     request: Request,
     text: str = Form(...),
     voice_id: str = Form(""),
+    language: str = Form(""),
     user_role: str = Form("user"),
 ):
     """Synthesize speech via Pocket TTS worker. Returns audio/wav stream."""
@@ -121,7 +122,7 @@ async def voice_synthesize_api(
         )
 
     tts = get_tts_client()
-    wav_bytes = await tts.synthesize(text, voice_id=voice_id)
+    wav_bytes = await tts.synthesize(text, voice_id=voice_id, language=language)
     security_layer.audit_log(
         "voice_synthesize", user_role, "success", {"text_preview": text[:50]}
     )
