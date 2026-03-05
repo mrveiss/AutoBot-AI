@@ -8,6 +8,8 @@ Issue #208: FastAPI endpoints for code pattern detection and optimization.
 Issue #1304: Migrated to shared BackgroundTaskManager.
 """
 
+import asyncio
+import json
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -22,7 +24,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Pattern Analysis"])
 
 # Shared background task manager (#1304)
-_manager = BackgroundTaskManager(redis_prefix="pattern_task:")
+# Timeout raised to 1800s (30min) — batched analysis on ~2000 files needs time
+_manager = BackgroundTaskManager(redis_prefix="pattern_task:", task_timeout=1800)
+
+# Redis key prefix for analysis checkpoints
+_CHECKPOINT_PREFIX = "pattern_checkpoint:"
+# Overall analysis timeout (30 minutes)
+_ANALYSIS_TIMEOUT = 1800
 
 
 class PatternAnalysisRequest(BaseModel):
@@ -61,6 +69,7 @@ class PatternAnalysisStatus(BaseModel):
     error: Optional[str] = None
     reason: Optional[str] = None  # orphaned, timeout, manual (#1250)
     result: Optional[Dict[str, Any]] = None
+    partial_results: Optional[Dict[str, Any]] = None
 
 
 class PatternSummary(BaseModel):
@@ -75,8 +84,69 @@ class PatternSummary(BaseModel):
     complexity_score: str
 
 
+async def _get_checkpoint_redis():
+    """Get async Redis client for checkpoints."""
+    try:
+        from autobot_shared.redis_client import get_redis_client
+
+        return await get_redis_client(database="analytics", async_client=True)
+    except Exception:
+        return None
+
+
+async def _save_checkpoint(
+    task_id: str, phase: str, batch_idx: int, partial_results: dict
+) -> None:
+    """Save analysis checkpoint to Redis for resume capability."""
+    redis = await _get_checkpoint_redis()
+    if not redis:
+        return
+    try:
+        data = {
+            "phase": phase,
+            "batch_idx": batch_idx,
+            "partial_results": partial_results,
+        }
+        await redis.set(
+            f"{_CHECKPOINT_PREFIX}{task_id}",
+            json.dumps(data, default=str),
+            ex=86400,
+        )
+    except Exception as exc:
+        logger.debug("Checkpoint save failed (non-fatal): %s", exc)
+
+
+async def _load_checkpoint(task_id: str) -> Optional[Dict[str, Any]]:
+    """Load analysis checkpoint from Redis."""
+    redis = await _get_checkpoint_redis()
+    if not redis:
+        return None
+    try:
+        data = await redis.get(f"{_CHECKPOINT_PREFIX}{task_id}")
+        if data:
+            return json.loads(data)
+    except Exception as exc:
+        logger.debug("Checkpoint load failed (non-fatal): %s", exc)
+    return None
+
+
+async def _clear_checkpoint(task_id: str) -> None:
+    """Remove checkpoint after successful completion."""
+    redis = await _get_checkpoint_redis()
+    if not redis:
+        return
+    try:
+        await redis.delete(f"{_CHECKPOINT_PREFIX}{task_id}")
+    except Exception:
+        pass
+
+
 async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
-    """Run pattern analysis in background (#1304)."""
+    """Run batched pattern analysis with checkpointing (#1304).
+
+    Processes files in batches of 50 with Redis checkpoints after each
+    batch.  Overall timeout prevents zombie tasks.
+    """
     try:
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
@@ -85,20 +155,44 @@ async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
         async def _on_progress(step: str, progress: float) -> None:
             await _manager.update_progress(task_id, step, progress)
 
+        async def _on_checkpoint(phase: str, batch_idx: int, partial: dict) -> None:
+            await _save_checkpoint(task_id, phase, batch_idx, partial)
+
         analyzer = CodePatternAnalyzer(
             enable_clone_detection=request.enable_clone_detection,
-            enable_anti_pattern_detection=request.enable_anti_pattern_detection,
+            enable_anti_pattern_detection=(request.enable_anti_pattern_detection),
             enable_regex_detection=request.enable_regex_detection,
-            enable_complexity_analysis=request.enable_complexity_analysis,
+            enable_complexity_analysis=(request.enable_complexity_analysis),
             similarity_threshold=request.similarity_threshold,
         )
 
-        report = await analyzer.analyze_directory(
-            request.path, progress_callback=_on_progress
+        # Check for existing checkpoint to resume from
+        checkpoint = await _load_checkpoint(task_id)
+
+        report = await asyncio.wait_for(
+            analyzer.analyze_directory(
+                request.path,
+                progress_callback=_on_progress,
+                checkpoint_callback=_on_checkpoint,
+                resume_from=checkpoint,
+            ),
+            timeout=_ANALYSIS_TIMEOUT,
         )
 
+        await _clear_checkpoint(task_id)
         await _manager.complete_task(task_id, report.to_dict())
 
+    except asyncio.TimeoutError:
+        logger.error(
+            "Pattern analysis timed out after %ds for task %s",
+            _ANALYSIS_TIMEOUT,
+            task_id,
+        )
+        await _manager.fail_task(
+            task_id,
+            f"Analysis timed out after {_ANALYSIS_TIMEOUT}s",
+            reason="timeout",
+        )
     except Exception as e:
         logger.error("Pattern analysis failed: %s", e)
         await _manager.fail_task(task_id, str(e))
@@ -120,13 +214,26 @@ async def start_pattern_analysis(
     response_model=PatternAnalysisStatus,
 )
 async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
-    """Get status of a pattern analysis task."""
+    """Get status of a pattern analysis task.
+
+    When the task is still running, loads the latest checkpoint from
+    Redis and includes partial_results so the frontend can render
+    discovered patterns incrementally.
+    """
     task = await _manager.get_status(task_id)
     if task is None:
         raise HTTPException(
             status_code=404,
             detail=f"Analysis task {task_id} not found",
         )
+
+    # Load partial results from checkpoint while analysis is running
+    partial = None
+    if task["status"] in ("running", "pending"):
+        checkpoint = await _load_checkpoint(task_id)
+        if checkpoint and checkpoint.get("partial_results"):
+            partial = checkpoint["partial_results"]
+
     return PatternAnalysisStatus(
         task_id=task_id,
         status=task["status"],
@@ -137,6 +244,7 @@ async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
         error=task.get("error"),
         reason=task.get("reason"),
         result=task.get("result"),
+        partial_results=partial,
     )
 
 
@@ -231,7 +339,9 @@ async def get_pattern_summary(
 
 
 # Background task manager for pattern summary (#1304)
-_summary_manager = BackgroundTaskManager(redis_prefix="patsummary_task:")
+_summary_manager = BackgroundTaskManager(
+    redis_prefix="patsummary_task:", task_timeout=1800
+)
 
 
 async def _run_summary_analysis(task_id: str, path: str) -> None:
@@ -244,8 +354,15 @@ async def _run_summary_analysis(task_id: str, path: str) -> None:
             enable_embedding_storage=False,
         )
 
-        await _summary_manager.update_progress(task_id, "Analyzing patterns", 30.0)
-        report = await analyzer.analyze_directory(path)
+        async def _on_progress(step: str, progress: float) -> None:
+            # Scale inner progress (0-100) to outer range (30-80)
+            scaled = 30.0 + (progress / 100.0) * 50.0
+            await _summary_manager.update_progress(task_id, step, scaled)
+
+        report = await asyncio.wait_for(
+            analyzer.analyze_directory(path, progress_callback=_on_progress),
+            timeout=_ANALYSIS_TIMEOUT,
+        )
 
         await _summary_manager.update_progress(task_id, "Building summary", 80.0)
         result = {
@@ -254,10 +371,17 @@ async def _run_summary_analysis(task_id: str, path: str) -> None:
             "regex_opportunities": len(report.regex_opportunities),
             "complexity_hotspots": len(report.complexity_hotspots),
             "modularization_suggestions": len(report.modularization_suggestions),
-            "potential_loc_reduction": (report.potential_loc_reduction),
+            "potential_loc_reduction": report.potential_loc_reduction,
             "complexity_score": report.complexity_score,
         }
         await _summary_manager.complete_task(task_id, result)
+    except asyncio.TimeoutError:
+        logger.error("Pattern summary timed out after %ds", _ANALYSIS_TIMEOUT)
+        await _summary_manager.fail_task(
+            task_id,
+            f"Summary timed out after {_ANALYSIS_TIMEOUT}s",
+            reason="timeout",
+        )
     except Exception as e:
         logger.error("Pattern summary analysis failed: %s", e)
         await _summary_manager.fail_task(task_id, str(e))

@@ -288,11 +288,49 @@ class BackgroundTaskManager:
         await self._save_to_redis(task_id)
 
     async def get_status(self, task_id: str) -> Optional[dict]:
-        """Return status dict (memory-first, Redis fallback)."""
+        """Return status dict (memory-first, Redis fallback).
+
+        When loading from Redis, auto-detects zombie tasks (running
+        longer than ``_timeout``) and marks them as failed so the
+        frontend sees an error instead of infinite progress.
+        """
         task = self._tasks.get(task_id)
         if task:
             return {k: v for k, v in task.items() if k != "params"}
-        return await self._load_from_redis(task_id)
+        redis_task = await self._load_from_redis(task_id)
+        if redis_task and redis_task.get("status") == "running":
+            started = redis_task.get("started_at")
+            if started:
+                try:
+                    elapsed = (
+                        datetime.now() - datetime.fromisoformat(started)
+                    ).total_seconds()
+                    if elapsed > self._timeout:
+                        redis_task["status"] = "failed"
+                        redis_task["error"] = "Task timed out (auto-recovered)"
+                        redis_task["reason"] = "timeout"
+                        redis_task["completed_at"] = datetime.now().isoformat()
+                        # Persist the cleanup to Redis
+                        redis = await self._get_redis()
+                        if redis:
+                            try:
+                                await redis.set(
+                                    f"{self._prefix}{task_id}",
+                                    json.dumps(redis_task, default=str),
+                                    ex=self._ttl,
+                                )
+                            except Exception:
+                                pass
+                        logger.info(
+                            "Auto-recovered zombie task %s "
+                            "(running %.0fs, timeout %ds)",
+                            task_id,
+                            elapsed,
+                            self._timeout,
+                        )
+                except (ValueError, TypeError):
+                    pass
+        return redis_task
 
     async def list_tasks(self) -> dict:
         """Return summary of all tracked tasks."""
