@@ -269,6 +269,14 @@
       </div>
     </div>
 
+    <!-- Issue #1328: Translation Shortcut Panel -->
+    <TranslationShortcutPanel
+      v-if="showTranslatePanel"
+      :initial-text="messageText"
+      @close="showTranslatePanel = false"
+      @translation-result="handleTranslationResult"
+    />
+
     <!-- Vision Analysis Modal (#1242) -->
     <VisionAnalysisModal
       v-if="showVisionModal"
@@ -288,6 +296,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import ProgressBar from '@/components/ui/ProgressBar.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import VisionAnalysisModal from './VisionAnalysisModal.vue'
+import TranslationShortcutPanel from './TranslationShortcutPanel.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
@@ -322,6 +331,7 @@ const isVoiceRecording = ref(false)
 const isSending = ref(false)
 const showEmojiPicker = ref(false)
 const showVisionModal = ref(false)
+const showTranslatePanel = ref(false)
 const showQuickActions = ref(true)
 
 // Issue #249: Knowledge-Enhanced Chat (RAG) toggle
@@ -684,21 +694,41 @@ const insertEmoji = (emoji: typeof commonEmojis[0]) => {
   showEmojiPicker.value = false
 }
 
-const useQuickAction = (action: typeof quickActions[0]) => {
-  const actionTexts = {
-    help: 'Can you help me with ',
-    summarize: 'Please summarize our conversation',
-    translate: 'Please translate the following text: ',
-    explain: 'Can you explain '
+const useQuickAction = (action: { id: string; label: string; icon: string; description: string }) => {
+  // Issue #1328: Translate opens the translation panel
+  if (action.id === 'translate') {
+    showTranslatePanel.value = !showTranslatePanel.value
+    return
   }
 
-  const text = actionTexts[action.id as keyof typeof actionTexts] || ''
+  const actionTexts: Record<string, string> = {
+    help: 'Can you help me with ',
+    summarize: 'Please summarize our conversation',
+    explain: 'Can you explain ',
+  }
+
+  const text = actionTexts[action.id] || ''
   messageText.value = text
 
   nextTick(() => {
     messageInput.value?.focus()
     const textarea = messageInput.value!
     textarea.setSelectionRange(text.length, text.length)
+  })
+}
+
+// Issue #1328: Handle translation result — display in chat
+const handleTranslationResult = (payload: {
+  originalText: string
+  translatedText: string
+  targetLanguage: string
+}) => {
+  showTranslatePanel.value = false
+  store.addMessage({
+    content: `**${payload.targetLanguage}:**\n${payload.translatedText}`,
+    sender: 'assistant',
+    status: 'sent',
+    type: 'message',
   })
 }
 
