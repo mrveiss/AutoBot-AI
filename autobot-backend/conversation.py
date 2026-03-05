@@ -17,7 +17,6 @@ from agents import get_kb_librarian
 from agents.classification_agent import ClassificationAgent, ClassificationResult
 from agents.llm_failsafe_agent import get_robust_llm_response
 from autobot_types import TaskComplexity
-from config import config as global_config_manager
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
 from research_browser_manager import research_browser_manager
@@ -28,6 +27,8 @@ from source_attribution import (
     source_manager,
     track_source,
 )
+
+from config import config as global_config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -452,8 +453,13 @@ class Conversation:
         return "\n".join(research_lines)
 
     def _get_system_prompt(self) -> str:
-        """Get the system prompt for response generation."""
-        return (
+        """Get the system prompt for response generation.
+
+        Issue #1327: Appends language instruction when non-English.
+        """
+        from prompt_manager import get_language_instruction, resolve_language
+
+        base = (
             "You are AutoBot, an intelligent AI assistant. You have access to a "
             "knowledge base and can conduct external research.\n\n"
             "IMPORTANT INSTRUCTIONS:\n"
@@ -466,6 +472,8 @@ class Conversation:
             "5. Be conversational but accurate\n"
             "6. If you don't know something and it's not in KB or research, say so clearly"
         )
+        lang_code = resolve_language()
+        return base + get_language_instruction(lang_code)
 
     def _build_user_prompt(
         self, user_message: str, kb_context: str, research_context: str
