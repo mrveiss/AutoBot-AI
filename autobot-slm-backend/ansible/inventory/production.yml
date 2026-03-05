@@ -129,7 +129,6 @@ all:
             disk_gb: 50      # LVM expansion target
           services:
             - npu-worker
-            - tts-worker
             - openvino
             - python3
             - hardware-acceleration
@@ -141,8 +140,6 @@ all:
       vars:
         # NPU Worker-specific configuration
         npu_worker_port: 8081
-        # TTS Worker (#928)
-        tts_worker_port: 8082
         openvino_device: "AUTO"  # Auto-detect NPU > GPU > CPU
         python_version: "3.11"
         worker_threads: 2
@@ -190,12 +187,15 @@ all:
           services:
             - ai-stack
             - chromadb
+            - tts-worker
           hardware_features:
             gpu_passthrough: true
       vars:
         # AI/ML-specific configuration
         ai_stack_port: 8080
         ollama_port: 11434
+        # TTS Worker (#928, migrated from .22 — #1394)
+        tts_worker_port: 8082
         model_cache_size: "10gb"
         inference_threads: 4
 

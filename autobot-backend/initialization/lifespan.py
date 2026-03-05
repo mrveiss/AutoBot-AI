@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
+from config import ConfigManager
 from fastapi import FastAPI
 from knowledge_factory import get_or_create_knowledge_base
 from security_layer import SecurityLayer
@@ -31,7 +32,6 @@ from autobot_shared.tracing import (
     instrument_redis,
     shutdown_tracing,
 )
-from config import ConfigManager
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -437,9 +437,11 @@ async def _init_documentation_watcher():
 
 
 async def _run_background_doc_indexing():
-    """Background task for documentation indexing (Issue #1385).
+    """Background task for documentation indexing (#1385, #1390).
 
     Runs as a fire-and-forget task so it doesn't block startup.
+    After indexing, patches HNSW pickle metadata so subsequent
+    PersistentClient instances can load the index correctly.
     """
     try:
         from services.knowledge.doc_indexer import get_doc_indexer_service
@@ -447,13 +449,18 @@ async def _run_background_doc_indexing():
         indexer = get_doc_indexer_service()
         result = await indexer.index_all(force=False)
         logger.info(
-            "✅ Doc Index: Background indexing complete — "
-            "%d success, %d skipped, %d failed in %.1fs",
+            "Doc Index: done — %d indexed, %d skipped in %.1fs",
             result.success,
             result.skipped,
-            result.failed,
             result.elapsed_seconds,
         )
+
+        # Fix HNSW pickle format after indexing (#1390)
+        from constants.path_constants import PATH
+        from utils.chromadb_client import _fix_hnsw_pickle_format
+
+        chroma_path = PATH.PROJECT_ROOT / "data" / "chromadb"
+        _fix_hnsw_pickle_format(chroma_path)
     except Exception as e:
         logger.warning("Background doc indexing failed (non-critical): %s", e)
 
