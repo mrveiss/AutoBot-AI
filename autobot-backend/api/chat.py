@@ -1013,7 +1013,8 @@ async def _stream_chat_workflow_messages(
     """Stream chat workflow messages as SSE events (Issue #398: extracted)."""
     try:
         logger.debug("[%s] Starting stream for chat_id=%s", request_id, chat_id)
-        yield f"data: {json.dumps({'type': 'start', 'session_id': chat_id, 'request_id': request_id})}\n\n"
+        evt = {"type": "start", "session_id": chat_id, "request_id": request_id}
+        yield f"data: {json.dumps(evt)}\n\n"
 
         logger.debug("[%s] Processing message: %s...", request_id, message[:50])
         message_count = 0
@@ -1029,7 +1030,8 @@ async def _stream_chat_workflow_messages(
 
     except Exception as e:
         logger.error("[%s] Streaming error: %s", request_id, e, exc_info=True)
-        yield f"data: {json.dumps({'type': 'error', 'content': f'Error: {e}', 'request_id': request_id})}\n\n"
+        evt = {"type": "error", "content": f"Error: {e}", "request_id": request_id}
+        yield f"data: {json.dumps(evt)}\n\n"
 
 
 def _create_streaming_response(generator):
@@ -1143,9 +1145,8 @@ async def _stream_graph_resume(
 ):
     """Stream graph resume after command approval interrupt (#1043)."""
     try:
-        yield (
-            f"data: {json.dumps({'type': 'start', 'session_id': chat_id, 'request_id': request_id})}\n\n"
-        )
+        evt = {"type": "start", "session_id": chat_id, "request_id": request_id}
+        yield f"data: {json.dumps(evt)}\n\n"
 
         async for msg in chat_workflow_manager.resume_graph(
             session_id=chat_id, decision=decision
@@ -1157,9 +1158,8 @@ async def _stream_graph_resume(
 
     except Exception as e:
         logger.error("[%s] Graph resume error: %s", request_id, e, exc_info=True)
-        yield (
-            f"data: {json.dumps({'type': 'error', 'content': f'Error: {e}', 'request_id': request_id})}\n\n"
-        )
+        evt = {"type": "error", "content": f"Error: {e}", "request_id": request_id}
+        yield f"data: {json.dumps(evt)}\n\n"
 
 
 @with_error_handling(
