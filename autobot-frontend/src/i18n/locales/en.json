@@ -227,6 +227,17 @@
       "aiResponding": "AI is responding...",
       "typeMessage": "Type a message..."
     },
+    "translate": {
+      "title": "Translate Text",
+      "close": "Close translation panel",
+      "targetLanguage": "To:",
+      "textToTranslate": "Text to translate",
+      "placeholder": "Enter or paste text to translate...",
+      "detectLanguage": "Detect Language",
+      "translate": "Translate",
+      "detectedAs": "Detected: {language}",
+      "error": "Translation failed. Please try again."
+    },
     "messages": {
       "conversation": "Conversation messages",
       "aiAssistant": "AI Assistant",

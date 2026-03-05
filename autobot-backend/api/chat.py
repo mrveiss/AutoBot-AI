@@ -2051,6 +2051,97 @@ async def get_enhanced_chat_capabilities(
                 "enhanced_chat": True,
                 "ai_stack_integration": False,
                 "knowledge_base_integration": True,
-                "error": "Partial capabilities due to AI Stack unavailability",
+                "error": ("Partial capabilities due to" " AI Stack unavailability"),
             }
         )
+
+
+# ====================================================================
+# Issue #1328: Translation Shortcut Endpoint
+# ====================================================================
+
+
+class TranslateRequest(BaseModel):
+    """Request model for direct translation."""
+
+    text: str = Field(
+        ...,
+        min_length=1,
+        max_length=50000,
+        description="Text to translate",
+    )
+    target_language: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Target language name",
+    )
+    source_language: Optional[str] = Field(
+        None,
+        description="Source language (auto-detect if omitted)",
+    )
+
+
+class DetectLanguageRequest(BaseModel):
+    """Request model for language detection."""
+
+    text: str = Field(
+        ...,
+        min_length=1,
+        max_length=50000,
+        description="Text to detect language of",
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="translate_text",
+    error_code_prefix="TRANSLATE",
+)
+@router.post("/translate")
+async def translate_text(
+    body: TranslateRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Translate text via TranslationAgent (#1328)."""
+    from agents.base_agent import AgentRequest
+    from agents.translation_agent import get_translation_agent
+
+    agent = get_translation_agent()
+    req = AgentRequest(
+        request_id=str(uuid4()),
+        agent_type="translation",
+        action="translate",
+        payload={
+            "text": body.text,
+            "target_language": body.target_language,
+            "source_language": (body.source_language or "auto-detect"),
+        },
+    )
+    result = await agent.handle_translate(req)
+    return JSONResponse(content=result)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="detect_language",
+    error_code_prefix="TRANSLATE",
+)
+@router.post("/detect-language")
+async def detect_language(
+    body: DetectLanguageRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Detect language via TranslationAgent (#1328)."""
+    from agents.base_agent import AgentRequest
+    from agents.translation_agent import get_translation_agent
+
+    agent = get_translation_agent()
+    req = AgentRequest(
+        request_id=str(uuid4()),
+        agent_type="translation",
+        action="detect_language",
+        payload={"text": body.text},
+    )
+    result = await agent.handle_detect_language(req)
+    return JSONResponse(content=result)
