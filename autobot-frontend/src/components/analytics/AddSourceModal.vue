@@ -14,7 +14,7 @@
               <i :class="isEditMode ? 'fas fa-edit' : 'fas fa-plus-circle'"></i>
               {{ isEditMode ? $t('analytics.sources.editSource') : $t('analytics.sources.addCodeSource') }}
             </h3>
-            <button class="close-btn" @click="handleClose" aria-label="Close">
+            <button class="close-btn" @click="handleClose" :aria-label="$t('analytics.sources.form.close')">
               <i class="fas fa-times"></i>
             </button>
           </div>
@@ -28,7 +28,7 @@
                 id="source-name"
                 v-model="form.name"
                 class="form-input"
-                placeholder="e.g. AutoBot Main"
+                :placeholder="$t('analytics.sources.form.namePlaceholder')"
                 type="text"
                 autocomplete="off"
                 :class="{ 'form-input--error': errors.name }"
@@ -69,7 +69,7 @@
                   id="source-repo"
                   v-model="form.repo"
                   class="form-input"
-                  placeholder="owner/repository"
+                  :placeholder="$t('analytics.sources.form.repoPlaceholder')"
                   type="text"
                   autocomplete="off"
                   :class="{ 'form-input--error': errors.repo }"
@@ -83,7 +83,7 @@
                   id="source-branch"
                   v-model="form.branch"
                   class="form-input"
-                  placeholder="main"
+                  :placeholder="$t('analytics.sources.form.branchPlaceholder')"
                   type="text"
                   autocomplete="off"
                 />
@@ -121,7 +121,7 @@
                   id="source-path"
                   v-model="form.local_path"
                   class="form-input"
-                  placeholder="/home/user/projects/myapp"
+                  :placeholder="$t('analytics.sources.form.localPathPlaceholder')"
                   type="text"
                   autocomplete="off"
                   :class="{ 'form-input--error': errors.local_path }"
@@ -135,7 +135,7 @@
                   id="source-branch-local"
                   v-model="form.branch"
                   class="form-input"
-                  placeholder="main"
+                  :placeholder="$t('analytics.sources.form.branchPlaceholder')"
                   type="text"
                   autocomplete="off"
                 />

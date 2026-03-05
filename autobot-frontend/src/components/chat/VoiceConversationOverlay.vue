@@ -22,7 +22,7 @@
               </div>
               <div>
                 <h2 class="text-base font-semibold text-autobot-text-primary">
-                  Voice Chat
+                  {{ $t('chat.voice.title') }}
                 </h2>
                 <p class="text-xs text-autobot-text-muted">
                   {{ voiceConversation.stateLabel.value }}
@@ -36,11 +36,11 @@
                 :value="voiceConversation.mode.value"
                 @change="handleModeChange"
                 class="voice-overlay__mode-select"
-                aria-label="Conversation mode"
+                :aria-label="$t('chat.voice.conversationMode')"
               >
-                <option value="walkie-talkie">Walkie-talkie</option>
-                <option value="hands-free">Hands-free</option>
-                <option value="full-duplex">Full-duplex</option>
+                <option value="walkie-talkie">{{ $t('chat.voice.walkieTalkie') }}</option>
+                <option value="hands-free">{{ $t('chat.voice.handsFree') }}</option>
+                <option value="full-duplex">{{ $t('chat.voice.fullDuplex') }}</option>
               </select>
 
               <!-- WS connection indicator (full-duplex only) -->
@@ -52,14 +52,14 @@
                     voiceConversation.wsConnected.value,
                 }"
                 :title="voiceConversation.wsConnected.value
-                  ? 'Connected' : 'Disconnected'"
+                  ? $t('chat.voice.connected') : $t('chat.voice.disconnected')"
               ></div>
 
               <!-- Close -->
               <button
                 @click="close"
                 class="voice-overlay__close-btn"
-                aria-label="Close voice chat"
+                :aria-label="$t('chat.voice.closeVoiceChat')"
               >
                 <i class="fas fa-times"></i>
               </button>
@@ -73,7 +73,7 @@
               class="voice-overlay__empty"
             >
               <i class="fas fa-comments text-2xl opacity-20"></i>
-              <p>Tap the mic to start a conversation</p>
+              <p>{{ $t('chat.voice.tapMicToStart') }}</p>
             </div>
 
             <TransitionGroup name="bubble" tag="div" class="space-y-3">
@@ -94,7 +94,7 @@
                 </div>
                 <div class="voice-overlay__bubble-content">
                   <span class="voice-overlay__bubble-sender">
-                    {{ bubble.sender === 'user' ? 'You' : 'AutoBot' }}
+                    {{ bubble.sender === 'user' ? $t('chat.voice.you') : $t('chat.voice.autobot') }}
                   </span>
                   <p>{{ bubble.content }}</p>
                 </div>
@@ -132,26 +132,22 @@
               class="voice-overlay__cert-warning"
             >
               <p class="voice-overlay__cert-warning-title">
-                <i class="fas fa-lock-open mr-2"></i>Mic access blocked
+                <i class="fas fa-lock-open mr-2"></i>{{ $t('chat.voice.micBlocked') }}
               </p>
               <p class="voice-overlay__cert-warning-body">
-                Your browser requires a trusted HTTPS certificate to use the
-                microphone. To fix, choose one of:
+                {{ $t('chat.voice.certRequired') }}
               </p>
               <ol class="voice-overlay__cert-warning-steps">
+                <li>{{ $t('chat.voice.certStep1') }}</li>
                 <li>
-                  Install the <strong>AutoBot Internal CA</strong> cert as a
-                  trusted root in your OS/browser.
-                </li>
-                <li>
-                  In Chrome/Edge, open
+                  {{ $t('chat.voice.certStep2Pre') }}
                   <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code>,
-                  add <code>{{ currentOrigin }}</code>, and restart.
+                  {{ $t('chat.voice.certStep2Post', { origin: currentOrigin }) }}
                 </li>
               </ol>
               <p class="voice-overlay__cert-warning-fallback">
                 <i class="fas fa-info-circle mr-1"></i>
-                Walkie-talkie mode works without a trusted cert.
+                {{ $t('chat.voice.walkieTalkieFallback') }}
               </p>
             </div>
           </Transition>
@@ -172,7 +168,7 @@
             <!-- Silence threshold slider -->
             <div class="voice-overlay__threshold">
               <label class="voice-overlay__threshold-label">
-                Silence timeout
+                {{ $t('chat.voice.silenceTimeout') }}
               </label>
               <input
                 type="range"
@@ -242,12 +238,14 @@ import {
   ref,
   watch,
 } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+const { t } = useI18n()
 const voiceConversation = useVoiceConversation()
 const overlayRef = ref<HTMLElement | null>(null)
 const conversationRef = ref<HTMLElement | null>(null)
@@ -284,18 +282,20 @@ const micHint = computed(() => {
   switch (voiceConversation.state.value) {
     case 'listening':
       return isAutoMode.value
-        ? 'Speak naturally — auto-detects when you stop'
-        : 'Tap to stop'
+        ? t('chat.voice.hintAutoListening')
+        : t('chat.voice.hintTapToStop')
     case 'processing':
-      return isHandsFree.value ? 'Transcribing...' : 'Waiting for response...'
+      return isHandsFree.value
+        ? t('chat.voice.hintTranscribing')
+        : t('chat.voice.hintWaitingResponse')
     case 'speaking':
       return isFullDuplex.value
-        ? 'Tap or speak to interrupt'
-        : 'AutoBot is responding...'
+        ? t('chat.voice.hintInterrupt')
+        : t('chat.voice.hintResponding')
     default:
       return isAutoMode.value
-        ? 'Listening will start automatically'
-        : 'Tap to speak'
+        ? t('chat.voice.hintAutoStart')
+        : t('chat.voice.hintTapToSpeak')
   }
 })
 

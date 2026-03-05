@@ -4,7 +4,7 @@
     <div v-if="errorMessage" class="error-notification" role="alert" aria-live="assertive">
       <i class="fas fa-exclamation-circle"></i>
       <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = ''" class="close-btn" aria-label="Close error message">
+      <button @click="errorMessage = ''" class="close-btn" :aria-label="$t('knowledge.stats.closeError')">
         <i class="fas fa-times"></i>
       </button>
     </div>
@@ -81,13 +81,11 @@
         <div class="notice-content">
           <h4>{{ $t('knowledge.stats.vectorNotGenerated') }}</h4>
           <p>
-            You have <strong>{{ vectorStats.total_facts }} facts</strong> stored in the knowledge base,
-            but they haven't been vectorized yet. Vector embeddings enable semantic search and RAG capabilities.
+            {{ $t('knowledge.stats.vectorNotGeneratedDesc', { count: vectorStats.total_facts }) }}
           </p>
           <p class="notice-hint">
             <i class="fas fa-lightbulb"></i>
-            Vectors are typically generated automatically when facts are added through the proper ingestion pipeline.
-            If you imported facts manually, they may need to be re-indexed to generate embeddings.
+            {{ $t('knowledge.stats.vectorNotGeneratedHint') }}
           </p>
         </div>
       </div>

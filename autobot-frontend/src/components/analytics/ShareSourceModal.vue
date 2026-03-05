@@ -14,7 +14,7 @@
               <i class="fas fa-share-alt"></i>
               {{ $t('analytics.sources.shareSource') }}
             </h3>
-            <button class="close-btn" @click="$emit('close')" aria-label="Close">
+            <button class="close-btn" @click="$emit('close')" :aria-label="$t('analytics.sources.form.close')">
               <i class="fas fa-times"></i>
             </button>
           </div>

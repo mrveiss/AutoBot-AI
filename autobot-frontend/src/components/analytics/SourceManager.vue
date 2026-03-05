@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div v-if="visible" class="source-manager-overlay" @click.self="$emit('close')">
-      <div class="source-manager-panel" role="dialog" aria-modal="true" aria-label="Code Source Manager">
+      <div class="source-manager-panel" role="dialog" aria-modal="true" :aria-label="$t('analytics.sources.registry')">
         <!-- Panel Header -->
         <div class="panel-header">
           <div class="panel-title">
@@ -17,7 +17,7 @@
               <i class="fas fa-plus"></i>
               {{ $t('analytics.sources.addSource') }}
             </button>
-            <button class="close-btn" @click="$emit('close')" aria-label="Close">
+            <button class="close-btn" @click="$emit('close')" :aria-label="$t('common.close')">
               <i class="fas fa-times"></i>
             </button>
           </div>

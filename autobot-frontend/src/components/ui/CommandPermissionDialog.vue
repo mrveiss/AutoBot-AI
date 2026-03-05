@@ -95,7 +95,7 @@
             variant="secondary"
             @click="handleDeny"
             :disabled="isProcessing"
-            aria-label="Deny">
+            :aria-label="t('ui.commandPermission.deny')">
             <i class="fas fa-times"></i>
             {{ t('ui.commandPermission.deny') }}
           </BaseButton>

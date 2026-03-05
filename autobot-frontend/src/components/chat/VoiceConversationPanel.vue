@@ -7,7 +7,7 @@
           <i class="fas fa-headset"></i>
         </div>
         <div>
-          <h3 class="text-sm font-semibold text-autobot-text-primary">Voice Chat</h3>
+          <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('chat.voice.title') }}</h3>
           <p class="text-xs text-autobot-text-muted">
             {{ voiceConversation.stateLabel.value }}
           </p>
@@ -19,11 +19,11 @@
           :value="voiceConversation.mode.value"
           @change="handleModeChange"
           class="voice-panel__mode-select"
-          aria-label="Conversation mode"
+          :aria-label="$t('chat.voice.conversationMode')"
         >
-          <option value="walkie-talkie">Walkie-talkie</option>
-          <option value="hands-free">Hands-free</option>
-          <option value="full-duplex">Full-duplex</option>
+          <option value="walkie-talkie">{{ $t('chat.voice.walkieTalkie') }}</option>
+          <option value="hands-free">{{ $t('chat.voice.handsFree') }}</option>
+          <option value="full-duplex">{{ $t('chat.voice.fullDuplex') }}</option>
         </select>
 
         <!-- WS indicator (full-duplex) -->
@@ -31,11 +31,11 @@
           v-if="voiceConversation.mode.value === 'full-duplex'"
           class="voice-panel__ws-dot"
           :class="{ 'voice-panel__ws-dot--connected': voiceConversation.wsConnected.value }"
-          :title="voiceConversation.wsConnected.value ? 'Connected' : 'Disconnected'"
+          :title="voiceConversation.wsConnected.value ? $t('chat.voice.connected') : $t('chat.voice.disconnected')"
         ></div>
 
         <!-- Close -->
-        <button @click="close" class="action-btn" title="Close voice panel">
+        <button @click="close" class="action-btn" :title="$t('chat.voice.closeVoicePanel')">
           <i class="fas fa-times text-xs"></i>
         </button>
       </div>
@@ -77,10 +77,10 @@
       class="voice-panel__cert-warning"
     >
       <p class="font-semibold text-xs">
-        <i class="fas fa-lock-open mr-1"></i>Mic blocked
+        <i class="fas fa-lock-open mr-1"></i>{{ $t('chat.voice.micBlocked') }}
       </p>
       <p class="text-xs opacity-80">
-        Trusted HTTPS cert required. Use walkie-talkie mode as fallback.
+        {{ $t('chat.voice.certRequiredShort') }}
       </p>
     </div>
 
@@ -96,7 +96,7 @@
         ></div>
       </div>
       <div class="flex items-center gap-2">
-        <label class="text-xs text-autobot-text-muted whitespace-nowrap">Silence</label>
+        <label class="text-xs text-autobot-text-muted whitespace-nowrap">{{ $t('chat.voice.silence') }}</label>
         <input
           type="range"
           min="500"
@@ -151,12 +151,14 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
 
 const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+const { t } = useI18n()
 const voiceConversation = useVoiceConversation()
 
 const isFullDuplex = computed(
@@ -213,18 +215,20 @@ const micHint = computed(() => {
   switch (voiceConversation.state.value) {
     case 'listening':
       return isAutoMode.value
-        ? 'Auto-detects when you stop'
-        : 'Tap to stop'
+        ? t('chat.voice.hintAutoDetects')
+        : t('chat.voice.hintTapToStop')
     case 'processing':
-      return isHandsFree.value ? 'Transcribing...' : 'Processing...'
+      return isHandsFree.value
+        ? t('chat.voice.hintTranscribing')
+        : t('chat.voice.hintProcessing')
     case 'speaking':
       return isFullDuplex.value
-        ? 'Tap or speak to interrupt'
-        : 'Responding...'
+        ? t('chat.voice.hintInterrupt')
+        : t('chat.voice.hintRespondingShort')
     default:
       return isAutoMode.value
-        ? 'Listening starts automatically'
-        : 'Tap to speak'
+        ? t('chat.voice.hintAutoStart')
+        : t('chat.voice.hintTapToSpeak')
   }
 })
 

@@ -265,7 +265,7 @@ const overseerAgent = computed(() => {
     autoConnect: true,
     onPlanCreated: (plan) => {
       logger.info('[Overseer] Plan created:', plan.plan_id)
-      notify('Execution plan created', 'info')
+      notify(t('chat.interface.executionPlanCreated'), 'info')
     },
     onStepUpdate: (step) => {
       logger.debug('[Overseer] Step update:', { step_number: step.step_number, status: step.status })
@@ -275,11 +275,11 @@ const overseerAgent = computed(() => {
     },
     onError: (error) => {
       logger.error('[Overseer] Error:', error)
-      notify(`Overseer error: ${error}`, 'error')
+      notify(t('chat.interface.overseerError', { error }), 'error')
     },
     onComplete: () => {
       logger.info('[Overseer] Execution complete')
-      notify('Execution completed', 'success')
+      notify(t('chat.interface.executionCompleted'), 'success')
     }
   })
 })
@@ -376,10 +376,10 @@ const sessionInfo = computed(() => {
   const sessionId = session.id  // Display full UUID
 
   if (messageCount === 0) {
-    return `Session: ${sessionId} • No messages yet`
+    return t('chat.interface.sessionNoMessages', { sessionId })
   }
 
-  return `Session: ${sessionId} • ${messageCount} message${messageCount > 1 ? 's' : ''} • Last: ${lastMessageTime}`
+  return t('chat.interface.sessionInfo', { sessionId, count: messageCount, time: lastMessageTime })
 })
 
 
@@ -415,7 +415,7 @@ const exportSession = async () => {
 
   } catch (error) {
     logger.error('Failed to export session:', error)
-    appStore.setGlobalError('Failed to export chat session')
+    appStore.setGlobalError(t('chat.interface.failedToExport'))
   }
 }
 
@@ -427,7 +427,7 @@ const clearSession = async () => {
       await controller.resetCurrentChat()
     } catch (error) {
       logger.error('Failed to clear session:', error)
-      appStore.setGlobalError('Failed to clear chat session')
+      appStore.setGlobalError(t('chat.interface.failedToClear'))
     }
   }
 }
@@ -439,7 +439,7 @@ const handleSidebarLoadingComplete = () => {
 
 const handleSidebarLoadingError = (error: any) => {
   logger.error('Sidebar loading error:', error)
-  appStore.setGlobalError('Failed to load chat sessions')
+  appStore.setGlobalError(t('chat.interface.failedToLoadSessions'))
 }
 
 const handleSidebarLoadingTimeout = () => {
@@ -452,7 +452,7 @@ const handleContentLoadingComplete = () => {
 
 const handleContentLoadingError = (error: any) => {
   logger.error('Content loading error:', error)
-  appStore.setGlobalError('Failed to load chat content')
+  appStore.setGlobalError(t('chat.interface.failedToLoadContent'))
 }
 
 const handleContentLoadingTimeout = () => {
@@ -635,7 +635,7 @@ const onCommandCommented = async (commentData: any) => {
       const result = await response.json()
 
       logger.debug('Command denied with user feedback/alternative approach')
-      notify('Feedback sent to agent', 'success')
+      notify(t('chat.interface.feedbackSent'), 'success')
     }
 
     // Close the dialog
@@ -645,7 +645,7 @@ const onCommandCommented = async (commentData: any) => {
     // The agent will receive the denial + feedback and can propose an alternative
   } catch (error) {
     logger.error('Error sending command comment/denial:', error)
-    notify('Failed to send feedback to agent', 'error')
+    notify(t('chat.interface.feedbackFailed'), 'error')
   }
 }
 
@@ -778,7 +778,7 @@ const initializeChatInterface = async () => {
       // Update connection status
       if (data.system_health && !data.system_health.error) {
         isConnected.value = data.system_health.status === 'healthy'
-        baseConnectionStatus.value = isConnected.value ? 'Connected' : 'Disconnected'
+        baseConnectionStatus.value = isConnected.value ? t('status.connected') : t('status.disconnected')
       }
 
       // Issue #671: Clear initialization state on success
@@ -803,9 +803,9 @@ const initializeChatInterface = async () => {
     // Issue #671: Set error state and show toast notification
     const errorMessage = error instanceof Error ? error.message : 'Failed to initialize chat interface'
     store.setInitializationError(errorMessage)
-    notify('Chat initialization failed. Some features may not work correctly.', 'error')
+    notify(t('chat.interface.initFailed'), 'error')
 
-    appStore.setGlobalError('Failed to initialize chat interface')
+    appStore.setGlobalError(t('chat.interface.failedToInit'))
   }
 }
 

@@ -62,7 +62,13 @@
     },
     "welcome": {
       "message": "Welcome to AutoBot."
-    }
+    },
+    "unknownError": "Unknown error",
+    "loadMore": "Load more",
+    "unknown": "Unknown",
+    "important": "Important",
+    "selectAll": "Select All",
+    "deselectAll": "Deselect All"
   },
   "chat": {
     "sendMessage": "Send a message...",
@@ -79,7 +85,21 @@
     "thinking": "Thinking...",
     "emptyState": "Send a message to begin chatting with the AI assistant.",
     "sessions": "Sessions",
-    "message": "message",
+    "message": {
+      "edit": "Edit message",
+      "copy": "Copy message",
+      "delete": "Delete message",
+      "tokens": "{count} tokens",
+      "sender": {
+        "user": "You",
+        "assistant": "AutoBot",
+        "system": "System",
+        "thought": "Thought",
+        "overseer": "Overseer",
+        "tool-code": "Code",
+        "tool-output": "Output"
+      }
+    },
     "response": "response",
     "thought": "thought",
     "planning": "planning",
@@ -160,7 +180,20 @@
       "toggleFilePanel": "Toggle file panel",
       "aiTyping": "AI is typing...",
       "startConversation": "Start a Conversation",
-      "confirmClear": "Clear all messages? This action cannot be undone."
+      "confirmClear": "Clear all messages? This action cannot be undone.",
+      "executionPlanCreated": "Execution plan created",
+      "overseerError": "Overseer error: {error}",
+      "executionCompleted": "Execution completed",
+      "feedbackSent": "Feedback sent",
+      "feedbackFailed": "Failed to send feedback",
+      "initFailed": "Initialization failed",
+      "failedToExport": "Failed to export conversation",
+      "failedToClear": "Failed to clear conversation",
+      "failedToLoadSessions": "Failed to load sessions",
+      "failedToLoadContent": "Failed to load conversation content",
+      "failedToInit": "Failed to initialize",
+      "sessionNoMessages": "Session {sessionId} - No messages yet",
+      "sessionInfo": "Session {sessionId} - {count} messages, last at {time}"
     },
     "input": {
       "retryUpload": "Retry upload",
@@ -256,7 +289,251 @@
       "addComment": "Add comment to approval decision",
       "denyCommand": "Deny command",
       "deny": "Deny",
-      "processing": "Processing approval..."
+      "processing": "Processing approval...",
+      "approveWithComment": "Approve with comment",
+      "autoApproveLabel": "Automatically approve similar commands",
+      "denyWithComment": "Deny with comment",
+      "inputRequiredFor": "Input required for",
+      "submitDecision": "Submit {decision}"
+    },
+    "browser": {
+      "title": "Browser",
+      "chatLabel": "Chat",
+      "none": "None",
+      "browserLabel": "Browser",
+      "notConnected": "Not Connected",
+      "refreshSession": "Refresh Session",
+      "connecting": "Connecting...",
+      "noChatSession": "No chat session",
+      "interactionRequired": "Interaction Required",
+      "active": "Active",
+      "connectingStatus": "Connecting",
+      "disconnected": "Disconnected",
+      "screenshot": "Browser screenshot"
+    },
+    "citations": {
+      "sources": "Sources",
+      "model": "Model:",
+      "reliabilityVerified": "Verified",
+      "reliabilityHigh": "High",
+      "reliabilityMedium": "Medium",
+      "reliabilityLow": "Low",
+      "aiTrainingData": "AI Training Data",
+      "webSource": "Web Source",
+      "knowledgeBase": "Knowledge Base"
+    },
+    "tabContent": {
+      "openInNewWindow": "Open in new window",
+      "selectVncHost": "Select a VNC host",
+      "selectVncHostDesc": "Choose a host with VNC capability to start a remote desktop session.",
+      "connectedTo": "Connected to {name}",
+      "selectSshHost": "Select an SSH host",
+      "selectSshHostDesc": "Choose a host with SSH capability to start a terminal session."
+    },
+    "deleteDialog": {
+      "title": "Delete Conversation",
+      "cannotUndo": "This action cannot be undone.",
+      "permanentDelete": "This will permanently delete this conversation and all its messages.",
+      "kbFactsCount": "{count} knowledge facts found",
+      "selectFactsToPreserve": "Select facts to preserve in the knowledge base",
+      "selectedForPreservation": "selected for preservation",
+      "loadingFacts": "Loading knowledge facts...",
+      "attachedFiles": "Attached Files",
+      "totalSize": "Total size: {size}",
+      "fileActionQuestion": "What would you like to do with the attached files?",
+      "deleteFiles": "Delete Files",
+      "deleteFilesDesc": "Permanently delete all attached files",
+      "transferToKb": "Transfer to Knowledge Base",
+      "transferToKbDesc": "Move files to the knowledge base for future reference",
+      "transferToShared": "Transfer to Shared",
+      "transferToSharedDesc": "Move files to a shared folder",
+      "kbOptions": "Knowledge Base Options",
+      "categories": "Categories",
+      "extractText": "Extract text content",
+      "sharedOptions": "Shared Folder Options",
+      "targetFolder": "Target folder",
+      "noAttachedFiles": "No attached files in this conversation.",
+      "actionSummary": "Action Summary",
+      "deleteConversation": "Delete Conversation",
+      "deleting": "Deleting...",
+      "deleteAllFacts": "Delete all {count} knowledge facts",
+      "preserveAllFacts": "Preserve all {count} knowledge facts",
+      "deletePreserveFacts": "Delete {deleteCount} facts, preserve {preserveCount} facts",
+      "deleteFilesPermanently": "Permanently delete {count} attached files",
+      "transferFilesToKb": "Transfer {count} files to knowledge base",
+      "transferFilesToShared": "Transfer {count} files to shared folder",
+      "noFileAction": "No file action required"
+    },
+    "docFilter": {
+      "categories": "Categories",
+      "loadingCategories": "Loading categories...",
+      "dev": "Dev",
+      "docs": "Docs",
+      "selectDev": "Select development category",
+      "selectDocs": "Select documentation category",
+      "clearCategoryFilters": "Clear category filters",
+      "documentationCategories": "Documentation categories",
+      "selectAllCategories": "Select all categories"
+    },
+    "docResult": {
+      "collapse": "Collapse result",
+      "expand": "Expand result",
+      "copyContent": "Copy content",
+      "insertIntoChat": "Insert into chat",
+      "openDocument": "Open document",
+      "category": {
+        "api": "API",
+        "architecture": "Architecture",
+        "guide": "Guide",
+        "tutorial": "Tutorial",
+        "reference": "Reference",
+        "example": "Example",
+        "other": "Other"
+      }
+    },
+    "docSearch": {
+      "title": "Documentation Search",
+      "searchPlaceholder": "Search documentation...",
+      "sortRelevance": "Relevance",
+      "sortDate": "Date",
+      "sortTitle": "Title",
+      "sortCategory": "Category",
+      "searching": "Searching...",
+      "noResults": "No results found",
+      "searchPrompt": "Search for documentation to find answers",
+      "quickSearches": "Quick Searches",
+      "recentDocuments": "Recent Documents",
+      "toggleSidebar": "Toggle documentation sidebar",
+      "closeSidebar": "Close documentation sidebar",
+      "searchDocumentation": "Search documentation",
+      "clearSearch": "Clear search",
+      "sortResultsBy": "Sort results by",
+      "resultsCount": "{count} result(s)"
+    },
+    "docSuggestion": {
+      "dismiss": "Dismiss suggestion",
+      "relevance": "Relevance"
+    },
+    "overseer": {
+      "executionPlan": "Execution Plan",
+      "stepsProgress": "{completed} of {total} steps",
+      "copyCommand": "Copy command",
+      "whatCommandDoes": "What this command does",
+      "running": "Running",
+      "output": "Output",
+      "whatLookingAt": "What I'm looking at",
+      "suggestedNextSteps": "Suggested next steps:",
+      "status": {
+        "pending": "Pending",
+        "running": "Running",
+        "streaming": "Streaming",
+        "explaining": "Explaining",
+        "completed": "Completed",
+        "failed": "Failed"
+      }
+    },
+    "share": {
+      "title": "Share Conversation",
+      "shareWith": "Share with (user IDs)",
+      "recipientPlaceholder": "Enter user ID and press Enter",
+      "includeKnowledge": "Include knowledge created in this conversation",
+      "loadingFacts": "Loading knowledge facts...",
+      "noFactsFound": "No knowledge facts found in this conversation.",
+      "factsSelected": "{selected} of {total} facts selected",
+      "selectAll": "Select All",
+      "deselectAll": "Deselect All",
+      "share": "Share",
+      "sharing": "Sharing..."
+    },
+    "vision": {
+      "title": "Image Analysis",
+      "dropPrompt": "Drag & drop an image or click to browse",
+      "formats": "PNG, JPG, WebP, GIF",
+      "intent": "Intent",
+      "intentAnalysis": "General Analysis",
+      "intentVisualQA": "Visual Q&A",
+      "intentAutomation": "Automation Detection",
+      "intentContentGeneration": "Content Generation",
+      "question": "Question",
+      "questionPlaceholder": "What would you like to know about this image?",
+      "analyzeImage": "Analyze Image",
+      "analyzing": "Analyzing...",
+      "analysisFailed": "Analysis failed",
+      "invalidImageFile": "Please drop a valid image file",
+      "results": "Results",
+      "description": "Description",
+      "labels": "Labels",
+      "detectedObjects": "Detected Objects",
+      "showRawJson": "Show Raw JSON",
+      "hideRawJson": "Hide Raw JSON",
+      "exportJson": "Export JSON",
+      "sendToChat": "Send to Chat",
+      "preview": "Preview"
+    },
+    "visualBrowser": {
+      "checking": "Checking...",
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "back": "Back",
+      "forward": "Forward",
+      "reload": "Reload",
+      "urlPlaceholder": "Enter URL or search…",
+      "refreshScreenshot": "Refresh Screenshot",
+      "toggleAutomation": "Toggle GUI Automation Panel",
+      "browserTitle": "Browser",
+      "startBrowsing": "Enter a URL above and press Enter or click the search icon to start browsing.",
+      "noScreenshot": "No screenshot yet — navigate to a URL to capture the browser view.",
+      "captureScreenshot": "Capture Screenshot",
+      "navigationFailed": "Navigation failed",
+      "backFailed": "Back navigation failed",
+      "forwardFailed": "Forward navigation failed",
+      "reloadFailed": "Reload failed"
+    },
+    "voice": {
+      "title": "Voice Chat",
+      "conversationMode": "Conversation mode",
+      "walkieTalkie": "Walkie-talkie",
+      "handsFree": "Hands-free",
+      "fullDuplex": "Full-duplex",
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "closeVoiceChat": "Close voice chat",
+      "closeVoicePanel": "Close voice panel",
+      "tapMicToStart": "Tap the mic to start a conversation",
+      "you": "You",
+      "autobot": "AutoBot",
+      "micBlocked": "Mic access blocked",
+      "certRequired": "Your browser requires a trusted HTTPS certificate to use the microphone. To fix, choose one of:",
+      "certRequiredShort": "Trusted HTTPS cert required. Use walkie-talkie mode as fallback.",
+      "certStep1": "Install the AutoBot Internal CA cert as a trusted root in your OS/browser.",
+      "certStep2Pre": "In Chrome/Edge, open",
+      "certStep2Post": "add {origin}, and restart.",
+      "walkieTalkieFallback": "Walkie-talkie mode works without a trusted cert.",
+      "silenceTimeout": "Silence timeout",
+      "silence": "Silence",
+      "hintAutoListening": "Speak naturally — auto-detects when you stop",
+      "hintAutoDetects": "Auto-detects when you stop",
+      "hintTapToStop": "Tap to stop",
+      "hintTranscribing": "Transcribing...",
+      "hintWaitingResponse": "Waiting for response...",
+      "hintProcessing": "Processing...",
+      "hintInterrupt": "Tap or speak to interrupt",
+      "hintResponding": "AutoBot is responding...",
+      "hintRespondingShort": "Responding...",
+      "hintAutoStart": "Listening will start automatically",
+      "hintTapToSpeak": "Tap to speak"
+    },
+    "typing": {
+      "aiAssistant": "AI Assistant",
+      "thinking": "Thinking...",
+      "processing": "Processing...",
+      "analyzing": "Analyzing...",
+      "workingOnIt": "Working on it...",
+      "understanding": "Understanding your request...",
+      "searching": "Searching knowledge base...",
+      "formulating": "Formulating response...",
+      "crafting": "Crafting detailed answer...",
+      "reviewing": "Reviewing response quality..."
     }
   },
   "settings": {
@@ -709,6 +986,31 @@
         "sectionExported": "{section} exported as {format}",
         "cacheCleared": "Cache cleared: {count} entries removed",
         "cacheClearFailed": "Cache clear failed: {error}"
+      },
+      "charts": {
+        "problemsBySeverity": "Problems by Severity",
+        "raceConditionsByCategory": "Race Conditions by Category",
+        "topFilesWithProblems": "Top Files with Most Problems",
+        "externalDependencies": "External Dependencies",
+        "packageUsageAcrossCodebase": "Package usage across codebase",
+        "modulesWithMostImports": "Modules with Most Imports",
+        "filesWithHighestDependencyCount": "Files with highest dependency count",
+        "fileImportRelationships": "File Import Relationships",
+        "clickToExpandImports": "Click to expand and see imports/importers",
+        "functionCallRelationships": "Function Call Relationships",
+        "viewFunctionCalls": "View which functions call which other functions"
+      },
+      "risk": {
+        "highComplexity": "High Complexity",
+        "complex": "Complex",
+        "frequentlyChanged": "Frequently Changed",
+        "unstable": "Unstable",
+        "largeFile": "Large File",
+        "large": "Large",
+        "hasBugHistory": "Has Bug History",
+        "bugHistory": "Bug History",
+        "noTestsDetected": "No Tests Detected",
+        "noTests": "No Tests"
       }
     },
     "patterns": {
@@ -952,7 +1254,7 @@
       }
     },
     "sources": {
-      "registry": "Code Source Registry",
+      "registry": "Code Source Manager",
       "queued": "queued",
       "addSource": "Add Source",
       "loading": "Loading sources...",
@@ -1009,7 +1311,12 @@
         "accessLevel": "Access Level",
         "cancel": "Cancel",
         "saving": "Saving...",
-        "saveChanges": "Save Changes"
+        "saveChanges": "Save Changes",
+        "close": "Close",
+        "namePlaceholder": "e.g. AutoBot Main",
+        "repoPlaceholder": "owner/repository",
+        "branchPlaceholder": "main",
+        "localPathPlaceholder": "/home/user/projects/myapp"
       }
     },
     "codeGeneration": {
@@ -1656,7 +1963,11 @@
   "knowledge": {
     "title": "Knowledge Base",
     "search": "Search knowledge...",
-    "upload": "Upload Document",
+    "upload": {
+      "tagsPlaceholder": "Enter tags separated by commas...",
+      "selectCategory": "Select category...",
+      "category": "Category"
+    },
     "documents": "Documents",
     "categories": {
       "title": "Knowledge Base Categories",
@@ -2004,7 +2315,8 @@
       "loadingContent": "Loading content...",
       "closeFileViewer": "Close file viewer",
       "facts": "facts",
-      "documentsSelected": "{count} document(s) selected"
+      "documentsSelected": "{count} document(s) selected",
+      "backToRoot": "Back to root"
     },
     "contentViewer": {
       "noFileSelected": "No file selected",
@@ -2071,7 +2383,11 @@
       "verified": "Verified",
       "pendingReview": "Pending review",
       "unverified": "Unverified",
-      "rejected": "Rejected"
+      "rejected": "Rejected",
+      "filterByCategoryAria": "Filter by category",
+      "filterByTypeAria": "Filter by entry type",
+      "sortByAria": "Sort entries by",
+      "unknown": "Unknown"
     },
     "graphView": {
       "title": "Knowledge Graph",
@@ -2256,7 +2572,9 @@
         "cancel": "Cancel",
         "next": "Next",
         "update": "Update",
-        "create": "Create"
+        "create": "Create",
+        "sqlQueryPlaceholder": "SELECT * FROM documents WHERE updated_at > :last_sync",
+        "connectorNamePlaceholder": "My Connector"
       }
     },
     "modals": {
@@ -2482,7 +2800,10 @@
       "charts": {
         "documentsByCategory": "Documents by Category",
         "documentsByType": "Documents by Type"
-      }
+      },
+      "closeError": "Close error message",
+      "vectorNotGeneratedDesc": "Vectors have not been generated yet for {count} facts in the knowledge base.",
+      "vectorNotGeneratedHint": "Click 'Generate Vectors' above to create embeddings for semantic search."
     },
     "summaries": {
       "search": {
@@ -2567,6 +2888,28 @@
         "entity": "Entity",
         "unknownTime": "Unknown time"
       }
+    },
+    "persistence": {
+      "closeDialog": "Close dialog",
+      "selectAllAria": "Select all items",
+      "deselectAllAria": "Deselect all items",
+      "addSelectedToKbAria": "Add selected to knowledge base",
+      "keepSelectedTemporarilyAria": "Keep selected temporarily",
+      "deleteSelectedAria": "Delete selected items",
+      "compileChatAria": "Compile chat to knowledge base",
+      "applyDecisionsAria": "Apply decisions",
+      "cancelAria": "Cancel"
+    },
+    "systemKnowledge": {
+      "vectorizeTooltip": "Generate vector embeddings for all knowledge base entries to enable semantic search",
+      "initializeTooltip": "Initialize system knowledge base with core documentation",
+      "reindexTooltip": "Rebuild the search index for all knowledge entries",
+      "aboutInitialize": "Scans installed system packages, reads their documentation, and creates structured knowledge entries. This provides the AI with deep understanding of your system's capabilities.",
+      "aboutReindex": "Rebuilds the search index by re-processing all existing knowledge entries. Use this after bulk imports or if search results seem stale.",
+      "aboutRefreshManPages": "Re-reads all man pages from the system and updates or creates knowledge entries. Useful after installing new packages.",
+      "aboutPopulateCommands": "Discovers available system commands and creates knowledge entries with usage information, flags, and examples.",
+      "aboutIndexDocs": "Indexes documentation files from configured directories (e.g., /usr/share/doc) into the knowledge base.",
+      "aboutWhenToUse": "Run <strong>Initialize</strong> first on new systems. Use <strong>Refresh Man Pages</strong> and <strong>Populate Commands</strong> after installing new software. <strong>Reindex</strong> if search performance degrades."
     }
   },
   "workflow": {
@@ -2953,6 +3296,86 @@
       "skipStep": "Skip This Step",
       "takingControl": "Taking Control...",
       "takeManualControl": "Take Manual Control"
+    },
+    "terminal": {
+      "chatTerminal": "Chat Terminal",
+      "systemTerminal": "System Terminal",
+      "chatSession": "Chat Session",
+      "independentTool": "Independent Tool",
+      "clearTerminal": "Clear Terminal",
+      "copyOutput": "Copy Output",
+      "enterCommandPlaceholder": "Enter command...",
+      "connecting": "Connecting...",
+      "disconnect": "Disconnect",
+      "connect": "Connect",
+      "connectedToTerminal": "Connected to terminal",
+      "terminalConnectedSuccessfully": "Terminal connected successfully",
+      "connectionError": "Connection error",
+      "connectionErrorOccurred": "Connection error occurred",
+      "connectionLost": "Connection lost",
+      "connectionClosed": "Connection closed ({code})",
+      "disconnected": "Disconnected",
+      "terminalDisconnected": "Terminal disconnected",
+      "initializingSession": "Initializing terminal session...",
+      "connectingToTerminal": "Connecting to terminal...",
+      "failedToConnect": "Failed to connect",
+      "notConnected": "Not connected to terminal",
+      "terminalCleared": "Terminal cleared",
+      "outputCopied": "Terminal output copied to clipboard",
+      "copyFailed": "Failed to copy terminal output"
+    },
+    "output": {
+      "commandOutputAria": "Terminal command output"
+    },
+    "window": {
+      "titlePrefix": "Terminal -",
+      "defaultTitle": "Terminal",
+      "emergencyKillTitle": "EMERGENCY KILL - Stop all running processes immediately",
+      "resumeAutomation": "Resume automated workflow",
+      "pauseAutomation": "Pause automation and take manual control",
+      "interruptProcess": "Send Ctrl+C to interrupt current process",
+      "reconnect": "Reconnect",
+      "clear": "Clear",
+      "closeWindow": "Close Window",
+      "session": "Session:",
+      "lines": "Lines:",
+      "shortcutHint": "Press Ctrl+C to interrupt, Ctrl+D to exit",
+      "startExampleWorkflowTitle": "Start Example Automated Workflow (for testing)",
+      "testWorkflow": "Test Workflow",
+      "downloadLogTitle": "Download Session Log",
+      "saveLog": "Save Log",
+      "shareSessionTitle": "Share Session",
+      "share": "Share",
+      "connectionLost": "Connection Lost",
+      "connectionLostMessage": "The terminal connection was lost. Would you like to reconnect?",
+      "cancel": "Cancel",
+      "destructiveCommand": "Potentially Destructive Command",
+      "commandToExecute": "Command to execute:",
+      "riskLevel": "Risk Level:",
+      "commandMay": "This command may:",
+      "riskDeleteFiles": "Delete files or directories permanently",
+      "riskModifyConfig": "Modify system configurations",
+      "riskChangePermissions": "Change file permissions or ownership",
+      "riskInstallRemove": "Install or remove software packages",
+      "confirmProceed": "Are you sure you want to proceed?",
+      "emergencyKillAllProcesses": "Emergency Kill All Processes",
+      "emergencyKillWarning": "WARNING: This will immediately terminate ALL running processes in this terminal session!",
+      "runningProcesses": "Running processes:",
+      "cannotBeUndone": "This action cannot be undone. Continue?",
+      "workflowStepConfirmation": "AI Workflow Step Confirmation",
+      "aiWantsToExecute": "The AI wants to execute the following command:",
+      "chooseAction": "Choose your action:",
+      "executeLabel": "Execute:",
+      "executeDesc": "Run this command and continue to next step",
+      "skipLabel": "Skip:",
+      "skipDesc": "Skip this command and continue to next step",
+      "takeControlLabel": "Take Control:",
+      "takeControlDesc": "Pause automation and perform manual steps",
+      "statusConnected": "Connected",
+      "statusConnecting": "Connecting...",
+      "statusDisconnected": "Disconnected",
+      "statusError": "Error",
+      "statusUnknown": "Unknown"
     }
   },
   "llm": {
@@ -3766,7 +4189,8 @@
       "failedToLoadHosts": "Failed to load hosts",
       "pleaseSelectHost": "Please select a host",
       "hostNotFound": "Selected host not found",
-      "failedToConnect": "Failed to connect to host"
+      "failedToConnect": "Failed to connect to host",
+      "close": "Close"
     },
     "hostSelector": {
       "selectHost": "Select Host",
@@ -3967,7 +4391,8 @@
       "automationScriptPlaceholder": "// Write your automation script here...\n// Available: page.goto(), page.click(), page.fill(), etc.",
       "runAutomation": "Run Automation",
       "scriptResult": "Script Result",
-      "automationCompleted": "Automation Completed"
+      "automationCompleted": "Automation Completed",
+      "screenshotAlt": "Screenshot"
     },
     "componentShowcase": {
       "title": "Component Showcase",
@@ -4567,7 +4992,48 @@
       "transferToGeneral": "Transfer to General",
       "deleteConfirmName": "Delete \"{name}\"?",
       "deleting": "Deleting...",
-      "deleteCredential": "Delete Credential"
+      "deleteCredential": "Delete Credential",
+      "credentialCount": "{count} credential | {count} credentials",
+      "refresh": "Refresh",
+      "listView": "List view",
+      "gridView": "Grid view",
+      "expiresIn": "Expires {time}",
+      "view": "View",
+      "makeGeneral": "Make General",
+      "scopeUser": "User",
+      "scopeSession": "Session",
+      "scopeHint": "Original scope field (maintained for backward compatibility)",
+      "organizationId": "Organization ID",
+      "orgIdPlaceholder": "org-uuid-here",
+      "orgIdHint": "Organization UUID for org-level access",
+      "teamIds": "Team IDs",
+      "teamIdsPlaceholder": "team-id-1, team-id-2",
+      "teamIdsHint": "Comma-separated team IDs",
+      "shareWithUsers": "Share With Users",
+      "sharedWithPlaceholder": "user-id-1, user-id-2",
+      "sharedWithHint": "Comma-separated user IDs to share with",
+      "sshAlwaysEnabled": "SSH (Always enabled)",
+      "vncDesktop": "VNC Desktop",
+      "hideKey": "Hide key",
+      "showKey": "Show key",
+      "sshKeyHint": "Paste your entire private key including BEGIN/END markers",
+      "sshPasswordPlaceholder": "Enter SSH password",
+      "hidePassword": "Hide password",
+      "showPassword": "Show password",
+      "vncPasswordPlaceholder": "VNC password (optional)",
+      "osPlaceholder": "e.g., Ubuntu 22.04, CentOS 8",
+      "hideValue": "Hide value",
+      "showValue": "Show value",
+      "expirationHint": "Optional auto-expiry date",
+      "loadingValue": "Loading...",
+      "timeJustNow": "just now",
+      "timeInAMoment": "in a moment",
+      "timeMinutesAgo": "{count}m ago",
+      "timeInMinutes": "in {count}m",
+      "timeHoursAgo": "{count}h ago",
+      "timeInHours": "in {count}h",
+      "timeDaysAgo": "{count}d ago",
+      "timeInDays": "in {count}d"
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -4847,7 +5313,11 @@
       "connectionsLegend": "Connections:",
       "connApi": "API",
       "connData": "Data",
-      "connEvent": "Event"
+      "connEvent": "Event",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "resetView": "Reset view",
+      "toggleGrid": "Toggle grid"
     },
     "workflowViz": {
       "defaultTitle": "Workflow Execution",
@@ -4988,7 +5458,9 @@
       "errorLoadingContents": "Error loading contents",
       "errorCreatingFolder": "Error creating folder",
       "errorDeletingFile": "Error deleting file",
-      "errorRenamingFile": "Error renaming file"
+      "errorRenamingFile": "Error renaming file",
+      "refreshAriaLabel": "Refresh files",
+      "toggleViewAriaLabel": "Toggle view mode"
     },
     "header": {
       "title": "File Browser",
@@ -5030,7 +5502,8 @@
       "type": "Type:",
       "size": "Size:",
       "noPreview": "Preview not available for this file type.",
-      "downloadFile": "Download File"
+      "downloadFile": "Download File",
+      "closeAriaLabel": "Close preview"
     },
     "treeView": {
       "title": "Directory Structure",
@@ -5041,7 +5514,9 @@
     "upload": {
       "dragAndDrop": "Drag & drop or click:",
       "selectFiles": "Select files to upload",
-      "selectDirectory": "Select a directory to upload"
+      "selectDirectory": "Select a directory to upload",
+      "visibleInputAriaLabel": "Visible file upload input",
+      "hiddenInputAriaLabel": "File upload input"
     },
     "fileTypes": {
       "text": "Text",
@@ -5127,7 +5602,13 @@
       "modeLogOnly": "Log Only",
       "modeLogOnlyDesc": "Log but allow",
       "modeEnforced": "Enforced",
-      "modeEnforcedDesc": "Block violations"
+      "modeEnforcedDesc": "Block violations",
+      "edit": "Edit",
+      "removeLabel": "Remove",
+      "override": "Override",
+      "revertTitle": "Revert to Global Mode?",
+      "revertDescription": "This will remove the override for {endpoint} and the endpoint will use the global enforcement mode.",
+      "endpointHint": "The API endpoint path (supports path parameters like {id})"
     },
     "modeSelector": {
       "title": "Enforcement Mode",
@@ -5168,16 +5649,20 @@
       "system": "System",
       "justNow": "Just now",
       "minuteAgo": "1 minute ago",
-      "minutesAgo": "{count} minutes ago",
+      "minutesAgo": "{count} minute(s) ago",
       "hourAgo": "1 hour ago",
-      "hoursAgo": "{count} hours ago",
+      "hoursAgo": "{count} hour(s) ago",
       "dayAgo": "1 day ago",
-      "daysAgo": "{count} days ago",
+      "daysAgo": "{count} day(s) ago",
       "longAgo": "Long ago",
       "modeLegend": "Mode Legend:",
       "legendDisabled": "Disabled",
       "legendLogOnly": "Log Only",
-      "legendEnforced": "Enforced"
+      "legendEnforced": "Enforced",
+      "modeDisabled": "Disabled",
+      "modeLogOnly": "Log Only",
+      "modeEnforced": "Enforced",
+      "actionUpdated": "Configuration was updated"
     }
   },
   "audit": {
@@ -5342,7 +5827,9 @@
       "errorServiceTimeout": "Desktop service timed out. Please try again.",
       "errorServiceDisabled": "Desktop service is currently disabled.",
       "errorInitFailed": "Failed to initialize desktop connection.",
-      "errorClipboardRead": "Failed to read clipboard contents."
+      "errorClipboardRead": "Failed to read clipboard contents.",
+      "iframeTitle": "Remote Desktop - XFCE Environment",
+      "screenshotAlt": "Desktop Screenshot"
     },
     "popoutBrowser": {
       "title": "Research Browser",
@@ -5424,5 +5911,17 @@
     "payload": "Payload",
     "metadata": "Metadata",
     "correlationChain": "Correlation Chain"
+  },
+  "nav": {
+    "mainNavigation": "Main navigation",
+    "chat": "Chat",
+    "knowledge": "Knowledge",
+    "automation": "Automation",
+    "analytics": "Analytics",
+    "secrets": "Secrets",
+    "plugins": "Plugins",
+    "slmAdmin": "SLM Admin",
+    "slmAdminTitle": "Open SLM Admin Panel",
+    "profileSettings": "Profile Settings"
   }
 }

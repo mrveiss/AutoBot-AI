@@ -6,7 +6,7 @@
           <LoadingSpinner variant="pulse" size="sm" color="var(--color-primary)" />
         </div>
         <div class="message-info">
-          <span class="sender-name">AI Assistant</span>
+          <span class="sender-name">{{ t('chat.typing.aiAssistant') }}</span>
           <span class="message-time">{{ statusText }}</span>
         </div>
       </div>
@@ -48,7 +48,10 @@
  */
 
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
+
+const { t } = useI18n()
 
 interface Props {
   isTyping: boolean
@@ -70,10 +73,10 @@ const elapsedTime = ref(0)
 let updateInterval: ReturnType<typeof setInterval> | null = null
 
 const statusText = computed(() => {
-  if (elapsedTime.value < 2000) return 'Thinking...'
-  if (elapsedTime.value < 5000) return 'Processing...'
-  if (elapsedTime.value < 10000) return 'Analyzing...'
-  return 'Working on it...'
+  if (elapsedTime.value < 2000) return t('chat.typing.thinking')
+  if (elapsedTime.value < 5000) return t('chat.typing.processing')
+  if (elapsedTime.value < 10000) return t('chat.typing.analyzing')
+  return t('chat.typing.workingOnIt')
 })
 
 const detailText = computed(() => {
@@ -85,11 +88,11 @@ const detailText = computed(() => {
 
   // Fallback to time-based placeholder text when no streaming content yet
   const details = [
-    'Understanding your request...',
-    'Searching knowledge base...',
-    'Formulating response...',
-    'Crafting detailed answer...',
-    'Reviewing response quality...'
+    t('chat.typing.understanding'),
+    t('chat.typing.searching'),
+    t('chat.typing.formulating'),
+    t('chat.typing.crafting'),
+    t('chat.typing.reviewing')
   ]
   const index = Math.min(Math.floor(elapsedTime.value / 2000), details.length - 1)
   return details[index]

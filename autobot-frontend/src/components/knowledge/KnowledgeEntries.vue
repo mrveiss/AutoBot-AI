@@ -90,7 +90,7 @@
           v-model="filterCategory"
           @change="filterEntries"
           class="filter-select"
-          aria-label="Filter by category"
+          :aria-label="$t('knowledge.entries.filterByCategoryAria')"
         >
           <option value="">{{ $t('knowledge.entries.allCategories') }}</option>
           <option v-for="cat in store.categories" :key="cat.id" :value="cat.name">
@@ -106,7 +106,7 @@
           v-model="filterType"
           @change="filterEntries"
           class="filter-select"
-          aria-label="Filter by entry type"
+          :aria-label="$t('knowledge.entries.filterByTypeAria')"
         >
           <option value="">{{ $t('knowledge.entries.allTypes') }}</option>
           <option value="document">{{ $t('knowledge.entries.documents') }}</option>
@@ -123,7 +123,7 @@
           v-model="sortBy"
           @change="sortEntries"
           class="filter-select"
-          aria-label="Sort entries by"
+          :aria-label="$t('knowledge.entries.sortByAria')"
         >
           <option value="updatedAt">{{ $t('knowledge.entries.lastUpdated') }}</option>
           <option value="createdAt">{{ $t('knowledge.entries.dateCreated') }}</option>
@@ -556,7 +556,7 @@ const selectedBulkEditEntries = computed<BulkEditEntry[]>(() => {
     .filter(doc => selectedEntries.value.includes(doc.id))
     .map(doc => ({
       id: doc.id,
-      title: doc.title || 'Untitled',
+      title: doc.title || t('knowledge.entries.untitled'),
       category: doc.category,
       tags: doc.tags
     }))
@@ -877,7 +877,7 @@ const getVerificationLabel = (
     unverified: t('knowledge.entries.unverified'),
     rejected: t('knowledge.entries.rejected')
   }
-  return labels[status || ''] || 'Unknown'
+  return labels[status || ''] || t('knowledge.entries.unknown')
 }
 
 const getCategoryStyle = (category: string) => {

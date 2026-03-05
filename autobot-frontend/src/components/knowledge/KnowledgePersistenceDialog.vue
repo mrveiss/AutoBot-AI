@@ -9,7 +9,7 @@
           size="sm"
           @click="closeDialog"
           class="close-button"
-          aria-label="Close dialog"
+          :aria-label="$t('knowledge.persistence.closeDialog')"
         >
           ×
         </BaseButton>
@@ -142,7 +142,7 @@
             variant="outline"
             @click="selectAll"
             class="bulk-button"
-            aria-label="Select all items"
+            :aria-label="$t('knowledge.persistence.selectAllAria')"
           >
             {{ $t('knowledge.persistence.selectAll') }}
           </BaseButton>
@@ -150,7 +150,7 @@
             variant="outline"
             @click="deselectAll"
             class="bulk-button"
-            aria-label="Deselect all items"
+            :aria-label="$t('knowledge.persistence.deselectAllAria')"
           >
             {{ $t('knowledge.persistence.deselectAll') }}
           </BaseButton>
@@ -159,7 +159,7 @@
             @click="applyBulkDecision('add_to_kb')"
             :disabled="!hasSelectedItems"
             class="bulk-button add"
-            aria-label="Add selected to knowledge base"
+            :aria-label="$t('knowledge.persistence.addSelectedToKbAria')"
           >
             {{ $t('knowledge.persistence.addSelectedToKb') }}
           </BaseButton>
@@ -168,7 +168,7 @@
             @click="applyBulkDecision('keep_temporary')"
             :disabled="!hasSelectedItems"
             class="bulk-button temp"
-            aria-label="Keep selected temporarily"
+            :aria-label="$t('knowledge.persistence.keepSelectedTemporarilyAria')"
           >
             {{ $t('knowledge.persistence.keepSelectedTemporarily') }}
           </BaseButton>
@@ -177,7 +177,7 @@
             @click="applyBulkDecision('delete')"
             :disabled="!hasSelectedItems"
             class="bulk-button delete"
-            aria-label="Delete selected items"
+            :aria-label="$t('knowledge.persistence.deleteSelectedAria')"
           >
             {{ $t('knowledge.persistence.deleteSelected') }}
           </BaseButton>
@@ -209,7 +209,7 @@
           variant="primary"
           @click="compileChat"
           class="compile-button"
-          aria-label="Compile chat to knowledge base"
+          :aria-label="$t('knowledge.persistence.compileChatAria')"
         >
           {{ $t('knowledge.persistence.compileButton') }}
         </BaseButton>
@@ -235,7 +235,7 @@
             @click="applyAllDecisions"
             :disabled="!hasDecisions"
             class="primary-button"
-            aria-label="Apply decisions"
+            :aria-label="$t('knowledge.persistence.applyDecisionsAria')"
           >
             {{ $t('knowledge.persistence.applyDecisions') }}
           </BaseButton>
@@ -243,7 +243,7 @@
             variant="secondary"
             @click="closeDialog"
             class="secondary-button"
-            aria-label="Cancel"
+            :aria-label="$t('knowledge.persistence.cancelAria')"
           >
             {{ $t('knowledge.persistence.cancel') }}
           </BaseButton>

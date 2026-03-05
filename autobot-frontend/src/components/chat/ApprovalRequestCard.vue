@@ -3,15 +3,15 @@
   <div v-if="status === 'pre_approved'" class="approval-confirmed approval-pre-approved">
     <div class="approval-header">
       <i class="fas fa-shield-check text-blue-600" aria-hidden="true"></i>
-      <span class="font-semibold">Auto-Approved</span>
+      <span class="font-semibold">{{ $t('chat.approval.autoApproved') }}</span>
     </div>
     <div class="approval-details">
       <div class="approval-detail-item">
-        <span class="detail-label">Command:</span>
+        <span class="detail-label">{{ $t('chat.approval.command') }}</span>
         <code class="detail-value">{{ command }}</code>
       </div>
       <div v-if="comment" class="approval-detail-item">
-        <span class="detail-label">Reason:</span>
+        <span class="detail-label">{{ $t('chat.approval.reason') }}</span>
         <span class="detail-value">{{ comment }}</span>
       </div>
     </div>
@@ -21,15 +21,15 @@
   <div v-else-if="status === 'approved'" class="approval-confirmed approval-approved">
     <div class="approval-header">
       <i class="fas fa-check-circle text-green-600" aria-hidden="true"></i>
-      <span class="font-semibold">Command Approved</span>
+      <span class="font-semibold">{{ $t('chat.approval.commandApproved') }}</span>
     </div>
     <div class="approval-details">
       <div class="approval-detail-item">
-        <span class="detail-label">Command:</span>
+        <span class="detail-label">{{ $t('chat.approval.command') }}</span>
         <code class="detail-value">{{ command }}</code>
       </div>
       <div v-if="comment" class="approval-detail-item">
-        <span class="detail-label">Comment:</span>
+        <span class="detail-label">{{ $t('chat.approval.comment') }}</span>
         <span class="detail-value">{{ comment }}</span>
       </div>
     </div>
@@ -39,15 +39,15 @@
   <div v-else-if="status === 'denied'" class="approval-confirmed approval-denied">
     <div class="approval-header">
       <i class="fas fa-times-circle text-red-600" aria-hidden="true"></i>
-      <span class="font-semibold">Command Denied</span>
+      <span class="font-semibold">{{ $t('chat.approval.commandDenied') }}</span>
     </div>
     <div class="approval-details">
       <div class="approval-detail-item">
-        <span class="detail-label">Command:</span>
+        <span class="detail-label">{{ $t('chat.approval.command') }}</span>
         <code class="detail-value">{{ command }}</code>
       </div>
       <div v-if="comment" class="approval-detail-item">
-        <span class="detail-label">Reason:</span>
+        <span class="detail-label">{{ $t('chat.approval.reason') }}</span>
         <span class="detail-value">{{ comment }}</span>
       </div>
     </div>
@@ -57,25 +57,25 @@
   <div v-else-if="requiresApproval && !status" class="approval-request">
     <div class="approval-header">
       <i class="fas fa-exclamation-triangle text-yellow-600" aria-hidden="true"></i>
-      <span class="font-semibold">Command Approval Required</span>
+      <span class="font-semibold">{{ $t('chat.approval.approvalRequired') }}</span>
     </div>
     <div class="approval-details">
       <div class="approval-detail-item">
-        <span class="detail-label">Command:</span>
+        <span class="detail-label">{{ $t('chat.approval.command') }}</span>
         <code class="detail-value">{{ command }}</code>
       </div>
       <div class="approval-detail-item">
-        <span class="detail-label">Risk Level:</span>
+        <span class="detail-label">{{ $t('chat.approval.riskLevel') }}</span>
         <span class="detail-value" :class="getRiskClass(riskLevel)">
           {{ riskLevel }}
         </span>
       </div>
       <div v-if="purpose" class="approval-detail-item">
-        <span class="detail-label">Purpose:</span>
+        <span class="detail-label">{{ $t('chat.approval.purpose') }}</span>
         <span class="detail-value">{{ purpose }}</span>
       </div>
       <div v-if="reasons && reasons.length > 0" class="approval-detail-item">
-        <span class="detail-label">Reasons:</span>
+        <span class="detail-label">{{ $t('chat.approval.reasons') }}</span>
         <span class="detail-value">{{ reasons.join(', ') }}</span>
       </div>
 
@@ -83,17 +83,17 @@
       <div v-if="isInteractive" class="approval-detail-item interactive-warning">
         <div class="interactive-header">
           <i class="fas fa-keyboard text-blue-600" aria-hidden="true"></i>
-          <span class="detail-label font-semibold text-blue-700">Interactive Command</span>
+          <span class="detail-label font-semibold text-blue-700">{{ $t('chat.approval.interactiveCommand') }}</span>
         </div>
         <div class="interactive-info">
           <p class="text-sm text-autobot-text-secondary mb-2">
-            This command requires user input (stdin). You'll be prompted after approval.
+            {{ $t('chat.approval.interactiveInfo') }}
           </p>
           <div
             v-if="interactiveReasons && interactiveReasons.length > 0"
             class="interactive-reasons"
           >
-            <span class="text-xs font-medium text-autobot-text-secondary">Input required for:</span>
+            <span class="text-xs font-medium text-autobot-text-secondary">{{ $t('chat.approval.inputRequiredFor') }}</span>
             <ul class="text-xs text-autobot-text-secondary mt-1 ml-4 list-disc">
               <li v-for="(reason, idx) in interactiveReasons" :key="idx">{{ reason }}</li>
             </ul>
@@ -107,7 +107,7 @@
       <textarea
         v-model="localComment"
         class="comment-textarea"
-        placeholder="Add a comment or reason for this decision..."
+        :placeholder="$t('chat.approval.commentPlaceholder')"
         rows="2"
         @keydown.ctrl.enter="submitWithComment"
         @keydown.meta.enter="submitWithComment"
@@ -118,10 +118,10 @@
           size="sm"
           @click="cancelComment"
           class="cancel-comment-btn"
-          aria-label="Cancel comment"
+          :aria-label="$t('chat.approval.cancelComment')"
         >
           <i class="fas fa-times" aria-hidden="true"></i>
-          <span>Cancel</span>
+          <span>{{ $t('common.cancel') }}</span>
         </BaseButton>
         <BaseButton
           variant="primary"
@@ -129,10 +129,10 @@
           @click="submitWithComment"
           :disabled="!localComment.trim()"
           class="submit-comment-btn"
-          :aria-label="`Submit ${pendingDecision ? 'approval' : 'denial'} with comment`"
+          :aria-label="$t('chat.approval.submitDecision', { decision: pendingDecision ? $t('chat.approval.approval') : $t('chat.approval.denial') })"
         >
           <i class="fas fa-check" aria-hidden="true"></i>
-          <span>Submit {{ pendingDecision ? 'Approval' : 'Denial' }}</span>
+          <span>{{ $t('chat.approval.submitDecision', { decision: pendingDecision ? $t('chat.approval.approval') : $t('chat.approval.denial') }) }}</span>
         </BaseButton>
       </div>
     </div>
@@ -148,12 +148,12 @@
         />
         <span class="checkbox-label">
           <i class="fas fa-shield-check" aria-hidden="true"></i>
-          Automatically approve similar commands in the future
+          {{ $t('chat.approval.autoApproveLabel') }}
         </span>
       </label>
       <div v-if="localAutoApprove" class="auto-approve-hint">
         <i class="fas fa-info-circle" aria-hidden="true"></i>
-        <span>Commands with the same pattern and risk level will be auto-approved</span>
+        <span>{{ $t('chat.approval.autoApproveHint') }}</span>
       </div>
     </div>
 
@@ -165,10 +165,10 @@
         @click="startDeny"
         :disabled="processing"
         class="deny-btn"
-        aria-label="Deny command"
+        :aria-label="$t('chat.approval.denyCommand')"
       >
         <i class="fas fa-times" aria-hidden="true"></i>
-        <span>Deny</span>
+        <span>{{ $t('chat.approval.deny') }}</span>
       </BaseButton>
       <BaseButton
         variant="secondary"
@@ -176,10 +176,10 @@
         @click="startDenyWithComment"
         :disabled="processing"
         class="deny-comment-btn"
-        aria-label="Deny with comment"
+        :aria-label="$t('chat.approval.denyWithComment')"
       >
         <i class="fas fa-comment" aria-hidden="true"></i>
-        <span>Deny with Comment</span>
+        <span>{{ $t('chat.approval.denyWithComment') }}</span>
       </BaseButton>
       <BaseButton
         variant="secondary"
@@ -187,10 +187,10 @@
         @click="startApproveWithComment"
         :disabled="processing"
         class="approve-comment-btn"
-        aria-label="Approve with comment"
+        :aria-label="$t('chat.approval.approveWithComment')"
       >
         <i class="fas fa-comment" aria-hidden="true"></i>
-        <span>Approve with Comment</span>
+        <span>{{ $t('chat.approval.approveWithComment') }}</span>
       </BaseButton>
       <BaseButton
         variant="success"
@@ -198,10 +198,10 @@
         @click="startApprove"
         :disabled="processing"
         class="approve-btn"
-        aria-label="Approve command"
+        :aria-label="$t('chat.approval.approveCommand')"
       >
         <i class="fas fa-check" aria-hidden="true"></i>
-        <span>Approve</span>
+        <span>{{ $t('chat.approval.approve') }}</span>
       </BaseButton>
     </div>
   </div>
@@ -221,7 +221,10 @@
  */
 
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'
+
+const { t } = useI18n()
 
 interface Props {
   status?: string | null // 'pre_approved' | 'approved' | 'denied' | null

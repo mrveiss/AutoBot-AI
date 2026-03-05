@@ -42,10 +42,10 @@
             />
 
             <div class="file-actions-inline">
-              <button @click="refreshFiles" aria-label="Refresh files">
+              <button @click="refreshFiles" :aria-label="t('fileBrowser.browser.refreshAriaLabel')">
                 <i class="fas fa-sync-alt"></i> {{ $t('fileBrowser.browser.refresh') }}
               </button>
-              <button @click="toggleView" aria-label="Toggle view mode">
+              <button @click="toggleView" :aria-label="t('fileBrowser.browser.toggleViewAriaLabel')">
                 <i :class="viewMode === 'tree' ? 'fas fa-list' : 'fas fa-tree'"></i>
                 {{ viewMode === 'tree' ? $t('fileBrowser.browser.listView') : $t('fileBrowser.browser.treeView') }}
               </button>

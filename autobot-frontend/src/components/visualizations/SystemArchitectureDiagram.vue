@@ -316,17 +316,17 @@
 
       <!-- Zoom Controls -->
       <div class="zoom-controls">
-        <button @click="zoomIn" title="Zoom in">
+        <button @click="zoomIn" :title="t('visualizations.systemArchitecture.zoomIn')">
           <i class="fas fa-plus"></i>
         </button>
         <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-        <button @click="zoomOut" title="Zoom out">
+        <button @click="zoomOut" :title="t('visualizations.systemArchitecture.zoomOut')">
           <i class="fas fa-minus"></i>
         </button>
-        <button @click="resetView" title="Reset view">
+        <button @click="resetView" :title="t('visualizations.systemArchitecture.resetView')">
           <i class="fas fa-expand"></i>
         </button>
-        <button @click="showGrid = !showGrid" title="Toggle grid" :class="{ active: showGrid }">
+        <button @click="showGrid = !showGrid" :title="t('visualizations.systemArchitecture.toggleGrid')" :class="{ active: showGrid }">
           <i class="fas fa-th"></i>
         </button>
       </div>

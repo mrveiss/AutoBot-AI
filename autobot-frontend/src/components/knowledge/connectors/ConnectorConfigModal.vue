@@ -553,7 +553,7 @@ function closeModal() {
             v-model="dbQuery"
             class="form-textarea"
             rows="3"
-            placeholder="SELECT id, title, body FROM articles WHERE updated_at > :last_sync"
+            :placeholder="$t('knowledge.connectors.config.sqlQueryPlaceholder')"
           ></textarea>
         </div>
         <div class="form-row">
@@ -679,7 +679,7 @@ function closeModal() {
           v-model="connectorName"
           type="text"
           class="form-input"
-          placeholder="e.g. Internal Docs, Product Blog"
+          :placeholder="$t('knowledge.connectors.config.connectorNamePlaceholder')"
         />
       </div>
 

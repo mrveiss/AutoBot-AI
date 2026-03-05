@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     :model-value="visible"
-    title="Share Conversation"
+    :title="$t('chat.share.title')"
     size="medium"
     @update:model-value="$emit('update:visible', $event)"
     @close="handleCancel"
@@ -11,13 +11,13 @@
         <!-- Recipients Input -->
         <div>
           <label class="block text-sm font-medium text-autobot-text-primary mb-1">
-            Share with (user IDs)
+            {{ $t('chat.share.shareWith') }}
           </label>
           <input
             v-model="recipientInput"
             type="text"
             class="w-full px-3 py-2 border border-autobot-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-electric-500"
-            placeholder="Enter user ID and press Enter"
+            :placeholder="$t('chat.share.recipientPlaceholder')"
             @keyup.enter="addRecipient"
           />
           <div v-if="recipients.length > 0" class="flex flex-wrap gap-1.5 mt-2">
@@ -44,30 +44,30 @@
             type="checkbox"
             class="rounded border-autobot-border text-autobot-primary focus:ring-autobot-primary"
           />
-          <span class="text-sm text-autobot-text-primary">Include knowledge created in this conversation</span>
+          <span class="text-sm text-autobot-text-primary">{{ $t('chat.share.includeKnowledge') }}</span>
         </label>
 
         <!-- KB Facts Preview -->
         <div v-if="includeKnowledge" class="space-y-2">
           <div v-if="factsLoading" class="flex items-center gap-2 text-sm text-autobot-text-secondary p-3">
             <i class="fas fa-spinner fa-spin"></i>
-            Loading knowledge facts...
+            {{ $t('chat.share.loadingFacts') }}
           </div>
 
           <div v-else-if="facts.length === 0" class="text-sm text-autobot-text-secondary p-3 bg-autobot-bg-secondary rounded-lg">
-            No knowledge facts found in this conversation.
+            {{ $t('chat.share.noFactsFound') }}
           </div>
 
           <template v-else>
             <div class="flex items-center justify-between">
               <p class="text-sm font-medium text-autobot-text-primary">
-                {{ selectedFactIds.size }} of {{ facts.length }} facts selected
+                {{ $t('chat.share.factsSelected', { selected: selectedFactIds.size, total: facts.length }) }}
               </p>
               <button
                 class="text-xs text-autobot-primary hover:text-autobot-text-secondary"
                 @click="toggleAllFacts"
               >
-                {{ selectedFactIds.size === facts.length ? 'Deselect All' : 'Select All' }}
+                {{ selectedFactIds.size === facts.length ? $t('chat.share.deselectAll') : $t('chat.share.selectAll') }}
               </button>
             </div>
 
@@ -96,7 +96,7 @@
 
     <template #actions>
       <BaseButton variant="secondary" @click="handleCancel">
-        Cancel
+        {{ $t('common.cancel') }}
       </BaseButton>
       <BaseButton
         variant="primary"
@@ -104,7 +104,7 @@
         :loading="sharing"
         @click="handleShare"
       >
-        {{ sharing ? 'Sharing...' : 'Share' }}
+        {{ sharing ? $t('chat.share.sharing') : $t('chat.share.share') }}
       </BaseButton>
     </template>
   </BaseModal>
@@ -112,11 +112,13 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
+const { t } = useI18n()
 const logger = createLogger('ShareConversationDialog')
 
 interface ShareFact {

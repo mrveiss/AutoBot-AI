@@ -130,7 +130,7 @@
             <div class="form-group">
               <label for="url-category">{{ $t('knowledge.upload.category') }}</label>
               <select id="url-category" v-model="urlEntry.category" class="form-select">
-                <option value="">Select category...</option>
+                <option value="">{{ $t('knowledge.upload.selectCategory') }}</option>
                 <option v-for="cat in store.categories" :key="cat.id" :value="cat.name">
                   {{ cat.name }}
                 </option>
@@ -144,7 +144,7 @@
                 v-model="urlEntry.tagsInput"
                 type="text"
                 class="form-input"
-                placeholder="Enter tags separated by commas..."
+                :placeholder="$t('knowledge.upload.tagsPlaceholder')"
               />
             </div>
           </div>
@@ -349,7 +349,7 @@
                   v-model="fileEntry.tagsInput"
                   type="text"
                   class="form-input"
-                  placeholder="Enter tags separated by commas..."
+                  :placeholder="$t('knowledge.upload.tagsPlaceholder')"
                 />
               </div>
             </div>

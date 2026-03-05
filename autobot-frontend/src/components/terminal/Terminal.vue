@@ -10,8 +10,8 @@
         </div>
         <div class="flex items-center space-x-2 text-sm">
           <i class="fas fa-terminal text-green-600"></i>
-          <span class="font-medium">{{ props.chatSessionId ? 'Chat Terminal' : 'System Terminal' }}</span>
-          <span class="text-xs text-gray-500">{{ props.chatSessionId ? 'Chat Session' : 'Independent Tool' }}</span>
+          <span class="font-medium">{{ props.chatSessionId ? $t('terminal.terminal.chatTerminal') : $t('terminal.terminal.systemTerminal') }}</span>
+          <span class="text-xs text-gray-500">{{ props.chatSessionId ? $t('terminal.terminal.chatSession') : $t('terminal.terminal.independentTool') }}</span>
         </div>
       </div>
 
@@ -22,11 +22,11 @@
             <i :class="connectionIconClass"></i>
           </button>
 
-          <button @click="clearTerminal" class="terminal-btn" title="Clear Terminal">
+          <button @click="clearTerminal" class="terminal-btn" :title="$t('terminal.terminal.clearTerminal')">
             <i class="fas fa-trash"></i>
           </button>
 
-          <button @click="copyTerminalOutput" class="terminal-btn" title="Copy Output">
+          <button @click="copyTerminalOutput" class="terminal-btn" :title="$t('terminal.terminal.copyOutput')">
             <i class="fas fa-copy"></i>
           </button>
         </div>
@@ -65,7 +65,7 @@
               @keyup="handleKeyup"
               class="command-input"
               :disabled="!isConnected"
-              placeholder="Enter command..."
+              :placeholder="t('terminal.terminal.enterCommandPlaceholder')"
             />
           </div>
         </div>
@@ -76,6 +76,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import appConfig from '@/config/AppConfig.js'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
@@ -83,6 +84,8 @@ import { useTabCompletion } from '@/composables/useTabCompletion'
 import CompletionSuggestions from './CompletionSuggestions.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+
+const { t } = useI18n()
 
 const logger = createLogger('Terminal')
 
@@ -129,8 +132,8 @@ const { isConnected, isConnecting, send: wsSend, connect: wsConnect, disconnect:
     autoReconnect: false, // Terminal handles reconnection explicitly via user action
     parseJSON: true,
     onOpen: () => {
-      statusMessage.value = 'Connected to terminal'
-      addTerminalLine('system', 'Terminal connected successfully', 'success')
+      statusMessage.value = t('terminal.terminal.connectedToTerminal')
+      addTerminalLine('system', t('terminal.terminal.terminalConnectedSuccessfully'), 'success')
 
       // Focus input
       nextTick(() => {
@@ -151,16 +154,16 @@ const { isConnected, isConnecting, send: wsSend, connect: wsConnect, disconnect:
     },
     onError: (error) => {
       logger.error('WebSocket error:', error)
-      statusMessage.value = 'Connection error'
-      addTerminalLine('system', 'Connection error occurred', 'error')
+      statusMessage.value = t('terminal.terminal.connectionError')
+      addTerminalLine('system', t('terminal.terminal.connectionErrorOccurred'), 'error')
     },
     onClose: (event) => {
       if (event.code !== 1000) {
-        statusMessage.value = 'Connection lost'
-        addTerminalLine('system', `Connection closed (${event.code})`, 'error')
+        statusMessage.value = t('terminal.terminal.connectionLost')
+        addTerminalLine('system', t('terminal.terminal.connectionClosed', { code: event.code }), 'error')
       } else {
-        statusMessage.value = 'Disconnected'
-        addTerminalLine('system', 'Terminal disconnected', 'info')
+        statusMessage.value = t('terminal.terminal.disconnected')
+        addTerminalLine('system', t('terminal.terminal.terminalDisconnected'), 'info')
       }
     }
   }
@@ -179,8 +182,8 @@ const connectionIconClass = computed(() => {
 })
 
 const connectionButtonText = computed(() => {
-  if (isConnecting.value) return 'Connecting...'
-  return isConnected.value ? 'Disconnect' : 'Connect'
+  if (isConnecting.value) return t('terminal.terminal.connecting')
+  return isConnected.value ? t('terminal.terminal.disconnect') : t('terminal.terminal.connect')
 })
 
 const statusIconClass = computed(() => {
@@ -277,12 +280,12 @@ const connectTerminal = async () => {
   if (isConnecting.value || isConnected.value) return
 
   try {
-    statusMessage.value = 'Initializing terminal session...'
+    statusMessage.value = t('terminal.terminal.initializingSession')
 
     // CRITICAL: Initialize session first to get correct session ID
     await initializeSession()
 
-    statusMessage.value = 'Connecting to terminal...'
+    statusMessage.value = t('terminal.terminal.connectingToTerminal')
     wsUrl.value = await getWebSocketUrl()
 
     // Connect using WebSocket composable
@@ -290,14 +293,14 @@ const connectTerminal = async () => {
 
   } catch (error) {
     logger.error('Connection failed:', error)
-    statusMessage.value = 'Failed to connect'
+    statusMessage.value = t('terminal.terminal.failedToConnect')
     addTerminalLine('system', `Connection failed: ${error}`, 'error')
   }
 }
 
 const disconnectTerminal = () => {
   wsDisconnect(1000, 'User disconnected')
-  statusMessage.value = 'Disconnected'
+  statusMessage.value = t('terminal.terminal.disconnected')
 }
 
 const toggleConnection = () => {
@@ -311,7 +314,7 @@ const toggleConnection = () => {
 const sendCommand = (command: string) => {
   tabCompletion.dismiss()
   if (!isConnected.value) {
-    addTerminalLine('system', 'Not connected to terminal', 'error')
+    addTerminalLine('system', t('terminal.terminal.notConnected'), 'error')
     return
   }
 
@@ -446,7 +449,7 @@ const addTerminalLine = (prefix: string, content: string, type: string = 'output
 
 const clearTerminal = () => {
   terminalLines.value = []
-  addTerminalLine('system', 'Terminal cleared', 'info')
+  addTerminalLine('system', t('terminal.terminal.terminalCleared'), 'info')
 }
 
 const copyTerminalOutput = async () => {
@@ -456,9 +459,9 @@ const copyTerminalOutput = async () => {
       .join('\n')
 
     await navigator.clipboard.writeText(output)
-    addTerminalLine('system', 'Terminal output copied to clipboard', 'info')
+    addTerminalLine('system', t('terminal.terminal.outputCopied'), 'info')
   } catch (error) {
-    addTerminalLine('system', 'Failed to copy terminal output', 'error')
+    addTerminalLine('system', t('terminal.terminal.copyFailed'), 'error')
   }
 }
 

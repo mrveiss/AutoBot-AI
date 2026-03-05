@@ -245,7 +245,7 @@ function selectSession(session: typeof sessions.value[0]) {
           <div class="card-body">
             <div class="screenshots-grid">
               <div v-for="(screenshot, idx) in screenshots.slice(0, 6)" :key="idx" class="screenshot-item">
-                <img :src="screenshot.image_data" alt="Screenshot">
+                <img :src="screenshot.image_data" :alt="$t('views.browserAutomation.screenshotAlt')">
                 <div class="screenshot-meta">{{ new Date(screenshot.timestamp).toLocaleTimeString() }}</div>
               </div>
             </div>

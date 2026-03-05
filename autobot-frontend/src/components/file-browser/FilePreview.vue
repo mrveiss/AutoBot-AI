@@ -13,7 +13,7 @@
         <button
           class="close-btn"
           @click="$emit('close')"
-          aria-label="Close preview"
+          :aria-label="$t('fileBrowser.preview.closeAriaLabel')"
         >
           &times;
         </button>

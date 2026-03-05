@@ -20,7 +20,7 @@
       v-if="dismissible"
       class="chip-dismiss"
       @click.stop="$emit('dismiss')"
-      aria-label="Dismiss suggestion"
+      :aria-label="$t('chat.docSuggestion.dismiss')"
     >
       <i class="fas fa-times" aria-hidden="true"></i>
     </button>
@@ -42,6 +42,9 @@
  */
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 interface Props {
   label: string
@@ -109,7 +112,7 @@ const fullTitle = computed(() => {
     title += `\n${props.filePath}`
   }
   if (props.score !== undefined) {
-    title += `\nRelevance: ${formatScore(props.score)}%`
+    title += `\n${t('chat.docSuggestion.relevance')}: ${formatScore(props.score)}%`
   }
   return title
 })

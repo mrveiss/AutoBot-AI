@@ -181,7 +181,7 @@
         size="sm"
         @click="clearSelection"
         class="breadcrumb-item"
-        aria-label="Back to root"
+        :aria-label="$t('knowledge.browser.backToRoot')"
       >
         <i class="fas fa-home"></i> {{ $t('knowledge.browser.root') }}
       </BaseButton>

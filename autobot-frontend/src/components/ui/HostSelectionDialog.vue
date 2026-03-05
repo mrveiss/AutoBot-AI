@@ -13,7 +13,7 @@
           v-if="!isProcessing"
           class="close-button"
           @click="handleCancel"
-          aria-label="Close"
+          :aria-label="t('ui.hostSelection.close')"
         >
           <i class="fas fa-times"></i>
         </button>

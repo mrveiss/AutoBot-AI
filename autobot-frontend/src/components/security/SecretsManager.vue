@@ -104,13 +104,13 @@
       <header class="content-header">
         <div class="header-left">
           <h2>{{ currentCategoryLabel }}</h2>
-          <span class="subtitle">{{ filteredSecrets.length }} credential{{ filteredSecrets.length !== 1 ? 's' : '' }}</span>
+          <span class="subtitle">{{ t('security.secretsManager.credentialCount', { count: filteredSecrets.length }) }}</span>
         </div>
         <div class="header-actions">
-          <button @click="loadSecrets" class="btn-icon" :disabled="loading" title="Refresh">
+          <button @click="loadSecrets" class="btn-icon" :disabled="loading" :title="t('security.secretsManager.refresh')">
             <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
           </button>
-          <button @click="toggleView" class="btn-icon" :title="viewMode === 'grid' ? 'List view' : 'Grid view'">
+          <button @click="toggleView" class="btn-icon" :title="viewMode === 'grid' ? t('security.secretsManager.listView') : t('security.secretsManager.gridView')">
             <i :class="viewMode === 'grid' ? 'fas fa-list' : 'fas fa-th'"></i>
           </button>
         </div>
@@ -204,7 +204,7 @@
               </span>
               <span v-if="secret.expires_at" class="meta-item" :class="{ 'text-warning': isExpiringSoon(secret) }">
                 <i class="fas fa-hourglass-half"></i>
-                Expires {{ formatRelativeTime(secret.expires_at) }}
+                {{ t('security.secretsManager.expiresIn', { time: formatRelativeTime(secret.expires_at) }) }}
               </span>
             </div>
 
@@ -216,21 +216,21 @@
 
           <!-- Card Actions -->
           <div class="card-actions">
-            <button @click.stop="viewSecret(secret)" class="action-btn" title="View">
+            <button @click.stop="viewSecret(secret)" class="action-btn" :title="t('security.secretsManager.view')">
               <i class="fas fa-eye"></i>
             </button>
-            <button @click.stop="editSecret(secret)" class="action-btn" title="Edit">
+            <button @click.stop="editSecret(secret)" class="action-btn" :title="t('security.secretsManager.edit')">
               <i class="fas fa-edit"></i>
             </button>
             <button
               v-if="secret.scope === 'chat'"
               @click.stop="transferSecret(secret)"
               class="action-btn"
-              title="Make General"
+              :title="t('security.secretsManager.makeGeneral')"
             >
               <i class="fas fa-share"></i>
             </button>
-            <button @click.stop="confirmDelete(secret)" class="action-btn delete" title="Delete">
+            <button @click.stop="confirmDelete(secret)" class="action-btn delete" :title="t('security.secretsManager.delete')">
               <i class="fas fa-trash"></i>
             </button>
           </div>
@@ -322,11 +322,11 @@
               <select id="secret-scope" v-model="secretForm.scope" class="form-input">
                 <option value="general">{{ $t('security.secretsManager.scopeGeneral') }}</option>
                 <option value="chat">{{ $t('security.secretsManager.scopeChat') }}</option>
-                <option value="user">User</option>
-                <option value="session">Session</option>
+                <option value="user">{{ t('security.secretsManager.scopeUser') }}</option>
+                <option value="session">{{ t('security.secretsManager.scopeSession') }}</option>
                 <option value="shared">{{ $t('security.secretsManager.visibilityShared') }}</option>
               </select>
-              <small class="input-hint">Original scope field (maintained for backward compatibility)</small>
+              <small class="input-hint">{{ t('security.secretsManager.scopeHint') }}</small>
             </div>
             <div class="form-group">
               <label for="secret-visibility">{{ $t('security.secretsManager.visibility') }} <span class="required">*</span></label>
@@ -344,43 +344,43 @@
           <!-- Conditional Organization/Team Fields -->
           <div class="form-row two-col" v-if="secretForm.visibility === 'organization' || secretForm.visibility === 'group'">
             <div class="form-group" v-if="secretForm.visibility === 'organization'">
-              <label for="secret-org-id">Organization ID</label>
+              <label for="secret-org-id">{{ t('security.secretsManager.organizationId') }}</label>
               <input
                 id="secret-org-id"
                 type="text"
                 v-model="secretForm.org_id"
-                placeholder="org-uuid-here"
+                :placeholder="t('security.secretsManager.orgIdPlaceholder')"
                 class="form-input"
               />
-              <small class="input-hint">Organization UUID for org-level access</small>
+              <small class="input-hint">{{ t('security.secretsManager.orgIdHint') }}</small>
             </div>
             <div class="form-group" v-if="secretForm.visibility === 'group'">
-              <label for="secret-team-ids">Team IDs</label>
+              <label for="secret-team-ids">{{ t('security.secretsManager.teamIds') }}</label>
               <input
                 id="secret-team-ids"
                 type="text"
                 v-model="teamIdsInput"
-                placeholder="team-id-1, team-id-2"
+                :placeholder="t('security.secretsManager.teamIdsPlaceholder')"
                 class="form-input"
                 @input="updateTeamIds"
               />
-              <small class="input-hint">Comma-separated team IDs</small>
+              <small class="input-hint">{{ t('security.secretsManager.teamIdsHint') }}</small>
             </div>
           </div>
 
           <!-- Shared With Field (for visibility=shared) -->
           <div class="form-row" v-if="secretForm.visibility === 'shared'">
             <div class="form-group">
-              <label for="secret-shared-with">Share With Users</label>
+              <label for="secret-shared-with">{{ t('security.secretsManager.shareWithUsers') }}</label>
               <input
                 id="secret-shared-with"
                 type="text"
                 v-model="sharedWithInput"
-                placeholder="user-id-1, user-id-2"
+                :placeholder="t('security.secretsManager.sharedWithPlaceholder')"
                 class="form-input"
                 @input="updateSharedWith"
               />
-              <small class="input-hint">Comma-separated user IDs to share with</small>
+              <small class="input-hint">{{ t('security.secretsManager.sharedWithHint') }}</small>
             </div>
           </div>
 
@@ -449,12 +449,12 @@
                     type="button"
                     @click="toggleValueVisibility"
                     class="toggle-visibility"
-                    :title="showValue ? 'Hide key' : 'Show key'"
+                    :title="showValue ? t('security.secretsManager.hideKey') : t('security.secretsManager.showKey')"
                   >
                     <i :class="showValue ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
                   </button>
                 </div>
-                <small class="input-hint">Paste your entire private key including BEGIN/END markers</small>
+                <small class="input-hint">{{ t('security.secretsManager.sshKeyHint') }}</small>
               </div>
             </div>
 
@@ -467,7 +467,7 @@
                     type="password"
                     v-model="secretForm.ssh_password"
                     required
-                    placeholder="Enter SSH password"
+                    :placeholder="t('security.secretsManager.sshPasswordPlaceholder')"
                     class="form-input secret-input"
                     autocomplete="new-password"
                   />
@@ -475,7 +475,7 @@
                     type="button"
                     @click="toggleValueVisibility"
                     class="toggle-visibility"
-                    :title="showValue ? 'Hide password' : 'Show password'"
+                    :title="showValue ? t('security.secretsManager.hidePassword') : t('security.secretsManager.showPassword')"
                   >
                     <i :class="showValue ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
                   </button>
@@ -491,12 +491,12 @@
                   <label class="checkbox-option">
                     <input type="checkbox" value="ssh" v-model="secretForm.capabilities" disabled checked />
                     <i class="fas fa-terminal"></i>
-                    <span>SSH (Always enabled)</span>
+                    <span>{{ t('security.secretsManager.sshAlwaysEnabled') }}</span>
                   </label>
                   <label class="checkbox-option">
                     <input type="checkbox" value="vnc" v-model="secretForm.capabilities" />
                     <i class="fas fa-desktop"></i>
-                    <span>VNC Desktop</span>
+                    <span>{{ t('security.secretsManager.vncDesktop') }}</span>
                   </label>
                 </div>
               </div>
@@ -521,7 +521,7 @@
                 <input
                   type="password"
                   v-model="secretForm.vnc_password"
-                  placeholder="VNC password (optional)"
+                  :placeholder="t('security.secretsManager.vncPasswordPlaceholder')"
                   class="form-input"
                   autocomplete="new-password"
                 />
@@ -535,7 +535,7 @@
                 <input
                   type="text"
                   v-model="secretForm.os"
-                  placeholder="e.g., Ubuntu 22.04, CentOS 8"
+                  :placeholder="t('security.secretsManager.osPlaceholder')"
                   class="form-input"
                 />
               </div>
@@ -580,7 +580,7 @@
                   type="button"
                   @click="toggleValueVisibility"
                   class="toggle-visibility"
-                  :title="showValue ? 'Hide value' : 'Show value'"
+                  :title="showValue ? t('security.secretsManager.hideValue') : t('security.secretsManager.showValue')"
                 >
                   <i :class="showValue ? 'fas fa-eye-slash' : 'fas fa-eye'"></i>
                 </button>
@@ -620,7 +620,7 @@
                 v-model="secretForm.expires_at"
                 class="form-input"
               />
-              <small class="input-hint">Optional auto-expiry date</small>
+              <small class="input-hint">{{ t('security.secretsManager.expirationHint') }}</small>
             </div>
           </div>
         </div>
@@ -660,7 +660,7 @@
         <div class="view-section">
           <label>{{ $t('security.secretsManager.value') }}</label>
           <div class="secret-display">
-            <code v-if="showSecretValue">{{ viewingSecret?.value || 'Loading...' }}</code>
+            <code v-if="showSecretValue">{{ viewingSecret?.value || t('security.secretsManager.loadingValue') }}</code>
             <code v-else>{{ '•'.repeat(Math.min(viewingSecret?.value?.length || 20, 40)) }}</code>
             <div class="secret-actions">
               <button @click="toggleSecretValue" class="action-btn">
@@ -1478,17 +1478,17 @@ const formatRelativeTime = (dateString: string) => {
   const diff = date.getTime() - now.getTime();
   const absDiff = Math.abs(diff);
 
-  if (absDiff < 60000) return diff < 0 ? 'just now' : 'in a moment';
+  if (absDiff < 60000) return diff < 0 ? t('security.secretsManager.timeJustNow') : t('security.secretsManager.timeInAMoment');
   if (absDiff < 3600000) {
     const mins = Math.floor(absDiff / 60000);
-    return diff < 0 ? `${mins}m ago` : `in ${mins}m`;
+    return diff < 0 ? t('security.secretsManager.timeMinutesAgo', { count: mins }) : t('security.secretsManager.timeInMinutes', { count: mins });
   }
   if (absDiff < 86400000) {
     const hours = Math.floor(absDiff / 3600000);
-    return diff < 0 ? `${hours}h ago` : `in ${hours}h`;
+    return diff < 0 ? t('security.secretsManager.timeHoursAgo', { count: hours }) : t('security.secretsManager.timeInHours', { count: hours });
   }
   const days = Math.floor(absDiff / 86400000);
-  return diff < 0 ? `${days}d ago` : `in ${days}d`;
+  return diff < 0 ? t('security.secretsManager.timeDaysAgo', { count: days }) : t('security.secretsManager.timeInDays', { count: days });
 };
 
 const truncate = (text: string, length: number) => {

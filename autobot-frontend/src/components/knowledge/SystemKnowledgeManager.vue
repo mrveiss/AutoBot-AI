@@ -64,7 +64,7 @@
         variant="primary"
         @click="generateVectorEmbeddings"
         :loading="isVectorizing"
-        title="Batched vector generation: Processes 50 facts per batch with 0.5s delay. Skips already vectorized facts. Safe to run periodically to vectorize new facts."
+        :title="t('knowledge.systemKnowledge.vectorizeTooltip')"
         class="btn-highlight"
       >
         <span class="icon">🧬</span>
@@ -75,7 +75,7 @@
         variant="primary"
         @click="initializeMachineKnowledge"
         :loading="isInitializing"
-        title="Create vector embeddings for search functionality"
+        :title="t('knowledge.systemKnowledge.initializeTooltip')"
       >
         <span class="icon">🚀</span>
         {{ isInitializing ? $t('knowledge.systemKnowledge.initializing') : $t('knowledge.systemKnowledge.initializeMachineKnowledge') }}
@@ -85,7 +85,7 @@
         variant="primary"
         @click="reindexDocuments"
         :loading="isReindexing"
-        title="Reindex all documents in the knowledge base"
+        :title="t('knowledge.systemKnowledge.reindexTooltip')"
       >
         <span class="icon">🔄</span>
         {{ isReindexing ? $t('knowledge.systemKnowledge.reindexing') : $t('knowledge.systemKnowledge.reindexDocuments') }}
@@ -161,30 +161,12 @@
         <h3>ℹ️ {{ $t('knowledge.systemKnowledge.aboutTitle') }}</h3>
       </template>
       <div class="info-content">
-        <p>
-          <strong>Initialize Machine Knowledge:</strong> Creates vector embeddings for all documents in the knowledge base.
-          Required for search functionality to work. Run this first if search returns no results.
-        </p>
-        <p>
-          <strong>Reindex Documents:</strong> Rebuilds the entire knowledge base from scratch, repopulating with:
-          text entries, uploaded files, and indexed websites. Use when documents seem outdated or corrupted.
-        </p>
-        <p>
-          <strong>Refresh Man Pages:</strong> Scans and indexes ALL Linux manual pages available on this machine.
-          Enables the chat agent to understand and help with command-line tools.
-        </p>
-        <p>
-          <strong>Populate Common Commands:</strong> Quick index of frequently-used commands (ls, cd, grep, etc).
-          Faster alternative to full man page refresh.
-        </p>
-        <p>
-          <strong>Index AutoBot Docs:</strong> Indexes project guidelines, API references, architecture docs,
-          and troubleshooting guides. Enables the chat agent to be self-aware of its capabilities.
-        </p>
-        <p>
-          <strong>When to Use:</strong> Initialize after first install, Reindex when documents are outdated,
-          Refresh after installing packages or updating docs.
-        </p>
+        <p v-html="t('knowledge.systemKnowledge.aboutInitialize')"></p>
+        <p v-html="t('knowledge.systemKnowledge.aboutReindex')"></p>
+        <p v-html="t('knowledge.systemKnowledge.aboutRefreshManPages')"></p>
+        <p v-html="t('knowledge.systemKnowledge.aboutPopulateCommands')"></p>
+        <p v-html="t('knowledge.systemKnowledge.aboutIndexDocs')"></p>
+        <p v-html="t('knowledge.systemKnowledge.aboutWhenToUse')"></p>
       </div>
     </BasePanel>
 

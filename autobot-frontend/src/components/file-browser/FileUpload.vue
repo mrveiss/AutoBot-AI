@@ -14,7 +14,7 @@
         @change="handleFileSelected"
         class="visible-file-input"
         data-testid="visible-file-upload-input"
-        aria-label="Visible file upload input"
+        :aria-label="$t('fileBrowser.upload.visibleInputAriaLabel')"
         multiple
       />
     </div>
@@ -26,7 +26,7 @@
       style="display: none"
       @change="handleFileSelected"
       data-testid="file-upload-input"
-      aria-label="File upload input"
+      :aria-label="$t('fileBrowser.upload.hiddenInputAriaLabel')"
       multiple
     />
   </div>

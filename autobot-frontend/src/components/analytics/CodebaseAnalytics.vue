@@ -491,7 +491,7 @@
             <SeverityBarChart
               v-if="chartData.severity_counts && chartData.severity_counts.length > 0"
               :data="chartData.severity_counts"
-              title="Problems by Severity"
+              :title="$t('analytics.codebase.charts.problemsBySeverity')"
               :height="320"
               class="chart-item"
             />
@@ -505,7 +505,7 @@
             <RaceConditionsDonut
               v-if="chartData.race_conditions && chartData.race_conditions.length > 0"
               :data="chartData.race_conditions"
-              title="Race Conditions by Category"
+              :title="$t('analytics.codebase.charts.raceConditionsByCategory')"
               :height="320"
               class="chart-item"
             />
@@ -515,7 +515,7 @@
             <TopFilesChart
               v-if="chartData.top_files && chartData.top_files.length > 0"
               :data="chartData.top_files"
-              title="Top Files with Most Problems"
+              :title="$t('analytics.codebase.charts.topFilesWithProblems')"
               :height="400"
               :maxFiles="10"
               class="chart-item"
@@ -585,8 +585,8 @@
             <DependencyTreemap
               v-if="dependencyData.external_dependencies && dependencyData.external_dependencies.length > 0"
               :data="(dependencyData.external_dependencies as any)"
-              title="External Dependencies"
-              subtitle="Package usage across codebase"
+              :title="$t('analytics.codebase.charts.externalDependencies')"
+              :subtitle="$t('analytics.codebase.charts.packageUsageAcrossCodebase')"
               :height="350"
               class="chart-item"
             />
@@ -596,8 +596,8 @@
             <ModuleImportsChart
               v-if="dependencyData.modules && dependencyData.modules.length > 0"
               :data="(dependencyData.modules.filter(m => m.import_count > 0) as any)"
-              title="Modules with Most Imports"
-              subtitle="Files with highest dependency count"
+              :title="$t('analytics.codebase.charts.modulesWithMostImports')"
+              :subtitle="$t('analytics.codebase.charts.filesWithHighestDependencyCount')"
               :height="350"
               :maxModules="12"
               class="chart-item"
@@ -678,8 +678,8 @@
         <div v-else-if="importTreeData && importTreeData.length > 0" class="import-tree-content">
           <ImportTreeChart
             :data="importTreeData"
-            title="File Import Relationships"
-            subtitle="Click to expand and see imports/importers"
+            :title="$t('analytics.codebase.charts.fileImportRelationships')"
+            :subtitle="$t('analytics.codebase.charts.clickToExpandImports')"
             :height="500"
             :loading="importTreeLoading"
             :error="importTreeError"
@@ -725,8 +725,8 @@
             :data="callGraphData"
             :summary="(callGraphSummary as any)"
             :orphaned-functions="callGraphOrphaned"
-            title="Function Call Relationships"
-            subtitle="View which functions call which other functions"
+            :title="$t('analytics.codebase.charts.functionCallRelationships')"
+            :subtitle="$t('analytics.codebase.charts.viewFunctionCalls')"
             :height="600"
             :loading="callGraphLoading"
             :error="callGraphError"
@@ -1858,20 +1858,20 @@
 
               <!-- Quick Risk Indicators (Always Visible) -->
               <div class="quick-risk-indicators">
-                <span v-if="file.factors?.complexity >= 80" class="indicator high" title="High Complexity">
-                  <i class="fas fa-project-diagram"></i> Complex
+                <span v-if="file.factors?.complexity >= 80" class="indicator high" :title="$t('analytics.codebase.risk.highComplexity')">
+                  <i class="fas fa-project-diagram"></i> {{ $t('analytics.codebase.risk.complex') }}
                 </span>
-                <span v-if="file.factors?.change_frequency >= 80" class="indicator warning" title="Frequently Changed">
-                  <i class="fas fa-history"></i> Unstable
+                <span v-if="file.factors?.change_frequency >= 80" class="indicator warning" :title="$t('analytics.codebase.risk.frequentlyChanged')">
+                  <i class="fas fa-history"></i> {{ $t('analytics.codebase.risk.unstable') }}
                 </span>
-                <span v-if="file.factors?.file_size >= 70" class="indicator info" title="Large File">
-                  <i class="fas fa-file-alt"></i> Large
+                <span v-if="file.factors?.file_size >= 70" class="indicator info" :title="$t('analytics.codebase.risk.largeFile')">
+                  <i class="fas fa-file-alt"></i> {{ $t('analytics.codebase.risk.large') }}
                 </span>
-                <span v-if="file.factors?.bug_history > 0" class="indicator critical" title="Has Bug History">
-                  <i class="fas fa-bug"></i> Bug History
+                <span v-if="file.factors?.bug_history > 0" class="indicator critical" :title="$t('analytics.codebase.risk.hasBugHistory')">
+                  <i class="fas fa-bug"></i> {{ $t('analytics.codebase.risk.bugHistory') }}
                 </span>
-                <span v-if="file.factors?.test_coverage === 50" class="indicator muted" title="No Tests Detected">
-                  <i class="fas fa-vial"></i> No Tests
+                <span v-if="file.factors?.test_coverage === 50" class="indicator muted" :title="$t('analytics.codebase.risk.noTestsDetected')">
+                  <i class="fas fa-vial"></i> {{ $t('analytics.codebase.risk.noTests') }}
                 </span>
               </div>
 
