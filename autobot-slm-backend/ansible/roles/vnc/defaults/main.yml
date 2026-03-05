@@ -18,7 +18,7 @@ websockify_enabled: "{{ lookup('env', 'WEBSOCKIFY_ENABLED') | default('true', tr
 # noVNC installation
 novnc_path: /usr/share/novnc
 
-# Security - password set via SLM credential API, not in playbook
+# Security - password auto-generated to /etc/autobot/vnc-secrets.env
 vnc_security_type: "{{ lookup('env', 'VNC_SECURITY_TYPE') | default('VeNCrypt', true) }}"
 
 # Service management

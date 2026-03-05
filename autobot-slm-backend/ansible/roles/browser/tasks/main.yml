@@ -148,6 +148,50 @@
   when: install_vnc | default(false)
   tags: ['browser', 'directories', 'vnc']
 
+- name: "Browser | Check if VNC secrets file exists"
+  stat:
+    path: /etc/autobot/vnc-secrets.env
+  register: browser_vnc_secrets_stat
+  become: yes
+  when: install_vnc | default(false)
+  tags: ['browser', 'vnc']
+
+- name: "Browser | Generate secure VNC password"
+  shell: |
+    password=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c 16)
+    echo "VNC_PASSWORD=${password}" > /etc/autobot/vnc-secrets.env
+    chmod 0640 /etc/autobot/vnc-secrets.env
+    chown root:autobot /etc/autobot/vnc-secrets.env
+  args:
+    creates: /etc/autobot/vnc-secrets.env
+  become: yes
+  when:
+    - install_vnc | default(false)
+    - not (browser_vnc_secrets_stat.stat.exists | default(false))
+  tags: ['browser', 'vnc']
+
+- name: "Browser | Read VNC password"
+  shell: >
+    grep '^VNC_PASSWORD=' /etc/autobot/vnc-secrets.env
+    | cut -d= -f2
+  register: browser_vnc_password
+  changed_when: false
+  become: yes
+  when: install_vnc | default(false)
+  tags: ['browser', 'vnc']
+
+- name: "Browser | Set VNC password file"
+  shell: |
+    echo '{{ browser_vnc_password.stdout }}' | vncpasswd -f \
+      > /home/autobot/.vnc/passwd
+    chmod 0600 /home/autobot/.vnc/passwd
+    chown autobot:autobot /home/autobot/.vnc/passwd
+  become: yes
+  when:
+    - install_vnc | default(false)
+    - browser_vnc_password.stdout | default('') | length > 0
+  tags: ['browser', 'vnc']
+
 - name: "Browser | Create VNC systemd service"
   template:
     src: vnc.service.j2
