@@ -2,8 +2,8 @@
   <div id="app" class="h-screen bg-autobot-bg-primary flex flex-col overflow-hidden">
     <!-- Skip Navigation Links -->
     <div v-if="!isLoginPage" class="skip-links">
-      <a href="#main-content" class="skip-link sr-only-focusable">Skip to main content</a>
-      <a href="#navigation" class="skip-link sr-only-focusable">Skip to navigation</a>
+      <a href="#main-content" class="skip-link sr-only-focusable">{{ $t('nav.skipToContent') }}</a>
+      <a href="#navigation" class="skip-link sr-only-focusable">{{ $t('nav.skipToNavigation') }}</a>
     </div>
 
     <!-- Header - Issue #901: Professional solid color (no gradients) -->
@@ -51,7 +51,7 @@
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                       <path fill-rule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clip-rule="evenodd"></path>
                     </svg>
-                    <span>Chat</span>
+                    <span>{{ $t('nav.chat') }}</span>
                   </div>
                 </router-link>
 
@@ -67,7 +67,7 @@
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                       <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
-                    <span>Knowledge</span>
+                    <span>{{ $t('nav.knowledge') }}</span>
                   </div>
                 </router-link>
 
@@ -83,7 +83,7 @@
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                       <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"></path>
                     </svg>
-                    <span>Automation</span>
+                    <span>{{ $t('nav.automation') }}</span>
                   </div>
                 </router-link>
 
@@ -100,7 +100,7 @@
                       <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z"></path>
                       <path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z"></path>
                     </svg>
-                    <span>Analytics</span>
+                    <span>{{ $t('nav.analytics') }}</span>
                   </div>
                 </router-link>
 
@@ -116,7 +116,7 @@
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                       <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd"></path>
                     </svg>
-                    <span>Secrets</span>
+                    <span>{{ $t('nav.secrets') }}</span>
                   </div>
                 </router-link>
 
@@ -134,7 +134,7 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z"></path>
                     </svg>
-                    <span>Plugins</span>
+                    <span>{{ $t('nav.plugins') }}</span>
                   </div>
                 </router-link>
 
@@ -143,13 +143,13 @@
                   :href="slmAdminUrl"
                   target="_blank"
                   class="px-3 py-2 rounded text-sm font-medium transition-colors duration-150 text-autobot-text-primary hover:bg-autobot-bg-tertiary"
-                  title="Open SLM Admin for infrastructure management"
+                  :title="$t('nav.slmAdminTitle')"
                 >
                   <div class="flex items-center space-x-1">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                       <path fill-rule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm3.293 1.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L7.586 10 5.293 7.707a1 1 0 010-1.414zM11 12a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"></path>
                     </svg>
-                    <span>SLM Admin</span>
+                    <span>{{ $t('nav.slmAdmin') }}</span>
                     <svg class="w-3 h-3 opacity-50" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                       <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
                       <path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"></path>
@@ -167,13 +167,13 @@
               v-if="userStore.isAuthenticated"
               @click="showProfileModal = true"
               class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-md text-sm font-medium text-autobot-text-primary hover:bg-autobot-bg-tertiary transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-autobot-primary"
-              title="Open profile settings"
-              aria-label="Profile settings"
+              :title="$t('nav.profileSettings')"
+              :aria-label="$t('nav.profileSettings')"
             >
               <div class="w-6 h-6 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                 {{ displayUsername?.charAt(0)?.toUpperCase() || 'U' }}
               </div>
-              <span class="max-w-[120px] truncate">{{ displayUsername || 'Profile' }}</span>
+              <span class="max-w-[120px] truncate">{{ displayUsername || $t('nav.profile') }}</span>
             </button>
 
             <!-- Dark Mode Toggle -->
@@ -540,6 +540,7 @@
 <script lang="ts">
 import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useAppStore } from '@/stores/useAppStore'
 import { useUserStore } from '@/stores/useUserStore'
 import { useChatStore } from '@/stores/useChatStore'
@@ -576,6 +577,8 @@ export default {
   },
 
   setup() {
+    const { t } = useI18n()
+
     // Store references
     const appStore = useAppStore();
     const userStore = useUserStore();

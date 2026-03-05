@@ -46,7 +46,7 @@
               {{ getModeLabel(mode) }}
             </span>
             <span class="vs-global" v-if="mode !== globalMode">
-              (Override)
+              ({{ t('featureFlags.enforcement.override') }})
             </span>
           </div>
         </div>
@@ -54,14 +54,14 @@
           <button
             @click="editOverride(endpoint, mode)"
             class="action-btn"
-            title="Edit"
+            :title="t('featureFlags.enforcement.edit')"
           >
             <i class="fas fa-edit"></i>
           </button>
           <button
             @click="confirmRemove(endpoint)"
             class="action-btn delete"
-            title="Remove"
+            :title="t('featureFlags.enforcement.removeLabel')"
           >
             <i class="fas fa-trash"></i>
           </button>
@@ -86,7 +86,7 @@
             :placeholder="$t('featureFlags.enforcement.endpointPlaceholder')"
             class="form-input"
           />
-          <small class="input-hint">The API endpoint path (supports path parameters like {id})</small>
+          <small class="input-hint">{{ t('featureFlags.enforcement.endpointHint') }}</small>
         </div>
 
         <div class="form-group">
@@ -135,10 +135,9 @@
         <div class="remove-icon">
           <i class="fas fa-undo"></i>
         </div>
-        <h4>Revert to Global Mode?</h4>
+        <h4>{{ t('featureFlags.enforcement.revertTitle') }}</h4>
         <p>
-          This will remove the override for <code>{{ removingEndpoint }}</code>
-          and the endpoint will use the global enforcement mode.
+          {{ t('featureFlags.enforcement.revertDescription', { endpoint: removingEndpoint }) }}
         </p>
       </div>
 

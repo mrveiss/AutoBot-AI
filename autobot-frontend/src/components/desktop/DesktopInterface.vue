@@ -43,7 +43,7 @@
             ref="vncFrame"
             :src="vncUrl"
             class="vnc-iframe"
-            title="Remote Desktop - XFCE Environment"
+            :title="$t('desktop.interface.iframeTitle')"
             frameborder="0"
             allowfullscreen
           ></iframe>
@@ -94,7 +94,7 @@
             <button @click="showScreenshotModal = false" class="close-btn">×</button>
           </div>
           <div class="screenshot-body">
-            <img v-if="screenshotData" :src="screenshotData" alt="Desktop Screenshot" class="screenshot-image" />
+            <img v-if="screenshotData" :src="screenshotData" :alt="$t('desktop.interface.screenshotAlt')" class="screenshot-image" />
           </div>
           <div class="screenshot-footer">
             <button @click="downloadScreenshot" class="download-btn">
