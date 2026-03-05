@@ -194,7 +194,7 @@ all:
         # AI/ML-specific configuration
         ai_stack_port: 8080
         ollama_port: 11434
-        # TTS Worker (#1394, migrated from .22)
+        # TTS Worker (#928, migrated from .22 — #1394)
         tts_worker_port: 8082
         model_cache_size: "10gb"
         inference_threads: 4
