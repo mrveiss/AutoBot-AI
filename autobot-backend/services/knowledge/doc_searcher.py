@@ -164,7 +164,13 @@ class DocumentationSearcher:
         Returns:
             Formatted result dictionary. Issue #620.
         """
-        score = 1 - distance  # Convert distance to similarity
+        # ChromaDB 0.5.x may return L2 distances even when
+        # collection metadata specifies cosine (#1390).
+        # Cosine: range 0-2. L2: range 0-inf.
+        if distance <= 2.0:
+            score = max(0.0, 1.0 - distance)
+        else:
+            score = 1.0 / (1.0 + distance)
         return {
             "content": doc,
             "score": round(score, 3),
@@ -205,7 +211,9 @@ class DocumentationSearcher:
                 results["distances"][0],
             ):
                 item = self._format_result_item(doc, meta, dist)
-                if item["score"] >= score_threshold:
+                # L2 normalized scores are very small; skip
+                # threshold filter when distances indicate L2 (#1390)
+                if dist > 2.0 or item["score"] >= score_threshold:
                     formatted.append(item)
 
             return formatted
