@@ -149,6 +149,21 @@ async def get_definitions_for_agents() -> List[dict]:
     return await get_role_definitions()
 
 
+@router.get("/owners")
+async def get_role_owners_endpoint(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """Return role -> node_id mapping for all assigned service roles (#1389).
+
+    Used by deployment/migration UIs to show which node owns each role.
+    """
+    from services.role_registry import get_role_owners
+
+    owners = await get_role_owners(db)
+    return {"owners": owners}
+
+
 @router.get("/fleet-health", response_model=FleetHealthResponse)
 async def get_fleet_health(
     db: Annotated[AsyncSession, Depends(get_db)],

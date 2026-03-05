@@ -741,6 +741,19 @@ async def assign_role_to_node(
             detail="Node not found",
         )
 
+    # Check role uniqueness — one service role per node (#1389)
+    from services.role_registry import check_role_uniqueness
+
+    owner = await check_role_uniqueness(db, role_request.role_name, node_id)
+    if owner:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Role '{role_request.role_name}' is already assigned "
+                f"to node '{owner}'. Migrate or unassign it first."
+            ),
+        )
+
     preflight = await _run_preflight(node_id, role_request.role_name, db)
     if not preflight.allowed:
         conflict_details = "; ".join(c.detail for c in preflight.conflicts)

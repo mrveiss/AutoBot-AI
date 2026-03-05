@@ -286,6 +286,11 @@ export function useSlmApi() {
     return response.data.roles
   }
 
+  async function getRoleOwners(): Promise<Record<string, string>> {
+    const response = await client.get<{ owners: Record<string, string> }>('/roles/owners')
+    return response.data.owners
+  }
+
   // Deployments
   async function getDeployments(): Promise<Deployment[]> {
     const response = await client.get<DeploymentsResponse>('/deployments')
@@ -1593,6 +1598,19 @@ export function useSlmApi() {
     return response.data
   }
 
+  async function getProvisionStatus(sinceLine: number = 0): Promise<{
+    status: string
+    lines: string[]
+    total_lines: number
+    error: string | null
+    elapsed_seconds?: number
+  }> {
+    const response = await client.get('/setup/provision-status', {
+      params: { since_line: sinceLine },
+    })
+    return response.data
+  }
+
   async function validateWizardFleet(): Promise<{
     health: string
     total_nodes: number
@@ -1630,6 +1648,7 @@ export function useSlmApi() {
     applyUpdates,
     // Roles
     getRoles,
+    getRoleOwners,
     // Deployments
     getDeployments,
     getDeployment,
@@ -1756,6 +1775,7 @@ export function useSlmApi() {
     completeWizardStep,
     skipWizardSetup,
     provisionWizardFleet,
+    getProvisionStatus,
     validateWizardFleet,
   }
 }

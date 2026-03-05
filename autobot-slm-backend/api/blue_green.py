@@ -11,9 +11,6 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing_extensions import Annotated
-
 from models.schemas import (
     BlueGreenActionResponse,
     BlueGreenCreate,
@@ -26,6 +23,8 @@ from models.schemas import (
 from services.auth import get_current_user, require_admin
 from services.blue_green import blue_green_service
 from services.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing_extensions import Annotated
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/blue-green", tags=["blue-green"])
@@ -77,6 +76,20 @@ async def create_deployment(
     - Green node: Standby node that will temporarily borrow the roles
     - Auto-rollback: Automatically revert if health checks fail
     """
+    # Validate green node doesn't already own any of the requested roles (#1389)
+    from services.role_registry import check_role_uniqueness
+
+    for role in data.roles:
+        owner = await check_role_uniqueness(db, role, data.blue_node_id)
+        if owner and owner != data.blue_node_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Role '{role}' is assigned to node '{owner}', "
+                    f"not the declared blue node '{data.blue_node_id}'."
+                ),
+            )
+
     try:
         deployment = await blue_green_service.create_deployment(
             db, data, triggered_by=current_user.get("sub", "unknown")

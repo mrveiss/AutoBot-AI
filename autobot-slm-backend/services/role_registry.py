@@ -399,6 +399,52 @@ async def list_roles(db: AsyncSession) -> List[Role]:
     return list(result.scalars().all())
 
 
+# Infra roles allowed on multiple nodes simultaneously (#1389)
+MULTI_NODE_ROLES = {"autobot-shared", "slm-agent"}
+
+
+async def check_role_uniqueness(
+    db: AsyncSession,
+    role_name: str,
+    target_node_id: str,
+) -> Optional[str]:
+    """Check if a role is already assigned to another node (#1389).
+
+    Returns the node_id that currently owns the role, or None if available.
+    Infra roles (autobot-shared, slm-agent) are exempt.
+    """
+    if role_name in MULTI_NODE_ROLES:
+        return None
+
+    from models.database import NodeRole
+
+    result = await db.execute(
+        select(NodeRole.node_id).where(
+            NodeRole.role_name == role_name,
+            NodeRole.node_id != target_node_id,
+            NodeRole.status.in_(["active", "installed", "not_installed"]),
+        )
+    )
+    existing = result.scalar_one_or_none()
+    return existing
+
+
+async def get_role_owners(db: AsyncSession) -> Dict[str, str]:
+    """Return mapping of role_name -> node_id for all assigned roles (#1389).
+
+    Only includes non-infra roles with active/installed status.
+    """
+    from models.database import NodeRole
+
+    result = await db.execute(
+        select(NodeRole.role_name, NodeRole.node_id).where(
+            NodeRole.role_name.notin_(list(MULTI_NODE_ROLES)),
+            NodeRole.status.in_(["active", "installed", "not_installed"]),
+        )
+    )
+    return {row.role_name: row.node_id for row in result.all()}
+
+
 async def get_role_definitions() -> List[Dict]:
     """Get lightweight role definitions for agents.
 

@@ -356,7 +356,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
@@ -375,6 +375,7 @@ const {
   completeWizardStep,
   skipWizardSetup,
   provisionWizardFleet,
+  getProvisionStatus,
   validateWizardFleet,
 } = useSlmApi()
 
@@ -635,6 +636,23 @@ function toggleRole(nodeId: string, roleName: string) {
   if (current.includes(roleName)) {
     current = current.filter(r => r !== roleName)
   } else {
+    // Enforce uniqueness: unassign this role from any other node (#1384)
+    if (!INFRA_ROLES.includes(roleName)) {
+      for (const node of nodes.value) {
+        if (node.node_id !== nodeId) {
+          const otherRoles = nodeRoles.value[node.node_id] || []
+          if (otherRoles.includes(roleName)) {
+            let updated = otherRoles.filter(r => r !== roleName)
+            // Remove infra roles if no user roles remain
+            const hasUser = updated.some(r => !INFRA_ROLES.includes(r))
+            if (!hasUser) {
+              updated = updated.filter(r => !INFRA_ROLES.includes(r))
+            }
+            nodeRoles.value[node.node_id] = updated
+          }
+        }
+      }
+    }
     current = [...current, roleName]
   }
   // Auto-inject/remove infra roles (#1344)
@@ -663,22 +681,62 @@ async function saveRoles() {
   }
 }
 
+let provisionPollTimer: ReturnType<typeof setInterval> | null = null
+
 async function provisionFleet() {
   provisioning.value = true
   provisionOutput.value = 'Starting fleet provisioning...\n'
+  let linesSeen = 0
+
   try {
-    const data = await provisionWizardFleet(
-      nodes.value.map(n => n.node_id)
-    )
-    provisionOutput.value += data.output || 'Provisioning completed.\n'
-    provisionComplete.value = true
+    await provisionWizardFleet(nodes.value.map(n => n.node_id))
   } catch (err: unknown) {
     const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Unknown error'
     provisionOutput.value += `\nERROR: ${detail}\n`
-  } finally {
     provisioning.value = false
+    return
+  }
+
+  // Poll for progress (#1384)
+  provisionPollTimer = setInterval(async () => {
+    try {
+      const status = await getProvisionStatus(linesSeen)
+      if (status.lines.length > 0) {
+        provisionOutput.value += status.lines.join('\n') + '\n'
+        linesSeen = status.total_lines
+      }
+      if (status.elapsed_seconds) {
+        provisionOutput.value = provisionOutput.value.replace(
+          /^Starting fleet provisioning\.\.\.\n/,
+          `Provisioning in progress (${Math.round(status.elapsed_seconds)}s)...\n`
+        )
+      }
+      if (status.status === 'completed') {
+        stopProvisionPolling()
+        provisionOutput.value += '\nProvisioning completed successfully.\n'
+        provisionComplete.value = true
+        provisioning.value = false
+      } else if (status.status === 'failed') {
+        stopProvisionPolling()
+        provisionOutput.value += `\nERROR: ${status.error || 'Provisioning failed'}\n`
+        provisioning.value = false
+      }
+    } catch {
+      // Poll failure is transient — keep trying
+    }
+  }, 2000)
+}
+
+function stopProvisionPolling() {
+  if (provisionPollTimer) {
+    clearInterval(provisionPollTimer)
+    provisionPollTimer = null
   }
 }
+
+onUnmounted(() => {
+  stopProvisionPolling()
+})
 
 async function checkFleetHealth() {
   checkingHealth.value = true
