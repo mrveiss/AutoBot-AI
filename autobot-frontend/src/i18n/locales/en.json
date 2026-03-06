@@ -4662,6 +4662,16 @@
     }
   },
   "browser": {
+    "interactive": {
+      "screenshotAlt": "Browser screenshot",
+      "noScreenshot": "No screenshot available",
+      "scrollUp": "Scroll up",
+      "scrollDown": "Scroll down",
+      "pageUp": "Page up",
+      "pageDown": "Page down",
+      "typePlaceholder": "Type text and press Enter...",
+      "typeLabel": "Type text"
+    },
     "sessionManager": {
       "title": "Browser Sessions",
       "subtitle": "Manage persistent browser sessions",

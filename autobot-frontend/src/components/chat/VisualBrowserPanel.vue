@@ -14,6 +14,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
+import InteractiveScreenshot from '@/components/browser/InteractiveScreenshot.vue'
 import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue'
 import {
   visionMultimodalApiClient,
@@ -32,6 +33,8 @@ const currentUrl = ref<string | null>(null)
 const pageTitle = ref<string | null>(null)
 const isConnected = ref(false)
 const statusChecked = ref(false)
+const viewportWidth = ref(1280)
+const viewportHeight = ref(720)
 
 // GUI Automation panel state (#1242)
 const showAutomation = ref(false)
@@ -91,7 +94,9 @@ async function navigate(): Promise<void> {
     currentUrl.value = (nav.url as string) || targetUrl
     pageTitle.value = (nav.title as string) || null
     isConnected.value = true
-    await captureScreenshot()
+    if (nav.screenshot) screenshot.value = nav.screenshot as string
+    if (nav.viewportWidth) viewportWidth.value = nav.viewportWidth as number
+    if (nav.viewportHeight) viewportHeight.value = nav.viewportHeight as number
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } }; message?: string }
     error.value = err?.response?.data?.detail ?? (e instanceof Error ? e.message : t('chat.visualBrowser.navigationFailed'))
@@ -118,7 +123,7 @@ async function goBack(): Promise<void> {
     const nav = await ApiClient.post('/api/playwright/back', {}) as Record<string, unknown>
     if (nav.url) { currentUrl.value = nav.url as string; url.value = nav.url as string }
     if (nav.title) pageTitle.value = nav.title as string
-    await captureScreenshot()
+    if (nav.screenshot) screenshot.value = nav.screenshot as string
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('chat.visualBrowser.backFailed')
   } finally {
@@ -134,7 +139,7 @@ async function goForward(): Promise<void> {
     const nav = await ApiClient.post('/api/playwright/forward', {}) as Record<string, unknown>
     if (nav.url) { currentUrl.value = nav.url as string; url.value = nav.url as string }
     if (nav.title) pageTitle.value = nav.title as string
-    await captureScreenshot()
+    if (nav.screenshot) screenshot.value = nav.screenshot as string
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('chat.visualBrowser.forwardFailed')
   } finally {
@@ -147,10 +152,28 @@ async function reload(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    await ApiClient.post('/api/playwright/reload', {})
-    await captureScreenshot()
+    const nav = await ApiClient.post('/api/playwright/reload', {}) as Record<string, unknown>
+    if (nav.screenshot) screenshot.value = nav.screenshot as string
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('chat.visualBrowser.reloadFailed')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleInteract(payload: { action: string; params: Record<string, unknown> }): Promise<void> {
+  if (!isConnected.value || loading.value) return
+  loading.value = true
+  try {
+    const result = await ApiClient.post('/api/playwright/interact', {
+      action: payload.action,
+      ...payload.params,
+    }) as Record<string, unknown>
+    if (result.screenshot) screenshot.value = result.screenshot as string
+    if (result.url) { currentUrl.value = result.url as string; url.value = result.url as string }
+    if (result.title) pageTitle.value = result.title as string
+  } catch (e) {
+    logger.warn('Interaction failed:', e)
   } finally {
     loading.value = false
   }
@@ -260,13 +283,15 @@ onMounted(() => {
           <p class="viewport-msg">{{ $t('chat.visualBrowser.startBrowsing') }}</p>
         </div>
 
-        <!-- Screenshot Display -->
-        <img
+        <!-- Interactive Screenshot Display (#1416) -->
+        <InteractiveScreenshot
           v-else-if="screenshot"
-          :src="`data:image/png;base64,${screenshot}`"
-          :alt="$t('chat.browser.screenshot')"
-          class="screenshot-img"
-          :class="{ 'screenshot-img--loading': loading }"
+          :screenshot="screenshot"
+          :loading="loading"
+          :interactive="isConnected"
+          :viewport-width="viewportWidth"
+          :viewport-height="viewportHeight"
+          @interact="handleInteract"
         />
 
         <!-- Connected but no screenshot yet -->
