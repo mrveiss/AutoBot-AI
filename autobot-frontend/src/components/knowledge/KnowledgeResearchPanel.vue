@@ -13,11 +13,12 @@
  * Issue #1256: Observable Research Panel (Live Browser Collaboration).
  */
 
-import { ref, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { getBackendWsUrl } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import InteractiveScreenshot from '@/components/browser/InteractiveScreenshot.vue'
 
 const logger = createLogger('KnowledgeResearchPanel')
 
@@ -33,6 +34,8 @@ const errorMsg = ref<string | null>(null)
 const screenshot = ref<string | null>(null)
 const browserConnected = ref(false)
 const screenshotLoading = ref(false)
+const viewportWidth = ref(1280)
+const viewportHeight = ref(720)
 
 let screenshotInterval: ReturnType<typeof setInterval> | null = null
 let ws: WebSocket | null = null
@@ -69,6 +72,8 @@ async function fetchScreenshot(): Promise<void> {
     if (data.screenshot) {
       screenshot.value = data.screenshot as string
       browserConnected.value = true
+      if (data.viewportWidth) viewportWidth.value = data.viewportWidth as number
+      if (data.viewportHeight) viewportHeight.value = data.viewportHeight as number
     }
   } catch (e) {
     logger.warn('Screenshot fetch failed:', e)
@@ -253,7 +258,29 @@ function rejectSource(card: SourceCard): void {
   card.decision = 'rejected'
 }
 
-// ── Cleanup ────────────────────────────────────────────────────────────────
+// ── Interactive browser control (#1416) ──────────────────────────────────
+
+async function handleInteract(payload: { action: string; params: Record<string, unknown> }): Promise<void> {
+  if (screenshotLoading.value) return
+  screenshotLoading.value = true
+  try {
+    const result = await ApiClient.post('/api/playwright/interact', {
+      action: payload.action,
+      ...payload.params,
+    }) as Record<string, unknown>
+    if (result.screenshot) screenshot.value = result.screenshot as string
+  } catch (e) {
+    logger.warn('Interaction failed:', e)
+  } finally {
+    screenshotLoading.value = false
+  }
+}
+
+// ── Lifecycle ────────────────────────────────────────────────────────────
+
+onMounted(() => {
+  checkBrowserStatus()
+})
 
 onUnmounted(() => {
   closeWs()
@@ -438,13 +465,15 @@ onUnmounted(() => {
 
         <!-- Viewport -->
         <div class="browser-viewport">
-          <!-- Screenshot -->
-          <img
+          <!-- Interactive Screenshot (#1416) -->
+          <InteractiveScreenshot
             v-if="screenshot"
-            :src="`data:image/png;base64,${screenshot}`"
-            :alt="$t('knowledge.research.liveBrowserView')"
-            class="screenshot-img"
-            :class="{ 'screenshot-img--loading': screenshotLoading }"
+            :screenshot="screenshot"
+            :loading="screenshotLoading"
+            :interactive="browserConnected"
+            :viewport-width="viewportWidth"
+            :viewport-height="viewportHeight"
+            @interact="handleInteract"
           />
 
           <!-- No screenshot yet -->
