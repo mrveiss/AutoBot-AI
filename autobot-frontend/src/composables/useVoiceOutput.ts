@@ -12,6 +12,7 @@ import { ref } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
+import { usePreferences } from '@/composables/usePreferences'
 import { getBackendWsUrl } from '@/config/ssot-config'
 
 const logger = createLogger('useVoiceOutput')
@@ -211,7 +212,8 @@ export function useVoiceOutput() {
 
     try {
       const { effectiveVoiceId } = useVoiceProfiles()
-      const language = localStorage.getItem('autobot-language') || ''
+      const { language: prefLang } = usePreferences()
+      const language = prefLang.value || ''
       const formData = new FormData()
       formData.append('text', text)
       if (effectiveVoiceId.value) {
@@ -254,7 +256,8 @@ export function useVoiceOutput() {
     try {
       const ws = await _connectTtsWs()
       const { effectiveVoiceId } = useVoiceProfiles()
-      const language = localStorage.getItem('autobot-language') || ''
+      const { language: prefLang } = usePreferences()
+      const language = prefLang.value || ''
       ws.send(JSON.stringify({
         type: 'speak_sentence',
         text: text.trim(),

@@ -9,6 +9,7 @@
 
 import { ref, computed } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { usePreferences } from '@/composables/usePreferences'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useVoiceProfiles')
@@ -38,7 +39,8 @@ const effectiveVoiceId = computed<string>(() => {
   // 1. voice_ids[current_language] (language-specific)
   // 2. voice_id (profile default, backward compatible)
   // 3. User-selected voice (selectedVoiceId)
-  const lang = localStorage.getItem('autobot-language') || 'en'
+  const { language } = usePreferences()
+  const lang = language.value || 'en'
   const langVoice = personalityVoiceIds.value[lang]
   if (langVoice) return langVoice
   if (personalityVoiceId.value) return personalityVoiceId.value

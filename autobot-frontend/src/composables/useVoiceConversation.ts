@@ -15,7 +15,7 @@ import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
 import { useChatController } from '@/models/controllers'
 import { useChatStore } from '@/stores/useChatStore'
-import { useUserStore } from '@/stores/useUserStore'
+import { usePreferences } from '@/composables/usePreferences'
 import { getBackendWsUrl } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
@@ -270,7 +270,7 @@ function _handleBargeIn(): void {
   _startListeningInternal()
 }
 
-// ─── Language helper (#1329) ─────────────────────────────
+// ─── Language helper (#1329, #1334) ──────────────────────
 
 /** Map short language codes to BCP-47 tags for browser SpeechRecognition. */
 const _LANG_TO_BCP47: Record<string, string> = {
@@ -282,15 +282,21 @@ const _LANG_TO_BCP47: Record<string, string> = {
   lt: 'lt-LT', et: 'et-EE', uk: 'uk-UA', tr: 'tr-TR',
 }
 
+/** Current language code exposed for UI indicators (#1334). */
+const currentLanguage = ref('en')
+
 function _getSttLanguage(): string {
-  const store = useUserStore()
-  const lang = store.preferences.language || 'en'
+  const { language } = usePreferences()
+  const lang = language.value || 'en'
+  currentLanguage.value = lang
   return _LANG_TO_BCP47[lang] || lang
 }
 
 function _getShortLanguage(): string {
-  const store = useUserStore()
-  return store.preferences.language || 'en'
+  const { language } = usePreferences()
+  const lang = language.value || 'en'
+  currentLanguage.value = lang
+  return lang
 }
 
 // ─── Whisper fallback for airgapped mode (#1329) ────────
@@ -515,7 +521,11 @@ function _dispatchTranscript(text: string): void {
     timestamp: Date.now(),
   })
 
-  controller.sendMessage(text, { use_knowledge: false }).then(() => {
+  const lang = _getShortLanguage()
+  controller.sendMessage(text, {
+    use_knowledge: false,
+    language: lang,
+  }).then(() => {
     const session = store.sessions.find(
       (s) => s.id === store.currentSessionId,
     )
@@ -740,6 +750,7 @@ export function useVoiceConversation() {
     state.value = 'idle'
     bubbles.value = []
     errorMessage.value = ''
+    currentLanguage.value = _getShortLanguage()
     unlockAudio()
 
     if (mode.value === 'full-duplex') {
@@ -838,6 +849,17 @@ export function useVoiceConversation() {
     }
   })
 
+  // #1334: Update STT language when preference changes mid-conversation
+  const { language: prefLanguage } = usePreferences()
+  watch(prefLanguage, (newLang) => {
+    currentLanguage.value = newLang || 'en'
+    if (_recognition && state.value === 'listening') {
+      const bcp47 = _LANG_TO_BCP47[newLang] || newLang
+      _recognition.lang = bcp47
+    }
+    logger.debug('Language preference changed:', newLang)
+  })
+
   function cleanup(): void {
     deactivate()
   }
@@ -846,6 +868,7 @@ export function useVoiceConversation() {
     state,
     mode,
     currentTranscript,
+    currentLanguage,
     bubbles,
     isActive,
     errorMessage,

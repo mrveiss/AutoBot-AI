@@ -26,6 +26,15 @@
           <option value="full-duplex">{{ $t('chat.voice.fullDuplex') }}</option>
         </select>
 
+        <!-- Language indicator (#1334) -->
+        <div
+          class="voice-panel__lang-badge"
+          :title="$t('chat.voice.languageLabel')"
+        >
+          <i class="fas fa-globe"></i>
+          {{ voiceConversation.currentLanguage.value.toUpperCase() }}
+        </div>
+
         <!-- WS indicator (full-duplex) -->
         <div
           v-if="voiceConversation.mode.value === 'full-duplex'"
@@ -283,6 +292,25 @@ onBeforeUnmount(() => {
   color: var(--text-secondary, #94a3b8);
   font-size: 0.6875rem;
   cursor: pointer;
+}
+
+.voice-panel__lang-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem;
+  background: rgba(37, 99, 235, 0.1);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  color: #93c5fd;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.voice-panel__lang-badge i {
+  font-size: 0.5625rem;
+  opacity: 0.7;
 }
 
 .voice-panel__ws-dot {
