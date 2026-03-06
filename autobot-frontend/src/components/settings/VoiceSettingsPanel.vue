@@ -61,10 +61,17 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
       <i class="fas fa-spinner fa-spin"></i> {{ $t('voice.loadingVoices') }}
     </div>
 
-    <div v-if="personalityVoiceId" class="personality-voice-hint">
+    <div v-if="personalityVoiceId || hasLanguageVoices" class="personality-voice-hint">
       <i class="fas fa-user-circle"></i>
-      {{ $t('voice.personalityOverride') }}
-      <strong>{{ voices.find(v => v.id === personalityVoiceId)?.name ?? personalityVoiceId }}</strong>
+      <div class="personality-voice-details">
+        <div v-if="personalityVoiceId">
+          {{ $t('voice.personalityOverride') }}
+          <strong>{{ voices.find(v => v.id === personalityVoiceId)?.name ?? personalityVoiceId }}</strong>
+        </div>
+        <div v-if="hasLanguageVoices">
+          {{ $t('voice.languageVoicesActive', { count: Object.keys(personalityVoiceIds).length }) }}
+        </div>
+      </div>
     </div>
 
     <div v-if="error" class="error-msg">{{ error }}</div>
@@ -131,7 +138,7 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
 import { createLogger } from '@/utils/debugUtils'
@@ -144,6 +151,7 @@ const {
   selectedVoiceId,
   effectiveVoiceId,
   personalityVoiceId,
+  personalityVoiceIds,
   loading,
   error,
   fetchVoices,
@@ -152,6 +160,10 @@ const {
   deleteVoice,
   fetchPersonalityVoice,
 } = useVoiceProfiles()
+
+const hasLanguageVoices = computed(() =>
+  Object.keys(personalityVoiceIds.value).length > 0
+)
 
 const showAddDialog = ref(false)
 const newVoiceName = ref('')
@@ -461,6 +473,12 @@ async function handleDelete(voiceId: string, name: string) {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs, 6px);
+}
+
+.personality-voice-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .personality-voice-hint strong {

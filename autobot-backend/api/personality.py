@@ -50,6 +50,7 @@ class ProfileDetail(BaseModel):
     created_at: str
     updated_at: str
     voice_id: str = ""
+    voice_ids: Dict[str, str] = {}
     language_code: str = "en"
 
 
@@ -62,6 +63,7 @@ class ProfileCreate(BaseModel):
     off_limits: List[str] = []
     custom_notes: str = ""
     voice_id: str = ""
+    voice_ids: Dict[str, str] = {}
     language_code: str = "en"
 
     @field_validator("tone")
@@ -90,6 +92,7 @@ class ProfileUpdate(BaseModel):
     off_limits: Optional[List[str]] = None
     custom_notes: Optional[str] = None
     voice_id: Optional[str] = None
+    voice_ids: Optional[Dict[str, str]] = None
     language_code: Optional[str] = None
 
     @field_validator("tone")
@@ -134,6 +137,7 @@ def _profile_to_detail(p) -> ProfileDetail:
         off_limits=p.off_limits,
         custom_notes=p.custom_notes,
         voice_id=p.voice_id,  # (#1135)
+        voice_ids=p.voice_ids,  # (#1333)
         language_code=p.language_code,  # (#1324)
         is_system=p.is_system,
         created_by=p.created_by,

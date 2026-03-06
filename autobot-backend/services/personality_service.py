@@ -75,6 +75,9 @@ class PersonalityProfile:
     off_limits: List[str] = field(default_factory=list)
     custom_notes: str = ""
     voice_id: str = ""  # Pocket TTS voice override (#1135)
+    voice_ids: Dict[str, str] = field(
+        default_factory=dict
+    )  # Per-language voices (#1333)
     language_code: str = "en"  # Response language (#1324)
     is_system: bool = False
     created_by: str = "system"
@@ -243,6 +246,7 @@ class PersonalityManager:
             off_limits=list(kwargs.get("off_limits", [])),
             custom_notes=kwargs.get("custom_notes", ""),
             voice_id=kwargs.get("voice_id", ""),
+            voice_ids=dict(kwargs.get("voice_ids", {})),
             language_code=kwargs.get("language_code", "en"),
             is_system=False,
             created_by=created_by,
@@ -273,6 +277,7 @@ class PersonalityManager:
             "off_limits",
             "custom_notes",
             "voice_id",
+            "voice_ids",
             "language_code",
         }
         for key, val in updates.items():
