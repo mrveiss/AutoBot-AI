@@ -59,7 +59,7 @@ pygetwindow==0.0.9
 markdownify==1.2.0
 langchain==0.3.26
 langchain-community==0.3.27
-langchain-core==0.3.68
+langchain-core==0.3.83
 langchain-text-splitters==0.3.9
 langsmith==0.4.5
 llama-index-core==0.12.52
