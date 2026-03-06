@@ -604,8 +604,7 @@
     "stop": "Stop",
     "record": "Record",
     "creating": "Creating...",
-    "confirmDeleteVoice": "Delete voice \"{name}\"?",
-    "languageVoicesActive": "{count} language-specific voice(s) configured"
+    "confirmDeleteVoice": "Delete voice \"{name}\"?"
   },
   "analytics": {
     "title": "Analytics",
