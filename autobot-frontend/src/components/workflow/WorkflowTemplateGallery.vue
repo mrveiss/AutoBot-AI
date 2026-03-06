@@ -306,18 +306,6 @@ const getCategoryClass = (cat: string) => ({
   community: cat === 'Community' || cat === 'community'
 })
 
-// Open preview - fetch full detail if steps are missing (#1415)
-const openPreview = async (template: AnyTemplate) => {
-  if (!('steps' in template) || !Array.isArray((template as any).steps)) {
-    const detail = await fetchTemplateDetail(template.id)
-    if (detail) {
-      previewTemplate.value = detail
-      return
-    }
-  }
-  previewTemplate.value = template
-}
-
 // Retry loading on error
 const retryLoad = async () => {
   await Promise.all([fetchTemplates(), fetchCategories()])
