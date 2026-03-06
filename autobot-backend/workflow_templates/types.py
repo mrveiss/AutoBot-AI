@@ -77,14 +77,14 @@ class WorkflowTemplate:
     required_secrets: Dict[str, Dict[str, Any]] = None
 
     def __post_init__(self):
-        """Initialize default value for variables field."""
+        """Initialize default values for variables and required_secrets fields."""
         if self.variables is None:
             self.variables = {}
         if self.required_secrets is None:
             self.required_secrets = {}
 
     def to_summary_dict(self) -> Dict[str, Any]:
-        """Convert template to summary dict for caching."""
+        """Convert template to summary dict for caching. (#1415)"""
         return {
             "id": self.id,
             "name": self.name,
@@ -101,7 +101,7 @@ class WorkflowTemplate:
         }
 
     def to_detail_dict(self) -> Dict[str, Any]:
-        """Convert template to detailed dict for caching."""
+        """Convert template to detailed dict for caching. (#1415)"""
         return {
             "id": self.id,
             "name": self.name,
