@@ -63,7 +63,9 @@ class SpeechRecognitionEngine:
         except ImportError:
             logger.warning("Language detection not available")
 
-    async def _run_parallel_analysis(self, audio_input: AudioInput) -> tuple:
+    async def _run_parallel_analysis(
+        self, audio_input: AudioInput, language: str = "en"
+    ) -> tuple:
         """Issue #665: Extracted from transcribe_audio to reduce function length.
 
         Run audio analysis operations in parallel for better performance.
@@ -73,7 +75,7 @@ class SpeechRecognitionEngine:
             return await asyncio.gather(
                 self._analyze_audio_quality(audio_input),
                 self._calculate_noise_level(audio_input),
-                self._perform_speech_recognition(audio_input),
+                self._perform_speech_recognition(audio_input, language),
                 self._detect_speech_segments(audio_input),
             )
         # Run parallel operations without speech recognition
@@ -122,9 +124,13 @@ class SpeechRecognitionEngine:
         )
 
     async def transcribe_audio(
-        self, audio_input: AudioInput
+        self, audio_input: AudioInput, language: str = "en"
     ) -> SpeechRecognitionResult:
-        """Transcribe audio to text using speech recognition"""
+        """Transcribe audio to text using speech recognition.
+
+        Args:
+            language: BCP-47 language code (e.g. "en", "de"). Defaults to "en".
+        """
 
         async with task_tracker.track_task(
             "Speech Recognition",
@@ -135,6 +141,7 @@ class SpeechRecognitionEngine:
                 "audio_id": audio_input.audio_id,
                 "duration": audio_input.duration,
                 "sample_rate": audio_input.sample_rate,
+                "language": language,
             },
         ) as task_context:
             start_time = time.time()
@@ -145,7 +152,7 @@ class SpeechRecognitionEngine:
                     noise_level,
                     transcription_result,
                     speech_segments,
-                ) = await self._run_parallel_analysis(audio_input)
+                ) = await self._run_parallel_analysis(audio_input, language)
                 processing_time = time.time() - start_time
 
                 result = self._build_recognition_result(
@@ -215,11 +222,15 @@ class SpeechRecognitionEngine:
             logger.debug("Noise level calculation failed: %s", e)
             return 0.5
 
-    def _try_google_recognition(self, audio_data) -> List[Dict[str, Any]]:
+    def _try_google_recognition(
+        self, audio_data, language: str = "en"
+    ) -> List[Dict[str, Any]]:
         """Try Google speech recognition (Issue #298 - extracted helper)."""
         results = []
         try:
-            result = self.recognizer.recognize_google(audio_data, show_all=True)
+            result = self.recognizer.recognize_google(
+                audio_data, language=language, show_all=True
+            )
             if not result or "alternative" not in result:
                 return results
             for alt in result["alternative"]:
@@ -250,9 +261,9 @@ class SpeechRecognitionEngine:
             return []
 
     async def _perform_speech_recognition(
-        self, audio_input: AudioInput
+        self, audio_input: AudioInput, language: str = "en"
     ) -> Dict[str, Any]:
-        """Perform actual speech recognition"""
+        """Perform actual speech recognition (#1329: language passthrough)."""
         empty_result = {
             "transcription": "",
             "confidence": 0.0,
@@ -268,7 +279,7 @@ class SpeechRecognitionEngine:
             audio_data = self._convert_to_audio_data(audio_input)
 
             # Try recognition engines (Issue #298 - uses helpers)
-            transcription_results = self._try_google_recognition(audio_data)
+            transcription_results = self._try_google_recognition(audio_data, language)
 
             if not transcription_results:
                 transcription_results = self._try_sphinx_recognition(audio_data)
@@ -282,7 +293,7 @@ class SpeechRecognitionEngine:
                 "transcription": best_result["text"],
                 "confidence": best_result["confidence"],
                 "alternatives": transcription_results[1:],
-                "language": "en",
+                "language": language,
             }
 
         except Exception as e:

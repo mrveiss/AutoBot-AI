@@ -15,6 +15,7 @@ import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
 import { useChatController } from '@/models/controllers'
 import { useChatStore } from '@/stores/useChatStore'
+import { useUserStore } from '@/stores/useUserStore'
 import { getBackendWsUrl } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
@@ -63,6 +64,9 @@ let _vadNode: AudioWorkletNode | null = null
 let _micStream: MediaStream | null = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _sileroVad: any = null
+let _whisperFallback = false // #1329: true when browser STT unavailable (airgapped)
+let _fallbackRecorder: MediaRecorder | null = null
+let _fallbackStream: MediaStream | null = null
 
 // Issue #1371: Cooldown timer to prevent TTS echo from triggering VAD
 let _ttsCooldownTimer: ReturnType<typeof setTimeout> | null = null
@@ -266,11 +270,111 @@ function _handleBargeIn(): void {
   _startListeningInternal()
 }
 
+// ─── Language helper (#1329) ─────────────────────────────
+
+/** Map short language codes to BCP-47 tags for browser SpeechRecognition. */
+const _LANG_TO_BCP47: Record<string, string> = {
+  en: 'en-US', de: 'de-DE', fr: 'fr-FR', es: 'es-ES',
+  it: 'it-IT', pt: 'pt-BR', nl: 'nl-NL', ru: 'ru-RU',
+  ja: 'ja-JP', ko: 'ko-KR', zh: 'zh-CN', ar: 'ar-SA',
+  hi: 'hi-IN', pl: 'pl-PL', cs: 'cs-CZ', sv: 'sv-SE',
+  da: 'da-DK', fi: 'fi-FI', nb: 'nb-NO', lv: 'lv-LV',
+  lt: 'lt-LT', et: 'et-EE', uk: 'uk-UA', tr: 'tr-TR',
+}
+
+function _getSttLanguage(): string {
+  const store = useUserStore()
+  const lang = store.preferences.language || 'en'
+  return _LANG_TO_BCP47[lang] || lang
+}
+
+function _getShortLanguage(): string {
+  const store = useUserStore()
+  return store.preferences.language || 'en'
+}
+
+// ─── Whisper fallback for airgapped mode (#1329) ────────
+
+async function _startWhisperFallback(): Promise<void> {
+  if (state.value === 'listening') return
+  if (!isActive.value) return
+
+  if (!micAccessAvailable.value) {
+    errorMessage.value = _getMicContextError('walkie-talkie')
+    return
+  }
+
+  try {
+    _fallbackStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    _fallbackRecorder = new MediaRecorder(_fallbackStream, {
+      mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm',
+    })
+    const chunks: Blob[] = []
+
+    _fallbackRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data)
+    }
+
+    _fallbackRecorder.onstop = () => {
+      const blob = new Blob(chunks, { type: 'audio/webm' })
+      _fallbackStream?.getTracks().forEach((t) => t.stop())
+      _fallbackStream = null
+      if (!isActive.value || blob.size === 0) {
+        state.value = 'idle'
+        return
+      }
+      state.value = 'processing'
+      _transcribeAudioWithLanguage(blob)
+        .then((text) => {
+          if (text) {
+            _dispatchTranscript(text)
+          } else {
+            state.value = 'idle'
+          }
+        })
+        .catch((err) => {
+          logger.error('Whisper fallback transcription error:', err)
+          errorMessage.value = 'Transcription failed. Try again.'
+          state.value = 'idle'
+        })
+    }
+
+    _fallbackRecorder.start()
+    state.value = 'listening'
+    currentTranscript.value = ''
+    logger.debug('Whisper fallback recording started')
+  } catch (e) {
+    const err = e instanceof Error ? e : new Error(String(e))
+    logger.error('Whisper fallback mic init failed:', err)
+    if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
+      errorMessage.value = _getMicContextError('walkie-talkie')
+    } else {
+      errorMessage.value = `Mic init failed: ${err.message || 'unknown error'}`
+    }
+    state.value = 'idle'
+  }
+}
+
+function _stopWhisperFallback(): void {
+  if (_fallbackRecorder && _fallbackRecorder.state !== 'inactive') {
+    _fallbackRecorder.stop()
+  }
+  _fallbackRecorder = null
+}
+
 // ─── STT helper (shared across modes) ───────────────────
 
 function _startListeningInternal(): void {
   if (state.value === 'listening') return
   if (!isActive.value) return
+
+  // #1329: If browser STT failed previously (airgapped), use Whisper fallback
+  if (_whisperFallback) {
+    _startWhisperFallback()
+    return
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = window as any
@@ -283,7 +387,7 @@ function _startListeningInternal(): void {
   _recognition = new Ctor()
   _recognition.continuous = mode.value === 'full-duplex'
   _recognition.interimResults = true
-  _recognition.lang = 'en-US'
+  _recognition.lang = _getSttLanguage()
 
   _recognition.onstart = () => {
     state.value = 'listening'
@@ -347,6 +451,12 @@ function _startListeningInternal(): void {
     if (event.error === 'not-allowed') {
       errorMessage.value =
         'Microphone access denied. Allow mic in browser settings.'
+    } else if (event.error === 'network') {
+      // #1329: Browser STT needs internet — fall back to local Whisper
+      logger.warn('Browser STT network error — switching to Whisper fallback')
+      _whisperFallback = true
+      _startWhisperFallback()
+      return
     } else if (event.error === 'no-speech') {
       if (mode.value === 'full-duplex' && isActive.value) {
         state.value = 'idle'
@@ -367,6 +477,7 @@ function _stopRecognition(): void {
     try { _recognition.abort() } catch { /* ignore */ }
     _recognition = null
   }
+  _stopWhisperFallback()
   currentTranscript.value = ''
 }
 
@@ -490,10 +601,15 @@ function _float32ToWav(samples: Float32Array, sr: number): Blob {
   return new Blob([buf], { type: 'audio/wav' })
 }
 
-/** POST audio blob to /api/voice/transcribe → { text, confidence }. */
-async function _transcribeAudio(blob: Blob): Promise<string> {
+/** POST audio blob to /api/voice/transcribe → { text, confidence } (#1329). */
+async function _transcribeAudioWithLanguage(
+  blob: Blob,
+  filename = 'speech.wav',
+): Promise<string> {
   const form = new FormData()
-  form.append('audio', blob, 'speech.wav')
+  form.append('audio', blob, filename)
+  const lang = _getShortLanguage()
+  if (lang) form.append('language', lang)
   const res = await fetchWithAuth('/api/voice/transcribe', {
     method: 'POST',
     body: form,
@@ -504,6 +620,11 @@ async function _transcribeAudio(blob: Blob): Promise<string> {
   }
   const data = await res.json()
   return (data.text ?? '').trim()
+}
+
+/** POST audio blob to /api/voice/transcribe → { text, confidence }. */
+async function _transcribeAudio(blob: Blob): Promise<string> {
+  return _transcribeAudioWithLanguage(blob, 'speech.wav')
 }
 
 /** Start Silero VAD for hands-free speech detection (#1030). */
@@ -662,6 +783,8 @@ export function useVoiceConversation() {
     if (mode.value === 'hands-free') {
       _stopHandsFree()
       state.value = 'idle'
+    } else if (_fallbackRecorder && _fallbackRecorder.state !== 'inactive') {
+      _stopWhisperFallback()
     } else if (_recognition) {
       _recognition.stop()
     }
