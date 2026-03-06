@@ -33,6 +33,13 @@ Issue #753: User preference management interface
           Appearance
         </button>
         <button
+          @click="activeTab = 'language'"
+          :class="['settings-tab', { active: activeTab === 'language' }]"
+        >
+          <i class="fas fa-globe"></i>
+          {{ $t('settings.language') }}
+        </button>
+        <button
           @click="activeTab = 'voice'"
           :class="['settings-tab', { active: activeTab === 'voice' }]"
         >
@@ -56,6 +63,19 @@ Issue #753: User preference management interface
           </div>
         </section>
 
+        <section v-if="activeTab === 'language'" class="settings-section">
+          <div class="section-header">
+            <h2 class="section-title">
+              <i class="fas fa-globe"></i>
+              {{ $t('settings.language') }}
+            </h2>
+            <p class="section-description">{{ $t('settings.languageDesc') }}</p>
+          </div>
+          <div class="section-content">
+            <LanguageSettingsPanel />
+          </div>
+        </section>
+
         <section v-if="activeTab === 'voice'" class="settings-section">
           <div class="section-header">
             <h2 class="section-title">
@@ -75,6 +95,7 @@ Issue #753: User preference management interface
 
 <script setup lang="ts">
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
+import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import { ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -83,7 +104,7 @@ const logger = createLogger('SettingsView')
 
 logger.debug('Settings view initialized')
 
-type PreferenceTab = 'appearance' | 'voice'
+type PreferenceTab = 'appearance' | 'language' | 'voice'
 const activeTab = ref<PreferenceTab>('appearance')
 </script>
 
