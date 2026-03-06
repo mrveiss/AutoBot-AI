@@ -43,6 +43,7 @@ export interface ScanResult {
 export interface ScanRunnerReturn {
   running: Ref<boolean>
   results: Ref<ScanResult[]>
+  currentScanId: Ref<string | null>
   completedCount: ComputedRef<number>
   failedCount: ComputedRef<number>
   skippedCount: ComputedRef<number>
@@ -56,6 +57,7 @@ export interface ScanRunnerReturn {
 async function executeScan(
   scan: ScanDefinition,
   results: Ref<ScanResult[]>,
+  currentScanId: Ref<string | null>,
   index: number,
 ): Promise<void> {
   const entry = results.value[index]
@@ -67,6 +69,7 @@ async function executeScan(
     return
   }
 
+  currentScanId.value = scan.id
   entry.status = 'running'
   const start = performance.now()
   logger.info(`[${scan.id}] started: ${scan.label}`)
@@ -94,6 +97,7 @@ async function executeScan(
 export function useAnalyticsScanRunner(): ScanRunnerReturn {
   const running: Ref<boolean> = ref(false)
   const results: Ref<ScanResult[]> = ref([])
+  const currentScanId: Ref<string | null> = ref(null)
 
   const completedCount = computed(
     () => results.value.filter((r) => r.status === 'completed').length,
@@ -129,7 +133,7 @@ export function useAnalyticsScanRunner(): ScanRunnerReturn {
     logger.info(`Starting ${scans.length} scans sequentially`)
 
     for (let i = 0; i < scans.length; i++) {
-      await executeScan(scans[i], results, i)
+      await executeScan(scans[i], results, currentScanId, i)
     }
 
     const summary = [
@@ -139,6 +143,7 @@ export function useAnalyticsScanRunner(): ScanRunnerReturn {
     ].join(', ')
     logger.info(`All scans finished: ${summary}`)
 
+    currentScanId.value = null
     running.value = false
   }
 
@@ -146,11 +151,13 @@ export function useAnalyticsScanRunner(): ScanRunnerReturn {
   const reset = (): void => {
     running.value = false
     results.value = []
+    currentScanId.value = null
   }
 
   return {
     running,
     results,
+    currentScanId,
     completedCount,
     failedCount,
     skippedCount,
