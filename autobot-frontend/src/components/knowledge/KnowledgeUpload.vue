@@ -220,7 +220,7 @@
                 <i class="fas fa-folder-open"></i>
                 {{ selectedFiles.length }} file{{ selectedFiles.length > 1 ? 's' : '' }} selected
               </h5>
-              <button @click="clearAllFiles" class="clear-all-btn" title="Clear all files">
+              <button @click="clearAllFiles" class="clear-all-btn" :title="$t('knowledge.upload.clearAllTitle')">
                 <i class="fas fa-trash-alt"></i>
                 {{ $t('knowledge.upload.clearAll') }}
               </button>
@@ -267,14 +267,14 @@
                       class="preview-toggle-btn"
                       :class="{ 'active': expandedFileId === fileItem.id }"
                       @click.stop="toggleFilePreview(fileItem.id)"
-                      title="Preview content"
+                      :title="$t('knowledge.upload.previewContentTitle')"
                     >
                       <i :class="expandedFileId === fileItem.id ? 'fas fa-chevron-up' : 'fas fa-eye'"></i>
                     </button>
                     <button
                       class="remove-file-btn"
                       @click.stop="removeFile(index)"
-                      title="Remove file"
+                      :title="$t('knowledge.upload.removeFileTitle')"
                     >
                       <i class="fas fa-times"></i>
                     </button>

@@ -567,7 +567,13 @@
     "cacheApiUnavailable": "Cache API not available",
     "cachedSettings": "Using cached settings (backend offline)",
     "appearanceDesc": "Customize the look and feel of your workspace",
-    "voiceDesc": "Configure text-to-speech voice and voice profiles"
+    "voiceDesc": "Configure text-to-speech voice and voice profiles",
+    "languageDesc": "Choose your preferred language for the interface and AI responses",
+    "languageTitle": "Language Preferences",
+    "languageSelect": "Interface Language",
+    "languageHint": "Select your preferred language. The interface will switch immediately if translations are available. AI responses will also use this language.",
+    "languageChanged": "Language updated successfully",
+    "languageChangeFailed": "Failed to update language"
   },
   "voice": {
     "title": "Voice",
@@ -4100,6 +4106,9 @@
   "knowledge.upload.browse": "browse",
   "knowledge.upload.supportedFormats": "Supported formats: PDF, TXT, MD, JSON, CSV, DOCX",
   "knowledge.upload.clearAll": "Clear All",
+  "knowledge.upload.clearAllTitle": "Clear all files",
+  "knowledge.upload.previewContentTitle": "Preview content",
+  "knowledge.upload.removeFileTitle": "Remove file",
   "knowledge.upload.uploadedSuccessfully": "Uploaded successfully",
   "knowledge.upload.uploadFailed": "Upload failed",
   "knowledge.upload.contentPreview": "Content Preview",
