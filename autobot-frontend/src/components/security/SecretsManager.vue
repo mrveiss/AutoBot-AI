@@ -1034,6 +1034,28 @@ const loadSecrets = async () => {
   }
 };
 
+// Load workflow usage for secrets (#1415)
+const loadWorkflowUsage = async () => {
+  try {
+    const backendUrl = getBackendUrl();
+    const response = await fetchWithAuth(
+      `${backendUrl}/api/templates/templates/secrets-usage`
+    );
+    if (response.ok) {
+      const data = await response.json();
+      workflowUsage.value = data.secrets_usage || {};
+    }
+  } catch (error) {
+    logger.error('Failed to load workflow usage:', error);
+  }
+};
+
+// Get workflow usage for a secret by matching name to keys (#1415)
+const getWorkflowUsage = (secret: any): any[] => {
+  const name = (secret.name || '').toUpperCase().replace(/\s+/g, '_');
+  return workflowUsage.value[name] || [];
+};
+
 const selectCategory = (type: string) => {
   selectedCategory.value = type;
   selectedScope.value = '';
@@ -1543,6 +1565,7 @@ const getVisibilityIcon = (secret: any): string => {
 // Lifecycle
 onMounted(() => {
   loadSecrets();
+  loadWorkflowUsage();
 });
 
 // Watch for scope changes to reload with filter
