@@ -8,6 +8,8 @@
  */
 
 import { ref, watch } from 'vue'
+import { setLocale } from '@/i18n'
+import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('usePreferences')
@@ -23,6 +25,7 @@ export interface UserPreferences {
   accentColor: AccentColor
   layoutDensity: LayoutDensity
   voiceDisplayMode: VoiceDisplayMode
+  language: string
 }
 
 // Default preferences
@@ -30,7 +33,8 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   fontSize: 'medium',
   accentColor: 'teal',
   layoutDensity: 'comfortable',
-  voiceDisplayMode: 'modal'
+  voiceDisplayMode: 'modal',
+  language: 'en'
 }
 
 // Reactive preferences state
@@ -38,6 +42,7 @@ const fontSize = ref<FontSize>('medium')
 const accentColor = ref<AccentColor>('teal')
 const layoutDensity = ref<LayoutDensity>('comfortable')
 const voiceDisplayMode = ref<VoiceDisplayMode>('modal')
+const language = ref<string>('en')
 
 // Local storage key
 const STORAGE_KEY = 'autobot-preferences'
@@ -54,6 +59,7 @@ function loadPreferences(): void {
       accentColor.value = parsed.accentColor || DEFAULT_PREFERENCES.accentColor
       layoutDensity.value = parsed.layoutDensity || DEFAULT_PREFERENCES.layoutDensity
       voiceDisplayMode.value = parsed.voiceDisplayMode || DEFAULT_PREFERENCES.voiceDisplayMode
+      language.value = parsed.language || localStorage.getItem('autobot-language') || DEFAULT_PREFERENCES.language
 
       logger.debug('Preferences loaded from localStorage', {
         fontSize: fontSize.value,
@@ -77,7 +83,8 @@ function savePreferences(): void {
       fontSize: fontSize.value,
       accentColor: accentColor.value,
       layoutDensity: layoutDensity.value,
-      voiceDisplayMode: voiceDisplayMode.value
+      voiceDisplayMode: voiceDisplayMode.value,
+      language: language.value
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences))
     logger.debug('Preferences saved to localStorage', preferences)
@@ -114,16 +121,35 @@ function applyLayoutDensity(density: LayoutDensity): void {
 }
 
 /**
+ * Sync language preference to backend personality profile
+ */
+function syncLanguageToBackend(code: string): void {
+  apiClient.get('/api/personality/active').then((res) => {
+    if (res.data && res.data.id) {
+      apiClient.put(
+        `/api/personality/profiles/${res.data.id}`,
+        { language_code: code }
+      )
+    }
+  }).catch((error) => {
+    logger.warn('Could not sync language to backend', error)
+  })
+}
+
+/**
  * Main composable function
  */
 export function usePreferences() {
   // Load preferences on first use
   loadPreferences()
 
-  // Apply current preferences
+  // Apply current preferences (#1331: sync language to vue-i18n on startup)
   applyFontSize(fontSize.value)
   applyAccentColor(accentColor.value)
   applyLayoutDensity(layoutDensity.value)
+  if (language.value !== 'en') {
+    setLocale(language.value)
+  }
 
   // Watch for changes and persist
   watch(fontSize, (newSize) => {
@@ -170,6 +196,13 @@ export function usePreferences() {
     voiceDisplayMode.value = mode
   }
 
+  async function setLanguage(code: string): Promise<void> {
+    language.value = code
+    await setLocale(code)
+    savePreferences()
+    syncLanguageToBackend(code)
+  }
+
   /**
    * Reset all preferences to defaults
    */
@@ -178,21 +211,26 @@ export function usePreferences() {
     accentColor.value = DEFAULT_PREFERENCES.accentColor
     layoutDensity.value = DEFAULT_PREFERENCES.layoutDensity
     voiceDisplayMode.value = DEFAULT_PREFERENCES.voiceDisplayMode
+    language.value = DEFAULT_PREFERENCES.language
+    setLocale(DEFAULT_PREFERENCES.language)
     logger.debug('Preferences reset to defaults')
   }
 
+  // #1331 — expose language preference
   return {
     // State
     fontSize,
     accentColor,
     layoutDensity,
     voiceDisplayMode,
+    language,
 
     // Actions
     setFontSize,
     setAccentColor,
     setLayoutDensity,
     setVoiceDisplayMode,
+    setLanguage,
     resetPreferences
   }
 }

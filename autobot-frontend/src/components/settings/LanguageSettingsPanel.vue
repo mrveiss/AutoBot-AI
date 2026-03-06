@@ -61,16 +61,18 @@ Issue #1330: Language switcher component in Settings
 </template>
 
 <script setup lang="ts">
+// Issue #1331: Use usePreferences for language persistence
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { setLocale } from '@/i18n'
+import { usePreferences } from '@/composables/usePreferences'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('LanguageSettingsPanel')
 const { t } = useI18n()
+const { language, setLanguage } = usePreferences()
 
-const selectedLanguage = ref(localStorage.getItem('autobot-language') || 'en')
+const selectedLanguage = ref(language.value)
 const languages = ref<Record<string, string>>({ en: 'English' })
 const announcement = ref('')
 const statusMessage = ref('')
@@ -92,9 +94,7 @@ async function handleLanguageChange() {
   statusMessage.value = ''
 
   try {
-    await setLocale(locale)
-
-    await updatePersonalityLanguage(locale)
+    await setLanguage(locale)
 
     statusMessage.value = t('settings.languageChanged')
     statusType.value = 'success'
@@ -104,20 +104,6 @@ async function handleLanguageChange() {
     logger.error('Failed to change language', error)
     statusMessage.value = t('settings.languageChangeFailed')
     statusType.value = 'error'
-  }
-}
-
-async function updatePersonalityLanguage(languageCode: string) {
-  try {
-    const activeResponse = await apiClient.get('/api/personality/active')
-    if (activeResponse.data && activeResponse.data.id) {
-      await apiClient.put(
-        `/api/personality/profiles/${activeResponse.data.id}`,
-        { language_code: languageCode }
-      )
-    }
-  } catch (error) {
-    logger.warn('Could not update personality profile language', error)
   }
 }
 
