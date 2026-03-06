@@ -84,6 +84,7 @@ class LLMUsageRecord:
     timestamp: str
     session_id: Optional[str] = None
     user_id: Optional[str] = None
+    agent_id: Optional[str] = None
     endpoint: Optional[str] = None
     latency_ms: Optional[float] = None
     success: bool = True
@@ -101,6 +102,7 @@ class LLMUsageRecord:
             "timestamp": self.timestamp,
             "session_id": self.session_id,
             "user_id": self.user_id,
+            "agent_id": self.agent_id,
             "endpoint": self.endpoint,
             "latency_ms": self.latency_ms,
             "success": self.success,
@@ -120,6 +122,7 @@ class LLMUsageRecord:
             timestamp=data["timestamp"],
             session_id=data.get("session_id"),
             user_id=data.get("user_id"),
+            agent_id=data.get("agent_id"),
             endpoint=data.get("endpoint"),
             latency_ms=data.get("latency_ms"),
             success=data.get("success", True),
@@ -143,6 +146,7 @@ class TrackUsageRequest:
     output_tokens: int
     session_id: Optional[str] = None
     user_id: Optional[str] = None
+    agent_id: Optional[str] = None
     endpoint: Optional[str] = None
     latency_ms: Optional[float] = None
     success: bool = True
@@ -178,6 +182,8 @@ class LLMCostTracker:
     DAILY_TOTALS_KEY = f"{REDIS_KEY_PREFIX}daily"
     MODEL_TOTALS_KEY = f"{REDIS_KEY_PREFIX}by_model"
     SESSION_TOTALS_KEY = f"{REDIS_KEY_PREFIX}by_session"
+    AGENT_TOTALS_KEY = f"{REDIS_KEY_PREFIX}by_agent"
+    AGENT_BUDGET_KEY = f"{REDIS_KEY_PREFIX}agent_budget"
     BUDGET_ALERTS_KEY = f"{REDIS_KEY_PREFIX}budget_alerts"
 
     def __init__(self):
@@ -238,6 +244,7 @@ class LLMCostTracker:
             request.output_tokens,
             request.session_id,
             request.user_id,
+            request.agent_id,
             request.endpoint,
             request.latency_ms,
             request.success,
@@ -253,6 +260,7 @@ class LLMCostTracker:
         output_tokens: Optional[int],
         session_id: Optional[str],
         user_id: Optional[str],
+        agent_id: Optional[str],
         endpoint: Optional[str],
         latency_ms: Optional[float],
         success: bool,
@@ -277,6 +285,7 @@ class LLMCostTracker:
             output_tokens,
             session_id,
             user_id,
+            agent_id,
             endpoint,
             latency_ms,
             success,
@@ -293,6 +302,7 @@ class LLMCostTracker:
         output_tokens: Optional[int],
         session_id: Optional[str],
         user_id: Optional[str],
+        agent_id: Optional[str],
         endpoint: Optional[str],
         latency_ms: Optional[float],
         success: bool,
@@ -325,6 +335,7 @@ class LLMCostTracker:
             output_tokens,
             session_id,
             user_id,
+            agent_id,
             endpoint,
             latency_ms,
             success,
@@ -341,6 +352,7 @@ class LLMCostTracker:
         cost: float,
         session_id: Optional[str],
         user_id: Optional[str],
+        agent_id: Optional[str],
         endpoint: Optional[str],
         latency_ms: Optional[float],
         success: bool,
@@ -367,6 +379,7 @@ class LLMCostTracker:
             timestamp=datetime.utcnow().isoformat(),
             session_id=session_id,
             user_id=user_id,
+            agent_id=agent_id,
             endpoint=endpoint,
             latency_ms=latency_ms,
             success=success,
@@ -383,6 +396,7 @@ class LLMCostTracker:
         output_tokens: Optional[int],
         session_id: Optional[str],
         user_id: Optional[str],
+        agent_id: Optional[str],
         endpoint: Optional[str],
         latency_ms: Optional[float],
         success: bool,
@@ -398,6 +412,7 @@ class LLMCostTracker:
             output_tokens,
             session_id,
             user_id,
+            agent_id,
             endpoint,
             latency_ms,
             success,
@@ -413,6 +428,7 @@ class LLMCostTracker:
         output_tokens: int,
         session_id: Optional[str],
         user_id: Optional[str],
+        agent_id: Optional[str],
         endpoint: Optional[str],
         latency_ms: Optional[float],
         success: bool,
@@ -429,6 +445,7 @@ class LLMCostTracker:
             cost,
             session_id,
             user_id,
+            agent_id,
             endpoint,
             latency_ms,
             success,
@@ -460,6 +477,7 @@ class LLMCostTracker:
         output_tokens: Optional[int] = None,
         session_id: Optional[str] = None,
         user_id: Optional[str] = None,
+        agent_id: Optional[str] = None,
         endpoint: Optional[str] = None,
         latency_ms: Optional[float] = None,
         success: bool = True,
@@ -482,6 +500,7 @@ class LLMCostTracker:
             output_tokens,
             session_id,
             user_id,
+            agent_id,
             endpoint,
             latency_ms,
             success,
@@ -495,6 +514,7 @@ class LLMCostTracker:
             output_tokens,
             session_id,
             user_id,
+            agent_id,
             endpoint,
             latency_ms,
             success,
@@ -508,6 +528,7 @@ class LLMCostTracker:
             output_tokens,
             session_id,
             user_id,
+            agent_id,
             endpoint,
             latency_ms,
             success,
@@ -554,6 +575,19 @@ class LLMCostTracker:
                         session_key, "output_tokens", record.output_tokens
                     )
                     await pipe.expire(session_key, 86400 * 30)  # Keep 30 days
+
+                # Update per-agent totals if agent provided (#1401)
+                if record.agent_id:
+                    agent_key = f"{self.AGENT_TOTALS_KEY}:{record.agent_id}"
+                    await pipe.hincrbyfloat(agent_key, "cost_usd", record.cost_usd)
+                    await pipe.hincrby(agent_key, "input_tokens", record.input_tokens)
+                    await pipe.hincrby(agent_key, "output_tokens", record.output_tokens)
+                    await pipe.hincrby(agent_key, "call_count", 1)
+                    daily_agent_key = (
+                        f"{self.AGENT_TOTALS_KEY}:{record.agent_id}" f":daily:{today}"
+                    )
+                    await pipe.incrbyfloat(daily_agent_key, record.cost_usd)
+                    await pipe.expire(daily_agent_key, 86400 * 90)
 
                 # Execute all operations in single round-trip
                 await pipe.execute()
@@ -788,6 +822,169 @@ class LLMCostTracker:
         except Exception as e:
             logger.error("Failed to get recent usage: %s", e)
             return []
+
+    async def get_cost_by_agent(self, agent_id: str) -> Dict[str, Any]:
+        """Get cost breakdown for a specific agent (#1401)."""
+        try:
+            redis = await self.get_redis()
+            agent_key = f"{self.AGENT_TOTALS_KEY}:{agent_id}"
+            data = await redis.hgetall(agent_key)
+
+            if not data:
+                return {"agent_id": agent_id, "found": False}
+
+            return {
+                "agent_id": agent_id,
+                "found": True,
+                "cost_usd": float(data.get(b"cost_usd", 0) or data.get("cost_usd", 0)),
+                "input_tokens": int(
+                    data.get(b"input_tokens", 0) or data.get("input_tokens", 0)
+                ),
+                "output_tokens": int(
+                    data.get(b"output_tokens", 0) or data.get("output_tokens", 0)
+                ),
+                "call_count": int(
+                    data.get(b"call_count", 0) or data.get("call_count", 0)
+                ),
+            }
+        except Exception as e:
+            logger.error("Failed to get agent cost: %s", e)
+            return {"agent_id": agent_id, "error": str(e)}
+
+    async def get_all_agent_costs(self) -> List[Dict[str, Any]]:
+        """Get cost breakdown for all agents (#1401)."""
+        try:
+            redis = await self.get_redis()
+            pattern = f"{self.AGENT_TOTALS_KEY}:*"
+            agent_keys = [
+                k
+                for k in await redis.keys(pattern)
+                if b":daily:" not in (k if isinstance(k, bytes) else k.encode())
+            ]
+
+            if not agent_keys:
+                return []
+
+            pipe = redis.pipeline()
+            for key in agent_keys:
+                pipe.hgetall(key)
+            results = await pipe.execute()
+
+            agents = []
+            for key, data in zip(agent_keys, results):
+                if not data:
+                    continue
+                key_str = key if isinstance(key, str) else key.decode("utf-8")
+                agent_id = key_str.split(":")[-1]
+                agents.append(
+                    {
+                        "agent_id": agent_id,
+                        "cost_usd": float(
+                            data.get(b"cost_usd", 0) or data.get("cost_usd", 0)
+                        ),
+                        "input_tokens": int(
+                            data.get(b"input_tokens", 0) or data.get("input_tokens", 0)
+                        ),
+                        "output_tokens": int(
+                            data.get(b"output_tokens", 0)
+                            or data.get("output_tokens", 0)
+                        ),
+                        "call_count": int(
+                            data.get(b"call_count", 0) or data.get("call_count", 0)
+                        ),
+                    }
+                )
+
+            agents.sort(key=lambda x: x["cost_usd"], reverse=True)
+            return agents
+        except Exception as e:
+            logger.error("Failed to get all agent costs: %s", e)
+            return []
+
+    async def set_agent_budget(
+        self, agent_id: str, budget_monthly_usd: float
+    ) -> Dict[str, Any]:
+        """Set monthly budget for an agent (#1401)."""
+        try:
+            redis = await self.get_redis()
+            budget_cents = int(budget_monthly_usd * 100)
+            await redis.hset(
+                self.AGENT_BUDGET_KEY,
+                agent_id,
+                json.dumps(
+                    {
+                        "budget_monthly_cents": budget_cents,
+                        "updated_at": datetime.utcnow().isoformat(),
+                    }
+                ),
+            )
+            return {
+                "agent_id": agent_id,
+                "budget_monthly_usd": budget_monthly_usd,
+                "budget_monthly_cents": budget_cents,
+                "status": "set",
+            }
+        except Exception as e:
+            logger.error("Failed to set agent budget: %s", e)
+            return {"agent_id": agent_id, "error": str(e)}
+
+    async def get_agent_budget(self, agent_id: str) -> Optional[Dict[str, Any]]:
+        """Get budget config for an agent (#1401)."""
+        try:
+            redis = await self.get_redis()
+            raw = await redis.hget(self.AGENT_BUDGET_KEY, agent_id)
+            if not raw:
+                return None
+            raw_str = raw if isinstance(raw, str) else raw.decode("utf-8")
+            return json.loads(raw_str)
+        except Exception as e:
+            logger.error("Failed to get agent budget: %s", e)
+            return None
+
+    async def get_all_agent_budgets(
+        self,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Get all agent budget configs (#1401)."""
+        try:
+            redis = await self.get_redis()
+            raw_data = await redis.hgetall(self.AGENT_BUDGET_KEY)
+            budgets = {}
+            for k, v in raw_data.items():
+                k_str = k if isinstance(k, str) else k.decode("utf-8")
+                v_str = v if isinstance(v, str) else v.decode("utf-8")
+                budgets[k_str] = json.loads(v_str)
+            return budgets
+        except Exception as e:
+            logger.error("Failed to get agent budgets: %s", e)
+            return {}
+
+    async def check_agent_budget(self, agent_id: str) -> Dict[str, Any]:
+        """Check if agent has exceeded budget (#1401)."""
+        budget = await self.get_agent_budget(agent_id)
+        if not budget:
+            return {
+                "agent_id": agent_id,
+                "has_budget": False,
+                "exceeded": False,
+            }
+
+        cost_data = await self.get_cost_by_agent(agent_id)
+        spent_usd = cost_data.get("cost_usd", 0)
+        budget_cents = budget.get("budget_monthly_cents", 0)
+        budget_usd = budget_cents / 100.0
+        spent_cents = int(spent_usd * 100)
+        exceeded = budget_cents > 0 and spent_cents >= budget_cents
+        utilization = (spent_usd / budget_usd * 100) if budget_usd > 0 else 0
+
+        return {
+            "agent_id": agent_id,
+            "has_budget": True,
+            "budget_monthly_usd": budget_usd,
+            "spent_usd": spent_usd,
+            "remaining_usd": max(budget_usd - spent_usd, 0),
+            "utilization_percent": round(utilization, 2),
+            "exceeded": exceeded,
+        }
 
 
 # Singleton instance (thread-safe)
