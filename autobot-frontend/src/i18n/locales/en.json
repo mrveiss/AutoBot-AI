@@ -508,6 +508,7 @@
       "fullDuplex": "Full-duplex",
       "connected": "Connected",
       "disconnected": "Disconnected",
+      "languageLabel": "Voice language",
       "closeVoiceChat": "Close voice chat",
       "closeVoicePanel": "Close voice panel",
       "tapMicToStart": "Tap the mic to start a conversation",
