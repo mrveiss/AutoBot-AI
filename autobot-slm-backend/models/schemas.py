@@ -322,6 +322,41 @@ class SettingResponse(BaseModel):
 
 
 # =============================================================================
+# System Secrets Schemas (#1417)
+# =============================================================================
+
+
+class SecretCreate(BaseModel):
+    """Create a system secret."""
+
+    key: str = Field(..., min_length=1, max_length=128)
+    value: str = Field(..., min_length=1)
+    category: str = "system"
+    description: Optional[str] = None
+
+
+class SecretUpdate(BaseModel):
+    """Update a system secret."""
+
+    value: Optional[str] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+
+
+class SecretResponse(BaseModel):
+    """System secret response (value masked)."""
+
+    id: int
+    key: str
+    category: str
+    description: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# =============================================================================
 # Role Schemas
 # =============================================================================
 

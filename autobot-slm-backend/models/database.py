@@ -582,6 +582,32 @@ class BlueGreenDeployment(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class SecretCategory(str, enum.Enum):
+    """System secret category enumeration (#1417)."""
+
+    SYSTEM = "system"
+    API_TOKEN = "api_token"
+    SERVICE = "service"
+
+
+class SystemSecret(Base):
+    """Encrypted system secret for fleet-wide configuration (#1417).
+
+    Stores sensitive tokens (HF_TOKEN, API keys, etc.) encrypted at rest.
+    These are internal AutoBot system secrets, not shared with end users.
+    """
+
+    __tablename__ = "system_secrets"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String(128), unique=True, nullable=False, index=True)
+    encrypted_value = Column(Text, nullable=False)
+    category = Column(String(32), default=SecretCategory.SYSTEM.value)
+    description = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class CredentialType(str, enum.Enum):
     """Credential type enumeration."""
 

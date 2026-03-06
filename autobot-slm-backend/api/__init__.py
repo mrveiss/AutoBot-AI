@@ -30,6 +30,7 @@ from .monitoring import router as monitoring_router
 from .nodes import router as nodes_router
 from .npu import router as npu_router
 from .orchestration import router as orchestration_router
+from .secrets import router as secrets_router
 from .security import router as security_router
 from .services import fleet_router as fleet_services_router
 from .services import router as services_router
@@ -83,6 +84,7 @@ __all__ = [
     "autobot_users_router",
     "autobot_teams_router",
     "sso_router",
+    "secrets_router",
     "setup_wizard_router",
     "sso_auth_router",
 ]

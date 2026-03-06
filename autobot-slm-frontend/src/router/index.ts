@@ -209,6 +209,13 @@ const router = createRouter({
           meta: { title: 'Personality', parent: 'settings', admin: true }
         },
         {
+          // Issue #1417: System Secrets Management
+          path: 'admin/secrets',
+          name: 'settings-admin-secrets',
+          component: () => import('@/views/settings/admin/SecretsSettings.vue'),
+          meta: { title: 'System Secrets', parent: 'settings', admin: true }
+        },
+        {
           path: 'admin/log-forwarding',
           name: 'settings-admin-log-forwarding',
           component: () => import('@/views/settings/admin/LogForwardingSettings.vue'),
