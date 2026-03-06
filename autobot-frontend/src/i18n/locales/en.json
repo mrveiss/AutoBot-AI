@@ -871,6 +871,7 @@
         "lastAnalysis": "Last analysis",
         "noFilesAnalyzed": "No files analyzed - all files are within acceptable risk thresholds.",
         "noData": "No bug prediction data available.",
+        "interrupted": "Previous bug prediction analysis was interrupted by a server restart.",
         "factors": {
           "complexity": "High cyclomatic complexity - break down into smaller functions",
           "changeFrequency": "Frequently modified - stabilize before adding features",

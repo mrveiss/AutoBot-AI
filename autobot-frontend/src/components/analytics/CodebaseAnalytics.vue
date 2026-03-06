@@ -1780,13 +1780,29 @@
           </div>
         </h3>
 
-        <!-- Loading State -->
+        <!-- Loading State (#1418: progress bar matching PatternAnalysis.vue) -->
         <div v-if="loadingBugPrediction" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i> {{ $t('analytics.codebase.bugPrediction.analyzing') }}
+          <i class="fas fa-spinner fa-spin"></i>
+          <span v-if="bugPredictionTask.taskStatus.value">
+            {{ bugPredictionTask.taskStatus.value.current_step || $t('analytics.codebase.bugPrediction.analyzing') }}
+          </span>
+          <span v-else>{{ $t('analytics.codebase.bugPrediction.analyzing') }}</span>
+          <div v-if="bugPredictionTask.taskStatus.value?.progress" class="mini-progress">
+            <div class="mini-progress-bar" :style="{ width: bugPredictionTask.taskStatus.value.progress + '%' }"></div>
+          </div>
+        </div>
+
+        <!-- Interrupted State (#1418) -->
+        <div v-if="!loadingBugPrediction && bugPredictionTask.wasInterrupted.value" class="interrupted-state">
+          <i class="fas fa-info-circle"></i>
+          {{ $t('analytics.codebase.bugPrediction.interrupted') }}
+          <button @click="loadBugPrediction" class="rerun-btn">
+            <i class="fas fa-redo"></i> {{ $t('analytics.codebase.actions.retry') }}
+          </button>
         </div>
 
         <!-- Error State -->
-        <div v-else-if="bugPredictionError" class="error-state">
+        <div v-else-if="!loadingBugPrediction && bugPredictionError" class="error-state">
           <i class="fas fa-exclamation-triangle"></i> {{ bugPredictionError }}
           <button @click="loadBugPrediction" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
         </div>
@@ -3465,25 +3481,23 @@ interface BugPredictionResult {
   high_risk_count: number
   files: BugPredictionFile[]
 }
-// #1321: bugPredictionAnalysis — useAnalyticsFetch
-const {
-  data: bugPredictionAnalysis,
-  loading: loadingBugPrediction,
-  error: bugPredictionError,
-  load: _loadBugPrediction,
-} = useAnalyticsFetch<BugPredictionResult>(
-  '/api/analytics/bug-prediction/analyze',
-  (r) => {
-    if (r.status === 'no_data') return undefined
-    return {
-      timestamp: (r.timestamp as string) || new Date().toISOString(),
-      total_files: (r.total_files as number) || 0,
-      analyzed_files: (r.analyzed_files as number) || 0,
-      high_risk_count: (r.high_risk_count as number) || 0,
-      files: (r.files as BugPredictionFile[]) || [],
-    }
-  },
+// #1418: bugPrediction — useBackgroundTask with batched analysis
+const bugPredictionTask = useBackgroundTask(
+  '/api/analytics/bug-prediction',
 )
+const bugPredictionAnalysis = computed<BugPredictionResult | null>(() => {
+  const r = bugPredictionTask.result.value
+  if (!r || r.status === 'no_data') return null
+  return {
+    timestamp: (r.timestamp as string) || new Date().toISOString(),
+    total_files: (r.total_files as number) || 0,
+    analyzed_files: (r.analyzed_files as number) || 0,
+    high_risk_count: (r.high_risk_count as number) || 0,
+    files: (r.files as BugPredictionFile[]) || [],
+  }
+})
+const loadingBugPrediction = bugPredictionTask.running
+const bugPredictionError = bugPredictionTask.error
 
 // Enhanced Bug Prediction UI state
 const bugRiskFilter = ref<'all' | 'high' | 'medium' | 'low'>('all')
@@ -4617,7 +4631,10 @@ const loadConfigDuplicates = () => _loadConfigDuplicates()
 
 // Issue #538/#1321: Bug prediction (useAnalyticsFetch)
 // Issue #608: limit=1000 baked into the composable path
-const loadBugPrediction = () => _loadBugPrediction({ limit: '1000' })
+const loadBugPrediction = () => bugPredictionTask.start(
+  undefined,
+  { limit: '1000' },
+)
 
 // Issue #538/#1321: API endpoint analysis (useAnalyticsFetch)
 const loadApiEndpointAnalysis = () => _loadApiEndpoints()
