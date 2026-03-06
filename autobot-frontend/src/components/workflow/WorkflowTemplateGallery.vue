@@ -45,7 +45,7 @@
           </div>
         </div>
         <div class="template-actions">
-          <button class="btn-icon" @click.stop="previewTemplate = template" :title="$t('workflow.templates.preview')"><i class="fas fa-eye"></i></button>
+          <button class="btn-icon" @click.stop="openPreview(template)" :title="$t('workflow.templates.preview')"><i class="fas fa-eye"></i></button>
           <button class="btn-run" @click.stop="$emit('run-template', template)" :title="$t('workflow.templates.runNow')"><i class="fas fa-play"></i></button>
         </div>
       </div>
@@ -66,6 +66,21 @@
             <h4>{{ $t('workflow.templates.agentsInvolved') }}</h4>
             <div class="agent-tags">
               <span v-for="agent in previewTemplate.agents_involved" :key="agent" class="agent-tag">{{ agent }}</span>
+            </div>
+          </div>
+
+          <!-- Required Credentials (#1415) -->
+          <div v-if="(previewTemplate as any).required_secrets && Object.keys((previewTemplate as any).required_secrets).length" class="preview-secrets">
+            <h4>Required Credentials</h4>
+            <div class="secret-items">
+              <div v-for="(meta, key) in (previewTemplate as any).required_secrets" :key="key" class="secret-item">
+                <i class="fas fa-key"></i>
+                <div class="secret-info">
+                  <span class="secret-name">{{ key }}</span>
+                  <span class="secret-desc">{{ meta.description }}</span>
+                </div>
+                <span class="secret-scope" :class="meta.scope">{{ meta.scope }}</span>
+              </div>
             </div>
           </div>
 
@@ -130,7 +145,8 @@ const {
   loading: apiLoading,
   error: apiError,
   fetchTemplates,
-  fetchCategories
+  fetchCategories,
+  fetchTemplateDetail
 } = useWorkflowTemplates()
 
 // Local state
@@ -223,10 +239,24 @@ watch(searchQuery, (query) => {
   }, 300)
 })
 
-// Get steps count - handle both API and local templates
+// Open preview - fetch full detail if steps missing (#1415)
+const openPreview = async (template: AnyTemplate) => {
+  previewTemplate.value = template
+  if (!('steps' in template) || !Array.isArray(template.steps) || template.steps.length === 0) {
+    const detail = await fetchTemplateDetail(template.id)
+    if (detail) {
+      previewTemplate.value = detail
+    }
+  }
+}
+
+// Get steps count - handle both API and local templates (#1415)
 const getStepsCount = (template: AnyTemplate): number => {
   if ('steps' in template && Array.isArray(template.steps)) {
     return template.steps.length
+  }
+  if ('step_count' in template && typeof template.step_count === 'number') {
+    return template.step_count
   }
   return 0
 }
@@ -247,7 +277,7 @@ const getTemplateSteps = (template: AnyTemplate): TemplateStep[] => {
   return []
 }
 
-// Get default icon based on category
+// Get default icon based on category (#1415)
 const getDefaultIcon = (category: string): string => {
   const icons: Record<string, string> = {
     security: 'fas fa-shield-alt',
@@ -255,23 +285,38 @@ const getDefaultIcon = (category: string): string => {
     development: 'fas fa-code',
     system_admin: 'fas fa-server',
     analysis: 'fas fa-chart-bar',
+    community: 'fas fa-users',
     System: 'fas fa-cog',
     Development: 'fas fa-code',
     Security: 'fas fa-lock',
-    Backup: 'fas fa-database'
+    Backup: 'fas fa-database',
+    Community: 'fas fa-users'
   }
   return icons[category] || 'fas fa-tasks'
 }
 
-// Category styling
+// Category styling (#1415)
 const getCategoryClass = (cat: string) => ({
   system: cat === 'System' || cat === 'system_admin',
   development: cat === 'Development' || cat === 'development',
   security: cat === 'Security' || cat === 'security',
   backup: cat === 'Backup',
   research: cat === 'Research' || cat === 'research',
-  analysis: cat === 'Analysis' || cat === 'analysis'
+  analysis: cat === 'Analysis' || cat === 'analysis',
+  community: cat === 'Community' || cat === 'community'
 })
+
+// Open preview - fetch full detail if steps are missing (#1415)
+const openPreview = async (template: AnyTemplate) => {
+  if (!('steps' in template) || !Array.isArray((template as any).steps)) {
+    const detail = await fetchTemplateDetail(template.id)
+    if (detail) {
+      previewTemplate.value = detail
+      return
+    }
+  }
+  previewTemplate.value = template
+}
 
 // Retry loading on error
 const retryLoad = async () => {
@@ -314,6 +359,7 @@ onMounted(async () => {
 .template-icon.backup { background: var(--color-success-bg); color: var(--color-success); }
 .template-icon.research { background: #e8f4fd; color: #0077b6; }
 .template-icon.analysis { background: #f3e8ff; color: #7c3aed; }
+.template-icon.community { background: #e8fdf0; color: #059669; }
 
 .template-info { flex: 1; min-width: 0; }
 .template-info h4 { margin: 0 0 4px; font-size: 15px; color: var(--text-primary); }
@@ -339,6 +385,17 @@ onMounted(async () => {
 .preview-agents { margin-bottom: 20px; }
 .agent-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .agent-tag { padding: 4px 10px; background: var(--color-primary-bg); color: var(--color-primary); border-radius: 12px; font-size: 12px; }
+
+.preview-secrets { margin-bottom: 20px; }
+.secret-items { display: flex; flex-direction: column; gap: 8px; }
+.secret-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg-tertiary); border-radius: 8px; font-size: 13px; }
+.secret-item i { color: var(--text-tertiary); font-size: 12px; }
+.secret-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.secret-name { font-weight: 600; color: var(--text-primary); font-size: 12px; }
+.secret-desc { color: var(--text-tertiary); font-size: 11px; }
+.secret-scope { padding: 2px 6px; border-radius: 8px; font-size: 10px; background: var(--bg-secondary); color: var(--text-tertiary); }
+.secret-scope.write { background: var(--color-warning-bg); color: var(--color-warning); }
+.secret-scope.read { background: var(--color-success-bg); color: var(--color-success); }
 
 .preview-steps { display: flex; flex-direction: column; gap: 12px; }
 .preview-step { display: flex; gap: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; }

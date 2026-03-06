@@ -147,6 +147,37 @@ async def list_workflow_templates(
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="get_secrets_usage",
+    error_code_prefix="TEMPLATES",
+)
+@router.get("/templates/secrets-usage")
+async def get_secrets_usage():
+    """Map secret keys to the templates that require them (#1415)."""
+    try:
+        all_templates = workflow_template_manager.list_templates()
+        usage_map: Dict[str, list] = {}
+        for template in all_templates:
+            for secret_key, meta in (template.required_secrets or {}).items():
+                if secret_key not in usage_map:
+                    usage_map[secret_key] = []
+                usage_map[secret_key].append(
+                    {
+                        "template_id": template.id,
+                        "template_name": template.name,
+                        "required": meta.get("required", True),
+                        "scope": meta.get("scope", ""),
+                    }
+                )
+        return {"success": True, "secrets_usage": usage_map}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get secrets usage: {str(e)}",
+        )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="search_templates",
     error_code_prefix="TEMPLATES",
 )

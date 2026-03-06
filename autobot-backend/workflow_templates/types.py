@@ -74,11 +74,14 @@ class WorkflowTemplate:
     agents_involved: List[str]
     tags: List[str]
     variables: Dict[str, str] = None
+    required_secrets: Dict[str, Dict[str, Any]] = None
 
     def __post_init__(self):
         """Initialize default value for variables field."""
         if self.variables is None:
             self.variables = {}
+        if self.required_secrets is None:
+            self.required_secrets = {}
 
     def to_summary_dict(self) -> Dict[str, Any]:
         """Convert template to summary dict for caching."""
@@ -94,6 +97,7 @@ class WorkflowTemplate:
             "step_count": len(self.steps),
             "approval_steps": sum(1 for step in self.steps if step.requires_approval),
             "variables": self.variables,
+            "required_secrets": self.required_secrets,
         }
 
     def to_detail_dict(self) -> Dict[str, Any]:
@@ -108,5 +112,6 @@ class WorkflowTemplate:
             "agents_involved": self.agents_involved,
             "tags": self.tags,
             "variables": self.variables,
+            "required_secrets": self.required_secrets,
             "steps": [step.to_dict() for step in self.steps],
         }
