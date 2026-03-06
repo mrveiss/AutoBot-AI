@@ -212,6 +212,14 @@
               <span v-for="tag in secret.tags.slice(0, 3)" :key="tag" class="tag">{{ tag }}</span>
               <span v-if="secret.tags.length > 3" class="tag more">+{{ secret.tags.length - 3 }}</span>
             </div>
+
+            <!-- Workflow usage (#1415) -->
+            <div class="card-workflow-usage" v-if="getWorkflowUsage(secret).length">
+              <span class="usage-label"><i class="fas fa-project-diagram"></i> Used by:</span>
+              <span v-for="usage in getWorkflowUsage(secret)" :key="usage.template_id" class="usage-tag">
+                {{ usage.template_name }}
+              </span>
+            </div>
           </div>
 
           <!-- Card Actions -->
@@ -832,6 +840,7 @@ const credentialTemplates = computed(() => [
 const secrets = ref<any[]>([]);
 const stats = ref<any>(null);
 const loading = ref(false);
+const workflowUsage = ref<Record<string, any[]>>({});
 const saving = ref(false);
 const deleting = ref(false);
 const transferring = ref(false);
@@ -2045,6 +2054,30 @@ watch(selectedScope, () => {
 
 .tag.more {
   color: var(--color-primary);
+}
+
+.card-workflow-usage {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.usage-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.usage-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+  border-radius: 10px;
 }
 
 .card-actions {

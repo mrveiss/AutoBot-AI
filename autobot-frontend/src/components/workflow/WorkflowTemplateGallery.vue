@@ -69,6 +69,21 @@
             </div>
           </div>
 
+          <!-- Required Credentials (#1415) -->
+          <div v-if="(previewTemplate as any).required_secrets && Object.keys((previewTemplate as any).required_secrets).length" class="preview-secrets">
+            <h4>Required Credentials</h4>
+            <div class="secret-items">
+              <div v-for="(meta, key) in (previewTemplate as any).required_secrets" :key="key" class="secret-item">
+                <i class="fas fa-key"></i>
+                <div class="secret-info">
+                  <span class="secret-name">{{ key }}</span>
+                  <span class="secret-desc">{{ meta.description }}</span>
+                </div>
+                <span class="secret-scope" :class="meta.scope">{{ meta.scope }}</span>
+              </div>
+            </div>
+          </div>
+
           <h4>{{ $t('workflow.templates.steps') }}</h4>
           <div class="preview-steps">
             <div v-for="(step, i) in getTemplateSteps(previewTemplate)" :key="i" class="preview-step">
@@ -291,6 +306,18 @@ const getCategoryClass = (cat: string) => ({
   community: cat === 'Community' || cat === 'community'
 })
 
+// Open preview - fetch full detail if steps are missing (#1415)
+const openPreview = async (template: AnyTemplate) => {
+  if (!('steps' in template) || !Array.isArray((template as any).steps)) {
+    const detail = await fetchTemplateDetail(template.id)
+    if (detail) {
+      previewTemplate.value = detail
+      return
+    }
+  }
+  previewTemplate.value = template
+}
+
 // Retry loading on error
 const retryLoad = async () => {
   await Promise.all([fetchTemplates(), fetchCategories()])
@@ -358,6 +385,17 @@ onMounted(async () => {
 .preview-agents { margin-bottom: 20px; }
 .agent-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .agent-tag { padding: 4px 10px; background: var(--color-primary-bg); color: var(--color-primary); border-radius: 12px; font-size: 12px; }
+
+.preview-secrets { margin-bottom: 20px; }
+.secret-items { display: flex; flex-direction: column; gap: 8px; }
+.secret-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg-tertiary); border-radius: 8px; font-size: 13px; }
+.secret-item i { color: var(--text-tertiary); font-size: 12px; }
+.secret-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.secret-name { font-weight: 600; color: var(--text-primary); font-size: 12px; }
+.secret-desc { color: var(--text-tertiary); font-size: 11px; }
+.secret-scope { padding: 2px 6px; border-radius: 8px; font-size: 10px; background: var(--bg-secondary); color: var(--text-tertiary); }
+.secret-scope.write { background: var(--color-warning-bg); color: var(--color-warning); }
+.secret-scope.read { background: var(--color-success-bg); color: var(--color-success); }
 
 .preview-steps { display: flex; flex-direction: column; gap: 12px; }
 .preview-step { display: flex; gap: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; }
