@@ -1258,7 +1258,8 @@
         "maintenance": "Maintenance",
         "optimization": "Optimization",
         "insights": "Insights",
-        "reports": "Reports"
+        "reports": "Reports",
+        "agentCosts": "Agent Costs"
       },
       "reports": {
         "executiveSummary": "Executive Summary",
@@ -1269,6 +1270,27 @@
         "costDesc": "Cost breakdown, trends, and optimization opportunities",
         "performanceReport": "Performance Report",
         "performanceDesc": "Agent and system performance metrics"
+      },
+      "agentCosts": {
+        "title": "Per-Agent Cost Tracking",
+        "totalSpend": "Total Spend",
+        "activeAgents": "Tracked Agents",
+        "totalCalls": "Total LLM Calls",
+        "overBudget": "Over Budget",
+        "agent": "Agent",
+        "cost": "Cost (USD)",
+        "calls": "Calls",
+        "inputTokens": "Input Tokens",
+        "outputTokens": "Output Tokens",
+        "budget": "Budget Usage",
+        "actions": "Actions",
+        "noBudget": "No budget set",
+        "setBudget": "Set Budget",
+        "setBudgetFor": "Set Budget for",
+        "monthlyBudget": "Monthly Budget",
+        "cancel": "Cancel",
+        "save": "Save",
+        "noData": "No agent cost data available. Costs will appear as agents make LLM calls."
       }
     },
     "sources": {

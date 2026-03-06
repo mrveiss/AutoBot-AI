@@ -291,6 +291,10 @@
           </div>
         </div>
       </div>
+      <!-- Agent Costs -->
+      <div v-if="activeTab === 'agent-costs'" class="tab-panel">
+        <AgentCostPanel />
+      </div>
     </div>
 
     <!-- Loading Overlay -->
@@ -311,6 +315,7 @@ import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import AdvancedAnalytics from '@/components/analytics/AdvancedAnalytics.vue'
+import AgentCostPanel from '@/components/analytics/AgentCostPanel.vue'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -344,7 +349,8 @@ const tabs = computed(() => [
     badgeClass: ''
   },
   { id: 'insights', label: t('analytics.bi.tabs.insights'), icon: 'fas fa-lightbulb' },
-  { id: 'reports', label: t('analytics.bi.tabs.reports'), icon: 'fas fa-file-alt' }
+  { id: 'reports', label: t('analytics.bi.tabs.reports'), icon: 'fas fa-file-alt' },
+  { id: 'agent-costs', label: t('analytics.bi.tabs.agentCosts'), icon: 'fas fa-robot' }
 ])
 
 // Methods
