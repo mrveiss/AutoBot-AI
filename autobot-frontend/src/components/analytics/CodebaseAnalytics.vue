@@ -194,6 +194,41 @@
       </div>
     </div>
 
+    <!-- Scan Runner Progress (#1418) -->
+    <div v-if="scanRunner.running.value || scanRunner.results.value.length > 0" class="scan-runner-progress">
+      <div class="scan-runner-header">
+        <span class="scan-runner-title">
+          <i :class="scanRunner.running.value ? 'fas fa-spinner fa-spin' : 'fas fa-check-circle'"></i>
+          {{ $t('analytics.codebase.scanRunner.title') }}
+        </span>
+        <span class="scan-runner-count">
+          {{ scanRunner.completedCount.value }} / {{ scanRunner.totalCount.value }}
+        </span>
+      </div>
+      <div class="mini-progress">
+        <div class="mini-progress-bar" :style="{ width: scanRunner.progress.value + '%' }"></div>
+      </div>
+      <div class="scan-runner-items">
+        <div
+          v-for="result in scanRunner.results.value"
+          :key="result.id"
+          class="scan-runner-item"
+          :class="'scan-' + result.status"
+        >
+          <i :class="{
+            'fas fa-spinner fa-spin': result.status === 'running',
+            'fas fa-check': result.status === 'completed',
+            'fas fa-times': result.status === 'failed',
+            'fas fa-forward': result.status === 'skipped',
+            'fas fa-clock': result.status === 'pending',
+          }"></i>
+          <span class="scan-label">{{ result.label }}</span>
+          <span v-if="result.durationMs != null" class="scan-duration">{{ result.durationMs }}ms</span>
+          <span v-if="result.error" class="scan-error">{{ result.error }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Enhanced Analytics Dashboard Cards -->
     <div class="enhanced-analytics-grid">
       <!-- System Overview -->
@@ -1745,13 +1780,29 @@
           </div>
         </h3>
 
-        <!-- Loading State -->
+        <!-- Loading State (#1418: progress bar matching PatternAnalysis.vue) -->
         <div v-if="loadingBugPrediction" class="loading-state">
-          <i class="fas fa-spinner fa-spin"></i> {{ $t('analytics.codebase.bugPrediction.analyzing') }}
+          <i class="fas fa-spinner fa-spin"></i>
+          <span v-if="bugPredictionTask.taskStatus.value">
+            {{ bugPredictionTask.taskStatus.value.current_step || $t('analytics.codebase.bugPrediction.analyzing') }}
+          </span>
+          <span v-else>{{ $t('analytics.codebase.bugPrediction.analyzing') }}</span>
+          <div v-if="bugPredictionTask.taskStatus.value?.progress" class="mini-progress">
+            <div class="mini-progress-bar" :style="{ width: bugPredictionTask.taskStatus.value.progress + '%' }"></div>
+          </div>
+        </div>
+
+        <!-- Interrupted State (#1418) -->
+        <div v-if="!loadingBugPrediction && bugPredictionTask.wasInterrupted.value" class="interrupted-state">
+          <i class="fas fa-info-circle"></i>
+          {{ $t('analytics.codebase.bugPrediction.interrupted') }}
+          <button @click="loadBugPrediction" class="rerun-btn">
+            <i class="fas fa-redo"></i> {{ $t('analytics.codebase.actions.retry') }}
+          </button>
         </div>
 
         <!-- Error State -->
-        <div v-else-if="bugPredictionError" class="error-state">
+        <div v-else-if="!loadingBugPrediction && bugPredictionError" class="error-state">
           <i class="fas fa-exclamation-triangle"></i> {{ bugPredictionError }}
           <button @click="loadBugPrediction" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
         </div>
@@ -2772,6 +2823,7 @@ import { useCodeIntelligence } from '@/composables/useCodeIntelligence'
 import { useBackgroundTask } from '@/composables/useBackgroundTask'
 import { useTaskLoader } from '@/composables/useTaskLoader'
 import { useAnalyticsFetch } from '@/composables/useAnalyticsFetch'
+import { useAnalyticsScanRunner } from '@/composables/useAnalyticsScanRunner'
 import { createLogger } from '@/utils/debugUtils'
 // Issue #1133: Code Source Registry Components
 import SourceManager from '@/components/analytics/SourceManager.vue'
@@ -2970,6 +3022,7 @@ const {
 )
 
 const dashboardTask = useBackgroundTask('/api/analytics/dashboard/overview')
+const scanRunner = useAnalyticsScanRunner()
 
 // Issue #1133: CodeSource type
 interface CodeSource {
@@ -3428,25 +3481,23 @@ interface BugPredictionResult {
   high_risk_count: number
   files: BugPredictionFile[]
 }
-// #1321: bugPredictionAnalysis — useAnalyticsFetch
-const {
-  data: bugPredictionAnalysis,
-  loading: loadingBugPrediction,
-  error: bugPredictionError,
-  load: _loadBugPrediction,
-} = useAnalyticsFetch<BugPredictionResult>(
-  '/api/analytics/bug-prediction/analyze',
-  (r) => {
-    if (r.status === 'no_data') return undefined
-    return {
-      timestamp: (r.timestamp as string) || new Date().toISOString(),
-      total_files: (r.total_files as number) || 0,
-      analyzed_files: (r.analyzed_files as number) || 0,
-      high_risk_count: (r.high_risk_count as number) || 0,
-      files: (r.files as BugPredictionFile[]) || [],
-    }
-  },
+// #1418: bugPrediction — useBackgroundTask with batched analysis
+const bugPredictionTask = useBackgroundTask(
+  '/api/analytics/bug-prediction',
 )
+const bugPredictionAnalysis = computed<BugPredictionResult | null>(() => {
+  const r = bugPredictionTask.result.value
+  if (!r || r.status === 'no_data') return null
+  return {
+    timestamp: (r.timestamp as string) || new Date().toISOString(),
+    total_files: (r.total_files as number) || 0,
+    analyzed_files: (r.analyzed_files as number) || 0,
+    high_risk_count: (r.high_risk_count as number) || 0,
+    files: (r.files as BugPredictionFile[]) || [],
+  }
+})
+const loadingBugPrediction = bugPredictionTask.running
+const bugPredictionError = bugPredictionTask.error
 
 // Enhanced Bug Prediction UI state
 const bugRiskFilter = ref<'all' | 'high' | 'medium' | 'low'>('all')
@@ -4289,54 +4340,39 @@ const loadProjectRoot = async () => {
 // Phase 2: Important data (declarations, duplicates, charts) - load next
 // Phase 3: Secondary data (call graph, analysis) - load in background
 const loadCodebaseAnalyticsData = async () => {
-
   try {
-    // Phase 1: CRITICAL - Load stats and problems first (user sees these immediately)
-    // These are small payloads and render at the top of the page
-    logger.debug('Analytics loading: Phase 1 (critical data)')
-    await Promise.all([
-      getCodebaseStats(),
-      getProblemsReport(),
+    await scanRunner.runAll([
+      { id: 'stats', label: t('analytics.codebase.scans.stats'), run: () => getCodebaseStats() },
+      { id: 'problems', label: t('analytics.codebase.scans.problems'), run: () => getProblemsReport() },
+      { id: 'declarations', label: t('analytics.codebase.scans.declarations'), run: () => loadDeclarations() },
+      { id: 'duplicates', label: t('analytics.codebase.scans.duplicates'), run: () => loadDuplicates() },
+      { id: 'hardcodes', label: t('analytics.codebase.scans.hardcodes'), run: () => loadHardcodes() },
+      { id: 'charts', label: t('analytics.codebase.scans.charts'), run: () => loadChartData() },
+      { id: 'dependencies', label: t('analytics.codebase.scans.dependencies'), run: () => loadDependencyData() },
+      { id: 'imports', label: t('analytics.codebase.scans.imports'), run: () => loadImportTreeData() },
+      { id: 'callgraph', label: t('analytics.codebase.scans.callGraph'), run: () => loadCallGraphData() },
+      { id: 'configDuplicates', label: t('analytics.codebase.scans.configDuplicates'), run: () => loadConfigDuplicates() },
+      { id: 'apiEndpoints', label: t('analytics.codebase.scans.apiEndpoints'), run: () => loadApiEndpointAnalysis() },
+      { id: 'bugPrediction', label: t('analytics.codebase.scans.bugPrediction'), run: () => loadBugPrediction() },
+      { id: 'security', label: t('analytics.codebase.scans.security'), run: () => loadSecurityScore() },
+      { id: 'performance', label: t('analytics.codebase.scans.performance'), run: () => loadPerformanceScore() },
+      { id: 'redis', label: t('analytics.codebase.scans.redis'), run: () => loadRedisHealth() },
+      { id: 'environment', label: t('analytics.codebase.scans.environment'), run: () => loadEnvironmentAnalysis() },
+      { id: 'ownership', label: t('analytics.codebase.scans.ownership'), run: () => loadOwnershipAnalysis() },
+      { id: 'crossLanguage', label: t('analytics.codebase.scans.crossLanguage'), run: () => getCrossLanguageAnalysis() },
     ])
 
-    // Phase 2: IMPORTANT - Load primary analysis data
-    // These are medium-sized and commonly viewed
-    logger.debug('Analytics loading: Phase 2 (important data)')
-    Promise.all([
-      loadDeclarations(),       // Silent version
-      loadDuplicates(),         // Silent version
-      loadHardcodes(),          // Silent version - hardcoded values detection
-      loadChartData(),          // Load chart data for visualizations
-    ]).catch(err => logger.warn('Phase 2 loading error:', err))
-
-    // Phase 3: SECONDARY - Load heavier analysis in background
-    // These are larger payloads and don't block initial render
-    logger.debug('Analytics loading: Phase 3 (secondary data - background)')
-    Promise.all([
-      loadDependencyData(),     // Load dependency analysis
-      loadImportTreeData(),     // Load import tree data
-      loadCallGraphData(),      // Load function call graph (heavy)
-      loadConfigDuplicates(),   // Issue #538: Config duplicates detection
-      loadApiEndpointAnalysis(), // Issue #538: API endpoint analysis
-    ]).catch(err => logger.warn('Phase 3 loading error:', err))
-
-    // Phase 4: BACKGROUND - Load remaining analytics (don't wait)
-    // These are independent scores and analyses that can load async
-    logger.debug('Analytics loading: Phase 4 (background scores)')
-    Promise.all([
-      loadBugPrediction(),      // Issue #538: Bug prediction analysis
-      loadSecurityScore(),      // Issue #538: Security score
-      loadPerformanceScore(),   // Issue #538: Performance score
-      loadRedisHealth(),        // Issue #538: Redis health score
-      loadEnvironmentAnalysis(), // Issue #538: Environment analysis
-      loadOwnershipAnalysis(),  // Issue #248: Code ownership analysis
-      getCrossLanguageAnalysis() // Issue #244: Cross-language pattern analysis
-    ]).catch(err => logger.warn('Phase 4 loading error:', err))
-
+    if (scanRunner.failedCount.value > 0) {
+      progressStatus.value = t('analytics.codebase.status.loadPartialFailed', {
+        failed: scanRunner.failedCount.value,
+        total: scanRunner.totalCount.value,
+      })
+    } else {
+      progressStatus.value = t('analytics.codebase.status.loadComplete')
+    }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     logger.error('Failed to load codebase analytics data:', error)
-    // Provide user feedback for critical failures
     progressStatus.value = t('analytics.codebase.status.loadFailed', { error: errorMessage })
   }
 }
@@ -4595,7 +4631,10 @@ const loadConfigDuplicates = () => _loadConfigDuplicates()
 
 // Issue #538/#1321: Bug prediction (useAnalyticsFetch)
 // Issue #608: limit=1000 baked into the composable path
-const loadBugPrediction = () => _loadBugPrediction({ limit: '1000' })
+const loadBugPrediction = () => bugPredictionTask.start(
+  undefined,
+  { limit: '1000' },
+)
 
 // Issue #538/#1321: API endpoint analysis (useAnalyticsFetch)
 const loadApiEndpointAnalysis = () => _loadApiEndpoints()
@@ -6072,59 +6111,37 @@ const clearCache = async () => {
 // Each step runs to completion regardless of whether previous steps failed.
 // Progress is always displayed. Each analysis is independently runnable.
 const runFullAnalysis = async () => {
-  const results: { step: string; status: 'success' | 'failed'; error?: string }[] = []
+  await scanRunner.runAll([
+    { id: 'indexing', label: t('analytics.codebase.scans.indexing'), run: () => indexCodebase() },
+    {
+      id: 'patterns',
+      label: t('analytics.codebase.scans.patterns'),
+      run: async () => {
+        if (patternAnalysisRef.value?.runAnalysis) {
+          await patternAnalysisRef.value.runAnalysis()
+          if (patternAnalysisRef.value?.error) {
+            throw new Error(patternAnalysisRef.value.error)
+          }
+        } else {
+          throw new Error('Component not ready')
+        }
+      },
+    },
+    {
+      id: 'crossLanguage',
+      label: t('analytics.codebase.scans.crossLanguage'),
+      run: () => runCrossLanguageAnalysis(),
+    },
+  ])
 
-  // Step 1: Codebase indexing
-  progressStatus.value = t('analytics.codebase.status.step1Indexing')
-  try {
-    await indexCodebase()
-    results.push({ step: 'Codebase indexing', status: 'success' })
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    logger.error('Codebase indexing failed, continuing with next step:', msg)
-    results.push({ step: 'Codebase indexing', status: 'failed', error: msg })
-  }
-
-  // Step 2: Pattern analysis (now properly awaits completion)
-  progressStatus.value = t('analytics.codebase.status.step2Patterns')
-  try {
-    if (patternAnalysisRef.value?.runAnalysis) {
-      logger.info('Triggering pattern analysis as part of full analysis')
-      await patternAnalysisRef.value.runAnalysis()
-      // runAnalysis now awaits polling — check error state for real result
-      const patternError = patternAnalysisRef.value?.error
-      if (patternError) {
-        results.push({ step: 'Pattern analysis', status: 'failed', error: patternError })
-      } else {
-        results.push({ step: 'Pattern analysis', status: 'success' })
-      }
-    } else {
-      results.push({ step: 'Pattern analysis', status: 'failed', error: 'Component not ready' })
-    }
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    logger.error('Pattern analysis failed, continuing with next step:', msg)
-    results.push({ step: 'Pattern analysis', status: 'failed', error: msg })
-  }
-
-  // Step 3: Cross-language analysis (independent of previous steps)
-  progressStatus.value = t('analytics.codebase.status.step3CrossLanguage')
-  try {
-    logger.info('Triggering cross-language analysis as part of full analysis')
-    await runCrossLanguageAnalysis()
-    results.push({ step: 'Cross-language analysis', status: 'success' })
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    logger.error('Cross-language analysis failed:', msg)
-    results.push({ step: 'Cross-language analysis', status: 'failed', error: msg })
-  }
-
-  // Report results
-  const succeeded = results.filter(r => r.status === 'success').length
-  const failed = results.filter(r => r.status === 'failed').length
-  progressStatus.value = t('analytics.codebase.status.analysisComplete', { succeeded, total: results.length })
-  if (failed > 0) {
-    const failedNames = results.filter(r => r.status === 'failed').map(r => r.step).join(', ')
+  const succeeded = scanRunner.completedCount.value
+  const total = scanRunner.totalCount.value
+  progressStatus.value = t('analytics.codebase.status.analysisComplete', { succeeded, total })
+  if (scanRunner.failedCount.value > 0) {
+    const failedNames = scanRunner.results.value
+      .filter(r => r.status === 'failed')
+      .map(r => r.label)
+      .join(', ')
     logger.warn(`Full analysis partial failure: ${failedNames}`)
   }
 }
@@ -11535,5 +11552,80 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 
 .kb-optin-dismiss:hover {
   color: var(--text-primary);
+}
+
+/* Scan Runner Progress (#1418) */
+.scan-runner-progress {
+  margin: var(--spacing-3) 0;
+  padding: var(--spacing-3);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+.scan-runner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-2);
+}
+.scan-runner-title {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+.scan-runner-count {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.scan-runner-progress .mini-progress {
+  width: 100%;
+  height: 4px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  margin-bottom: var(--spacing-2);
+}
+.scan-runner-progress .mini-progress-bar {
+  height: 100%;
+  background: var(--color-purple);
+  transition: width 0.3s ease;
+}
+.scan-runner-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-1);
+}
+.scan-runner-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  padding: 2px var(--spacing-2);
+  font-size: var(--text-xs);
+  border-radius: var(--radius-xs);
+  background: var(--bg-tertiary);
+}
+.scan-runner-item.scan-completed { color: var(--color-success); }
+.scan-runner-item.scan-failed { color: var(--color-error); }
+.scan-runner-item.scan-running { color: var(--color-info); }
+.scan-runner-item.scan-skipped { color: var(--text-tertiary); }
+.scan-runner-item.scan-pending { color: var(--text-secondary); }
+.scan-label {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scan-duration {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
+}
+.scan-error {
+  color: var(--color-error);
+  font-size: var(--text-xs);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
