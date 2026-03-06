@@ -219,9 +219,7 @@
                     voiceConversation.state.value === 'speaking',
                 }"
                 :disabled="
-                  voiceConversation.state.value === 'processing' ||
-                  (voiceConversation.state.value === 'speaking'
-                    && !isFullDuplex)
+                  voiceConversation.state.value === 'processing'
                 "
                 :aria-label="voiceConversation.stateLabel.value"
               >
@@ -265,7 +263,7 @@ const micIcon = computed(() => {
       return isAutoMode.value ? 'fas fa-microphone' : 'fas fa-stop'
     case 'processing': return 'fas fa-spinner fa-spin'
     case 'speaking':
-      return isFullDuplex.value ? 'fas fa-hand-paper' : 'fas fa-volume-up'
+      return 'fas fa-stop'
     default: return 'fas fa-microphone'
   }
 })
@@ -298,9 +296,7 @@ const micHint = computed(() => {
         ? t('chat.voice.hintTranscribing')
         : t('chat.voice.hintWaitingResponse')
     case 'speaking':
-      return isFullDuplex.value
-        ? t('chat.voice.hintInterrupt')
-        : t('chat.voice.hintResponding')
+      return t('chat.voice.hintInterrupt')
     default:
       return isAutoMode.value
         ? t('chat.voice.hintAutoStart')

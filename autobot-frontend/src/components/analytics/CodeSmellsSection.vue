@@ -195,7 +195,8 @@ const getHealthGradeClass = (grade: string): string => {
   if (g === 'B') return 'grade-b'
   if (g === 'C') return 'grade-c'
   if (g === 'D') return 'grade-d'
-  return 'grade-f'
+  if (g === 'F') return 'grade-f'
+  return 'grade-unknown'
 }
 
 const getItemSeverityClass = (severity: string): string => {
@@ -230,6 +231,7 @@ const getItemSeverityClass = (severity: string): string => {
 .grade-c { background: var(--color-warning-bg); color: var(--color-warning); }
 .grade-d { background: var(--chart-orange-bg); color: var(--chart-orange); }
 .grade-f { background: var(--color-error-bg); color: var(--color-error); }
+.grade-unknown { background: var(--bg-tertiary); color: var(--text-secondary); }
 
 .total-count {
   font-size: 0.8em;

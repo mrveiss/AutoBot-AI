@@ -36,6 +36,7 @@ let _isPlayingChunks = false
 
 // Streaming TTS WebSocket connection (#1319)
 let _ttsWs: WebSocket | null = null
+let _ttsWsConnecting: Promise<WebSocket> | null = null
 let _ttsWsIdleTimer: ReturnType<typeof setTimeout> | null = null
 const _TTS_WS_IDLE_TIMEOUT = 30_000
 
@@ -144,22 +145,27 @@ function _disconnectTtsWs(): void {
 }
 
 function _connectTtsWs(): Promise<WebSocket> {
-  return new Promise((resolve, reject) => {
-    if (_ttsWs && _ttsWs.readyState === WebSocket.OPEN) {
-      _resetTtsWsIdleTimer()
-      resolve(_ttsWs)
-      return
-    }
-    if (_ttsWs) {
-      try { _ttsWs.close() } catch { /* ignore */ }
-      _ttsWs = null
-    }
+  if (_ttsWs && _ttsWs.readyState === WebSocket.OPEN) {
+    _resetTtsWsIdleTimer()
+    return Promise.resolve(_ttsWs)
+  }
+  // Guard against concurrent connection attempts (#1420) — return the
+  // in-flight promise so only ONE WebSocket is created at a time.
+  if (_ttsWsConnecting) {
+    return _ttsWsConnecting
+  }
+  if (_ttsWs) {
+    try { _ttsWs.close() } catch { /* ignore */ }
+    _ttsWs = null
+  }
 
+  _ttsWsConnecting = new Promise<WebSocket>((resolve, reject) => {
     const url = `${getBackendWsUrl()}/api/voice/stream`
     const ws = new WebSocket(url)
 
     ws.onopen = () => {
       _ttsWs = ws
+      _ttsWsConnecting = null
       _resetTtsWsIdleTimer()
       logger.debug('TTS WS connected')
       resolve(ws)
@@ -167,11 +173,13 @@ function _connectTtsWs(): Promise<WebSocket> {
     ws.onerror = (e) => {
       logger.warn('TTS WS error:', e)
       _ttsWs = null
+      _ttsWsConnecting = null
       reject(e)
     }
     ws.onclose = () => {
       logger.debug('TTS WS closed')
       _ttsWs = null
+      _ttsWsConnecting = null
     }
     ws.onmessage = (event) => {
       _resetTtsWsIdleTimer()
@@ -180,7 +188,7 @@ function _connectTtsWs(): Promise<WebSocket> {
         if (msg.type === 'tts_audio' && msg.data) {
           _playAudioChunkFromBase64(msg.data)
         } else if (msg.type === 'tts_end') {
-          // Sentence stream complete — isSpeaking cleared by chunk drain
+          // Sentence stream complete — isSpeaking cleared by drain
         } else if (msg.type === 'error') {
           logger.warn('TTS WS server error:', msg.message)
         }
@@ -189,6 +197,7 @@ function _connectTtsWs(): Promise<WebSocket> {
       }
     }
   })
+  return _ttsWsConnecting
 }
 
 export function useVoiceOutput() {
