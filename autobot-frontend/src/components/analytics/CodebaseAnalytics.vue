@@ -4086,10 +4086,10 @@ async function addToKnowledgeBase() {
   knowledgeBaseAdding.value = true
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/knowledge/index`, {
+    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: rootPath.value })
+      body: JSON.stringify({ root_path: rootPath.value })
     })
     if (!response.ok) {
       const text = await response.text()
