@@ -604,6 +604,31 @@
     "dashboard": "Dashboard",
     "codebase": {
       "title": "Real-time Codebase Analytics",
+      "scanRunner": {
+        "title": "Scan Progress"
+      },
+      "scans": {
+        "stats": "Codebase Stats",
+        "problems": "Problems Report",
+        "declarations": "Declarations",
+        "duplicates": "Duplicates",
+        "hardcodes": "Hardcoded Values",
+        "charts": "Chart Data",
+        "dependencies": "Dependencies",
+        "imports": "Import Tree",
+        "callGraph": "Call Graph",
+        "configDuplicates": "Config Duplicates",
+        "apiEndpoints": "API Endpoints",
+        "bugPrediction": "Bug Prediction",
+        "security": "Security Score",
+        "performance": "Performance Score",
+        "redis": "Redis Health",
+        "environment": "Environment Analysis",
+        "ownership": "Code Ownership",
+        "crossLanguage": "Cross-Language",
+        "indexing": "Codebase Indexing",
+        "patterns": "Pattern Analysis"
+      },
       "pathPlaceholder": "/path/to/analyze",
       "available": "Available",
       "notAvailable": "Not Available",
@@ -941,7 +966,9 @@
         "step1Indexing": "Step 1/3: Codebase indexing...",
         "step2Patterns": "Step 2/3: Pattern analysis...",
         "step3CrossLanguage": "Step 3/3: Cross-language analysis...",
-        "analysisComplete": "Analysis complete: {succeeded}/{total} passed"
+        "analysisComplete": "Analysis complete: {succeeded}/{total} passed",
+        "loadPartialFailed": "{failed} of {total} scans failed",
+        "loadComplete": "All scans completed successfully"
       },
       "notify": {
         "codeIntelComplete": "Code Intelligence analysis complete: {count} suggestions",
