@@ -58,6 +58,7 @@ from api.code_source import router as code_source_router
 from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
+from api.voice_proxy import router as voice_proxy_router
 from config import settings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -289,6 +290,9 @@ app.include_router(code_sync_router, prefix="/api")
 app.include_router(roles_router, prefix="/api")
 app.include_router(code_source_router, prefix="/api")
 app.include_router(personality_proxy_router, prefix="/api")  # Issue #1145
+app.include_router(
+    voice_proxy_router, prefix="/api"
+)  # Voice proxy for personality voice assignment
 app.include_router(orchestration_router, prefix="/api")
 app.include_router(discovery_router, prefix="/api")
 app.include_router(config_router, prefix="/api")
