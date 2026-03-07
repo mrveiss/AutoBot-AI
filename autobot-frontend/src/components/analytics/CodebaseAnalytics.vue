@@ -1850,26 +1850,26 @@
           <div class="risk-filter-tabs">
             <button
               :class="{ active: bugRiskFilter === 'all' }"
-              @click="bugRiskFilter = 'all'"
+              @click="bugRiskFilter = 'all'; bugRiskVisibleCount = BUG_RISK_PAGE_SIZE"
             >
-              All At-Risk ({{ getAtRiskFilesCount() }})
+              All ({{ bugPredictionAnalysis.files.length }})
             </button>
             <button
               :class="{ active: bugRiskFilter === 'high' }"
-              @click="bugRiskFilter = 'high'"
+              @click="bugRiskFilter = 'high'; bugRiskVisibleCount = BUG_RISK_PAGE_SIZE"
               :disabled="bugPredictionAnalysis.high_risk_count === 0"
             >
               High ({{ bugPredictionAnalysis.high_risk_count }})
             </button>
             <button
               :class="{ active: bugRiskFilter === 'medium' }"
-              @click="bugRiskFilter = 'medium'"
+              @click="bugRiskFilter = 'medium'; bugRiskVisibleCount = BUG_RISK_PAGE_SIZE"
             >
               Medium ({{ bugPredictionAnalysis.files.filter(f => f.risk_score >= 40 && f.risk_score < 60).length }})
             </button>
             <button
               :class="{ active: bugRiskFilter === 'low' }"
-              @click="bugRiskFilter = 'low'"
+              @click="bugRiskFilter = 'low'; bugRiskVisibleCount = BUG_RISK_PAGE_SIZE"
             >
               Low ({{ bugPredictionAnalysis.files.filter(f => f.risk_score < 40).length }})
             </button>
@@ -1879,7 +1879,7 @@
           <div class="risk-files-list detailed">
             <h4>
               <i class="fas fa-file-code"></i>
-              {{ bugRiskFilter === 'all' ? 'Files Requiring Attention' : `${bugRiskFilter.charAt(0).toUpperCase() + bugRiskFilter.slice(1)} Risk Files` }}
+              {{ bugRiskFilter === 'all' ? 'Analyzed Files' : `${bugRiskFilter.charAt(0).toUpperCase() + bugRiskFilter.slice(1)} Risk Files` }}
               <span class="file-count">({{ getFilteredBugRiskFiles().length }} files)</span>
             </h4>
 
@@ -1888,7 +1888,7 @@
             </div>
 
             <div
-              v-for="(file, index) in getFilteredBugRiskFiles().slice(0, bugRiskShowAll ? 100 : 20)"
+              v-for="(file, index) in getFilteredBugRiskFiles().slice(0, bugRiskVisibleCount)"
               :key="'risk-file-' + index"
               class="risk-file-item"
               :class="[getRiskClass(file.risk_score), { expanded: expandedBugRiskFiles.has(file.file_path) }]"
@@ -1972,11 +1972,11 @@
               </div>
             </div>
 
-            <!-- Show More Button -->
-            <div v-if="getFilteredBugRiskFiles().length > 20" class="show-more-container">
-              <button @click="bugRiskShowAll = !bugRiskShowAll" class="show-more-btn">
-                <i :class="bugRiskShowAll ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
-                {{ bugRiskShowAll ? 'Show Less' : `Show All ${getFilteredBugRiskFiles().length} Files` }}
+            <!-- Load More Button (#1430) -->
+            <div v-if="getFilteredBugRiskFiles().length > bugRiskVisibleCount" class="show-more-container">
+              <button @click="bugRiskVisibleCount += BUG_RISK_PAGE_SIZE" class="show-more-btn">
+                <i class="fas fa-chevron-down"></i>
+                Show More ({{ Math.min(BUG_RISK_PAGE_SIZE, getFilteredBugRiskFiles().length - bugRiskVisibleCount) }} of {{ getFilteredBugRiskFiles().length - bugRiskVisibleCount }} remaining)
               </button>
             </div>
           </div>
@@ -3501,7 +3501,8 @@ const bugPredictionError = bugPredictionTask.error
 
 // Enhanced Bug Prediction UI state
 const bugRiskFilter = ref<'all' | 'high' | 'medium' | 'low'>('all')
-const bugRiskShowAll = ref(false)
+const BUG_RISK_PAGE_SIZE = 50
+const bugRiskVisibleCount = ref(BUG_RISK_PAGE_SIZE)
 const expandedBugRiskFiles = ref<Set<string>>(new Set())
 
 // Bug Risk helper functions
@@ -3513,6 +3514,7 @@ function getAtRiskFilesCount(): number {
 
 function toggleBugRiskFilter(filter: 'high' | 'medium' | 'low'): void {
   bugRiskFilter.value = bugRiskFilter.value === filter ? 'all' : filter
+  bugRiskVisibleCount.value = BUG_RISK_PAGE_SIZE
 }
 
 function toggleBugRiskFileExpand(filePath: string): void {
@@ -3542,8 +3544,7 @@ function getFilteredBugRiskFiles(): BugPredictionFile[] {
       break
     case 'all':
     default:
-      // Show all files with risk >= 40 (medium and high) by default
-      filtered = files.filter(f => f.risk_score >= 40)
+      filtered = [...files]
       break
   }
 
@@ -4630,11 +4631,8 @@ const loadHardcodes = async () => {
 const loadConfigDuplicates = () => _loadConfigDuplicates()
 
 // Issue #538/#1321: Bug prediction (useAnalyticsFetch)
-// Issue #608: limit=1000 baked into the composable path
-const loadBugPrediction = () => bugPredictionTask.start(
-  undefined,
-  { limit: '1000' },
-)
+// Issue #1430: removed hardcoded limit=1000 — backend default handles it
+const loadBugPrediction = () => bugPredictionTask.start()
 
 // Issue #538/#1321: API endpoint analysis (useAnalyticsFetch)
 const loadApiEndpointAnalysis = () => _loadApiEndpoints()
@@ -6314,21 +6312,21 @@ const loadPerformanceMetrics = async () => {
 }
 
 const refreshAllMetrics = async () => {
-
+  // #1432: Only fetch cached GET endpoints on interval refresh.
+  // Background tasks (POST /analyze) are NOT re-triggered here to
+  // avoid 409 retry storms when analysis takes longer than the
+  // 30-second refresh interval.
   await Promise.all([
-    // Enhanced analytics (top section)
-    loadSystemOverview(),
+    // Enhanced analytics (top section) — all GET-only
     loadCommunicationPatterns(),
     loadCodeQuality(),
     loadPerformanceMetrics(),
 
-    // Codebase analytics (bottom section) - using silent versions
+    // Codebase analytics (bottom section) — GET-only
     getCodebaseStats(),
     getProblemsReport(),
-    loadDeclarations(),  // Silent version without alerts
-    loadDuplicates()     // Silent version without alerts
+    loadDeclarations(),
   ])
-
 }
 
 const toggleRealTime = () => {

@@ -43,6 +43,7 @@ class WorkflowPhase(str, Enum):
     """Discrete phases a workflow can occupy."""
 
     PLANNING = "planning"
+    AWAITING_APPROVAL = "awaiting_approval"  # #1402: approval gate
     EXECUTING = "executing"
     VALIDATING = "validating"
     COMPLETE = "complete"
@@ -52,6 +53,7 @@ class WorkflowPhase(str, Enum):
 # Default routing table: phase → service that should act next
 DEFAULT_ROUTING_TABLE: Dict[str, str] = {
     "planning": "main-backend",
+    "awaiting_approval": "main-backend",  # #1402
     "executing": "main-backend",
     "validating": "main-backend",
 }

@@ -12,6 +12,7 @@ and are imported at module level to fail fast if missing.
 # Core router imports - these are required for basic functionality
 from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
+from api.approval_gates import router as approval_gates_router  # #1402
 from api.audit import router as audit_router
 from api.auth import router as auth_router
 from api.browser_mcp import router as browser_mcp_router
@@ -267,6 +268,7 @@ def _get_agent_routers() -> list:
     """Get agent and utility routers (Issue #560: extracted)."""
     return [
         (agent_router, "/agent", ["agent"], "agent"),
+        (approval_gates_router, "", ["approval-gates"], "approval_gates"),
         (agent_config_router, "/agent_config", ["agent_config"], "agent_config"),
         (
             intelligent_agent_router,

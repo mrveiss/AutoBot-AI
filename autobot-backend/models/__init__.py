@@ -21,6 +21,9 @@ from models.activities import (
     TerminalActivityModel,
 )
 
+# Approval gate models (#1402)
+from models.approval import Approval, ApprovalComment, TaskApprovalLink
+
 # Other backend models (SQLAlchemy models only)
 from models.code_pattern import CodePattern
 from models.completion_feedback import CompletionFeedback
@@ -41,4 +44,8 @@ __all__ = [
     "MLModel",
     "Secret",
     "SessionCollaboration",
+    # Approval gate models (#1402)
+    "Approval",
+    "ApprovalComment",
+    "TaskApprovalLink",
 ]

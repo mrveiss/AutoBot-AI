@@ -41,6 +41,7 @@ REDIS_DATABASE = "workflows"
 
 # Step name constants
 STEP_PLANNING = "planning"
+STEP_AWAITING_APPROVAL = "awaiting_approval"  # #1402
 STEP_EXECUTING = "executing"
 STEP_VALIDATING = "validating"
 STEP_COMPLETE = "complete"
@@ -90,6 +91,7 @@ def route_next(state: WorkflowState) -> str:
 
     routing = {
         STEP_PLANNING: "main-backend",
+        STEP_AWAITING_APPROVAL: "main-backend",  # #1402
         STEP_EXECUTING: state.metadata.get("executor_service", "main-backend"),
         STEP_VALIDATING: "main-backend",
     }
