@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 class ModelConfigMixin:
     """Mixin providing LLM and model configuration management"""
 
+    def get_default_llm_model(self) -> str:
+        """Get default LLM model. Alias for get_selected_model (#1433)."""
+        return self.get_selected_model()
+
     def get_selected_model(self) -> str:
         """Get the currently selected model from config.yaml (CRITICAL FIX)"""
         # This is the key method that was broken in the original global_config_manager
