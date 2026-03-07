@@ -124,6 +124,38 @@ def _build_inventory_children(
     return children, ansible_groups
 
 
+# Role name -> (variable_name, port) for infrastructure service discovery.
+# Maps active roles to the Ansible vars that templates expect (#1431).
+_ROLE_INFRA_VARS: dict[str, tuple[str, int]] = {
+    "backend": ("backend_host", 8443),
+    "redis": ("redis_host", 6379),
+    "frontend": ("frontend_host", 5173),
+    "ai-stack": ("ai_stack_host", 8080),
+    "npu-worker": ("npu_worker_host", 8081),
+    "browser-service": ("browser_host", 3000),
+}
+
+
+def _build_infra_vars(
+    node_roles: list,
+    node_id_to_ip: dict[str, str],
+) -> dict:
+    """Derive infrastructure discovery vars from active role assignments (#1431)."""
+    infra_vars: dict = {}
+    for nr in node_roles:
+        mapping = _ROLE_INFRA_VARS.get(nr.role_name)
+        if not mapping:
+            continue
+        ip = node_id_to_ip.get(nr.node_id)
+        if not ip:
+            continue
+        host_var, port = mapping
+        if host_var not in infra_vars:
+            infra_vars[host_var] = ip
+            infra_vars[host_var.replace("_host", "_port")] = port
+    return infra_vars
+
+
 async def _generate_dynamic_inventory(
     node_ids: Optional[list[str]] = None,
 ) -> Optional[Path]:
@@ -141,6 +173,7 @@ async def _generate_dynamic_inventory(
 
         hosts: dict[str, dict] = {}
         node_id_to_hostname: dict[str, str] = {}
+        node_id_to_ip: dict[str, str] = {}
         for node in db_nodes:
             host_vars = {
                 "ansible_host": node.ip_address,
@@ -151,20 +184,34 @@ async def _generate_dynamic_inventory(
                 host_vars["ansible_port"] = node.ssh_port
             hosts[node.hostname] = host_vars
             node_id_to_hostname[node.node_id] = node.hostname
+            node_id_to_ip[node.node_id] = node.ip_address
 
-        nr_query = select(NodeRole)
+        # Only include active roles in Ansible groups (#1431)
+        nr_query = select(NodeRole).where(NodeRole.status == "active")
         if node_ids:
             nr_query = nr_query.where(NodeRole.node_id.in_(node_ids))
         all_node_roles = (await session.execute(nr_query)).scalars().all()
 
+        # Fetch ALL active roles for infra var derivation (#1431)
+        if node_ids:
+            all_nodes = (await session.execute(select(Node))).scalars().all()
+            all_ip_map = {n.node_id: n.ip_address for n in all_nodes}
+            all_active_q = select(NodeRole).where(NodeRole.status == "active")
+            all_active = (await session.execute(all_active_q)).scalars().all()
+        else:
+            all_ip_map = node_id_to_ip
+            all_active = all_node_roles
+
     children, ansible_groups = _build_inventory_children(
         hosts, all_node_roles, node_id_to_hostname
     )
+    infra_vars = _build_infra_vars(all_active, all_ip_map)
     inventory = {
         "all": {
             "vars": {
                 "ansible_ssh_private_key_file": "~/.ssh/autobot_key",
                 "ansible_python_interpreter": "/usr/bin/python3",
+                **infra_vars,
             },
             "hosts": hosts,
             "children": children,
