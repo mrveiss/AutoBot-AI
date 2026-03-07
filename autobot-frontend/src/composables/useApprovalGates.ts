@@ -172,13 +172,12 @@ export function useApprovalGates() {
 
   async function approve(
     id: string,
-    decidedBy: string,
     comment?: string
   ): Promise<Approval | null> {
     try {
       const result = await apiPost<Approval>(
         `/api/approval-gates/${id}/approve`,
-        { decided_by: decidedBy, comment }
+        { comment }
       )
       _updateLocal(result)
       return result
@@ -191,13 +190,12 @@ export function useApprovalGates() {
 
   async function reject(
     id: string,
-    decidedBy: string,
     comment?: string
   ): Promise<Approval | null> {
     try {
       const result = await apiPost<Approval>(
         `/api/approval-gates/${id}/reject`,
-        { decided_by: decidedBy, comment }
+        { comment }
       )
       _updateLocal(result)
       return result
@@ -210,13 +208,12 @@ export function useApprovalGates() {
 
   async function requestRevision(
     id: string,
-    decidedBy: string,
     comment?: string
   ): Promise<Approval | null> {
     try {
       const result = await apiPost<Approval>(
         `/api/approval-gates/${id}/request-revision`,
-        { decided_by: decidedBy, comment }
+        { comment }
       )
       _updateLocal(result)
       return result
@@ -250,14 +247,13 @@ export function useApprovalGates() {
 
   async function addComment(
     approvalId: string,
-    author: string,
     body: string,
     authorType = 'human'
   ): Promise<ApprovalComment | null> {
     try {
       return await apiPost<ApprovalComment>(
         `/api/approval-gates/${approvalId}/comments`,
-        { author, body, author_type: authorType }
+        { body, author_type: authorType }
       )
     } catch (e) {
       logger.error('Failed to add comment:', e)

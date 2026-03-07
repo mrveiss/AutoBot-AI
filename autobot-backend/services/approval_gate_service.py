@@ -11,7 +11,7 @@ notifications for pending approvals.
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
 
 from models.approval import Approval, ApprovalComment, ApprovalStatus, TaskApprovalLink
@@ -20,6 +20,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 logger = logging.getLogger(__name__)
+
+# Valid state transitions: source -> {allowed targets}
+_VALID_TRANSITIONS = {
+    ApprovalStatus.PENDING.value: {
+        ApprovalStatus.APPROVED.value,
+        ApprovalStatus.REJECTED.value,
+        ApprovalStatus.REVISION_REQUESTED.value,
+    },
+    ApprovalStatus.REVISION_REQUESTED.value: {
+        ApprovalStatus.APPROVED.value,
+        ApprovalStatus.REJECTED.value,
+    },
+}
 
 
 class ApprovalGateService:
@@ -270,8 +283,15 @@ class ApprovalGateService:
         self,
         approval_id: uuid.UUID,
     ) -> Approval:
-        """Load approval or raise ValueError."""
-        stmt = select(Approval).where(Approval.id == approval_id)
+        """Load approval with relationships or raise ValueError."""
+        stmt = (
+            select(Approval)
+            .options(
+                selectinload(Approval.comments),
+                selectinload(Approval.task_links),
+            )
+            .where(Approval.id == approval_id)
+        )
         result = await self.session.execute(stmt)
         approval = result.scalar_one_or_none()
         if approval is None:
@@ -288,17 +308,15 @@ class ApprovalGateService:
         """Perform a status transition with validation."""
         approval = await self._get_or_raise(approval_id)
 
-        if approval.status not in (
-            ApprovalStatus.PENDING.value,
-            ApprovalStatus.REVISION_REQUESTED.value,
-        ):
+        allowed = _VALID_TRANSITIONS.get(approval.status, set())
+        if new_status.value not in allowed:
             raise ValueError(
                 f"Cannot transition from {approval.status} " f"to {new_status.value}"
             )
 
         approval.status = new_status.value
         approval.decided_by_user = decided_by
-        approval.decided_at = datetime.utcnow()
+        approval.decided_at = datetime.now(UTC)
 
         if comment:
             c = ApprovalComment(
