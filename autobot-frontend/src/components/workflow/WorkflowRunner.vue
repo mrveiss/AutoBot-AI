@@ -3,14 +3,14 @@
     <!-- Workflow List -->
     <div class="runner-sidebar">
       <div class="sidebar-header">
-        <h4><i class="fas fa-tasks"></i> Active Workflows</h4>
+        <h4><i class="fas fa-tasks"></i> {{ $t('workflow.runner.activeWorkflows') }}</h4>
         <button class="btn-refresh" @click="$emit('refresh')" :disabled="loading">
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
         </button>
       </div>
       <div v-if="workflows.length === 0" class="empty-list">
         <i class="fas fa-inbox"></i>
-        <p>No active workflows</p>
+        <p>{{ $t('workflow.runner.noActiveWorkflows') }}</p>
       </div>
       <div v-else class="workflow-list">
         <div v-for="wf in workflows" :key="wf.workflow_id" class="workflow-item"
@@ -21,7 +21,7 @@
           </div>
           <div class="wf-info">
             <span class="wf-name">{{ wf.name }}</span>
-            <span class="wf-progress">Step {{ wf.current_step + 1 }} / {{ wf.total_steps }}</span>
+            <span class="wf-progress">{{ $t('workflow.runner.stepProgress', { current: wf.current_step + 1, total: wf.total_steps }) }}</span>
           </div>
           <div class="wf-progress-bar">
             <div class="progress-fill" :style="{ width: getProgress(wf) + '%' }"></div>
@@ -34,8 +34,8 @@
     <div class="runner-main">
       <div v-if="!currentWorkflow" class="no-selection">
         <i class="fas fa-hand-pointer"></i>
-        <h3>Select a Workflow</h3>
-        <p>Choose an active workflow from the list to view details and control execution</p>
+        <h3>{{ $t('workflow.runner.selectWorkflow') }}</h3>
+        <p>{{ $t('workflow.runner.selectWorkflowDescription') }}</p>
       </div>
 
       <template v-else>
@@ -45,19 +45,25 @@
             <h2>{{ currentWorkflow.name }}</h2>
             <p>{{ currentWorkflow.description }}</p>
             <div class="header-meta">
-              <span><i class="fas fa-calendar"></i> Started {{ formatTime(currentWorkflow.started_at) }}</span>
+              <span><i class="fas fa-calendar"></i> {{ $t('workflow.runner.started') }} {{ formatTime(currentWorkflow.started_at) }}</span>
               <span><i class="fas fa-cog"></i> {{ currentWorkflow.automation_mode }}</span>
+              <span v-if="currentWorkflow.phase" class="phase-badge" :class="currentWorkflow.phase">
+                <i class="fas fa-project-diagram"></i> {{ formatPhase(currentWorkflow.phase) }}
+              </span>
+              <span v-if="currentWorkflow.active_service" class="service-badge">
+                <i class="fas fa-server"></i> {{ currentWorkflow.active_service }}
+              </span>
             </div>
           </div>
           <div class="header-actions">
             <button v-if="currentWorkflow.is_paused" class="btn-success" @click="$emit('resume-workflow', currentWorkflow.workflow_id)">
-              <i class="fas fa-play"></i> Resume
+              <i class="fas fa-play"></i> {{ $t('workflow.runner.resume') }}
             </button>
             <button v-else class="btn-warning" @click="$emit('pause-workflow', currentWorkflow.workflow_id)">
-              <i class="fas fa-pause"></i> Pause
+              <i class="fas fa-pause"></i> {{ $t('workflow.runner.pause') }}
             </button>
             <button class="btn-danger" @click="$emit('cancel-workflow', currentWorkflow.workflow_id)">
-              <i class="fas fa-stop"></i> Cancel
+              <i class="fas fa-stop"></i> {{ $t('workflow.runner.cancel') }}
             </button>
           </div>
         </div>
@@ -68,16 +74,16 @@
             <div class="progress-fill" :style="{ width: getProgress(currentWorkflow) + '%' }"></div>
           </div>
           <div class="progress-stats">
-            <div class="stat"><span class="value">{{ currentWorkflow.current_step + 1 }}</span><span class="label">Current</span></div>
-            <div class="stat"><span class="value">{{ currentWorkflow.total_steps }}</span><span class="label">Total</span></div>
-            <div class="stat"><span class="value">{{ completedSteps }}</span><span class="label">Completed</span></div>
-            <div class="stat"><span class="value">{{ failedSteps }}</span><span class="label">Failed</span></div>
+            <div class="stat"><span class="value">{{ currentWorkflow.current_step + 1 }}</span><span class="label">{{ $t('workflow.runner.current') }}</span></div>
+            <div class="stat"><span class="value">{{ currentWorkflow.total_steps }}</span><span class="label">{{ $t('workflow.runner.total') }}</span></div>
+            <div class="stat"><span class="value">{{ completedSteps }}</span><span class="label">{{ $t('workflow.runner.completed') }}</span></div>
+            <div class="stat"><span class="value">{{ failedSteps }}</span><span class="label">{{ $t('workflow.runner.failed') }}</span></div>
           </div>
         </div>
 
         <!-- Steps List -->
         <div class="steps-container">
-          <h4><i class="fas fa-list-ol"></i> Execution Steps</h4>
+          <h4><i class="fas fa-list-ol"></i> {{ $t('workflow.runner.executionSteps') }}</h4>
           <div class="steps-list">
             <div v-for="(step, i) in currentWorkflow.steps" :key="step.step_id" class="step-item" :class="step.status">
               <div class="step-indicator">
@@ -105,10 +111,10 @@
                 <!-- Approval Actions -->
                 <div v-if="step.status === 'waiting_approval' && step.requires_confirmation" class="step-actions">
                   <button class="btn-success btn-sm" @click="$emit('approve-step', currentWorkflow.workflow_id, step.step_id)">
-                    <i class="fas fa-check"></i> Approve
+                    <i class="fas fa-check"></i> {{ $t('workflow.runner.approve') }}
                   </button>
                   <button class="btn-secondary btn-sm" @click="$emit('skip-step', currentWorkflow.workflow_id, step.step_id)">
-                    <i class="fas fa-forward"></i> Skip
+                    <i class="fas fa-forward"></i> {{ $t('workflow.runner.skip') }}
                   </button>
                 </div>
                 <!-- Execution Result -->
@@ -169,6 +175,10 @@ function formatStatus(status: string): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 }
 
+function formatPhase(phase: string): string {
+  return phase.charAt(0).toUpperCase() + phase.slice(1);
+}
+
 function formatTime(timestamp?: string): string {
   if (!timestamp) return '-';
   return new Date(timestamp).toLocaleTimeString();
@@ -219,8 +229,15 @@ function formatResult(result: Record<string, unknown>): string {
 .workflow-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-default); }
 .header-info h2 { margin: 0 0 4px; font-size: 18px; color: var(--text-primary); }
 .header-info p { margin: 0 0 10px; font-size: 13px; color: var(--text-secondary); }
-.header-meta { display: flex; gap: 16px; font-size: 12px; color: var(--text-tertiary); }
+.header-meta { display: flex; gap: 16px; font-size: 12px; color: var(--text-tertiary); flex-wrap: wrap; }
 .header-meta span { display: flex; align-items: center; gap: 6px; }
+.phase-badge { padding: 2px 8px; border-radius: 10px; font-weight: 500; background: var(--bg-tertiary); }
+.phase-badge.planning { background: var(--color-info-bg); color: var(--color-info); }
+.phase-badge.executing { background: var(--color-primary-bg); color: var(--color-primary); }
+.phase-badge.validating { background: var(--color-warning-bg); color: var(--color-warning); }
+.phase-badge.complete { background: var(--color-success-bg); color: var(--color-success); }
+.phase-badge.failed { background: var(--color-error-bg); color: var(--color-error); }
+.service-badge { padding: 2px 8px; border-radius: 10px; background: var(--bg-tertiary); color: var(--text-secondary); font-family: monospace; }
 .header-actions { display: flex; gap: 10px; }
 
 .progress-overview { padding: 20px; background: var(--bg-secondary); }

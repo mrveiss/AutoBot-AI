@@ -93,7 +93,7 @@ class VMConfig(BaseSettings):
     aistack: str = Field(default="172.16.168.24", alias="AUTOBOT_AI_STACK_HOST")
     chromadb: str = Field(default="172.16.168.24", alias="AUTOBOT_CHROMADB_HOST")
     browser: str = Field(default="172.16.168.25", alias="AUTOBOT_BROWSER_SERVICE_HOST")
-    tts: str = Field(default="172.16.168.22", alias="AUTOBOT_TTS_WORKER_HOST")
+    tts: str = Field(default="172.16.168.24", alias="AUTOBOT_TTS_WORKER_HOST")
     slm: str = Field(default="172.16.168.19", alias="AUTOBOT_SLM_HOST")  # Issue #768
     ollama: str = Field(default="127.0.0.1", alias="AUTOBOT_OLLAMA_HOST")
 
@@ -599,6 +599,11 @@ class CacheL1Config(BaseSettings):
         alias="AUTOBOT_CACHE_L1_WEAK_CACHE",
         description="Max items in weak reference cache",
     )
+    semantic_cache_max_size: int = Field(
+        default=10000,
+        alias="AUTOBOT_CACHE_L1_SEMANTIC_MAX_SIZE",
+        description="Max entries in semantic query cache ChromaDB collection",
+    )
 
 
 class CacheL2Config(BaseSettings):
@@ -642,6 +647,16 @@ class CacheL2Config(BaseSettings):
         default=7200,
         alias="AUTOBOT_CACHE_L2_COMPUTED",
         description="TTL for computed results in seconds (2 hours)",
+    )
+    semantic_cache: int = Field(
+        default=3600,
+        alias="AUTOBOT_CACHE_L2_SEMANTIC",
+        description="TTL for semantic query cache responses in seconds (1 hour)",
+    )
+    semantic_cache_threshold: float = Field(
+        default=0.95,
+        alias="AUTOBOT_CACHE_SEMANTIC_THRESHOLD",
+        description="Cosine similarity threshold for semantic cache hits (0.5-1.0)",
     )
 
 

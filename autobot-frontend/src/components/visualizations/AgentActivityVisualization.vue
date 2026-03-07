@@ -10,20 +10,20 @@
 <template>
   <div class="agent-activity-viz">
     <div class="viz-header">
-      <h3>{{ title }}</h3>
+      <h3>{{ title || t('visualizations.agentActivity.defaultTitle') }}</h3>
       <div class="header-controls">
         <div class="view-toggle">
           <button
             @click="viewMode = 'grid'"
             :class="{ active: viewMode === 'grid' }"
-            title="Grid view"
+            :title="t('visualizations.agentActivity.gridView')"
           >
             <i class="fas fa-th-large"></i>
           </button>
           <button
             @click="viewMode = 'timeline'"
             :class="{ active: viewMode === 'timeline' }"
-            title="Timeline view"
+            :title="t('visualizations.agentActivity.timelineView')"
           >
             <i class="fas fa-stream"></i>
           </button>
@@ -31,7 +31,7 @@
         <div class="status-summary">
           <span class="active-count">
             <i class="fas fa-circle pulse"></i>
-            {{ activeAgentCount }} active
+            {{ t('visualizations.agentActivity.activeCount', { count: activeAgentCount }) }}
           </span>
         </div>
       </div>
@@ -62,15 +62,15 @@
         <div class="current-activity">
           <div v-if="agent.status === 'working'" class="activity-indicator">
             <div class="activity-pulse"></div>
-            <span class="activity-text">{{ truncate(agent.currentTask || 'Processing...', 30) }}</span>
+            <span class="activity-text">{{ truncate(agent.currentTask || t('visualizations.agentActivity.processing'), 30) }}</span>
           </div>
           <div v-else-if="agent.status === 'idle'" class="activity-idle">
             <i class="fas fa-pause-circle"></i>
-            <span>Idle</span>
+            <span>{{ t('visualizations.agentActivity.idle') }}</span>
           </div>
           <div v-else-if="agent.status === 'error'" class="activity-error">
             <i class="fas fa-exclamation-triangle"></i>
-            <span>Error</span>
+            <span>{{ t('visualizations.agentActivity.error') }}</span>
           </div>
         </div>
 
@@ -78,15 +78,15 @@
         <div class="agent-metrics">
           <div class="metric">
             <span class="metric-value">{{ agent.tasksCompleted }}</span>
-            <span class="metric-label">Tasks</span>
+            <span class="metric-label">{{ t('visualizations.agentActivity.tasks') }}</span>
           </div>
           <div class="metric">
             <span class="metric-value">{{ formatUptime(agent.uptime) }}</span>
-            <span class="metric-label">Uptime</span>
+            <span class="metric-label">{{ t('visualizations.agentActivity.uptime') }}</span>
           </div>
           <div class="metric">
             <span class="metric-value">{{ agent.successRate }}%</span>
-            <span class="metric-label">Success</span>
+            <span class="metric-label">{{ t('visualizations.agentActivity.success') }}</span>
           </div>
         </div>
 
@@ -94,7 +94,7 @@
         <Transition name="expand">
           <div v-if="expandedAgent === agent.id" class="expanded-details">
             <div class="detail-section">
-              <h5>Recent Tasks</h5>
+              <h5>{{ t('visualizations.agentActivity.recentTasks') }}</h5>
               <ul class="task-list">
                 <li
                   v-for="task in agent.recentTasks"
@@ -108,10 +108,10 @@
             </div>
             <div class="detail-actions">
               <button @click.stop="viewDetails(agent)" class="action-btn">
-                <i class="fas fa-eye"></i> Details
+                <i class="fas fa-eye"></i> {{ t('visualizations.agentActivity.detailsBtn') }}
               </button>
               <button @click.stop="pauseAgent(agent)" class="action-btn" :disabled="agent.status !== 'working'">
-                <i class="fas fa-pause"></i> Pause
+                <i class="fas fa-pause"></i> {{ t('visualizations.agentActivity.pauseBtn') }}
               </button>
             </div>
           </div>
@@ -157,7 +157,7 @@
     <div class="activity-feed">
       <h4>
         <i class="fas fa-rss"></i>
-        Live Activity Feed
+        {{ t('visualizations.agentActivity.liveActivityFeed') }}
       </h4>
       <div class="feed-items">
         <TransitionGroup name="feed">
@@ -180,9 +180,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
 
+const { t } = useI18n()
 const logger = createLogger('AgentActivityVisualization')
 
 /**
@@ -234,7 +236,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'Agent Activity Monitor',
+  title: undefined,
   refreshInterval: 5000
 })
 

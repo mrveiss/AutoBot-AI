@@ -5,8 +5,8 @@
 <template>
   <div class="desktop-context-panel">
     <div class="panel-header">
-      <h3 class="text-sm font-semibold text-autobot-text-primary">Desktop Context</h3>
-      <button @click="refresh" :disabled="loading" class="refresh-btn" title="Refresh">
+      <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('desktop.contextPanel.title') }}</h3>
+      <button @click="refresh" :disabled="loading" class="refresh-btn" :title="$t('desktop.contextPanel.title')">
         <svg class="w-4 h-4" :class="{ 'animate-spin': loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
@@ -20,39 +20,39 @@
     <div v-else-if="context" class="context-sections">
       <!-- System Info -->
       <div class="context-section">
-        <h4 class="section-title">System</h4>
+        <h4 class="section-title">{{ $t('desktop.contextPanel.system') }}</h4>
         <div class="info-grid">
           <div class="info-item">
-            <span class="info-label">CPU Load</span>
-            <span class="info-value">{{ context.system.cpu_load_1min || 'N/A' }}</span>
+            <span class="info-label">{{ $t('desktop.contextPanel.cpuLoad') }}</span>
+            <span class="info-value">{{ context.system.cpu_load_1min || $t('desktop.contextPanel.na') }}</span>
           </div>
           <div class="info-item">
-            <span class="info-label">Memory</span>
+            <span class="info-label">{{ $t('desktop.contextPanel.memory') }}</span>
             <span class="info-value">
               {{ context.system.memory_percent }}% ({{ context.system.memory_used_mb }}MB / {{ context.system.memory_total_mb }}MB)
             </span>
           </div>
           <div class="info-item">
-            <span class="info-label">Uptime</span>
-            <span class="info-value">{{ context.system.uptime || 'N/A' }}</span>
+            <span class="info-label">{{ $t('desktop.contextPanel.uptime') }}</span>
+            <span class="info-value">{{ context.system.uptime || $t('desktop.contextPanel.na') }}</span>
           </div>
         </div>
       </div>
 
       <!-- Desktop Info -->
       <div class="context-section">
-        <h4 class="section-title">Desktop</h4>
+        <h4 class="section-title">{{ $t('desktop.contextPanel.desktop') }}</h4>
         <div class="info-grid">
           <div class="info-item">
-            <span class="info-label">Resolution</span>
-            <span class="info-value">{{ context.desktop.resolution || 'N/A' }}</span>
+            <span class="info-label">{{ $t('desktop.contextPanel.resolution') }}</span>
+            <span class="info-value">{{ context.desktop.resolution || $t('desktop.contextPanel.na') }}</span>
           </div>
           <div class="info-item">
-            <span class="info-label">Active Window</span>
-            <span class="info-value text-truncate">{{ context.desktop.active_window || 'None' }}</span>
+            <span class="info-label">{{ $t('desktop.contextPanel.activeWindow') }}</span>
+            <span class="info-value text-truncate">{{ context.desktop.active_window || $t('desktop.contextPanel.none') }}</span>
           </div>
           <div v-if="context.desktop.window_count" class="info-item">
-            <span class="info-label">Windows</span>
+            <span class="info-label">{{ $t('desktop.contextPanel.windows') }}</span>
             <span class="info-value">{{ context.desktop.window_count }}</span>
           </div>
         </div>
@@ -60,16 +60,16 @@
 
       <!-- Running Processes -->
       <div v-if="context.processes && context.processes.length > 0" class="context-section">
-        <h4 class="section-title">Top Processes (by CPU)</h4>
+        <h4 class="section-title">{{ $t('desktop.contextPanel.topProcesses') }}</h4>
         <div class="process-list">
           <div v-for="proc in context.processes" :key="proc.pid" class="process-item">
             <div class="process-info">
-              <span class="process-pid">PID {{ proc.pid }}</span>
+              <span class="process-pid">{{ $t('desktop.contextPanel.pid', { pid: proc.pid }) }}</span>
               <span class="process-command">{{ proc.command }}</span>
             </div>
             <div class="process-stats">
-              <span class="process-cpu">CPU: {{ proc.cpu }}%</span>
-              <span class="process-mem">MEM: {{ proc.mem }}%</span>
+              <span class="process-cpu">{{ $t('desktop.contextPanel.cpu', { pct: proc.cpu }) }}</span>
+              <span class="process-mem">{{ $t('desktop.contextPanel.mem', { pct: proc.mem }) }}</span>
             </div>
           </div>
         </div>
@@ -77,21 +77,23 @@
 
       <!-- Last Update -->
       <div class="update-time">
-        Last updated: {{ formatTime(context.timestamp) }}
+        {{ $t('desktop.contextPanel.lastUpdated', { time: formatTime(context.timestamp) }) }}
       </div>
     </div>
 
     <div v-else class="loading-state">
-      Loading context...
+      {{ $t('desktop.contextPanel.loading') }}
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
+const { t } = useI18n()
 const logger = createLogger('DesktopContextPanel')
 
 interface DesktopContext {
@@ -132,7 +134,7 @@ async function fetchContext() {
     context.value = data
   } catch (err: any) {
     logger.error('Failed to fetch desktop context:', err)
-    error.value = 'Failed to load desktop context'
+    error.value = t('desktop.contextPanel.error')
   } finally {
     loading.value = false
   }

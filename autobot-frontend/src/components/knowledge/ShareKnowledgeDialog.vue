@@ -3,9 +3,9 @@
     <div class="modal-dialog">
       <div class="modal-header">
         <h3 class="modal-title">
-          <i class="fas fa-share-alt"></i> Share "{{ factTitle }}"
+          <i class="fas fa-share-alt"></i> {{ $t('knowledge.share.title', { name: factTitle }) }}
         </h3>
-        <button class="close-button" @click="closeDialog" aria-label="Close">
+        <button class="close-button" @click="closeDialog" :aria-label="$t('knowledge.share.closeAriaLabel')">
           <i class="fas fa-times"></i>
         </button>
       </div>
@@ -13,14 +13,14 @@
       <div class="modal-body">
         <!-- Search for users/groups -->
         <div class="search-section">
-          <label for="share-search">Share with:</label>
+          <label for="share-search">{{ $t('knowledge.share.shareWith') }}</label>
           <div class="search-input-wrapper">
             <i class="fas fa-search search-icon"></i>
             <input
               id="share-search"
               v-model="searchQuery"
               type="text"
-              placeholder="Search users or groups..."
+              :placeholder="$t('knowledge.share.searchPlaceholder')"
               class="search-input"
               @input="handleSearch"
             />
@@ -37,15 +37,15 @@
           >
             <i :class="result.type === 'user' ? 'fas fa-user' : 'fas fa-users'"></i>
             <span class="result-name">{{ result.name }}</span>
-            <span class="result-type">{{ result.type === 'user' ? 'User' : 'Team' }}</span>
+            <span class="result-type">{{ result.type === 'user' ? $t('knowledge.share.user') : $t('knowledge.share.team') }}</span>
           </div>
         </div>
 
         <!-- Current access list -->
         <div class="current-access">
-          <h4>Current Access:</h4>
+          <h4>{{ $t('knowledge.share.currentAccess') }}</h4>
           <div v-if="currentAccess.length === 0" class="empty-state">
-            No one else has access yet
+            {{ $t('knowledge.share.noAccess') }}
           </div>
           <div v-else class="access-list">
             <div
@@ -56,7 +56,7 @@
               <div class="access-info">
                 <i :class="access.type === 'user' ? 'fas fa-user' : 'fas fa-users'"></i>
                 <span class="access-name">{{ access.name }}</span>
-                <span class="access-type">{{ access.type === 'user' ? 'User' : 'Team' }}</span>
+                <span class="access-type">{{ access.type === 'user' ? $t('knowledge.share.user') : $t('knowledge.share.team') }}</span>
               </div>
               <div class="access-controls">
                 <select
@@ -64,14 +64,14 @@
                   class="permission-select"
                   @change="handlePermissionChange(access)"
                 >
-                  <option value="read">Read</option>
-                  <option value="write">Write</option>
-                  <option value="admin">Admin</option>
+                  <option value="read">{{ $t('knowledge.share.read') }}</option>
+                  <option value="write">{{ $t('knowledge.share.write') }}</option>
+                  <option value="admin">{{ $t('knowledge.share.admin') }}</option>
                 </select>
                 <button
                   class="remove-button"
                   @click="removeEntity(access)"
-                  aria-label="Remove access"
+                  :aria-label="$t('knowledge.share.removeAccess')"
                 >
                   <i class="fas fa-trash-alt"></i>
                 </button>
@@ -83,7 +83,7 @@
 
       <div class="modal-footer">
         <button class="btn btn-secondary" @click="closeDialog">
-          Cancel
+          {{ $t('knowledge.share.cancel') }}
         </button>
         <button
           class="btn btn-primary"
@@ -92,7 +92,7 @@
         >
           <i class="fas fa-spinner fa-spin" v-if="saving"></i>
           <i class="fas fa-save" v-else></i>
-          {{ saving ? 'Saving...' : 'Save Changes' }}
+          {{ saving ? $t('knowledge.share.saving') : $t('knowledge.share.saveChanges') }}
         </button>
       </div>
     </div>
@@ -101,6 +101,9 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 /**
  * Share Knowledge Dialog Component
@@ -261,7 +264,7 @@ const saveChanges = async () => {
 
 const closeDialog = () => {
   if (hasChanges.value) {
-    if (!confirm('You have unsaved changes. Are you sure you want to close?')) {
+    if (!confirm(t('knowledge.share.unsavedConfirm'))) {
       return
     }
   }

@@ -356,7 +356,7 @@ class RelationsMixin:
 
     # -- stats ------------------------------------------------------------
 
-    @error_boundary(operation="get_relation_stats")
+    @error_boundary(component="knowledge", function="get_relation_stats")
     async def get_relation_stats(self) -> Dict[str, Any]:
         """Aggregate statistics about fact relations."""
         self.ensure_initialized()

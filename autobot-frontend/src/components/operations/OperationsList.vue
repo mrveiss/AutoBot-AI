@@ -11,14 +11,14 @@
     <!-- Empty state -->
     <div class="empty-state" v-if="operations.length === 0 && !loading">
       <i class="fas fa-tasks empty-icon"></i>
-      <h3 class="empty-title">No Operations</h3>
-      <p class="empty-text">{{ emptyMessage }}</p>
+      <h3 class="empty-title">{{ $t('operations.list.noOperations') }}</h3>
+      <p class="empty-text">{{ emptyMessage || $t('operations.list.defaultEmptyMessage') }}</p>
     </div>
 
     <!-- Loading state -->
     <div class="loading-state" v-if="loading">
       <i class="fas fa-spinner fa-spin loading-icon"></i>
-      <span>Loading operations...</span>
+      <span>{{ $t('operations.list.loadingOperations') }}</span>
     </div>
 
     <!-- Operations table -->
@@ -26,12 +26,12 @@
       <table class="operations-table">
         <thead>
           <tr>
-            <th class="col-status">Status</th>
-            <th class="col-name">Operation</th>
-            <th class="col-progress">Progress</th>
-            <th class="col-type">Type</th>
-            <th class="col-time">Started</th>
-            <th class="col-actions">Actions</th>
+            <th class="col-status">{{ $t('operations.list.colStatus') }}</th>
+            <th class="col-name">{{ $t('operations.list.colOperation') }}</th>
+            <th class="col-progress">{{ $t('operations.list.colProgress') }}</th>
+            <th class="col-type">{{ $t('operations.list.colType') }}</th>
+            <th class="col-time">{{ $t('operations.list.colStarted') }}</th>
+            <th class="col-actions">{{ $t('operations.list.colActions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -86,7 +86,7 @@
                   class="action-btn cancel-btn"
                   v-if="canCancelOperation(operation)"
                   @click.stop="emit('cancel', operation.operation_id)"
-                  title="Cancel"
+                  :title="$t('operations.list.cancel')"
                 >
                   <i class="fas fa-stop"></i>
                 </button>
@@ -94,14 +94,14 @@
                   class="action-btn resume-btn"
                   v-if="canResumeOperation(operation)"
                   @click.stop="emit('resume', operation.operation_id)"
-                  title="Resume"
+                  :title="$t('operations.list.resume')"
                 >
                   <i class="fas fa-play"></i>
                 </button>
                 <button
                   class="action-btn view-btn"
                   @click.stop="emit('select', operation)"
-                  title="View Details"
+                  :title="$t('operations.list.viewDetails')"
                 >
                   <i class="fas fa-eye"></i>
                 </button>
@@ -113,7 +113,7 @@
     </div>
 
     <div class="list-footer" v-if="operations.length > 0">
-      <span class="footer-text">Showing {{ operations.length }} of {{ totalCount }} operations</span>
+      <span class="footer-text">{{ $t('operations.list.showingCount', { shown: operations.length, total: totalCount }) }}</span>
     </div>
   </div>
 </template>
@@ -141,7 +141,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
   selectedId: null,
-  emptyMessage: 'No operations found. Operations will appear here when background tasks are running.'
+  emptyMessage: undefined
 })
 
 const emit = defineEmits<{

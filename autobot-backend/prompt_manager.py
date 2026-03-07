@@ -646,3 +646,59 @@ def reload_prompts() -> None:
     Convenience function to reload all prompts.
     """
     prompt_manager.reload()
+
+
+# Issue #1327: Supported languages for prompt language injection.
+# Canonical copy lives in personality_service.SUPPORTED_LANGUAGES;
+# duplicated here to avoid circular-import issues at call time.
+SUPPORTED_LANGUAGES = {
+    "en": "English",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "pt": "Portuguese",
+    "zh": "Chinese",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "ar": "Arabic",
+    "ru": "Russian",
+    "it": "Italian",
+    "nl": "Dutch",
+    "hi": "Hindi",
+}
+
+
+def resolve_language(request_language=None):
+    """Resolve response language from request, personality, or default.
+
+    Issue #1327: Shared utility for all agents and handlers.
+    Priority: request param > personality profile > 'en'.
+    """
+    if request_language:
+        return request_language
+    try:
+        from services.personality_service import get_personality_manager
+
+        profile = get_personality_manager().get_active_profile()
+        if profile and profile.language_code:
+            return profile.language_code
+    except Exception:
+        pass
+    return "en"
+
+
+def get_language_instruction(language_code):
+    """Build a language instruction block for system prompts.
+
+    Issue #1327: Returns empty string for English (default),
+    so no noise is added when language is not explicitly set.
+    """
+    if not language_code or language_code == "en":
+        return ""
+    lang_name = SUPPORTED_LANGUAGES.get(language_code, language_code)
+    return (
+        f"\n\n**Language Requirement:** You MUST respond in "
+        f"{lang_name} ({language_code}). "
+        f"All your responses, explanations, and generated "
+        f"content must be in {lang_name}."
+    )

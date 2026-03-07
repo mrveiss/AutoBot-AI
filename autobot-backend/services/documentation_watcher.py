@@ -16,8 +16,6 @@ Features:
 """
 
 import asyncio
-import hashlib
-import json
 import logging
 import time
 from datetime import datetime
@@ -243,56 +241,34 @@ class DocumentationWatcherService:
 
     async def _handle_update(self, file_path: Path) -> None:
         """
-        Handle a file creation or modification.
+        Handle a file creation or modification via DocIndexerService.
+
+        Issue #1385: Uses ChromaDB-based DocIndexerService instead of Redis KB.
 
         Args:
             file_path: Path to the updated file
         """
         try:
-            # Read file content
-            content = file_path.read_text(encoding="utf-8")
-            if not content.strip():
-                logger.debug("Skipping empty file: %s", file_path)
+            from services.knowledge.doc_indexer import get_doc_indexer_service
+
+            indexer = get_doc_indexer_service()
+            if not await indexer.initialize():
+                logger.error("DocIndexerService not available for reindexing")
                 return
 
-            # Calculate content hash
-            content_hash = hashlib.sha256(content.encode()).hexdigest()
+            # force=True to re-index even if hash matches (file watcher
+            # already debounced, so we trust it actually changed)
+            result = await indexer.index_file(file_path, force=True)
 
-            # Import indexing functions
-            from knowledge_factory import get_knowledge_base_async
-
-            from scripts.utilities.index_documentation import (
-                detect_category,
-                index_document,
-            )
-
-            # Get knowledge base
-            kb = await get_knowledge_base_async()
-            if not kb:
-                logger.error("Knowledge base not available for reindexing")
-                return
-
-            # Check if content has changed
-            existing_hash_key = f"doc_hash:{content_hash}"
-            if kb.redis_client.exists(existing_hash_key):
-                logger.debug("File unchanged, skipping: %s", file_path.name)
-                return
-
-            # Detect category and reindex
-            category = detect_category(file_path)
-            result = await index_document(kb, file_path, category, reindex=True)
-
-            if result["status"] == "success":
-                logger.info(
-                    "Reindexed documentation: %s (%d chunks)",
-                    file_path.name,
-                    result.get("chunks_indexed", 0),
-                )
+            if result.success > 0:
+                logger.info("Reindexed documentation: %s", file_path.name)
+            elif result.skipped > 0:
+                logger.debug("File unchanged, skipped: %s", file_path.name)
             else:
                 logger.warning(
                     "Failed to reindex %s: %s",
                     file_path.name,
-                    result.get("error", "Unknown error"),
+                    result.errors,
                 )
 
         except Exception as e:
@@ -301,51 +277,35 @@ class DocumentationWatcherService:
 
     async def _handle_deletion(self, file_path: Path) -> None:
         """
-        Handle a file deletion.
+        Handle a file deletion by removing its chunks from ChromaDB.
+
+        Issue #1385: Deletes chunks from autobot_docs collection by file_path
+        metadata filter instead of scanning Redis facts.
 
         Args:
             file_path: Path to the deleted file
         """
         try:
-            from knowledge_factory import get_knowledge_base_async
+            from services.knowledge.doc_indexer import get_doc_indexer_service
 
-            kb = await get_knowledge_base_async()
-            if not kb:
-                logger.error("Knowledge base not available for deletion cleanup")
+            indexer = get_doc_indexer_service()
+            if not await indexer.initialize():
+                logger.error("DocIndexerService not available for deletion")
                 return
 
-            # Find and remove facts associated with this file
             relative_path = str(file_path.relative_to(PROJECT_ROOT))
 
-            # Scan for facts with this file path
-            cursor = 0
-            removed_count = 0
-
-            while True:
-                cursor, keys = await asyncio.to_thread(
-                    kb.redis_client.scan, cursor, match="fact:*", count=500
-                )
-
-                if keys:
-                    for key in keys:
-                        try:
-                            fact_data = await asyncio.to_thread(
-                                kb.redis_client.hgetall, key
-                            )
-                            if fact_data:
-                                metadata = json.loads(fact_data.get(b"metadata", b"{}"))
-                                if metadata.get("file_path") == relative_path:
-                                    await asyncio.to_thread(kb.redis_client.delete, key)
-                                    removed_count += 1
-                        except Exception:
-                            continue
-
-                if cursor == 0:
-                    break
-
-            logger.info(
-                "Removed %d facts for deleted file: %s", removed_count, file_path.name
-            )
+            # Delete all chunks with this file_path from ChromaDB
+            if indexer._collection:
+                try:
+                    indexer._collection.delete(where={"file_path": relative_path})
+                    logger.info("Removed chunks for deleted file: %s", file_path.name)
+                except Exception as del_err:
+                    logger.warning(
+                        "Could not delete chunks for %s: %s",
+                        file_path.name,
+                        del_err,
+                    )
 
         except Exception as e:
             logger.error("Error handling deletion %s: %s", file_path, e)

@@ -9,9 +9,10 @@ Provides native API access to containerized Playwright functionality
 import logging
 
 import aiohttp
+from auth_middleware import check_admin_permission
 from config import ConfigManager
 from constants.network_constants import NetworkConstants
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from services.playwright_service import (
     get_playwright_service,
@@ -27,7 +28,7 @@ from autobot_shared.http_client import get_http_client
 # Create singleton config instance
 config = ConfigManager()
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = logging.getLogger(__name__)
 
 
@@ -60,6 +61,15 @@ class NavigateRequest(BaseModel):
 
 class ReloadRequest(BaseModel):
     wait_until: str = "networkidle"
+
+
+class InteractRequest(BaseModel):
+    action: str  # click, scroll, type, hover
+    x: float | None = None
+    y: float | None = None
+    deltaX: float = 0
+    deltaY: float = 0
+    text: str | None = None
 
 
 # Browser VM connection
@@ -582,6 +592,57 @@ async def take_worker_screenshot():
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="interact",
+    error_code_prefix="PLAYWRIGHT",
+)
+@router.post("/interact")
+async def interact_with_page(request: InteractRequest):
+    """Proxy interactive browser actions to Browser VM (#1416)"""
+    allowed = {"click", "scroll", "type", "hover"}
+    if request.action not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid action: {request.action}. Allowed: {', '.join(sorted(allowed))}",
+        )
+    try:
+        payload: dict = {}
+        if request.action in ("click", "hover"):
+            if request.x is None or request.y is None:
+                raise HTTPException(status_code=400, detail="x and y required")
+            payload = {"x": request.x, "y": request.y}
+        elif request.action == "scroll":
+            payload = {"deltaX": request.deltaX, "deltaY": request.deltaY}
+        elif request.action == "type":
+            if not request.text:
+                raise HTTPException(status_code=400, detail="text required")
+            payload = {"text": request.text}
+
+        http_client = get_http_client()
+        async with await http_client.post(
+            f"{BROWSER_VM_URL}/{request.action}",
+            json=payload,
+            timeout=aiohttp.ClientTimeout(total=15),
+        ) as response:
+            result = await response.json()
+            if response.status == 200:
+                return result
+            else:
+                raise HTTPException(
+                    status_code=response.status,
+                    detail=result.get("error", "Interaction failed"),
+                )
+    except HTTPException:
+        raise
+    except aiohttp.ClientError as e:
+        logger.error("Browser VM connection error: %s", e)
+        raise HTTPException(status_code=503, detail=f"Browser VM unavailable: {str(e)}")
+    except Exception as e:
+        logger.error("Interact error: %s", e)
+        raise HTTPException(status_code=500, detail=f"Interaction failed: {str(e)}")
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="get_capabilities",
     error_code_prefix="PLAYWRIGHT",
 )
@@ -628,6 +689,7 @@ async def get_capabilities():
             "/api/playwright/reload",
             "/api/playwright/back",
             "/api/playwright/forward",
+            "/api/playwright/interact",
         ],
         "container_integration": {
             "type": "embedded",

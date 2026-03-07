@@ -171,6 +171,11 @@ class CodePatternAnalyzer:
         )
         self._init_sub_analyzers(cc_threshold, mi_threshold)
 
+    # Batch size for per-file analysis (tunable)
+    BATCH_SIZE = 50
+    # Per-analyzer timeout in seconds
+    ANALYZER_TIMEOUT = 300  # 5 minutes per analyzer per batch
+
     def _build_analysis_tasks(self, directory: str) -> List:
         """Build list of analysis tasks based on enabled features. Issue #620."""
         tasks = []
@@ -197,55 +202,338 @@ class CodePatternAnalyzer:
                 continue
             self._merge_results(report, result)
 
+    def collect_python_files(self, directory: str) -> List[str]:
+        """Collect all Python files excluding configured directories.
+
+        Returns:
+            Sorted list of absolute file paths.
+        """
+        files = []
+        dir_path = Path(directory)
+        for py_file in dir_path.rglob("*.py"):
+            if any(exc in py_file.parts for exc in self.exclude_dirs):
+                continue
+            files.append(str(py_file))
+        return sorted(files)
+
+    async def _run_batch_regex(self, file_paths: List[str]) -> List:
+        """Run regex detection on a batch of files."""
+        if not self._regex_detector:
+            return []
+        loop = asyncio.get_event_loop()
+        executor = get_analytics_executor()
+        results = []
+        for fp in file_paths:
+            try:
+                opps = await loop.run_in_executor(
+                    executor, self._regex_detector.detect_in_file, fp
+                )
+                results.extend(opps)
+            except Exception as e:
+                logger.debug("Regex detection failed for %s: %s", fp, e)
+        return results
+
+    async def _run_batch_complexity(self, file_paths: List[str]) -> List:
+        """Run complexity analysis on a batch of files."""
+        if not self._complexity_analyzer:
+            return []
+        loop = asyncio.get_event_loop()
+        executor = get_analytics_executor()
+        modules = []
+        for fp in file_paths:
+            try:
+                module = await loop.run_in_executor(
+                    executor, self._complexity_analyzer.analyze_file, fp
+                )
+                modules.append(module)
+            except Exception as e:
+                logger.debug("Complexity analysis failed for %s: %s", fp, e)
+        return modules
+
+    async def _run_batch_anti_pattern(self, file_paths: List[str]) -> Dict[str, List]:
+        """Run anti-pattern detection on a batch of files."""
+        if not self._anti_pattern_detector:
+            return {"modularization": [], "other_patterns": []}
+        loop = asyncio.get_event_loop()
+        executor = get_analytics_executor()
+        modularization: List = []
+        other_patterns: List = []
+        for fp in file_paths:
+            try:
+                file_result = await loop.run_in_executor(
+                    executor,
+                    self._anti_pattern_detector.analyze_file,
+                    fp,
+                )
+                for pattern in file_result.get("anti_patterns", []):
+                    if self._is_modularization_candidate(pattern):
+                        mod = self._to_modularization_suggestion(pattern)
+                        if mod:
+                            modularization.append(mod)
+                    else:
+                        cp = self._anti_pattern_to_code_pattern(pattern)
+                        if cp:
+                            other_patterns.append(cp)
+            except Exception as e:
+                logger.debug("Anti-pattern detection failed for %s: %s", fp, e)
+        return {"modularization": modularization, "other_patterns": other_patterns}
+
     async def analyze_directory(
         self,
         directory: str,
         progress_callback: Optional[Any] = None,
+        checkpoint_callback: Optional[Any] = None,
+        resume_from: Optional[Dict[str, Any]] = None,
     ) -> PatternAnalysisReport:
-        """Analyze a directory for code patterns.
+        """Analyze a directory for code patterns using batched processing.
+
+        Processes files in batches of BATCH_SIZE (50) with progress
+        reporting and optional checkpointing for resume capability.
 
         Args:
-            directory: Path to directory to analyze
-            progress_callback: Optional async callable(step: str, progress: float)
-                for reporting progress to callers (e.g. background task status).
+            directory: Path to directory to analyze.
+            progress_callback: async callable(step, progress) for UI updates.
+            checkpoint_callback: async callable(phase, batch_idx, partial)
+                to save intermediate results for resume.
+            resume_from: Checkpoint dict to resume from (keys: phase,
+                batch_idx, partial_results).
 
         Returns:
-            PatternAnalysisReport with all findings
+            PatternAnalysisReport with all findings.
         """
-        logger.info("Starting code pattern analysis for: %s", directory)
+        logger.info("Starting batched code pattern analysis for: %s", directory)
         start_time = time.time()
 
         async def _report(step: str, pct: float) -> None:
             if progress_callback:
                 await progress_callback(step, pct)
 
-        await _report("Scanning files...", 5.0)
+        # Phase 1: Collect files
+        await _report("Scanning files...", 2.0)
+        all_files = await asyncio.to_thread(self.collect_python_files, directory)
+        file_count = len(all_files)
+        line_count = await asyncio.to_thread(self._count_lines_for_files, all_files)
+
         report = PatternAnalysisReport(scan_path=directory)
-        file_count, line_count = await asyncio.to_thread(
-            self._count_files_and_lines, directory
-        )
         report.total_files_analyzed = file_count
         report.total_lines_analyzed = line_count
 
-        await _report(f"Analyzing {file_count} files ({line_count} lines)...", 15.0)
-        tasks = self._build_analysis_tasks(directory)
-        await self._execute_and_merge_results(tasks, report)
+        if file_count == 0:
+            await _report("No Python files found", 100.0)
+            return report
 
+        # Split into batches
+        batches = [
+            all_files[i : i + self.BATCH_SIZE]
+            for i in range(0, file_count, self.BATCH_SIZE)
+        ]
+        total_batches = len(batches)
+        await _report(
+            f"Found {file_count} files ({line_count} lines) "
+            f"— {total_batches} batches of {self.BATCH_SIZE}",
+            5.0,
+        )
+
+        start_batch = self._apply_resume_checkpoint(report, resume_from, total_batches)
+
+        # Phase 2: Per-file analysis in batches (5% → 75%)
+        await self._process_file_batches(
+            batches,
+            start_batch,
+            report,
+            _report,
+            checkpoint_callback,
+            file_count,
+        )
+
+        # Phase 3: Clone detection (75% → 85%) — full directory, with timeout
+        if self.enable_clone_detection:
+            await _report("Running clone detection...", 75.0)
+            try:
+                clone_result = await asyncio.wait_for(
+                    self._run_clone_detection(directory),
+                    timeout=self.ANALYZER_TIMEOUT,
+                )
+                self._merge_results(report, clone_result)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Clone detection timed out after %ds, skipping",
+                    self.ANALYZER_TIMEOUT,
+                )
+            except Exception as e:
+                logger.error("Clone detection failed: %s", e)
+
+        # Phase 4: Store in ChromaDB (85% → 95%)
         if self.enable_embedding_storage:
             await _report("Storing patterns in ChromaDB...", 85.0)
             await self._store_patterns(report)
 
+        # Phase 5: Finalize
         await _report("Finalizing report...", 95.0)
         report.analysis_duration_seconds = time.time() - start_time
         report.calculate_metrics()
 
         logger.info(
-            "Pattern analysis complete: %d patterns found in %.2f seconds",
+            "Pattern analysis complete: %d patterns found in %.2f seconds "
+            "(%d batches of %d files)",
             report.total_patterns,
             report.analysis_duration_seconds,
+            total_batches,
+            self.BATCH_SIZE,
         )
 
         return report
+
+    def _apply_resume_checkpoint(
+        self,
+        report: PatternAnalysisReport,
+        resume_from: Optional[Dict[str, Any]],
+        total_batches: int,
+    ) -> int:
+        """Restore partial results from a checkpoint and return start batch.
+
+        Args:
+            report: Report to populate with checkpoint data.
+            resume_from: Checkpoint dict or None.
+            total_batches: Total number of batches for logging.
+
+        Returns:
+            Batch index to resume from (0 if no checkpoint).
+        """
+        if not resume_from:
+            return 0
+        start_batch = resume_from.get("batch_idx", 0)
+        partial = resume_from.get("partial_results", {})
+        report.regex_opportunities.extend(partial.get("regex", []))
+        report.complexity_hotspots.extend(partial.get("complexity", []))
+        report.modularization_suggestions.extend(partial.get("modularization", []))
+        report.other_patterns.extend(partial.get("other_patterns", []))
+        logger.info("Resuming from batch %d/%d", start_batch, total_batches)
+        return start_batch
+
+    async def _process_file_batches(
+        self,
+        batches: List[List[str]],
+        start_batch: int,
+        report: PatternAnalysisReport,
+        progress_fn: Any,
+        checkpoint_callback: Optional[Any],
+        file_count: int,
+    ) -> None:
+        """Run per-file analyzers in batches with checkpointing.
+
+        Processes batches from start_batch, merging results into report.
+        Computes complexity hotspots after all batches complete.
+
+        Args:
+            batches: File path batches.
+            start_batch: Index to start from (for resume).
+            report: Report to accumulate results into.
+            progress_fn: async callable(step, pct) for progress.
+            checkpoint_callback: Optional checkpoint saver.
+            file_count: Total files for checkpoint metadata.
+        """
+        total_batches = len(batches)
+        batch_progress_range = 70.0  # 5% to 75%
+        all_complexity_modules: List = []
+
+        for idx in range(start_batch, total_batches):
+            batch = batches[idx]
+            batch_pct = 5.0 + (batch_progress_range * (idx / total_batches))
+            await progress_fn(
+                f"Batch {idx + 1}/{total_batches}: " f"analyzing {len(batch)} files...",
+                batch_pct,
+            )
+
+            try:
+                regex_results, complexity_modules, ap_results = await asyncio.wait_for(
+                    asyncio.gather(
+                        self._run_batch_regex(batch),
+                        self._run_batch_complexity(batch),
+                        self._run_batch_anti_pattern(batch),
+                    ),
+                    timeout=self.ANALYZER_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Batch %d/%d timed out after %ds, skipping",
+                    idx + 1,
+                    total_batches,
+                    self.ANALYZER_TIMEOUT,
+                )
+                continue
+
+            report.regex_opportunities.extend(regex_results)
+            all_complexity_modules.extend(complexity_modules)
+            report.modularization_suggestions.extend(
+                ap_results.get("modularization", [])
+            )
+            report.other_patterns.extend(ap_results.get("other_patterns", []))
+
+            if checkpoint_callback:
+                hotspots = self._get_incremental_hotspots(all_complexity_modules)
+                await self._save_batch_checkpoint(
+                    checkpoint_callback,
+                    report,
+                    hotspots,
+                    idx,
+                    file_count,
+                )
+
+        # Post-process: final complexity hotspots
+        if self._complexity_analyzer and all_complexity_modules:
+            hotspots = self._complexity_analyzer.find_hotspots(all_complexity_modules)
+            report.complexity_hotspots.extend(hotspots)
+
+    def _get_incremental_hotspots(self, all_complexity_modules: List) -> List:
+        """Compute hotspots from accumulated complexity modules."""
+        if self._complexity_analyzer and all_complexity_modules:
+            return self._complexity_analyzer.find_hotspots(all_complexity_modules)
+        return []
+
+    async def _save_batch_checkpoint(
+        self,
+        callback: Any,
+        report: PatternAnalysisReport,
+        hotspots: List,
+        batch_idx: int,
+        file_count: int,
+    ) -> None:
+        """Serialize and save a checkpoint after a batch completes."""
+
+        def _serialize(items: List) -> List:
+            return [i.to_dict() if hasattr(i, "to_dict") else str(i) for i in items]
+
+        await callback(
+            "batched_analysis",
+            batch_idx + 1,
+            {
+                "regex": _serialize(report.regex_opportunities),
+                "complexity": _serialize(hotspots),
+                "modularization": _serialize(report.modularization_suggestions),
+                "other_patterns": _serialize(report.other_patterns),
+                "files_processed": min((batch_idx + 1) * self.BATCH_SIZE, file_count),
+                "total_files": file_count,
+            },
+        )
+
+    def _count_lines_for_files(self, file_paths: List[str]) -> int:
+        """Count total lines across a list of files.
+
+        Args:
+            file_paths: List of file paths to count.
+
+        Returns:
+            Total line count.
+        """
+        total = 0
+        for fp in file_paths:
+            try:
+                with open(fp, "r", encoding="utf-8") as f:
+                    total += sum(1 for _ in f)
+            except Exception:
+                pass
+        return total
 
     def _count_files_and_lines(self, directory: str) -> tuple:
         """Count Python files and lines in directory.

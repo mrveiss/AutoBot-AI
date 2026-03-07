@@ -5,137 +5,32 @@
 Pattern Analysis API Endpoints
 
 Issue #208: FastAPI endpoints for code pattern detection and optimization.
+Issue #1304: Migrated to shared BackgroundTaskManager.
 """
 
 import asyncio
 import json
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from constants.path_constants import PATH
 from constants.threshold_constants import QueryDefaults
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from pydantic import BaseModel, Field
+from utils.background_task_manager import BackgroundTaskManager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Pattern Analysis"])
 
-# Global state for tracking analysis tasks
-_analysis_tasks: Dict[str, Dict[str, Any]] = {}
-# Lock for thread-safe access to _analysis_tasks (Issue #1221)
-_analysis_tasks_lock = asyncio.Lock()
+# Shared background task manager (#1304)
+# Timeout raised to 1800s (30min) — batched analysis on ~2000 files needs time
+_manager = BackgroundTaskManager(redis_prefix="pattern_task:", task_timeout=1800)
 
-# Redis-backed task state for multi-worker visibility (#1179 pattern)
-_PATTERN_TASK_REDIS_PREFIX = "pattern_task:"
-_PATTERN_TASK_REDIS_TTL = 86400  # 24 hours
-
-
-async def _save_pattern_task_to_redis(task_id: str) -> None:
-    """Persist pattern task state to Redis so all workers can read it."""
-    try:
-        from ..scanner import get_redis_connection_async
-
-        redis = await get_redis_connection_async()
-        if redis:
-            state = _analysis_tasks.get(task_id)
-            if state:
-                # Exclude non-serializable fields
-                safe_state = {k: v for k, v in state.items() if k != "request"}
-                await redis.set(
-                    f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}",
-                    json.dumps(safe_state, default=str),
-                    ex=_PATTERN_TASK_REDIS_TTL,
-                )
-    except Exception as e:
-        logger.debug("Pattern task Redis save failed (non-fatal): %s", e)
-
-
-async def _load_pattern_task_from_redis(
-    task_id: str,
-) -> Optional[Dict[str, Any]]:
-    """Load pattern task state from Redis (cross-worker visibility).
-
-    If the task is still 'running' in Redis but absent from the in-memory
-    dict, it was orphaned by a backend restart — mark it failed (#1234).
-    """
-    try:
-        from ..scanner import get_redis_connection_async
-
-        redis = await get_redis_connection_async()
-        if redis:
-            data = await redis.get(f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}")
-            if data:
-                task = json.loads(data)
-                if task.get("status") == "running":
-                    task["status"] = "failed"
-                    task["error"] = "Task orphaned by backend restart"
-                    task["reason"] = "orphaned"
-                    task["completed_at"] = datetime.now().isoformat()
-                    await redis.set(
-                        f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}",
-                        json.dumps(task, default=str),
-                        ex=_PATTERN_TASK_REDIS_TTL,
-                    )
-                    logger.info("Marked orphaned Redis task %s as failed", task_id)
-                return task
-    except Exception as e:
-        logger.debug("Pattern task Redis load failed (non-fatal): %s", e)
-    return None
-
-
-async def _clear_orphaned_redis_tasks() -> int:
-    """Mark any 'running' tasks in Redis as failed (#1234).
-
-    After a backend restart, in-memory _analysis_tasks is empty but Redis
-    may still hold tasks with status='running' that will never complete.
-    This scans Redis for such orphans and marks them failed so new
-    analyses can start without a false 409 conflict.
-
-    Returns:
-        Number of orphaned tasks cleared.
-    """
-    cleared = 0
-    try:
-        from ..scanner import get_redis_connection_async
-
-        redis = await get_redis_connection_async()
-        if not redis:
-            return 0
-
-        # Scan for pattern task keys
-        cursor = 0
-        while True:
-            cursor, keys = await redis.scan(
-                cursor,
-                match=f"{_PATTERN_TASK_REDIS_PREFIX}*",
-                count=100,
-            )
-            for key in keys:
-                data = await redis.get(key)
-                if not data:
-                    continue
-                task = json.loads(data)
-                task_id = key.decode() if isinstance(key, bytes) else key
-                task_id = task_id.removeprefix(_PATTERN_TASK_REDIS_PREFIX)
-                if task.get("status") == "running" and task_id not in _analysis_tasks:
-                    task["status"] = "failed"
-                    task["error"] = "Task orphaned by backend restart"
-                    task["reason"] = "orphaned"
-                    task["completed_at"] = datetime.now().isoformat()
-                    await redis.set(
-                        f"{_PATTERN_TASK_REDIS_PREFIX}{task_id}",
-                        json.dumps(task, default=str),
-                        ex=_PATTERN_TASK_REDIS_TTL,
-                    )
-                    cleared += 1
-                    logger.info("Cleared orphaned Redis pattern task %s", task_id)
-            if cursor == 0:
-                break
-    except Exception as e:
-        logger.debug("Orphaned Redis task scan failed (non-fatal): %s", e)
-    return cleared
+# Redis key prefix for analysis checkpoints
+_CHECKPOINT_PREFIX = "pattern_checkpoint:"
+# Overall analysis timeout (30 minutes)
+_ANALYSIS_TIMEOUT = 1800
 
 
 class PatternAnalysisRequest(BaseModel):
@@ -174,6 +69,7 @@ class PatternAnalysisStatus(BaseModel):
     error: Optional[str] = None
     reason: Optional[str] = None  # orphaned, timeout, manual (#1250)
     result: Optional[Dict[str, Any]] = None
+    partial_results: Optional[Dict[str, Any]] = None
 
 
 class PatternSummary(BaseModel):
@@ -188,97 +84,118 @@ class PatternSummary(BaseModel):
     complexity_score: str
 
 
-async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
-    """Run pattern analysis in background.
+async def _get_checkpoint_redis():
+    """Get async Redis client for checkpoints."""
+    try:
+        from autobot_shared.redis_client import get_redis_client
 
-    Args:
-        task_id: Unique task identifier
-        request: Analysis request parameters
+        return await get_redis_client(database="analytics", async_client=True)
+    except Exception:
+        return None
+
+
+async def _save_checkpoint(
+    task_id: str, phase: str, batch_idx: int, partial_results: dict
+) -> None:
+    """Save analysis checkpoint to Redis for resume capability."""
+    redis = await _get_checkpoint_redis()
+    if not redis:
+        return
+    try:
+        data = {
+            "phase": phase,
+            "batch_idx": batch_idx,
+            "partial_results": partial_results,
+        }
+        await redis.set(
+            f"{_CHECKPOINT_PREFIX}{task_id}",
+            json.dumps(data, default=str),
+            ex=86400,
+        )
+    except Exception as exc:
+        logger.debug("Checkpoint save failed (non-fatal): %s", exc)
+
+
+async def _load_checkpoint(task_id: str) -> Optional[Dict[str, Any]]:
+    """Load analysis checkpoint from Redis."""
+    redis = await _get_checkpoint_redis()
+    if not redis:
+        return None
+    try:
+        data = await redis.get(f"{_CHECKPOINT_PREFIX}{task_id}")
+        if data:
+            return json.loads(data)
+    except Exception as exc:
+        logger.debug("Checkpoint load failed (non-fatal): %s", exc)
+    return None
+
+
+async def _clear_checkpoint(task_id: str) -> None:
+    """Remove checkpoint after successful completion."""
+    redis = await _get_checkpoint_redis()
+    if not redis:
+        return
+    try:
+        await redis.delete(f"{_CHECKPOINT_PREFIX}{task_id}")
+    except Exception:
+        pass
+
+
+async def _run_analysis(task_id: str, request: PatternAnalysisRequest) -> None:
+    """Run batched pattern analysis with checkpointing (#1304).
+
+    Processes files in batches of 50 with Redis checkpoints after each
+    batch.  Overall timeout prevents zombie tasks.
     """
     try:
-        # Import here to avoid circular imports
         from code_intelligence.pattern_analysis import CodePatternAnalyzer
 
-        _analysis_tasks[task_id]["status"] = "running"
-        _analysis_tasks[task_id]["started_at"] = datetime.now().isoformat()
-        await _save_pattern_task_to_redis(task_id)
+        await _manager.update_progress(task_id, "Initializing", 0.0)
 
         async def _on_progress(step: str, progress: float) -> None:
-            """Update task state with current phase info."""
-            _analysis_tasks[task_id]["current_step"] = step
-            _analysis_tasks[task_id]["progress"] = progress
-            await _save_pattern_task_to_redis(task_id)
+            await _manager.update_progress(task_id, step, progress)
 
-        # Create analyzer with request parameters
+        async def _on_checkpoint(phase: str, batch_idx: int, partial: dict) -> None:
+            await _save_checkpoint(task_id, phase, batch_idx, partial)
+
         analyzer = CodePatternAnalyzer(
             enable_clone_detection=request.enable_clone_detection,
-            enable_anti_pattern_detection=request.enable_anti_pattern_detection,
+            enable_anti_pattern_detection=(request.enable_anti_pattern_detection),
             enable_regex_detection=request.enable_regex_detection,
-            enable_complexity_analysis=request.enable_complexity_analysis,
+            enable_complexity_analysis=(request.enable_complexity_analysis),
             similarity_threshold=request.similarity_threshold,
         )
 
-        # Run analysis with progress reporting
-        report = await analyzer.analyze_directory(
-            request.path, progress_callback=_on_progress
+        # Check for existing checkpoint to resume from
+        checkpoint = await _load_checkpoint(task_id)
+
+        report = await asyncio.wait_for(
+            analyzer.analyze_directory(
+                request.path,
+                progress_callback=_on_progress,
+                checkpoint_callback=_on_checkpoint,
+                resume_from=checkpoint,
+            ),
+            timeout=_ANALYSIS_TIMEOUT,
         )
 
-        # Store result
-        _analysis_tasks[task_id]["status"] = "completed"
-        _analysis_tasks[task_id]["completed_at"] = datetime.now().isoformat()
-        _analysis_tasks[task_id]["result"] = report.to_dict()
-        _analysis_tasks[task_id]["progress"] = 100.0
-        _analysis_tasks[task_id]["current_step"] = "Complete"
-        await _save_pattern_task_to_redis(task_id)
+        await _clear_checkpoint(task_id)
+        await _manager.complete_task(task_id, report.to_dict())
 
+    except asyncio.TimeoutError:
+        logger.error(
+            "Pattern analysis timed out after %ds for task %s",
+            _ANALYSIS_TIMEOUT,
+            task_id,
+        )
+        await _manager.fail_task(
+            task_id,
+            f"Analysis timed out after {_ANALYSIS_TIMEOUT}s",
+            reason="timeout",
+        )
     except Exception as e:
         logger.error("Pattern analysis failed: %s", e)
-        _analysis_tasks[task_id]["status"] = "failed"
-        _analysis_tasks[task_id]["error"] = str(e)
-        _analysis_tasks[task_id]["completed_at"] = datetime.now().isoformat()
-        await _save_pattern_task_to_redis(task_id)
-
-
-def _cleanup_stuck_tasks() -> int:
-    """Clean up tasks that have been running too long.
-
-    Returns:
-        Number of tasks cleaned up
-
-    Issue #647: Auto-recover from stuck tasks.
-    """
-    cleaned = 0
-    now = datetime.now()
-
-    for task_id, task in list(_analysis_tasks.items()):
-        if task.get("status") == "running":
-            started_at = task.get("started_at")
-            is_stuck = False
-
-            if started_at:
-                try:
-                    start_time = datetime.fromisoformat(started_at)
-                    elapsed = (now - start_time).total_seconds()
-                    # Mark as stuck if running longer than timeout
-                    is_stuck = elapsed > TASK_TIMEOUT_SECONDS
-                except (ValueError, TypeError):
-                    is_stuck = True
-            else:
-                # No start time means task never actually started
-                is_stuck = True
-
-            if is_stuck:
-                _analysis_tasks[task_id]["status"] = "failed"
-                _analysis_tasks[task_id]["error"] = "Task timed out (auto-recovered)"
-                _analysis_tasks[task_id]["completed_at"] = now.isoformat()
-                cleaned += 1
-                logger.warning("Auto-recovered stuck task %s", task_id)
-
-    return cleaned
-
-
-# Task timeout threshold in seconds (10 minutes)
-TASK_TIMEOUT_SECONDS = 600
+        await _manager.fail_task(task_id, str(e))
 
 
 @router.post("/patterns/analyze", response_model=PatternAnalysisStatus)
@@ -286,85 +203,36 @@ async def start_pattern_analysis(
     request: PatternAnalysisRequest,
     background_tasks: BackgroundTasks,
 ) -> PatternAnalysisStatus:
-    """Start code pattern analysis.
-
-    This endpoint initiates a background analysis task and returns
-    a task ID that can be used to check status and retrieve results.
-
-    Issue #208: Code Pattern Detection & Optimization System
-    Issue #647: Auto-recover from stuck tasks before checking for running tasks.
-    """
-    import uuid
-
-    # Generate task ID
-    task_id = str(uuid.uuid4())[:8]
-
-    # Thread-safe check+insert under lock (Issue #1221)
-    async with _analysis_tasks_lock:
-        # Auto-cleanup any stuck tasks before checking (Issue #647)
-        cleaned = _cleanup_stuck_tasks()
-        if cleaned > 0:
-            logger.info(
-                "Auto-recovered %d stuck task(s) before starting new analysis",
-                cleaned,
-            )
-
-        # Also clear orphaned Redis tasks that survived a restart (#1234)
-        await _clear_orphaned_redis_tasks()
-
-        # Check if another analysis is genuinely running
-        running_tasks = [
-            t for t in _analysis_tasks.values() if t.get("status") == "running"
-        ]
-        if running_tasks:
-            raise HTTPException(
-                status_code=409,
-                detail="Another pattern analysis is already running. "
-                "Please wait or cancel it.",
-            )
-
-        # Initialize task state
-        _analysis_tasks[task_id] = {
-            "task_id": task_id,
-            "status": "pending",
-            "progress": 0.0,
-            "started_at": None,
-            "completed_at": None,
-            "error": None,
-            "result": None,
-            "request": request.model_dump(),
-        }
-
-    # Start background task (outside lock — doesn't modify dict)
+    """Start code pattern analysis (#208, #647, #1304)."""
+    task_id = await _manager.create_task(params=request.model_dump())
     background_tasks.add_task(_run_analysis, task_id, request)
-
-    return PatternAnalysisStatus(
-        task_id=task_id,
-        status="pending",
-        progress=0.0,
-    )
+    return PatternAnalysisStatus(task_id=task_id, status="pending", progress=0.0)
 
 
-@router.get("/patterns/status/{task_id}", response_model=PatternAnalysisStatus)
+@router.get(
+    "/patterns/status/{task_id}",
+    response_model=PatternAnalysisStatus,
+)
 async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
     """Get status of a pattern analysis task.
 
-    Args:
-        task_id: The task ID returned from start_pattern_analysis
-
-    Returns:
-        PatternAnalysisStatus with current status and results if complete
+    When the task is still running, loads the latest checkpoint from
+    Redis and includes partial_results so the frontend can render
+    discovered patterns incrementally.
     """
-    # #1179 pattern: check local memory first, fall back to Redis
-    task = _analysis_tasks.get(task_id)
-    if task is None:
-        task = await _load_pattern_task_from_redis(task_id)
-
+    task = await _manager.get_status(task_id)
     if task is None:
         raise HTTPException(
             status_code=404,
             detail=f"Analysis task {task_id} not found",
         )
+
+    # Load partial results from checkpoint while analysis is running
+    partial = None
+    if task["status"] in ("running", "pending"):
+        checkpoint = await _load_checkpoint(task_id)
+        if checkpoint and checkpoint.get("partial_results"):
+            partial = checkpoint["partial_results"]
 
     return PatternAnalysisStatus(
         task_id=task_id,
@@ -376,192 +244,64 @@ async def get_analysis_status(task_id: str) -> PatternAnalysisStatus:
         error=task.get("error"),
         reason=task.get("reason"),
         result=task.get("result"),
+        partial_results=partial,
     )
 
 
 @router.get("/patterns/result/{task_id}")
 async def get_analysis_result(task_id: str) -> Dict[str, Any]:
-    """Get full results of a completed pattern analysis.
-
-    Args:
-        task_id: The task ID returned from start_pattern_analysis
-
-    Returns:
-        Full analysis report as dictionary
-    """
-    task = _analysis_tasks.get(task_id)
-    if task is None:
-        task = await _load_pattern_task_from_redis(task_id)
-
+    """Get full results of a completed pattern analysis."""
+    task = await _manager.get_status(task_id)
     if task is None:
         raise HTTPException(
             status_code=404,
             detail=f"Analysis task {task_id} not found",
         )
-
     if task["status"] != "completed":
         raise HTTPException(
             status_code=400,
-            detail=f"Analysis not complete. Current status: {task['status']}",
+            detail=f"Analysis not complete. Status: {task['status']}",
         )
-
     return task.get("result", {})
 
 
 @router.delete("/patterns/task/{task_id}")
 async def cancel_analysis(task_id: str) -> Dict[str, str]:
-    """Cancel or delete a pattern analysis task.
-
-    Args:
-        task_id: The task ID to cancel/delete
-
-    Returns:
-        Confirmation message
-    """
-    async with _analysis_tasks_lock:
-        if task_id not in _analysis_tasks:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Analysis task {task_id} not found",
-            )
-
-        # Remove task (note: this doesn't actually stop a running task)
-        del _analysis_tasks[task_id]
-
+    """Cancel or delete a pattern analysis task."""
+    deleted = await _manager.delete_task(task_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Analysis task {task_id} not found",
+        )
     return {"message": f"Task {task_id} removed"}
 
 
 @router.get("/patterns/tasks")
 async def list_analysis_tasks() -> Dict[str, Any]:
-    """List all pattern analysis tasks.
-
-    Returns:
-        Dictionary with all tasks and their status
-
-    Issue #647: Added endpoint to view all tasks for debugging stuck analyses.
-    """
-    tasks = []
-    for task_id, task in _analysis_tasks.items():
-        tasks.append(
-            {
-                "task_id": task_id,
-                "status": task.get("status"),
-                "progress": task.get("progress", 0.0),
-                "started_at": task.get("started_at"),
-                "completed_at": task.get("completed_at"),
-                "error": task.get("error"),
-            }
-        )
-
-    return {
-        "total": len(tasks),
-        "running": len([t for t in tasks if t["status"] == "running"]),
-        "tasks": tasks,
-    }
+    """List all pattern analysis tasks (#647)."""
+    return await _manager.list_tasks()
 
 
 @router.post("/patterns/tasks/clear-stuck")
 async def clear_stuck_tasks(
     force: bool = Query(
         default=False,
-        description="Force clear ALL running tasks, not just timed-out ones",
-    )
+        description="Force clear ALL running tasks",
+    ),
 ) -> Dict[str, Any]:
-    """Clear tasks that are stuck in 'running' status.
-
-    This marks long-running tasks as failed and allows new analyses to start.
-    Tasks running longer than TASK_TIMEOUT_SECONDS are considered stuck.
-
-    Args:
-        force: If True, clears ALL running tasks regardless of how long they've been running
-
-    Returns:
-        Summary of cleared tasks
-
-    Issue #647: Added endpoint to clear stuck analysis tasks.
-    """
-    cleared = []
-    now = datetime.now()
-
-    async with _analysis_tasks_lock:
-        for task_id, task in list(_analysis_tasks.items()):
-            if task.get("status") == "running":
-                should_clear = force  # Force mode clears all
-
-                if not force:
-                    # Normal mode: only clear timed-out tasks
-                    started_at = task.get("started_at")
-                    if started_at:
-                        try:
-                            start_time = datetime.fromisoformat(started_at)
-                            elapsed = (now - start_time).total_seconds()
-                            should_clear = elapsed > TASK_TIMEOUT_SECONDS
-                        except (ValueError, TypeError):
-                            should_clear = True
-                    else:
-                        should_clear = True
-
-                if should_clear:
-                    _analysis_tasks[task_id]["status"] = "failed"
-                    _analysis_tasks[task_id]["error"] = (
-                        "Task cleared manually"
-                        if force
-                        else "Task timed out or was stuck"
-                    )
-                    _analysis_tasks[task_id]["completed_at"] = now.isoformat()
-                    cleared.append(task_id)
-                    await _save_pattern_task_to_redis(task_id)
-                    logger.info(
-                        "Cleared %s task %s",
-                        "forced" if force else "stuck",
-                        task_id,
-                    )
-
+    """Clear stuck tasks (#647)."""
+    cleaned = await _manager.clear_stuck(force=force)
     return {
-        "cleared_count": len(cleared),
-        "cleared_task_ids": cleared,
-        "message": f"Cleared {len(cleared)} task(s)" + (" (forced)" if force else ""),
+        "cleared_count": cleaned,
+        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
     }
 
 
 @router.post("/patterns/tasks/clear-all")
 async def clear_all_tasks() -> Dict[str, str]:
-    """Clear all pattern analysis tasks from memory and Redis.
-
-    Returns:
-        Confirmation message
-
-    Issue #647: Added endpoint to clear all tasks.
-    Issue #1234: Also clear Redis-persisted task state.
-    """
-    async with _analysis_tasks_lock:
-        task_ids = list(_analysis_tasks.keys())
-        count = len(task_ids)
-        _analysis_tasks.clear()
-
-    # Clear from Redis — scan for ALL pattern task keys (#1250)
-    # After restart, in-memory dict is empty so task_ids would be empty.
-    # Must scan Redis directly to find orphaned keys.
-    try:
-        from ..scanner import get_redis_connection_async
-
-        redis = await get_redis_connection_async()
-        if redis:
-            cursor = 0
-            while True:
-                cursor, keys = await redis.scan(
-                    cursor,
-                    match=f"{_PATTERN_TASK_REDIS_PREFIX}*",
-                    count=100,
-                )
-                for key in keys:
-                    await redis.delete(key)
-                    count += 1
-                if cursor == 0:
-                    break
-    except Exception as e:
-        logger.debug("Redis task cleanup failed (non-fatal): %s", e)
-
+    """Clear all tasks (#647, #1234)."""
+    count = await _manager.clear_all()
     return {"message": f"Cleared {count} task(s)"}
 
 
@@ -596,6 +336,96 @@ async def get_pattern_summary(
     except Exception as e:
         logger.error("Pattern summary failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Background task manager for pattern summary (#1304)
+_summary_manager = BackgroundTaskManager(
+    redis_prefix="patsummary_task:", task_timeout=1800
+)
+
+
+async def _run_summary_analysis(task_id: str, path: str) -> None:
+    """Background worker for pattern summary (#1304)."""
+    try:
+        from code_intelligence.pattern_analysis import CodePatternAnalyzer
+
+        await _summary_manager.update_progress(task_id, "Initializing analyzer", 10.0)
+        analyzer = CodePatternAnalyzer(
+            enable_embedding_storage=False,
+        )
+
+        async def _on_progress(step: str, progress: float) -> None:
+            # Scale inner progress (0-100) to outer range (30-80)
+            scaled = 30.0 + (progress / 100.0) * 50.0
+            await _summary_manager.update_progress(task_id, step, scaled)
+
+        report = await asyncio.wait_for(
+            analyzer.analyze_directory(path, progress_callback=_on_progress),
+            timeout=_ANALYSIS_TIMEOUT,
+        )
+
+        await _summary_manager.update_progress(task_id, "Building summary", 80.0)
+        result = {
+            "total_patterns": report.total_patterns,
+            "duplicates": len(report.duplicate_patterns),
+            "regex_opportunities": len(report.regex_opportunities),
+            "complexity_hotspots": len(report.complexity_hotspots),
+            "modularization_suggestions": len(report.modularization_suggestions),
+            "potential_loc_reduction": report.potential_loc_reduction,
+            "complexity_score": report.complexity_score,
+        }
+        await _summary_manager.complete_task(task_id, result)
+    except asyncio.TimeoutError:
+        logger.error("Pattern summary timed out after %ds", _ANALYSIS_TIMEOUT)
+        await _summary_manager.fail_task(
+            task_id,
+            f"Summary timed out after {_ANALYSIS_TIMEOUT}s",
+            reason="timeout",
+        )
+    except Exception as e:
+        logger.error("Pattern summary analysis failed: %s", e)
+        await _summary_manager.fail_task(task_id, str(e))
+
+
+@router.post("/patterns/summary/analyze")
+async def start_pattern_summary_analysis(
+    background_tasks: BackgroundTasks,
+    path: str = Query(
+        default=str(PATH.PROJECT_ROOT),
+        description="Path to analyze",
+    ),
+):
+    """Start background pattern summary analysis (#1304)."""
+    task_id = await _summary_manager.create_task(params={"path": path})
+    background_tasks.add_task(_run_summary_analysis, task_id, path)
+    return {"task_id": task_id, "status": "pending"}
+
+
+@router.get("/patterns/summary/status/{task_id}")
+async def get_pattern_summary_status(task_id: str):
+    """Get pattern summary task status (#1304)."""
+    task = await _summary_manager.get_status(task_id)
+    if task is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task {task_id} not found",
+        )
+    return task
+
+
+@router.post("/patterns/summary/tasks/clear-stuck")
+async def clear_stuck_summary_tasks(
+    force: bool = Query(
+        default=False,
+        description="Force clear ALL running tasks",
+    ),
+):
+    """Clear stuck pattern summary tasks (#1304)."""
+    cleaned = await _summary_manager.clear_stuck(force=force)
+    return {
+        "cleared_count": cleaned,
+        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
+    }
 
 
 @router.get("/patterns/duplicates")

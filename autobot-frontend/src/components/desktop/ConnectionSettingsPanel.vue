@@ -5,7 +5,7 @@
 <template>
   <div class="connection-settings-panel">
     <div class="panel-header">
-      <h3 class="text-sm font-semibold text-autobot-text-primary">Connection Quality</h3>
+      <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('desktop.connectionSettings.title') }}</h3>
     </div>
 
     <div v-if="error" class="error-message">
@@ -15,7 +15,7 @@
     <div v-else-if="settings" class="settings-content">
       <!-- Quality Presets -->
       <div class="presets-section">
-        <label class="text-xs text-autobot-text-secondary mb-2 block">Quality Preset</label>
+        <label class="text-xs text-autobot-text-secondary mb-2 block">{{ $t('desktop.connectionSettings.qualityPreset') }}</label>
         <div class="preset-buttons">
           <button
             v-for="preset in presets"
@@ -40,15 +40,15 @@
             @change="saveSettings"
             class="checkbox"
           />
-          <span class="text-sm text-autobot-text-primary">Auto-reconnect on disconnect</span>
+          <span class="text-sm text-autobot-text-primary">{{ $t('desktop.connectionSettings.autoReconnect') }}</span>
         </label>
         <div v-if="settings.auto_reconnect" class="reconnect-details">
           <div class="detail-item">
-            <span class="text-xs text-autobot-text-secondary">Delay:</span>
+            <span class="text-xs text-autobot-text-secondary">{{ $t('desktop.connectionSettings.delay') }}</span>
             <span class="text-xs text-autobot-text-primary">{{ settings.reconnect_delay_ms }}ms</span>
           </div>
           <div class="detail-item">
-            <span class="text-xs text-autobot-text-secondary">Max attempts:</span>
+            <span class="text-xs text-autobot-text-secondary">{{ $t('desktop.connectionSettings.maxAttempts') }}</span>
             <span class="text-xs text-autobot-text-primary">{{ settings.max_reconnect_attempts }}</span>
           </div>
         </div>
@@ -56,16 +56,16 @@
 
       <!-- Connection Metrics -->
       <div v-if="metrics" class="metrics-section">
-        <h4 class="text-xs font-semibold text-autobot-text-primary mb-2">Connection Status</h4>
+        <h4 class="text-xs font-semibold text-autobot-text-primary mb-2">{{ $t('desktop.connectionSettings.connectionStatus') }}</h4>
         <div class="metrics-grid">
           <div class="metric-item">
-            <span class="metric-label">VNC Server</span>
+            <span class="metric-label">{{ $t('desktop.connectionSettings.vncServer') }}</span>
             <span :class="['metric-value', metrics.vnc_running ? 'text-green-600' : 'text-red-600']">
-              {{ metrics.vnc_running ? 'Running' : 'Stopped' }}
+              {{ metrics.vnc_running ? $t('desktop.connectionSettings.running') : $t('desktop.connectionSettings.stopped') }}
             </span>
           </div>
           <div v-if="metrics.latency_ms" class="metric-item">
-            <span class="metric-label">Latency</span>
+            <span class="metric-label">{{ $t('desktop.connectionSettings.latency') }}</span>
             <span class="metric-value">{{ metrics.latency_ms.toFixed(1) }}ms</span>
           </div>
         </div>
@@ -73,28 +73,30 @@
     </div>
 
     <div v-else class="loading-state">
-      Loading settings...
+      {{ $t('desktop.connectionSettings.loading') }}
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useVncConnection } from '@/composables/useVncConnection'
 
+const { t } = useI18n()
 const { loading, error, settings, metrics, loadSettings, updateSettings, loadMetrics, setQualityPreset } = useVncConnection()
 
-const presets = [
-  { value: 'low' as const, label: 'Low', desc: 'High compression, lower quality - best for slow connections' },
-  { value: 'medium' as const, label: 'Medium', desc: 'Balanced compression and quality' },
-  { value: 'high' as const, label: 'High', desc: 'Low compression, high quality - good for fast connections' },
-  { value: 'best' as const, label: 'Best', desc: 'No compression, maximum quality - requires fast connection' }
-]
+const presets = computed(() => [
+  { value: 'low' as const, label: t('desktop.connectionSettings.presetLow'), desc: t('desktop.connectionSettings.presetLowDesc') },
+  { value: 'medium' as const, label: t('desktop.connectionSettings.presetMedium'), desc: t('desktop.connectionSettings.presetMediumDesc') },
+  { value: 'high' as const, label: t('desktop.connectionSettings.presetHigh'), desc: t('desktop.connectionSettings.presetHighDesc') },
+  { value: 'best' as const, label: t('desktop.connectionSettings.presetBest'), desc: t('desktop.connectionSettings.presetBestDesc') }
+])
 
 const currentPreset = ref<'low' | 'medium' | 'high' | 'best'>('medium')
 
 const presetDescription = computed(() => {
-  return presets.find(p => p.value === currentPreset.value)?.desc || ''
+  return presets.value.find(p => p.value === currentPreset.value)?.desc || ''
 })
 
 function isActivePreset(preset: string): boolean {

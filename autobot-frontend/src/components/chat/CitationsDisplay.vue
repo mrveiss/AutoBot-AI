@@ -11,7 +11,7 @@
     >
       <div class="citations-header-left">
         <i class="fas fa-layer-group text-autobot-primary" aria-hidden="true"></i>
-        <span class="citations-label">Sources</span>
+        <span class="citations-label">{{ $t('chat.citations.sources') }}</span>
         <span class="citations-count">{{ citations.length }}</span>
       </div>
       <i
@@ -56,7 +56,7 @@
               v-if="citation.type === 'llm_training' && citation.model"
               class="citation-excerpt"
             >
-              Model: {{ citation.model }}
+              {{ $t('chat.citations.model') }} {{ citation.model }}
             </div>
             <div class="citation-meta">
               <span
@@ -105,6 +105,9 @@
  */
 
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 interface Citation {
   id?: string
@@ -163,7 +166,7 @@ const formatScore = (score: number): string => {
 }
 
 const formatSourcePath = (sourcePath: string): string => {
-  if (!sourcePath) return 'Unknown'
+  if (!sourcePath) return t('common.unknown')
   const parts = sourcePath.split('/')
   return parts[parts.length - 1] || sourcePath
 }
@@ -188,8 +191,9 @@ const reliabilityClass = (reliability: string | undefined): string => {
 }
 
 const reliabilityLabel = (reliability: string | undefined): string => {
-  if (!reliability) return 'Medium'
-  return reliability.charAt(0).toUpperCase() + reliability.slice(1)
+  if (!reliability) return t('chat.citations.reliabilityMedium')
+  const key = `chat.citations.reliability${reliability.charAt(0).toUpperCase() + reliability.slice(1)}`
+  return t(key)
 }
 
 const isSafeUrl = (url: string): boolean => {
@@ -203,9 +207,9 @@ const isSafeUrl = (url: string): boolean => {
 
 const citationTitle = (citation: Citation): string => {
   if (citation.title) return citation.title
-  if (citation.type === 'llm_training') return 'AI Training Data'
-  if (citation.type === 'web') return citation.url || 'Web Source'
-  return citation.source ? formatSourcePath(citation.source) : 'Knowledge Base'
+  if (citation.type === 'llm_training') return t('chat.citations.aiTrainingData')
+  if (citation.type === 'web') return citation.url || t('chat.citations.webSource')
+  return citation.source ? formatSourcePath(citation.source) : t('chat.citations.knowledgeBase')
 }
 </script>
 

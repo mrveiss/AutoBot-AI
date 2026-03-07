@@ -11,6 +11,7 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 interface Setting {
@@ -25,6 +26,7 @@ interface TimeConfig {
   ntp_servers: string[]
 }
 
+const router = useRouter()
 const authStore = useAuthStore()
 const loading = ref(false)
 const saving = ref(false)
@@ -193,9 +195,9 @@ async function saveAllSettings(): Promise<void> {
   success.value = null
 
   try {
-    // Save general settings
+    // Save general settings (upsert: PUT if exists, POST if not)
     for (const [key, value] of Object.entries(settings.value)) {
-      await fetch(`${authStore.getApiUrl()}/api/settings/${key}`, {
+      const putRes = await fetch(`${authStore.getApiUrl()}/api/settings/${key}`, {
         method: 'PUT',
         headers: {
           ...authStore.getAuthHeaders(),
@@ -203,6 +205,16 @@ async function saveAllSettings(): Promise<void> {
         },
         body: JSON.stringify({ value: String(value) }),
       })
+      if (putRes.status === 404) {
+        await fetch(`${authStore.getApiUrl()}/api/settings/${key}`, {
+          method: 'POST',
+          headers: {
+            ...authStore.getAuthHeaders(),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ value: String(value) }),
+        })
+      }
     }
 
     // Save time config (timezone + NTP)
@@ -259,7 +271,54 @@ async function syncTimeToNodes(): Promise<void> {
   }
 }
 
-onMounted(fetchSettings)
+// Setup Wizard on-demand access
+const wizardStatus = ref<{ completed: boolean; current_step: string } | null>(null)
+const wizardLoading = ref(false)
+const wizardResetting = ref(false)
+
+async function fetchWizardStatus(): Promise<void> {
+  wizardLoading.value = true
+  try {
+    const res = await fetch(`${authStore.getApiUrl()}/api/setup/status`, {
+      headers: authStore.getAuthHeaders(),
+    })
+    if (res.ok) {
+      wizardStatus.value = await res.json()
+    }
+  } catch {
+    // Non-critical — wizard card just won't show status
+  } finally {
+    wizardLoading.value = false
+  }
+}
+
+function launchWizard(): void {
+  router.push({ name: 'setup' })
+}
+
+async function resetWizard(): Promise<void> {
+  wizardResetting.value = true
+  try {
+    const res = await fetch(`${authStore.getApiUrl()}/api/setup/reset`, {
+      method: 'POST',
+      headers: authStore.getAuthHeaders(),
+    })
+    if (res.ok) {
+      await fetchWizardStatus()
+      success.value = 'Setup wizard has been reset'
+      setTimeout(() => { success.value = null }, 3000)
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to reset wizard'
+  } finally {
+    wizardResetting.value = false
+  }
+}
+
+onMounted(() => {
+  fetchSettings()
+  fetchWizardStatus()
+})
 </script>
 
 <template>
@@ -435,6 +494,54 @@ onMounted(fetchSettings)
             <summary class="cursor-pointer text-xs font-medium">Ansible output</summary>
             <pre class="mt-2 text-xs whitespace-pre-wrap font-mono opacity-80">{{ syncResult.output }}</pre>
           </details>
+        </div>
+      </div>
+      <!-- Setup Wizard Card -->
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-semibold">Setup Wizard</h2>
+            <p class="text-sm text-gray-500 mt-1">
+              Run the guided fleet configuration wizard to add nodes, enroll agents, assign roles, and provision your fleet.
+            </p>
+          </div>
+          <span
+            v-if="wizardStatus"
+            :class="wizardStatus.completed
+              ? 'bg-green-100 text-green-800'
+              : 'bg-yellow-100 text-yellow-800'"
+            class="px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap"
+          >
+            {{ wizardStatus.completed ? 'Completed' : `In Progress: ${wizardStatus.current_step}` }}
+          </span>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button
+            @click="launchWizard"
+            class="px-5 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            {{ wizardStatus?.completed ? 'View Wizard' : 'Launch Wizard' }}
+          </button>
+          <button
+            @click="resetWizard"
+            :disabled="wizardResetting"
+            class="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-50"
+          >
+            <svg v-if="wizardResetting" class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {{ wizardResetting ? 'Resetting...' : 'Reset Wizard' }}
+          </button>
         </div>
       </div>
     </template>

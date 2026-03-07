@@ -10,52 +10,52 @@
         </div>
         <div class="flex items-center space-x-2 text-sm">
           <i class="fab fa-chrome text-blue-600"></i>
-          <span class="font-medium">Research Browser</span>
-          <span v-if="sessionId" class="text-xs text-autobot-text-muted">Session: {{ sessionId.slice(0, 8) }}...</span>
+          <span class="font-medium">{{ $t('desktop.popoutBrowser.title') }}</span>
+          <span v-if="sessionId" class="text-xs text-autobot-text-muted">{{ $t('desktop.popoutBrowser.sessionLabel', { id: sessionId.slice(0, 8) }) }}</span>
         </div>
       </div>
 
       <div class="flex items-center space-x-2">
         <!-- Browser Controls -->
         <div class="flex items-center space-x-1">
-          <button @click="refreshBrowser" class="browser-btn" :disabled="isRefreshing" title="Refresh">
+          <button @click="refreshBrowser" class="browser-btn" :disabled="isRefreshing" :title="$t('desktop.popoutBrowser.refresh')">
             <i class="fas fa-sync-alt" :class="{ 'fa-spin': isRefreshing }"></i>
           </button>
 
-          <button @click="navigateHome" class="browser-btn" title="Home">
+          <button @click="navigateHome" class="browser-btn" :title="$t('desktop.popoutBrowser.home')">
             <i class="fas fa-home"></i>
           </button>
 
-          <button @click="showDevTools = !showDevTools" class="browser-btn" title="Developer Tools">
+          <button @click="showDevTools = !showDevTools" class="browser-btn" :title="$t('desktop.popoutBrowser.devTools')">
             <i class="fas fa-code"></i>
           </button>
 
-          <button @click="openVncPopout" class="browser-btn text-blue-600" title="Open VNC Browser (Visual Control)">
+          <button @click="openVncPopout" class="browser-btn text-blue-600" :title="$t('desktop.popoutBrowser.openVnc')">
             <i class="fas fa-desktop"></i>
           </button>
         </div>
 
         <!-- Playwright Automation Controls -->
         <div class="border-l border-autobot-border pl-2 flex items-center space-x-1">
-          <button @click="showPlaywrightPanel = !showPlaywrightPanel" class="browser-btn" title="Playwright Automation">
+          <button @click="showPlaywrightPanel = !showPlaywrightPanel" class="browser-btn" :title="$t('desktop.popoutBrowser.playwrightAutomation')">
             <i class="fas fa-robot" :class="{ 'text-blue-600': showPlaywrightPanel }"></i>
           </button>
 
-          <button @click="runFrontendTest" class="browser-btn" :disabled="isTestingFrontend" title="Test Frontend">
+          <button @click="runFrontendTest" class="browser-btn" :disabled="isTestingFrontend" :title="$t('desktop.popoutBrowser.testFrontend')">
             <i class="fas fa-vials" :class="{ 'fa-spin': isTestingFrontend }"></i>
           </button>
 
-          <button @click="performWebSearch" class="browser-btn" :disabled="isSearching" title="Web Search">
+          <button @click="performWebSearch" class="browser-btn" :disabled="isSearching" :title="$t('desktop.popoutBrowser.webSearch')">
             <i class="fas fa-search" :class="{ 'fa-spin': isSearching }"></i>
           </button>
 
-          <button @click="sendTestMessage" class="browser-btn" :disabled="isSendingMessage" title="Test Message">
+          <button @click="sendTestMessage" class="browser-btn" :disabled="isSendingMessage" :title="$t('desktop.popoutBrowser.testMessage')">
             <i class="fas fa-paper-plane" :class="{ 'fa-spin': isSendingMessage }"></i>
           </button>
         </div>
 
         <div class="border-l border-autobot-border pl-2">
-          <button @click="$emit('close')" class="browser-btn text-red-600" title="Close">
+          <button @click="$emit('close')" class="browser-btn text-red-600" :title="$t('desktop.popoutBrowser.close')">
             <i class="fas fa-times"></i>
           </button>
         </div>
@@ -64,10 +64,10 @@
 
     <!-- Address Bar -->
     <div class="address-bar bg-autobot-bg-secondary border-b border-autobot-border p-3 flex items-center space-x-3">
-      <button @click="goBack" :disabled="!canGoBack || isGoingBack" class="nav-btn" title="Back">
+      <button @click="goBack" :disabled="!canGoBack || isGoingBack" class="nav-btn" :title="$t('desktop.popoutBrowser.back')">
         <i class="fas fa-arrow-left" :class="{ 'fa-pulse': isGoingBack }"></i>
       </button>
-      <button @click="goForward" :disabled="!canGoForward || isGoingForward" class="nav-btn" title="Forward">
+      <button @click="goForward" :disabled="!canGoForward || isGoingForward" class="nav-btn" :title="$t('desktop.popoutBrowser.forward')">
         <i class="fas fa-arrow-right" :class="{ 'fa-pulse': isGoingForward }"></i>
       </button>
       <div class="flex-1 flex items-center bg-autobot-bg-tertiary rounded-lg px-3 py-2" :class="{ 'opacity-50': isNavigating }">
@@ -76,7 +76,7 @@
           v-model="addressBarUrl"
           @keyup.enter="navigateToUrl(addressBarUrl)"
           class="flex-1 bg-transparent text-sm outline-none"
-          placeholder="Enter URL or search..."
+          :placeholder="$t('desktop.popoutBrowser.addressPlaceholder')"
         />
         <button @click="navigateToUrl(addressBarUrl)" :disabled="isNavigating" class="text-blue-600 hover:text-blue-800 ml-2">
           <i class="fas fa-search"></i>
@@ -92,7 +92,7 @@
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center space-x-2">
           <i class="fas fa-robot text-blue-600"></i>
-          <span class="font-medium text-blue-800">Browser Automation</span>
+          <span class="font-medium text-blue-800">{{ $t('desktop.popoutBrowser.browserAutomation') }}</span>
           <span class="text-sm px-2 py-1 bg-blue-200 text-blue-700 rounded">{{ playwrightStatus }}</span>
         </div>
         <button @click="showPlaywrightPanel = false" class="text-blue-400 hover:text-blue-600">
@@ -105,18 +105,18 @@
         <div class="automation-card">
           <div class="flex items-center space-x-2 mb-2">
             <i class="fas fa-search text-green-500"></i>
-            <span class="text-sm font-medium">Web Search</span>
+            <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.webSearch') }}</span>
           </div>
           <div class="space-y-2">
             <input
               v-model="searchQuery"
               @keyup.enter="performWebSearch"
               class="w-full px-3 py-1 text-sm border border-autobot-border rounded"
-              placeholder="Search the web..."
+              :placeholder="$t('desktop.popoutBrowser.searchPlaceholder')"
             />
             <button @click="performWebSearch" :disabled="isSearching" class="w-full btn-sm btn-primary">
               <i class="fas mr-1" :class="isSearching ? 'fa-spinner fa-spin' : 'fa-search'"></i>
-              {{ isSearching ? 'Searching...' : 'Search' }}
+              {{ isSearching ? $t('desktop.popoutBrowser.searching') : $t('desktop.popoutBrowser.searchButton') }}
             </button>
           </div>
         </div>
@@ -125,11 +125,11 @@
         <div class="automation-card">
           <div class="flex items-center space-x-2 mb-2">
             <i class="fas fa-vials text-blue-500"></i>
-            <span class="text-sm font-medium">Frontend Test</span>
+            <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.frontendTest') }}</span>
           </div>
           <button @click="runFrontendTest" :disabled="isTestingFrontend" class="w-full btn-sm btn-primary">
               <i class="fas mr-1" :class="isTestingFrontend ? 'fa-spinner fa-spin' : 'fa-play'"></i>
-              {{ isTestingFrontend ? 'Running...' : 'Run Tests' }}
+              {{ isTestingFrontend ? $t('desktop.popoutBrowser.running') : $t('desktop.popoutBrowser.runTests') }}
           </button>
         </div>
 
@@ -137,17 +137,17 @@
         <div class="automation-card">
           <div class="flex items-center space-x-2 mb-2">
             <i class="fas fa-chart-bar text-purple-500"></i>
-            <span class="text-sm font-medium">Results</span>
+            <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.results') }}</span>
           </div>
           <div class="text-xs text-autobot-text-secondary space-y-1">
             <div v-if="automationResults.lastSearch">
-              Search: {{ (automationResults.lastSearch as SearchData).results?.length || 0 }} results
+              {{ $t('desktop.popoutBrowser.searchResultCount', { count: (automationResults.lastSearch as SearchData).results?.length || 0 }) }}
             </div>
             <div v-if="automationResults.lastTest">
-              Tests: {{ (automationResults.lastTest as TestData).passed || 0 }}/{{ (automationResults.lastTest as TestData).total || 0 }} passed
+              {{ $t('desktop.popoutBrowser.testResultCount', { passed: (automationResults.lastTest as TestData).passed || 0, total: (automationResults.lastTest as TestData).total || 0 }) }}
             </div>
             <div v-if="isSearching || isTestingFrontend || isSendingMessage" class="text-blue-600">
-              <i class="fas fa-spinner fa-spin mr-1"></i>Running...
+              <i class="fas fa-spinner fa-spin mr-1"></i>{{ $t('desktop.popoutBrowser.running') }}
             </div>
           </div>
         </div>
@@ -170,7 +170,7 @@
           class="absolute inset-0 bg-autobot-bg-tertiary z-10"
         >
           <template #loading-message>
-            <p class="text-sm text-autobot-text-secondary">Connecting to Playwright service...</p>
+            <p class="text-sm text-autobot-text-secondary">{{ $t('desktop.popoutBrowser.connectingPlaywright') }}</p>
           </template>
         </UnifiedLoadingView>
 
@@ -178,10 +178,10 @@
         <div v-if="browserStatus === 'error'" class="absolute inset-0 bg-red-50 flex items-center justify-center z-10">
           <div class="text-center p-4">
             <i class="fas fa-exclamation-triangle text-red-500 text-2xl mb-2"></i>
-            <p class="text-sm text-red-600 mb-2">Playwright service connection failed</p>
+            <p class="text-sm text-red-600 mb-2">{{ $t('desktop.popoutBrowser.playwrightConnectionFailed') }}</p>
             <BaseButton variant="primary" size="sm" @click="initializeBrowser" :loading="isInitializingBrowser">
               <i class="fas fa-retry mr-1"></i>
-              Retry Connection
+              {{ $t('desktop.popoutBrowser.retryConnection') }}
             </BaseButton>
           </div>
         </div>
@@ -190,19 +190,19 @@
         <div v-if="!vncUrl" class="w-full h-full flex items-center justify-center bg-gray-900 text-white">
           <div class="text-center p-8">
             <i class="fas fa-robot text-6xl mb-4 text-blue-400"></i>
-            <h3 class="text-xl font-semibold mb-2">Headless Browser Mode</h3>
+            <h3 class="text-xl font-semibold mb-2">{{ $t('desktop.popoutBrowser.headlessBrowserMode') }}</h3>
             <p class="text-gray-300 mb-4">
-              The browser is running on the Browser VM via Playwright API
+              {{ $t('desktop.popoutBrowser.headlessDesc') }}
             </p>
             <p class="text-sm text-gray-400 mb-4">
-              Enter a URL in the address bar above to navigate. Results will be logged below.
+              {{ $t('desktop.popoutBrowser.headlessInstructions') }}
             </p>
             <div class="bg-gray-800 rounded p-4 text-left max-w-md mx-auto">
-              <div class="text-xs text-gray-400 mb-2">Current Status:</div>
+              <div class="text-xs text-gray-400 mb-2">{{ $t('desktop.popoutBrowser.currentStatus') }}</div>
               <div class="text-sm">
-                <div>Status: <span class="text-green-400">{{ browserStatus }}</span></div>
-                <div v-if="currentUrl">URL: <span class="text-blue-300">{{ currentUrl }}</span></div>
-                <div v-if="pageTitle">Title: <span class="text-gray-200">{{ pageTitle }}</span></div>
+                <div>{{ $t('desktop.popoutBrowser.statusLabel') }} <span class="text-green-400">{{ browserStatus }}</span></div>
+                <div v-if="currentUrl">{{ $t('desktop.popoutBrowser.urlLabel') }} <span class="text-blue-300">{{ currentUrl }}</span></div>
+                <div v-if="pageTitle">{{ $t('desktop.popoutBrowser.titleLabel') }} <span class="text-gray-200">{{ pageTitle }}</span></div>
               </div>
             </div>
           </div>
@@ -224,8 +224,8 @@
         <div class="bg-autobot-bg-secondary rounded-lg shadow-lg p-4 border border-autobot-border">
           <div class="mb-4">
             <div class="flex items-center justify-between mb-2">
-              <h4 class="text-sm font-medium text-autobot-text-primary">Browser Session</h4>
-              <StatusBadge variant="success" size="small">Connected</StatusBadge>
+              <h4 class="text-sm font-medium text-autobot-text-primary">{{ $t('desktop.popoutBrowser.browserSession') }}</h4>
+              <StatusBadge variant="success" size="small">{{ $t('desktop.popoutBrowser.connected') }}</StatusBadge>
             </div>
             <div class="text-xs text-autobot-text-secondary">
               <div class="flex items-center space-x-2">
@@ -237,22 +237,22 @@
 
           <!-- Recent results -->
           <div v-if="automationResults.lastSearch || automationResults.lastTest" class="bg-autobot-bg-secondary rounded-lg p-4 shadow-sm border border-autobot-border">
-            <h4 class="text-sm font-medium text-autobot-text-primary mb-3">Recent Automation Results</h4>
+            <h4 class="text-sm font-medium text-autobot-text-primary mb-3">{{ $t('desktop.popoutBrowser.recentResults') }}</h4>
 
             <div v-if="automationResults.lastSearch" class="mb-3 p-3 bg-blue-50 rounded">
               <div class="flex items-center space-x-2 mb-1">
                 <i class="fas fa-search text-blue-500"></i>
-                <span class="text-sm font-medium">Web Search</span>
+                <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.webSearch') }}</span>
               </div>
-              <p class="text-xs text-autobot-text-secondary">Found {{ (automationResults.lastSearch as SearchData).results?.length || 0 }} results</p>
+              <p class="text-xs text-autobot-text-secondary">{{ $t('desktop.popoutBrowser.foundResults', { count: (automationResults.lastSearch as SearchData).results?.length || 0 }) }}</p>
             </div>
 
             <div v-if="automationResults.lastTest" class="p-3 bg-green-50 rounded">
               <div class="flex items-center space-x-2 mb-1">
                 <i class="fas fa-vials text-green-500"></i>
-                <span class="text-sm font-medium">Frontend Test</span>
+                <span class="text-sm font-medium">{{ $t('desktop.popoutBrowser.frontendTest') }}</span>
               </div>
-              <p class="text-xs text-autobot-text-secondary">{{ (automationResults.lastTest as TestData).passed }}/{{ (automationResults.lastTest as TestData).total }} tests passed</p>
+              <p class="text-xs text-autobot-text-secondary">{{ $t('desktop.popoutBrowser.testResultCount', { passed: (automationResults.lastTest as TestData).passed, total: (automationResults.lastTest as TestData).total }) }}</p>
             </div>
           </div>
 
@@ -260,7 +260,7 @@
           <EmptyState
             v-else
             icon="fas fa-rocket"
-            message="Use automation controls above to get started"
+            :message="$t('desktop.popoutBrowser.getStarted')"
             compact
           />
         </div>
@@ -270,16 +270,16 @@
       <div v-if="!sessionId || sessionId === 'manual-browser'" class="flex items-center justify-center h-full bg-autobot-bg-tertiary">
         <EmptyState
           icon="fas fa-globe"
-          title="Manual Browser Mode"
-          message="Direct control via VNC interface"
+          :title="$t('desktop.popoutBrowser.manualBrowserMode')"
+          :message="$t('desktop.popoutBrowser.manualBrowserDesc')"
         >
           <template #actions>
             <BaseButton variant="primary" @click="initializeBrowser" :loading="isInitializingBrowser">
               <i class="fas fa-rocket mr-2"></i>
-              {{ isInitializingBrowser ? 'Launching...' : 'Launch Browser Session' }}
+              {{ isInitializingBrowser ? $t('desktop.popoutBrowser.launching') : $t('desktop.popoutBrowser.launchSession') }}
             </BaseButton>
             <p class="text-sm text-autobot-text-muted mt-3">
-              This will open a live browser that you can control directly
+              {{ $t('desktop.popoutBrowser.launchDesc') }}
             </p>
           </template>
         </EmptyState>
@@ -298,8 +298,8 @@
       >
         <template #loading-message>
           <div class="text-center">
-            <p class="text-autobot-text-secondary">Initializing browser session...</p>
-            <p class="text-sm text-autobot-text-muted mt-2">Session ID: {{ sessionId || 'Not available' }}</p>
+            <p class="text-autobot-text-secondary">{{ $t('desktop.popoutBrowser.initializingSession') }}</p>
+            <p class="text-sm text-autobot-text-muted mt-2">{{ $t('desktop.popoutBrowser.sessionId', { id: sessionId || $t('desktop.popoutBrowser.notAvailable') }) }}</p>
           </div>
         </template>
       </UnifiedLoadingView>
@@ -307,7 +307,7 @@
       <!-- Developer Tools Overlay -->
       <div v-if="showDevTools" class="absolute bottom-0 left-0 right-0 h-1/3 bg-gray-900 border-t border-gray-600">
         <div class="flex items-center justify-between bg-gray-800 p-2 text-white text-sm">
-          <span>Developer Console</span>
+          <span>{{ $t('desktop.popoutBrowser.developerConsole') }}</span>
           <button @click="showDevTools = false" class="text-gray-400 hover:text-white">
             <i class="fas fa-times"></i>
           </button>
@@ -325,20 +325,20 @@
         <div class="bg-white rounded-lg p-6 max-w-md mx-4">
           <div class="flex items-center mb-4">
             <i class="fas fa-exclamation-triangle text-yellow-500 text-2xl mr-3"></i>
-            <h3 class="text-lg font-semibold">User Interaction Required</h3>
+            <h3 class="text-lg font-semibold">{{ $t('desktop.popoutBrowser.interactionRequired') }}</h3>
           </div>
           <p class="text-autobot-text-primary mb-4">{{ interactionMessage }}</p>
           <div class="flex space-x-3">
             <BaseButton variant="primary" @click="handleInteraction('wait')">
               <i class="fas fa-clock mr-1"></i>
-              Wait & Monitor
+              {{ $t('desktop.popoutBrowser.waitAndMonitor') }}
             </BaseButton>
             <BaseButton variant="secondary" @click="handleInteraction('takeover')">
               <i class="fas fa-hand-paper mr-1"></i>
-              Take Control
+              {{ $t('desktop.popoutBrowser.takeControl') }}
             </BaseButton>
             <BaseButton variant="outline" @click="hideInteractionOverlay">
-              Dismiss
+              {{ $t('desktop.popoutBrowser.dismiss') }}
             </BaseButton>
           </div>
         </div>

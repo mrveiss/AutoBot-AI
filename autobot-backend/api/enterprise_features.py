@@ -10,18 +10,19 @@ import asyncio
 import logging
 from typing import List, Optional
 
+from auth_middleware import check_admin_permission
 from enterprise_feature_manager import (
     FeatureCategory,
     FeatureStatus,
     get_enterprise_manager,
 )
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = logging.getLogger(__name__)
 
 

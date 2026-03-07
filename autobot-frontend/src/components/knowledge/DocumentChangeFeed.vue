@@ -4,26 +4,26 @@
     <div class="feed-header">
       <h3 class="feed-title">
         <i class="fas fa-sync-alt"></i>
-        Document Changes
+        {{ $t('knowledge.changeFeed.title') }}
       </h3>
 
       <!-- Change Summary Badges -->
       <div class="change-badges">
         <span v-if="changeSummary.added > 0" class="badge badge-success">
           <i class="fas fa-plus-circle"></i>
-          {{ changeSummary.added }} Added
+          {{ changeSummary.added }} {{ $t('knowledge.changeFeed.added') }}
         </span>
         <span v-if="changeSummary.updated > 0" class="badge badge-info">
           <i class="fas fa-sync-alt"></i>
-          {{ changeSummary.updated }} Updated
+          {{ changeSummary.updated }} {{ $t('knowledge.changeFeed.updated') }}
         </span>
         <span v-if="changeSummary.removed > 0" class="badge badge-danger">
           <i class="fas fa-minus-circle"></i>
-          {{ changeSummary.removed }} Removed
+          {{ changeSummary.removed }} {{ $t('knowledge.changeFeed.removed') }}
         </span>
         <span v-if="totalChanges === 0" class="badge badge-secondary">
           <i class="fas fa-check-circle"></i>
-          No Changes
+          {{ $t('knowledge.changeFeed.noChanges') }}
         </span>
       </div>
     </div>
@@ -37,24 +37,24 @@
         @click="handleScanNow"
       >
         <i class="fas fa-search"></i>
-        {{ isScanning ? 'Scanning...' : 'Scan Now' }}
+        {{ isScanning ? $t('knowledge.changeFeed.scanning') : $t('knowledge.changeFeed.scanNow') }}
       </BaseButton>
 
       <!-- Issue #425: Man Page Section Filter -->
       <div class="section-filter">
         <label class="filter-label">
           <i class="fas fa-book"></i>
-          Section:
+          {{ $t('knowledge.changeFeed.sectionLabel') }}
         </label>
         <select v-model="selectedSections" multiple class="section-select">
-          <option value="1">1 - User Commands</option>
-          <option value="2">2 - System Calls</option>
-          <option value="3">3 - Library Functions</option>
-          <option value="4">4 - Special Files</option>
-          <option value="5">5 - File Formats</option>
-          <option value="6">6 - Games</option>
-          <option value="7">7 - Miscellaneous</option>
-          <option value="8">8 - System Admin</option>
+          <option value="1">{{ $t('knowledge.changeFeed.section1') }}</option>
+          <option value="2">{{ $t('knowledge.changeFeed.section2') }}</option>
+          <option value="3">{{ $t('knowledge.changeFeed.section3') }}</option>
+          <option value="4">{{ $t('knowledge.changeFeed.section4') }}</option>
+          <option value="5">{{ $t('knowledge.changeFeed.section5') }}</option>
+          <option value="6">{{ $t('knowledge.changeFeed.section6') }}</option>
+          <option value="7">{{ $t('knowledge.changeFeed.section7') }}</option>
+          <option value="8">{{ $t('knowledge.changeFeed.section8') }}</option>
         </select>
       </div>
 
@@ -65,7 +65,7 @@
             v-model="autoRefreshEnabled"
             @change="handleAutoRefreshToggle"
           />
-          <span>Auto-refresh (30m)</span>
+          <span>{{ $t('knowledge.changeFeed.autoRefresh') }}</span>
         </label>
       </div>
 
@@ -75,13 +75,13 @@
             type="checkbox"
             v-model="autoVectorizeEnabled"
           />
-          <span>Auto-vectorize changes</span>
+          <span>{{ $t('knowledge.changeFeed.autoVectorize') }}</span>
         </label>
       </div>
 
       <div v-if="lastScanTime" class="last-scan">
         <i class="fas fa-clock"></i>
-        Last scan: {{ formatRelativeTime(lastScanTime) }}
+        {{ $t('knowledge.changeFeed.lastScan') }} {{ formatRelativeTime(lastScanTime) }}
       </div>
     </div>
 
@@ -89,20 +89,20 @@
     <div v-if="lastVectorizationResult" class="vectorization-status">
       <div class="status-header">
         <i class="fas fa-vector-square"></i>
-        Vectorization Results
+        {{ $t('knowledge.changeFeed.vectorizationResults') }}
       </div>
       <div class="status-stats">
         <span class="stat-item stat-success">
           <i class="fas fa-check-circle"></i>
-          {{ lastVectorizationResult.successful }} successful
+          {{ lastVectorizationResult.successful }} {{ $t('knowledge.changeFeed.successful') }}
         </span>
         <span class="stat-item stat-failed" v-if="lastVectorizationResult.failed > 0">
           <i class="fas fa-times-circle"></i>
-          {{ lastVectorizationResult.failed }} failed
+          {{ lastVectorizationResult.failed }} {{ $t('knowledge.changeFeed.failed') }}
         </span>
         <span class="stat-item stat-skipped" v-if="lastVectorizationResult.skipped > 0">
           <i class="fas fa-minus-circle"></i>
-          {{ lastVectorizationResult.skipped }} skipped
+          {{ lastVectorizationResult.skipped }} {{ $t('knowledge.changeFeed.skipped') }}
         </span>
       </div>
     </div>
@@ -180,11 +180,11 @@
     <EmptyState
       v-else
       icon="fas fa-inbox"
-      message="No recent changes detected"
+      :message="$t('knowledge.changeFeed.noRecentChanges')"
     >
       <template #actions>
         <BaseButton variant="secondary" @click="handleScanNow">
-          Scan for Changes
+          {{ $t('knowledge.changeFeed.scanForChanges') }}
         </BaseButton>
       </template>
     </EmptyState>
@@ -193,11 +193,11 @@
     <div class="feed-actions" v-if="recentChanges.length > 0">
       <BaseButton variant="outline" size="sm" @click="handleClearChanges">
         <i class="fas fa-trash"></i>
-        Clear History
+        {{ $t('knowledge.changeFeed.clearHistory') }}
       </BaseButton>
       <BaseButton variant="outline" size="sm" @click="handleExportChanges">
         <i class="fas fa-download"></i>
-        Export Changes
+        {{ $t('knowledge.changeFeed.exportChanges') }}
       </BaseButton>
     </div>
   </div>
@@ -205,10 +205,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { useDocumentChanges } from '@/composables/useDocumentChanges'
 
 const logger = createLogger('DocumentChangeFeed')
+const { t } = useI18n()
 import type { DocumentChange } from '@/composables/useDocumentChanges'
 import { formatBytes } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -289,7 +291,7 @@ const handleAutoRefreshToggle = () => {
 }
 
 const handleClearChanges = () => {
-  if (confirm('Clear all change history? This cannot be undone.')) {
+  if (confirm(t('knowledge.changeFeed.confirmClearHistory'))) {
     clearChanges()
     activeFilter.value = 'all'
   }

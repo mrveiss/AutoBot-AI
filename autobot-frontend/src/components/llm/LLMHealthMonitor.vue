@@ -61,9 +61,9 @@ function formatTimestamp(timestamp: string): string {
     <!-- Overall Status Card -->
     <div class="bg-autobot-bg-card rounded shadow-sm border border-default p-6">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-semibold text-primary">LLM Health Status</h3>
+        <h3 class="text-lg font-semibold text-primary">{{ $t('llm.healthStatus') }}</h3>
         <div v-if="lastUpdate" class="text-sm text-secondary">
-          Updated: {{ lastUpdate.toLocaleTimeString() }}
+          {{ $t('llm.updated') }} {{ lastUpdate.toLocaleTimeString() }}
         </div>
       </div>
 
@@ -72,13 +72,13 @@ function formatTimestamp(timestamp: string): string {
       </div>
 
       <div v-else-if="!healthSummary" class="text-center py-8 text-secondary">
-        No health data available
+        {{ $t('llm.noHealthData') }}
       </div>
 
       <div v-else class="grid grid-cols-1 md:grid-cols-4 gap-6">
         <!-- Overall Status -->
         <div class="space-y-2">
-          <div class="text-sm font-medium text-secondary">Overall Status</div>
+          <div class="text-sm font-medium text-secondary">{{ $t('llm.overallStatus') }}</div>
           <div :class="['text-3xl font-bold', overallStatusColor]">
             {{ overallStatusText }}
           </div>
@@ -89,29 +89,29 @@ function formatTimestamp(timestamp: string): string {
 
         <!-- Healthy Providers -->
         <div class="space-y-2">
-          <div class="text-sm font-medium text-secondary">Healthy</div>
+          <div class="text-sm font-medium text-secondary">{{ $t('llm.healthy') }}</div>
           <div class="text-3xl font-bold text-autobot-success">
             {{ healthSummary.healthy_providers }}
           </div>
-          <div class="text-xs text-secondary">Providers</div>
+          <div class="text-xs text-secondary">{{ $t('llm.providers') }}</div>
         </div>
 
         <!-- Degraded Providers -->
         <div class="space-y-2">
-          <div class="text-sm font-medium text-secondary">Degraded</div>
+          <div class="text-sm font-medium text-secondary">{{ $t('llm.degraded') }}</div>
           <div class="text-3xl font-bold text-autobot-warning">
             {{ healthSummary.degraded_providers }}
           </div>
-          <div class="text-xs text-secondary">Providers</div>
+          <div class="text-xs text-secondary">{{ $t('llm.providers') }}</div>
         </div>
 
         <!-- Unhealthy Providers -->
         <div class="space-y-2">
-          <div class="text-sm font-medium text-secondary">Unhealthy</div>
+          <div class="text-sm font-medium text-secondary">{{ $t('llm.unhealthy') }}</div>
           <div class="text-3xl font-bold text-autobot-error">
             {{ healthSummary.unhealthy_providers }}
           </div>
-          <div class="text-xs text-secondary">Providers</div>
+          <div class="text-xs text-secondary">{{ $t('llm.providers') }}</div>
         </div>
       </div>
     </div>
@@ -119,7 +119,7 @@ function formatTimestamp(timestamp: string): string {
     <!-- Provider Health Details -->
     <div v-if="healthSummary && healthSummary.providers.length > 0" class="bg-autobot-bg-card rounded shadow-sm border border-default">
       <div class="px-6 py-4 border-b border-default">
-        <h3 class="text-lg font-semibold text-primary">Provider Details</h3>
+        <h3 class="text-lg font-semibold text-primary">{{ $t('llm.providerDetails') }}</h3>
       </div>
 
       <div class="overflow-x-auto">
@@ -127,19 +127,19 @@ function formatTimestamp(timestamp: string): string {
           <thead class="bg-autobot-bg-secondary">
             <tr>
               <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Provider
+                {{ $t('llm.provider') }}
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Health Score
+                {{ $t('llm.healthScore') }}
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Latency
+                {{ $t('llm.latency') }}
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Errors
+                {{ $t('llm.errors') }}
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider">
-                Last Success
+                {{ $t('llm.lastSuccess') }}
               </th>
             </tr>
           </thead>
@@ -178,7 +178,7 @@ function formatTimestamp(timestamp: string): string {
                 <span v-if="provider.last_successful_request">
                   {{ formatTimestamp(provider.last_successful_request) }}
                 </span>
-                <span v-else class="text-autobot-text-muted">Never</span>
+                <span v-else class="text-autobot-text-muted">{{ $t('llm.never') }}</span>
               </td>
             </tr>
           </tbody>
@@ -189,7 +189,7 @@ function formatTimestamp(timestamp: string): string {
     <!-- Detailed Metrics -->
     <div v-if="healthMetrics.length > 0" class="bg-autobot-bg-card rounded shadow-sm border border-default">
       <div class="px-6 py-4 border-b border-default">
-        <h3 class="text-lg font-semibold text-primary">Performance Metrics</h3>
+        <h3 class="text-lg font-semibold text-primary">{{ $t('llm.performanceMetrics') }}</h3>
       </div>
 
       <div class="p-6 space-y-6">
@@ -207,21 +207,21 @@ function formatTimestamp(timestamp: string): string {
 
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <div class="text-xs text-secondary">Response Time</div>
+              <div class="text-xs text-secondary">{{ $t('llm.responseTime') }}</div>
               <div class="text-lg font-semibold text-primary">{{ metric.response_time_ms }}ms</div>
             </div>
             <div>
-              <div class="text-xs text-secondary">Success Rate</div>
+              <div class="text-xs text-secondary">{{ $t('llm.successRate') }}</div>
               <div :class="['text-lg font-semibold', getHealthColor(metric.success_rate)]">
                 {{ metric.success_rate.toFixed(1) }}%
               </div>
             </div>
             <div>
-              <div class="text-xs text-secondary">Total Requests</div>
+              <div class="text-xs text-secondary">{{ $t('llm.totalRequests') }}</div>
               <div class="text-lg font-semibold text-primary">{{ metric.total_requests.toLocaleString() }}</div>
             </div>
             <div>
-              <div class="text-xs text-secondary">Uptime</div>
+              <div class="text-xs text-secondary">{{ $t('llm.uptime') }}</div>
               <div :class="['text-lg font-semibold', getHealthColor(metric.uptime_percentage)]">
                 {{ metric.uptime_percentage.toFixed(1) }}%
               </div>

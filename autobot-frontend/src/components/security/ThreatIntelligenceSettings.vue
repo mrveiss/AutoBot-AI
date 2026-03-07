@@ -2,8 +2,8 @@
   <div class="threat-intel-settings">
     <!-- Header -->
     <div class="settings-header">
-      <h2 class="settings-title">Threat Intelligence Settings</h2>
-      <p class="settings-subtitle">Configure external threat intelligence API integrations</p>
+      <h2 class="settings-title">{{ t('security.threatSettings.title') }}</h2>
+      <p class="settings-subtitle">{{ t('security.threatSettings.subtitle') }}</p>
     </div>
 
     <!-- Current Status -->
@@ -11,8 +11,8 @@
       <span class="status-icon">{{ status.any_service_configured ? '🛡️' : '⚠️' }}</span>
       <span class="status-text">
         {{ status.any_service_configured
-          ? 'Threat intelligence services are active'
-          : 'No threat intelligence services configured' }}
+          ? t('security.threatSettings.statusActive')
+          : t('security.threatSettings.statusInactive') }}
       </span>
     </div>
 
@@ -20,44 +20,43 @@
     <div class="settings-section">
       <div class="section-header">
         <div class="service-info">
-          <h3>VirusTotal Integration</h3>
+          <h3>{{ t('security.threatSettings.virusTotalIntegration') }}</h3>
           <span class="service-badge" :class="status.virustotal?.configured ? 'configured' : 'not-configured'">
-            {{ status.virustotal?.configured ? 'Configured' : 'Not Configured' }}
+            {{ status.virustotal?.configured ? t('security.threatSettings.configured') : t('security.threatSettings.notConfigured') }}
           </span>
         </div>
         <a href="https://www.virustotal.com/gui/my-apikey" target="_blank" class="external-link">
-          Get API Key →
+          {{ t('security.threatSettings.getApiKey') }}
         </a>
       </div>
       <div class="section-content">
         <p class="service-description">
-          VirusTotal aggregates data from over 70 antivirus scanners and URL/domain blocklisting services.
-          The free API allows 4 requests per minute.
+          {{ t('security.threatSettings.virusTotalDesc') }}
         </p>
         <div class="form-group">
-          <label for="vt-api-key">API Key</label>
+          <label for="vt-api-key">{{ t('security.threatSettings.apiKeyLabel') }}</label>
           <div class="input-group">
             <input
               id="vt-api-key"
               v-model="virusTotalApiKey"
               :type="showVtKey ? 'text' : 'password'"
-              placeholder="Enter your VirusTotal API key"
+              :placeholder="t('security.threatSettings.vtApiKeyPlaceholder')"
               class="form-input"
             />
             <button class="btn-toggle" @click="showVtKey = !showVtKey">
               {{ showVtKey ? '👁️' : '👁️‍🗨️' }}
             </button>
           </div>
-          <p class="form-hint">Environment variable: <code>VIRUSTOTAL_API_KEY</code></p>
+          <p class="form-hint">{{ t('security.threatSettings.vtEnvHint') }}</p>
         </div>
         <div v-if="status.virustotal?.configured" class="service-stats">
           <div class="stat">
-            <span class="stat-label">Rate Limit:</span>
-            <span class="stat-value">{{ status.virustotal?.requests_per_minute || 4 }} req/min</span>
+            <span class="stat-label">{{ t('security.threatSettings.rateLimit') }}</span>
+            <span class="stat-value">{{ t('security.threatSettings.reqPerMin', { count: status.virustotal?.requests_per_minute || 4 }) }}</span>
           </div>
           <div class="stat">
-            <span class="stat-label">Remaining:</span>
-            <span class="stat-value">{{ status.virustotal?.remaining_requests || 0 }} requests</span>
+            <span class="stat-label">{{ t('security.threatSettings.remaining') }}</span>
+            <span class="stat-value">{{ t('security.threatSettings.requestsCount', { count: status.virustotal?.remaining_requests || 0 }) }}</span>
           </div>
         </div>
       </div>
@@ -67,44 +66,43 @@
     <div class="settings-section">
       <div class="section-header">
         <div class="service-info">
-          <h3>URLVoid Integration</h3>
+          <h3>{{ t('security.threatSettings.urlVoidIntegration') }}</h3>
           <span class="service-badge" :class="status.urlvoid?.configured ? 'configured' : 'not-configured'">
-            {{ status.urlvoid?.configured ? 'Configured' : 'Not Configured' }}
+            {{ status.urlvoid?.configured ? t('security.threatSettings.configured') : t('security.threatSettings.notConfigured') }}
           </span>
         </div>
         <a href="https://www.urlvoid.com/api/" target="_blank" class="external-link">
-          Get API Key →
+          {{ t('security.threatSettings.getApiKey') }}
         </a>
       </div>
       <div class="section-content">
         <p class="service-description">
-          URLVoid checks domains against 30+ blocklist engines and provides domain age,
-          registration info, and reputation data. The free tier allows 10 requests per minute.
+          {{ t('security.threatSettings.urlVoidDesc') }}
         </p>
         <div class="form-group">
-          <label for="uv-api-key">API Key</label>
+          <label for="uv-api-key">{{ t('security.threatSettings.apiKeyLabel') }}</label>
           <div class="input-group">
             <input
               id="uv-api-key"
               v-model="urlVoidApiKey"
               :type="showUvKey ? 'text' : 'password'"
-              placeholder="Enter your URLVoid API key"
+              :placeholder="t('security.threatSettings.uvApiKeyPlaceholder')"
               class="form-input"
             />
             <button class="btn-toggle" @click="showUvKey = !showUvKey">
               {{ showUvKey ? '👁️' : '👁️‍🗨️' }}
             </button>
           </div>
-          <p class="form-hint">Environment variable: <code>URLVOID_API_KEY</code></p>
+          <p class="form-hint">{{ t('security.threatSettings.uvEnvHint') }}</p>
         </div>
         <div v-if="status.urlvoid?.configured" class="service-stats">
           <div class="stat">
-            <span class="stat-label">Rate Limit:</span>
-            <span class="stat-value">{{ status.urlvoid?.requests_per_minute || 10 }} req/min</span>
+            <span class="stat-label">{{ t('security.threatSettings.rateLimit') }}</span>
+            <span class="stat-value">{{ t('security.threatSettings.reqPerMin', { count: status.urlvoid?.requests_per_minute || 10 }) }}</span>
           </div>
           <div class="stat">
-            <span class="stat-label">Remaining:</span>
-            <span class="stat-value">{{ status.urlvoid?.remaining_requests || 0 }} requests</span>
+            <span class="stat-label">{{ t('security.threatSettings.remaining') }}</span>
+            <span class="stat-value">{{ t('security.threatSettings.requestsCount', { count: status.urlvoid?.remaining_requests || 0 }) }}</span>
           </div>
         </div>
       </div>
@@ -114,27 +112,26 @@
     <div class="settings-section">
       <div class="section-header">
         <div class="service-info">
-          <h3>Cache Settings</h3>
-          <span class="service-badge configured">Active</span>
+          <h3>{{ t('security.threatSettings.cacheSettings') }}</h3>
+          <span class="service-badge configured">{{ t('security.threatSettings.cacheActive') }}</span>
         </div>
       </div>
       <div class="section-content">
         <p class="service-description">
-          URL reputation results are cached to reduce API calls and improve response times.
-          Cached results are marked with a badge in the dashboard.
+          {{ t('security.threatSettings.cacheDesc') }}
         </p>
         <div class="cache-stats">
           <div class="stat">
-            <span class="stat-label">Cache Entries:</span>
+            <span class="stat-label">{{ t('security.threatSettings.cacheEntries') }}</span>
             <span class="stat-value">{{ status.cache_stats?.size || 0 }}</span>
           </div>
           <div class="stat">
-            <span class="stat-label">TTL:</span>
-            <span class="stat-value">2 hours</span>
+            <span class="stat-label">{{ t('security.threatSettings.cacheTtl') }}</span>
+            <span class="stat-value">{{ t('security.threatSettings.cacheTtlValue') }}</span>
           </div>
         </div>
         <button class="btn-secondary" @click="clearCache" :disabled="loading">
-          Clear Cache
+          {{ t('security.threatSettings.clearCache') }}
         </button>
       </div>
     </div>
@@ -143,30 +140,30 @@
     <div class="settings-section">
       <div class="section-header">
         <div class="service-info">
-          <h3>Domain Security Settings</h3>
+          <h3>{{ t('security.threatSettings.domainSecuritySettings') }}</h3>
         </div>
       </div>
       <div class="section-content">
         <p class="service-description">
-          Configure domain validation behavior for URL checking.
+          {{ t('security.threatSettings.domainSecurityDesc') }}
         </p>
         <div class="domain-settings">
           <div class="setting-row">
             <label>
               <input type="checkbox" v-model="domainSettings.requireHttps" />
-              Require HTTPS
+              {{ t('security.threatSettings.requireHttps') }}
             </label>
-            <span class="setting-hint">Block non-HTTPS URLs</span>
+            <span class="setting-hint">{{ t('security.threatSettings.requireHttpsHint') }}</span>
           </div>
           <div class="setting-row">
             <label>
               <input type="checkbox" v-model="domainSettings.checkDns" />
-              DNS Verification
+              {{ t('security.threatSettings.dnsVerification') }}
             </label>
-            <span class="setting-hint">Verify domains resolve to valid IPs</span>
+            <span class="setting-hint">{{ t('security.threatSettings.dnsVerificationHint') }}</span>
           </div>
           <div class="setting-row">
-            <label>Max Redirects</label>
+            <label>{{ t('security.threatSettings.maxRedirects') }}</label>
             <input
               type="number"
               v-model.number="domainSettings.maxRedirects"
@@ -183,15 +180,14 @@
     <div class="info-box">
       <div class="info-icon">ℹ️</div>
       <div class="info-content">
-        <h4>Setting Up API Keys</h4>
+        <h4>{{ t('security.threatSettings.settingUpApiKeys') }}</h4>
         <p>
-          API keys should be configured via environment variables for security.
-          Add the following to your <code>.env</code> file:
+          {{ t('security.threatSettings.apiKeysInfo') }}
         </p>
         <pre class="code-block">VIRUSTOTAL_API_KEY=your_api_key_here
 URLVOID_API_KEY=your_api_key_here</pre>
         <p>
-          Restart the backend service after updating environment variables.
+          {{ t('security.threatSettings.restartHint') }}
         </p>
       </div>
     </div>
@@ -199,10 +195,10 @@ URLVOID_API_KEY=your_api_key_here</pre>
     <!-- Actions -->
     <div class="settings-actions">
       <button class="btn-primary" @click="saveSettings" :disabled="loading">
-        {{ loading ? 'Saving...' : 'Save Settings' }}
+        {{ loading ? t('security.threatSettings.saving') : t('security.threatSettings.saveSettings') }}
       </button>
       <button class="btn-secondary" @click="refreshStatus" :disabled="loading">
-        Refresh Status
+        {{ t('security.threatSettings.refreshStatus') }}
       </button>
     </div>
   </div>
@@ -210,9 +206,11 @@ URLVOID_API_KEY=your_api_key_here</pre>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import apiClient from '@/utils/ApiClient'
 
+const { t } = useI18n()
 const logger = createLogger('ThreatIntelligenceSettings')
 
 // State

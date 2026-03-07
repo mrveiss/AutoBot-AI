@@ -31,14 +31,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from type_defs.common import JSONObject, Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["database_mcp", "mcp"])
+router = APIRouter(
+    tags=["database_mcp", "mcp"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 # Issue #380: Module-level tuple for allowed DML operations
 _ALLOWED_DML_OPERATIONS = ("INSERT", "UPDATE", "DELETE")

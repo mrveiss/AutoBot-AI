@@ -1,28 +1,28 @@
 <template>
   <div class="stats-section">
-    <h3><i class="fas fa-chart-pie"></i> Codebase Statistics</h3>
+    <h3><i class="fas fa-chart-pie"></i> {{ $t('analytics.codebaseStats.title') }}</h3>
     <div v-if="stats" class="stats-grid">
       <BasePanel variant="elevated" size="small">
         <div class="stat-value">{{ stats.total_files || 0 }}</div>
-        <div class="stat-label">Total Files</div>
+        <div class="stat-label">{{ $t('analytics.codebaseStats.totalFiles') }}</div>
       </BasePanel>
       <BasePanel variant="elevated" size="small">
         <div class="stat-value">{{ stats.total_lines || 0 }}</div>
-        <div class="stat-label">Lines of Code</div>
+        <div class="stat-label">{{ $t('analytics.codebaseStats.linesOfCode') }}</div>
       </BasePanel>
       <BasePanel variant="elevated" size="small">
         <div class="stat-value">{{ stats.total_functions || 0 }}</div>
-        <div class="stat-label">Functions</div>
+        <div class="stat-label">{{ $t('analytics.codebaseStats.functions') }}</div>
       </BasePanel>
       <BasePanel variant="elevated" size="small">
         <div class="stat-value">{{ stats.total_classes || 0 }}</div>
-        <div class="stat-label">Classes</div>
+        <div class="stat-label">{{ $t('analytics.codebaseStats.classes') }}</div>
       </BasePanel>
     </div>
     <EmptyState
       v-else
       icon="fas fa-chart-bar"
-      message="No codebase statistics available. Run analysis to generate data."
+      :message="$t('analytics.codebaseStats.emptyMessage')"
     />
   </div>
 </template>

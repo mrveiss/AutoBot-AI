@@ -24,8 +24,8 @@
           size="xs"
           @click="$emit('edit', message)"
           class="action-btn"
-          aria-label="Edit message"
-          title="Edit message"
+          :aria-label="$t('chat.message.edit')"
+          :title="$t('chat.message.edit')"
         >
           <i class="fas fa-edit" aria-hidden="true"></i>
         </BaseButton>
@@ -34,8 +34,8 @@
           size="xs"
           @click="$emit('copy', message)"
           class="action-btn"
-          aria-label="Copy message"
-          title="Copy message"
+          :aria-label="$t('chat.message.copy')"
+          :title="$t('chat.message.copy')"
         >
           <i class="fas fa-copy" aria-hidden="true"></i>
         </BaseButton>
@@ -44,8 +44,8 @@
           size="xs"
           @click="$emit('delete', message)"
           class="action-btn danger"
-          aria-label="Delete message"
-          title="Delete message"
+          :aria-label="$t('chat.message.delete')"
+          :title="$t('chat.message.delete')"
         >
           <i class="fas fa-trash" aria-hidden="true"></i>
         </BaseButton>
@@ -89,7 +89,7 @@
           </span>
           <span v-if="message.metadata?.tokens" class="metadata-item">
             <i class="fas fa-coins" aria-hidden="true"></i>
-            {{ message.metadata.tokens }} tokens
+            {{ $t('chat.message.tokens', { count: message.metadata.tokens }) }}
           </span>
           <span v-if="message.metadata?.duration" class="metadata-item">
             <i class="fas fa-clock" aria-hidden="true"></i>
@@ -156,8 +156,11 @@
  */
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { ChatMessage } from '@/stores/useChatStore'
 import { formatTime } from '@/utils/formatHelpers'
+
+const { t } = useI18n()
 import MessageStatus from '@/components/ui/MessageStatus.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import ApprovalRequestCard from './ApprovalRequestCard.vue'
@@ -222,16 +225,9 @@ const senderIcon = computed(() => {
 })
 
 const senderName = computed(() => {
-  const names: Record<string, string> = {
-    user: 'You',
-    assistant: 'AI Assistant',
-    system: 'System',
-    error: 'Error',
-    thought: 'AI Thought',
-    'tool-code': 'Code Execution',
-    'tool-output': 'Output'
-  }
-  return names[props.message.sender] || props.message.sender
+  const key = `chat.message.sender.${props.message.sender}`
+  const translated = t(key, props.message.sender)
+  return translated !== key ? translated : props.message.sender
 })
 
 const contentClass = computed(() => {

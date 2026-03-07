@@ -12,7 +12,8 @@ getting account information.
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException
 from integrations.base import IntegrationConfig
 from integrations.cloud_integration import (
     AWSIntegration,
@@ -21,7 +22,10 @@ from integrations.cloud_integration import (
 )
 from pydantic import BaseModel, Field
 
-router = APIRouter(tags=["integrations-cloud"])
+router = APIRouter(
+    tags=["integrations-cloud"],
+    dependencies=[Depends(check_admin_permission)],
+)
 logger = logging.getLogger(__name__)
 
 

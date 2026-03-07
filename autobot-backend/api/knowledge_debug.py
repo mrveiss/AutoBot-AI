@@ -9,12 +9,15 @@ This creates a completely new knowledge base instance for testing the fixes
 import asyncio
 import logging
 
+from auth_middleware import check_admin_permission
 from constants.threshold_constants import TimingConstants
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(check_admin_permission)],
+)
 logger = logging.getLogger(__name__)
 
 

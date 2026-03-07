@@ -9,14 +9,14 @@
 <template>
   <div class="function-call-graph" :class="{ 'chart-loading': loading, 'fullscreen': isFullscreen }">
     <div v-if="title" class="chart-header">
-      <h3 class="chart-title">{{ title }}</h3>
-      <span v-if="subtitle" class="chart-subtitle">{{ subtitle }}</span>
+      <h3 class="chart-title">{{ title ?? $t('charts.callGraph.title') }}</h3>
+      <span v-if="subtitle" class="chart-subtitle">{{ subtitle ?? $t('charts.callGraph.subtitle') }}</span>
     </div>
 
     <!-- Loading state -->
     <div v-if="loading" class="chart-loading-overlay">
       <div class="loading-spinner"></div>
-      <span>Analyzing function calls...</span>
+      <span>{{ $t('charts.callGraph.loading') }}</span>
     </div>
 
     <!-- Error state -->
@@ -27,7 +27,7 @@
 
     <!-- No data state -->
     <div v-else-if="!data || (!data.nodes?.length && !data.edges?.length)" class="chart-no-data">
-      <span>No function call data available</span>
+      <span>{{ $t('charts.callGraph.noData') }}</span>
     </div>
 
     <!-- Graph content -->
@@ -37,12 +37,12 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search functions..."
+          :placeholder="$t('charts.callGraph.searchPlaceholder')"
           class="graph-search"
           @input="handleSearch"
         />
         <select v-model="filterModule" class="module-filter" @change="handleModuleFilter">
-          <option value="">All Modules</option>
+          <option value="">{{ $t('charts.callGraph.allModules') }}</option>
           <option v-for="mod in uniqueModules" :key="mod" :value="mod">
             {{ truncateModule(mod || '') }}
           </option>
@@ -51,28 +51,28 @@
           <button
             :class="{ active: viewMode === 'network' }"
             @click="viewMode = 'network'"
-            title="Network View (Cytoscape)"
+            :title="$t('charts.callGraph.networkView')"
           >
             <i class="fas fa-project-diagram"></i>
           </button>
           <button
             :class="{ active: viewMode === 'list' }"
             @click="viewMode = 'list'"
-            title="List View"
+            :title="$t('charts.callGraph.listView')"
           >
             <i class="fas fa-list"></i>
           </button>
           <button
             :class="{ active: viewMode === 'stats' }"
             @click="viewMode = 'stats'"
-            title="Cluster View"
+            :title="$t('charts.callGraph.clusterView')"
           >
             <i class="fas fa-circle-nodes"></i>
           </button>
           <button
             :class="{ active: viewMode === 'orphaned' }"
             @click="viewMode = 'orphaned'"
-            title="Orphaned Functions (unused)"
+            :title="$t('charts.callGraph.orphanedView')"
           >
             <i class="fas fa-unlink"></i>
           </button>
@@ -83,23 +83,23 @@
       <div class="stats-bar">
         <div class="stat">
           <span class="stat-value">{{ data.nodes?.length || 0 }}</span>
-          <span class="stat-label">Functions</span>
+          <span class="stat-label">{{ $t('charts.callGraph.stats.functions') }}</span>
         </div>
         <div class="stat">
           <span class="stat-value">{{ data.edges?.length || 0 }}</span>
-          <span class="stat-label">Calls</span>
+          <span class="stat-label">{{ $t('charts.callGraph.stats.calls') }}</span>
         </div>
         <div class="stat stat-resolved" :class="{ active: resolvedFilter === 'resolved' }" @click="toggleResolvedFilter('resolved')">
           <span class="stat-value">{{ summary?.resolved_calls || 0 }}</span>
-          <span class="stat-label">Resolved</span>
+          <span class="stat-label">{{ $t('charts.callGraph.stats.resolved') }}</span>
         </div>
         <div class="stat stat-unresolved" :class="{ active: resolvedFilter === 'unresolved' }" @click="toggleResolvedFilter('unresolved')">
           <span class="stat-value">{{ unresolvedCount }}</span>
-          <span class="stat-label">Unresolved</span>
+          <span class="stat-label">{{ $t('charts.callGraph.stats.unresolved') }}</span>
         </div>
         <div class="stat stat-orphaned" :class="{ active: viewMode === 'orphaned' }" @click="viewMode = 'orphaned'">
           <span class="stat-value">{{ orphanedFunctions?.length || summary?.orphaned_functions || 0 }}</span>
-          <span class="stat-label">Orphaned</span>
+          <span class="stat-label">{{ $t('charts.callGraph.stats.orphaned') }}</span>
         </div>
       </div>
 
@@ -107,21 +107,21 @@
       <div v-show="viewMode === 'network'" class="network-view">
         <div ref="cytoscapeContainer" class="cytoscape-container"></div>
         <div class="network-controls">
-          <button @click="zoomIn" title="Zoom in">
+          <button @click="zoomIn" :title="$t('charts.callGraph.controls.zoomIn')">
             <i class="fas fa-plus"></i>
           </button>
           <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-          <button @click="zoomOut" title="Zoom out">
+          <button @click="zoomOut" :title="$t('charts.callGraph.controls.zoomOut')">
             <i class="fas fa-minus"></i>
           </button>
-          <button @click="fitGraph" title="Fit to view">
+          <button @click="fitGraph" :title="$t('charts.callGraph.controls.fitToView')">
             <i class="fas fa-expand"></i>
           </button>
-          <button @click="toggleLayout" title="Toggle layout">
+          <button @click="toggleLayout" :title="$t('charts.callGraph.controls.toggleLayout')">
             <i class="fas fa-th"></i>
           </button>
           <span class="control-separator">|</span>
-          <button @click="toggleFullscreen" :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'">
+          <button @click="toggleFullscreen" :title="isFullscreen ? $t('charts.callGraph.controls.exitFullscreen') : $t('charts.callGraph.controls.fullscreen')">
             <i :class="isFullscreen ? 'fas fa-compress' : 'fas fa-expand-arrows-alt'"></i>
           </button>
         </div>
@@ -131,33 +131,33 @@
           <div class="detail-header">
             <span v-if="selectedNodeInfo.isAsync" class="async-badge">async</span>
             <span class="detail-name">{{ selectedNodeInfo.name }}</span>
-            <button class="close-btn" @click="selectedNodeInfo = null" title="Close">
+            <button class="close-btn" @click="selectedNodeInfo = null" :title="$t('charts.callGraph.controls.close')">
               <i class="fas fa-times"></i>
             </button>
           </div>
           <div class="detail-content">
             <div class="detail-row">
-              <span class="detail-label">Full Name:</span>
+              <span class="detail-label">{{ $t('charts.callGraph.detail.fullName') }}</span>
               <span class="detail-value path-value">{{ selectedNodeInfo.fullName }}</span>
             </div>
             <div v-if="selectedNodeInfo.module" class="detail-row">
-              <span class="detail-label">Module:</span>
+              <span class="detail-label">{{ $t('charts.callGraph.detail.module') }}</span>
               <span class="detail-value">{{ selectedNodeInfo.module }}</span>
             </div>
             <div v-if="selectedNodeInfo.className" class="detail-row">
-              <span class="detail-label">Class:</span>
+              <span class="detail-label">{{ $t('charts.callGraph.detail.classLabel') }}</span>
               <span class="detail-value class-value">{{ selectedNodeInfo.className }}</span>
             </div>
             <div v-if="selectedNodeInfo.file" class="detail-row">
-              <span class="detail-label">File:</span>
+              <span class="detail-label">{{ $t('charts.callGraph.detail.file') }}</span>
               <span class="detail-value path-value">{{ selectedNodeInfo.file }}:{{ selectedNodeInfo.line }}</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Outgoing Calls:</span>
+              <span class="detail-label">{{ $t('charts.callGraph.detail.outgoingCalls') }}</span>
               <span class="detail-value calls-out">{{ selectedNodeInfo.outgoingCalls }} function{{ selectedNodeInfo.outgoingCalls !== 1 ? 's' : '' }}</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Incoming Calls:</span>
+              <span class="detail-label">{{ $t('charts.callGraph.detail.incomingCalls') }}</span>
               <span class="detail-value calls-in">{{ selectedNodeInfo.incomingCalls }} caller{{ selectedNodeInfo.incomingCalls !== 1 ? 's' : '' }}</span>
             </div>
           </div>
@@ -182,10 +182,10 @@
               <span v-if="node.class" class="class-badge">{{ node.class }}</span>
               <span class="func-name">{{ node.name }}</span>
               <div class="call-counts">
-                <span class="outgoing" :title="`Makes ${getOutgoingCalls(node.id).length} calls`">
+                <span class="outgoing" :title="$t('charts.callGraph.list.makesCalls', { count: getOutgoingCalls(node.id).length })">
                   ↗{{ getOutgoingCalls(node.id).length }}
                 </span>
-                <span class="incoming" :title="`Called ${getIncomingCalls(node.id).length} times`">
+                <span class="incoming" :title="$t('charts.callGraph.list.calledTimes', { count: getIncomingCalls(node.id).length })">
                   ↙{{ getIncomingCalls(node.id).length }}
                 </span>
               </div>
@@ -201,7 +201,7 @@
               <!-- Outgoing calls -->
               <div v-if="getOutgoingCalls(node.id).length > 0" class="calls-section">
                 <div class="section-label">
-                  <span class="arrow">↗</span> Calls ({{ getOutgoingCalls(node.id).length }})
+                  <span class="arrow">↗</span> {{ $t('charts.callGraph.list.calls') }} ({{ getOutgoingCalls(node.id).length }})
                 </div>
                 <div class="call-list">
                   <div
@@ -212,10 +212,10 @@
                   >
                     <span class="call-name">{{ edge.to_name || getNodeName(edge.to || edge.target || '') }}</span>
                     <span v-if="(edge.count ?? 0) > 1" class="call-count">×{{ edge.count }}</span>
-                    <span v-if="edge.resolved === false" class="unresolved-badge">external</span>
+                    <span v-if="edge.resolved === false" class="unresolved-badge">{{ $t('charts.callGraph.list.external') }}</span>
                   </div>
                   <div v-if="getOutgoingCalls(node.id).length > 10" class="more-calls">
-                    +{{ getOutgoingCalls(node.id).length - 10 }} more
+                    {{ $t('charts.callGraph.list.more', { count: getOutgoingCalls(node.id).length - 10 }) }}
                   </div>
                 </div>
               </div>
@@ -223,7 +223,7 @@
               <!-- Incoming calls -->
               <div v-if="getIncomingCalls(node.id).length > 0" class="calls-section">
                 <div class="section-label">
-                  <span class="arrow">↙</span> Called by ({{ getIncomingCalls(node.id).length }})
+                  <span class="arrow">↙</span> {{ $t('charts.callGraph.list.calledBy') }} ({{ getIncomingCalls(node.id).length }})
                 </div>
                 <div class="call-list">
                   <div
@@ -235,7 +235,7 @@
                     <span v-if="(edge.count ?? 0) > 1" class="call-count">×{{ edge.count }}</span>
                   </div>
                   <div v-if="getIncomingCalls(node.id).length > 10" class="more-calls">
-                    +{{ getIncomingCalls(node.id).length - 10 }} more
+                    {{ $t('charts.callGraph.list.more', { count: getIncomingCalls(node.id).length - 10 }) }}
                   </div>
                 </div>
               </div>
@@ -248,26 +248,26 @@
       <div v-show="viewMode === 'stats'" class="cluster-view">
         <div class="graph-info">
           <i class="fas fa-info-circle"></i>
-          <span>Top callers (green) and most called functions (purple) as clusters</span>
+          <span>{{ $t('charts.callGraph.cluster.description') }}</span>
         </div>
         <div class="cluster-legend">
-          <span class="legend-item caller"><span class="dot"></span> Top Callers</span>
-          <span class="legend-item called"><span class="dot"></span> Most Called</span>
-          <span class="legend-item hub"><span class="dot"></span> Hub (Both)</span>
+          <span class="legend-item caller"><span class="dot"></span> {{ $t('charts.callGraph.cluster.topCallers') }}</span>
+          <span class="legend-item called"><span class="dot"></span> {{ $t('charts.callGraph.cluster.mostCalled') }}</span>
+          <span class="legend-item hub"><span class="dot"></span> {{ $t('charts.callGraph.cluster.hub') }}</span>
         </div>
         <div ref="clusterContainer" class="cluster-container"></div>
         <div class="network-controls cluster-controls">
-          <button @click="zoomInCluster" title="Zoom in">
+          <button @click="zoomInCluster" :title="$t('charts.callGraph.controls.zoomIn')">
             <i class="fas fa-plus"></i>
           </button>
           <span class="zoom-level">{{ Math.round(clusterZoomLevel * 100) }}%</span>
-          <button @click="zoomOutCluster" title="Zoom out">
+          <button @click="zoomOutCluster" :title="$t('charts.callGraph.controls.zoomOut')">
             <i class="fas fa-minus"></i>
           </button>
-          <button @click="fitClusterGraph" title="Fit to view">
+          <button @click="fitClusterGraph" :title="$t('charts.callGraph.controls.fitToView')">
             <i class="fas fa-expand"></i>
           </button>
-          <button @click="toggleClusterLayout" title="Toggle layout">
+          <button @click="toggleClusterLayout" :title="$t('charts.callGraph.controls.toggleLayout')">
             <i class="fas fa-th"></i>
           </button>
         </div>
@@ -277,7 +277,7 @@
       <div v-show="viewMode === 'orphaned'" class="orphaned-view">
         <div class="graph-info warning">
           <i class="fas fa-exclamation-triangle"></i>
-          <span>Functions that are defined but never called by other functions. Review for potential dead code or missing integrations.</span>
+          <span>{{ $t('charts.callGraph.orphaned.description') }}</span>
         </div>
 
         <!-- Orphaned functions search/filter -->
@@ -285,11 +285,11 @@
           <input
             v-model="orphanedSearch"
             type="text"
-            placeholder="Search orphaned functions..."
+            :placeholder="$t('charts.callGraph.orphaned.searchPlaceholder')"
             class="orphaned-search"
           />
           <select v-model="orphanedModuleFilter" class="orphaned-module-filter">
-            <option value="">All Modules</option>
+            <option value="">{{ $t('charts.callGraph.allModules') }}</option>
             <option v-for="mod in orphanedModules" :key="mod" :value="mod">
               {{ truncateModule(mod || '') }}
             </option>
@@ -322,15 +322,15 @@
           </div>
           <!-- Virtual scroll info -->
           <div class="virtual-scroll-info">
-            <span>Showing {{ visibleOrphanedFunctions.length }} of {{ filteredOrphanedFunctions.length }} functions (scroll for more)</span>
+            <span>{{ $t('charts.callGraph.orphaned.showingOf', { showing: visibleOrphanedFunctions.length, total: filteredOrphanedFunctions.length }) }}</span>
           </div>
         </div>
 
         <!-- Empty state -->
         <div v-else class="orphaned-empty">
           <i class="fas fa-check-circle"></i>
-          <span v-if="orphanedSearch || orphanedModuleFilter">No orphaned functions match your filter</span>
-          <span v-else>No orphaned functions detected - all functions are connected!</span>
+          <span v-if="orphanedSearch || orphanedModuleFilter">{{ $t('charts.callGraph.orphaned.noMatch') }}</span>
+          <span v-else>{{ $t('charts.callGraph.orphaned.allConnected') }}</span>
         </div>
       </div>
     </div>
@@ -339,6 +339,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
 // @ts-expect-error - cytoscape-fcose has no type declarations
 import fcose from 'cytoscape-fcose'
@@ -347,6 +348,8 @@ import { useVirtualScrollSimple } from '@/composables/useVirtualScroll'
 
 // Register fcose layout
 cytoscape.use(fcose)
+
+const { t } = useI18n()
 
 // Flexible interface to support multiple data formats
 interface GraphNode {
@@ -411,8 +414,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'Function Call Graph',
-  subtitle: 'View function call relationships',
+  title: undefined,
+  subtitle: undefined,
   orphanedFunctions: () => [],
   height: 600,
   loading: false,
@@ -1436,6 +1439,7 @@ watch(viewMode, async (newMode) => {
 
 .stats-bar {
   display: flex;
+  align-items: center;
   gap: var(--spacing-xl);
   margin-bottom: var(--spacing-md);
   padding: var(--spacing-3) var(--spacing-4);

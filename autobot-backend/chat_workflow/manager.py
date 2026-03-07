@@ -553,6 +553,9 @@ class ChatWorkflowManager(
         Process chunk data and detect content type.
 
         Issue #665: Extracted from _stream_llm_response to reduce function length.
+        Issue #1313: Only run full type detection when chunk contains '[' or ']',
+        which is the only way a tag boundary can occur. This avoids scanning
+        the entire accumulated content on every chunk (O(n²) → amortized O(n)).
 
         Returns:
             Tuple of (chunk_text, new_llm_response, new_current_segment, new_type)
@@ -564,7 +567,12 @@ class ChatWorkflowManager(
         chunk_text = self._normalize_tool_call_text(chunk_text)
         new_llm_response = llm_response + chunk_text
         new_current_segment = current_segment + chunk_text
-        new_type = self._detect_content_type(new_llm_response, current_message_type)
+
+        # Issue #1313: Skip expensive full-content scan when chunk has no tag chars
+        if "[" in chunk_text or "]" in chunk_text:
+            new_type = self._detect_content_type(new_llm_response, current_message_type)
+        else:
+            new_type = current_message_type
 
         return (chunk_text, new_llm_response, new_current_segment, new_type)
 
@@ -2520,46 +2528,44 @@ before summarizing.
         workflow_messages: List[WorkflowMessage],
         llm_response: str,
     ) -> None:
-        """Persist WorkflowMessages and assistant response to chat history (Issue #332)."""
+        """Persist WorkflowMessages to chat history in a single batch.
+
+        Issue #332: Original implementation.
+        Issue #1316: Batch all messages into one load/save cycle instead
+        of N individual add_message() calls.
+        """
         from chat_history import ChatHistoryManager
 
         try:
             chat_mgr = ChatHistoryManager()
 
-            # Persist all collected WorkflowMessages
+            # Build message dicts in memory, then persist in one batch
+            batch = []
             for wf_msg in workflow_messages:
-                message_type = wf_msg.type
-
-                # Skip segment_complete markers — internal stream control messages
-                # with empty content that pollute history and share message_id
-                # with the content message they terminate (Issue #1141).
-                if message_type == "segment_complete":
+                # Skip segment_complete markers — internal stream control
+                # messages with empty content (Issue #1141).
+                if wf_msg.type == "segment_complete":
                     continue
 
-                sender = "system" if message_type == "terminal_output" else "assistant"
-
-                await chat_mgr.add_message(
-                    sender=sender,
-                    text=wf_msg.content,
-                    message_type=message_type,
-                    raw_data=wf_msg.metadata,
-                    session_id=session_id,
-                )
-                logger.debug(
-                    "Persisted WorkflowMessage to chat history: type=%s, session=%s",
-                    message_type,
-                    session_id,
+                sender = "system" if wf_msg.type == "terminal_output" else "assistant"
+                batch.append(
+                    chat_mgr._build_message_dict(
+                        sender,
+                        wf_msg.content,
+                        wf_msg.type,
+                        wf_msg.metadata,
+                        None,
+                    )
                 )
 
-            # NOTE: Removed duplicate llm_response persistence (#1064).
-            # The per-message loop above already persists the final
-            # response; a second add_message with type="llm_response"
-            # created a duplicate that survived content-based dedup.
+            if batch:
+                await chat_mgr.add_messages_batch(session_id, batch)
+
             logger.info(
                 "Persisted conversation to chat history: "
                 "session=%s, workflow_messages=%d",
                 session_id,
-                len(workflow_messages),
+                len(batch),
             )
 
         except Exception as persist_error:
@@ -2665,8 +2671,12 @@ before summarizing.
         self._register_user_message_in_history(session, message)
 
         use_knowledge = context.get("use_knowledge", True) if context else True
+        # Issue #1325: Extract language from context for system prompt
+        language = context.get("language") if context else None
+        if language:
+            session.metadata["language"] = language
         llm_params = await self._prepare_llm_request_params(
-            session, message, use_knowledge=use_knowledge
+            session, message, use_knowledge=use_knowledge, language=language
         )
 
         logger.info(
@@ -2718,8 +2728,16 @@ before summarizing.
         Execute the main LLM workflow.
 
         Issue #620: Refactored using Extract Method to reduce function length.
+        Issue #1315: Yields progress indicator before RAG retrieval.
         Yields WorkflowMessages.
         """
+        # Issue #1315: Emit progress before RAG so frontend shows activity
+        use_knowledge = context.get("use_knowledge", True) if context else True
+        if use_knowledge and self.knowledge_service:
+            progress = StreamingMessage(type="progress")
+            progress.update("Searching knowledge base...")
+            yield progress.to_workflow_message()
+
         llm_params = await self._prepare_llm_workflow_params(session, message, context)
 
         ctx = self._create_llm_iteration_context(

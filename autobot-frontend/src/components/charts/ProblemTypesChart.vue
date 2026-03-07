@@ -11,7 +11,7 @@
     :height="height"
     :series="chartSeries"
     :options="chartOptions"
-    :title="title"
+    :title="title ?? $t('charts.problemTypes.title')"
     :subtitle="subtitle"
     :loading="loading"
     :error="error"
@@ -20,8 +20,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
+
+const { t } = useI18n()
 
 interface ProblemTypeData {
   type?: string
@@ -40,7 +43,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'Problem Types Distribution',
+  title: undefined,
   subtitle: '',
   height: 350,
   loading: false,
@@ -62,7 +65,7 @@ const chartOptions = computed<ApexOptions>(() => ({
   },
   tooltip: {
     y: {
-      formatter: (value: number) => `${value} problems`
+      formatter: (value: number) => t('charts.problemTypes.tooltipProblems', { count: value })
     }
   },
   dataLabels: {

@@ -3,13 +3,13 @@
     <!-- Header -->
     <div class="dashboard-header">
       <div class="header-content">
-        <h2 class="dashboard-title">Threat Intelligence</h2>
-        <p class="dashboard-subtitle">URL reputation checking and domain security analysis</p>
+        <h2 class="dashboard-title">{{ t('security.threatDashboard.title') }}</h2>
+        <p class="dashboard-subtitle">{{ t('security.threatDashboard.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <button class="btn-refresh" @click="refreshStatus" :disabled="loading">
           <span class="icon">↻</span>
-          {{ loading ? 'Loading...' : 'Refresh' }}
+          {{ loading ? t('security.threatDashboard.loading') : t('security.threatDashboard.refresh') }}
         </button>
       </div>
     </div>
@@ -22,12 +22,12 @@
           <span v-else>✗</span>
         </div>
         <div class="card-content">
-          <span class="card-title">VirusTotal</span>
+          <span class="card-title">{{ t('security.threatDashboard.virusTotal') }}</span>
           <span class="card-status">
-            {{ status.virustotal?.configured ? 'Configured' : 'Not Configured' }}
+            {{ status.virustotal?.configured ? t('security.threatDashboard.configured') : t('security.threatDashboard.notConfigured') }}
           </span>
           <span v-if="status.virustotal?.configured" class="card-detail">
-            {{ status.virustotal?.remaining_requests || 0 }}/{{ status.virustotal?.requests_per_minute || 4 }} requests remaining
+            {{ t('security.threatDashboard.requestsRemaining', { remaining: status.virustotal?.remaining_requests || 0, total: status.virustotal?.requests_per_minute || 4 }) }}
           </span>
         </div>
       </div>
@@ -38,12 +38,12 @@
           <span v-else>✗</span>
         </div>
         <div class="card-content">
-          <span class="card-title">URLVoid</span>
+          <span class="card-title">{{ t('security.threatDashboard.urlVoid') }}</span>
           <span class="card-status">
-            {{ status.urlvoid?.configured ? 'Configured' : 'Not Configured' }}
+            {{ status.urlvoid?.configured ? t('security.threatDashboard.configured') : t('security.threatDashboard.notConfigured') }}
           </span>
           <span v-if="status.urlvoid?.configured" class="card-detail">
-            {{ status.urlvoid?.remaining_requests || 0 }}/{{ status.urlvoid?.requests_per_minute || 10 }} requests remaining
+            {{ t('security.threatDashboard.requestsRemaining', { remaining: status.urlvoid?.remaining_requests || 0, total: status.urlvoid?.requests_per_minute || 10 }) }}
           </span>
         </div>
       </div>
@@ -51,9 +51,9 @@
       <div class="status-card cache">
         <div class="card-icon">💾</div>
         <div class="card-content">
-          <span class="card-title">Cache</span>
-          <span class="card-status">{{ status.cache_stats?.size || 0 }} entries</span>
-          <span class="card-detail">2-hour TTL</span>
+          <span class="card-title">{{ t('security.threatDashboard.cache') }}</span>
+          <span class="card-status">{{ t('security.threatDashboard.cacheEntries', { count: status.cache_stats?.size || 0 }) }}</span>
+          <span class="card-detail">{{ t('security.threatDashboard.cacheTtl') }}</span>
         </div>
       </div>
 
@@ -63,12 +63,12 @@
           <span v-else>⚠️</span>
         </div>
         <div class="card-content">
-          <span class="card-title">Overall Status</span>
+          <span class="card-title">{{ t('security.threatDashboard.overallStatus') }}</span>
           <span class="card-status">
-            {{ status.any_service_configured ? 'Active' : 'No Services' }}
+            {{ status.any_service_configured ? t('security.threatDashboard.active') : t('security.threatDashboard.noServices') }}
           </span>
           <span class="card-detail">
-            {{ status.any_service_configured ? 'Ready for URL checks' : 'Configure API keys' }}
+            {{ status.any_service_configured ? t('security.threatDashboard.readyForChecks') : t('security.threatDashboard.configureApiKeys') }}
           </span>
         </div>
       </div>
@@ -77,14 +77,14 @@
     <!-- URL Check Section -->
     <div class="url-check-section">
       <div class="section-header">
-        <h3>URL Reputation Check</h3>
-        <p>Check any URL against threat intelligence services</p>
+        <h3>{{ t('security.threatDashboard.urlReputationCheck') }}</h3>
+        <p>{{ t('security.threatDashboard.urlReputationDesc') }}</p>
       </div>
       <div class="url-check-form">
         <input
           v-model="urlToCheck"
           type="url"
-          placeholder="https://example.com"
+          :placeholder="t('security.threatDashboard.urlPlaceholder')"
           class="url-input"
           @keyup.enter="checkUrl"
         />
@@ -95,7 +95,7 @@
         >
           <span v-if="checkLoading" class="spinner"></span>
           <span v-else>🔍</span>
-          {{ checkLoading ? 'Checking...' : 'Check URL' }}
+          {{ checkLoading ? t('security.threatDashboard.checking') : t('security.threatDashboard.checkUrl') }}
         </button>
       </div>
 
@@ -110,7 +110,7 @@
         </div>
         <div class="result-details">
           <div class="score-bar">
-            <div class="score-label">Safety Score</div>
+            <div class="score-label">{{ t('security.threatDashboard.safetyScore') }}</div>
             <div class="score-track">
               <div
                 class="score-fill"
@@ -129,11 +129,11 @@
               <span class="source-value">{{ (checkResult.urlvoid_score * 100).toFixed(0) }}%</span>
             </div>
             <div class="source-score">
-              <span class="source-name">Sources Checked:</span>
+              <span class="source-name">{{ t('security.threatDashboard.sourcesChecked') }}:</span>
               <span class="source-value">{{ checkResult.sources_checked }}</span>
             </div>
             <div v-if="checkResult.cached" class="source-score cached">
-              <span class="source-name">Cached Result</span>
+              <span class="source-name">{{ t('security.threatDashboard.cachedResult') }}</span>
               <span class="source-value">✓</span>
             </div>
           </div>
@@ -144,11 +144,10 @@
       <div v-if="!status.any_service_configured" class="no-services-warning">
         <span class="warning-icon">⚠️</span>
         <span class="warning-text">
-          No threat intelligence services configured.
-          Set <code>VIRUSTOTAL_API_KEY</code> or <code>URLVOID_API_KEY</code> environment variables.
+          {{ t('security.threatDashboard.noServicesWarning') }}
         </span>
         <router-link to="/settings/security" class="btn-settings">
-          Configure Settings →
+          {{ t('security.threatDashboard.configureSettings') }}
         </router-link>
       </div>
     </div>
@@ -156,29 +155,29 @@
     <!-- Domain Security Stats -->
     <div class="domain-stats-section">
       <div class="section-header">
-        <h3>Domain Security Configuration</h3>
-        <p>Current domain validation settings and lists</p>
+        <h3>{{ t('security.threatDashboard.domainSecurityConfig') }}</h3>
+        <p>{{ t('security.threatDashboard.domainSecurityDesc') }}</p>
       </div>
       <div class="domain-stats-grid">
         <div class="stat-card">
           <div class="stat-icon">✅</div>
           <div class="stat-value">{{ domainStats.whitelist_count || 0 }}</div>
-          <div class="stat-label">Whitelisted Domains</div>
+          <div class="stat-label">{{ t('security.threatDashboard.whitelistedDomains') }}</div>
         </div>
         <div class="stat-card danger">
           <div class="stat-icon">🚫</div>
           <div class="stat-value">{{ domainStats.blacklist_count || 0 }}</div>
-          <div class="stat-label">Blacklisted Domains</div>
+          <div class="stat-label">{{ t('security.threatDashboard.blacklistedDomains') }}</div>
         </div>
         <div class="stat-card warning">
           <div class="stat-icon">⚠️</div>
           <div class="stat-value">{{ domainStats.suspicious_tlds_count || 0 }}</div>
-          <div class="stat-label">Suspicious TLDs</div>
+          <div class="stat-label">{{ t('security.threatDashboard.suspiciousTlds') }}</div>
         </div>
         <div class="stat-card info">
           <div class="stat-icon">🔒</div>
-          <div class="stat-value">{{ domainStats.settings?.require_https ? 'Yes' : 'No' }}</div>
-          <div class="stat-label">Require HTTPS</div>
+          <div class="stat-value">{{ domainStats.settings?.require_https ? t('security.threatDashboard.yes') : t('security.threatDashboard.no') }}</div>
+          <div class="stat-label">{{ t('security.threatDashboard.requireHttps') }}</div>
         </div>
       </div>
     </div>
@@ -186,8 +185,8 @@
     <!-- Recent Checks History -->
     <div v-if="checkHistory.length > 0" class="history-section">
       <div class="section-header">
-        <h3>Recent Checks</h3>
-        <button class="btn-clear" @click="clearHistory">Clear History</button>
+        <h3>{{ t('security.threatDashboard.recentChecks') }}</h3>
+        <button class="btn-clear" @click="clearHistory">{{ t('security.threatDashboard.clearHistory') }}</button>
       </div>
       <div class="history-list">
         <div
@@ -208,9 +207,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import apiClient from '@/utils/ApiClient'
 
+const { t } = useI18n()
 const logger = createLogger('ThreatIntelligenceDashboard')
 
 /**
@@ -320,7 +321,7 @@ async function checkUrl() {
       urlvoid_score: null,
       sources_checked: 0,
       cached: false,
-      message: 'Failed to check URL'
+      message: t('security.threatDashboard.failedToCheckUrl')
     }
   } finally {
     checkLoading.value = false

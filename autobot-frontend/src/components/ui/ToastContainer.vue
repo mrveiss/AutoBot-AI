@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div class="toast-container" role="region" aria-label="Notifications" aria-live="polite">
+    <div class="toast-container" role="region" :aria-label="t('ui.toastContainer.notifications')" aria-live="polite">
       <TransitionGroup name="toast">
         <div
           v-for="toast in toasts"
@@ -18,7 +18,7 @@
           <button
             class="toast-close"
             @click="removeToast(toast.id)"
-            aria-label="Dismiss notification"
+            :aria-label="t('ui.toastContainer.dismissNotification')"
           >
             <i class="fas fa-times"></i>
           </button>
@@ -38,8 +38,10 @@
  * @author mrveiss
  * @copyright 2025 mrveiss
  */
+import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 
+const { t } = useI18n()
 const { toasts, removeToast } = useToast()
 
 const getIcon = (type: string): string => {

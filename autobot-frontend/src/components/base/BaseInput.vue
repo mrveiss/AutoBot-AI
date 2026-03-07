@@ -43,7 +43,7 @@
           type="button"
           class="clear-button"
           @click="handleClear"
-          aria-label="Clear input"
+          :aria-label="t('base.input.clearInput')"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -63,6 +63,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 interface Props {
   modelValue?: string | number
@@ -79,6 +80,8 @@ interface Props {
   autocomplete?: string
   id?: string
 }
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<Props>(), {
   type: 'text',

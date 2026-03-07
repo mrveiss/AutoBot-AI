@@ -1,20 +1,31 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# VNC Server systemd service - managed by Ansible (browser role)
+
 [Unit]
 Description=AutoBot VNC Server
 After=network.target
 
 [Service]
-Type=forking
+Type=simple
 User=autobot
 Group=autobot
 
-# VNC startup
-ExecStartPre=/bin/bash -c '/usr/bin/vncserver -kill {{ vnc_display }} > /dev/null 2>&1 || :'
-ExecStart=/usr/bin/vncserver {{ vnc_display }} -geometry 1280x720 -depth 24
+# Clean up stale lock files before starting
+ExecStartPre=/bin/sh -c '/usr/bin/vncserver -kill {{ vnc_display }} 2>/dev/null || true'
+ExecStartPre=/bin/sh -c 'rm -f /tmp/.X{{ vnc_display | replace(":", "") }}-lock /tmp/.X11-unix/X{{ vnc_display | replace(":", "") }} 2>/dev/null || true'
+
+# Start VNC server in foreground mode
+ExecStart=/usr/bin/vncserver {{ vnc_display }} -fg -geometry 1280x720 -depth 24 -localhost no
+
+# Stop VNC server
 ExecStop=/usr/bin/vncserver -kill {{ vnc_display }}
 
 # Restart policy
 Restart=on-failure
-RestartSec=5s
+RestartSec=10s
 
 # Logging
 StandardOutput=journal

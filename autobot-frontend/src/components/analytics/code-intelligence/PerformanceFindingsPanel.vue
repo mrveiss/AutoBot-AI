@@ -6,13 +6,13 @@
 <template>
   <div class="performance-panel">
     <div class="panel-header">
-      <h3><i class="fas fa-tachometer-alt"></i> Performance Issues</h3>
+      <h3><i class="fas fa-tachometer-alt"></i> {{ $t('analytics.findings.performance.title') }}</h3>
       <span v-if="findings.length > 0" class="count-badge">{{ findings.length }}</span>
     </div>
     <FindingsTable
       :findings="findings"
       :loading="loading"
-      empty-message="No performance issues found"
+      :empty-message="$t('analytics.findings.performance.emptyMessage')"
     />
   </div>
 </template>

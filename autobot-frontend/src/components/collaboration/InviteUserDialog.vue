@@ -9,9 +9,11 @@
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
 import { useChatStore } from '@/stores/useChatStore'
 
+const { t } = useI18n()
 const chatStore = useChatStore()
 const { inviteCollaborator, sessionPresence } = useSessionCollaboration()
 
@@ -85,7 +87,7 @@ const selectUser = (userId: string) => {
 // Send invitation
 const sendInvitation = async () => {
   if (!selectedUserId.value) {
-    errorMessage.value = 'Please select a user to invite'
+    errorMessage.value = t('collaboration.invite.selectUserError')
     return
   }
 
@@ -105,10 +107,10 @@ const sendInvitation = async () => {
       // Close dialog and reset
       closeDialog()
     } else {
-      errorMessage.value = 'Failed to send invitation'
+      errorMessage.value = t('collaboration.invite.sendFailed')
     }
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'An error occurred'
+    errorMessage.value = error instanceof Error ? error.message : t('collaboration.invite.genericError')
   } finally {
     inviting.value = false
   }
@@ -127,20 +129,20 @@ const closeDialog = () => {
 }
 
 // Role options
-const roleOptions = [
+const roleOptions = computed(() => [
   {
     value: 'collaborator' as const,
-    label: 'Editor',
-    description: 'Can view and edit session content',
+    label: t('collaboration.invite.roleEditor'),
+    description: t('collaboration.invite.roleEditorDesc'),
     icon: 'pencil-square'
   },
   {
     value: 'viewer' as const,
-    label: 'Viewer',
-    description: 'Can only view session content',
+    label: t('collaboration.invite.roleViewer'),
+    description: t('collaboration.invite.roleViewerDesc'),
     icon: 'eye'
   }
-]
+])
 </script>
 
 <template>
@@ -163,11 +165,11 @@ const roleOptions = [
           <!-- Header -->
           <div class="flex items-center justify-between px-6 py-4 border-b border-autobot-border">
             <h2 id="invite-dialog-title" class="text-lg font-semibold text-autobot-text-primary">
-              Invite to Session
+              {{ $t('collaboration.invite.title') }}
             </h2>
             <button
               class="text-autobot-text-muted hover:text-autobot-text-primary transition-colors"
-              aria-label="Close dialog"
+              :aria-label="$t('collaboration.invite.closeDialog')"
               @click="closeDialog"
             >
               <i class="bi bi-x-lg" />
@@ -179,7 +181,7 @@ const roleOptions = [
             <!-- Search input -->
             <div>
               <label for="user-search" class="block text-sm font-medium text-autobot-text-secondary mb-2">
-                Search users
+                {{ $t('collaboration.invite.searchUsers') }}
               </label>
               <div class="relative">
                 <i class="bi bi-search absolute left-3 top-1/2 -translate-y-1/2 text-autobot-text-muted" />
@@ -187,7 +189,7 @@ const roleOptions = [
                   id="user-search"
                   v-model="searchQuery"
                   type="text"
-                  placeholder="Search by username or email..."
+                  :placeholder="$t('collaboration.invite.searchPlaceholder')"
                   class="w-full pl-10 pr-4 py-2 bg-autobot-bg-tertiary border border-autobot-border rounded-lg text-autobot-text-primary placeholder-autobot-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
                   autocomplete="off"
                 >
@@ -199,7 +201,7 @@ const roleOptions = [
               <!-- Available users -->
               <div v-if="availableUsers.length > 0">
                 <div class="text-xs font-medium text-autobot-text-muted uppercase tracking-wide mb-2">
-                  Available ({{ availableUsers.length }})
+                  {{ $t('collaboration.invite.available', { count: availableUsers.length }) }}
                 </div>
                 <button
                   v-for="user in availableUsers"
@@ -233,7 +235,7 @@ const roleOptions = [
               <!-- Already in session -->
               <div v-if="alreadyInSession.length > 0" class="mt-3">
                 <div class="text-xs font-medium text-autobot-text-muted uppercase tracking-wide mb-2">
-                  Already in session ({{ alreadyInSession.length }})
+                  {{ $t('collaboration.invite.alreadyInSession', { count: alreadyInSession.length }) }}
                 </div>
                 <div
                   v-for="user in alreadyInSession"
@@ -252,7 +254,7 @@ const roleOptions = [
                     </div>
                   </div>
                   <span class="text-xs text-autobot-text-muted">
-                    In session
+                    {{ $t('collaboration.invite.inSession') }}
                   </span>
                 </div>
               </div>
@@ -263,14 +265,14 @@ const roleOptions = [
                 class="text-center py-8 text-autobot-text-muted"
               >
                 <i class="bi bi-search text-2xl mb-2" />
-                <div class="text-sm">No users found</div>
+                <div class="text-sm">{{ $t('collaboration.invite.noUsersFound') }}</div>
               </div>
             </div>
 
             <!-- Role selection -->
             <div>
               <label class="block text-sm font-medium text-autobot-text-secondary mb-2">
-                Permission level
+                {{ $t('collaboration.invite.permissionLevel') }}
               </label>
               <div class="space-y-2">
                 <button
@@ -329,7 +331,7 @@ const roleOptions = [
               class="px-4 py-2 text-sm rounded bg-autobot-bg-tertiary hover:bg-autobot-bg-secondary text-autobot-text-primary transition-colors"
               @click="closeDialog"
             >
-              Cancel
+              {{ $t('common.cancel') }}
             </button>
             <button
               class="px-4 py-2 text-sm rounded bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -337,7 +339,7 @@ const roleOptions = [
               @click="sendInvitation"
             >
               <i v-if="inviting" class="bi bi-arrow-repeat animate-spin" />
-              <span>{{ inviting ? 'Sending...' : 'Send Invitation' }}</span>
+              <span>{{ inviting ? $t('collaboration.invite.sending') : $t('collaboration.invite.sendInvitation') }}</span>
             </button>
           </div>
         </div>

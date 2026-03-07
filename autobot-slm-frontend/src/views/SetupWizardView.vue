@@ -14,13 +14,22 @@
     <div class="wizard-header">
       <h1>AutoBot Setup Wizard</h1>
       <p class="subtitle">Configure your fleet in a few easy steps</p>
-      <button
-        v-if="currentStepIndex > 0 && currentStepIndex < steps.length - 1"
-        class="skip-btn"
-        @click="skipWizard"
-      >
-        Skip Setup
-      </button>
+      <div class="header-actions">
+        <button
+          v-if="currentStep !== 'complete'"
+          class="skip-btn"
+          @click="skipWizard"
+        >
+          Skip Setup
+        </button>
+        <button
+          class="close-btn"
+          @click="exitWizard"
+          title="Exit wizard without completing"
+        >
+          &#10005;
+        </button>
+      </div>
     </div>
 
     <!-- Progress bar -->
@@ -185,21 +194,78 @@
 
         <div class="role-assignment" v-for="node in nodes" :key="node.node_id">
           <h3>{{ node.hostname }} ({{ node.ip_address }})</h3>
-          <div class="role-chips">
-            <label
-              v-for="role in availableRoles"
-              :key="role.name"
-              class="role-chip"
-              :class="{ selected: (nodeRoles[node.node_id] || []).includes(role.name) }"
+
+          <!-- Core Services (required) (#1350) -->
+          <div class="role-section">
+            <span class="section-header">Core Services</span>
+            <div class="role-chips">
+              <label
+                v-for="role in requiredRoles"
+                :key="role.name"
+                class="role-chip"
+                :class="[
+                  { selected: (nodeRoles[node.node_id] || []).includes(role.name) },
+                  `state-${roleState(node, role.name)}`,
+                ]"
+                :title="roleState(node, role.name) === 'running'
+                  ? role.display_name + ' (running)'
+                  : role.display_name"
+              >
+                <input
+                  type="checkbox"
+                  :value="role.name"
+                  :checked="(nodeRoles[node.node_id] || []).includes(role.name)"
+                  @change="toggleRole(node.node_id, role.name)"
+                />
+                <span class="state-dot"></span>
+                {{ role.display_name || role.name }}
+              </label>
+            </div>
+          </div>
+
+          <!-- Optional Services (#1350) -->
+          <div class="role-section" v-if="optionalRoles.length">
+            <span class="section-header optional-header">Optional Services</span>
+            <div class="role-chips">
+              <label
+                v-for="role in optionalRoles"
+                :key="role.name"
+                class="role-chip optional-chip"
+                :class="[
+                  { selected: (nodeRoles[node.node_id] || []).includes(role.name) },
+                  `state-${roleState(node, role.name)}`,
+                ]"
+                :title="roleState(node, role.name) === 'running'
+                  ? role.display_name + ' (running)'
+                  : role.degraded_without.length
+                    ? 'Without: ' + role.degraded_without.join('; ')
+                    : role.display_name"
+              >
+                <input
+                  type="checkbox"
+                  :value="role.name"
+                  :checked="(nodeRoles[node.node_id] || []).includes(role.name)"
+                  @change="toggleRole(node.node_id, role.name)"
+                />
+                <span class="state-dot"></span>
+                {{ role.display_name || role.name }}
+              </label>
+            </div>
+          </div>
+
+          <!-- Infra roles: auto-deployed, shown as locked (#1344) -->
+          <div
+            v-if="(nodeRoles[node.node_id] || []).some(r => !INFRA_ROLES.includes(r))"
+            class="infra-roles-row"
+          >
+            <span class="infra-label">Auto-deployed:</span>
+            <span
+              v-for="infra in INFRA_ROLES"
+              :key="infra"
+              class="role-chip infra-chip"
             >
-              <input
-                type="checkbox"
-                :value="role.name"
-                :checked="(nodeRoles[node.node_id] || []).includes(role.name)"
-                @change="toggleRole(node.node_id, role.name)"
-              />
-              {{ role.display_name || role.name }}
-            </label>
+              {{ infra === 'autobot-shared' ? 'Shared Library' : 'SLM Agent' }}
+            </span>
           </div>
         </div>
 
@@ -266,7 +332,7 @@
         <button
           class="btn-primary"
           @click="completeStep('verify_health')"
-          :disabled="!fleetHealth"
+          :disabled="!fleetHealth || !fleetHealth.ready"
         >
           Continue
         </button>
@@ -290,7 +356,7 @@
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
@@ -298,7 +364,20 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('SetupWizard')
 
 const router = useRouter()
-const api = useSlmApi()
+const {
+  getNodes: fetchNodes,
+  getRoles: fetchRoles,
+  registerNode,
+  testConnection,
+  enrollNode,
+  updateNodeRoles,
+  getWizardStatus,
+  completeWizardStep,
+  skipWizardSetup,
+  provisionWizardFleet,
+  getProvisionStatus,
+  validateWizardFleet,
+} = useSlmApi()
 
 // ── Wizard state ──────────────────────────────────────────────────────────
 
@@ -333,7 +412,13 @@ interface Node {
   ip_address: string
   status: string
   roles: string[]
+  detected_roles: string[]
+  ssh_user?: string
+  ssh_port?: number
+  auth_method?: string
 }
+
+type RoleState = 'running' | 'assigned' | 'available'
 
 const nodes = ref<Node[]>([])
 const newNode = ref({
@@ -359,7 +444,7 @@ const allConnectionsTested = computed(() =>
 const enrolling = ref(false)
 const allNodesEnrolled = computed(() =>
   nodes.value.length > 0 &&
-  nodes.value.every(n => ['online', 'enrolling'].includes(n.status))
+  nodes.value.every(n => n.status === 'online')
 )
 
 // ── Role assignment ───────────────────────────────────────────────────────
@@ -367,11 +452,25 @@ const allNodesEnrolled = computed(() =>
 interface RoleInfo {
   name: string
   display_name: string
+  required: boolean
+  degraded_without: string[]
 }
+
+const INFRA_ROLES = ['autobot-shared', 'slm-agent']
 
 const availableRoles = ref<RoleInfo[]>([])
 const nodeRoles = ref<Record<string, string[]>>({})
 const savingRoles = ref(false)
+
+const requiredRoles = computed(() => availableRoles.value.filter(r => r.required))
+const optionalRoles = computed(() => availableRoles.value.filter(r => !r.required))
+
+/** Determine per-chip state for a role on a given node (#1353). */
+function roleState(node: Node, roleName: string): RoleState {
+  if (node.detected_roles.includes(roleName)) return 'running'
+  if ((nodeRoles.value[node.node_id] || []).includes(roleName)) return 'assigned'
+  return 'available'
+}
 
 // ── Provisioning ──────────────────────────────────────────────────────────
 
@@ -394,7 +493,7 @@ const fleetHealth = ref<{
 
 async function loadWizardStatus() {
   try {
-    const { data } = await api.get('/setup/status')
+    const data = await getWizardStatus()
     steps.value = data.steps
     currentStep.value = data.current_step
     currentStepIndex.value = data.current_step_index
@@ -408,8 +507,18 @@ async function loadWizardStatus() {
 
 async function loadNodes() {
   try {
-    const { data } = await api.get('/nodes')
-    nodes.value = Array.isArray(data) ? data : data.nodes || []
+    const result = await fetchNodes()
+    nodes.value = result.map(n => ({
+      node_id: n.node_id,
+      hostname: n.hostname,
+      ip_address: n.ip_address,
+      status: n.status,
+      roles: n.roles as string[],
+      detected_roles: n.detected_roles ?? [],
+      ssh_user: n.ssh_user,
+      ssh_port: n.ssh_port,
+      auth_method: n.auth_method,
+    }))
     // Initialize role map from current node roles
     for (const node of nodes.value) {
       nodeRoles.value[node.node_id] = node.roles || []
@@ -421,8 +530,16 @@ async function loadNodes() {
 
 async function loadRoles() {
   try {
-    const { data } = await api.get('/roles')
-    availableRoles.value = Array.isArray(data) ? data : data.roles || []
+    const result = await fetchRoles()
+    // Filter out SLM-internal and infra roles (#1349, #1344)
+    availableRoles.value = result
+      .filter(r => !r.name.startsWith('slm-') && !INFRA_ROLES.includes(r.name))
+      .map(r => ({
+        name: r.name,
+        display_name: r.description || r.name,
+        required: r.required ?? false,
+        degraded_without: r.degraded_without ?? [],
+      }))
   } catch {
     availableRoles.value = []
   }
@@ -430,7 +547,7 @@ async function loadRoles() {
 
 async function completeStep(step: string) {
   try {
-    await api.post('/setup/complete-step', { step })
+    await completeWizardStep(step)
     await loadWizardStatus()
     // Load data needed for the next step
     if (currentStep.value === 'add_nodes' || currentStep.value === 'test_connections') {
@@ -448,7 +565,7 @@ async function completeStep(step: string) {
 async function skipWizard() {
   if (confirm('Skip the setup wizard? You can configure nodes later from the Fleet page.')) {
     try {
-      await api.post('/setup/skip')
+      await skipWizardSetup()
       router.push({ name: 'fleet' })
     } catch (err) {
       logger.error('Failed to skip wizard:', err)
@@ -460,11 +577,11 @@ async function addNode() {
   if (!newNode.value.hostname || !newNode.value.ip_address) return
   addingNode.value = true
   try {
-    await api.post('/nodes', {
+    await registerNode({
       hostname: newNode.value.hostname,
       ip_address: newNode.value.ip_address,
       ssh_user: newNode.value.ssh_user || 'autobot',
-      auth_method: newNode.value.auth_method,
+      auth_method: newNode.value.auth_method as 'key' | 'password',
       ssh_password: newNode.value.auth_method === 'password' ? newNode.value.ssh_password : undefined,
       roles: [],
     })
@@ -483,11 +600,11 @@ async function testAllConnections() {
   for (const node of nodes.value) {
     try {
       connectionResults.value[node.node_id] = 'testing'
-      await api.post('/nodes/test-connection', {
+      await testConnection({
         ip_address: node.ip_address,
-        ssh_user: 'autobot',
-        ssh_port: 22,
-        auth_method: 'key',
+        ssh_user: node.ssh_user || 'autobot',
+        ssh_port: node.ssh_port || 22,
+        auth_method: (node.auth_method || 'key') as 'key' | 'password',
       })
       connectionResults.value[node.node_id] = 'success'
     } catch {
@@ -502,7 +619,7 @@ async function enrollAllNodes() {
   for (const node of nodes.value) {
     if (node.status === 'online') continue
     try {
-      await api.post(`/nodes/${node.node_id}/enroll`)
+      await enrollNode(node.node_id)
     } catch (err) {
       logger.error(`Failed to enroll ${node.hostname}:`, err)
     }
@@ -515,12 +632,39 @@ async function enrollAllNodes() {
 }
 
 function toggleRole(nodeId: string, roleName: string) {
-  const current = nodeRoles.value[nodeId] || []
+  let current = nodeRoles.value[nodeId] || []
   if (current.includes(roleName)) {
-    nodeRoles.value[nodeId] = current.filter(r => r !== roleName)
+    current = current.filter(r => r !== roleName)
   } else {
-    nodeRoles.value[nodeId] = [...current, roleName]
+    // Enforce uniqueness: unassign this role from any other node (#1384)
+    if (!INFRA_ROLES.includes(roleName)) {
+      for (const node of nodes.value) {
+        if (node.node_id !== nodeId) {
+          const otherRoles = nodeRoles.value[node.node_id] || []
+          if (otherRoles.includes(roleName)) {
+            let updated = otherRoles.filter(r => r !== roleName)
+            // Remove infra roles if no user roles remain
+            const hasUser = updated.some(r => !INFRA_ROLES.includes(r))
+            if (!hasUser) {
+              updated = updated.filter(r => !INFRA_ROLES.includes(r))
+            }
+            nodeRoles.value[node.node_id] = updated
+          }
+        }
+      }
+    }
+    current = [...current, roleName]
   }
+  // Auto-inject/remove infra roles (#1344)
+  const hasUserRoles = current.some(r => !INFRA_ROLES.includes(r))
+  if (hasUserRoles) {
+    for (const infra of INFRA_ROLES) {
+      if (!current.includes(infra)) current.push(infra)
+    }
+  } else {
+    current = current.filter(r => !INFRA_ROLES.includes(r))
+  }
+  nodeRoles.value[nodeId] = current
 }
 
 async function saveRoles() {
@@ -528,7 +672,7 @@ async function saveRoles() {
   try {
     for (const node of nodes.value) {
       const roles = nodeRoles.value[node.node_id] || []
-      await api.patch(`/nodes/${node.node_id}/roles`, { roles })
+      await updateNodeRoles(node.node_id, roles as any)
     }
   } catch (err) {
     logger.error('Failed to save roles:', err)
@@ -537,28 +681,67 @@ async function saveRoles() {
   }
 }
 
+let provisionPollTimer: ReturnType<typeof setInterval> | null = null
+
 async function provisionFleet() {
   provisioning.value = true
   provisionOutput.value = 'Starting fleet provisioning...\n'
+  let linesSeen = 0
+
   try {
-    const { data } = await api.post('/setup/provision-fleet', {
-      node_ids: nodes.value.map(n => n.node_id),
-    })
-    provisionOutput.value += data.output || 'Provisioning completed.\n'
-    provisionComplete.value = true
+    await provisionWizardFleet(nodes.value.map(n => n.node_id))
   } catch (err: unknown) {
     const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Unknown error'
     provisionOutput.value += `\nERROR: ${detail}\n`
-  } finally {
     provisioning.value = false
+    return
+  }
+
+  // Poll for progress (#1384)
+  provisionPollTimer = setInterval(async () => {
+    try {
+      const status = await getProvisionStatus(linesSeen)
+      if (status.lines.length > 0) {
+        provisionOutput.value += status.lines.join('\n') + '\n'
+        linesSeen = status.total_lines
+      }
+      if (status.elapsed_seconds) {
+        provisionOutput.value = provisionOutput.value.replace(
+          /^Starting fleet provisioning\.\.\.\n/,
+          `Provisioning in progress (${Math.round(status.elapsed_seconds)}s)...\n`
+        )
+      }
+      if (status.status === 'completed') {
+        stopProvisionPolling()
+        provisionOutput.value += '\nProvisioning completed successfully.\n'
+        provisionComplete.value = true
+        provisioning.value = false
+      } else if (status.status === 'failed') {
+        stopProvisionPolling()
+        provisionOutput.value += `\nERROR: ${status.error || 'Provisioning failed'}\n`
+        provisioning.value = false
+      }
+    } catch {
+      // Poll failure is transient — keep trying
+    }
+  }, 2000)
+}
+
+function stopProvisionPolling() {
+  if (provisionPollTimer) {
+    clearInterval(provisionPollTimer)
+    provisionPollTimer = null
   }
 }
+
+onUnmounted(() => {
+  stopProvisionPolling()
+})
 
 async function checkFleetHealth() {
   checkingHealth.value = true
   try {
-    const { data } = await api.get('/setup/validate')
-    fleetHealth.value = data
+    fleetHealth.value = await validateWizardFleet()
   } catch {
     fleetHealth.value = null
   } finally {
@@ -567,6 +750,10 @@ async function checkFleetHealth() {
 }
 
 function goToDashboard() {
+  router.push({ name: 'fleet' })
+}
+
+function exitWizard() {
   router.push({ name: 'fleet' })
 }
 
@@ -604,10 +791,16 @@ onMounted(async () => {
   margin-top: 0.25rem;
 }
 
-.skip-btn {
+.header-actions {
   position: absolute;
   top: 0;
   right: 0;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.skip-btn {
   background: none;
   border: 1px solid var(--border-color, #444);
   color: var(--text-secondary, #a0a0a0);
@@ -620,6 +813,25 @@ onMounted(async () => {
 .skip-btn:hover {
   border-color: var(--text-primary, #e0e0e0);
   color: var(--text-primary, #e0e0e0);
+}
+
+.close-btn {
+  background: none;
+  border: 1px solid var(--border-color, #444);
+  color: var(--text-secondary, #a0a0a0);
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  border-color: var(--color-danger, #ef4444);
+  color: var(--color-danger, #ef4444);
 }
 
 /* Progress bar */
@@ -923,6 +1135,80 @@ input.full-width {
 
 .role-chip input[type="checkbox"] {
   display: none;
+}
+
+.role-section {
+  margin-bottom: 0.75rem;
+}
+
+.section-header {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, #aaa);
+  margin-bottom: 0.4rem;
+}
+
+.optional-header {
+  color: var(--text-muted, #888);
+}
+
+.optional-chip {
+  opacity: 0.85;
+}
+
+.optional-chip.selected {
+  opacity: 1;
+}
+
+.infra-roles-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-muted, #888);
+}
+
+.infra-label {
+  font-style: italic;
+}
+
+.infra-chip {
+  background: var(--bg-tertiary, #252525);
+  border-color: var(--border-color, #555);
+  opacity: 0.7;
+  cursor: default;
+  font-size: 0.75rem;
+}
+
+/* Role state indicators (#1353) */
+.state-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border-color, #555);
+  flex-shrink: 0;
+}
+
+.state-running .state-dot {
+  background: #22c55e;
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.5);
+}
+
+.state-assigned .state-dot {
+  background: var(--color-primary, #3b82f6);
+}
+
+.state-available .state-dot {
+  background: var(--border-color, #555);
+}
+
+.state-running {
+  border-color: rgba(34, 197, 94, 0.4);
 }
 
 /* Provision log */

@@ -728,6 +728,45 @@ class AdvancedRAGOptimizer:
             "gpu_acceleration": self.semantic_chunker is not None,
         }
 
+    async def advanced_search_with_refinement(
+        self,
+        query: str,
+        max_results: int = 5,
+        enable_reranking: bool = True,
+    ) -> Tuple[List[SearchResult], RAGMetrics, list]:
+        """Run advanced_search with RLM-driven query refinement (#1382).
+
+        Falls back to standard advanced_search if the rlm module is
+        unavailable or if the refiner deems the first-pass results
+        sufficient.
+
+        Returns:
+            (results, metrics, refinement_history)
+        """
+        try:
+            from rlm.rag_refiner import AdaptiveRAGRefiner
+        except ImportError:
+            results, metrics = await self.advanced_search(
+                query, max_results, enable_reranking
+            )
+            return results, metrics, []
+
+        refiner = AdaptiveRAGRefiner()
+
+        async def _search_fn(q: str) -> List[SearchResult]:
+            res, _ = await self.advanced_search(q, max_results, enable_reranking)
+            return res
+
+        results, history = await refiner.adaptive_refine(query, _search_fn)
+
+        # Re-run with metrics for the final query
+        final_query = history[-1]["query"] if history else query
+        final_results, metrics = await self.advanced_search(
+            final_query, max_results, enable_reranking
+        )
+
+        return final_results, metrics, history
+
 
 # Global instance for system integration (thread-safe)
 import asyncio as _asyncio_lock

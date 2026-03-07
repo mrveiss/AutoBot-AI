@@ -1,7 +1,7 @@
 <template>
   <BasePanel variant="bordered" size="medium">
     <template #header>
-      <h3><i class="fas fa-chart-bar"></i> Integration Status</h3>
+      <h3><i class="fas fa-chart-bar"></i> {{ $t('manpage.integrationStatus.title') }}</h3>
       <BaseButton
         size="sm"
         variant="outline"
@@ -9,7 +9,7 @@
         :disabled="loading"
       >
         <i class="fas fa-sync" :class="{ 'fa-spin': loading }"></i>
-        Refresh
+        {{ $t('manpage.integrationStatus.refresh') }}
       </BaseButton>
     </template>
 
@@ -17,15 +17,15 @@
       <div v-if="status.status === 'not_integrated'" class="not-integrated">
         <i class="fas fa-info-circle"></i>
         <div>
-          <strong>Man pages not yet integrated</strong>
-          <p>Click "Integrate Man Pages" below to extract documentation from your system.</p>
+          <strong>{{ $t('manpage.integrationStatus.notIntegratedTitle') }}</strong>
+          <p>{{ $t('manpage.integrationStatus.notIntegratedDesc') }}</p>
         </div>
       </div>
 
       <div v-else-if="status.status === 'error'" class="error-state">
         <i class="fas fa-exclamation-circle"></i>
         <div>
-          <strong>Integration Error</strong>
+          <strong>{{ $t('manpage.integrationStatus.errorTitle') }}</strong>
           <p>{{ status.message }}</p>
         </div>
       </div>
@@ -34,29 +34,29 @@
         <div class="stats-grid">
           <div class="stat-item">
             <div class="stat-number">{{ status.successful || 0 }}</div>
-            <div class="stat-label">Successful</div>
+            <div class="stat-label">{{ $t('manpage.integrationStatus.successful') }}</div>
           </div>
           <div class="stat-item">
             <div class="stat-number">{{ status.processed || 0 }}</div>
-            <div class="stat-label">Processed</div>
+            <div class="stat-label">{{ $t('manpage.integrationStatus.processed') }}</div>
           </div>
           <div class="stat-item">
             <div class="stat-number">{{ status.current_man_page_files || 0 }}</div>
-            <div class="stat-label">Knowledge Files</div>
+            <div class="stat-label">{{ $t('manpage.integrationStatus.knowledgeFiles') }}</div>
           </div>
           <div class="stat-item">
             <div class="stat-number">{{ status.total_available_tools || 0 }}</div>
-            <div class="stat-label">Available Tools</div>
+            <div class="stat-label">{{ $t('manpage.integrationStatus.availableTools') }}</div>
           </div>
         </div>
 
         <div v-if="status.integration_date" class="integration-date">
           <i class="fas fa-clock"></i>
-          Last integrated: {{ formatDate(status.integration_date) }}
+          {{ $t('manpage.integrationStatus.lastIntegrated') }} {{ formatDate(status.integration_date) }}
         </div>
 
         <div v-if="status.available_commands" class="available-commands">
-          <h4>Integrated Commands ({{ status.available_commands.length }}):</h4>
+          <h4>{{ $t('manpage.integrationStatus.integratedCommands', { count: status.available_commands.length }) }}</h4>
           <div class="command-tags">
             <span
               v-for="command in status.available_commands"
@@ -72,7 +72,7 @@
 
     <div v-if="loading" class="loading">
       <i class="fas fa-spinner fa-spin"></i>
-      Loading integration status...
+      {{ $t('manpage.integrationStatus.loadingStatus') }}
     </div>
   </BasePanel>
 </template>

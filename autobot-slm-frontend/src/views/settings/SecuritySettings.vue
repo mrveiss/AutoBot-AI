@@ -4,6 +4,7 @@
 // Author: mrveiss
 
 import { ref, reactive, onMounted } from 'vue'
+import { formatDateTime } from '@/composables/useTimezone'
 import {
   useMfaApi,
   type MFASetupResponse,
@@ -216,8 +217,7 @@ function copyToClipboard(text: string): void {
 }
 
 function formatDate(dateStr: string | null): string {
-  if (!dateStr) return 'Never'
-  return new Date(dateStr).toLocaleString()
+  return formatDateTime(dateStr)
 }
 
 onMounted(async () => {

@@ -1,7 +1,7 @@
 <template>
   <BasePanel v-if="show" variant="bordered" size="medium">
     <template #header>
-      <h3><i class="fas fa-search"></i> Search Man Page Knowledge</h3>
+      <h3><i class="fas fa-search"></i> {{ $t('manpage.searchPanel.title') }}</h3>
     </template>
 
     <div class="search-input">
@@ -10,7 +10,7 @@
         @input="$emit('update:query', ($event.target as HTMLInputElement).value)"
         @keyup.enter="$emit('search')"
         type="text"
-        placeholder="Search for commands, patterns, network tools, etc..."
+        :placeholder="$t('manpage.searchPanel.placeholder')"
         class="form-input"
       >
       <BaseButton
@@ -19,24 +19,24 @@
         :disabled="!query.trim() || loading"
       >
         <i class="fas fa-search"></i>
-        Search
+        {{ $t('manpage.searchPanel.search') }}
       </BaseButton>
     </div>
 
     <div v-if="results" class="search-results">
-      <h4>Search Results for "{{ lastQuery }}":</h4>
+      <h4>{{ $t('manpage.searchPanel.resultsFor', { query: lastQuery }) }}</h4>
 
       <EmptyState
         v-if="results.length === 0"
         icon="fas fa-info-circle"
-        message='No results found. Try different keywords like "network", "file", "process".'
+        :message="$t('manpage.searchPanel.noResults')"
       />
 
       <div v-else class="result-list">
         <div v-for="result in results" :key="result.command" class="result-item">
           <div class="result-header">
             <strong>{{ result.command }}</strong>
-            <span class="relevance-score">Score: {{ result.relevance_score }}</span>
+            <span class="relevance-score">{{ $t('manpage.searchPanel.score', { score: result.relevance_score }) }}</span>
           </div>
           <div class="result-purpose">{{ result.purpose }}</div>
           <div class="result-meta">

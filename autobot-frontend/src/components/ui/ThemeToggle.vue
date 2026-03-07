@@ -13,7 +13,7 @@
   <div class="theme-toggle" :class="{ 'theme-toggle--compact': compact }">
     <label v-if="showLabel" class="theme-toggle__label">
       <i class="fas fa-palette"></i>
-      <span>Theme</span>
+      <span>{{ t('ui.themeToggle.theme') }}</span>
     </label>
 
     <!-- Dropdown mode (default) -->
@@ -21,7 +21,7 @@
       <select
         v-model="selectedTheme"
         class="theme-toggle__select"
-        :aria-label="'Select theme'"
+        :aria-label="t('ui.themeToggle.selectTheme')"
         @change="handleThemeChange"
       >
         <option
@@ -57,11 +57,11 @@
     <button
       v-else-if="mode === 'toggle'"
       class="theme-toggle__simple"
-      :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+      :aria-label="isDark ? t('ui.themeToggle.switchToLight') : t('ui.themeToggle.switchToDark')"
       @click="toggleTheme"
     >
       <i :class="isDark ? 'fas fa-sun' : 'fas fa-moon'"></i>
-      <span v-if="!compact">{{ isDark ? 'Light' : 'Dark' }}</span>
+      <span v-if="!compact">{{ isDark ? t('ui.themeToggle.light') : t('ui.themeToggle.dark') }}</span>
     </button>
   </div>
 </template>
@@ -82,6 +82,7 @@
  */
 
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useTheme, type Theme } from '@/composables/useTheme'
 
 interface Props {
@@ -96,6 +97,7 @@ const props = withDefaults(defineProps<Props>(), {
   showLabel: true
 })
 
+const { t } = useI18n()
 const { theme, setTheme, toggleTheme, isDark, availableThemes, themeLabels } = useTheme()
 
 // Local state for v-model binding

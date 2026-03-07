@@ -17,8 +17,10 @@ import { ref, computed, watch } from 'vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('DocumentExportModal')
+const { t } = useI18n()
 
 // =============================================================================
 // Type Definitions
@@ -73,29 +75,29 @@ const isOpen = computed({
 const documentCount = computed(() => props.documents?.length || 0)
 
 const modalTitle = computed(() => {
-  return props.title || `Export ${documentCount.value} Document${documentCount.value !== 1 ? 's' : ''}`
+  return props.title || t('knowledge.modals.export.title', { count: documentCount.value })
 })
 
-const formatOptions = [
+const formatOptions = computed(() => [
   {
     value: 'markdown' as const,
-    label: 'Markdown',
+    label: t('knowledge.modals.export.formatMarkdown'),
     icon: 'fas fa-file-alt',
-    description: 'Best for documentation and readability'
+    description: t('knowledge.modals.export.formatMarkdownDesc')
   },
   {
     value: 'json' as const,
-    label: 'JSON',
+    label: t('knowledge.modals.export.formatJson'),
     icon: 'fas fa-file-code',
-    description: 'Best for data processing and imports'
+    description: t('knowledge.modals.export.formatJsonDesc')
   },
   {
     value: 'txt' as const,
-    label: 'Plain Text',
+    label: t('knowledge.modals.export.formatPlainText'),
     icon: 'fas fa-file',
-    description: 'Simple format, no formatting'
+    description: t('knowledge.modals.export.formatPlainTextDesc')
   }
-]
+])
 
 // =============================================================================
 // Methods
@@ -108,7 +110,7 @@ function closeModal(): void {
 
 async function performExport(): Promise<void> {
   if (documentCount.value === 0) {
-    error.value = 'No documents to export'
+    error.value = t('knowledge.modals.export.noDocuments')
     return
   }
 
@@ -183,7 +185,7 @@ async function performExport(): Promise<void> {
     closeModal()
   } catch (err) {
     logger.error('Export failed:', err)
-    error.value = 'Failed to export documents'
+    error.value = t('knowledge.modals.export.exportFailed')
   } finally {
     isExporting.value = false
   }
@@ -216,12 +218,12 @@ watch(() => props.modelValue, (isOpen) => {
       <!-- Document Count -->
       <div class="export-summary">
         <i class="fas fa-file-export"></i>
-        <span>{{ documentCount }} document{{ documentCount !== 1 ? 's' : '' }} will be exported</span>
+        <span>{{ $t('knowledge.modals.export.documentCount', { count: documentCount }) }}</span>
       </div>
 
       <!-- Format Selection -->
       <div class="form-group">
-        <label>Export Format</label>
+        <label>{{ $t('knowledge.modals.export.exportFormat') }}</label>
         <div class="format-options">
           <label
             v-for="format in formatOptions"
@@ -252,7 +254,7 @@ watch(() => props.modelValue, (isOpen) => {
             type="checkbox"
             v-model="includeMetadata"
           />
-          <span>Include metadata (paths, dates, etc.)</span>
+          <span>{{ $t('knowledge.modals.export.includeMetadata') }}</span>
         </label>
       </div>
 
@@ -263,7 +265,7 @@ watch(() => props.modelValue, (isOpen) => {
           @click="closeModal"
           :disabled="isExporting"
         >
-          Cancel
+          {{ $t('knowledge.modals.export.cancel') }}
         </BaseButton>
         <BaseButton
           variant="primary"
@@ -272,7 +274,7 @@ watch(() => props.modelValue, (isOpen) => {
         >
           <i v-if="isExporting" class="fas fa-spinner fa-spin"></i>
           <i v-else class="fas fa-download"></i>
-          Export
+          {{ $t('knowledge.modals.export.export') }}
         </BaseButton>
       </div>
     </div>

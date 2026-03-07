@@ -6,13 +6,16 @@ import logging
 import os
 import tempfile
 
-from fastapi import APIRouter, File, Form, Request, UploadFile
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 from services.tts_client import get_tts_client
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(check_admin_permission)],
+)
 logger = logging.getLogger(__name__)
 
 
@@ -104,6 +107,7 @@ async def voice_synthesize_api(
     request: Request,
     text: str = Form(...),
     voice_id: str = Form(""),
+    language: str = Form(""),
     user_role: str = Form("user"),
 ):
     """Synthesize speech via Pocket TTS worker. Returns audio/wav stream."""
@@ -118,7 +122,7 @@ async def voice_synthesize_api(
         )
 
     tts = get_tts_client()
-    wav_bytes = await tts.synthesize(text, voice_id=voice_id)
+    wav_bytes = await tts.synthesize(text, voice_id=voice_id, language=language)
     security_layer.audit_log(
         "voice_synthesize", user_role, "success", {"text_preview": text[:50]}
     )
@@ -224,20 +228,35 @@ _MIME_TO_SUFFIX = {
 }
 
 
-def _whisper_sync(pipe, audio_bytes: bytes, suffix: str) -> dict:
-    """Blocking Whisper inference — call via asyncio.to_thread (#1030)."""
+def _whisper_sync(pipe, audio_bytes: bytes, suffix: str, language: str = "") -> dict:
+    """Blocking Whisper inference — call via asyncio.to_thread (#1030).
+
+    Args:
+        language: BCP-47 language hint (e.g. "en", "de"). Empty = auto-detect.
+    """
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(audio_bytes)
         tmp_path = tmp.name
 
     try:
-        output = pipe(tmp_path, return_timestamps=False)
+        generate_kwargs = {}
+        if language:
+            generate_kwargs["language"] = language
+        output = pipe(
+            tmp_path,
+            return_timestamps=False,
+            generate_kwargs=generate_kwargs or None,
+        )
         text = output.get("text", "").strip() if isinstance(output, dict) else ""
-        language = (
+        detected_lang = (
             output.get("language", "unknown") if isinstance(output, dict) else "unknown"
         )
         confidence = 0.9 if text else 0.0
-        return {"text": text, "language": language, "confidence": confidence}
+        return {
+            "text": text,
+            "language": detected_lang,
+            "confidence": confidence,
+        }
     except Exception as exc:
         logger.warning("Whisper transcription failed: %s", exc)
         return {"text": "", "language": "unknown", "confidence": 0.0}
@@ -248,7 +267,9 @@ def _whisper_sync(pipe, audio_bytes: bytes, suffix: str) -> dict:
             pass
 
 
-async def _transcribe_with_whisper(audio_bytes: bytes, content_type: str) -> dict:
+async def _transcribe_with_whisper(
+    audio_bytes: bytes, content_type: str, language: str = ""
+) -> dict:
     """Run Whisper transcription in a background thread (#1030)."""
     from media.audio.pipeline import _get_whisper_pipeline
 
@@ -258,7 +279,7 @@ async def _transcribe_with_whisper(audio_bytes: bytes, content_type: str) -> dic
 
     ct = content_type.split(";")[0].strip()
     suffix = _MIME_TO_SUFFIX.get(ct, ".wav")
-    return await asyncio.to_thread(_whisper_sync, pipe, audio_bytes, suffix)
+    return await asyncio.to_thread(_whisper_sync, pipe, audio_bytes, suffix, language)
 
 
 @with_error_handling(
@@ -270,8 +291,13 @@ async def _transcribe_with_whisper(audio_bytes: bytes, content_type: str) -> dic
 async def voice_transcribe_api(
     request: Request,
     audio: UploadFile = File(...),
+    language: str = Form(""),
 ):
-    """Transcribe audio blob to text via Whisper (#1030)."""
+    """Transcribe audio blob to text via Whisper (#1030, #1329).
+
+    Args:
+        language: BCP-47 language hint (e.g. "en", "de"). Empty = auto-detect.
+    """
     security_layer = request.app.state.security_layer
     if not security_layer.check_permission("user", "allow_voice_listen"):
         return JSONResponse(
@@ -287,7 +313,7 @@ async def voice_transcribe_api(
         )
 
     result = await _transcribe_with_whisper(
-        audio_bytes, audio.content_type or "audio/webm"
+        audio_bytes, audio.content_type or "audio/webm", language
     )
     security_layer.audit_log(
         "voice_transcribe",

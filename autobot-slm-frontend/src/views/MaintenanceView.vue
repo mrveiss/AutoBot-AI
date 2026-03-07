@@ -7,6 +7,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
+import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
 import type { MaintenanceWindow, MaintenanceWindowCreate } from '@/types/slm'
 
 const logger = createLogger('MaintenanceView')
@@ -248,7 +249,7 @@ function formatDateTimeLocal(isoString: string): string {
 }
 
 function formatDateTime(isoString: string): string {
-  return new Date(isoString).toLocaleString()
+  return formatDateTimeTz(isoString)
 }
 
 function getStatusBadgeClass(status: string): string {

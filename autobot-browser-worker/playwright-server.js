@@ -42,6 +42,8 @@ async function initBrowser() {
           '--disable-backgrounding-occluded-windows',
           '--disable-renderer-backgrounding',
           '--ignore-certificate-errors',
+          '--remote-debugging-port=9222',
+          '--remote-debugging-address=0.0.0.0',
         ]
       };
 
@@ -93,6 +95,29 @@ async function captureNavScreenshot() {
   return buf.toString('base64');
 }
 
+// Anti-detection: random offset +/-2-5px, biased slightly upper-left (#1416)
+function applyJitter(x, y) {
+  const jitter = () => {
+    const sign = Math.random() < 0.6 ? -1 : 1;
+    return sign * (2 + Math.random() * 3);
+  };
+  return { x: x + jitter(), y: y + jitter() };
+}
+
+// Standard response for all interaction endpoints (#1416)
+async function navInteractionResponse(page) {
+  const screenshot = await captureNavScreenshot();
+  const vp = page.viewportSize() || { width: 1280, height: 720 };
+  return {
+    success: true,
+    screenshot,
+    url: page.url(),
+    title: await page.title(),
+    viewportWidth: vp.width,
+    viewportHeight: vp.height,
+  };
+}
+
 app.get('/status', async (req, res) => {
   try {
     const connected = browser && browser.isConnected();
@@ -110,8 +135,7 @@ app.post('/navigate', async (req, res) => {
   try {
     const page = await ensureNavPage();
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    const screenshot = await captureNavScreenshot();
-    res.json({ success: true, url: page.url(), title: await page.title(), screenshot });
+    res.json(await navInteractionResponse(page));
   } catch (e) {
     logger.error('navigate error:', e.message);
     res.status(500).json({ success: false, error: e.message });
@@ -121,8 +145,7 @@ app.post('/navigate', async (req, res) => {
 app.post('/screenshot', async (req, res) => {
   try {
     const page = await ensureNavPage();
-    const screenshot = await captureNavScreenshot();
-    res.json({ success: true, screenshot, url: page.url(), title: await page.title() });
+    res.json(await navInteractionResponse(page));
   } catch (e) {
     logger.error('screenshot error:', e.message);
     res.status(500).json({ success: false, error: e.message });
@@ -133,8 +156,7 @@ app.post('/back', async (req, res) => {
   try {
     const page = await ensureNavPage();
     await page.goBack({ waitUntil: 'domcontentloaded', timeout: 15000 });
-    const screenshot = await captureNavScreenshot();
-    res.json({ success: true, url: page.url(), title: await page.title(), screenshot });
+    res.json(await navInteractionResponse(page));
   } catch (e) {
     logger.error('back error:', e.message);
     res.status(500).json({ success: false, error: e.message });
@@ -145,8 +167,7 @@ app.post('/forward', async (req, res) => {
   try {
     const page = await ensureNavPage();
     await page.goForward({ waitUntil: 'domcontentloaded', timeout: 15000 });
-    const screenshot = await captureNavScreenshot();
-    res.json({ success: true, url: page.url(), title: await page.title(), screenshot });
+    res.json(await navInteractionResponse(page));
   } catch (e) {
     logger.error('forward error:', e.message);
     res.status(500).json({ success: false, error: e.message });
@@ -157,15 +178,88 @@ app.post('/reload', async (req, res) => {
   try {
     const page = await ensureNavPage();
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
-    const screenshot = await captureNavScreenshot();
-    res.json({ success: true, url: page.url(), title: await page.title(), screenshot });
+    res.json(await navInteractionResponse(page));
   } catch (e) {
-    console.error('reload error:', e.message);
+    logger.error('reload error:', e.message);
     res.status(500).json({ success: false, error: e.message });
   }
 });
 
 // --- End persistent navigation page endpoints ---
+
+// --- Interactive browser control endpoints (#1416) ---
+
+app.post('/click', async (req, res) => {
+  const { x, y } = req.body;
+  if (typeof x !== 'number' || typeof y !== 'number') {
+    return res.status(400).json({ success: false, error: 'x and y coordinates required' });
+  }
+  try {
+    const page = await ensureNavPage();
+    const jittered = applyJitter(x, y);
+    logger.info('Click at:', { original: { x, y }, jittered });
+    await page.mouse.click(jittered.x, jittered.y);
+    await page.waitForTimeout(300);
+    res.json(await navInteractionResponse(page));
+  } catch (e) {
+    logger.error('click error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/scroll', async (req, res) => {
+  const { deltaX = 0, deltaY = 0 } = req.body;
+  if (typeof deltaX !== 'number' || typeof deltaY !== 'number') {
+    return res.status(400).json({ success: false, error: 'deltaX and deltaY must be numbers' });
+  }
+  try {
+    const page = await ensureNavPage();
+    logger.info('Scroll:', { deltaX, deltaY });
+    await page.mouse.wheel(deltaX, deltaY);
+    await page.waitForTimeout(200);
+    res.json(await navInteractionResponse(page));
+  } catch (e) {
+    logger.error('scroll error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/type', async (req, res) => {
+  const { text } = req.body;
+  if (!text || typeof text !== 'string') {
+    return res.status(400).json({ success: false, error: 'text string required' });
+  }
+  try {
+    const page = await ensureNavPage();
+    logger.info('Type:', text.substring(0, 50));
+    await page.keyboard.type(text, { delay: 30 + Math.random() * 40 });
+    await page.waitForTimeout(200);
+    res.json(await navInteractionResponse(page));
+  } catch (e) {
+    logger.error('type error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/hover', async (req, res) => {
+  const { x, y } = req.body;
+  if (typeof x !== 'number' || typeof y !== 'number') {
+    return res.status(400).json({ success: false, error: 'x and y coordinates required' });
+  }
+  try {
+    const page = await ensureNavPage();
+    const jittered = applyJitter(x, y);
+    logger.info('Hover at:', { original: { x, y }, jittered });
+    await page.mouse.move(jittered.x, jittered.y);
+    await page.waitForTimeout(200);
+    res.json(await navInteractionResponse(page));
+  } catch (e) {
+    logger.error('hover error:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// --- End interactive browser control endpoints (#1416) ---
 
 
 app.post('/search', async (req, res) => {

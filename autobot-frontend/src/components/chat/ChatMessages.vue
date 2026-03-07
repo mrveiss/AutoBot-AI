@@ -12,25 +12,46 @@
     <EmptyState
       v-if="showEmptyState"
       icon="fas fa-comments"
-      title="Start a conversation"
-      message="Send a message to begin chatting with the AI assistant."
+      :title="$t('chat.interface.startConversation')"
+      :message="$t('chat.emptyState')"
     />
 
     <div
       v-else
-      class="space-y-1"
       role="log"
       aria-live="polite"
       aria-atomic="false"
       aria-relevant="additions"
-      aria-label="Chat conversation"
+      :aria-label="$t('chat.messages.conversation')"
     >
+      <!-- Issue #1314: Virtual scroll spacer — sets total scrollable height -->
       <div
-        v-for="message in filteredMessages"
-        :key="message.id"
-        class="message-wrapper"
-        :class="getMessageWrapperClass(message)"
+        :style="{
+          height: `${totalSize}px`,
+          width: '100%',
+          position: 'relative',
+        }"
       >
+        <div
+          v-for="vItem in virtualItems"
+          :key="String(vItem.key)"
+          :data-index="vItem.index"
+          :ref="(el: any) => el && measureElement(el as Element)"
+          :style="{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            transform: `translateY(${vItem.start}px)`,
+            paddingBottom: '4px',
+          }"
+        >
+        <!-- Issue #1314: Local alias via single-element v-for -->
+        <template v-for="message in [filteredMessages[vItem.index]]" :key="0">
+        <div
+          class="message-wrapper"
+          :class="getMessageWrapperClass(message)"
+        >
         <!-- Message Header -->
         <div class="message-header">
           <div class="flex items-center gap-1.5">
@@ -44,6 +65,15 @@
                   ({{ message.metadata.model }})
                 </span>
               </span>
+              <!-- Issue #1310: Visible type badge for typed messages -->
+              <span
+                v-if="getMessageTypeBadge(message)"
+                class="message-type-badge"
+                :class="`badge-${getMessageTypeBadge(message)!.type}`"
+              >
+                <i :class="getMessageTypeBadge(message)!.icon" class="mr-1"></i>
+                {{ getMessageTypeBadge(message)!.label }}
+              </span>
               <span class="message-time">{{ formatTime(message.timestamp) }}</span>
             </div>
           </div>
@@ -55,8 +85,8 @@
               size="xs"
               @click="editMessage(message)"
               class="action-btn"
-              aria-label="Edit message"
-              title="Edit message"
+              :aria-label="$t('chat.editMessage')"
+              :title="$t('chat.editMessage')"
             >
               <i class="fas fa-edit" aria-hidden="true"></i>
             </BaseButton>
@@ -65,8 +95,8 @@
               size="xs"
               @click="copyMessage(message)"
               class="action-btn"
-              aria-label="Copy message"
-              title="Copy message"
+              :aria-label="$t('chat.copyMessage')"
+              :title="$t('chat.copyMessage')"
             >
               <i class="fas fa-copy" aria-hidden="true"></i>
             </BaseButton>
@@ -75,8 +105,8 @@
               size="xs"
               @click="deleteMessage(message)"
               class="action-btn danger"
-              aria-label="Delete message"
-              title="Delete message"
+              :aria-label="$t('chat.deleteMessage')"
+              :title="$t('chat.deleteMessage')"
             >
               <i class="fas fa-trash" aria-hidden="true"></i>
             </BaseButton>
@@ -111,7 +141,7 @@
         <div v-else class="message-content" :class="getContentClass(message)">
           <!-- Streaming content with typing indicator -->
           <div v-if="isStreamingMessage(message)" class="streaming-content">
-            <div class="message-text" v-html="formatMessageContent(message.content)"></div>
+            <div class="message-text" v-html="formatMessageContent(message.content, message.id)"></div>
             <div v-if="store.isTyping && isLastMessage(message)" class="typing-indicator">
               <div class="typing-dots">
                 <span></span>
@@ -122,7 +152,7 @@
           </div>
 
           <!-- Regular message content -->
-          <div v-else class="message-text" v-html="formatMessageContent(message.content)"></div>
+          <div v-else class="message-text" v-html="formatMessageContent(message.content, message.id)"></div>
 
           <!-- Message Metadata -->
           <div v-if="message.metadata && shouldShowMetadata(message)" class="message-metadata">
@@ -133,7 +163,7 @@
               </span>
               <span v-if="message.metadata.tokens" class="metadata-item">
                 <i class="fas fa-coins" aria-hidden="true"></i>
-                {{ message.metadata.tokens }} tokens
+                {{ $t('chat.messages.tokens', { count: message.metadata.tokens }) }}
               </span>
               <span v-if="message.metadata.duration" class="metadata-item">
                 <i class="fas fa-clock" aria-hidden="true"></i>
@@ -145,14 +175,14 @@
           <!-- Issue #249, #1186: Source Attribution Display -->
           <CitationsDisplay
             v-if="message.sender === 'assistant' && (message.metadata?.citations?.length || 0) > 0"
-            :citations="message.metadata.citations || []"
+            :citations="message.metadata?.citations || []"
           />
 
           <!-- Attachments -->
           <div v-if="message.attachments && message.attachments.length > 0" class="message-attachments">
             <div class="attachment-header">
               <i class="fas fa-paperclip" aria-hidden="true"></i>
-              <span>{{ message.attachments.length }} attachment{{ message.attachments.length > 1 ? 's' : '' }}</span>
+              <span>{{ $t('chat.messages.attachments', { count: message.attachments.length }) }}</span>
             </div>
             <div class="attachment-list">
               <div
@@ -178,15 +208,15 @@
           <div v-if="message.metadata?.approval_status === 'pre_approved'" class="approval-confirmed approval-pre-approved">
             <div class="approval-header">
               <i class="fas fa-shield-check text-blue-600" aria-hidden="true"></i>
-              <span class="font-semibold">Auto-Approved</span>
+              <span class="font-semibold">{{ $t('chat.approval.autoApproved') }}</span>
             </div>
             <div class="approval-details">
               <div class="approval-detail-item">
-                <span class="detail-label">Command:</span>
+                <span class="detail-label">{{ $t('chat.approval.command') }}:</span>
                 <code class="detail-value">{{ message.metadata.command }}</code>
               </div>
               <div v-if="message.metadata.approval_comment" class="approval-detail-item">
-                <span class="detail-label">Reason:</span>
+                <span class="detail-label">{{ $t('chat.approval.reason') }}:</span>
                 <span class="detail-value">{{ message.metadata.approval_comment }}</span>
               </div>
             </div>
@@ -196,15 +226,15 @@
           <div v-else-if="message.metadata?.approval_status === 'approved'" class="approval-confirmed approval-approved">
             <div class="approval-header">
               <i class="fas fa-check-circle text-green-600" aria-hidden="true"></i>
-              <span class="font-semibold">Command Approved</span>
+              <span class="font-semibold">{{ $t('chat.approval.commandApproved') }}</span>
             </div>
             <div class="approval-details">
               <div class="approval-detail-item">
-                <span class="detail-label">Command:</span>
+                <span class="detail-label">{{ $t('chat.approval.command') }}:</span>
                 <code class="detail-value">{{ message.metadata.command }}</code>
               </div>
               <div v-if="message.metadata.approval_comment" class="approval-detail-item">
-                <span class="detail-label">Comment:</span>
+                <span class="detail-label">{{ $t('chat.approval.comment') }}:</span>
                 <span class="detail-value">{{ message.metadata.approval_comment }}</span>
               </div>
             </div>
@@ -214,15 +244,15 @@
           <div v-else-if="message.metadata?.approval_status === 'denied'" class="approval-confirmed approval-denied">
             <div class="approval-header">
               <i class="fas fa-times-circle text-red-600" aria-hidden="true"></i>
-              <span class="font-semibold">Command Denied</span>
+              <span class="font-semibold">{{ $t('chat.approval.commandDenied') }}</span>
             </div>
             <div class="approval-details">
               <div class="approval-detail-item">
-                <span class="detail-label">Command:</span>
+                <span class="detail-label">{{ $t('chat.approval.command') }}:</span>
                 <code class="detail-value">{{ message.metadata.command }}</code>
               </div>
               <div v-if="message.metadata.approval_comment" class="approval-detail-item">
-                <span class="detail-label">Reason:</span>
+                <span class="detail-label">{{ $t('chat.approval.reason') }}:</span>
                 <span class="detail-value">{{ message.metadata.approval_comment }}</span>
               </div>
             </div>
@@ -233,25 +263,25 @@
           <div v-else-if="message.metadata?.requires_approval && !message.metadata?.approval_status" class="approval-request">
             <div class="approval-header">
               <i class="fas fa-exclamation-triangle text-yellow-600" aria-hidden="true"></i>
-              <span class="font-semibold">Command Approval Required</span>
+              <span class="font-semibold">{{ $t('chat.approval.approvalRequired') }}</span>
             </div>
             <div class="approval-details">
               <div class="approval-detail-item">
-                <span class="detail-label">Command:</span>
+                <span class="detail-label">{{ $t('chat.approval.command') }}:</span>
                 <code class="detail-value">{{ message.metadata.command }}</code>
               </div>
               <div class="approval-detail-item">
-                <span class="detail-label">Risk Level:</span>
+                <span class="detail-label">{{ $t('chat.approval.riskLevel') }}:</span>
                 <span class="detail-value" :class="getRiskClass(message.metadata.risk_level)">
                   {{ message.metadata.risk_level }}
                 </span>
               </div>
               <div v-if="message.metadata.purpose" class="approval-detail-item">
-                <span class="detail-label">Purpose:</span>
+                <span class="detail-label">{{ $t('chat.approval.purpose') }}:</span>
                 <span class="detail-value">{{ message.metadata.purpose }}</span>
               </div>
               <div v-if="message.metadata.reasons && message.metadata.reasons.length > 0" class="approval-detail-item">
-                <span class="detail-label">Reasons:</span>
+                <span class="detail-label">{{ $t('chat.approval.reasons') }}:</span>
                 <span class="detail-value">{{ message.metadata.reasons.join(', ') }}</span>
               </div>
 
@@ -259,14 +289,14 @@
               <div v-if="message.metadata.is_interactive" class="approval-detail-item interactive-warning">
                 <div class="interactive-header">
                   <i class="fas fa-keyboard text-blue-600" aria-hidden="true"></i>
-                  <span class="detail-label font-semibold text-blue-700">Interactive Command</span>
+                  <span class="detail-label font-semibold text-blue-700">{{ $t('chat.approval.interactiveCommand') }}</span>
                 </div>
                 <div class="interactive-info">
                   <p class="text-sm text-autobot-text-secondary mb-2">
-                    This command requires user input (stdin). You'll be prompted after approval.
+                    {{ $t('chat.approval.interactiveInfo') }}
                   </p>
                   <div v-if="message.metadata.interactive_reasons && message.metadata.interactive_reasons.length > 0" class="interactive-reasons">
-                    <span class="text-xs font-medium text-autobot-text-secondary">Input required for:</span>
+                    <span class="text-xs font-medium text-autobot-text-secondary">{{ $t('chat.approval.inputRequired') }}:</span>
                     <ul class="text-xs text-autobot-text-secondary mt-1 ml-4 list-disc">
                       <li v-for="(reason, idx) in message.metadata.interactive_reasons" :key="idx">{{ reason }}</li>
                     </ul>
@@ -279,7 +309,7 @@
               <textarea
                 v-model="approvalComment"
                 class="comment-textarea"
-                placeholder="Add a comment or reason for this decision..."
+                :placeholder="$t('chat.approval.commentPlaceholder')"
                 rows="2"
                 @keydown.ctrl.enter="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
                 @keydown.meta.enter="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
@@ -290,10 +320,10 @@
                   size="sm"
                   @click="cancelComment"
                   class="cancel-comment-btn"
-                  aria-label="Cancel comment"
+                  :aria-label="$t('chat.approval.cancelComment')"
                 >
                   <i class="fas fa-times" aria-hidden="true"></i>
-                  <span>Cancel</span>
+                  <span>{{ $t('common.cancel') }}</span>
                 </BaseButton>
                 <BaseButton
                   variant="primary"
@@ -301,10 +331,10 @@
                   @click="submitApprovalWithComment(message.metadata.terminal_session_id, pendingApprovalDecision)"
                   :disabled="!approvalComment.trim()"
                   class="submit-comment-btn"
-                  :aria-label="`Submit ${pendingApprovalDecision ? 'approval' : 'denial'} with comment`"
+                  :aria-label="$t('chat.approval.submitWithComment', { action: pendingApprovalDecision ? $t('chat.approval.approval') : $t('chat.approval.denial') })"
                 >
                   <i class="fas fa-check" aria-hidden="true"></i>
-                  <span>Submit {{ pendingApprovalDecision ? 'Approval' : 'Denial' }}</span>
+                  <span>{{ $t('chat.approval.submit') }} {{ pendingApprovalDecision ? $t('chat.approval.approval') : $t('chat.approval.denial') }}</span>
                 </BaseButton>
               </div>
             </div>
@@ -319,12 +349,12 @@
                 />
                 <span class="checkbox-label">
                   <i class="fas fa-shield-check" aria-hidden="true"></i>
-                  Automatically approve similar commands in the future
+                  {{ $t('chat.approval.autoApproveFuture') }}
                 </span>
               </label>
               <div v-if="autoApproveFuture" class="auto-approve-hint">
                 <i class="fas fa-info-circle" aria-hidden="true"></i>
-                <span>Commands with the same pattern and risk level will be auto-approved</span>
+                <span>{{ $t('chat.approval.autoApproveHint') }}</span>
               </div>
             </div>
 
@@ -338,12 +368,12 @@
                 />
                 <span class="checkbox-label">
                   <i class="fas fa-folder-open" aria-hidden="true"></i>
-                  Remember this approval for this project
+                  {{ $t('chat.approval.rememberProject') }}
                 </span>
               </label>
               <div v-if="rememberForProject" class="remember-project-hint">
                 <i class="fas fa-info-circle" aria-hidden="true"></i>
-                <span>Similar commands in this project will be auto-approved ({{ currentProjectPath || 'No project context' }})</span>
+                <span>{{ $t('chat.approval.rememberProjectHint', { path: currentProjectPath || $t('chat.approval.noProjectContext') }) }}</span>
               </div>
             </div>
 
@@ -354,10 +384,10 @@
                 @click="approveCommand(message.metadata.terminal_session_id, true, undefined, message.metadata.command_id, { command: message.metadata.command, risk_level: message.metadata.risk_level })"
                 :disabled="processingApproval || showCommentInput"
                 class="approve-btn"
-                aria-label="Approve command"
+                :aria-label="$t('chat.approval.approveCommand')"
               >
                 <i class="fas fa-check" aria-hidden="true"></i>
-                <span>Approve</span>
+                <span>{{ $t('chat.approval.approve') }}</span>
               </BaseButton>
               <BaseButton
                 variant="outline"
@@ -365,10 +395,10 @@
                 @click="promptForComment(message.metadata.terminal_session_id)"
                 :disabled="processingApproval || showCommentInput"
                 class="comment-btn"
-                aria-label="Add comment to approval decision"
+                :aria-label="$t('chat.approval.addComment')"
               >
                 <i class="fas fa-comment" aria-hidden="true"></i>
-                <span>Comment</span>
+                <span>{{ $t('chat.approval.comment') }}</span>
               </BaseButton>
               <BaseButton
                 variant="danger"
@@ -376,18 +406,21 @@
                 @click="approveCommand(message.metadata.terminal_session_id, false, undefined, message.metadata.command_id, { command: message.metadata.command, risk_level: message.metadata.risk_level })"
                 :disabled="processingApproval || showCommentInput"
                 class="deny-btn"
-                aria-label="Deny command"
+                :aria-label="$t('chat.approval.denyCommand')"
               >
                 <i class="fas fa-times" aria-hidden="true"></i>
-                <span>Deny</span>
+                <span>{{ $t('chat.approval.deny') }}</span>
               </BaseButton>
             </div>
             <div v-if="processingApproval" class="approval-processing">
               <LoadingSpinner size="sm" />
-              <span>Processing approval...</span>
+              <span>{{ $t('chat.approval.processing') }}</span>
             </div>
           </div>
         </div>
+      </div>
+      </template>
+      </div>
       </div>
 
       <!-- Enhanced AI typing indicator -->
@@ -398,7 +431,7 @@
               <LoadingSpinner variant="pulse" size="sm" color="#3b82f6" />
             </div>
             <div class="message-info">
-              <span class="sender-name">AI Assistant</span>
+              <span class="sender-name">{{ $t('chat.messages.aiAssistant') }}</span>
               <span class="message-time">{{ typingStatusText }}</span>
             </div>
           </div>
@@ -434,20 +467,20 @@
   <!-- Edit Message Modal -->
   <BaseModal
     v-model="showEditModal"
-    title="Edit Message"
+    :title="$t('chat.messages.editMessage')"
     size="medium"
   >
     <textarea
       v-model="editingContent"
       class="flex-1 w-full px-3 py-2 border border-autobot-border rounded-md focus:outline-none focus:ring-2 focus:ring-electric-500 resize-none"
-      placeholder="Enter your message..."
+      :placeholder="$t('chat.messages.enterMessage')"
       @keydown.ctrl.enter="saveEditedMessage"
       @keydown.meta.enter="saveEditedMessage"
       ref="editTextarea"
       rows="6"
     ></textarea>
     <div class="text-xs text-autobot-text-muted mt-2">
-      Press Ctrl+Enter (Cmd+Enter on Mac) to save
+      {{ $t('chat.messages.ctrlEnterToSave') }}
     </div>
 
     <template #actions>
@@ -455,25 +488,27 @@
         variant="secondary"
         @click="cancelEdit"
       >
-        Cancel
+        {{ $t('common.cancel') }}
       </BaseButton>
       <BaseButton
         variant="primary"
         @click="saveEditedMessage"
         :disabled="!editingContent.trim()"
       >
-        Save
+        {{ $t('common.save') }}
       </BaseButton>
     </template>
   </BaseModal>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import { useDisplaySettings } from '@/composables/useDisplaySettings'
 import { usePermissionStore } from '@/stores/usePermissionStore'
+import { useVirtualChatScroll } from '@/composables/useVirtualChatScroll'
 import type { ChatMessage } from '@/stores/useChatStore'
 import MessageStatus from '@/components/ui/MessageStatus.vue'
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
@@ -508,6 +543,7 @@ const emit = defineEmits<{
   }]
 }>()
 
+const { t } = useI18n()
 const store = useChatStore()
 const controller = useChatController()
 const { displaySettings } = useDisplaySettings()
@@ -606,12 +642,26 @@ const filteredMessages = computed(() => {
   })
 })
 
+// Issue #1314: Virtual scrolling composable
+const {
+  virtualItems,
+  totalSize,
+  measureElement,
+  scrollToBottom,
+  isStuckToBottom,
+} = useVirtualChatScroll({
+  messagesContainerRef: messagesContainer,
+  filteredMessages,
+  isTyping: computed(() => store.isTyping),
+  currentSessionId: computed(() => store.currentSessionId),
+})
+
 const typingStatusText = computed(() => {
   const elapsed = typingStartTime.value ? Date.now() - typingStartTime.value : 0
-  if (elapsed < 2000) return 'Thinking...'
-  if (elapsed < 5000) return 'Processing...'
-  if (elapsed < 10000) return 'Analyzing...'
-  return 'Working on it...'
+  if (elapsed < 2000) return t('chat.messages.thinking')
+  if (elapsed < 5000) return t('chat.messages.processingStatus')
+  if (elapsed < 10000) return t('chat.messages.analyzing')
+  return t('chat.messages.workingOnIt')
 })
 
 const typingDetailText = computed(() => {
@@ -624,11 +674,11 @@ const typingDetailText = computed(() => {
   // Fallback to time-based placeholder text when no streaming content yet
   const elapsed = typingStartTime.value ? Date.now() - typingStartTime.value : 0
   const details = [
-    'Understanding your request...',
-    'Searching knowledge base...',
-    'Formulating response...',
-    'Crafting detailed answer...',
-    'Reviewing response quality...'
+    t('chat.messages.understandingRequest'),
+    t('chat.messages.searchingKnowledge'),
+    t('chat.messages.formulatingResponse'),
+    t('chat.messages.craftingAnswer'),
+    t('chat.messages.reviewingQuality')
   ]
   const index = Math.min(Math.floor(elapsed / 2000), details.length - 1)
   return details[index]
@@ -691,17 +741,33 @@ const getSenderIcon = (sender: string, messageType?: string): string => {
 }
 
 const getSenderName = (sender: string): string => {
-  const names = {
-    user: 'You',
-    assistant: 'AI Assistant',
-    system: 'System',
-    error: 'Error',
-    thought: 'AI Thought',
-    'tool-code': 'Code Execution',
-    'tool-output': 'Output'
+  const names: Record<string, string> = {
+    user: t('chat.messages.senderYou'),
+    assistant: t('chat.messages.aiAssistant'),
+    system: t('chat.messages.senderSystem'),
+    error: t('common.error'),
+    thought: t('chat.messages.senderThought'),
+    'tool-code': t('chat.messages.senderCodeExecution'),
+    'tool-output': t('chat.messages.senderOutput')
   }
 
-  return names[sender as keyof typeof names] || sender
+  return names[sender] || sender
+}
+
+/** Issue #1310: Visible badge for typed messages so they're clearly distinguishable. */
+const getMessageTypeBadge = (message: ChatMessage): { label: string; icon: string; type: string } | null => {
+  const msgType = message.type || message.metadata?.display_type
+  if (!msgType) return null
+
+  const badges: Record<string, { label: string; icon: string; type: string }> = {
+    thought:  { label: t('chat.messages.badgeThought'),  icon: 'fas fa-brain',      type: 'thought' },
+    planning: { label: t('chat.messages.badgePlanning'), icon: 'fas fa-list-check',  type: 'planning' },
+    debug:    { label: t('chat.messages.badgeDebug'),    icon: 'fas fa-bug',         type: 'debug' },
+    utility:  { label: t('chat.messages.badgeUtility'),  icon: 'fas fa-wrench',      type: 'utility' },
+    sources:  { label: t('chat.messages.badgeSources'),  icon: 'fas fa-book-open',   type: 'sources' },
+  }
+
+  return badges[msgType] || null
 }
 
 const getContentClass = (message: ChatMessage): string => {
@@ -715,36 +781,41 @@ const getContentClass = (message: ChatMessage): string => {
 
 // NOTE: formatTime removed - now using shared utility from @/utils/formatHelpers
 
-const formatMessageContent = (content: string): string => {
+/**
+ * Issue #1312: Memoized format cache.
+ * Key: message id + content length (cheap proxy for content identity).
+ * Avoids re-running 11 regex ops for unchanged messages on every render.
+ */
+const formatCache = new Map<string, string>()
+const FORMAT_CACHE_MAX = 500
+
+const formatMessageContentRaw = (content: string): string => {
   // Strip ANSI escape codes FIRST (terminal color codes, cursor movements, etc.)
-  // This removes sequences like: \x1b[31m (red), \x1b[0m (reset), \x1b]0;... (set title), [?2004h, etc.
   let formatted = content
-    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences: \x1b[...m, \x1b[...H, etc.
-    .replace(/\x1b\][0-9;]*[^\x07]*\x07/g, '') // OSC sequences: \x1b]...BEL
-    .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x1b\\)?/g, '') // OSC sequences: \x1b]...ST
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '') // CSI sequences
+    .replace(/\x1b\][0-9;]*[^\x07]*\x07/g, '') // OSC sequences: BEL
+    .replace(/\x1b\][0-9;]*[^\x07\x1b]*(?:\x1b\\)?/g, '') // OSC sequences: ST
     .replace(/\x1b[=>]/g, '') // Set numeric keypad mode
     .replace(/\x1b[()][AB012]/g, '') // Character set selection
-    .replace(/\x1b\[[?\d;]*[hlHJ]/g, '') // Bracket sequences with ESC: \x1b[?2004h, etc.
-    .replace(/\x1b\]0;[^\x07\n]*\x07?/g, '') // Set title with ESC: \x1b]0;...
+    .replace(/\x1b\[[?\d;]*[hlHJ]/g, '') // Bracket sequences
+    .replace(/\x1b\]0;[^\x07\n]*\x07?/g, '') // Set title
     .trim()
 
-  // Strip message type tags (Issue #680: Tags should not be visible in chat)
-  // These tags are used internally for message categorization but shouldn't display
-  // Handles both complete tags [TAG] and malformed tags [TAG without closing bracket
+  // Strip message type tags (Issue #680)
   formatted = formatted
     .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
+    .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?$/gi, '')
     .trim()
 
-  // Strip TOOL_CALL tags (internal metadata that shouldn't be displayed)
-  // Removes: <tool_call name="..." params="...">content</tool_call>
+  // Strip TOOL_CALL tags
   formatted = formatted.replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
 
-  // Process code blocks THIRD (after ANSI stripping and tool_call removal, before inline code and newlines)
-  formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+  // Process code blocks
+  formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match, lang, code) => {
     return `<pre class="code-block${lang ? ` language-${lang}` : ''}"><code>${code.trim()}</code></pre>`
   })
 
-  // Then basic markdown-like formatting
+  // Basic markdown formatting
   formatted = formatted
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
@@ -757,14 +828,30 @@ const formatMessageContent = (content: string): string => {
   return formatted
 }
 
+const formatMessageContent = (content: string, messageId?: string): string => {
+  const cacheKey = messageId ? `${messageId}:${content.length}` : content
+  const cached = formatCache.get(cacheKey)
+  if (cached !== undefined) return cached
+
+  const result = formatMessageContentRaw(content)
+
+  // Evict oldest entries when cache is full
+  if (formatCache.size >= FORMAT_CACHE_MAX) {
+    const firstKey = formatCache.keys().next().value
+    if (firstKey !== undefined) formatCache.delete(firstKey)
+  }
+  formatCache.set(cacheKey, result)
+  return result
+}
+
 const getStatusText = (status: string): string => {
-  const statusMap = {
-    sending: 'Sending...',
-    sent: 'Sent',
-    error: 'Failed to send'
+  const statusMap: Record<string, string> = {
+    sending: t('chat.messages.statusSending'),
+    sent: t('chat.messages.statusSent'),
+    error: t('chat.messages.statusFailed')
   }
 
-  return statusMap[status as keyof typeof statusMap] || status
+  return statusMap[status] || status
 }
 
 const isStreamingMessage = (message: ChatMessage): boolean => {
@@ -856,7 +943,7 @@ const copyMessage = async (message: ChatMessage) => {
 }
 
 const deleteMessage = (message: ChatMessage) => {
-  if (confirm('Delete this message? This action cannot be undone.')) {
+  if (confirm(t('chat.messages.confirmDelete'))) {
     controller.deleteMessage(message.id)
   }
 }
@@ -1188,38 +1275,27 @@ const cancelComment = () => {
   pendingApprovalDecision.value = null
 }
 
-const scrollToBottom = () => {
-  if (store.settings.autoSave && messagesContainer.value) { // Using autoSave as proxy for auto-scroll
-    // Scroll the parent container (UnifiedLoadingView handles scrolling now)
-    const scrollableParent = messagesContainer.value.closest('.overflow-y-auto')
-    if (scrollableParent) {
-      scrollableParent.scrollTop = scrollableParent.scrollHeight
-    }
-  }
-}
-
-// Auto-scroll when new messages arrive
-watch(() => store.currentMessages.length, () => {
+// Issue #1312: Consolidated watcher — auto-scroll + screen reader announcement
+// Replaces two separate watchers (one with deep: true that traversed all message
+// properties on every streaming chunk). Now watches only array length (O(1)).
+watch(() => store.currentMessages.length, (newLen, oldLen) => {
+  // Auto-scroll on any length change (new message or streaming update)
   nextTick(scrollToBottom)
-})
 
-// Announce new messages to screen readers
-watch(() => store.currentMessages, (newMessages, oldMessages) => {
-  // Only announce if a new message was added
-  if (newMessages.length > (oldMessages?.length || 0)) {
-    const latestMessage = newMessages[newMessages.length - 1]
+  // Announce to screen readers only when a new message is added
+  if (newLen > (oldLen || 0)) {
+    const latestMessage = store.currentMessages[newLen - 1]
     if (latestMessage) {
       const sender = getSenderName(latestMessage.sender)
-      const preview = latestMessage.content.substring(0, 100).replace(/<[^>]*>/g, '') // Strip HTML
+      const preview = latestMessage.content.substring(0, 100).replace(/<[^>]*>/g, '')
       screenReaderStatus.value = `New message from ${sender}: ${preview}${preview.length < latestMessage.content.length ? '...' : ''}`
 
-      // Clear announcement after 2 seconds to allow new announcements
       setTimeout(() => {
         screenReaderStatus.value = ''
       }, 2000)
     }
   }
-}, { deep: true })
+})
 
 // Watch typing status to manage timing
 watch(() => store.isTyping, (isTyping) => {
@@ -1258,10 +1334,8 @@ watch(() => store.isTyping, (isTyping) => {
 //   }
 // }, { deep: true })
 
-// Scroll to bottom on mount and initialize permission store
+// Initialize permission store on mount (scroll handled by useVirtualChatScroll)
 onMounted(async () => {
-  nextTick(scrollToBottom)
-
   // Permission v2: Initialize permission store
   try {
     await permissionStore.initialize()
@@ -1338,7 +1412,7 @@ onMounted(async () => {
 
 /* THOUGHT MESSAGES - Purple theme for AI reasoning */
 .message-wrapper.type-thought {
-  @apply bg-purple-50 border-purple-300 text-purple-900;
+  @apply bg-purple-900/20 border-purple-500/40 text-purple-200;
   border-left: 4px solid theme('colors.purple.500');
 }
 
@@ -1347,11 +1421,19 @@ onMounted(async () => {
 }
 
 .message-wrapper.type-thought .sender-name {
-  @apply text-purple-800;
+  @apply text-purple-300;
 }
 
 .message-wrapper.type-thought .message-time {
-  @apply text-purple-600;
+  @apply text-purple-400;
+}
+
+.message-wrapper.type-thought .message-content {
+  @apply text-purple-200;
+}
+
+.message-wrapper.type-thought .message-text {
+  @apply text-purple-100;
 }
 
 .message-wrapper.type-thought::before {
@@ -1359,27 +1441,40 @@ onMounted(async () => {
   @apply absolute top-2 right-2 w-2 h-2 rounded-full bg-purple-400;
 }
 
-/* PLANNING MESSAGES - Primary theme for task planning */
+/* PLANNING MESSAGES - Indigo theme for task planning */
 .message-wrapper.type-planning {
-  @apply bg-autobot-bg-tertiary border-autobot-border text-autobot-text-primary;
+  @apply bg-indigo-900/20 border-indigo-500/40 text-indigo-200;
   border-left: 4px solid theme('colors.indigo.500');
 }
 
 .message-wrapper.type-planning .message-avatar {
-  @apply bg-autobot-primary;
+  @apply bg-indigo-600;
 }
 
 .message-wrapper.type-planning .sender-name {
-  @apply text-autobot-text-primary;
+  @apply text-indigo-300;
 }
 
 .message-wrapper.type-planning .message-time {
-  @apply text-autobot-text-secondary;
+  @apply text-indigo-400;
+}
+
+.message-wrapper.type-planning .message-content {
+  @apply text-indigo-200;
+}
+
+.message-wrapper.type-planning .message-text {
+  @apply text-indigo-100;
+}
+
+.message-wrapper.type-planning::before {
+  content: '';
+  @apply absolute top-2 right-2 w-2 h-2 rounded-full bg-indigo-400;
 }
 
 /* DEBUG MESSAGES - Orange/Amber theme for debug output */
 .message-wrapper.type-debug {
-  @apply bg-amber-50 border-amber-300 text-amber-900;
+  @apply bg-amber-900/20 border-amber-500/40 text-amber-200;
   border-left: 4px solid theme('colors.amber.500');
 }
 
@@ -1388,15 +1483,19 @@ onMounted(async () => {
 }
 
 .message-wrapper.type-debug .sender-name {
-  @apply text-amber-800;
+  @apply text-amber-300;
 }
 
 .message-wrapper.type-debug .message-time {
-  @apply text-amber-600;
+  @apply text-amber-400;
+}
+
+.message-wrapper.type-debug .message-content {
+  @apply text-amber-200;
 }
 
 .message-wrapper.type-debug .message-text {
-  @apply font-mono text-xs;
+  @apply font-mono text-xs text-amber-100;
 }
 
 /* UTILITY MESSAGES - Slate theme for tool/utility output */
@@ -1478,12 +1577,16 @@ onMounted(async () => {
 
 /* COMMAND APPROVAL REQUEST - Yellow/Warning theme */
 .message-wrapper.type-command_approval_request {
-  @apply bg-yellow-50 border-yellow-400 text-yellow-900;
+  @apply bg-yellow-900/20 border-yellow-500/40 text-yellow-200;
   border-left: 4px solid theme('colors.yellow.500');
 }
 
 .message-wrapper.type-command_approval_request .message-avatar {
   @apply bg-yellow-600;
+}
+
+.message-wrapper.type-command_approval_request .message-content {
+  @apply text-yellow-200;
 }
 
 /* Message type indicator badge */
@@ -1493,12 +1596,12 @@ onMounted(async () => {
 
 .message-wrapper.type-thought::after {
   content: 'Thought';
-  @apply bg-purple-200 text-purple-800;
+  @apply bg-purple-800/60 text-purple-200;
 }
 
 .message-wrapper.type-planning::after {
   content: 'Planning';
-  @apply bg-autobot-bg-secondary text-autobot-primary;
+  @apply bg-indigo-800/60 text-indigo-200;
 }
 
 .message-wrapper.type-debug::after {
@@ -1575,6 +1678,33 @@ onMounted(async () => {
 
 .model-name {
   @apply font-normal text-xs opacity-80 ml-1;
+}
+
+/* Issue #1310: Type badges for clear message identification */
+.message-type-badge {
+  @apply inline-flex items-center text-xs font-semibold px-1.5 py-0.5 rounded ml-2;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.badge-thought {
+  @apply bg-purple-900/40 text-purple-300 border border-purple-500/30;
+}
+
+.badge-planning {
+  @apply bg-indigo-900/40 text-indigo-300 border border-indigo-500/30;
+}
+
+.badge-debug {
+  @apply bg-amber-900/40 text-amber-300 border border-amber-500/30;
+}
+
+.badge-utility {
+  @apply bg-slate-700/40 text-slate-300 border border-slate-500/30;
+}
+
+.badge-sources {
+  @apply bg-teal-900/40 text-teal-300 border border-teal-500/30;
 }
 
 .message-time {

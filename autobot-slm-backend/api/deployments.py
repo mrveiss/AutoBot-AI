@@ -159,6 +159,8 @@ def _build_available_roles() -> List[RoleInfo]:
                 ),
                 category=meta.get("category", "core"),
                 ansible_role=reg.get("ansible_playbook", ""),
+                required=reg.get("required", False),
+                degraded_without=reg.get("degraded_without", []),
                 dependencies=[],
                 variables={},
                 tools=meta.get("tools", []),
@@ -215,6 +217,20 @@ async def create_deployment(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid roles: {', '.join(invalid_roles)}",
         )
+
+    # Check role uniqueness — reject if any role is owned by another node (#1389)
+    from services.role_registry import check_role_uniqueness
+
+    for role in deployment_data.roles:
+        owner = await check_role_uniqueness(db, role, deployment_data.node_id)
+        if owner:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Role '{role}' is already assigned to node "
+                    f"'{owner}'. Migrate or unassign it first."
+                ),
+            )
 
     try:
         deployment = await deployment_service.create_deployment(

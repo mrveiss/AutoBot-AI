@@ -2,8 +2,8 @@
   <div class="graph-rag-query">
     <!-- Header -->
     <div class="query-header">
-      <h4><i class="fas fa-search-plus"></i> Graph-RAG Query</h4>
-      <p class="header-description">Search knowledge using graph-aware retrieval</p>
+      <h4><i class="fas fa-search-plus"></i> {{ $t('knowledge.graphRAG.title') }}</h4>
+      <p class="header-description">{{ $t('knowledge.graphRAG.description') }}</p>
       <div v-if="healthStatus" class="health-indicator" :class="healthStatus.status">
         <i :class="healthIcon"></i>
         <span>{{ healthStatus.status }}</span>
@@ -14,13 +14,13 @@
     <div class="query-section">
       <div class="form-group">
         <label for="query-input">
-          <i class="fas fa-question-circle"></i> Query
+          <i class="fas fa-question-circle"></i> {{ $t('knowledge.graphRAG.query') }}
         </label>
         <input
           id="query-input"
           v-model="queryText"
           type="text"
-          placeholder="Ask a question about your knowledge graph..."
+          :placeholder="$t('knowledge.graphRAG.queryPlaceholder')"
           :disabled="isSearching"
           @keyup.enter="executeSearch"
         />
@@ -29,32 +29,32 @@
       <div class="options-row">
         <div class="form-group compact">
           <label for="start-entity">
-            <i class="fas fa-play-circle"></i> Start Entity
-            <span class="label-hint">(optional)</span>
+            <i class="fas fa-play-circle"></i> {{ $t('knowledge.graphRAG.startEntity') }}
+            <span class="label-hint">{{ $t('knowledge.graphRAG.startEntityHint') }}</span>
           </label>
           <input
             id="start-entity"
             v-model="startEntity"
             type="text"
-            placeholder="Entity name to start from..."
+            :placeholder="$t('knowledge.graphRAG.startEntityPlaceholder')"
             :disabled="isSearching"
           />
         </div>
 
         <div class="form-group compact">
           <label for="max-depth">
-            <i class="fas fa-layer-group"></i> Max Depth
+            <i class="fas fa-layer-group"></i> {{ $t('knowledge.graphRAG.maxDepth') }}
           </label>
           <select id="max-depth" v-model.number="maxDepth" :disabled="isSearching">
-            <option :value="1">1 Hop</option>
-            <option :value="2">2 Hops</option>
-            <option :value="3">3 Hops</option>
+            <option :value="1">{{ $t('knowledge.graphRAG.hop1') }}</option>
+            <option :value="2">{{ $t('knowledge.graphRAG.hop2') }}</option>
+            <option :value="3">{{ $t('knowledge.graphRAG.hop3') }}</option>
           </select>
         </div>
 
         <div class="form-group compact">
           <label for="max-results">
-            <i class="fas fa-list-ol"></i> Max Results
+            <i class="fas fa-list-ol"></i> {{ $t('knowledge.graphRAG.maxResults') }}
           </label>
           <select id="max-results" v-model.number="maxResults" :disabled="isSearching">
             <option :value="5">5</option>
@@ -74,8 +74,8 @@
           />
           <span class="toggle-text">
             <i class="fas fa-brain"></i>
-            Enable Neural Reranking
-            <span class="toggle-hint">(slower but more accurate)</span>
+            {{ $t('knowledge.graphRAG.enableNeuralReranking') }}
+            <span class="toggle-hint">{{ $t('knowledge.graphRAG.rerankingHint') }}</span>
           </span>
         </label>
       </div>
@@ -88,7 +88,7 @@
         >
           <i v-if="isSearching" class="fas fa-spinner fa-spin"></i>
           <i v-else class="fas fa-search"></i>
-          {{ isSearching ? 'Searching...' : 'Search Graph' }}
+          {{ isSearching ? $t('knowledge.graphRAG.searching') : $t('knowledge.graphRAG.searchGraph') }}
         </button>
         <button
           @click="checkHealth"
@@ -97,7 +97,7 @@
         >
           <i v-if="isCheckingHealth" class="fas fa-spinner fa-spin"></i>
           <i v-else class="fas fa-heartbeat"></i>
-          Check Health
+          {{ $t('knowledge.graphRAG.checkHealth') }}
         </button>
       </div>
     </div>
@@ -107,7 +107,7 @@
       <div class="results-header">
         <h5>
           <i class="fas fa-list"></i>
-          {{ searchResults.results.length }} Results Found
+          {{ $t('knowledge.graphRAG.resultsFound', { count: searchResults.results.length }) }}
         </h5>
         <div v-if="searchResults.metrics" class="metrics-badges">
           <span class="metric-badge">
@@ -129,14 +129,14 @@
         >
           <div class="result-header">
             <div class="result-scores">
-              <span class="score-badge hybrid" :title="'Hybrid Score'">
+              <span class="score-badge hybrid" :title="$t('knowledge.graphRAG.hybridScore')">
                 {{ formatScore(result.hybrid_score) }}
               </span>
               <span v-if="result.semantic_score" class="score-badge semantic">
-                Semantic: {{ formatScore(result.semantic_score) }}
+                {{ $t('knowledge.graphRAG.semantic') }} {{ formatScore(result.semantic_score) }}
               </span>
               <span v-if="result.keyword_score" class="score-badge keyword">
-                Keyword: {{ formatScore(result.keyword_score) }}
+                {{ $t('knowledge.graphRAG.keyword') }} {{ formatScore(result.keyword_score) }}
               </span>
             </div>
             <span v-if="result.relevance_rank" class="rank-badge">
@@ -160,8 +160,8 @@
 
       <div v-else class="no-results">
         <i class="fas fa-search"></i>
-        <p>No results found for your query.</p>
-        <p class="hint">Try adjusting your search terms or increasing the depth.</p>
+        <p>{{ $t('knowledge.graphRAG.noResultsFound') }}</p>
+        <p class="hint">{{ $t('knowledge.graphRAG.noResultsHint') }}</p>
       </div>
     </div>
 
@@ -195,11 +195,13 @@
 // Author: mrveiss
 
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('GraphRAGQuery')
+const { t } = useI18n()
 
 // ============================================================================
 // Types
@@ -270,7 +272,7 @@ const healthIcon = computed(() => {
 
 async function executeSearch(): Promise<void> {
   if (!queryText.value.trim()) {
-    errorMessage.value = 'Please enter a search query'
+    errorMessage.value = t('knowledge.graphRAG.errorEnterQuery')
     return
   }
 
@@ -295,7 +297,7 @@ async function executeSearch(): Promise<void> {
     logger.info(`Search complete: ${searchResults.value?.results?.length || 0} results`)
   } catch (error) {
     logger.error('Graph-RAG search failed:', error)
-    errorMessage.value = error instanceof Error ? error.message : 'Search failed'
+    errorMessage.value = error instanceof Error ? error.message : t('knowledge.graphRAG.errorSearchFailed')
   } finally {
     isSearching.value = false
   }

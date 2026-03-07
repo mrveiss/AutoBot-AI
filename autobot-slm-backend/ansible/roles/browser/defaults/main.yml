@@ -10,7 +10,8 @@ browser_user: autobot-browser
 browser_group: autobot-browser
 browser_install_dir: /opt/autobot/autobot-browser-worker
 
-# VNC configuration
+# VNC configuration  (#1363: opt-in, not installed by default)
+install_vnc: false
 vnc_port: 5901
 vnc_display: ":1"
 

@@ -345,6 +345,30 @@ DEFAULT_ROLES = (
     + _INFRA_ROLES
 )
 
+# ---------------------------------------------------------------------------
+# Role → Ansible inventory group mapping  (#1346)
+#
+# Maps each role name to the inventory group(s) expected by
+# provision-fleet-roles.yml.  Used by _generate_dynamic_inventory()
+# in setup_wizard.py to build role-based host groups.
+# ---------------------------------------------------------------------------
+ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
+    "backend": "01-Backend",
+    "celery": "01-Backend",
+    "vnc": "01-Backend",
+    "frontend": "02-Frontend",
+    "ai-stack": "03-AI-Stack",
+    "chromadb": "03-AI-Stack",
+    "redis": "04-Databases",
+    "npu-worker": "npu-worker",
+    "browser-service": "browser-automation",
+    "autobot-llm-cpu": "llm_nodes",
+    "autobot-llm-gpu": "llm_nodes",
+    # tts-worker has no dedicated phase in provision-fleet-roles.yml;
+    # it co-locates with npu-worker by convention.
+    "tts-worker": "npu-worker",
+}
+
 
 async def seed_default_roles(db: AsyncSession) -> int:
     """Seed default roles if they don't exist."""
@@ -373,6 +397,52 @@ async def list_roles(db: AsyncSession) -> List[Role]:
     """List all roles."""
     result = await db.execute(select(Role).order_by(Role.name))
     return list(result.scalars().all())
+
+
+# Infra roles allowed on multiple nodes simultaneously (#1389)
+MULTI_NODE_ROLES = {"autobot-shared", "slm-agent"}
+
+
+async def check_role_uniqueness(
+    db: AsyncSession,
+    role_name: str,
+    target_node_id: str,
+) -> Optional[str]:
+    """Check if a role is already assigned to another node (#1389).
+
+    Returns the node_id that currently owns the role, or None if available.
+    Infra roles (autobot-shared, slm-agent) are exempt.
+    """
+    if role_name in MULTI_NODE_ROLES:
+        return None
+
+    from models.database import NodeRole
+
+    result = await db.execute(
+        select(NodeRole.node_id).where(
+            NodeRole.role_name == role_name,
+            NodeRole.node_id != target_node_id,
+            NodeRole.status.in_(["active", "installed", "not_installed"]),
+        )
+    )
+    existing = result.scalar_one_or_none()
+    return existing
+
+
+async def get_role_owners(db: AsyncSession) -> Dict[str, str]:
+    """Return mapping of role_name -> node_id for all assigned roles (#1389).
+
+    Only includes non-infra roles with active/installed status.
+    """
+    from models.database import NodeRole
+
+    result = await db.execute(
+        select(NodeRole.role_name, NodeRole.node_id).where(
+            NodeRole.role_name.notin_(list(MULTI_NODE_ROLES)),
+            NodeRole.status.in_(["active", "installed", "not_installed"]),
+        )
+    )
+    return {row.role_name: row.node_id for row in result.all()}
 
 
 async def get_role_definitions() -> List[Dict]:

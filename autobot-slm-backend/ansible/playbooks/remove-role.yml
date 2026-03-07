@@ -14,12 +14,13 @@
 #
 # Optional vars:
 #   backup_before_removal - Create data backup first (default: false)
+#   role_target_dir  - Target directory to remove (e.g. autobot-npu-worker)
 #
 # Usage:
 #   ansible-playbook playbooks/remove-role.yml \
 #     -i inventory/production.yml -i inventory/slm-nodes.yml \
 #     --limit <node_id> \
-#     -e "role_name=redis systemd_service=redis-stack-server backup_before_removal=true"
+#     -e "role_name=redis systemd_service=redis-stack-server role_target_dir=autobot-redis backup_before_removal=true"
 
 - name: "Remove role {{ role_name }} from node"
   hosts: all
@@ -136,6 +137,25 @@
       notify: reload systemd
 
     # =======================================================================
+    # DISK CLEANUP
+    # =======================================================================
+    - name: "Remove role application directory"
+      ansible.builtin.file:
+        path: "/opt/autobot/{{ role_target_dir }}"
+        state: absent
+      when: role_target_dir is defined and role_target_dir | length > 0
+
+    - name: "Clean orphan user-level Python packages"
+      ansible.builtin.file:
+        path: "/home/{{ service_user | default('autobot') }}/.local/lib"
+        state: absent
+
+    - name: "Clean pip cache for service user"
+      ansible.builtin.file:
+        path: "/home/{{ service_user | default('autobot') }}/.cache/pip"
+        state: absent
+
+    # =======================================================================
     # SUMMARY
     # =======================================================================
     - name: Display removal summary
@@ -144,6 +164,7 @@
           Role removal complete: {{ role_name }}
           - Host: {{ ansible_hostname }} ({{ ansible_default_ipv4.address }})
           - Service: {{ 'stopped and removed' if _service_file.stat.exists else 'not present' }}
+          - Disk cleanup: {{ '/opt/autobot/' + role_target_dir + ' removed' if (role_target_dir is defined and role_target_dir | length > 0) else 'skipped (no target dir)' }}
           - Backup: {{ _backup_path | default('none') if (_backup_performed | default(false)) else 'skipped' }}
 
   handlers:

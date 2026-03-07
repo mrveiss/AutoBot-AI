@@ -6,7 +6,7 @@
  * SLM Type Definitions
  */
 
-export type NodeStatus = 'registered' | 'pending' | 'enrolling' | 'healthy' | 'degraded' | 'unhealthy' | 'offline' | 'maintenance' | 'online' | 'error'
+export type NodeStatus = 'registered' | 'pending' | 'enrolling' | 'healthy' | 'degraded' | 'unhealthy' | 'offline' | 'maintenance' | 'online' | 'error' | 'decommissioned'
 
 export type NodeRole =
   | 'slm-backend'
@@ -179,6 +179,8 @@ export interface RoleInfo {
   name: NodeRole
   description: string
   category: RoleCategory
+  required: boolean
+  degraded_without: string[]
   dependencies: NodeRole[]
   variables: Record<string, unknown>
   tools: string[]

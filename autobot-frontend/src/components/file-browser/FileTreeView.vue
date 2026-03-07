@@ -1,12 +1,12 @@
 <template>
   <div class="tree-panel">
     <div class="tree-header">
-      <h3><i class="fas fa-folder-tree"></i> Directory Structure</h3>
+      <h3><i class="fas fa-folder-tree"></i> {{ $t('fileBrowser.treeView.title') }}</h3>
       <div class="tree-controls">
-        <button @click="$emit('expand-all')" title="Expand All">
+        <button @click="$emit('expand-all')" :title="$t('fileBrowser.treeView.expandAll')">
           <i class="fas fa-expand-alt"></i>
         </button>
-        <button @click="$emit('collapse-all')" title="Collapse All">
+        <button @click="$emit('collapse-all')" :title="$t('fileBrowser.treeView.collapseAll')">
           <i class="fas fa-compress-alt"></i>
         </button>
       </div>
@@ -43,7 +43,7 @@
       <EmptyState
         v-if="directoryTree.length === 0"
         icon="fas fa-folder-open"
-        message="No directory structure available"
+        :message="$t('fileBrowser.treeView.noStructure')"
       />
     </div>
   </div>

@@ -3,20 +3,20 @@
     <!-- Header -->
     <div class="dashboard-header">
       <div class="header-content">
-        <h2><i class="fas fa-stream"></i> Dynamic Log Pattern Mining</h2>
-        <p class="subtitle">Discover patterns, anomalies, and trends in log data</p>
+        <h2><i class="fas fa-stream"></i> {{ $t('analytics.logPatterns.title') }}</h2>
+        <p class="subtitle">{{ $t('analytics.logPatterns.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <select v-model="timeRange" class="time-select">
-          <option value="1">Last 1 hour</option>
-          <option value="6">Last 6 hours</option>
-          <option value="24">Last 24 hours</option>
-          <option value="72">Last 3 days</option>
-          <option value="168">Last 7 days</option>
+          <option value="1">{{ $t('analytics.logPatterns.last1hour') }}</option>
+          <option value="6">{{ $t('analytics.logPatterns.last6hours') }}</option>
+          <option value="24">{{ $t('analytics.logPatterns.last24hours') }}</option>
+          <option value="72">{{ $t('analytics.logPatterns.last3days') }}</option>
+          <option value="168">{{ $t('analytics.logPatterns.last7days') }}</option>
         </select>
         <button @click="runAnalysis" class="analyze-btn" :disabled="isAnalyzing">
           <i :class="isAnalyzing ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
-          {{ isAnalyzing ? 'Analyzing...' : 'Analyze Logs' }}
+          {{ isAnalyzing ? $t('analytics.logPatterns.analyzing') : $t('analytics.logPatterns.analyzeLogs') }}
         </button>
       </div>
     </div>
@@ -27,28 +27,28 @@
         <div class="summary-icon"><i class="fas fa-clock"></i></div>
         <div class="summary-content">
           <div class="summary-value">{{ realtimeData.logs_last_5min }}</div>
-          <div class="summary-label">Logs (5 min)</div>
+          <div class="summary-label">{{ $t('analytics.logPatterns.logs5min') }}</div>
         </div>
       </div>
       <div class="summary-card" :class="{ 'has-errors': realtimeData.error_count > 0 }">
         <div class="summary-icon"><i class="fas fa-exclamation-triangle"></i></div>
         <div class="summary-content">
           <div class="summary-value">{{ realtimeData.error_count }}</div>
-          <div class="summary-label">Recent Errors</div>
+          <div class="summary-label">{{ $t('analytics.logPatterns.recentErrors') }}</div>
         </div>
       </div>
       <div class="summary-card">
         <div class="summary-icon"><i class="fas fa-layer-group"></i></div>
         <div class="summary-content">
           <div class="summary-value">{{ miningResult?.summary?.unique_patterns || 0 }}</div>
-          <div class="summary-label">Patterns Found</div>
+          <div class="summary-label">{{ $t('analytics.logPatterns.patternsFound') }}</div>
         </div>
       </div>
       <div class="summary-card" :class="{ 'has-anomalies': (miningResult?.anomalies?.length || 0) > 0 }">
         <div class="summary-icon"><i class="fas fa-bolt"></i></div>
         <div class="summary-content">
           <div class="summary-value">{{ miningResult?.anomalies?.length || 0 }}</div>
-          <div class="summary-label">Anomalies</div>
+          <div class="summary-label">{{ $t('analytics.logPatterns.anomalies') }}</div>
         </div>
       </div>
     </div>
@@ -58,8 +58,8 @@
       <!-- Patterns Panel -->
       <div class="panel patterns-panel">
         <div class="panel-header">
-          <h3><i class="fas fa-fingerprint"></i> Discovered Patterns</h3>
-          <span class="pattern-count">{{ miningResult.patterns.length }} patterns</span>
+          <h3><i class="fas fa-fingerprint"></i> {{ $t('analytics.logPatterns.discoveredPatterns') }}</h3>
+          <span class="pattern-count">{{ $t('analytics.logPatterns.patternsCount', { count: miningResult.patterns.length }) }}</span>
         </div>
         <div class="panel-content">
           <div class="pattern-filters">
@@ -104,12 +104,12 @@
       <!-- Anomalies Panel -->
       <div class="panel anomalies-panel">
         <div class="panel-header">
-          <h3><i class="fas fa-exclamation-circle"></i> Detected Anomalies</h3>
+          <h3><i class="fas fa-exclamation-circle"></i> {{ $t('analytics.logPatterns.detectedAnomalies') }}</h3>
         </div>
         <div class="panel-content">
           <div v-if="miningResult.anomalies.length === 0" class="empty-state">
             <i class="fas fa-check-circle"></i>
-            <p>No anomalies detected</p>
+            <p>{{ $t('analytics.logPatterns.noAnomalies') }}</p>
           </div>
           <div v-else class="anomalies-list">
             <div
@@ -137,12 +137,12 @@
       <!-- Trends Panel -->
       <div class="panel trends-panel">
         <div class="panel-header">
-          <h3><i class="fas fa-chart-bar"></i> Log Trends</h3>
+          <h3><i class="fas fa-chart-bar"></i> {{ $t('analytics.logPatterns.logTrends') }}</h3>
         </div>
         <div class="panel-content">
           <div v-if="miningResult.trends.length === 0" class="empty-state">
             <i class="fas fa-minus"></i>
-            <p>Not enough data for trend analysis</p>
+            <p>{{ $t('analytics.logPatterns.notEnoughData') }}</p>
           </div>
           <div v-else class="trends-list">
             <div v-for="trend in miningResult.trends" :key="trend.trend_id" class="trend-item">
@@ -174,36 +174,36 @@
     <div v-if="selectedPattern" class="modal-overlay" @click="selectedPattern = null">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h3>Pattern Details: {{ selectedPattern.pattern_id }}</h3>
+          <h3>{{ $t('analytics.logPatterns.patternDetails', { id: selectedPattern.pattern_id }) }}</h3>
           <button @click="selectedPattern = null" class="close-btn">
             <i class="fas fa-times"></i>
           </button>
         </div>
         <div class="modal-body">
           <div class="detail-section">
-            <h4>Pattern Template</h4>
+            <h4>{{ $t('analytics.logPatterns.patternTemplate') }}</h4>
             <pre class="pattern-code">{{ selectedPattern.pattern_template }}</pre>
           </div>
           <div class="detail-grid">
             <div class="detail-item">
-              <span class="label">Occurrences</span>
+              <span class="label">{{ $t('analytics.logPatterns.occurrences') }}</span>
               <span class="value">{{ selectedPattern.occurrences }}</span>
             </div>
             <div class="detail-item">
-              <span class="label">Frequency</span>
+              <span class="label">{{ $t('analytics.logPatterns.frequency') }}</span>
               <span class="value">{{ selectedPattern.frequency_per_hour }}/hour</span>
             </div>
             <div class="detail-item">
-              <span class="label">First Seen</span>
+              <span class="label">{{ $t('analytics.logPatterns.firstSeen') }}</span>
               <span class="value">{{ formatTimestamp(selectedPattern.first_seen) }}</span>
             </div>
             <div class="detail-item">
-              <span class="label">Last Seen</span>
+              <span class="label">{{ $t('analytics.logPatterns.lastSeen') }}</span>
               <span class="value">{{ formatTimestamp(selectedPattern.last_seen) }}</span>
             </div>
           </div>
           <div class="detail-section">
-            <h4>Sample Messages</h4>
+            <h4>{{ $t('analytics.logPatterns.sampleMessages') }}</h4>
             <div class="sample-messages">
               <div v-for="(msg, idx) in selectedPattern.sample_messages" :key="idx" class="sample-msg">
                 {{ msg }}
@@ -218,7 +218,7 @@
     <div v-if="isAnalyzing && !miningResult" class="loading-overlay">
       <div class="loading-spinner">
         <i class="fas fa-cog fa-spin fa-3x"></i>
-        <p>Mining log patterns...</p>
+        <p>{{ $t('analytics.logPatterns.miningPatterns') }}</p>
       </div>
     </div>
   </div>
@@ -226,8 +226,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+
+const { t } = useI18n()
 
 const logger = createLogger('LogPatternDashboard')
 
@@ -296,12 +299,12 @@ const realtimeData = ref<RealtimeData | null>(null)
 const selectedPattern = ref<LogPattern | null>(null)
 const selectedPatternFilter = ref('all')
 
-const patternFilters = [
-  { label: 'All', value: 'all' },
-  { label: 'Errors', value: 'errors' },
-  { label: 'Warnings', value: 'warnings' },
-  { label: 'High Frequency', value: 'high_freq' }
-]
+const patternFilters = computed(() => [
+  { label: t('analytics.logPatterns.filterAll'), value: 'all' },
+  { label: t('analytics.logPatterns.filterErrors'), value: 'errors' },
+  { label: t('analytics.logPatterns.filterWarnings'), value: 'warnings' },
+  { label: t('analytics.logPatterns.filterHighFreq'), value: 'high_freq' }
+])
 
 let realtimeInterval: ReturnType<typeof setInterval> | null = null
 
@@ -373,13 +376,9 @@ const formatTimestamp = (timestamp: string): string => {
 }
 
 const formatAnomalyType = (type: string): string => {
-  const typeMap: Record<string, string> = {
-    'error_surge': 'Error Surge',
-    'new_pattern': 'New Pattern',
-    'gap': 'Log Gap',
-    'spike': 'Activity Spike'
-  }
-  return typeMap[type] || type
+  const key = `analytics.logPatterns.anomalyTypes.${type}`
+  const translated = t(key)
+  return translated !== key ? translated : type
 }
 
 const getTrendIcon = (direction: string): string => {

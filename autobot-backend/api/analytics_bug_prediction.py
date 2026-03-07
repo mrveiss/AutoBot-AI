@@ -10,6 +10,7 @@ and targeted testing suggestions.
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 from datetime import datetime, timedelta
@@ -19,8 +20,9 @@ from typing import Any, Dict, List, Optional
 
 from auth_middleware import check_admin_permission
 from constants.threshold_constants import TimingConstants
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from utils.background_task_manager import BackgroundTaskManager
 
 from autobot_shared.redis_client import get_redis_client
 
@@ -28,11 +30,83 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/bug-prediction", tags=["bug-prediction", "analytics"])
 
+# Issue #1341: Cache configuration for bug prediction
+BUG_PREDICTION_CACHE_PREFIX = "codebase:bug_prediction:cache"
+BUG_PREDICTION_CACHE_TTL = 300  # 5 minutes cache
+
+# Issue #1418: Background task manager for batched analysis
+_bg_manager = BackgroundTaskManager(
+    redis_prefix="bug_pred_task:",
+    task_timeout=600,
+)
+_BATCH_SIZE = 50
+
 # Performance optimization: O(1) lookup for control flow keywords (Issue #326)
 CONTROL_FLOW_KEYWORDS = {"if ", "elif ", "else:", "try:", "except:", "for ", "while "}
 
 # Issue #380: Module-level tuple for function definition prefixes
 _FUNCTION_DEF_PREFIXES = ("def ", "async def ")
+
+
+def _get_bug_prediction_cache_key(path: str, include_pattern: str, limit: int) -> str:
+    """
+    Generate parameter-specific cache key for bug prediction.
+
+    Issue #1341: Include path, pattern, and limit in cache key
+    to prevent stale data across different query parameters.
+    """
+    raw = f"{path}:{include_pattern}:{limit}"
+    param_hash = hashlib.md5(raw.encode()).hexdigest()[:12]
+    return f"{BUG_PREDICTION_CACHE_PREFIX}:{param_hash}"
+
+
+async def _get_cached_bug_prediction(
+    path: str, include_pattern: str, limit: int
+) -> dict | None:
+    """
+    Get cached bug prediction from Redis.
+
+    Issue #1341: Cache for 5 minutes to prevent re-running
+    expensive git subprocesses and complexity analysis.
+    """
+    try:
+        cache_key = _get_bug_prediction_cache_key(path, include_pattern, limit)
+        redis_client = get_redis_client(async_client=False, database="cache")
+        cached = redis_client.get(cache_key)
+        if cached:
+            logger.debug("Bug prediction cache hit for path: %s", path)
+            return json.loads(cached)
+    except Exception as e:
+        logger.debug("Cache read error (non-critical): %s", e)
+    return None
+
+
+async def _set_cached_bug_prediction(
+    path: str,
+    include_pattern: str,
+    limit: int,
+    data: dict,
+) -> None:
+    """
+    Cache bug prediction results in Redis.
+
+    Issue #1341: Cache for 5 minutes (300 seconds).
+    """
+    try:
+        cache_key = _get_bug_prediction_cache_key(path, include_pattern, limit)
+        redis_client = get_redis_client(async_client=False, database="cache")
+        redis_client.setex(
+            cache_key,
+            BUG_PREDICTION_CACHE_TTL,
+            json.dumps(data, default=str),
+        )
+        logger.debug(
+            "Bug prediction cached for %d seconds (path: %s)",
+            BUG_PREDICTION_CACHE_TTL,
+            path,
+        )
+    except Exception as e:
+        logger.debug("Cache write error (non-critical): %s", e)
 
 
 def _no_data_response(
@@ -788,22 +862,123 @@ async def _safe_store_prediction_history(
         )
 
 
+async def _run_bug_analysis(
+    path: str, include_pattern: str, limit: int
+) -> dict[str, Any]:
+    """Run full bug prediction analysis pipeline.
+
+    Issue #1341: Extracted from analyze_codebase to keep endpoint under
+    65-line limit. Ref: analyze_codebase.
+    """
+    bug_history, change_freq, files_to_analyze = await asyncio.gather(
+        get_git_bug_history(),
+        get_file_change_frequency(),
+        asyncio.to_thread(_find_files_sync, path, include_pattern, limit),
+    )
+
+    if not files_to_analyze:
+        return _no_data_response(
+            f"No files matching '{include_pattern}' found in '{path}'"
+        )
+
+    analyzed_files = await _analyze_files_parallel(
+        files_to_analyze, change_freq, bug_history
+    )
+    analyzed_files.sort(key=lambda x: x["risk_score"], reverse=True)
+    high_risk = sum(1 for f in analyzed_files if f["risk_score"] >= 60)
+
+    risk_dist = {level.value: 0 for level in RiskLevel}
+    for f in analyzed_files:
+        level = get_risk_level(f["risk_score"])
+        risk_dist[level.value] += 1
+
+    asyncio.create_task(
+        _safe_store_prediction_history(
+            total_files=len(files_to_analyze),
+            high_risk_count=high_risk,
+            risk_distribution=risk_dist,
+            analyzed_files=analyzed_files,
+        )
+    )
+
+    return {
+        "status": "success",
+        "timestamp": datetime.now().isoformat(),
+        "total_files": len(files_to_analyze),
+        "analyzed_files": len(analyzed_files),
+        "high_risk_count": high_risk,
+        "files": analyzed_files[:limit],
+        "from_cache": False,
+    }
+
+
 @router.get("/analyze")
 async def analyze_codebase(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
     limit: int = Query(1000, ge=1, le=5000, description="Maximum files to analyze"),
+    refresh: bool = Query(False, description="Force refresh, bypass cache"),
 ) -> dict[str, Any]:
     """
     Analyze codebase for bug risk (Issue #543: no demo data).
     Issue #744: Requires admin authentication.
-
-    Returns risk assessment for all files matching the pattern.
-    Issue #569: Also stores prediction history for trend tracking.
+    Issue #1341: Results cached in Redis for 5 minutes.
     """
     try:
-        # Issue #664: Parallelize independent data fetches
+        if not refresh:
+            cached = await _get_cached_bug_prediction(path, include_pattern, limit)
+            if cached:
+                cached["from_cache"] = True
+                return cached
+
+        response_data = await _run_bug_analysis(path, include_pattern, limit)
+
+        if response_data.get("status") == "success":
+            await _set_cached_bug_prediction(
+                path, include_pattern, limit, response_data
+            )
+
+        return response_data
+
+    except Exception as e:
+        logger.error("Failed to analyze codebase: %s", e, exc_info=True)
+        return _no_data_response(f"Analysis failed: {str(e)}")
+
+
+def _build_analysis_result(
+    analyzed_files: list[dict[str, Any]],
+    total: int,
+    limit: int,
+) -> dict[str, Any]:
+    """Build the final result dict for a completed analysis (#1418)."""
+    analyzed_files.sort(key=lambda x: x["risk_score"], reverse=True)
+    high_risk = sum(1 for f in analyzed_files if f["risk_score"] >= 60)
+    risk_dist = {level.value: 0 for level in RiskLevel}
+    for f in analyzed_files:
+        level = get_risk_level(f["risk_score"])
+        risk_dist[level.value] += 1
+    return {
+        "status": "success",
+        "timestamp": datetime.now().isoformat(),
+        "total_files": total,
+        "analyzed_files": len(analyzed_files),
+        "high_risk_count": high_risk,
+        "files": analyzed_files[:limit],
+        "from_cache": False,
+        "_risk_dist": risk_dist,
+    }
+
+
+async def _run_batched_bug_analysis(
+    task_id: str,
+    path: str,
+    include_pattern: str,
+    limit: int,
+) -> None:
+    """Run bug prediction in batches with progress tracking (#1418)."""
+    try:
+        await _bg_manager.update_progress(task_id, "Gathering file data", 5)
         bug_history, change_freq, files_to_analyze = await asyncio.gather(
             get_git_bug_history(),
             get_file_change_frequency(),
@@ -811,45 +986,87 @@ async def analyze_codebase(
         )
 
         if not files_to_analyze:
-            return _no_data_response(
-                f"No files matching '{include_pattern}' found in '{path}'"
+            await _bg_manager.complete_task(
+                task_id,
+                _no_data_response(
+                    f"No files matching '{include_pattern}' found in '{path}'"
+                ),
             )
+            return
 
-        # Issue #609: Analyze files in parallel
-        analyzed_files = await _analyze_files_parallel(
-            files_to_analyze, change_freq, bug_history
-        )
-        analyzed_files.sort(key=lambda x: x["risk_score"], reverse=True)
-        high_risk = sum(1 for f in analyzed_files if f["risk_score"] >= 60)
+        total = len(files_to_analyze)
+        analyzed_files: list[dict[str, Any]] = []
 
-        # Issue #569: Calculate risk distribution and store prediction history
-        risk_dist = {level.value: 0 for level in RiskLevel}
-        for f in analyzed_files:
-            level = get_risk_level(f["risk_score"])
-            risk_dist[level.value] += 1
+        for batch_start in range(0, total, _BATCH_SIZE):
+            batch_end = min(batch_start + _BATCH_SIZE, total)
+            batch = files_to_analyze[batch_start:batch_end]
+            step = f"Analyzing files {batch_start + 1}-{batch_end} of {total}"
+            pct = 10 + int((batch_start / total) * 85)
+            await _bg_manager.update_progress(task_id, step, pct)
+            batch_results = await _analyze_files_parallel(
+                batch, change_freq, bug_history
+            )
+            analyzed_files.extend(batch_results)
 
-        # Store prediction history asynchronously (don't block response)
+        await _bg_manager.update_progress(task_id, "Finalizing results", 95)
+        result = _build_analysis_result(analyzed_files, total, limit)
+
         asyncio.create_task(
             _safe_store_prediction_history(
-                total_files=len(files_to_analyze),
-                high_risk_count=high_risk,
-                risk_distribution=risk_dist,
+                total_files=total,
+                high_risk_count=result["high_risk_count"],
+                risk_distribution=result.pop("_risk_dist"),
                 analyzed_files=analyzed_files,
             )
         )
 
-        return {
-            "status": "success",
-            "timestamp": datetime.now().isoformat(),
-            "total_files": len(files_to_analyze),
-            "analyzed_files": len(analyzed_files),
-            "high_risk_count": high_risk,
-            "files": analyzed_files[:limit],
-        }
-
+        await _bg_manager.complete_task(task_id, result)
     except Exception as e:
-        logger.error("Failed to analyze codebase: %s", e, exc_info=True)
-        return _no_data_response(f"Analysis failed: {str(e)}")
+        logger.error("Batched bug analysis failed: %s", e, exc_info=True)
+        await _bg_manager.fail_task(task_id, str(e))
+
+
+@router.post("/analyze")
+async def start_bug_analysis(
+    background_tasks: BackgroundTasks,
+    admin_check: bool = Depends(check_admin_permission),
+    path: str = Query(".", description="Path to analyze"),
+    include_pattern: str = Query("*.py", description="File pattern to include"),
+    limit: int = Query(1000, ge=1, le=5000, description="Maximum files to analyze"),
+):
+    """Start batched bug prediction analysis as background task (#1418)."""
+    task_id = await _bg_manager.create_task(
+        params={"path": path, "include_pattern": include_pattern, "limit": limit}
+    )
+    background_tasks.add_task(
+        _run_batched_bug_analysis, task_id, path, include_pattern, limit
+    )
+    return {"task_id": task_id, "status": "pending"}
+
+
+@router.get("/status/{task_id}")
+async def get_bug_prediction_status(
+    task_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Get bug prediction task status (#1418)."""
+    task = await _bg_manager.get_status(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return task
+
+
+@router.post("/tasks/clear-stuck")
+async def clear_stuck_bug_tasks(
+    force: bool = Query(default=False, description="Force clear ALL running tasks"),
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """Clear stuck bug prediction tasks (#1418)."""
+    cleaned = await _bg_manager.clear_stuck(force=force)
+    return {
+        "cleared_count": cleaned,
+        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
+    }
 
 
 @router.get("/high-risk")

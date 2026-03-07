@@ -20,10 +20,10 @@
 
         <div v-if="!selectedFile" class="drop-placeholder">
           <i class="fas fa-film"></i>
-          <p>Drag & drop a video here</p>
-          <span>or click to browse</span>
+          <p>{{ t('vision.videoProcessor.dropTitle') }}</p>
+          <span>{{ t('vision.videoProcessor.dropOrClick') }}</span>
           <div class="supported-formats">
-            MP4, WebM, OGG, AVI
+            {{ t('vision.videoProcessor.supportedFormats') }}
           </div>
         </div>
 
@@ -49,16 +49,16 @@
     <!-- Processing Options -->
     <div class="options-section" v-if="selectedFile">
       <div class="option-group">
-        <label>Frame Extraction Mode</label>
+        <label>{{ t('vision.videoProcessor.frameExtractionMode') }}</label>
         <select v-model="extractionMode">
-          <option value="keyframes">Key Frames Only</option>
-          <option value="interval">Fixed Interval</option>
-          <option value="all">All Frames (slow)</option>
+          <option value="keyframes">{{ t('vision.videoProcessor.keyFramesOnly') }}</option>
+          <option value="interval">{{ t('vision.videoProcessor.fixedInterval') }}</option>
+          <option value="all">{{ t('vision.videoProcessor.allFramesSlow') }}</option>
         </select>
       </div>
 
       <div class="option-group" v-if="extractionMode === 'interval'">
-        <label>Frame Interval (seconds)</label>
+        <label>{{ t('vision.videoProcessor.frameInterval') }}</label>
         <input
           type="number"
           v-model.number="frameInterval"
@@ -69,7 +69,7 @@
       </div>
 
       <div class="option-group">
-        <label>Max Frames to Process</label>
+        <label>{{ t('vision.videoProcessor.maxFrames') }}</label>
         <input
           type="number"
           v-model.number="maxFrames"
@@ -80,11 +80,11 @@
       </div>
 
       <div class="option-group">
-        <label>Processing Intent</label>
+        <label>{{ t('vision.videoProcessor.processingIntent') }}</label>
         <select v-model="processingIntent">
-          <option value="analysis">General Analysis</option>
-          <option value="automation">UI Element Detection</option>
-          <option value="content_generation">Content Generation</option>
+          <option value="analysis">{{ t('vision.videoProcessor.generalAnalysis') }}</option>
+          <option value="automation">{{ t('vision.videoProcessor.uiElementDetection') }}</option>
+          <option value="content_generation">{{ t('vision.videoProcessor.contentGeneration') }}</option>
         </select>
       </div>
     </div>
@@ -98,7 +98,7 @@
       >
         <i v-if="processing" class="fas fa-spinner fa-spin"></i>
         <i v-else class="fas fa-cogs"></i>
-        {{ processing ? `Processing... (${processedFrames}/${totalFrames})` : 'Process Video' }}
+        {{ processing ? t('vision.videoProcessor.processing', { processed: processedFrames, total: totalFrames }) : t('vision.videoProcessor.processVideo') }}
       </button>
     </div>
 
@@ -111,7 +111,7 @@
         ></div>
       </div>
       <div class="progress-info">
-        <span>{{ processedFrames }} of {{ totalFrames }} frames processed</span>
+        <span>{{ t('vision.videoProcessor.framesProcessed', { processed: processedFrames, total: totalFrames }) }}</span>
         <span>{{ progressPercent.toFixed(0) }}%</span>
       </div>
     </div>
@@ -119,8 +119,8 @@
     <!-- Results Section -->
     <div v-if="frameResults.length > 0" class="results-section">
       <div class="results-header">
-        <h4><i class="fas fa-check-circle"></i> Processing Complete</h4>
-        <span class="frame-count">{{ frameResults.length }} frames analyzed</span>
+        <h4><i class="fas fa-check-circle"></i> {{ t('vision.videoProcessor.processingComplete') }}</h4>
+        <span class="frame-count">{{ t('vision.videoProcessor.framesAnalyzed', { count: frameResults.length }) }}</span>
       </div>
 
       <div class="frames-grid">
@@ -140,18 +140,18 @@
 
       <!-- Selected Frame Detail -->
       <div v-if="selectedFrame" class="selected-frame">
-        <h5>Frame {{ selectedFrameIndex + 1 }} Details</h5>
+        <h5>{{ t('vision.videoProcessor.frameDetails', { index: selectedFrameIndex + 1 }) }}</h5>
         <div class="frame-details">
           <div class="detail-item">
-            <span class="label">Confidence</span>
+            <span class="label">{{ t('vision.videoProcessor.confidenceLabel') }}</span>
             <span class="value">{{ (selectedFrame.confidence * 100).toFixed(1) }}%</span>
           </div>
           <div class="detail-item">
-            <span class="label">Processing Time</span>
+            <span class="label">{{ t('vision.videoProcessor.processingTimeLabel') }}</span>
             <span class="value">{{ selectedFrame.processing_time.toFixed(2) }}s</span>
           </div>
           <div class="detail-item" v-if="selectedFrame.device_used">
-            <span class="label">Device</span>
+            <span class="label">{{ t('vision.videoProcessor.deviceLabel') }}</span>
             <span class="value">{{ selectedFrame.device_used }}</span>
           </div>
         </div>
@@ -159,7 +159,7 @@
         <div class="frame-data" v-if="selectedFrame.result_data">
           <button @click="showFrameJson = !showFrameJson" class="btn-toggle">
             <i :class="showFrameJson ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
-            {{ showFrameJson ? 'Hide' : 'Show' }} Analysis Data
+            {{ showFrameJson ? t('vision.videoProcessor.hideAnalysisData') : t('vision.videoProcessor.showAnalysisData') }}
           </button>
           <pre v-if="showFrameJson" class="json-display">{{ JSON.stringify(selectedFrame.result_data, null, 2) }}</pre>
         </div>
@@ -168,11 +168,11 @@
       <div class="results-actions">
         <button @click="exportAllResults" class="btn-secondary">
           <i class="fas fa-download"></i>
-          Export All Results
+          {{ t('vision.videoProcessor.exportAllResults') }}
         </button>
         <button @click="saveToGallery" class="btn-secondary">
           <i class="fas fa-save"></i>
-          Save to Gallery
+          {{ t('vision.videoProcessor.saveToGallery') }}
         </button>
       </div>
     </div>
@@ -192,6 +192,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onUnmounted } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useToast } from '@/composables/useToast';
 import {
@@ -205,6 +206,7 @@ interface FrameResult extends MultiModalResponse {
   timestamp?: number;
 }
 
+const { t } = useI18n();
 const logger = createLogger('VideoProcessor');
 const { showToast } = useToast();
 
@@ -272,7 +274,7 @@ const handleDrop = (event: DragEvent) => {
   if (file && file.type.startsWith('video/')) {
     selectFile(file);
   } else {
-    error.value = 'Please drop a valid video file';
+    error.value = t('vision.videoProcessor.errorInvalidFile');
   }
 };
 
@@ -365,9 +367,9 @@ const processVideo = async () => {
         frames_processed: frameResults.value.length,
         results: frameResults.value,
       });
-      showToast(`Processed ${frameResults.value.length} frames successfully`, 'success');
+      showToast(t('vision.videoProcessor.toastProcessed', { count: frameResults.value.length }), 'success');
     } else {
-      error.value = 'No frames could be processed';
+      error.value = t('vision.videoProcessor.errorNoFrames');
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Video processing failed';
@@ -478,7 +480,7 @@ const saveToGallery = () => {
     },
   });
 
-  showToast('Saved to gallery', 'success');
+  showToast(t('vision.videoProcessor.toastSavedToGallery'), 'success');
 };
 
 // Cleanup object URLs on unmount to prevent memory leaks

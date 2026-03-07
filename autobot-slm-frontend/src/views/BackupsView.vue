@@ -13,6 +13,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
+import { formatDateTime } from '@/composables/useTimezone'
 import type { Backup, BackupRequest, Replication, ReplicationRequest } from '@/types/slm'
 
 const api = useSlmApi()
@@ -205,7 +206,7 @@ function formatBytes(bytes: number): string {
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString()
+  return formatDateTime(dateStr)
 }
 
 function getNodeHostname(nodeId: string): string {

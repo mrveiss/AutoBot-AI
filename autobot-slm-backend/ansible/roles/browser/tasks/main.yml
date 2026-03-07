@@ -51,6 +51,8 @@
   tags: ['browser', 'config']
 
 # ============================================================
+# VNC + desktop environment (opt-in, default false)  (#1363)
+# ============================================================
 - name: "Browser | Install desktop environment and VNC"
   apt:
     name:
@@ -62,8 +64,12 @@
       - xvfb
     state: present
   become: yes
-  tags: ['browser', 'packages']
+  when: install_vnc | default(false)
+  tags: ['browser', 'packages', 'vnc']
 
+# ============================================================
+# Playwright headless browser automation
+# ============================================================
 - name: "Browser | Check if Node.js is already installed"
   command: node --version
   register: node_check
@@ -139,7 +145,52 @@
     group: autobot
     mode: '0700'
   become: yes
-  tags: ['browser', 'directories']
+  when: install_vnc | default(false)
+  tags: ['browser', 'directories', 'vnc']
+
+- name: "Browser | Check if VNC secrets file exists"
+  stat:
+    path: /etc/autobot/vnc-secrets.env
+  register: browser_vnc_secrets_stat
+  become: yes
+  when: install_vnc | default(false)
+  tags: ['browser', 'vnc']
+
+- name: "Browser | Generate secure VNC password"
+  shell: |
+    password=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c 16)
+    echo "VNC_PASSWORD=${password}" > /etc/autobot/vnc-secrets.env
+    chmod 0640 /etc/autobot/vnc-secrets.env
+    chown root:autobot /etc/autobot/vnc-secrets.env
+  args:
+    creates: /etc/autobot/vnc-secrets.env
+  become: yes
+  when:
+    - install_vnc | default(false)
+    - not (browser_vnc_secrets_stat.stat.exists | default(false))
+  tags: ['browser', 'vnc']
+
+- name: "Browser | Read VNC password"
+  shell: >
+    grep '^VNC_PASSWORD=' /etc/autobot/vnc-secrets.env
+    | cut -d= -f2
+  register: browser_vnc_password
+  changed_when: false
+  become: yes
+  when: install_vnc | default(false)
+  tags: ['browser', 'vnc']
+
+- name: "Browser | Set VNC password file"
+  shell: |
+    echo '{{ browser_vnc_password.stdout }}' | vncpasswd -f \
+      > /home/autobot/.vnc/passwd
+    chmod 0600 /home/autobot/.vnc/passwd
+    chown autobot:autobot /home/autobot/.vnc/passwd
+  become: yes
+  when:
+    - install_vnc | default(false)
+    - browser_vnc_password.stdout | default('') | length > 0
+  tags: ['browser', 'vnc']
 
 - name: "Browser | Create VNC systemd service"
   template:
@@ -147,10 +198,11 @@
     dest: /etc/systemd/system/autobot-vnc.service
     mode: '0644'
   become: yes
+  when: install_vnc | default(false)
   notify:
     - reload systemd
     - restart vnc
-  tags: ['browser', 'systemd']
+  tags: ['browser', 'systemd', 'vnc']
 
 - name: "Browser | Create Playwright systemd service"
   template:
@@ -171,8 +223,9 @@
     from_ip: "{{ network_subnet }}"
     comment: "VNC Server"
   become: yes
+  when: install_vnc | default(false)
   notify: reload firewall
-  tags: ['browser', 'firewall']
+  tags: ['browser', 'firewall', 'vnc']
 
 - name: "Browser | Configure firewall - Allow Playwright API"
   ufw:
@@ -191,7 +244,8 @@
     enabled: yes
     daemon_reload: yes
   become: yes
-  tags: ['browser', 'service']
+  when: install_vnc | default(false)
+  tags: ['browser', 'service', 'vnc']
 
 - name: "Browser | Enable Playwright service"
   systemd:
@@ -205,11 +259,9 @@
   debug:
     msg:
       - "=== Browser Configuration Complete ==="
-      - "Desktop Environment: XFCE4"
-      - "VNC Port: {{ vnc_port }}"
-      - "VNC Display: {{ vnc_display }}"
       - "Playwright Port: {{ playwright_port }}"
       - "Browsers: Chromium, Firefox"
-      - "Services: autobot-vnc, autobot-playwright (configured)"
+      - "VNC Installed: {{ install_vnc | default(false) }}"
+      - "Services: autobot-playwright{{ ' + autobot-vnc' if (install_vnc | default(false)) else '' }}"
       - "Note: Services will start when code is synced"
   tags: ['browser', 'report']

@@ -12,6 +12,7 @@
 
 import { ref, onMounted } from 'vue'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
+import { formatDateTime } from '@/composables/useTimezone'
 import type { AlertRule } from '@/composables/usePerformanceMonitoring'
 
 const {
@@ -111,12 +112,8 @@ function formatCondition(condition: string): string {
   }
 }
 
-/**
- * Format last triggered date.
- */
 function formatLastTriggered(dateStr: string | null): string {
-  if (!dateStr) return 'Never'
-  return new Date(dateStr).toLocaleString()
+  return formatDateTime(dateStr)
 }
 
 /**

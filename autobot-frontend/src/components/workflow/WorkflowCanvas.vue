@@ -3,17 +3,17 @@
     <!-- Toolbar -->
     <div class="canvas-toolbar">
       <div class="toolbar-left">
-        <button class="tool-btn" @click="addStepNode" title="Add Step">
-          <i class="fas fa-plus"></i> Add Step
+        <button class="tool-btn" @click="addStepNode" :title="$t('workflow.canvas.addStep')">
+          <i class="fas fa-plus"></i> {{ $t('workflow.canvas.addStep') }}
         </button>
-        <button class="tool-btn" @click="addConditionNode" title="Add Condition">
-          <i class="fas fa-code-branch"></i> Condition
+        <button class="tool-btn" @click="addConditionNode" :title="$t('workflow.canvas.addCondition')">
+          <i class="fas fa-code-branch"></i> {{ $t('workflow.canvas.condition') }}
         </button>
         <div class="toolbar-divider"></div>
-        <button class="tool-btn" @click="clearCanvas" title="Clear">
+        <button class="tool-btn" @click="clearCanvas" :title="$t('workflow.canvas.clear')">
           <i class="fas fa-trash-alt"></i>
         </button>
-        <button class="tool-btn" @click="autoLayout" title="Auto Layout">
+        <button class="tool-btn" @click="autoLayout" :title="$t('workflow.canvas.autoLayout')">
           <i class="fas fa-magic"></i>
         </button>
       </div>
@@ -23,7 +23,7 @@
         <button class="tool-btn" @click="resetZoom"><i class="fas fa-compress-arrows-alt"></i></button>
         <div class="toolbar-divider"></div>
         <button class="tool-btn primary" @click="saveWorkflow" :disabled="nodes.length === 0">
-          <i class="fas fa-save"></i> Save
+          <i class="fas fa-save"></i> {{ $t('workflow.canvas.save') }}
         </button>
       </div>
     </div>
@@ -54,19 +54,19 @@
           </div>
           <div class="node-body">
             <template v-if="node.type === 'step'">
-              <input v-model="node.data.description" placeholder="Description" @click.stop />
-              <input v-model="node.data.command" placeholder="Command" class="mono" @click.stop />
+              <input v-model="node.data.description" :placeholder="$t('workflow.canvas.description')" @click.stop />
+              <input v-model="node.data.command" :placeholder="$t('workflow.canvas.command')" class="mono" @click.stop />
               <div class="node-row">
                 <select v-model="node.data.risk_level" @click.stop>
-                  <option value="low">Low Risk</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
+                  <option value="low">{{ $t('workflow.canvas.lowRisk') }}</option>
+                  <option value="medium">{{ $t('workflow.canvas.mediumRisk') }}</option>
+                  <option value="high">{{ $t('workflow.canvas.highRisk') }}</option>
                 </select>
-                <label class="checkbox"><input type="checkbox" v-model="node.data.requires_confirmation" @click.stop /> Confirm</label>
+                <label class="checkbox"><input type="checkbox" v-model="node.data.requires_confirmation" @click.stop /> {{ $t('workflow.canvas.confirm') }}</label>
               </div>
             </template>
             <template v-else-if="node.type === 'condition'">
-              <input v-model="(node.data as any).condition" placeholder="Condition (e.g., $? -eq 0)" @click.stop />
+              <input v-model="(node.data as any).condition" :placeholder="$t('workflow.canvas.conditionPlaceholder')" @click.stop />
             </template>
           </div>
           <div class="port port-in" @mousedown.stop="startConnect(node.id, 'in', $event)"></div>
@@ -76,9 +76,9 @@
         <!-- Empty State -->
         <div v-if="nodes.length === 0" class="empty-state">
           <i class="fas fa-project-diagram"></i>
-          <h3>Start Building Your Workflow</h3>
-          <p>Add nodes using the toolbar or click below</p>
-          <button class="btn-primary" @click="addStepNode"><i class="fas fa-plus"></i> Add Step</button>
+          <h3>{{ $t('workflow.canvas.emptyTitle') }}</h3>
+          <p>{{ $t('workflow.canvas.emptyDescription') }}</p>
+          <button class="btn-primary" @click="addStepNode"><i class="fas fa-plus"></i> {{ $t('workflow.canvas.addStep') }}</button>
         </div>
       </div>
     </div>
@@ -86,12 +86,12 @@
     <!-- Save Dialog -->
     <div v-if="showSaveDialog" class="dialog-overlay" @click.self="showSaveDialog = false">
       <div class="dialog">
-        <h3><i class="fas fa-save"></i> Save Workflow</h3>
-        <input v-model="saveName" placeholder="Workflow name" />
-        <textarea v-model="saveDesc" placeholder="Description" rows="3"></textarea>
+        <h3><i class="fas fa-save"></i> {{ $t('workflow.canvas.saveWorkflow') }}</h3>
+        <input v-model="saveName" :placeholder="$t('workflow.canvas.workflowName')" />
+        <textarea v-model="saveDesc" :placeholder="$t('workflow.canvas.description')" rows="3"></textarea>
         <div class="dialog-actions">
-          <button class="btn-secondary" @click="showSaveDialog = false">Cancel</button>
-          <button class="btn-primary" @click="confirmSave" :disabled="!saveName.trim()">Save</button>
+          <button class="btn-secondary" @click="showSaveDialog = false">{{ $t('workflow.canvas.cancelBtn') }}</button>
+          <button class="btn-primary" @click="confirmSave" :disabled="!saveName.trim()">{{ $t('workflow.canvas.save') }}</button>
         </div>
       </div>
     </div>
@@ -100,7 +100,10 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { WorkflowNode } from '@/composables/useWorkflowBuilder';
+
+const { t } = useI18n();
 
 const props = defineProps<{ nodes: WorkflowNode[]; selectedNodeId: string | null }>();
 const emit = defineEmits<{
@@ -113,7 +116,11 @@ const emit = defineEmits<{
 }>();
 
 const nodeIcons: Record<string, string> = { step: 'fas fa-terminal', condition: 'fas fa-code-branch', parallel: 'fas fa-columns' };
-const nodeLabels: Record<string, string> = { step: 'Step', condition: 'Condition', parallel: 'Parallel' };
+const nodeLabels = computed(() => ({
+  step: t('workflow.canvas.stepLabel'),
+  condition: t('workflow.canvas.conditionLabel'),
+  parallel: t('workflow.canvas.parallelLabel'),
+}));
 
 const canvasRef = ref<HTMLElement | null>(null);
 const zoom = ref(1);
@@ -185,7 +192,7 @@ function deleteNode(id: string) {
 function selectNode(id: string) { emit('node-selected', id); }
 
 function clearCanvas() {
-  if (props.nodes.length && confirm('Clear all nodes?')) {
+  if (props.nodes.length && confirm(t('workflow.canvas.clearConfirm'))) {
     props.nodes.forEach(n => emit('node-removed', n.id));
     emit('node-selected', null);
   }

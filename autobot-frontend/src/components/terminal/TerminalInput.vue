@@ -19,7 +19,7 @@
         data-testid="terminal-send"
         @click="$emit('send-command')"
         :disabled="!canInput"
-        title="Send Command"
+        :title="$t('terminal.sendCommand')"
       >
         ⏎
       </button>
@@ -28,30 +28,30 @@
 
     <div class="terminal-footer">
       <div class="footer-info">
-        <span>Press Ctrl+C to interrupt, Ctrl+D to exit, Tab for completion</span>
+        <span>{{ $t('terminal.keyboardHint') }}</span>
       </div>
       <div class="footer-actions">
         <button
           class="footer-button workflow-test"
           @click="$emit('start-example-workflow')"
-          title="Start Example Automated Workflow (for testing)"
+          :title="$t('terminal.testWorkflowTitle')"
           v-if="!hasAutomatedWorkflow"
         >
-          🤖 Test Workflow
+          🤖 {{ $t('terminal.testWorkflow') }}
         </button>
         <button
           class="footer-button"
           @click="$emit('download-log')"
-          title="Download Session Log"
+          :title="$t('terminal.downloadLogTitle')"
         >
-          💾 Save Log
+          💾 {{ $t('terminal.saveLog') }}
         </button>
         <button
           class="footer-button"
           @click="$emit('share-session')"
-          title="Share Session"
+          :title="$t('terminal.shareTitle')"
         >
-          🔗 Share
+          🔗 {{ $t('terminal.share') }}
         </button>
       </div>
     </div>

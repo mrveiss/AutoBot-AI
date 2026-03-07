@@ -8,7 +8,8 @@ Provides REST endpoints for hot reloading chat workflow modules during developme
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from type_defs.common import Metadata
 
@@ -17,7 +18,10 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 logger = logging.getLogger(__name__)
 
 # Initialize router
-router = APIRouter(tags=["hot-reload", "development"])
+router = APIRouter(
+    tags=["hot-reload", "development"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 class ReloadRequest(BaseModel):

@@ -29,7 +29,7 @@
               v-if="showClose"
               class="close-btn"
               @click="handleClose"
-              aria-label="Close dialog"
+              :aria-label="t('ui.modal.closeDialog')"
               type="button"
             >
               <i class="fas fa-times" aria-hidden="true"></i>
@@ -53,6 +53,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 /**
  * Reusable Modal/Dialog Component
@@ -111,6 +112,8 @@ const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   'close': []
 }>()
+
+const { t } = useI18n()
 
 // Refs
 const dialogRef = ref<HTMLElement | null>(null)

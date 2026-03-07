@@ -3,43 +3,43 @@
     <!-- Header Section -->
     <div class="graph-header">
       <div class="header-content">
-        <h3><i class="fas fa-project-diagram"></i> Knowledge Graph</h3>
-        <p class="header-description">Visualize entities and their relationships</p>
+        <h3><i class="fas fa-project-diagram"></i> {{ $t('knowledge.graph.title') }}</h3>
+        <p class="header-description">{{ $t('knowledge.graph.description') }}</p>
       </div>
       <div class="header-actions">
         <button
           @click="refreshGraph"
           :disabled="isLoading"
           class="action-btn refresh"
-          title="Refresh graph data"
+          :title="$t('knowledge.graph.refreshGraphData')"
         >
           <i class="fas fa-sync" :class="{ 'fa-spin': isLoading }"></i>
-          Refresh
+          {{ $t('knowledge.graph.refresh') }}
         </button>
         <button
           @click="toggleLayout"
           class="action-btn"
-          title="Toggle layout"
+          :title="$t('knowledge.graph.toggleLayout')"
         >
           <i class="fas fa-th"></i>
-          {{ layoutMode === 'force' ? 'Grid' : 'Force' }}
+          {{ layoutMode === 'force' ? $t('knowledge.graph.grid') : $t('knowledge.graph.force') }}
         </button>
         <button
           @click="fitGraph"
           class="action-btn"
-          title="Fit graph to view"
+          :title="$t('knowledge.graph.fitGraphToView')"
         >
           <i class="fas fa-expand"></i>
-          Fit
+          {{ $t('knowledge.graph.fit') }}
         </button>
         <button
           @click="showCleanupPanel = !showCleanupPanel"
           class="action-btn cleanup"
           :class="{ active: showCleanupPanel }"
-          title="Cleanup orphaned entities"
+          :title="$t('knowledge.graph.cleanupOrphanedEntities')"
         >
           <i class="fas fa-broom"></i>
-          Cleanup
+          {{ $t('knowledge.graph.cleanup') }}
         </button>
       </div>
     </div>
@@ -71,14 +71,14 @@
           id="entity-search"
           v-model="searchQuery"
           type="text"
-          placeholder="Search entities..."
+          :placeholder="$t('knowledge.graph.searchPlaceholder')"
           @input="handleSearch"
         />
         <button
           v-if="searchQuery"
           @click="clearSearch"
           class="clear-btn"
-          title="Clear search"
+          :title="$t('knowledge.graph.clearSearch')"
         >
           <i class="fas fa-times"></i>
         </button>
@@ -86,9 +86,9 @@
 
       <!-- Filter by Type -->
       <div class="control-group">
-        <label for="type-filter">Type:</label>
+        <label for="type-filter">{{ $t('knowledge.graph.typeFilter') }}</label>
         <select id="type-filter" v-model="selectedType" @change="filterEntities">
-          <option value="">All Types</option>
+          <option value="">{{ $t('knowledge.graph.allTypes') }}</option>
           <option v-for="type in entityTypes" :key="type" :value="type">
             {{ formatTypeName(type) }}
           </option>
@@ -97,11 +97,11 @@
 
       <!-- Depth Control -->
       <div class="control-group">
-        <label for="depth-control">Depth:</label>
+        <label for="depth-control">{{ $t('knowledge.graph.depthControl') }}</label>
         <select id="depth-control" v-model.number="graphDepth" @change="refreshGraph">
-          <option :value="1">1 Level</option>
-          <option :value="2">2 Levels</option>
-          <option :value="3">3 Levels</option>
+          <option :value="1">{{ $t('knowledge.graph.level1') }}</option>
+          <option :value="2">{{ $t('knowledge.graph.level2') }}</option>
+          <option :value="3">{{ $t('knowledge.graph.level3') }}</option>
         </select>
       </div>
 
@@ -109,11 +109,11 @@
       <div class="stats-summary">
         <span class="stat">
           <i class="fas fa-circle node-icon"></i>
-          {{ filteredEntities.length }} entities
+          {{ filteredEntities.length }} {{ $t('knowledge.graph.entitiesStat') }}
         </span>
         <span class="stat">
           <i class="fas fa-link edge-icon"></i>
-          {{ relationCount }} relations
+          {{ relationCount }} {{ $t('knowledge.graph.relationsStat') }}
         </span>
       </div>
     </div>
@@ -123,7 +123,7 @@
       <div class="spinner">
         <i class="fas fa-circle-notch fa-spin"></i>
       </div>
-      <p>Loading knowledge graph...</p>
+      <p>{{ $t('knowledge.graph.loadingGraph') }}</p>
     </div>
 
     <!-- Empty State -->
@@ -131,11 +131,11 @@
       <div class="empty-icon">
         <i class="fas fa-project-diagram"></i>
       </div>
-      <h4>No Entities Found</h4>
-      <p>Start building your knowledge graph by adding entities.</p>
+      <h4>{{ $t('knowledge.graph.noEntitiesFound') }}</h4>
+      <p>{{ $t('knowledge.graph.noEntitiesHint') }}</p>
       <button @click="showCreateModal = true" class="action-btn primary">
         <i class="fas fa-plus"></i>
-        Create Entity
+        {{ $t('knowledge.graph.createEntity') }}
       </button>
     </div>
 
@@ -145,18 +145,18 @@
 
       <!-- Zoom Controls -->
       <div class="zoom-controls">
-        <button @click="zoomIn" title="Zoom in">
+        <button @click="zoomIn" :title="$t('knowledge.graph.zoomIn')">
           <i class="fas fa-plus"></i>
         </button>
         <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-        <button @click="zoomOut" title="Zoom out">
+        <button @click="zoomOut" :title="$t('knowledge.graph.zoomOut')">
           <i class="fas fa-minus"></i>
         </button>
-        <button @click="fitGraph" title="Fit to view">
+        <button @click="fitGraph" :title="$t('knowledge.graph.fitToView')">
           <i class="fas fa-expand"></i>
         </button>
         <span class="control-separator">|</span>
-        <button @click="toggleFullscreen" :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'">
+        <button @click="toggleFullscreen" :title="isFullscreen ? $t('knowledge.graph.exitFullscreen') : $t('knowledge.graph.fullscreen')">
           <i :class="isFullscreen ? 'fas fa-compress' : 'fas fa-expand-arrows-alt'"></i>
         </button>
       </div>
@@ -181,24 +181,24 @@
           <!-- Entity Info -->
           <div class="info-section">
             <div class="info-row">
-              <label>Type:</label>
+              <label>{{ $t('knowledge.graph.typeLabel') }}</label>
               <span class="type-badge" :style="{ background: getNodeColor(selectedEntity.type) }">
                 {{ formatTypeName(selectedEntity.type) }}
               </span>
             </div>
             <div class="info-row">
-              <label>ID:</label>
+              <label>{{ $t('knowledge.graph.idLabel') }}</label>
               <code>{{ selectedEntity.id }}</code>
             </div>
             <div class="info-row" v-if="selectedEntity.created_at">
-              <label>Created:</label>
+              <label>{{ $t('knowledge.graph.createdLabel') }}</label>
               <span>{{ formatDate(selectedEntity.created_at) }}</span>
             </div>
           </div>
 
           <!-- Observations -->
           <div class="observations-section" v-if="selectedEntity.observations?.length">
-            <h5><i class="fas fa-eye"></i> Observations</h5>
+            <h5><i class="fas fa-eye"></i> {{ $t('knowledge.graph.observations') }}</h5>
             <ul class="observations-list">
               <li v-for="(obs, idx) in selectedEntity.observations" :key="idx">
                 {{ obs }}
@@ -208,7 +208,7 @@
 
           <!-- Relations -->
           <div class="relations-section" v-if="getEntityRelations(selectedEntity.id).length">
-            <h5><i class="fas fa-link"></i> Relations</h5>
+            <h5><i class="fas fa-link"></i> {{ $t('knowledge.graph.relationsSection') }}</h5>
             <ul class="relations-list">
               <li
                 v-for="relation in getEntityRelations(selectedEntity.id)"
@@ -228,11 +228,11 @@
           <div class="panel-actions">
             <button @click="focusOnEntity(selectedEntity)" class="action-btn">
               <i class="fas fa-crosshairs"></i>
-              Focus
+              {{ $t('knowledge.graph.focus') }}
             </button>
             <button @click="highlightNeighbors(selectedEntity)" class="action-btn">
               <i class="fas fa-expand-arrows-alt"></i>
-              Neighbors
+              {{ $t('knowledge.graph.neighbors') }}
             </button>
           </div>
         </div>
@@ -243,56 +243,56 @@
     <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
       <div class="modal-content">
         <div class="modal-header">
-          <h4><i class="fas fa-plus-circle"></i> Create Entity</h4>
+          <h4><i class="fas fa-plus-circle"></i> {{ $t('knowledge.graph.createEntityTitle') }}</h4>
           <button @click="showCreateModal = false" class="close-btn">
             <i class="fas fa-times"></i>
           </button>
         </div>
         <form @submit.prevent="createEntity" class="entity-form">
           <div class="form-group">
-            <label for="entity-name">Name *</label>
+            <label for="entity-name">{{ $t('knowledge.graph.nameLabel') }}</label>
             <input
               id="entity-name"
               v-model="newEntity.name"
               type="text"
               required
-              placeholder="Entity name"
+              :placeholder="$t('knowledge.graph.namePlaceholder')"
             />
           </div>
           <div class="form-group">
-            <label for="entity-type">Type *</label>
+            <label for="entity-type">{{ $t('knowledge.graph.typeRequired') }}</label>
             <select id="entity-type" v-model="newEntity.type" required>
-              <option value="">Select type...</option>
-              <option value="conversation">Conversation</option>
-              <option value="bug_fix">Bug Fix</option>
-              <option value="feature">Feature</option>
-              <option value="decision">Decision</option>
-              <option value="task">Task</option>
-              <option value="user_preference">User Preference</option>
-              <option value="context">Context</option>
-              <option value="learning">Learning</option>
-              <option value="research">Research</option>
-              <option value="implementation">Implementation</option>
+              <option value="">{{ $t('knowledge.graph.selectType') }}</option>
+              <option value="conversation">{{ $t('knowledge.graph.typeConversation') }}</option>
+              <option value="bug_fix">{{ $t('knowledge.graph.typeBugFix') }}</option>
+              <option value="feature">{{ $t('knowledge.graph.typeFeature') }}</option>
+              <option value="decision">{{ $t('knowledge.graph.typeDecision') }}</option>
+              <option value="task">{{ $t('knowledge.graph.typeTask') }}</option>
+              <option value="user_preference">{{ $t('knowledge.graph.typeUserPreference') }}</option>
+              <option value="context">{{ $t('knowledge.graph.typeContext') }}</option>
+              <option value="learning">{{ $t('knowledge.graph.typeLearning') }}</option>
+              <option value="research">{{ $t('knowledge.graph.typeResearch') }}</option>
+              <option value="implementation">{{ $t('knowledge.graph.typeImplementation') }}</option>
             </select>
           </div>
           <div class="form-group">
-            <label for="entity-observations">Observations *</label>
+            <label for="entity-observations">{{ $t('knowledge.graph.observationsLabel') }}</label>
             <textarea
               id="entity-observations"
               v-model="newEntity.observations"
               rows="3"
               required
-              placeholder="Enter observations (one per line)"
+              :placeholder="$t('knowledge.graph.observationsPlaceholder')"
             ></textarea>
           </div>
           <div class="form-actions">
             <button type="button" @click="showCreateModal = false" class="action-btn">
-              Cancel
+              {{ $t('knowledge.graph.cancel') }}
             </button>
             <button type="submit" class="action-btn primary" :disabled="isCreating">
               <i v-if="isCreating" class="fas fa-spinner fa-spin"></i>
               <i v-else class="fas fa-plus"></i>
-              Create
+              {{ $t('knowledge.graph.create') }}
             </button>
           </div>
         </form>
@@ -301,7 +301,7 @@
 
     <!-- Legend -->
     <div class="graph-legend">
-      <h5>Entity Types</h5>
+      <h5>{{ $t('knowledge.graph.entityTypesLegend') }}</h5>
       <div class="legend-items">
         <div
           v-for="type in entityTypes"

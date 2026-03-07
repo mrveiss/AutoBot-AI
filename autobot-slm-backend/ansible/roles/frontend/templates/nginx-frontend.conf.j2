@@ -36,6 +36,11 @@ server {
     # Enable ETag support for cache validation
     etag on;
 
+    # SharedArrayBuffer requires COOP/COEP headers — needed by onnxruntime-web
+    # (Silero VAD for hands-free voice mode uses threaded WASM)
+    add_header Cross-Origin-Opener-Policy "same-origin" always;
+    add_header Cross-Origin-Embedder-Policy "credentialless" always;
+
     # Issue #1098: Custom error pages for backend unavailability
     error_page 502 /502.html;
     error_page 504 /504.html;
@@ -69,6 +74,8 @@ server {
         add_header X-Content-Type-Options nosniff;
         add_header X-XSS-Protection "1; mode=block";
         add_header Referrer-Policy strict-origin-when-cross-origin;
+        add_header Cross-Origin-Opener-Policy "same-origin";
+        add_header Cross-Origin-Embedder-Policy "credentialless";
 
         try_files $uri =404;
     }
@@ -77,14 +84,18 @@ server {
     location ~* \.(js|css)$ {
         expires 1y;
         add_header Cache-Control "public, immutable, max-age=31536000";
+        add_header Cross-Origin-Opener-Policy "same-origin";
+        add_header Cross-Origin-Embedder-Policy "credentialless";
         access_log off;
         try_files $uri =404;
     }
 
     # Other static assets - long cache but not immutable
-    location ~* \.(png|jpg|jpeg|gif|ico|svg|woff2?|ttf|eot|webp)$ {
+    location ~* \.(png|jpg|jpeg|gif|ico|svg|woff2?|ttf|eot|webp|wasm|onnx)$ {
         expires 1y;
         add_header Cache-Control "public, max-age=31536000";
+        add_header Cross-Origin-Opener-Policy "same-origin";
+        add_header Cross-Origin-Embedder-Policy "credentialless";
         access_log off;
         try_files $uri =404;
     }
@@ -103,6 +114,8 @@ server {
         add_header X-Content-Type-Options nosniff;
         add_header X-XSS-Protection "1; mode=block";
         add_header Referrer-Policy strict-origin-when-cross-origin;
+        add_header Cross-Origin-Opener-Policy "same-origin";
+        add_header Cross-Origin-Embedder-Policy "credentialless";
     }
 
     # Issue #1099: Extended timeouts for heavy analytics/code-intelligence
@@ -139,6 +152,18 @@ server {
 
     # Issue #1105: WebSocket proxy for voice stream
     location /api/voice/stream {
+        proxy_pass {{ backend_protocol | default('https') }}://autobot_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 86400;
+        proxy_ssl_verify off;
+    }
+
+    # WebSocket proxy for workflow automation
+    location /api/workflow-automation/workflow_ws/ {
         proxy_pass {{ backend_protocol | default('https') }}://autobot_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;

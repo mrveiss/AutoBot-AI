@@ -10,7 +10,8 @@
  * to insert results into the conversation. Issue #1242.
  */
 
-import { ref, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import {
   visionMultimodalApiClient,
@@ -18,6 +19,7 @@ import {
   type MultiModalResponse,
 } from '@/utils/VisionMultimodalApiClient'
 
+const { t } = useI18n()
 const logger = createLogger('VisionAnalysisModal')
 
 const emit = defineEmits<{
@@ -46,12 +48,12 @@ const analysisResult = ref<MultiModalResponse | null>(null)
 const error = ref<string | null>(null)
 const showRawJson = ref(false)
 
-const intentLabels: Record<string, string> = {
-  analysis: 'General Analysis',
-  visual_qa: 'Visual Q&A',
-  automation: 'Automation Detection',
-  content_generation: 'Content Generation',
-}
+const intentLabels = computed(() => ({
+  analysis: t('chat.vision.intentAnalysis'),
+  visual_qa: t('chat.vision.intentVisualQA'),
+  automation: t('chat.vision.intentAutomation'),
+  content_generation: t('chat.vision.intentContentGeneration'),
+}))
 
 function triggerFileInput(): void {
   fileInput.value?.click()
@@ -69,7 +71,7 @@ function handleDrop(event: DragEvent): void {
   if (file && file.type.startsWith('image/')) {
     selectFile(file)
   } else {
-    error.value = 'Please drop a valid image file'
+    error.value = t('chat.vision.invalidImageFile')
   }
 }
 
@@ -115,10 +117,10 @@ async function analyzeImage(): Promise<void> {
       analysisResult.value = response.data
       logger.debug('Analysis complete:', response.data)
     } else {
-      error.value = response.error || 'Analysis failed'
+      error.value = response.error || t('chat.vision.analysisFailed')
     }
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Unknown error'
+    error.value = err instanceof Error ? err.message : t('common.unknownError')
     logger.error('Analysis error:', err)
   } finally {
     processing.value = false
@@ -164,7 +166,7 @@ onUnmounted(() => {
       <div class="modal-header">
         <div class="header-title">
           <i class="fas fa-eye"></i>
-          <h3>Image Analysis</h3>
+          <h3>{{ $t('chat.vision.title') }}</h3>
         </div>
         <button @click="emit('close')" class="btn-close">
           <i class="fas fa-times"></i>
@@ -191,11 +193,11 @@ onUnmounted(() => {
           />
           <div v-if="!selectedFile" class="drop-placeholder">
             <i class="fas fa-cloud-upload-alt"></i>
-            <p>Drag & drop an image or click to browse</p>
-            <span class="formats">PNG, JPG, WebP, GIF</span>
+            <p>{{ $t('chat.vision.dropPrompt') }}</p>
+            <span class="formats">{{ $t('chat.vision.formats') }}</span>
           </div>
           <div v-else-if="previewUrl" class="file-preview">
-            <img :src="previewUrl" alt="Preview" class="preview-image" />
+            <img :src="previewUrl" :alt="$t('chat.vision.preview')" class="preview-image" />
             <div class="file-info">
               <span class="filename">{{ selectedFile.name }}</span>
               <span class="filesize">{{ formatFileSize(selectedFile.size) }}</span>
@@ -209,20 +211,20 @@ onUnmounted(() => {
         <!-- Options -->
         <div class="options-row">
           <div class="option-group">
-            <label>Intent</label>
+            <label>{{ $t('chat.vision.intent') }}</label>
             <select v-model="selectedIntent">
-              <option value="analysis">General Analysis</option>
-              <option value="visual_qa">Visual Q&A</option>
-              <option value="automation">Automation Detection</option>
-              <option value="content_generation">Content Generation</option>
+              <option value="analysis">{{ $t('chat.vision.intentAnalysis') }}</option>
+              <option value="visual_qa">{{ $t('chat.vision.intentVisualQA') }}</option>
+              <option value="automation">{{ $t('chat.vision.intentAutomation') }}</option>
+              <option value="content_generation">{{ $t('chat.vision.intentContentGeneration') }}</option>
             </select>
           </div>
           <div v-if="selectedIntent === 'visual_qa'" class="option-group flex-1">
-            <label>Question</label>
+            <label>{{ $t('chat.vision.question') }}</label>
             <input
               v-model="question"
               type="text"
-              placeholder="What would you like to know about this image?"
+              :placeholder="$t('chat.vision.questionPlaceholder')"
             />
           </div>
         </div>
@@ -234,7 +236,7 @@ onUnmounted(() => {
           :disabled="!selectedFile || processing"
         >
           <i :class="processing ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
-          {{ processing ? 'Analyzing...' : 'Analyze Image' }}
+          {{ processing ? $t('chat.vision.analyzing') : $t('chat.vision.analyzeImage') }}
         </button>
 
         <!-- Error -->
@@ -249,7 +251,7 @@ onUnmounted(() => {
         <!-- Results -->
         <div v-if="analysisResult" class="results-section">
           <div class="results-header">
-            <h4><i class="fas fa-check-circle"></i> Results</h4>
+            <h4><i class="fas fa-check-circle"></i> {{ $t('chat.vision.results') }}</h4>
             <div class="results-meta">
               <span class="meta-badge">
                 {{ (analysisResult.confidence * 100).toFixed(1) }}%
@@ -269,7 +271,7 @@ onUnmounted(() => {
               v-if="(analysisResult.result_data as any)?.description"
               class="result-item"
             >
-              <span class="result-label">Description</span>
+              <span class="result-label">{{ $t('chat.vision.description') }}</span>
               <p class="result-value">
                 {{ (analysisResult.result_data as any).description }}
               </p>
@@ -280,7 +282,7 @@ onUnmounted(() => {
               v-if="(analysisResult.result_data as any)?.labels?.length"
               class="result-item"
             >
-              <span class="result-label">Labels</span>
+              <span class="result-label">{{ $t('chat.vision.labels') }}</span>
               <div class="tags">
                 <span
                   v-for="label in (analysisResult.result_data as any).labels"
@@ -295,7 +297,7 @@ onUnmounted(() => {
               v-if="(analysisResult.result_data as any)?.objects?.length"
               class="result-item"
             >
-              <span class="result-label">Detected Objects</span>
+              <span class="result-label">{{ $t('chat.vision.detectedObjects') }}</span>
               <div class="objects-list">
                 <div
                   v-for="(obj, idx) in (analysisResult.result_data as any).objects"
@@ -313,7 +315,7 @@ onUnmounted(() => {
             <!-- Raw JSON toggle -->
             <button @click="showRawJson = !showRawJson" class="btn-toggle-json">
               <i :class="showRawJson ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
-              {{ showRawJson ? 'Hide' : 'Show' }} Raw JSON
+              {{ showRawJson ? $t('chat.vision.hideRawJson') : $t('chat.vision.showRawJson') }}
             </button>
             <pre v-if="showRawJson" class="json-display">{{
               JSON.stringify(analysisResult, null, 2)
@@ -325,16 +327,16 @@ onUnmounted(() => {
       <!-- Footer -->
       <div class="modal-footer">
         <button @click="exportResults" class="btn-secondary" :disabled="!analysisResult">
-          <i class="fas fa-download"></i> Export JSON
+          <i class="fas fa-download"></i> {{ $t('chat.vision.exportJson') }}
         </button>
         <div class="footer-right">
-          <button @click="emit('close')" class="btn-secondary">Cancel</button>
+          <button @click="emit('close')" class="btn-secondary">{{ $t('common.cancel') }}</button>
           <button
             @click="sendToChat"
             class="btn-primary"
             :disabled="!analysisResult"
           >
-            <i class="fas fa-paper-plane"></i> Send to Chat
+            <i class="fas fa-paper-plane"></i> {{ $t('chat.vision.sendToChat') }}
           </button>
         </div>
       </div>

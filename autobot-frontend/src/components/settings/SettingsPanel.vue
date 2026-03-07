@@ -1,18 +1,18 @@
 <template>
-  <ErrorBoundary fallback="Settings panel failed to load.">
+  <ErrorBoundary :fallback="$t('settings.panelLoadFailed')">
 <div class="settings-panel-layout">
   <!-- Main Content -->
   <main class="settings-content">
     <!-- Loading indicator -->
     <div v-if="settingsLoadingStatus === 'loading'" class="settings-loading">
       <div class="loading-spinner"></div>
-      <p>Loading settings...</p>
+      <p>{{ $t('settings.loadingSettings') }}</p>
     </div>
 
     <!-- Settings status message -->
     <div v-if="settingsLoadingStatus === 'offline'" class="settings-status offline">
       <i class="fas fa-exclamation-triangle"></i>
-      <span>Backend offline - using cached settings</span>
+      <span>{{ $t('settings.backendOffline') }}</span>
     </div>
 
     <!-- Router View for Settings Sub-routes -->
@@ -53,11 +53,11 @@
     <div v-if="isSettingsLoaded && hasUnsavedChanges" class="settings-actions">
       <button @click="saveSettings" :disabled="isSaving" class="save-settings-btn">
         <i :class="isSaving ? 'fas fa-spinner fa-spin' : 'fas fa-save'"></i>
-        {{ isSaving ? 'Saving...' : 'Save Settings' }}
+        {{ isSaving ? $t('settings.saving') : $t('settings.save') }}
       </button>
       <button @click="discardChanges" :disabled="isSaving" class="discard-btn">
         <i class="fas fa-undo"></i>
-        Discard Changes
+        {{ $t('settings.discardChanges') }}
       </button>
     </div>
   </main>
@@ -67,10 +67,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, provide } from 'vue'
+import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SettingsPanel')
+const { t } = useI18n()
 
 // Import error handling composables
 import { useAsyncHandler } from '@/composables/useErrorHandler'
@@ -399,7 +401,7 @@ const loadSettings = async () => {
             ...cachedSettings
           }
           isSettingsLoaded.value = true
-          notify('Using cached settings (backend offline)', 'info')
+          notify(t('settings.cachedSettings'), 'info')
         }
       },
       onFinally: () => {
@@ -465,7 +467,7 @@ const checkCacheApiAvailability = async () => {
 
 const saveCacheConfig = async () => {
   if (!cacheApiAvailable.value) {
-    notify('Cache API not available', 'error')
+    notify(t('settings.cacheApiUnavailable'), 'error')
     return
   }
 
@@ -547,7 +549,7 @@ const refreshCacheStats = async () => {
 
 const clearCache = async (type: string) => {
   if (!cacheApiAvailable.value) {
-    notify('Cache API not available', 'error')
+    notify(t('settings.cacheApiUnavailable'), 'error')
     return
   }
 
@@ -575,7 +577,7 @@ const clearCache = async (type: string) => {
 
 const clearRedisCache = async (database: string) => {
   if (!cacheApiAvailable.value) {
-    notify('Cache API not available', 'error')
+    notify(t('settings.cacheApiUnavailable'), 'error')
     return
   }
 
@@ -604,7 +606,7 @@ const clearRedisCache = async (database: string) => {
 
 const clearCacheType = async (cacheType: string) => {
   if (!cacheApiAvailable.value) {
-    notify('Cache API not available', 'error')
+    notify(t('settings.cacheApiUnavailable'), 'error')
     return
   }
 
@@ -633,7 +635,7 @@ const clearCacheType = async (cacheType: string) => {
 
 const warmupCaches = async () => {
   if (!cacheApiAvailable.value) {
-    notify('Cache API not available', 'error')
+    notify(t('settings.cacheApiUnavailable'), 'error')
     return
   }
 

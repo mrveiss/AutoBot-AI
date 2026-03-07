@@ -6,6 +6,6 @@
 
 <template>
   <div class="welcome">
-    <p>Welcome to AutoBot.</p>
+    <p>{{ $t('common.welcome.message') }}</p>
   </div>
 </template>

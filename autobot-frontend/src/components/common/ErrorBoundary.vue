@@ -5,17 +5,17 @@
         ⚠️
       </div>
       <div class="error-content">
-        <h3 class="error-title">Something went wrong</h3>
+        <h3 class="error-title">{{ $t('common.errorBoundary.title') }}</h3>
         <p class="error-message">{{ userFriendlyMessage }}</p>
 
         <div class="error-details" v-if="showDetails">
           <details>
-            <summary class="error-details-toggle">Technical Details</summary>
+            <summary class="error-details-toggle">{{ $t('common.errorBoundary.technicalDetails') }}</summary>
             <div class="error-stack">
               <pre>{{ errorInfo.message }}</pre>
               <pre v-if="errorInfo.stack" class="stack-trace">{{ errorInfo.stack }}</pre>
               <div v-if="errorInfo.componentInfo" class="component-info">
-                <strong>Component:</strong> {{ errorInfo.componentInfo }}
+                <strong>{{ $t('common.errorBoundary.component') }}:</strong> {{ errorInfo.componentInfo }}
               </div>
             </div>
           </details>
@@ -27,19 +27,19 @@
             @click="retry"
             :disabled="retrying"
           >
-            {{ retrying ? 'Retrying...' : 'Try Again' }}
+            {{ retrying ? $t('common.errorBoundary.retrying') : $t('common.errorBoundary.tryAgain') }}
           </BaseButton>
           <BaseButton
             variant="secondary"
             @click="reload"
           >
-            Reload Page
+            {{ $t('common.errorBoundary.reloadPage') }}
           </BaseButton>
           <BaseButton
             variant="ghost"
             @click="toggleDetails"
           >
-            {{ showDetails ? 'Hide Details' : 'Show Details' }}
+            {{ showDetails ? $t('common.errorBoundary.hideDetails') : $t('common.errorBoundary.showDetails') }}
           </BaseButton>
         </div>
       </div>
@@ -52,9 +52,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onErrorCaptured, inject } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import BaseButton from '@/components/base/BaseButton.vue'
 
+const { t } = useI18n()
 const logger = createLogger('ErrorBoundary')
 
 interface Props {
@@ -65,7 +67,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  fallback: 'An unexpected error occurred',
+  fallback: undefined,
   showRetry: true,
   showReload: true
 })
@@ -89,22 +91,22 @@ const userFriendlyMessage = computed(() => {
 
   // Map common errors to user-friendly messages
   if (error.message?.includes('Network Error')) {
-    return 'Connection lost. Please check your internet connection and try again.'
+    return t('common.errorBoundary.networkError')
   }
   if (error.message?.includes('Failed to fetch')) {
-    return 'Unable to connect to the server. Please try again in a moment.'
+    return t('common.errorBoundary.fetchError')
   }
   if (error.message?.includes('Cannot read properties')) {
-    return 'Some data is missing or corrupted. Reloading may help.'
+    return t('common.errorBoundary.dataError')
   }
   if (error.message?.includes('ChunkLoadError')) {
-    return 'Application update detected. Please reload the page to get the latest version.'
+    return t('common.errorBoundary.chunkLoadError')
   }
   if (error.message?.includes('ResizeObserver loop limit exceeded')) {
-    return 'Display refresh needed. This error is usually harmless.'
+    return t('common.errorBoundary.resizeError')
   }
 
-  return props.fallback
+  return props.fallback || t('common.errorBoundary.defaultFallback')
 })
 
 // Capture errors from child components

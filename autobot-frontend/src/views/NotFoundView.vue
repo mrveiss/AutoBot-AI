@@ -8,42 +8,42 @@
         </div>
 
         <!-- Error Message -->
-        <h1 class="error-title">Page Not Found</h1>
+        <h1 class="error-title">{{ $t('views.notFound.title') }}</h1>
         <p class="error-description">
-          The page you're looking for doesn't exist or has been moved.
+          {{ $t('views.notFound.description') }}
         </p>
 
         <!-- Navigation Options -->
         <div class="action-buttons">
           <router-link to="/chat" class="btn-action-primary">
             <i class="fas fa-home"></i>
-            <span>Go to Chat</span>
+            <span>{{ $t('views.notFound.goToChat') }}</span>
           </router-link>
           <button @click="$router.go(-1)" class="btn-action-secondary">
             <i class="fas fa-arrow-left"></i>
-            <span>Go Back</span>
+            <span>{{ $t('views.notFound.goBack') }}</span>
           </button>
         </div>
 
         <!-- Helpful Links -->
         <div class="quick-links-section">
-          <h3 class="quick-links-title">Quick Links</h3>
+          <h3 class="quick-links-title">{{ $t('views.notFound.quickLinks') }}</h3>
           <div class="quick-links-grid">
             <router-link to="/chat" class="quick-link-card">
               <i class="fas fa-comments"></i>
-              <span>AI Assistant</span>
+              <span>{{ $t('views.notFound.aiAssistant') }}</span>
             </router-link>
             <router-link to="/knowledge" class="quick-link-card">
               <i class="fas fa-database"></i>
-              <span>Knowledge Base</span>
+              <span>{{ $t('views.notFound.knowledgeBase') }}</span>
             </router-link>
             <router-link to="/automation" class="quick-link-card">
               <i class="fas fa-bolt"></i>
-              <span>Automation</span>
+              <span>{{ $t('views.notFound.automation') }}</span>
             </router-link>
             <router-link to="/analytics" class="quick-link-card">
               <i class="fas fa-chart-line"></i>
-              <span>Analytics</span>
+              <span>{{ $t('views.notFound.analytics') }}</span>
             </router-link>
           </div>
         </div>
@@ -55,6 +55,9 @@
 <script setup lang="ts">
 // View-level component for 404 error page
 // Issue #753: Design token usage instead of Tailwind utilities
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 </script>
 
 <style scoped>

@@ -1,14 +1,14 @@
 <template>
-  <div class="stats-overview" role="region" aria-label="Knowledge base overview statistics">
+  <div class="stats-overview" role="region" :aria-label="$t('knowledge.stats.overview.ariaLabel')">
     <BasePanel variant="elevated" size="small" role="article" aria-labelledby="facts-title">
       <div class="stat-icon facts" aria-hidden="true">
         <i class="fas fa-lightbulb"></i>
       </div>
       <div class="stat-content">
-        <h4 id="facts-title">Total Facts</h4>
+        <h4 id="facts-title">{{ $t('knowledge.stats.overview.totalFacts') }}</h4>
         <p class="stat-value" aria-live="polite">{{ totalFacts }}</p>
-        <p class="stat-change" aria-label="Knowledge items stored in Redis database">
-          Knowledge items in Redis
+        <p class="stat-change" :aria-label="$t('knowledge.stats.overview.factsAriaLabel')">
+          {{ $t('knowledge.stats.overview.factsDescription') }}
         </p>
       </div>
     </BasePanel>
@@ -18,12 +18,12 @@
         <i class="fas fa-file-alt"></i>
       </div>
       <div class="stat-content">
-        <h4 id="documents-title">Total Documents</h4>
+        <h4 id="documents-title">{{ $t('knowledge.stats.overview.totalDocuments') }}</h4>
         <p class="stat-value" aria-live="polite">{{ totalDocuments }}</p>
         <p class="stat-change" :class="{ 'needs-vectorization': needsVectorization }"
-           :aria-label="needsVectorization ? 'Warning: Facts are not vectorized for semantic search' : 'Facts are vectorized and ready for semantic search'">
+           :aria-label="needsVectorization ? $t('knowledge.stats.overview.notVectorizedAria') : $t('knowledge.stats.overview.vectorizedAria')">
           <i v-if="needsVectorization" class="fas fa-exclamation-triangle" aria-hidden="true"></i>
-          {{ needsVectorization ? 'Not vectorized' : 'Vectorized for RAG' }}
+          {{ needsVectorization ? $t('knowledge.stats.overview.notVectorized') : $t('knowledge.stats.overview.vectorizedForRag') }}
         </p>
       </div>
     </BasePanel>
@@ -33,10 +33,10 @@
         <i class="fas fa-folder"></i>
       </div>
       <div class="stat-content">
-        <h4 id="categories-title">Categories</h4>
+        <h4 id="categories-title">{{ $t('knowledge.stats.overview.categories') }}</h4>
         <p class="stat-value" aria-live="polite">{{ categoryCount }}</p>
-        <p class="stat-change" aria-label="Average documents per category">
-          {{ avgDocsPerCategory }} avg docs/category
+        <p class="stat-change" :aria-label="$t('knowledge.stats.overview.avgDocsPerCategoryAria')">
+          {{ $t('knowledge.stats.overview.avgDocsPerCategory', { count: avgDocsPerCategory }) }}
         </p>
       </div>
     </BasePanel>
@@ -46,10 +46,10 @@
         <i class="fas fa-tags"></i>
       </div>
       <div class="stat-content">
-        <h4>Unique Tags</h4>
+        <h4>{{ $t('knowledge.stats.overview.uniqueTags') }}</h4>
         <p class="stat-value">{{ uniqueTagsCount }}</p>
         <p class="stat-change">
-          {{ avgTagsPerDoc }} avg tags/doc
+          {{ $t('knowledge.stats.overview.avgTagsPerDoc', { count: avgTagsPerDoc }) }}
         </p>
       </div>
     </BasePanel>
@@ -59,10 +59,10 @@
         <i class="fas fa-database"></i>
       </div>
       <div class="stat-content">
-        <h4>Storage Used</h4>
+        <h4>{{ $t('knowledge.stats.overview.storageUsed') }}</h4>
         <p class="stat-value">{{ formatFileSize(totalStorageSize) }}</p>
         <p class="stat-change">
-          {{ formatFileSize(avgDocSize) }} avg/doc
+          {{ $t('knowledge.stats.overview.avgPerDoc', { size: formatFileSize(avgDocSize) }) }}
         </p>
       </div>
     </BasePanel>

@@ -9,7 +9,7 @@
               <i class="fas fa-shield-alt"></i>
             </div>
             <div class="captcha-title">
-              <h3>CAPTCHA Detected</h3>
+              <h3>{{ $t('research.captcha.detected') }}</h3>
               <p class="captcha-type">{{ captchaTypeLabel }}</p>
             </div>
             <div class="captcha-timer" :class="{ 'timer-warning': timeRemaining < 30 }">
@@ -21,7 +21,7 @@
           <!-- Content -->
           <div class="captcha-content">
             <p class="captcha-message">
-              A CAPTCHA was detected during web research. Please solve it manually via VNC to continue.
+              {{ $t('research.captcha.message') }}
             </p>
             <p class="captcha-url">
               <i class="fas fa-link"></i>
@@ -32,12 +32,12 @@
             <div v-if="activeCaptcha.screenshot" class="captcha-preview">
               <img
                 :src="'data:image/png;base64,' + activeCaptcha.screenshot"
-                alt="CAPTCHA Screenshot"
+                :alt="$t('research.captcha.screenshotAlt')"
                 @click="openVnc"
               />
               <div class="preview-overlay" @click="openVnc">
                 <i class="fas fa-external-link-alt"></i>
-                Click to solve in VNC
+                {{ $t('research.captcha.clickToSolve') }}
               </div>
             </div>
           </div>
@@ -46,15 +46,15 @@
           <div class="captcha-actions">
             <button class="btn-vnc" @click="openVnc">
               <i class="fas fa-desktop"></i>
-              Open VNC Desktop
+              {{ $t('research.captcha.openVnc') }}
             </button>
             <button class="btn-solved" @click="markSolved" :disabled="isSubmitting">
               <i class="fas fa-check"></i>
-              I've Solved It
+              {{ $t('research.captcha.solved') }}
             </button>
             <button class="btn-skip" @click="skipCaptcha" :disabled="isSubmitting">
               <i class="fas fa-times"></i>
-              Skip Source
+              {{ $t('research.captcha.skipSource') }}
             </button>
           </div>
 
@@ -74,11 +74,13 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 // @ts-ignore - JS module without type declarations
 import { useGlobalWebSocket } from '@/composables/useGlobalWebSocket'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
+const { t } = useI18n()
 const logger = createLogger('CaptchaNotification')
 
 // ============================================================================

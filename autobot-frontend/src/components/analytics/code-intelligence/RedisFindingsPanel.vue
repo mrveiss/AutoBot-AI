@@ -6,13 +6,13 @@
 <template>
   <div class="redis-panel">
     <div class="panel-header">
-      <h3><i class="fas fa-database"></i> Redis Optimizations</h3>
+      <h3><i class="fas fa-database"></i> {{ $t('analytics.findings.redis.title') }}</h3>
       <span v-if="findings.length > 0" class="count-badge">{{ findings.length }}</span>
     </div>
     <FindingsTable
       :findings="findings"
       :loading="loading"
-      empty-message="No Redis optimization opportunities found"
+      :empty-message="$t('analytics.findings.redis.emptyMessage')"
     />
   </div>
 </template>

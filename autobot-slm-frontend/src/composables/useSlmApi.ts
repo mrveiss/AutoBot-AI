@@ -55,6 +55,7 @@ interface BackendNodeResponse {
   ip_address: string
   status: string
   roles: string[]
+  detected_roles?: string[]
   cpu_percent: number
   memory_percent: number
   disk_percent: number
@@ -86,6 +87,7 @@ function mapBackendNode(node: BackendNodeResponse): SLMNode {
     ip_address: node.ip_address,
     status: node.status as SLMNode['status'],
     roles: node.roles as SLMNode['roles'],
+    detected_roles: node.detected_roles ?? [],
     ssh_user: node.ssh_user,
     ssh_port: node.ssh_port,
     auth_method: node.auth_method as SLMNode['auth_method'],
@@ -282,6 +284,11 @@ export function useSlmApi() {
   async function getRoles(): Promise<RoleInfo[]> {
     const response = await client.get<RoleListResponse>('/deployments/roles')
     return response.data.roles
+  }
+
+  async function getRoleOwners(): Promise<Record<string, string>> {
+    const response = await client.get<{ owners: Record<string, string> }>('/roles/owners')
+    return response.data.owners
   }
 
   // Deployments
@@ -1554,6 +1561,67 @@ export function useSlmApi() {
     return response.data
   }
 
+  // Setup Wizard (Issue #1294)
+  interface WizardStatusResponse {
+    completed: boolean
+    current_step: string
+    current_step_index: number
+    total_steps: number
+    steps: { name: string; index: number; completed: boolean; current: boolean }[]
+  }
+
+  async function getWizardStatus(): Promise<WizardStatusResponse> {
+    const response = await client.get<WizardStatusResponse>('/setup/status')
+    return response.data
+  }
+
+  async function completeWizardStep(step: string): Promise<{ status: string; completed_step: string }> {
+    const response = await client.post<{ status: string; completed_step: string }>(
+      '/setup/complete-step',
+      { step }
+    )
+    return response.data
+  }
+
+  async function skipWizardSetup(): Promise<{ status: string; message: string }> {
+    const response = await client.post<{ status: string; message: string }>('/setup/skip')
+    return response.data
+  }
+
+  async function provisionWizardFleet(
+    nodeIds?: string[]
+  ): Promise<{ status: string; message: string; output: string }> {
+    const response = await client.post<{ status: string; message: string; output: string }>(
+      '/setup/provision-fleet',
+      { node_ids: nodeIds || null }
+    )
+    return response.data
+  }
+
+  async function getProvisionStatus(sinceLine: number = 0): Promise<{
+    status: string
+    lines: string[]
+    total_lines: number
+    error: string | null
+    elapsed_seconds?: number
+  }> {
+    const response = await client.get('/setup/provision-status', {
+      params: { since_line: sinceLine },
+    })
+    return response.data
+  }
+
+  async function validateWizardFleet(): Promise<{
+    health: string
+    total_nodes: number
+    online_nodes: number
+    missing_required_roles: string[]
+    ready: boolean
+  }> {
+    const response = await client.get('/setup/validate')
+    return response.data
+  }
+
   return {
     // Nodes
     getNodes,
@@ -1580,6 +1648,7 @@ export function useSlmApi() {
     applyUpdates,
     // Roles
     getRoles,
+    getRoleOwners,
     // Deployments
     getDeployments,
     getDeployment,
@@ -1701,5 +1770,12 @@ export function useSlmApi() {
     getFleetCerts,
     // Node Reboot (Issue #813)
     rebootNode,
+    // Setup Wizard (Issue #1294)
+    getWizardStatus,
+    completeWizardStep,
+    skipWizardSetup,
+    provisionWizardFleet,
+    getProvisionStatus,
+    validateWizardFleet,
   }
 }

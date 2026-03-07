@@ -9,6 +9,7 @@
  */
 
 import { ref, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useLlmConfig, type LLMConfig } from '@/composables/useLlmConfig'
 import { useLlmHealth } from '@/composables/useLlmHealth'
 import LLMProviderCard from '@/components/llm/LLMProviderCard.vue'
@@ -16,6 +17,7 @@ import LLMHealthMonitor from '@/components/llm/LLMHealthMonitor.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('LLMConfigView')
+const { t } = useI18n()
 
 const {
   config,
@@ -138,11 +140,11 @@ onMounted(async () => {
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-bold text-primary">LLM Configuration</h2>
+        <h2 class="text-2xl font-bold text-primary">{{ $t('llm.configTitle') }}</h2>
         <p class="text-sm text-secondary mt-1">
-          Manage and monitor LLM providers
+          {{ $t('llm.configSubtitle') }}
           <span v-if="lastUpdate" class="ml-2">
-            • Last updated: {{ lastUpdate.toLocaleTimeString() }}
+            • {{ $t('llm.lastUpdated') }} {{ lastUpdate.toLocaleTimeString() }}
           </span>
         </p>
       </div>
@@ -159,7 +161,7 @@ onMounted(async () => {
         >
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        Refresh
+        {{ $t('common.refresh') }}
       </button>
     </div>
 
@@ -170,7 +172,7 @@ onMounted(async () => {
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
         </svg>
         <div class="flex-1">
-          <h3 class="text-sm font-medium text-autobot-error">Error</h3>
+          <h3 class="text-sm font-medium text-autobot-error">{{ $t('common.error') }}</h3>
           <p class="text-sm text-autobot-error mt-1">{{ error }}</p>
         </div>
       </div>
@@ -188,7 +190,7 @@ onMounted(async () => {
               : 'border-transparent text-secondary hover:text-primary hover:border-default'
           ]"
         >
-          Providers
+          {{ $t('llm.tabProviders') }}
         </button>
         <button
           @click="activeTab = 'health'"
@@ -199,7 +201,7 @@ onMounted(async () => {
               : 'border-transparent text-secondary hover:text-primary hover:border-default'
           ]"
         >
-          Health Monitor
+          {{ $t('llm.tabHealth') }}
         </button>
         <button
           @click="activeTab = 'usage'"
@@ -210,7 +212,7 @@ onMounted(async () => {
               : 'border-transparent text-secondary hover:text-primary hover:border-default'
           ]"
         >
-          Usage Statistics
+          {{ $t('llm.tabUsage') }}
         </button>
       </nav>
     </div>
@@ -222,7 +224,7 @@ onMounted(async () => {
         <div v-if="configLoading && providers.length === 0" class="flex items-center justify-center py-12">
           <div class="text-center">
             <div class="animate-spin rounded-sm h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
-            <p class="text-secondary mt-4">Loading providers...</p>
+            <p class="text-secondary mt-4">{{ $t('llm.loadingProviders') }}</p>
           </div>
         </div>
 
@@ -230,8 +232,8 @@ onMounted(async () => {
           <svg class="mx-auto h-12 w-12 text-autobot-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          <h3 class="mt-2 text-sm font-medium text-primary">No providers configured</h3>
-          <p class="mt-1 text-sm text-secondary">Get started by configuring an LLM provider.</p>
+          <h3 class="mt-2 text-sm font-medium text-primary">{{ $t('llm.noProviders') }}</h3>
+          <p class="mt-1 text-sm text-secondary">{{ $t('llm.noProvidersHint') }}</p>
         </div>
 
         <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -260,7 +262,7 @@ onMounted(async () => {
       <!-- Usage Tab -->
       <div v-show="activeTab === 'usage'">
         <div class="bg-autobot-bg-card rounded shadow-sm border border-default p-6">
-          <h3 class="text-lg font-semibold text-primary mb-4">Usage Statistics</h3>
+          <h3 class="text-lg font-semibold text-primary mb-4">{{ $t('llm.tabUsage') }}</h3>
           <div v-if="healthLoading && usageStats.length === 0" class="flex justify-center py-12">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-autobot-primary"></div>
           </div>
@@ -268,18 +270,18 @@ onMounted(async () => {
             <svg class="mx-auto h-12 w-12 text-autobot-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
-            <p class="mt-4">No usage data available yet</p>
+            <p class="mt-4">{{ $t('llm.noUsageData') }}</p>
           </div>
           <div v-else class="overflow-x-auto">
             <table class="min-w-full text-sm">
               <thead>
                 <tr class="border-b border-default text-left">
-                  <th class="pb-3 pr-4 font-medium text-secondary">Provider</th>
-                  <th class="pb-3 pr-4 font-medium text-secondary">Model</th>
-                  <th class="pb-3 pr-4 font-medium text-secondary text-right">Requests</th>
-                  <th class="pb-3 pr-4 font-medium text-secondary text-right">Total Tokens</th>
-                  <th class="pb-3 pr-4 font-medium text-secondary text-right">Avg Latency</th>
-                  <th class="pb-3 font-medium text-secondary text-right">Cost (USD)</th>
+                  <th class="pb-3 pr-4 font-medium text-secondary">{{ $t('llm.provider') }}</th>
+                  <th class="pb-3 pr-4 font-medium text-secondary">{{ $t('llm.colModel') }}</th>
+                  <th class="pb-3 pr-4 font-medium text-secondary text-right">{{ $t('llm.colRequests') }}</th>
+                  <th class="pb-3 pr-4 font-medium text-secondary text-right">{{ $t('llm.colTotalTokens') }}</th>
+                  <th class="pb-3 pr-4 font-medium text-secondary text-right">{{ $t('llm.colAvgLatency') }}</th>
+                  <th class="pb-3 font-medium text-secondary text-right">{{ $t('llm.colCost') }}</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-default">
@@ -310,11 +312,11 @@ onMounted(async () => {
     >
       <div class="bg-autobot-bg-card rounded shadow-xl max-w-lg w-full mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-semibold text-primary">Configure {{ selectedProvider }}</h3>
+          <h3 class="text-lg font-semibold text-primary">{{ $t('llm.configureProvider', { provider: selectedProvider }) }}</h3>
           <button
             @click="closeConfigModal"
             class="text-autobot-text-muted hover:text-secondary"
-            aria-label="Close configuration modal"
+            :aria-label="$t('llm.closeConfig')"
           >
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -325,11 +327,11 @@ onMounted(async () => {
         <div class="space-y-4">
           <!-- API Key -->
           <div>
-            <label class="block text-sm font-medium text-secondary mb-1">API Key</label>
+            <label class="block text-sm font-medium text-secondary mb-1">{{ $t('llm.apiKey') }}</label>
             <input
               v-model="configForm.api_key"
               type="password"
-              placeholder="Leave blank to keep existing key"
+              :placeholder="$t('llm.apiKeyPlaceholder')"
               class="w-full px-3 py-2 text-sm border border-default rounded bg-autobot-bg-secondary text-primary focus:outline-none focus:ring-2 focus:ring-autobot-primary"
               autocomplete="new-password"
             />
@@ -337,19 +339,19 @@ onMounted(async () => {
 
           <!-- Model -->
           <div>
-            <label class="block text-sm font-medium text-secondary mb-1">Model</label>
+            <label class="block text-sm font-medium text-secondary mb-1">{{ $t('llm.modelLabel') }}</label>
             <select
               v-model="configForm.model"
               class="w-full px-3 py-2 text-sm border border-default rounded bg-autobot-bg-secondary text-primary focus:outline-none focus:ring-2 focus:ring-autobot-primary"
             >
-              <option value="">Select a model</option>
+              <option value="">{{ $t('llm.selectModel') }}</option>
               <option v-for="m in models" :key="m.id" :value="m.id">{{ m.name || m.id }}</option>
             </select>
           </div>
 
           <!-- Endpoint -->
           <div>
-            <label class="block text-sm font-medium text-secondary mb-1">Endpoint URL</label>
+            <label class="block text-sm font-medium text-secondary mb-1">{{ $t('llm.endpointUrl') }}</label>
             <input
               v-model="configForm.endpoint"
               type="url"
@@ -361,7 +363,7 @@ onMounted(async () => {
           <!-- Temperature -->
           <div>
             <label class="block text-sm font-medium text-secondary mb-1">
-              Temperature: {{ configForm.temperature }}
+              {{ $t('llm.temperature') }} {{ configForm.temperature }}
             </label>
             <input
               v-model.number="configForm.temperature"
@@ -375,7 +377,7 @@ onMounted(async () => {
 
           <!-- Max Tokens -->
           <div>
-            <label class="block text-sm font-medium text-secondary mb-1">Max Tokens</label>
+            <label class="block text-sm font-medium text-secondary mb-1">{{ $t('llm.maxTokens') }}</label>
             <input
               v-model.number="configForm.max_tokens"
               type="number"
@@ -401,21 +403,21 @@ onMounted(async () => {
             :disabled="isSavingConfig"
             class="px-4 py-2 text-sm font-medium text-secondary bg-autobot-bg-secondary border border-default rounded hover:bg-autobot-bg-tertiary disabled:opacity-50"
           >
-            {{ isSavingConfig ? 'Working...' : 'Test Connection' }}
+            {{ isSavingConfig ? $t('llm.working') : $t('llm.testConnection') }}
           </button>
           <div class="flex gap-3">
             <button
               @click="closeConfigModal"
               class="px-4 py-2 text-sm font-medium text-secondary bg-autobot-bg-card border border-default rounded hover:bg-autobot-bg-secondary"
             >
-              Cancel
+              {{ $t('common.cancel') }}
             </button>
             <button
               @click="handleSaveConfig"
               :disabled="isSavingConfig"
               class="px-4 py-2 text-sm font-medium text-white bg-autobot-primary rounded hover:bg-autobot-primary-hover disabled:opacity-50"
             >
-              {{ isSavingConfig ? 'Saving...' : 'Save' }}
+              {{ isSavingConfig ? $t('settings.saving') : $t('common.save') }}
             </button>
           </div>
         </div>

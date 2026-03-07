@@ -16,7 +16,7 @@ tts_host: "0.0.0.0"
 tts_port: 8082
 
 # HuggingFace token (required for gated models like voice cloning)
-tts_hf_token: ""
+tts_hf_token: "{{ vault_hf_token | default('') }}"
 
 # Redis connection
 tts_redis_host: "{{ redis_host | default('127.0.0.1') }}"

@@ -151,6 +151,7 @@ class NodeResponse(BaseModel):
     ip_address: str
     status: str
     roles: Optional[List[str]] = []
+    detected_roles: List[str] = Field(default_factory=list)
     ssh_user: Optional[str] = "autobot"
     ssh_port: Optional[int] = 22
     auth_method: Optional[str] = "key"
@@ -321,6 +322,41 @@ class SettingResponse(BaseModel):
 
 
 # =============================================================================
+# System Secrets Schemas (#1417)
+# =============================================================================
+
+
+class SecretCreate(BaseModel):
+    """Create a system secret."""
+
+    key: str = Field(..., min_length=1, max_length=128)
+    value: str = Field(..., min_length=1)
+    category: str = "system"
+    description: Optional[str] = None
+
+
+class SecretUpdate(BaseModel):
+    """Update a system secret."""
+
+    value: Optional[str] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+
+
+class SecretResponse(BaseModel):
+    """System secret response (value masked)."""
+
+    id: int
+    key: str
+    category: str
+    description: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# =============================================================================
 # Role Schemas
 # =============================================================================
 
@@ -332,6 +368,8 @@ class RoleInfo(BaseModel):
     description: str
     category: str
     ansible_role: str = ""
+    required: bool = False
+    degraded_without: List[str] = Field(default_factory=list)
     dependencies: List[str] = Field(default_factory=list)
     variables: Dict = Field(default_factory=dict)
     tools: List[str] = Field(default_factory=list)
@@ -2048,3 +2086,32 @@ class UpdatePolicyResponse(BaseModel):
     effective_policy: str  # "full" | "security" | "manual"
     reboot_strategy: Optional[str] = None
     per_role: Dict[str, str] = Field(default_factory=dict)
+
+
+# =============================================================================
+# Decommission Schemas (Issue #1369)
+# =============================================================================
+
+
+class DecommissionRoleInfo(BaseModel):
+    """Role classification for decommission preflight."""
+
+    role_name: str
+    display_name: str
+    reason: str
+
+
+class DecommissionPreflightResponse(BaseModel):
+    """Preflight check result for node decommission."""
+
+    can_proceed: bool
+    must_migrate: List[DecommissionRoleInfo]
+    should_migrate: List[DecommissionRoleInfo]
+    safe_to_remove: List[DecommissionRoleInfo]
+
+
+class DecommissionRequest(BaseModel):
+    """Request to decommission a node."""
+
+    backup: bool = True
+    confirm_node_id: str

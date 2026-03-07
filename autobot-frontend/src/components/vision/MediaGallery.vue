@@ -3,21 +3,21 @@
     <!-- Header -->
     <div class="gallery-header">
       <div class="header-info">
-        <h3>Media Gallery</h3>
-        <p>History of processed images, videos, and screen captures</p>
+        <h3>{{ t('vision.mediaGallery.title') }}</h3>
+        <p>{{ t('vision.mediaGallery.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <div class="filter-group">
           <select v-model="filterType">
-            <option value="">All Types</option>
-            <option value="image">Images</option>
-            <option value="video">Videos</option>
-            <option value="screen">Screen Captures</option>
+            <option value="">{{ t('vision.mediaGallery.allTypes') }}</option>
+            <option value="image">{{ t('vision.mediaGallery.images') }}</option>
+            <option value="video">{{ t('vision.mediaGallery.videos') }}</option>
+            <option value="screen">{{ t('vision.mediaGallery.screenCaptures') }}</option>
           </select>
         </div>
         <button @click="clearAll" class="btn-clear-all" :disabled="items.length === 0">
           <i class="fas fa-trash"></i>
-          Clear All
+          {{ t('vision.mediaGallery.clearAll') }}
         </button>
       </div>
     </div>
@@ -49,13 +49,13 @@
           <span class="item-date">{{ formatDate(item.timestamp) }}</span>
         </div>
         <div class="item-actions">
-          <button @click.stop="$emit('re-analyze', item)" class="btn-action" title="Re-analyze">
+          <button @click.stop="$emit('re-analyze', item)" class="btn-action" :title="t('vision.mediaGallery.reAnalyze')">
             <i class="fas fa-redo"></i>
           </button>
-          <button @click.stop="downloadItem(item)" class="btn-action" title="Download">
+          <button @click.stop="downloadItem(item)" class="btn-action" :title="t('vision.mediaGallery.download')">
             <i class="fas fa-download"></i>
           </button>
-          <button @click.stop="$emit('delete', item.id)" class="btn-action btn-delete" title="Delete">
+          <button @click.stop="$emit('delete', item.id)" class="btn-action btn-delete" :title="t('vision.mediaGallery.deleteItem')">
             <i class="fas fa-trash"></i>
           </button>
         </div>
@@ -67,9 +67,9 @@
       <div class="empty-icon">
         <i class="fas fa-images"></i>
       </div>
-      <h4>No Media Items</h4>
-      <p v-if="filterType">No {{ filterType }}s found. Try changing the filter.</p>
-      <p v-else>Process some images or capture screens to see them here</p>
+      <h4>{{ t('vision.mediaGallery.noMediaItems') }}</h4>
+      <p v-if="filterType">{{ t('vision.mediaGallery.noFilterResults', { type: filterType }) }}</p>
+      <p v-else>{{ t('vision.mediaGallery.noMediaHint') }}</p>
     </div>
 
     <!-- Detail Modal -->
@@ -96,42 +96,42 @@
 
           <div class="details-section">
             <div class="detail-row">
-              <span class="label">Type</span>
+              <span class="label">{{ t('vision.mediaGallery.type') }}</span>
               <span class="value">{{ selectedItem.type }}</span>
             </div>
             <div class="detail-row">
-              <span class="label">Filename</span>
+              <span class="label">{{ t('vision.mediaGallery.filename') }}</span>
               <span class="value">{{ selectedItem.filename }}</span>
             </div>
             <div class="detail-row">
-              <span class="label">Date</span>
+              <span class="label">{{ t('vision.mediaGallery.date') }}</span>
               <span class="value">{{ formatFullDate(selectedItem.timestamp) }}</span>
             </div>
 
             <div v-if="selectedItem.analysisResult" class="analysis-section">
-              <h5>Analysis Results</h5>
+              <h5>{{ t('vision.mediaGallery.analysisResults') }}</h5>
               <div class="analysis-data">
                 <div class="data-row" v-if="selectedItem.analysisResult.confidence">
-                  <span class="label">Confidence</span>
+                  <span class="label">{{ t('vision.mediaGallery.confidenceLabel') }}</span>
                   <span class="value">
                     {{ ((selectedItem.analysisResult.confidence as number) * 100).toFixed(1) }}%
                   </span>
                 </div>
                 <div class="data-row" v-if="selectedItem.analysisResult.processing_time">
-                  <span class="label">Processing Time</span>
+                  <span class="label">{{ t('vision.mediaGallery.processingTime') }}</span>
                   <span class="value">
                     {{ (selectedItem.analysisResult.processing_time as number).toFixed(2) }}s
                   </span>
                 </div>
                 <div class="data-row" v-if="selectedItem.analysisResult.device_used">
-                  <span class="label">Device</span>
+                  <span class="label">{{ t('vision.mediaGallery.device') }}</span>
                   <span class="value">{{ selectedItem.analysisResult.device_used }}</span>
                 </div>
               </div>
 
               <button @click="showRawJson = !showRawJson" class="btn-toggle">
                 <i :class="showRawJson ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
-                {{ showRawJson ? 'Hide' : 'Show' }} Full Results
+                {{ showRawJson ? t('vision.mediaGallery.hideFullResults') : t('vision.mediaGallery.showFullResults') }}
               </button>
               <pre v-if="showRawJson" class="json-display">{{ JSON.stringify(selectedItem.analysisResult, null, 2) }}</pre>
             </div>
@@ -140,15 +140,15 @@
         <div class="modal-actions">
           <button @click="$emit('re-analyze', selectedItem); selectedItem = null" class="btn-primary">
             <i class="fas fa-redo"></i>
-            Re-analyze
+            {{ t('vision.mediaGallery.reAnalyze') }}
           </button>
           <button @click="downloadItem(selectedItem)" class="btn-secondary">
             <i class="fas fa-download"></i>
-            Download
+            {{ t('vision.mediaGallery.download') }}
           </button>
           <button @click="$emit('delete', selectedItem.id); selectedItem = null" class="btn-danger">
             <i class="fas fa-trash"></i>
-            Delete
+            {{ t('vision.mediaGallery.deleteItem') }}
           </button>
         </div>
       </div>
@@ -160,11 +160,11 @@
         <div class="confirm-icon">
           <i class="fas fa-exclamation-triangle"></i>
         </div>
-        <h4>Clear All Items?</h4>
-        <p>Are you sure you want to clear all {{ items.length }} gallery items? This action cannot be undone.</p>
+        <h4>{{ t('vision.mediaGallery.clearAllConfirmTitle') }}</h4>
+        <p>{{ t('vision.mediaGallery.clearAllConfirmMsg', { count: items.length }) }}</p>
         <div class="confirm-actions">
-          <button @click="cancelClearAll" class="btn-cancel">Cancel</button>
-          <button @click="confirmClearAll" class="btn-confirm">Clear All</button>
+          <button @click="cancelClearAll" class="btn-cancel">{{ t('vision.mediaGallery.cancelBtn') }}</button>
+          <button @click="confirmClearAll" class="btn-confirm">{{ t('vision.mediaGallery.clearAllConfirm') }}</button>
         </div>
       </div>
     </div>
@@ -173,9 +173,11 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useToast } from '@/composables/useToast';
 import type { GalleryItem } from '@/utils/VisionMultimodalApiClient';
 
+const { t } = useI18n();
 const { showToast } = useToast();
 
 // Props
@@ -241,7 +243,7 @@ const formatFullDate = (timestamp: number): string => {
 
 const downloadItem = (item: GalleryItem) => {
   if (!item.analysisResult) {
-    showToast('No analysis data to download', 'warning');
+    showToast(t('vision.mediaGallery.toastNoAnalysisData'), 'warning');
     return;
   }
 
@@ -262,7 +264,7 @@ const clearAll = () => {
 const confirmClearAll = () => {
   emit('clear-all');
   showClearConfirm.value = false;
-  showToast('Gallery cleared', 'success');
+  showToast(t('vision.mediaGallery.toastGalleryCleared'), 'success');
 };
 
 const cancelClearAll = () => {

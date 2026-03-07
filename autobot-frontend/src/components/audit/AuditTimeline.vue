@@ -5,10 +5,10 @@
       <div class="header-content">
         <h3>
           <i class="fas fa-clock-rotate-left"></i>
-          <span v-if="type === 'session'">Session Trail: {{ entityId }}</span>
-          <span v-else>User Activity: {{ entityId }}</span>
+          <span v-if="type === 'session'">{{ $t('audit.timeline.sessionTrail', { id: entityId }) }}</span>
+          <span v-else>{{ $t('audit.timeline.userActivity', { id: entityId }) }}</span>
         </h3>
-        <span class="entry-count">{{ entries.length }} events</span>
+        <span class="entry-count">{{ $t('audit.timeline.eventsCount', { count: entries.length }) }}</span>
       </div>
       <button class="btn btn-icon" @click="$emit('close')">
         <i class="fas fa-times"></i>
@@ -19,12 +19,12 @@
     <div class="timeline-content">
       <div v-if="loading" class="loading-state">
         <i class="fas fa-spinner fa-spin"></i>
-        <span>Loading timeline...</span>
+        <span>{{ $t('audit.timeline.loading') }}</span>
       </div>
 
       <div v-else-if="entries.length === 0" class="empty-state">
         <i class="fas fa-inbox"></i>
-        <span>No audit events found</span>
+        <span>{{ $t('audit.timeline.noEvents') }}</span>
       </div>
 
       <div v-else class="timeline-list">
@@ -80,7 +80,7 @@
               @click="toggleDetails(entry.id)"
             >
               <i :class="expandedIds.has(entry.id) ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
-              {{ expandedIds.has(entry.id) ? 'Hide Details' : 'Show Details' }}
+              {{ expandedIds.has(entry.id) ? $t('audit.timeline.hideDetails') : $t('audit.timeline.showDetails') }}
             </button>
             <div v-if="expandedIds.has(entry.id) && hasDetails(entry)" class="entry-details">
               <pre>{{ formatDetails(entry.details) }}</pre>
@@ -99,7 +99,7 @@
       </span>
       <button class="btn btn-secondary" @click="$emit('refresh')">
         <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
-        Refresh
+        {{ $t('audit.timeline.refresh') }}
       </button>
     </div>
   </div>

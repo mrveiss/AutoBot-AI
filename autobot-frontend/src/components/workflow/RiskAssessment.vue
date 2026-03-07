@@ -1,7 +1,7 @@
 <template>
   <div class="risk-section">
     <div class="risk-indicator" :class="level">
-      <span class="risk-label">Risk Level: {{ level.toUpperCase() }}</span>
+      <span class="risk-label">{{ $t('workflow.risk.levelLabel', { level: level.toUpperCase() }) }}</span>
       <div class="risk-reasons">
         <div v-for="reason in reasons" :key="reason" class="risk-reason">
           • {{ reason }}

@@ -20,6 +20,22 @@ from utils.errors import RepairableException
 
 logger = logging.getLogger(__name__)
 
+# Issue #1368: Browser tool names that route to browser_mcp handlers
+_BROWSER_TOOL_NAMES = frozenset(
+    {
+        "navigate",
+        "click",
+        "fill",
+        "select",
+        "hover",
+        "screenshot",
+        "evaluate",
+        "get_text",
+        "get_attribute",
+        "wait_for_selector",
+    }
+)
+
 # Issue #650: Pre-compiled regex for tool call parsing (performance optimization)
 # Handles both uppercase and lowercase TOOL_CALL tags with nested JSON in params
 _TOOL_CALL_PATTERN = re.compile(
@@ -1131,6 +1147,147 @@ class ToolHandlerMixin:
             },
         )
 
+    def _validate_browser_params(
+        self, tool_name: str, params: Dict[str, Any]
+    ) -> str | None:
+        """Validate browser tool params. Returns error message or None. #1368."""
+        from api.browser_mcp import is_script_safe, is_url_allowed
+
+        if tool_name == "navigate" and not is_url_allowed(params.get("url", "")):
+            return f"URL not allowed: {params.get('url', '')}"
+        if tool_name == "evaluate" and not is_script_safe(params.get("script", "")):
+            return "JavaScript blocked by security policy"
+        return None
+
+    async def _handle_browser_tool(
+        self,
+        tool_call: Dict[str, Any],
+        execution_results: List[Dict[str, Any]],
+    ):
+        """Execute a browser tool call via browser_mcp. Issue #1368.
+
+        Routes navigate/click/screenshot/etc. to the Browser VM through
+        the existing browser_mcp.send_to_browser_vm() function.
+
+        Yields:
+            WorkflowMessage for browser tool execution stages
+        """
+        tool_name = tool_call["name"]
+        params = tool_call.get("params", {})
+        description = tool_call.get("description", f"Browser: {tool_name}")
+
+        logger.info("[Issue #1368] Browser tool: %s params=%s", tool_name, params)
+
+        yield WorkflowMessage(
+            type="tool_execution",
+            content=f"Executing browser action: {description}",
+            metadata={"tool": tool_name, "params": params},
+        )
+
+        try:
+            validation_error = self._validate_browser_params(tool_name, params)
+            if validation_error:
+                execution_results.append(
+                    {"tool": tool_name, "status": "error", "error": validation_error}
+                )
+                yield WorkflowMessage(
+                    type="error",
+                    content=validation_error,
+                    metadata={"tool": tool_name, "error": True},
+                )
+                return
+
+            from api.browser_mcp import send_to_browser_vm
+
+            result = await send_to_browser_vm(tool_name, params)
+            summary = self._format_browser_result(tool_name, params, result)
+
+            execution_results.append(
+                {"tool": tool_name, "status": "success", "output": summary}
+            )
+            yield WorkflowMessage(
+                type="command_output",
+                content=summary,
+                metadata={
+                    "tool": tool_name,
+                    "params": params,
+                    "result": result,
+                    "status": "success",
+                },
+            )
+
+        except Exception as e:
+            error_msg = f"Browser tool '{tool_name}' failed: {e}"
+            logger.error("[Issue #1368] %s", error_msg)
+            execution_results.append(
+                {"tool": tool_name, "status": "error", "error": str(e)}
+            )
+            yield WorkflowMessage(
+                type="error",
+                content=error_msg,
+                metadata={"tool": tool_name, "error": True},
+            )
+
+    def _format_browser_result(
+        self,
+        tool_name: str,
+        params: Dict[str, Any],
+        result: Dict[str, Any],
+    ) -> str:
+        """Format browser tool result as text for LLM context. Issue #1368.
+
+        Browser VM returns: {"success": bool, "action": str, "result": {...}}
+        The inner 'result' dict contains tool-specific data.
+        """
+        inner = result.get("result", result)
+
+        if tool_name == "navigate":
+            url = inner.get("url", params.get("url", ""))
+            title = inner.get("title", "")
+            return f"Navigated to: {url}\nPage title: {title}"
+
+        if tool_name == "screenshot":
+            has_image = bool(inner.get("image") or inner.get("screenshot"))
+            if has_image:
+                return "Screenshot captured successfully."
+            return "Screenshot failed."
+
+        if tool_name == "get_text":
+            text = inner.get("text", "")
+            if text:
+                return f"Text content: {text[:2000]}"
+            return "No text found."
+
+        if tool_name == "get_attribute":
+            value = inner.get("value", "")
+            attr = params.get("attribute", "")
+            return f"Attribute '{attr}': {value}"
+
+        if tool_name == "evaluate":
+            js_result = inner.get("result", "")
+            return f"JavaScript result: {js_result}"
+
+        if tool_name == "click":
+            return f"Clicked: {params.get('selector', '')}"
+
+        if tool_name == "fill":
+            sel = params.get("selector", "")
+            return f"Filled '{sel}' with value"
+
+        if tool_name == "select":
+            val = params.get("value", "")
+            sel = params.get("selector", "")
+            return f"Selected '{val}' in {sel}"
+
+        if tool_name == "hover":
+            return f"Hovered over: {params.get('selector', '')}"
+
+        if tool_name == "wait_for_selector":
+            sel = params.get("selector", "")
+            return f"Element found: {sel}"
+
+        return json.dumps(result, default=str)[:1000]
+
     def _build_execution_summary(
         self, execution_results: List[Dict[str, Any]]
     ) -> WorkflowMessage:
@@ -1173,6 +1330,12 @@ class ToolHandlerMixin:
 
         if tool_name == "delegate":
             yield self._handle_delegate_tool(tool_call, execution_results)
+            return
+
+        # Issue #1368: Route browser tools to browser VM
+        if tool_name in _BROWSER_TOOL_NAMES:
+            async for msg in self._handle_browser_tool(tool_call, execution_results):
+                yield msg
             return
 
         if tool_name != "execute_command":

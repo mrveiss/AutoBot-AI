@@ -12,8 +12,10 @@ from pathlib import Path
 from typing import Dict, List, Set
 
 import aiofiles
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
+from utils.background_task_manager import BackgroundTaskManager
+from utils.chromadb_client import get_all_paginated
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -23,6 +25,9 @@ from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, get_project_root
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Background task manager for dependency analysis (#1304)
+_manager = BackgroundTaskManager(redis_prefix="dep_task:")
 
 # Combined set for fast lookup during import extraction (#1197)
 _EXTERNAL_MODULES = STDLIB_MODULES | COMMON_THIRD_PARTY
@@ -392,8 +397,10 @@ async def _load_modules_from_chromadb(
 ) -> None:
     """Helper for get_dependencies. Load module map from ChromaDB. Ref: #1088."""
     try:
-        results = code_collection.get(
-            where={"type": {"$in": ["function", "class"]}}, include=["metadatas"]
+        results = get_all_paginated(
+            code_collection,
+            where={"type": {"$in": ["function", "class"]}},
+            include=["metadatas"],
         )
         seen_files: set = set()
         for metadata in results.get("metadatas", []):
@@ -494,3 +501,79 @@ async def get_dependencies():
             modules, import_relationships, external_deps, circular_deps
         )
     )
+
+
+# ------------------------------------------------------------------
+# Background task endpoints (#1304)
+# ------------------------------------------------------------------
+
+
+async def _run_dep_analysis(task_id: str) -> None:
+    """Background worker for dependency analysis (#1304)."""
+    try:
+        await _manager.update_progress(task_id, "Loading ChromaDB modules", 10.0)
+        code_collection = await asyncio.to_thread(get_code_collection)
+        modules: Dict[str, Dict] = {}
+        import_relationships: List[Dict] = []
+        external_deps: Dict[str, int] = {}
+        runtime_rels: List[Dict] = []
+
+        if code_collection:
+            await _load_modules_from_chromadb(code_collection, modules)
+
+        await _manager.update_progress(task_id, "Scanning filesystem imports", 30.0)
+        project_root = get_project_root()
+        await _scan_filesystem_imports(
+            project_root,
+            modules,
+            import_relationships,
+            external_deps,
+            runtime_rels,
+        )
+
+        await _manager.update_progress(task_id, "Detecting circular dependencies", 70.0)
+        module_index = _build_module_index(modules)
+        circular_deps = _detect_circular_deps(runtime_rels, module_index)
+
+        await _manager.update_progress(task_id, "Building visualization", 90.0)
+        result = _build_visualization_graph(
+            modules, import_relationships, external_deps, circular_deps
+        )
+        await _manager.complete_task(task_id, result)
+    except Exception as e:
+        logger.error("Dependency analysis failed: %s", e)
+        await _manager.fail_task(task_id, str(e))
+
+
+@router.post("/analytics/dependencies/analyze")
+async def start_dependency_analysis(
+    background_tasks: BackgroundTasks,
+):
+    """Start background dependency analysis (#1304)."""
+    task_id = await _manager.create_task()
+    background_tasks.add_task(_run_dep_analysis, task_id)
+    return {"task_id": task_id, "status": "pending"}
+
+
+@router.get("/analytics/dependencies/status/{task_id}")
+async def get_dependency_status(task_id: str):
+    """Get dependency analysis task status (#1304)."""
+    task = await _manager.get_status(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return task
+
+
+@router.post("/analytics/dependencies/tasks/clear-stuck")
+async def clear_stuck_dep_tasks(
+    force: bool = Query(
+        default=False,
+        description="Force clear ALL running tasks",
+    ),
+):
+    """Clear stuck dependency analysis tasks (#1304)."""
+    cleaned = await _manager.clear_stuck(force=force)
+    return {
+        "cleared_count": cleaned,
+        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
+    }

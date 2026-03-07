@@ -2,8 +2,8 @@
   <div class="content-pane">
     <div v-if="!selectedFile" class="placeholder-state">
       <i class="fas fa-file-alt"></i>
-      <h4>No file selected</h4>
-      <p>Select a file from the tree to view its contents</p>
+      <h4>{{ $t('knowledge.contentViewer.noFileSelected') }}</h4>
+      <p>{{ $t('knowledge.contentViewer.selectFileHint') }}</p>
     </div>
 
     <div v-else class="file-viewer">
@@ -23,7 +23,7 @@
           size="sm"
           @click="$emit('close')"
           class="close-btn"
-          aria-label="Close file viewer"
+          :aria-label="$t('knowledge.contentViewer.closeFileViewer')"
         >
           <i class="fas fa-times"></i>
         </BaseButton>
@@ -32,7 +32,7 @@
       <div class="file-content">
         <div v-if="isLoading" class="loading-content">
           <i class="fas fa-spinner fa-spin"></i>
-          <p>Loading content...</p>
+          <p>{{ $t('knowledge.contentViewer.loadingContent') }}</p>
         </div>
 
         <div v-else-if="error" class="error-content">

@@ -2,21 +2,21 @@
 <template>
   <div class="pipeline-runner">
     <div class="runner-header">
-      <h4><i class="fas fa-play-circle"></i> Run Pipeline</h4>
+      <h4><i class="fas fa-play-circle"></i> {{ $t('knowledge.pipeline.runner.title') }}</h4>
       <p class="header-description">
-        Process a document through the knowledge graph extraction pipeline
+        {{ $t('knowledge.pipeline.runner.description') }}
       </p>
     </div>
 
     <!-- Pipeline Form -->
     <form class="pipeline-form" @submit.prevent="handleSubmit">
       <div class="form-group">
-        <label for="document-id">Document ID</label>
+        <label for="document-id">{{ $t('knowledge.pipeline.runner.documentId') }}</label>
         <input
           id="document-id"
           v-model="form.document_id"
           type="text"
-          placeholder="Enter document ID to process"
+          :placeholder="$t('knowledge.pipeline.runner.documentIdPlaceholder')"
           :class="['form-input', { 'input-error': documentIdError }]"
           @input="documentIdError = ''"
         />
@@ -26,24 +26,24 @@
       </div>
 
       <div class="form-group">
-        <label for="pipeline-name">Pipeline</label>
+        <label for="pipeline-name">{{ $t('knowledge.pipeline.runner.pipeline') }}</label>
         <select
           id="pipeline-name"
           v-model="form.pipeline_name"
           class="form-input"
         >
-          <option value="default">Default (All Stages)</option>
-          <option value="extract_only">Extract Only</option>
-          <option value="cognify_only">Cognify Only</option>
-          <option value="summarize_only">Summarize Only</option>
+          <option value="default">{{ $t('knowledge.pipeline.runner.pipelineDefault') }}</option>
+          <option value="extract_only">{{ $t('knowledge.pipeline.runner.pipelineExtractOnly') }}</option>
+          <option value="cognify_only">{{ $t('knowledge.pipeline.runner.pipelineCognifyOnly') }}</option>
+          <option value="summarize_only">{{ $t('knowledge.pipeline.runner.pipelineSummarizeOnly') }}</option>
         </select>
       </div>
 
       <div class="form-group">
         <div class="config-label-row">
           <label for="config-json">
-            Configuration (JSON)
-            <span class="label-hint">Optional</span>
+            {{ $t('knowledge.pipeline.runner.configurationJson') }}
+            <span class="label-hint">{{ $t('knowledge.pipeline.runner.optional') }}</span>
           </label>
           <button
             type="button"
@@ -51,7 +51,7 @@
             @click="showConfigEditor = !showConfigEditor"
           >
             <i :class="showConfigEditor ? 'fas fa-code' : 'fas fa-sliders-h'"></i>
-            {{ showConfigEditor ? 'JSON Editor' : 'Visual Config' }}
+            {{ showConfigEditor ? $t('knowledge.pipeline.runner.jsonEditor') : $t('knowledge.pipeline.runner.visualConfig') }}
           </button>
         </div>
         <PipelineConfig
@@ -79,7 +79,7 @@
         :disabled="loading"
       >
         <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-play'"></i>
-        {{ loading ? 'Running...' : 'Run Pipeline' }}
+        {{ loading ? $t('knowledge.pipeline.runner.running') : $t('knowledge.pipeline.runner.runPipeline') }}
       </button>
     </form>
 
@@ -87,7 +87,7 @@
     <div v-if="error" class="error-banner">
       <i class="fas fa-exclamation-triangle"></i>
       <span>{{ error }}</span>
-      <button class="dismiss-btn" aria-label="Dismiss error" @click="clearError">
+      <button class="dismiss-btn" :aria-label="$t('knowledge.pipeline.runner.dismissError')" @click="clearError">
         <i class="fas fa-times"></i>
       </button>
     </div>
@@ -97,7 +97,7 @@
       <div class="result-header">
         <h5>
           <i class="fas fa-check-circle"></i>
-          Pipeline Complete
+          {{ $t('knowledge.pipeline.runner.pipelineComplete') }}
         </h5>
         <span class="result-duration">
           {{ result.duration_seconds.toFixed(1) }}s
@@ -109,37 +109,37 @@
           <span class="stat-value">
             {{ result.stats.chunks_processed }}
           </span>
-          <span class="stat-label">Chunks</span>
+          <span class="stat-label">{{ $t('knowledge.pipeline.runner.chunks') }}</span>
         </div>
         <div class="result-stat">
           <span class="stat-value">
             {{ result.stats.entities_extracted }}
           </span>
-          <span class="stat-label">Entities</span>
+          <span class="stat-label">{{ $t('knowledge.pipeline.runner.entities') }}</span>
         </div>
         <div class="result-stat">
           <span class="stat-value">
             {{ result.stats.relationships_created }}
           </span>
-          <span class="stat-label">Relationships</span>
+          <span class="stat-label">{{ $t('knowledge.pipeline.runner.relationships') }}</span>
         </div>
         <div class="result-stat">
           <span class="stat-value">
             {{ result.stats.events_detected }}
           </span>
-          <span class="stat-label">Events</span>
+          <span class="stat-label">{{ $t('knowledge.pipeline.runner.events') }}</span>
         </div>
         <div class="result-stat">
           <span class="stat-value">
             {{ result.stats.summaries_generated }}
           </span>
-          <span class="stat-label">Summaries</span>
+          <span class="stat-label">{{ $t('knowledge.pipeline.runner.summaries') }}</span>
         </div>
       </div>
 
       <div class="result-meta">
-        <span>Pipeline: {{ result.pipeline_id }}</span>
-        <span>Status: {{ result.status }}</span>
+        <span>{{ $t('knowledge.pipeline.runner.pipelineLabel') }} {{ result.pipeline_id }}</span>
+        <span>{{ $t('knowledge.pipeline.runner.statusLabel') }} {{ result.status }}</span>
       </div>
     </div>
   </div>
@@ -157,8 +157,10 @@ import {
 } from '@/composables/useKnowledgeGraph'
 import { createLogger } from '@/utils/debugUtils'
 import PipelineConfig from './PipelineConfig.vue'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('PipelineRunner')
+const { t } = useI18n()
 const { runPipeline, loading, error, clearError } = useKnowledgeGraph()
 
 const form = reactive({
@@ -183,14 +185,14 @@ function parseConfig(): Record<string, unknown> | null {
     configError.value = ''
     return JSON.parse(configJson.value)
   } catch {
-    configError.value = 'Invalid JSON configuration'
+    configError.value = t('knowledge.pipeline.runner.invalidJson')
     return null
   }
 }
 
 async function handleSubmit(): Promise<void> {
   if (!form.document_id.trim()) {
-    documentIdError.value = 'Document ID is required'
+    documentIdError.value = t('knowledge.pipeline.runner.documentIdRequired')
     return
   }
 

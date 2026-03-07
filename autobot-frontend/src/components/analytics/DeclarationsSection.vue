@@ -1,9 +1,9 @@
 <template>
   <div class="declarations-section analytics-section">
     <h3>
-      <i class="fas fa-code"></i> Code Declarations
+      <i class="fas fa-code"></i> {{ $t('analytics.declarations.title') }}
       <span v-if="declarations && declarations.length > 0" class="total-count">
-        ({{ declarations.length.toLocaleString() }} total)
+        ({{ declarations.length.toLocaleString() }} {{ $t('analytics.declarations.total') }})
       </span>
     </h3>
     <div v-if="declarations && declarations.length > 0" class="section-content">
@@ -11,7 +11,7 @@
       <div class="summary-cards">
         <div class="summary-card total">
           <div class="summary-value">{{ declarations.length.toLocaleString() }}</div>
-          <div class="summary-label">Total</div>
+          <div class="summary-label">{{ $t('analytics.declarations.total') }}</div>
         </div>
         <div
           v-for="(typeData, type) in declarationsByType"
@@ -42,7 +42,7 @@
             </div>
             <div class="header-badges">
               <span v-if="typeData.exportedCount > 0" class="export-badge">
-                {{ typeData.exportedCount }} exported
+                {{ typeData.exportedCount }} {{ $t('analytics.declarations.exported') }}
               </span>
             </div>
           </div>
@@ -56,12 +56,12 @@
               >
                 <div class="item-header">
                   <span class="item-name">{{ declaration.name }}</span>
-                  <span v-if="declaration.is_exported" class="export-badge small">exported</span>
+                  <span v-if="declaration.is_exported" class="export-badge small">{{ $t('analytics.declarations.exported') }}</span>
                 </div>
                 <div class="item-location">{{ declaration.file_path }}:{{ declaration.line_number }}</div>
               </div>
               <div v-if="typeData.declarations.length > 30" class="show-more">
-                <span class="muted">Showing 30 of {{ typeData.declarations.length.toLocaleString() }} {{ formatDeclarationType(String(type)).toLowerCase() }}s</span>
+                <span class="muted">{{ $t('analytics.declarations.showingOf', { shown: 30, total: typeData.declarations.length.toLocaleString(), type: formatDeclarationType(String(type)) }) }}</span>
               </div>
             </div>
           </transition>
@@ -71,7 +71,7 @@
     <EmptyState
       v-else
       icon="fas fa-code"
-      message="No code declarations found or analysis not run yet."
+      :message="$t('analytics.declarations.emptyMessage')"
     />
   </div>
 </template>
@@ -91,7 +91,10 @@
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
+
+const { t } = useI18n()
 
 interface Declaration {
   name: string
@@ -127,17 +130,10 @@ const toggleDeclarationType = (type: string) => {
 }
 
 const formatDeclarationType = (type: string): string => {
-  const labels: Record<string, string> = {
-    function: 'Functions',
-    class: 'Classes',
-    method: 'Methods',
-    variable: 'Variables',
-    constant: 'Constants',
-    interface: 'Interfaces',
-    type: 'Types',
-    unknown: 'Other'
-  }
-  return labels[type] || type.charAt(0).toUpperCase() + type.slice(1)
+  const key = `analytics.declarations.types.${type}`
+  const translated = t(key)
+  // Fall back to capitalized type name if key not found
+  return translated !== key ? translated : type.charAt(0).toUpperCase() + type.slice(1)
 }
 
 const getDeclarationTypeClass = (type: string): string => {

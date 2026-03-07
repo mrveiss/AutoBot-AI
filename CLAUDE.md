@@ -2,6 +2,7 @@
 
 > **Reference material** (IPs, playbooks, commands): [`docs/developer/AUTOBOT_REFERENCE.md`](docs/developer/AUTOBOT_REFERENCE.md)
 > **Status updates:** [`docs/system-state.md`](docs/system-state.md)
+> **Worktrees:** Use `.worktrees/` (project-local, gitignored) for all parallel/isolated work
 
 ---
 

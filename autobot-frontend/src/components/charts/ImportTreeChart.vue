@@ -9,14 +9,14 @@
 <template>
   <div class="import-tree-chart" :class="{ 'chart-loading': loading, 'fullscreen': isFullscreen }">
     <div v-if="title" class="chart-header">
-      <h3 class="chart-title">{{ title }}</h3>
-      <span v-if="subtitle" class="chart-subtitle">{{ subtitle }}</span>
+      <h3 class="chart-title">{{ title ?? $t('charts.importTree.title') }}</h3>
+      <span v-if="subtitle" class="chart-subtitle">{{ subtitle ?? $t('charts.importTree.subtitle') }}</span>
     </div>
 
     <!-- Loading state -->
     <div v-if="loading" class="chart-loading-overlay">
       <div class="loading-spinner"></div>
-      <span>Loading import tree...</span>
+      <span>{{ $t('charts.importTree.loading') }}</span>
     </div>
 
     <!-- Error state -->
@@ -27,7 +27,7 @@
 
     <!-- No data state -->
     <div v-else-if="!data || data.length === 0" class="chart-no-data">
-      <span>No import data available</span>
+      <span>{{ $t('charts.importTree.noData') }}</span>
     </div>
 
     <!-- Main visualization -->
@@ -37,26 +37,26 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search files..."
+          :placeholder="$t('charts.importTree.searchPlaceholder')"
           class="tree-search"
           @input="handleSearch"
         />
         <div class="tree-stats">
-          <span>{{ filteredData.length }} files</span>
-          <span>{{ totalImports }} imports</span>
+          <span>{{ filteredData.length }} {{ $t('charts.importTree.statsFiles') }}</span>
+          <span>{{ totalImports }} {{ $t('charts.importTree.statsImports') }}</span>
         </div>
         <div class="view-toggle">
           <button
             :class="{ active: viewMode === 'network' }"
             @click="viewMode = 'network'"
-            title="Network View"
+            :title="$t('charts.importTree.networkView')"
           >
             <i class="fas fa-project-diagram"></i>
           </button>
           <button
             :class="{ active: viewMode === 'tree' }"
             @click="viewMode = 'tree'"
-            title="Tree View"
+            :title="$t('charts.importTree.treeView')"
           >
             <i class="fas fa-list-tree"></i>
           </button>
@@ -66,28 +66,28 @@
       <!-- Network view (Cytoscape) - DEFAULT -->
       <div v-show="viewMode === 'network'" class="network-view">
         <div class="network-legend">
-          <span class="legend-item importer"><span class="dot"></span> Imports Others</span>
-          <span class="legend-item imported"><span class="dot"></span> Imported By Others</span>
-          <span class="legend-item hub"><span class="dot"></span> Hub (Both)</span>
-          <span class="legend-item external"><span class="dot"></span> External Package</span>
+          <span class="legend-item importer"><span class="dot"></span> {{ $t('charts.importTree.legend.importsOthers') }}</span>
+          <span class="legend-item imported"><span class="dot"></span> {{ $t('charts.importTree.legend.importedByOthers') }}</span>
+          <span class="legend-item hub"><span class="dot"></span> {{ $t('charts.importTree.legend.hub') }}</span>
+          <span class="legend-item external"><span class="dot"></span> {{ $t('charts.importTree.legend.externalPackage') }}</span>
         </div>
         <div ref="cytoscapeContainer" class="cytoscape-container"></div>
         <div class="network-controls">
-          <button @click="zoomIn" title="Zoom in">
+          <button @click="zoomIn" :title="$t('charts.importTree.controls.zoomIn')">
             <i class="fas fa-plus"></i>
           </button>
           <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-          <button @click="zoomOut" title="Zoom out">
+          <button @click="zoomOut" :title="$t('charts.importTree.controls.zoomOut')">
             <i class="fas fa-minus"></i>
           </button>
-          <button @click="fitGraph" title="Fit to view">
+          <button @click="fitGraph" :title="$t('charts.importTree.controls.fitToView')">
             <i class="fas fa-expand"></i>
           </button>
-          <button @click="toggleLayout" title="Toggle layout">
+          <button @click="toggleLayout" :title="$t('charts.importTree.controls.toggleLayout')">
             <i class="fas fa-th"></i>
           </button>
           <span class="control-separator">|</span>
-          <button @click="toggleFullscreen" :title="isFullscreen ? 'Exit fullscreen' : 'Fullscreen'">
+          <button @click="toggleFullscreen" :title="isFullscreen ? $t('charts.importTree.controls.exitFullscreen') : $t('charts.importTree.controls.fullscreen')">
             <i :class="isFullscreen ? 'fas fa-compress' : 'fas fa-expand-arrows-alt'"></i>
           </button>
         </div>
@@ -97,35 +97,35 @@
           <div class="detail-header">
             <span class="detail-icon">{{ getFileIcon(selectedNode.path) }}</span>
             <span class="detail-name">{{ selectedNode.shortName }}</span>
-            <button class="close-btn" @click="selectedNode = null" title="Close">
+            <button class="close-btn" @click="selectedNode = null" :title="$t('charts.importTree.controls.close')">
               <i class="fas fa-times"></i>
             </button>
           </div>
           <div class="detail-content">
             <div class="detail-row">
-              <span class="detail-label">Full Path:</span>
+              <span class="detail-label">{{ $t('charts.importTree.detail.fullPath') }}</span>
               <span class="detail-value path-value">{{ selectedNode.path }}</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Type:</span>
+              <span class="detail-label">{{ $t('charts.importTree.detail.type') }}</span>
               <span class="detail-value" :class="'node-type-' + selectedNode.nodeType">
                 {{ getNodeTypeLabel(selectedNode.nodeType) }}
               </span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Imports:</span>
+              <span class="detail-label">{{ $t('charts.importTree.detail.imports') }}</span>
               <span class="detail-value">{{ selectedNode.importsCount }} module{{ selectedNode.importsCount !== 1 ? 's' : '' }}</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Imported By:</span>
+              <span class="detail-label">{{ $t('charts.importTree.detail.importedBy') }}</span>
               <span class="detail-value">{{ selectedNode.importedByCount }} file{{ selectedNode.importedByCount !== 1 ? 's' : '' }}</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Extension:</span>
+              <span class="detail-label">{{ $t('charts.importTree.detail.extension') }}</span>
               <span class="detail-value">{{ getFileExtension(selectedNode.path) }}</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Directory:</span>
+              <span class="detail-label">{{ $t('charts.importTree.detail.directory') }}</span>
               <span class="detail-value path-value">{{ getFileDirectory(selectedNode.path) }}</span>
             </div>
           </div>
@@ -151,10 +151,10 @@
               <span class="file-icon">{{ getFileIcon(file.path) }}</span>
               <span class="file-name" :title="file.path">{{ getFileName(file.path) }}</span>
               <span class="import-counts">
-                <span v-if="file.imports?.length" class="imports-out" :title="`Imports ${file.imports.length} modules`">
+                <span v-if="file.imports?.length" class="imports-out" :title="$t('charts.importTree.importsModules', { count: file.imports.length })">
                   ↑{{ file.imports.length }}
                 </span>
-                <span v-if="file.imported_by?.length" class="imports-in" :title="`Imported by ${file.imported_by.length} files`">
+                <span v-if="file.imported_by?.length" class="imports-in" :title="$t('charts.importTree.importedByFiles', { count: file.imported_by.length })">
                   ↓{{ file.imported_by.length }}
                 </span>
               </span>
@@ -166,7 +166,7 @@
               <div v-if="file.imports?.length" class="import-section">
                 <div class="section-header">
                   <span class="section-icon">↑</span>
-                  <span>Imports ({{ file.imports.length }})</span>
+                  <span>{{ $t('charts.importTree.sections.imports') }} ({{ file.imports.length }})</span>
                 </div>
                 <div class="import-list">
                   <div
@@ -187,7 +187,7 @@
               <div v-if="file.imported_by?.length" class="import-section">
                 <div class="section-header">
                   <span class="section-icon">↓</span>
-                  <span>Imported By ({{ file.imported_by.length }})</span>
+                  <span>{{ $t('charts.importTree.sections.importedBy') }} ({{ file.imported_by.length }})</span>
                 </div>
                 <div class="import-list">
                   <div
@@ -212,12 +212,15 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
 // @ts-expect-error - cytoscape-fcose has no type declarations
 import fcose from 'cytoscape-fcose'
 
 // Register fcose layout
 cytoscape.use(fcose)
+
+const { t } = useI18n()
 
 interface ImportInfo {
   module: string
@@ -249,8 +252,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'File Import Tree',
-  subtitle: 'View file import relationships',
+  title: undefined,
+  subtitle: undefined,
   height: 600,
   loading: false,
   error: ''
@@ -357,9 +360,9 @@ function getFileIcon(path: string): string {
 }
 
 function getFileExtension(path: string): string {
-  if (!path) return 'Unknown'
+  if (!path) return t('charts.importTree.detail.unknown')
   const lastDot = path.lastIndexOf('.')
-  if (lastDot === -1) return 'No extension'
+  if (lastDot === -1) return t('charts.importTree.detail.noExtension')
   return path.substring(lastDot)
 }
 
@@ -372,10 +375,10 @@ function getFileDirectory(path: string): string {
 
 function getNodeTypeLabel(nodeType: string): string {
   switch (nodeType) {
-    case 'hub': return 'Hub (Imports & Imported)'
-    case 'importer': return 'Importer (Imports Others)'
-    case 'imported': return 'Library (Imported by Others)'
-    case 'isolated': return 'Isolated (No Connections)'
+    case 'hub': return t('charts.importTree.nodeTypes.hub')
+    case 'importer': return t('charts.importTree.nodeTypes.importer')
+    case 'imported': return t('charts.importTree.nodeTypes.imported')
+    case 'isolated': return t('charts.importTree.nodeTypes.isolated')
     default: return nodeType
   }
 }

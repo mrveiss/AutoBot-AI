@@ -9,8 +9,11 @@
  */
 
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useChatStore, type SessionActivity } from '@/stores/useChatStore'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
+
+const { t } = useI18n()
 
 const chatStore = useChatStore()
 const { getActivities } = useSessionActivityLogger()
@@ -58,15 +61,15 @@ const formatTime = (date: Date): string => {
 const getTypeStyle = (type: SessionActivity['type']): { icon: string; color: string; label: string } => {
   switch (type) {
     case 'terminal':
-      return { icon: 'terminal', color: 'text-green-400 bg-green-400/10', label: 'Terminal' }
+      return { icon: 'terminal', color: 'text-green-400 bg-green-400/10', label: t('collaboration.activityTimeline.typeTerminal') }
     case 'file':
-      return { icon: 'folder', color: 'text-blue-400 bg-blue-400/10', label: 'File' }
+      return { icon: 'folder', color: 'text-blue-400 bg-blue-400/10', label: t('collaboration.activityTimeline.typeFile') }
     case 'browser':
-      return { icon: 'globe', color: 'text-purple-400 bg-purple-400/10', label: 'Browser' }
+      return { icon: 'globe', color: 'text-purple-400 bg-purple-400/10', label: t('collaboration.activityTimeline.typeBrowser') }
     case 'desktop':
-      return { icon: 'display', color: 'text-orange-400 bg-orange-400/10', label: 'Desktop' }
+      return { icon: 'display', color: 'text-orange-400 bg-orange-400/10', label: t('collaboration.activityTimeline.typeDesktop') }
     default:
-      return { icon: 'activity', color: 'text-autobot-text-muted bg-autobot-bg-tertiary', label: 'Activity' }
+      return { icon: 'activity', color: 'text-autobot-text-muted bg-autobot-bg-tertiary', label: t('collaboration.activityTimeline.typeActivity') }
   }
 }
 
@@ -81,21 +84,21 @@ const currentSession = computed(() => chatStore.currentSession)
 const hasActivities = computed(() => activities.value.length > 0)
 
 // Activity type options for filter
-const typeOptions = [
-  { value: 'all', label: 'All' },
-  { value: 'terminal', label: 'Terminal' },
-  { value: 'file', label: 'Files' },
-  { value: 'browser', label: 'Browser' },
-  { value: 'desktop', label: 'Desktop' }
-]
+const typeOptions = computed(() => [
+  { value: 'all', label: t('collaboration.activityTimeline.filterAll') },
+  { value: 'terminal', label: t('collaboration.activityTimeline.filterTerminal') },
+  { value: 'file', label: t('collaboration.activityTimeline.filterFiles') },
+  { value: 'browser', label: t('collaboration.activityTimeline.filterBrowser') },
+  { value: 'desktop', label: t('collaboration.activityTimeline.filterDesktop') }
+])
 </script>
 
 <template>
   <div class="activity-timeline h-full flex flex-col bg-autobot-bg-secondary rounded-lg">
     <!-- Header -->
     <div class="flex items-center justify-between px-4 py-3 border-b border-autobot-border">
-      <h3 class="text-sm font-semibold text-autobot-text-primary">Activity Timeline</h3>
-      <span class="text-xs text-autobot-text-muted">{{ activities.length }} activities</span>
+      <h3 class="text-sm font-semibold text-autobot-text-primary">{{ $t('collaboration.activityTimeline.title') }}</h3>
+      <span class="text-xs text-autobot-text-muted">{{ $t('collaboration.activityTimeline.activitiesCount', { count: activities.length }) }}</span>
     </div>
 
     <!-- Filter -->
@@ -125,7 +128,7 @@ const typeOptions = [
         class="flex flex-col items-center justify-center h-full text-autobot-text-muted p-4"
       >
         <i class="bi bi-chat-square-dots text-3xl mb-2" />
-        <span class="text-sm text-center">Select a chat session to view activity timeline</span>
+        <span class="text-sm text-center">{{ $t('collaboration.activityTimeline.selectSession') }}</span>
       </div>
 
       <!-- No activities -->
@@ -134,8 +137,8 @@ const typeOptions = [
         class="flex flex-col items-center justify-center h-full text-autobot-text-muted p-4"
       >
         <i class="bi bi-clock-history text-3xl mb-2" />
-        <span class="text-sm text-center">No activities recorded yet</span>
-        <span class="text-xs text-autobot-text-muted mt-1">Activities will appear here as you work</span>
+        <span class="text-sm text-center">{{ $t('collaboration.activityTimeline.noActivities') }}</span>
+        <span class="text-xs text-autobot-text-muted mt-1">{{ $t('collaboration.activityTimeline.activitiesAppearHere') }}</span>
       </div>
 
       <!-- Activity groups by date -->
@@ -194,7 +197,7 @@ const typeOptions = [
                   v-if="activity.userId && activity.userId !== 'anonymous'"
                   class="mt-1 text-xs text-autobot-text-muted"
                 >
-                  by {{ activity.userId }}
+                  {{ $t('collaboration.activityTimeline.byUser', { userId: activity.userId }) }}
                 </div>
 
                 <!-- Secrets badge -->
@@ -204,7 +207,7 @@ const typeOptions = [
                 >
                   <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-yellow-500/20 text-yellow-400">
                     <i class="bi bi-key mr-1" />
-                    {{ activity.secretsUsed.length }} secret(s) used
+                    {{ $t('collaboration.activityTimeline.secretsUsed', { count: activity.secretsUsed.length }) }}
                   </span>
                 </div>
 
@@ -214,7 +217,7 @@ const typeOptions = [
                   class="mt-2 text-xs text-autobot-text-muted"
                 >
                   <details class="cursor-pointer">
-                    <summary class="hover:text-autobot-text-secondary">Details</summary>
+                    <summary class="hover:text-autobot-text-secondary">{{ $t('collaboration.activityTimeline.details') }}</summary>
                     <pre class="mt-1 p-2 bg-autobot-bg-secondary rounded text-xs overflow-x-auto">{{ JSON.stringify(activity.metadata, null, 2) }}</pre>
                   </details>
                 </div>

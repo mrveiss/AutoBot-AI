@@ -3,7 +3,7 @@
     <div class="manager-header">
       <h3>
         <i class="fas fa-exclamation-triangle"></i>
-        Failed Vectorizations
+        {{ $t('knowledge.failedVectorizations.title') }}
       </h3>
       <div class="header-actions">
         <BaseButton
@@ -15,7 +15,7 @@
           class="btn-refresh"
         >
           <i v-if="!loading" class="fas fa-sync-alt"></i>
-          Refresh
+          {{ $t('knowledge.failedVectorizations.refresh') }}
         </BaseButton>
         <BaseButton
           v-if="failedJobs.length > 0"
@@ -26,7 +26,7 @@
           class="btn-clear-all"
         >
           <i class="fas fa-trash-alt"></i>
-          Clear All
+          {{ $t('knowledge.failedVectorizations.clearAll') }}
         </BaseButton>
       </div>
     </div>
@@ -34,7 +34,7 @@
     <!-- Loading State -->
     <div v-if="loading && failedJobs.length === 0" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      Loading failed jobs...
+      {{ $t('knowledge.failedVectorizations.loadingJobs') }}
     </div>
 
     <!-- Error State -->
@@ -47,7 +47,7 @@
     <EmptyState
       v-else-if="failedJobs.length === 0"
       icon="fas fa-check-circle"
-      message="No failed vectorizations!"
+      :message="$t('knowledge.failedVectorizations.noFailedJobs')"
       variant="success"
     />
 
@@ -66,7 +66,7 @@
 
         <div class="job-error">
           <i class="fas fa-times-circle"></i>
-          {{ job.error || 'Unknown error' }}
+          {{ job.error || $t('knowledge.failedVectorizations.unknownError') }}
         </div>
 
         <div class="job-actions">
@@ -79,7 +79,7 @@
             class="btn-retry"
           >
             <i v-if="!retryingJobs.has(job.job_id)" class="fas fa-redo"></i>
-            {{ retryingJobs.has(job.job_id) ? 'Retrying...' : 'Retry' }}
+            {{ retryingJobs.has(job.job_id) ? $t('knowledge.failedVectorizations.retrying') : $t('knowledge.failedVectorizations.retryBtn') }}
           </BaseButton>
           <BaseButton
             variant="secondary"
@@ -89,7 +89,7 @@
             class="btn-delete"
           >
             <i class="fas fa-trash"></i>
-            Delete
+            {{ $t('knowledge.failedVectorizations.deleteBtn') }}
           </BaseButton>
         </div>
       </div>
@@ -99,6 +99,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { formatDateTime } from '@/utils/formatHelpers'
@@ -108,6 +109,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('FailedVectorizationsManager')
+const { t } = useI18n()
 
 interface FailedJob {
   job_id: string
@@ -168,7 +170,7 @@ const retryJob = async (jobId: string) => {
 
 // Delete a single job
 const deleteJob = async (jobId: string) => {
-  if (!confirm('Are you sure you want to delete this failed job record?')) {
+  if (!confirm(t('knowledge.failedVectorizations.confirmDelete'))) {
     return
   }
 
@@ -187,7 +189,7 @@ const deleteJob = async (jobId: string) => {
 
 // Clear all failed jobs
 const clearAllFailed = async () => {
-  if (!confirm(`Are you sure you want to clear all ${failedJobs.value.length} failed jobs?`)) {
+  if (!confirm(t('knowledge.failedVectorizations.confirmClearAll', { count: failedJobs.value.length }))) {
     return
   }
 

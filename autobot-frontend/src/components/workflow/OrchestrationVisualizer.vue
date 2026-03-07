@@ -2,34 +2,34 @@
   <div class="orchestration-visualizer">
     <!-- Status Overview -->
     <div class="status-panel">
-      <h3><i class="fas fa-network-wired"></i> Orchestration Status</h3>
+      <h3><i class="fas fa-network-wired"></i> {{ $t('workflow.orchestration.statusTitle') }}</h3>
       <div class="status-grid">
         <div class="status-card" :class="{ healthy: status?.status === 'operational' }">
           <div class="card-icon"><i class="fas fa-heartbeat"></i></div>
           <div class="card-info">
             <span class="card-value">{{ status?.status || 'Unknown' }}</span>
-            <span class="card-label">System Status</span>
+            <span class="card-label">{{ $t('workflow.orchestration.systemStatus') }}</span>
           </div>
         </div>
         <div class="status-card">
           <div class="card-icon"><i class="fas fa-tasks"></i></div>
           <div class="card-info">
             <span class="card-value">{{ status?.active_workflows || 0 }}</span>
-            <span class="card-label">Active Workflows</span>
+            <span class="card-label">{{ $t('workflow.orchestration.activeWorkflows') }}</span>
           </div>
         </div>
         <div class="status-card">
           <div class="card-icon"><i class="fas fa-users"></i></div>
           <div class="card-info">
             <span class="card-value">{{ status?.total_agents || 0 }}</span>
-            <span class="card-label">Total Agents</span>
+            <span class="card-label">{{ $t('workflow.orchestration.totalAgents') }}</span>
           </div>
         </div>
         <div class="status-card">
           <div class="card-icon"><i class="fas fa-layer-group"></i></div>
           <div class="card-info">
             <span class="card-value">{{ status?.max_parallel_tasks || 0 }}</span>
-            <span class="card-label">Max Parallel</span>
+            <span class="card-label">{{ $t('workflow.orchestration.maxParallel') }}</span>
           </div>
         </div>
       </div>
@@ -37,32 +37,32 @@
 
     <!-- Capabilities -->
     <div v-if="status?.capabilities" class="capabilities-panel">
-      <h4><i class="fas fa-check-double"></i> Capabilities</h4>
+      <h4><i class="fas fa-check-double"></i> {{ $t('workflow.orchestration.capabilities') }}</h4>
       <div class="capabilities-list">
         <div class="capability-item" :class="{ enabled: status.capabilities.agent_coordination }">
           <i class="fas fa-users-cog"></i>
-          <span>Agent Coordination</span>
+          <span>{{ $t('workflow.orchestration.agentCoordination') }}</span>
         </div>
         <div class="capability-item" :class="{ enabled: status.capabilities.performance_tracking }">
           <i class="fas fa-chart-line"></i>
-          <span>Performance Tracking</span>
+          <span>{{ $t('workflow.orchestration.performanceTracking') }}</span>
         </div>
         <div class="capability-item" :class="{ enabled: status.capabilities.automatic_failover }">
           <i class="fas fa-sync-alt"></i>
-          <span>Automatic Failover</span>
+          <span>{{ $t('workflow.orchestration.automaticFailover') }}</span>
         </div>
         <div class="capability-item" :class="{ enabled: status.capabilities.resource_optimization }">
           <i class="fas fa-bolt"></i>
-          <span>Resource Optimization</span>
+          <span>{{ $t('workflow.orchestration.resourceOptimization') }}</span>
         </div>
       </div>
     </div>
 
     <!-- Execution Strategies -->
     <div class="strategies-panel">
-      <h4><i class="fas fa-chess"></i> Execution Strategies</h4>
+      <h4><i class="fas fa-chess"></i> {{ $t('workflow.orchestration.executionStrategies') }}</h4>
       <div v-if="loading" class="loading">
-        <i class="fas fa-spinner fa-spin"></i> Loading strategies...
+        <i class="fas fa-spinner fa-spin"></i> {{ $t('workflow.orchestration.loadingStrategies') }}
       </div>
       <div v-else class="strategies-grid">
         <div v-for="(strategy, key) in strategies" :key="key" class="strategy-card" :class="{ active: activeStrategy === key }">
@@ -78,7 +78,7 @@
 
     <!-- Current Workflow Visualization -->
     <div v-if="currentWorkflow" class="visualization-panel">
-      <h4><i class="fas fa-project-diagram"></i> Current Workflow: {{ currentWorkflow.name }}</h4>
+      <h4><i class="fas fa-project-diagram"></i> {{ $t('workflow.orchestration.currentWorkflow', { name: currentWorkflow.name }) }}</h4>
       <div class="workflow-viz">
         <div class="viz-timeline">
           <div v-for="(step, i) in currentWorkflow.steps" :key="step.step_id" class="viz-step" :class="step.status">
@@ -89,22 +89,22 @@
                 <i v-else-if="step.status === 'executing'" class="fas fa-spinner fa-spin"></i>
                 <span v-else>{{ i + 1 }}</span>
               </div>
-              <span class="node-label">{{ step.description || `Step ${i + 1}` }}</span>
+              <span class="node-label">{{ step.description || $t('workflow.orchestration.stepDefault', { num: i + 1 }) }}</span>
             </div>
             <div v-if="i < currentWorkflow.steps.length - 1" class="viz-connector" :class="step.status"></div>
           </div>
         </div>
         <div class="viz-details">
           <div class="detail-item">
-            <span class="label">Mode</span>
+            <span class="label">{{ $t('workflow.orchestration.mode') }}</span>
             <span class="value">{{ currentWorkflow.automation_mode }}</span>
           </div>
           <div class="detail-item">
-            <span class="label">Progress</span>
+            <span class="label">{{ $t('workflow.orchestration.progress') }}</span>
             <span class="value">{{ currentWorkflow.current_step + 1 }} / {{ currentWorkflow.total_steps }}</span>
           </div>
           <div class="detail-item">
-            <span class="label">Status</span>
+            <span class="label">{{ $t('workflow.orchestration.status') }}</span>
             <span class="value status-badge" :class="workflowStatusClass">{{ workflowStatusLabel }}</span>
           </div>
         </div>
@@ -115,8 +115,8 @@
     <div v-else class="no-workflow">
       <div class="empty-viz">
         <i class="fas fa-sitemap"></i>
-        <h3>No Active Orchestration</h3>
-        <p>Start a workflow to see real-time orchestration visualization</p>
+        <h3>{{ $t('workflow.orchestration.noActiveOrchestration') }}</h3>
+        <p>{{ $t('workflow.orchestration.noActiveDescription') }}</p>
       </div>
     </div>
   </div>
@@ -124,7 +124,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { OrchestrationStatus, StrategyInfo, ActiveWorkflow } from '@/composables/useWorkflowBuilder';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   status: OrchestrationStatus | null;
@@ -149,10 +152,10 @@ const workflowStatusClass = computed(() => {
 
 const workflowStatusLabel = computed(() => {
   if (!props.currentWorkflow) return '';
-  if (props.currentWorkflow.is_cancelled) return 'Cancelled';
-  if (props.currentWorkflow.is_paused) return 'Paused';
-  if (props.currentWorkflow.completed_at) return 'Completed';
-  return 'Running';
+  if (props.currentWorkflow.is_cancelled) return t('workflow.orchestration.cancelled');
+  if (props.currentWorkflow.is_paused) return t('workflow.orchestration.paused');
+  if (props.currentWorkflow.completed_at) return t('workflow.orchestration.completedStatus');
+  return t('workflow.orchestration.running');
 });
 
 function getStrategyIcon(strategy: string): string {

@@ -27,19 +27,19 @@
       </div>
 
       <h2 class="permission-denied__title">
-        {{ title }}
+        {{ title || $t('common.permissionDenied.title') }}
       </h2>
 
       <p class="permission-denied__message">
-        {{ message }}
+        {{ message || $t('common.permissionDenied.message') }}
       </p>
 
       <div v-if="showDetails && requiredPermission" class="permission-denied__details">
         <p class="permission-denied__required">
-          Required permission: <code>{{ requiredPermission }}</code>
+          {{ $t('common.permissionDenied.requiredPermission') }}: <code>{{ requiredPermission }}</code>
         </p>
         <p class="permission-denied__current">
-          Your role: <code>{{ currentRole }}</code>
+          {{ $t('common.permissionDenied.yourRole') }}: <code>{{ currentRole }}</code>
         </p>
       </div>
 
@@ -49,19 +49,19 @@
           class="permission-denied__button permission-denied__button--secondary"
           @click="goBack"
         >
-          Go Back
+          {{ $t('common.permissionDenied.goBack') }}
         </button>
         <button
           v-if="showHomeButton"
           class="permission-denied__button permission-denied__button--primary"
           @click="goHome"
         >
-          Go to Home
+          {{ $t('common.permissionDenied.goHome') }}
         </button>
       </div>
 
       <p v-if="contactAdmin" class="permission-denied__contact">
-        If you believe you should have access, please contact your administrator.
+        {{ $t('common.permissionDenied.contactAdmin') }}
       </p>
     </div>
   </div>
@@ -83,8 +83,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'Access Denied',
-  message: 'You do not have permission to access this resource.',
+  title: undefined,
+  message: undefined,
   requiredPermission: undefined,
   showDetails: false,
   showBackButton: true,

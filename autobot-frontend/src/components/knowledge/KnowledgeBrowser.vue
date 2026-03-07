@@ -16,7 +16,7 @@
           <h3>{{ mainCat.name }}</h3>
           <p>{{ mainCat.description }}</p>
           <div class="category-stats">
-            <span class="fact-count">{{ mainCat.count }} facts</span>
+            <span class="fact-count">{{ mainCat.count }} {{ $t('knowledge.browser.facts') }}</span>
             <!-- Populate button for system categories -->
             <BaseButton
               v-if="mainCat.id !== 'user-knowledge'"
@@ -28,7 +28,7 @@
               class="populate-btn"
             >
               <i v-if="!populationStates[mainCat.id]?.isPopulating" class="fas fa-sync"></i>
-              <span v-if="!populationStates[mainCat.id]?.isPopulating">Populate</span>
+              <span v-if="!populationStates[mainCat.id]?.isPopulating">{{ $t('knowledge.browser.populate') }}</span>
               <span v-else>{{ populationStates[mainCat.id]?.progress || 0 }}%</span>
             </BaseButton>
             <!-- Import button for user knowledge -->
@@ -40,7 +40,7 @@
               class="populate-btn"
             >
               <i class="fas fa-file-import"></i>
-              <span>Import</span>
+              <span>{{ $t('knowledge.browser.import') }}</span>
             </BaseButton>
           </div>
         </div>
@@ -84,11 +84,11 @@
         <transition name="fade">
           <div v-if="selectedCategory" class="active-filter-badge">
             <i class="fas fa-filter"></i>
-            <span>Filtering by: {{ formatCategoryName(selectedCategory) }}</span>
+            <span>{{ $t('knowledge.browser.filteringBy', { category: formatCategoryName(selectedCategory) }) }}</span>
             <button
               @click="selectCategory(null)"
               class="clear-filter-btn"
-              aria-label="Clear category filter"
+              :aria-label="$t('knowledge.browser.clearCategoryFilter')"
             >
               <i class="fas fa-times"></i>
             </button>
@@ -102,7 +102,7 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search files and folders..."
+          :placeholder="$t('knowledge.browser.searchPlaceholder')"
           class="search-input"
           @input="handleSearch"
         />
@@ -112,7 +112,7 @@
           size="xs"
           @click="clearSearch"
           class="clear-btn"
-          aria-label="Clear search"
+          :aria-label="$t('knowledge.browser.clearSearch')"
         >
           <i class="fas fa-times"></i>
         </BaseButton>
@@ -126,10 +126,10 @@
         :disabled="isRefreshingStatus"
         @click="refreshVectorizationStatus"
         class="refresh-status-btn"
-        title="Refresh vectorization status for all documents"
+        :title="$t('knowledge.browser.refreshVectorizationStatus')"
       >
         <i v-if="!isRefreshingStatus" class="fas fa-sync-alt"></i>
-        <span>Status</span>
+        <span>{{ $t('knowledge.browser.status') }}</span>
       </BaseButton>
     </div>
 
@@ -139,7 +139,7 @@
         <div class="toolbar-content">
           <div class="toolbar-info">
             <i class="fas fa-check-square"></i>
-            <span>{{ selectionCount }} document{{ selectionCount > 1 ? 's' : '' }} selected</span>
+            <span>{{ $t('knowledge.browser.documentsSelected', { count: selectionCount }) }}</span>
           </div>
           <div class="toolbar-actions">
             <BaseButton
@@ -150,7 +150,7 @@
               class="toolbar-btn vectorize"
             >
               <i v-if="!isVectorizing" class="fas fa-cubes"></i>
-              Vectorize Selected
+              {{ $t('knowledge.browser.vectorizeSelected') }}
             </BaseButton>
             <BaseButton
               variant="secondary"
@@ -158,7 +158,7 @@
               class="toolbar-btn cancel"
             >
               <i class="fas fa-times"></i>
-              Clear Selection
+              {{ $t('knowledge.browser.clearSelection') }}
             </BaseButton>
           </div>
         </div>
@@ -181,9 +181,9 @@
         size="sm"
         @click="clearSelection"
         class="breadcrumb-item"
-        aria-label="Back to root"
+        :aria-label="$t('knowledge.browser.backToRoot')"
       >
-        <i class="fas fa-home"></i> Root
+        <i class="fas fa-home"></i> {{ $t('knowledge.browser.root') }}
       </BaseButton>
       <i class="fas fa-chevron-right breadcrumb-sep"></i>
       <span v-for="(part, idx) in breadcrumbParts" :key="idx" class="breadcrumb-item active">
@@ -198,7 +198,7 @@
       <div class="tree-pane">
         <div v-if="isLoading" class="loading-state">
           <i class="fas fa-spinner fa-spin"></i>
-          <p>Loading file tree...</p>
+          <p>{{ $t('knowledge.browser.loadingFileTree') }}</p>
         </div>
 
         <div v-else-if="error" class="error-state">
@@ -209,7 +209,7 @@
             @click="() => loadKnowledgeTree(loadKnowledgeTreeFn)"
             class="retry-btn"
           >
-            <i class="fas fa-redo"></i> Retry
+            <i class="fas fa-redo"></i> {{ $t('knowledge.browser.retryBtn') }}
           </BaseButton>
         </div>
 
@@ -217,7 +217,7 @@
           <EmptyState
             v-if="filteredTree.length === 0"
             icon="fas fa-folder-open"
-            message="No items found"
+            :message="$t('knowledge.browser.noItemsFound')"
           />
           <TreeNodeComponent
             v-for="node in filteredTree"
@@ -242,13 +242,13 @@
               class="load-more-btn"
             >
               <i class="fas fa-chevron-down"></i>
-              Load More
+              {{ $t('knowledge.browser.loadMore') }}
             </BaseButton>
           </div>
 
           <div v-if="(props.mode === 'user' || props.mode === 'user-knowledge') && isLoadingMore" class="loading-more">
             <i class="fas fa-spinner fa-spin"></i>
-            <span>Loading more entries...</span>
+            <span>{{ $t('knowledge.browser.loadingMoreEntries') }}</span>
           </div>
         </div>
       </div>
@@ -257,8 +257,8 @@
       <div class="content-pane">
         <div v-if="!selectedFile" class="placeholder-state">
           <i class="fas fa-file-alt"></i>
-          <h4>No file selected</h4>
-          <p>Select a file from the tree to view its contents</p>
+          <h4>{{ $t('knowledge.browser.noFileSelected') }}</h4>
+          <p>{{ $t('knowledge.browser.selectFileHint') }}</p>
         </div>
 
         <div v-else class="file-viewer">
@@ -278,7 +278,7 @@
               size="sm"
               @click="clearSelection"
               class="close-btn"
-              aria-label="Close file viewer"
+              :aria-label="$t('knowledge.browser.closeFileViewer')"
             >
               <i class="fas fa-times"></i>
             </BaseButton>
@@ -287,7 +287,7 @@
           <div class="file-content">
             <div v-if="isLoadingContent" class="loading-content">
               <i class="fas fa-spinner fa-spin"></i>
-              <p>Loading content...</p>
+              <p>{{ $t('knowledge.browser.loadingContent') }}</p>
             </div>
 
             <div v-else-if="contentError" class="error-content">

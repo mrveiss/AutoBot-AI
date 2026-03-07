@@ -1,9 +1,9 @@
 <template>
   <div class="duplicates-section analytics-section">
     <h3>
-      <i class="fas fa-copy"></i> Duplicate Code Detection
+      <i class="fas fa-copy"></i> {{ $t('analytics.duplicates.title') }}
       <span v-if="duplicates && duplicates.length > 0" class="total-count">
-        ({{ duplicates.length.toLocaleString() }} pairs)
+        ({{ duplicates.length.toLocaleString() }} {{ $t('analytics.duplicates.pairs') }})
       </span>
     </h3>
     <div v-if="duplicates && duplicates.length > 0" class="section-content">
@@ -11,23 +11,23 @@
       <div class="summary-cards">
         <div class="summary-card total">
           <div class="summary-value">{{ duplicates.length.toLocaleString() }}</div>
-          <div class="summary-label">Total Pairs</div>
+          <div class="summary-label">{{ $t('analytics.duplicates.totalPairs') }}</div>
         </div>
         <div class="summary-card high">
           <div class="summary-value">{{ duplicatesBySimilarity.high?.length || 0 }}</div>
-          <div class="summary-label">High (90%+)</div>
+          <div class="summary-label">{{ $t('analytics.duplicates.highLabel') }}</div>
         </div>
         <div class="summary-card medium">
           <div class="summary-value">{{ duplicatesBySimilarity.medium?.length || 0 }}</div>
-          <div class="summary-label">Medium (70-89%)</div>
+          <div class="summary-label">{{ $t('analytics.duplicates.mediumLabel') }}</div>
         </div>
         <div class="summary-card low">
           <div class="summary-value">{{ duplicatesBySimilarity.low?.length || 0 }}</div>
-          <div class="summary-label">Low (&lt;70%)</div>
+          <div class="summary-label">{{ $t('analytics.duplicates.lowLabel') }}</div>
         </div>
         <div class="summary-card info">
           <div class="summary-value">{{ totalDuplicateLines.toLocaleString() }}</div>
-          <div class="summary-label">Total Lines</div>
+          <div class="summary-label">{{ $t('analytics.duplicates.totalLines') }}</div>
         </div>
       </div>
 
@@ -63,8 +63,8 @@
                 :class="`item-${similarity}`"
               >
                 <div class="item-header">
-                  <span class="item-similarity" :class="similarity">{{ duplicate.similarity }}% similar</span>
-                  <span class="item-lines">{{ duplicate.lines }} lines</span>
+                  <span class="item-similarity" :class="similarity">{{ duplicate.similarity }}% {{ $t('analytics.duplicates.similar') }}</span>
+                  <span class="item-lines">{{ duplicate.lines }} {{ $t('analytics.duplicates.lines') }}</span>
                 </div>
                 <div class="item-files">
                   <div class="item-file">{{ duplicate.file1 }}</div>
@@ -72,7 +72,7 @@
                 </div>
               </div>
               <div v-if="group.length > 20" class="show-more">
-                <span class="muted">Showing 20 of {{ group.length.toLocaleString() }} pairs</span>
+                <span class="muted">{{ $t('analytics.duplicates.showingOf', { shown: 20, total: group.length.toLocaleString() }) }}</span>
               </div>
             </div>
           </transition>
@@ -82,7 +82,7 @@
     <EmptyState
       v-else
       icon="fas fa-check-circle"
-      message="No duplicate code detected or analysis not run yet."
+      :message="$t('analytics.duplicates.emptyMessage')"
       variant="success"
     />
   </div>
@@ -102,7 +102,10 @@
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
+
+const { t } = useI18n()
 
 interface Duplicate {
   similarity: number
@@ -138,12 +141,9 @@ const toggleDuplicateGroup = (similarity: string) => {
 }
 
 const formatSimilarityGroup = (similarity: string): string => {
-  const labels: Record<string, string> = {
-    high: 'High Similarity (90%+)',
-    medium: 'Medium Similarity (70-89%)',
-    low: 'Low Similarity (<70%)'
-  }
-  return labels[similarity] || similarity
+  const key = `analytics.duplicates.similarityGroups.${similarity}`
+  const translated = t(key)
+  return translated !== key ? translated : similarity
 }
 </script>
 

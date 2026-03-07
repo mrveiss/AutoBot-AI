@@ -19,6 +19,7 @@ import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useHighContrast } from '@/composables/useAccessibility'
+import { ensureTimezone } from '@/composables/useTimezone'
 
 const route = useRoute()
 const fleetStore = useFleetStore()
@@ -41,6 +42,9 @@ watch(
 )
 
 async function initializeApp(): Promise<void> {
+  // Load configured timezone for date formatting across all views
+  ensureTimezone()
+
   // Load initial fleet data
   await fleetStore.fetchNodes()
 

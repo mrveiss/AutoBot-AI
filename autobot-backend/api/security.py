@@ -15,8 +15,9 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import aiofiles
+from auth_middleware import check_admin_permission
 from enhanced_security_layer import EnhancedSecurityLayer
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from security.domain_security import get_domain_security_manager
 from security.threat_intelligence import ThreatLevel, get_threat_intelligence_service
@@ -25,7 +26,7 @@ from type_defs.common import Metadata
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(check_admin_permission)])
 
 
 class CommandApprovalRequest(BaseModel):

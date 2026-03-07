@@ -2,7 +2,7 @@
   <span
     class="quality-badge"
     :class="qualityClass"
-    :title="`Quality score: ${(score * 100).toFixed(0)}%`"
+    :title="$t('knowledge.qualityScore.title', { score: (score * 100).toFixed(0) })"
   >
     {{ (score * 100).toFixed(0) }}%
   </span>

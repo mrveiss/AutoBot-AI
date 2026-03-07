@@ -48,10 +48,10 @@
             :href="dynamicVncUrl"
             target="_blank"
             class="text-autobot-text-muted hover:text-autobot-text-secondary underline"
-            title="Open noVNC in new window"
+            :title="$t('chat.tabContent.openInNewWindow')"
           >
             <i class="fas fa-external-link-alt mr-1"></i>
-            Open in New Window
+            {{ $t('chat.tabContent.openInNewWindow') }}
           </a>
         </div>
         <!-- VNC content - show iframe when host selected -->
@@ -68,9 +68,9 @@
         <div v-else class="flex-1 flex items-center justify-center text-autobot-text-muted">
           <div class="text-center">
             <i class="fas fa-desktop text-5xl mb-4 opacity-50"></i>
-            <p class="text-lg mb-2">Select a VNC Host</p>
+            <p class="text-lg mb-2">{{ $t('chat.tabContent.selectVncHost') }}</p>
             <p class="text-sm text-autobot-text-muted">
-              Choose a host with VNC capability from your configured infrastructure hosts.
+              {{ $t('chat.tabContent.selectVncHostDesc') }}
             </p>
           </div>
         </div>
@@ -94,7 +94,7 @@
           @open-secrets-manager="emit('open-secrets-manager')"
         />
         <span v-if="selectedSshHost" class="text-xs text-autobot-text-muted">
-          Connected to: {{ selectedSshHost.name }}
+          {{ $t('chat.tabContent.connectedTo', { name: selectedSshHost.name }) }}
         </span>
       </div>
       <!-- SSH Terminal iframe or component -->
@@ -109,9 +109,9 @@
       <div v-else class="flex-1 flex items-center justify-center bg-autobot-bg-secondary text-autobot-text-muted">
         <div class="text-center">
           <i class="fas fa-terminal text-5xl mb-4 opacity-50"></i>
-          <p class="text-lg mb-2">Select an SSH Host</p>
+          <p class="text-lg mb-2">{{ $t('chat.tabContent.selectSshHost') }}</p>
           <p class="text-sm text-autobot-text-muted">
-            Choose a host to connect via SSH from your configured infrastructure hosts.
+            {{ $t('chat.tabContent.selectSshHostDesc') }}
           </p>
         </div>
       </div>
@@ -121,7 +121,10 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
+
+const { t } = useI18n()
 
 const logger = createLogger('ChatTabContent')
 

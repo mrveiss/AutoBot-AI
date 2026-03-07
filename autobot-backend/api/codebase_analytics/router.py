@@ -5,7 +5,8 @@
 Main router combining all codebase analytics endpoints
 """
 
-from fastapi import APIRouter
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends
 
 # Issue #244: Cross-Language Pattern Detector
 # Issue #208: Code Pattern Detection & Optimization
@@ -28,7 +29,10 @@ from .endpoints import queue as queue_router
 from .endpoints import report, sources, stats
 
 # Create main router — prefix provided by analytics_routers.py registry (#1027)
-router = APIRouter(tags=["codebase-analytics"])
+router = APIRouter(
+    tags=["codebase-analytics"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 # Include all endpoint routers
 router.include_router(indexing.router)

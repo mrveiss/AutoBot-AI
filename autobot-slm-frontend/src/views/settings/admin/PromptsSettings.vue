@@ -12,6 +12,7 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useAutobotApi, type PromptTemplate } from '@/composables/useAutobotApi'
+import { formatDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
 
@@ -328,7 +329,7 @@ onMounted(() => {
               <div class="col-span-2">
                 <span class="text-gray-500">Last Modified:</span>
                 <span class="ml-2 font-medium text-gray-900">
-                  {{ selectedPrompt.modified_at ? new Date(selectedPrompt.modified_at).toLocaleString() : 'Never' }}
+                  {{ formatDateTime(selectedPrompt.modified_at ?? null) }}
                 </span>
               </div>
             </div>

@@ -54,7 +54,9 @@ class TTSClient:
             logger.debug("TTS worker health check failed: %s", e)
         return False
 
-    async def synthesize(self, text: str, voice_id: str = "") -> bytes:
+    async def synthesize(
+        self, text: str, voice_id: str = "", language: str = ""
+    ) -> bytes:
         """Send text to TTS worker and return WAV bytes."""
         timeout = aiohttp.ClientTimeout(total=SYNTHESIS_TIMEOUT)
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -62,6 +64,8 @@ class TTSClient:
             data.add_field("text", text)
             if voice_id:
                 data.add_field("voice_id", voice_id)
+            if language:
+                data.add_field("language", language)
             async with session.post(
                 f"{self.base_url}/tts/synthesize", data=data
             ) as resp:

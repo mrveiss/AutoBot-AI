@@ -1,23 +1,23 @@
 <template>
   <Teleport to="body">
     <div v-if="visible" class="source-manager-overlay" @click.self="$emit('close')">
-      <div class="source-manager-panel" role="dialog" aria-modal="true" aria-label="Code Source Manager">
+      <div class="source-manager-panel" role="dialog" aria-modal="true" :aria-label="$t('analytics.sources.registry')">
         <!-- Panel Header -->
         <div class="panel-header">
           <div class="panel-title">
             <i class="fas fa-code-branch"></i>
-            Code Source Registry
+            {{ $t('analytics.sources.registry') }}
           </div>
           <div class="panel-header-actions">
             <span v-if="queueLength > 0" class="queue-badge">
               <i class="fas fa-clock"></i>
-              {{ queueLength }} queued
+              {{ queueLength }} {{ $t('analytics.sources.queued') }}
             </span>
             <button class="btn-add" @click="$emit('open-add-source')">
               <i class="fas fa-plus"></i>
-              Add Source
+              {{ $t('analytics.sources.addSource') }}
             </button>
-            <button class="close-btn" @click="$emit('close')" aria-label="Close">
+            <button class="close-btn" @click="$emit('close')" :aria-label="$t('common.close')">
               <i class="fas fa-times"></i>
             </button>
           </div>
@@ -26,24 +26,24 @@
         <!-- Loading State -->
         <div v-if="loading" class="panel-loading">
           <i class="fas fa-spinner fa-spin"></i>
-          Loading sources...
+          {{ $t('analytics.sources.loading') }}
         </div>
 
         <!-- Error State -->
         <div v-else-if="loadError" class="panel-error">
           <i class="fas fa-exclamation-triangle"></i>
           {{ loadError }}
-          <button class="btn-retry" @click="loadSources">Retry</button>
+          <button class="btn-retry" @click="loadSources">{{ $t('analytics.sources.retry') }}</button>
         </div>
 
         <!-- Empty State -->
         <div v-else-if="sources.length === 0" class="panel-empty">
           <i class="fas fa-folder-open"></i>
-          <p>No code sources registered.</p>
-          <p class="panel-empty-hint">Add a GitHub repository or local path to get started.</p>
+          <p>{{ $t('analytics.sources.noSources') }}</p>
+          <p class="panel-empty-hint">{{ $t('analytics.sources.noSourcesHint') }}</p>
           <button class="btn-add" @click="$emit('open-add-source')">
             <i class="fas fa-plus"></i>
-            Add Your First Source
+            {{ $t('analytics.sources.addFirstSource') }}
           </button>
         </div>
 
@@ -76,9 +76,9 @@
                 </div>
                 <div class="source-timestamps">
                   <span v-if="source.last_synced" class="source-synced">
-                    Synced {{ formatRelativeTime(source.last_synced) }}
+                    {{ $t('analytics.sources.synced') }} {{ formatRelativeTime(source.last_synced) }}
                   </span>
-                  <span v-else class="source-never-synced">Never synced</span>
+                  <span v-else class="source-never-synced">{{ $t('analytics.sources.neverSynced') }}</span>
                 </div>
               </div>
             </div>
@@ -107,21 +107,21 @@
                 class="btn-action btn-action--sync"
                 :disabled="source.status === 'syncing' || syncingId === source.id"
                 @click="syncSource(source)"
-                :title="source.status === 'syncing' ? 'Syncing...' : 'Sync Now'"
+                :title="source.status === 'syncing' ? $t('analytics.sources.syncing') : $t('analytics.sources.syncNow')"
               >
                 <i :class="syncingId === source.id ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
               </button>
               <button
                 class="btn-action btn-action--edit"
                 @click="$emit('edit-source', source)"
-                title="Edit"
+                :title="$t('analytics.sources.edit')"
               >
                 <i class="fas fa-edit"></i>
               </button>
               <button
                 class="btn-action btn-action--share"
                 @click="$emit('share-source', source)"
-                title="Share"
+                :title="$t('analytics.sources.share')"
               >
                 <i class="fas fa-share-alt"></i>
               </button>
@@ -129,7 +129,7 @@
                 class="btn-action btn-action--delete"
                 :disabled="deletingId === source.id"
                 @click="deleteSource(source)"
-                title="Delete"
+                :title="$t('analytics.sources.deleteTitle')"
               >
                 <i :class="deletingId === source.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
               </button>
@@ -141,14 +141,14 @@
         <div v-if="runningTask" class="queue-footer">
           <div class="queue-running">
             <i class="fas fa-spinner fa-spin"></i>
-            <span>Indexing running</span>
+            <span>{{ $t('analytics.sources.indexingRunning') }}</span>
             <span v-if="runningTask.source_id" class="queue-source-id">
               (source: {{ runningTask.source_id.substring(0, 8) }}...)
             </span>
             <button
               class="btn-dequeue"
               @click="cancelQueueItem(runningTask.source_id)"
-              title="Remove from queue"
+              :title="$t('analytics.sources.removeFromQueue')"
             >
               <i class="fas fa-ban"></i>
             </button>
@@ -171,11 +171,13 @@
  */
 
 import { ref, watch, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SourceManager')
+const { t } = useI18n()
 
 // ---- Types ----------------------------------------------------------------
 
@@ -319,7 +321,7 @@ async function syncSource(source: CodeSource) {
 }
 
 async function deleteSource(source: CodeSource) {
-  if (!confirm(`Delete source "${source.name}"? This cannot be undone.`)) return
+  if (!confirm(t('analytics.sources.confirmDelete', { name: source.name }))) return
   deletingId.value = source.id
   try {
     const backendUrl = await getBackendUrl()

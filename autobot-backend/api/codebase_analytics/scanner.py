@@ -61,6 +61,11 @@ from .types import FileAnalysisResult
 logger = logging.getLogger(__name__)
 
 # =============================================================================
+# Issue #1341: Subprocess timeout and watchdog configuration
+_SUBPROCESS_HARD_TIMEOUT = 1800  # 30 minutes max for entire subprocess
+_SUBPROCESS_PROGRESS_TIMEOUT = 300  # 5 min without progress = stale
+_SUBPROCESS_WATCHDOG_INTERVAL = 30  # Check progress every 30 seconds
+
 # Dedicated Indexing Thread Pool (Issue #XXX: Prevent thread starvation)
 # =============================================================================
 # The indexing task needs its own thread pool to avoid being starved by
@@ -1342,43 +1347,75 @@ async def _store_single_batch(
     return items_in_batch
 
 
+async def _generate_embeddings_with_progress(
+    batch_documents: list, total_docs: int, update_progress
+) -> List[List[float]]:
+    """Generate embeddings in super-batches, reporting progress (#1303).
+
+    Splits the full document list into chunks of 1000 and updates
+    Redis progress after each chunk so the UI shows real progress.
+    """
+    super_batch_size = 1000
+    all_embeddings: List[List[float]] = []
+
+    for offset in range(0, total_docs, super_batch_size):
+        chunk = batch_documents[offset : offset + super_batch_size]
+        chunk_embeddings = await _generate_batch_embeddings(chunk)
+        all_embeddings.extend(chunk_embeddings)
+
+        processed = offset + len(chunk)
+        await update_progress(
+            operation="Generating embeddings",
+            current=processed,
+            total=total_docs,
+            current_file=(
+                f"Embeddings: {processed}/{total_docs} "
+                f"({processed * 100 // total_docs}%)"
+            ),
+            phase="embed",
+        )
+
+    return all_embeddings
+
+
 async def _precompute_embeddings(
     batch_documents: list, task_id: str, update_progress, update_phase
 ) -> Optional[List[List[float]]]:
-    """
-    Pre-compute embeddings for documents before storage.
+    """Pre-compute embeddings for documents before storage.
 
-    Issue #665: Extracted from _store_batches_to_chromadb for single responsibility.
+    Issue #665: Extracted from _store_batches_to_chromadb.
     Issue #660: Original embedding pre-computation logic.
-
-    Returns:
-        List of embeddings if successful, None otherwise.
+    Issue #1303: Delegates to _generate_embeddings_with_progress
+    so the embedding phase reports real progress instead of 0%.
     """
     if CHROMADB_EMBEDDING_MODE != "precompute":
         if CHROMADB_EMBEDDING_MODE == "skip":
             logger.info(
-                "[Task %s] Skipping pre-computed embeddings (mode=skip)", task_id
+                "[Task %s] Skipping pre-computed embeddings (mode=skip)",
+                task_id,
             )
         return None
 
     update_phase("embed", "running")
+    total_docs = len(batch_documents)
     await update_progress(
         operation="Generating embeddings",
         current=0,
-        total=len(batch_documents),
+        total=total_docs,
         current_file="Pre-computing embeddings...",
         phase="embed",
     )
 
     try:
-        batch_embeddings = await _generate_batch_embeddings(batch_documents)
-
-        if len(batch_embeddings) != len(batch_documents):
+        batch_embeddings = await _generate_embeddings_with_progress(
+            batch_documents, total_docs, update_progress
+        )
+        if len(batch_embeddings) != total_docs:
             logger.error(
-                "[Task %s] Embedding count mismatch: %d embeddings for %d documents",
+                "[Task %s] Embedding count mismatch: %d vs %d docs",
                 task_id,
                 len(batch_embeddings),
-                len(batch_documents),
+                total_docs,
             )
             batch_embeddings = None
         else:
@@ -1390,7 +1427,7 @@ async def _precompute_embeddings(
             )
     except Exception as e:
         logger.warning(
-            "[Task %s] Embedding pre-computation failed, falling back to auto: %s",
+            "[Task %s] Embedding pre-computation failed: %s",
             task_id,
             e,
         )
@@ -2918,6 +2955,58 @@ async def _handle_subprocess_crash(task_id: str, returncode: int) -> None:
         await _save_task_to_redis(task_id)
 
 
+async def _wait_with_watchdog(
+    proc: asyncio.subprocess.Process,
+    task_id: str,
+) -> int:
+    """Wait for subprocess with progress watchdog (#1341).
+
+    Periodically checks if the subprocess is still making progress
+    by reading the task state from Redis. If no progress update
+    for _SUBPROCESS_PROGRESS_TIMEOUT seconds, kills the subprocess.
+    """
+    last_progress_hash = None
+    last_progress_time = asyncio.get_event_loop().time()
+
+    while True:
+        try:
+            returncode = await asyncio.wait_for(
+                proc.wait(),
+                timeout=_SUBPROCESS_WATCHDOG_INTERVAL,
+            )
+            return returncode
+        except asyncio.TimeoutError:
+            pass  # Process still running — check progress
+
+        task_data = await _load_task_from_redis(task_id)
+        if task_data:
+            status = task_data.get("status")
+            if status in ("completed", "failed", "cancelled"):
+                return await proc.wait()
+
+            progress = task_data.get("progress", {})
+            progress_hash = (
+                progress.get("current"),
+                progress.get("total"),
+                progress.get("operation"),
+            )
+            now = asyncio.get_event_loop().time()
+
+            if progress_hash != last_progress_hash:
+                last_progress_hash = progress_hash
+                last_progress_time = now
+            elif now - last_progress_time > _SUBPROCESS_PROGRESS_TIMEOUT:
+                logger.error(
+                    "[Task %s] Subprocess stale for %d seconds, "
+                    "killing (no progress update)",
+                    task_id,
+                    int(now - last_progress_time),
+                )
+                proc.kill()
+                await proc.wait()
+                return -9
+
+
 async def _run_indexing_subprocess(task_id: str, root_path: str) -> None:
     """Launch isolated indexing subprocess to prevent ChromaDB SIGSEGV (#1180).
 
@@ -2925,6 +3014,8 @@ async def _run_indexing_subprocess(task_id: str, root_path: str) -> None:
     ChromaDB PersistentClient does not conflict with the KB's concurrent
     client. If the subprocess crashes (SIGSEGV), this coroutine catches the
     non-zero exit code and marks the task failed in Redis.
+
+    Issue #1341: Added 30-minute hard timeout and 5-minute progress watchdog.
 
     Designed as a drop-in async replacement for asyncio.create_task usage of
     do_indexing_with_progress — wrap in asyncio.create_task() as before.
@@ -2944,7 +3035,22 @@ async def _run_indexing_subprocess(task_id: str, root_path: str) -> None:
         task_id,
         root_path,
     )
-    returncode = await proc.wait()
+
+    # Issue #1341: Wait with watchdog + hard timeout
+    try:
+        returncode = await asyncio.wait_for(
+            _wait_with_watchdog(proc, task_id),
+            timeout=_SUBPROCESS_HARD_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            "[Task %s] Subprocess exceeded hard timeout of %d seconds",
+            task_id,
+            _SUBPROCESS_HARD_TIMEOUT,
+        )
+        proc.kill()
+        await proc.wait()
+        returncode = -9
 
     if returncode != 0:
         await _handle_subprocess_crash(task_id, returncode)

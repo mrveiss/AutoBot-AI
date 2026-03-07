@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from constants.threshold_constants import LLMDefaults
 from llm_interface import LLMInterface
+from prompt_manager import get_language_instruction, resolve_language
 
 from autobot_shared.ssot_config import (
     get_agent_endpoint_explicit,
@@ -140,8 +141,11 @@ class ChatAgent(StandardizedAgent):
         try:
             logger.info("Chat Agent processing message: %s...", message[:50])
 
-            # Prepare chat-optimized system prompt
-            system_prompt = self._get_chat_system_prompt()
+            # Prepare chat-optimized system prompt with language (#1327)
+            lang_code = resolve_language()
+            system_prompt = self._get_chat_system_prompt() + get_language_instruction(
+                lang_code
+            )
 
             # Build conversation context
             messages = [{"role": "system", "content": system_prompt}]

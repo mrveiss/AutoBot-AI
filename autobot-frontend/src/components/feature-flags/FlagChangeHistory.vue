@@ -1,9 +1,9 @@
 <template>
   <div class="flag-change-history">
     <div class="section-header">
-      <h3><i class="fas fa-history"></i> Change History</h3>
+      <h3><i class="fas fa-history"></i> {{ $t('featureFlags.changeHistory.title') }}</h3>
       <p class="description">
-        Track all changes to feature flag configuration for audit purposes
+        {{ $t('featureFlags.changeHistory.description') }}
       </p>
     </div>
 
@@ -17,8 +17,8 @@
       <div class="empty-icon">
         <i class="fas fa-clock"></i>
       </div>
-      <h4>No History Available</h4>
-      <p>No configuration changes have been recorded yet.</p>
+      <h4>{{ $t('featureFlags.changeHistory.noChanges') }}</h4>
+      <p>{{ $t('featureFlags.changeHistory.noChanges') }}</p>
     </div>
 
     <!-- History Timeline -->
@@ -49,7 +49,7 @@
             <div class="meta-info">
               <span class="changed-by">
                 <i class="fas fa-user"></i>
-                {{ entry.changed_by || 'System' }}
+                {{ entry.changed_by || t('featureFlags.changeHistory.system') }}
               </span>
               <span class="relative-time">
                 {{ formatRelativeTime(entry.timestamp) }}
@@ -62,19 +62,19 @@
 
     <!-- Legend -->
     <div class="legend" v-if="history.length">
-      <span class="legend-title">Mode Legend:</span>
+      <span class="legend-title">{{ t('featureFlags.changeHistory.modeLegend') }}</span>
       <div class="legend-items">
         <div class="legend-item">
           <span class="legend-dot disabled"></span>
-          <span>Disabled</span>
+          <span>{{ t('featureFlags.changeHistory.modeDisabled') }}</span>
         </div>
         <div class="legend-item">
           <span class="legend-dot log_only"></span>
-          <span>Log Only</span>
+          <span>{{ t('featureFlags.changeHistory.modeLogOnly') }}</span>
         </div>
         <div class="legend-item">
           <span class="legend-dot enforced"></span>
-          <span>Enforced</span>
+          <span>{{ t('featureFlags.changeHistory.modeEnforced') }}</span>
         </div>
       </div>
     </div>
@@ -82,8 +82,11 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n';
 import type { EnforcementMode } from '@/utils/FeatureFlagsApiClient';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+
+const { t } = useI18n();
 
 interface HistoryEntry {
   timestamp: string;
@@ -99,9 +102,9 @@ defineProps<{
 // Methods
 const getModeLabel = (mode: EnforcementMode) => {
   const labels: Record<EnforcementMode, string> = {
-    disabled: 'Disabled',
-    log_only: 'Log Only',
-    enforced: 'Enforced',
+    disabled: t('featureFlags.changeHistory.modeDisabled'),
+    log_only: t('featureFlags.changeHistory.modeLogOnly'),
+    enforced: t('featureFlags.changeHistory.modeEnforced'),
   };
   return labels[mode] || mode;
 };
@@ -117,11 +120,11 @@ const getModeIcon = (mode: EnforcementMode) => {
 
 const getActionText = (mode: EnforcementMode) => {
   const texts: Record<EnforcementMode, string> = {
-    disabled: 'Access control enforcement was disabled',
-    log_only: 'Switched to log-only mode for safe testing',
-    enforced: 'Full enforcement mode was enabled',
+    disabled: t('featureFlags.changeHistory.actionDisabled'),
+    log_only: t('featureFlags.changeHistory.actionLogOnly'),
+    enforced: t('featureFlags.changeHistory.actionEnforced'),
   };
-  return texts[mode] || 'Configuration was updated';
+  return texts[mode] || t('featureFlags.changeHistory.actionUpdated');
 };
 
 const formatTimestamp = (timestamp: string) => {
@@ -145,10 +148,10 @@ const formatRelativeTime = (timestamp: string) => {
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
 
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-  if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-  if (days < 30) return `${days} day${days > 1 ? 's' : ''} ago`;
+  if (minutes < 1) return t('featureFlags.changeHistory.justNow');
+  if (minutes < 60) return t('featureFlags.changeHistory.minutesAgo', { count: minutes });
+  if (hours < 24) return t('featureFlags.changeHistory.hoursAgo', { count: hours });
+  if (days < 30) return t('featureFlags.changeHistory.daysAgo', { count: days });
   return formatTimestamp(timestamp);
 };
 </script>

@@ -1,14 +1,14 @@
 <template>
   <BasePanel v-if="show" variant="bordered" size="medium">
     <template #header>
-      <h3><i class="fas fa-tasks"></i> Progress Tracking</h3>
+      <h3><i class="fas fa-tasks"></i> {{ $t('manpage.progressTracking.title') }}</h3>
       <BaseButton
         size="sm"
         variant="outline"
         @click="$emit('hide')"
       >
         <i class="fas fa-times"></i>
-        Hide
+        {{ $t('manpage.progressTracking.hide') }}
       </BaseButton>
     </template>
 
@@ -16,7 +16,7 @@
       <!-- Overall Progress -->
       <div class="progress-item">
         <div class="progress-label">
-          <span>{{ state.currentTask || 'Waiting...' }}</span>
+          <span>{{ state.currentTask || $t('manpage.progressTracking.waiting') }}</span>
           <span class="progress-percentage">{{ Math.round(state.overallProgress) }}%</span>
         </div>
         <div class="progress-bar">
@@ -31,7 +31,7 @@
       <!-- Task-specific Progress -->
       <div v-if="state.taskProgress > 0" class="progress-item">
         <div class="progress-label">
-          <span>{{ state.taskDetail || 'Processing...' }}</span>
+          <span>{{ state.taskDetail || $t('manpage.progressTracking.processing') }}</span>
           <span class="progress-percentage">{{ Math.round(state.taskProgress) }}%</span>
         </div>
         <div class="progress-bar">
@@ -60,7 +60,7 @@
       <div class="connection-status">
         <i :class="websocketConnected ? 'fas fa-plug connected' : 'fas fa-plug disconnected'"></i>
         <span :class="websocketConnected ? 'connected' : 'disconnected'">
-          {{ websocketConnected ? 'Connected' : 'Disconnected' }}
+          {{ websocketConnected ? $t('manpage.progressTracking.connected') : $t('manpage.progressTracking.disconnected') }}
         </span>
       </div>
     </div>

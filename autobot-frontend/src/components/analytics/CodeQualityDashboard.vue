@@ -3,25 +3,25 @@
     <!-- Header with Real-time Status -->
     <div class="dashboard-header">
       <div class="header-content">
-        <h2 class="dashboard-title">Code Quality Dashboard</h2>
+        <h2 class="dashboard-title">{{ $t('analytics.codeQuality.title') }}</h2>
         <div class="realtime-status" :class="{ connected: wsConnected }">
           <span class="status-dot"></span>
-          {{ wsConnected ? 'Live' : 'Offline' }}
+          {{ wsConnected ? $t('analytics.codeQuality.live') : $t('analytics.codeQuality.offline') }}
         </div>
       </div>
       <div class="header-actions">
         <button class="btn-refresh" @click="refreshData" :disabled="loading">
           <span class="icon">↻</span>
-          {{ loading ? 'Loading...' : 'Refresh' }}
+          {{ loading ? $t('analytics.codeQuality.loading') : $t('analytics.codeQuality.refresh') }}
         </button>
         <div class="export-dropdown" v-click-outside="closeExportMenu">
           <button class="btn-export" @click="exportMenuOpen = !exportMenuOpen">
             <span class="icon">↓</span>
-            Export
+            {{ $t('analytics.codeQuality.export') }}
           </button>
           <div v-if="exportMenuOpen" class="dropdown-menu">
-            <button @click="exportReport('json')">Export JSON</button>
-            <button @click="exportReport('csv')">Export CSV</button>
+            <button @click="exportReport('json')">{{ $t('analytics.codeQuality.exportJson') }}</button>
+            <button @click="exportReport('csv')">{{ $t('analytics.codeQuality.exportCsv') }}</button>
           </div>
         </div>
       </div>
@@ -52,16 +52,16 @@
         </div>
       </div>
       <div class="health-details">
-        <h3>Overall Health Score</h3>
+        <h3>{{ $t('analytics.codeQuality.overallHealthScore') }}</h3>
         <p class="health-description">
           Your codebase is rated <strong :class="'grade-' + healthScore.grade">{{ getGradeDescription(healthScore.grade) }}</strong>
         </p>
         <div class="trend-indicator" :class="getTrendClass(healthScore.trend)">
           <span class="trend-arrow">{{ healthScore.trend >= 0 ? '↑' : '↓' }}</span>
-          {{ Math.abs(healthScore.trend).toFixed(1) }}% from last period
+          {{ Math.abs(healthScore.trend).toFixed(1) }}% {{ $t('analytics.codeQuality.fromLastPeriod') }}
         </div>
         <div class="recommendations" v-if="healthScore.recommendations.length > 0">
-          <h4>Top Recommendations</h4>
+          <h4>{{ $t('analytics.codeQuality.topRecommendations') }}</h4>
           <ul>
             <li v-for="(rec, i) in healthScore.recommendations.slice(0, 3)" :key="i">
               {{ rec }}
@@ -98,7 +98,7 @@
           </div>
         </div>
         <div class="metric-footer">
-          <span class="metric-weight">Weight: {{ (metric.weight * 100).toFixed(0) }}%</span>
+          <span class="metric-weight">{{ $t('analytics.codeQuality.weight') }}: {{ (metric.weight * 100).toFixed(0) }}%</span>
           <span class="metric-trend" :class="getTrendClass(metric.trend)">
             {{ metric.trend >= 0 ? '+' : '' }}{{ metric.trend.toFixed(1) }}%
           </span>
@@ -111,7 +111,7 @@
       <!-- Pattern Distribution -->
       <div class="panel patterns-panel">
         <div class="panel-header">
-          <h3>Pattern Distribution</h3>
+          <h3>{{ $t('analytics.codeQuality.patternDistribution') }}</h3>
           <div class="severity-filter">
             <button
               v-for="sev in ['all', 'critical', 'high', 'medium', 'low']"
@@ -119,7 +119,7 @@
               :class="{ active: selectedSeverity === sev }"
               @click="selectedSeverity = sev"
             >
-              {{ sev === 'all' ? 'All' : sev }}
+              {{ sev === 'all' ? $t('analytics.codeQuality.all') : sev }}
             </button>
           </div>
         </div>
@@ -151,19 +151,19 @@
           <div class="patterns-summary">
             <div class="summary-stat critical">
               <span class="stat-value">{{ patternStats.critical }}</span>
-              <span class="stat-label">Critical</span>
+              <span class="stat-label">{{ $t('analytics.codeQuality.critical') }}</span>
             </div>
             <div class="summary-stat high">
               <span class="stat-value">{{ patternStats.high }}</span>
-              <span class="stat-label">High</span>
+              <span class="stat-label">{{ $t('analytics.codeQuality.high') }}</span>
             </div>
             <div class="summary-stat medium">
               <span class="stat-value">{{ patternStats.medium }}</span>
-              <span class="stat-label">Medium</span>
+              <span class="stat-label">{{ $t('analytics.codeQuality.medium') }}</span>
             </div>
             <div class="summary-stat info">
               <span class="stat-value">{{ patternStats.info }}</span>
-              <span class="stat-label">Info</span>
+              <span class="stat-label">{{ $t('analytics.codeQuality.info') }}</span>
             </div>
           </div>
         </div>
@@ -172,13 +172,13 @@
       <!-- Complexity Hotspots -->
       <div class="panel complexity-panel">
         <div class="panel-header">
-          <h3>Complexity Analysis</h3>
+          <h3>{{ $t('analytics.codeQuality.complexityAnalysis') }}</h3>
           <div class="complexity-stats">
             <span class="stat">
-              Avg Cyclomatic: <strong>{{ complexity.averages.cyclomatic.toFixed(1) }}</strong>
+              {{ $t('analytics.codeQuality.avgCyclomatic') }}: <strong>{{ complexity.averages.cyclomatic.toFixed(1) }}</strong>
             </span>
             <span class="stat">
-              Max: <strong :class="{ warning: complexity.maximums.cyclomatic > 20 }">
+              {{ $t('analytics.codeQuality.max') }}: <strong :class="{ warning: complexity.maximums.cyclomatic > 20 }">
                 {{ complexity.maximums.cyclomatic }}
               </strong>
             </span>
@@ -195,7 +195,7 @@
               <div class="hotspot-rank">{{ i + 1 }}</div>
               <div class="hotspot-info">
                 <span class="hotspot-file">{{ truncatePath(hotspot.file) }}</span>
-                <span class="hotspot-lines">{{ hotspot.lines }} lines</span>
+                <span class="hotspot-lines">{{ hotspot.lines }} {{ $t('analytics.codeQuality.lines') }}</span>
               </div>
               <div class="hotspot-complexity">
                 <div class="complexity-badge" :class="getComplexityClass(hotspot.complexity)">
@@ -207,15 +207,15 @@
           <div class="complexity-thresholds">
             <div class="threshold-item">
               <span class="threshold-color safe"></span>
-              <span>1-10 (Simple)</span>
+              <span>{{ $t('analytics.codeQuality.simple') }}</span>
             </div>
             <div class="threshold-item">
               <span class="threshold-color warning"></span>
-              <span>11-20 (Complex)</span>
+              <span>{{ $t('analytics.codeQuality.complex') }}</span>
             </div>
             <div class="threshold-item">
               <span class="threshold-color critical"></span>
-              <span>21+ (Very Complex)</span>
+              <span>{{ $t('analytics.codeQuality.veryComplex') }}</span>
             </div>
           </div>
         </div>
@@ -225,7 +225,7 @@
     <!-- Quality Trends -->
     <div class="panel trends-panel">
       <div class="panel-header">
-        <h3>Quality Trends</h3>
+        <h3>{{ $t('analytics.codeQuality.qualityTrends') }}</h3>
         <div class="period-selector">
           <button
             v-for="period in ['7d', '14d', '30d', '90d']"
@@ -313,25 +313,25 @@
         <!-- Trend Statistics -->
         <div class="trend-stats">
           <div class="trend-stat">
-            <span class="stat-label">Current</span>
+            <span class="stat-label">{{ $t('analytics.codeQuality.current') }}</span>
             <span class="stat-value">{{ trendStats.current.toFixed(1) }}</span>
           </div>
           <div class="trend-stat">
-            <span class="stat-label">Change</span>
+            <span class="stat-label">{{ $t('analytics.codeQuality.change') }}</span>
             <span class="stat-value" :class="getTrendClass(trendStats.change)">
               {{ trendStats.change >= 0 ? '+' : '' }}{{ trendStats.change.toFixed(1) }}%
             </span>
           </div>
           <div class="trend-stat">
-            <span class="stat-label">Average</span>
+            <span class="stat-label">{{ $t('analytics.codeQuality.average') }}</span>
             <span class="stat-value">{{ trendStats.average.toFixed(1) }}</span>
           </div>
           <div class="trend-stat">
-            <span class="stat-label">Min</span>
+            <span class="stat-label">{{ $t('analytics.codeQuality.min') }}</span>
             <span class="stat-value">{{ trendStats.min.toFixed(1) }}</span>
           </div>
           <div class="trend-stat">
-            <span class="stat-label">Max</span>
+            <span class="stat-label">{{ $t('analytics.codeQuality.max') }}</span>
             <span class="stat-value">{{ trendStats.max.toFixed(1) }}</span>
           </div>
         </div>
@@ -343,22 +343,22 @@
       <div class="stat-item">
         <span class="stat-icon">📁</span>
         <span class="stat-value">{{ codebaseStats.files.toLocaleString() }}</span>
-        <span class="stat-label">Files</span>
+        <span class="stat-label">{{ $t('analytics.codeQuality.files') }}</span>
       </div>
       <div class="stat-item">
         <span class="stat-icon">📝</span>
         <span class="stat-value">{{ codebaseStats.lines.toLocaleString() }}</span>
-        <span class="stat-label">Lines of Code</span>
+        <span class="stat-label">{{ $t('analytics.codeQuality.linesOfCode') }}</span>
       </div>
       <div class="stat-item">
         <span class="stat-icon">⚠️</span>
         <span class="stat-value">{{ codebaseStats.issues.toLocaleString() }}</span>
-        <span class="stat-label">Issues</span>
+        <span class="stat-label">{{ $t('analytics.codeQuality.issues') }}</span>
       </div>
       <div class="stat-item">
         <span class="stat-icon">🕒</span>
         <span class="stat-value">{{ lastUpdated }}</span>
-        <span class="stat-label">Last Updated</span>
+        <span class="stat-label">{{ $t('analytics.codeQuality.lastUpdated') }}</span>
       </div>
     </div>
 
@@ -366,32 +366,32 @@
     <div v-if="drillDownCategory" class="modal-overlay" @click.self="drillDownCategory = null">
       <div class="modal-content drill-down-modal">
         <div class="modal-header">
-          <h3>{{ formatCategoryName(drillDownCategory) }} - Detailed View</h3>
+          <h3>{{ formatCategoryName(drillDownCategory) }} - {{ $t('analytics.codeQuality.detailedView') }}</h3>
           <button class="btn-close" @click="drillDownCategory = null">×</button>
         </div>
         <div class="modal-body">
           <div class="drill-down-summary">
             <div class="summary-card">
               <span class="card-value">{{ drillDownData.total_files }}</span>
-              <span class="card-label">Files Affected</span>
+              <span class="card-label">{{ $t('analytics.codeQuality.filesAffected') }}</span>
             </div>
             <div class="summary-card">
               <span class="card-value">{{ drillDownData.total_issues }}</span>
-              <span class="card-label">Total Issues</span>
+              <span class="card-label">{{ $t('analytics.codeQuality.totalIssues') }}</span>
             </div>
             <div class="summary-card">
               <span class="card-value">{{ drillDownData.average_score.toFixed(1) }}</span>
-              <span class="card-label">Average Score</span>
+              <span class="card-label">{{ $t('analytics.codeQuality.averageScore') }}</span>
             </div>
           </div>
           <div class="drill-down-files">
             <table class="files-table">
               <thead>
                 <tr>
-                  <th>File</th>
-                  <th>Issues</th>
-                  <th>Score</th>
-                  <th>Top Issue</th>
+                  <th>{{ $t('analytics.codeQuality.file') }}</th>
+                  <th>{{ $t('analytics.codeQuality.issues') }}</th>
+                  <th>{{ $t('analytics.codeQuality.score') }}</th>
+                  <th>{{ $t('analytics.codeQuality.topIssue') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -410,7 +410,7 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" @click="drillDownCategory = null">Close</button>
+          <button class="btn-secondary" @click="drillDownCategory = null">{{ $t('analytics.codeQuality.close') }}</button>
         </div>
       </div>
     </div>

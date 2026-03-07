@@ -2,15 +2,15 @@
 <template>
   <div class="pipeline-config">
     <div class="config-header">
-      <h4><i class="fas fa-sliders-h"></i> Pipeline Configuration</h4>
+      <h4><i class="fas fa-sliders-h"></i> {{ $t('knowledge.pipeline.config.title') }}</h4>
       <p class="header-description">
-        Configure pipeline stages and processing parameters
+        {{ $t('knowledge.pipeline.config.description') }}
       </p>
     </div>
 
     <!-- Stage Configuration -->
     <div class="stages-section">
-      <h5>Processing Stages</h5>
+      <h5>{{ $t('knowledge.pipeline.config.processingStages') }}</h5>
       <div class="stage-list">
         <div
           v-for="stage in stages"
@@ -61,11 +61,11 @@
 
     <!-- Parameters -->
     <div class="params-section">
-      <h5>Processing Parameters</h5>
+      <h5>{{ $t('knowledge.pipeline.config.processingParameters') }}</h5>
 
       <div class="param-group">
         <label for="batch-size">
-          Batch Size: <strong>{{ batchSize }}</strong>
+          {{ $t('knowledge.pipeline.config.batchSize') }} <strong>{{ batchSize }}</strong>
         </label>
         <input
           id="batch-size"
@@ -85,7 +85,7 @@
 
       <div class="param-group">
         <label for="confidence">
-          Confidence Threshold: <strong>{{ confidenceThreshold.toFixed(2) }}</strong>
+          {{ $t('knowledge.pipeline.config.confidenceThreshold') }} <strong>{{ confidenceThreshold.toFixed(2) }}</strong>
         </label>
         <input
           id="confidence"
@@ -108,7 +108,7 @@
     <div class="preview-section">
       <h5>
         <i class="fas fa-code"></i>
-        Configuration Preview
+        {{ $t('knowledge.pipeline.config.configurationPreview') }}
       </h5>
       <pre class="config-preview">{{ configPreview }}</pre>
     </div>
@@ -116,10 +116,10 @@
     <!-- Actions -->
     <div class="config-actions">
       <button class="action-btn secondary" @click="resetDefaults">
-        <i class="fas fa-undo"></i> Reset Defaults
+        <i class="fas fa-undo"></i> {{ $t('knowledge.pipeline.config.resetDefaults') }}
       </button>
       <button class="action-btn primary" @click="emitConfig">
-        <i class="fas fa-check"></i> Apply Configuration
+        <i class="fas fa-check"></i> {{ $t('knowledge.pipeline.config.applyConfiguration') }}
       </button>
     </div>
   </div>
@@ -131,6 +131,7 @@
 // Author: mrveiss
 
 import { ref, reactive, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 interface StageTask {
   id: string
@@ -147,6 +148,8 @@ interface Stage {
   tasks: StageTask[]
 }
 
+const { t } = useI18n()
+
 const emit = defineEmits<{
   (e: 'config-change', config: Record<string, unknown>): void
 }>()
@@ -157,39 +160,39 @@ const confidenceThreshold = ref(0.7)
 const stages = reactive<Stage[]>([
   {
     id: 'extract',
-    name: 'Extract',
+    name: t('knowledge.pipeline.config.stageExtract'),
     icon: 'fas fa-file-alt',
-    description: 'Parse documents into chunks and extract raw content',
+    description: t('knowledge.pipeline.config.stageExtractDesc'),
     enabled: true,
     tasks: [
-      { id: 'chunk', name: 'Chunk Documents', enabled: true },
-      { id: 'parse_metadata', name: 'Parse Metadata', enabled: true },
-      { id: 'detect_language', name: 'Detect Language', enabled: true },
+      { id: 'chunk', name: t('knowledge.pipeline.config.taskChunkDocuments'), enabled: true },
+      { id: 'parse_metadata', name: t('knowledge.pipeline.config.taskParseMetadata'), enabled: true },
+      { id: 'detect_language', name: t('knowledge.pipeline.config.taskDetectLanguage'), enabled: true },
     ],
   },
   {
     id: 'cognify',
-    name: 'Cognify',
+    name: t('knowledge.pipeline.config.stageCognify'),
     icon: 'fas fa-brain',
-    description: 'Extract entities, relationships, and temporal events',
+    description: t('knowledge.pipeline.config.stageCognifyDesc'),
     enabled: true,
     tasks: [
-      { id: 'entities', name: 'Entity Extraction', enabled: true },
-      { id: 'relationships', name: 'Relationship Detection', enabled: true },
-      { id: 'events', name: 'Temporal Event Detection', enabled: true },
-      { id: 'coreference', name: 'Coreference Resolution', enabled: false },
+      { id: 'entities', name: t('knowledge.pipeline.config.taskEntityExtraction'), enabled: true },
+      { id: 'relationships', name: t('knowledge.pipeline.config.taskRelationshipDetection'), enabled: true },
+      { id: 'events', name: t('knowledge.pipeline.config.taskTemporalEventDetection'), enabled: true },
+      { id: 'coreference', name: t('knowledge.pipeline.config.taskCoreferenceResolution'), enabled: false },
     ],
   },
   {
     id: 'load',
-    name: 'Load',
+    name: t('knowledge.pipeline.config.stageLoad'),
     icon: 'fas fa-database',
-    description: 'Generate summaries and load into graph storage',
+    description: t('knowledge.pipeline.config.stageLoadDesc'),
     enabled: true,
     tasks: [
-      { id: 'summaries', name: 'Generate Summaries', enabled: true },
-      { id: 'embeddings', name: 'Compute Embeddings', enabled: true },
-      { id: 'index', name: 'Update Graph Index', enabled: true },
+      { id: 'summaries', name: t('knowledge.pipeline.config.taskGenerateSummaries'), enabled: true },
+      { id: 'embeddings', name: t('knowledge.pipeline.config.taskComputeEmbeddings'), enabled: true },
+      { id: 'index', name: t('knowledge.pipeline.config.taskUpdateGraphIndex'), enabled: true },
     ],
   },
 ])

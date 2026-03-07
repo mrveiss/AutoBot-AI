@@ -4,7 +4,7 @@
     class="entity-detail-overlay"
     role="dialog"
     aria-modal="true"
-    :aria-label="`Entity details: ${entity.name}`"
+    :aria-label="$t('knowledge.graph.entity.ariaLabel', { name: entity.name })"
     @click.self="$emit('close')"
     @keydown.escape="$emit('close')"
   >
@@ -29,7 +29,7 @@
         </div>
         <button
           class="close-btn"
-          aria-label="Close entity details"
+          :aria-label="$t('knowledge.graph.entity.closeAriaLabel')"
           @click="$emit('close')"
         >
           <i class="fas fa-times"></i>
@@ -38,7 +38,7 @@
 
       <!-- Confidence -->
       <div class="confidence-bar">
-        <span class="confidence-label">Confidence</span>
+        <span class="confidence-label">{{ $t('knowledge.graph.entity.confidence') }}</span>
         <div class="confidence-track">
           <div
             class="confidence-fill"
@@ -52,9 +52,9 @@
 
       <!-- Description -->
       <div class="detail-section">
-        <h5><i class="fas fa-align-left"></i> Description</h5>
+        <h5><i class="fas fa-align-left"></i> {{ $t('knowledge.graph.entity.description') }}</h5>
         <p class="description-text">
-          {{ entity.description || 'No description available' }}
+          {{ entity.description || $t('knowledge.graph.entity.noDescription') }}
         </p>
       </div>
 
@@ -63,7 +63,7 @@
         v-if="propertyEntries.length > 0"
         class="detail-section"
       >
-        <h5><i class="fas fa-list"></i> Properties</h5>
+        <h5><i class="fas fa-list"></i> {{ $t('knowledge.graph.entity.properties') }}</h5>
         <table class="properties-table">
           <tbody>
             <tr
@@ -81,7 +81,7 @@
       <div class="detail-section">
         <h5>
           <i class="fas fa-link"></i>
-          Relationships
+          {{ $t('knowledge.graph.entity.relationships') }}
           <span v-if="relLoading" class="section-loading">
             <i class="fas fa-spinner fa-spin"></i>
           </span>
@@ -106,7 +106,7 @@
           </div>
         </div>
 
-        <p v-else class="empty-text">No relationships found</p>
+        <p v-else class="empty-text">{{ $t('knowledge.graph.entity.noRelationships') }}</p>
       </div>
 
       <!-- Source Documents -->
@@ -116,7 +116,7 @@
       >
         <h5>
           <i class="fas fa-file-alt"></i>
-          Source Documents ({{ entity.source_document_ids.length }})
+          {{ $t('knowledge.graph.entity.sourceDocuments', { count: entity.source_document_ids.length }) }}
         </h5>
         <div class="source-list">
           <span
@@ -136,7 +136,7 @@
           @click="$emit('view-timeline', entity.name)"
         >
           <i class="fas fa-clock"></i>
-          View Timeline
+          {{ $t('knowledge.graph.entity.viewTimeline') }}
         </button>
       </div>
     </div>

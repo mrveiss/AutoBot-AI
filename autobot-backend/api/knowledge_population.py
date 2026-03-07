@@ -23,8 +23,9 @@ import re
 from pathlib import Path as PathLib
 
 import aiofiles
+from auth_middleware import check_admin_permission
 from constants.threshold_constants import TimingConstants
-from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from knowledge_factory import get_or_create_knowledge_base
 from utils.template_loader import knowledge_data_exists, load_knowledge_data
 
@@ -36,7 +37,10 @@ logger = logging.getLogger(__name__)
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 # Create router for population endpoints
-router = APIRouter(tags=["knowledge-population"])
+router = APIRouter(
+    tags=["knowledge-population"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 # ===== HELPER FUNCTIONS =====
@@ -1024,47 +1028,50 @@ def _build_population_response(
 @router.post("/populate_autobot_docs")
 async def populate_autobot_docs(request: dict, req: Request):
     """
-    Populate knowledge base with AutoBot-specific documentation.
+    Populate knowledge base with AutoBot documentation via ChromaDB.
 
-    Issue #281: Refactored from 145 lines to use extracted helper method.
-    Issue #398: Further refactored to extract scanning, processing, and response logic.
+    Issue #1385: Consolidated to use DocIndexerService (ChromaDB as single
+    source of truth). Replaces the old Redis KB store_fact() path.
+    Issue #281: Original implementation.
+    Issue #398: Extracted helper methods.
     """
-    from models.knowledge_import_tracking import ImportTracker
+    from services.knowledge.doc_indexer import get_doc_indexer_service
 
     force_reindex = request.get("force", False) if request else False
-    kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-    if kb_to_use is None:
+
+    logger.info("Starting AutoBot documentation indexing (force=%s)...", force_reindex)
+
+    indexer = get_doc_indexer_service()
+    if not await indexer.initialize():
         return {
             "status": "error",
-            "message": "Knowledge base not initialized",
+            "message": "Documentation indexer failed to initialize",
             "items_added": 0,
         }
 
-    logger.info("Starting AutoBot documentation population with import tracking...")
-
-    tracker = ImportTracker()
-    autobot_base_path = PathLib(__file__).parent.parent.parent
-
-    doc_files, scan_skipped = await _scan_doc_files(
-        autobot_base_path, tracker, force_reindex
-    )
-    items_added, proc_skipped, items_failed = await _process_all_doc_files(
-        kb_to_use, tracker, autobot_base_path, doc_files
-    )
-    items_skipped = scan_skipped + proc_skipped
-
-    if await _store_autobot_config_info(kb_to_use):
-        items_added += 1
+    result = await indexer.index_all(force=force_reindex)
 
     logger.info(
-        "AutoBot docs completed: %s added, %s skipped, %s failed",
-        items_added,
-        items_skipped,
-        items_failed,
+        "AutoBot docs indexing completed: %d success, %d skipped, %d failed",
+        result.success,
+        result.skipped,
+        result.failed,
     )
-    return _build_population_response(
-        items_added, items_skipped, items_failed, len(doc_files), force_reindex
-    )
+
+    mode = "Force reindex" if force_reindex else "Incremental update"
+    return {
+        "status": "success",
+        "message": (
+            f"{mode}: Successfully indexed {result.success} AutoBot documents "
+            f"({result.skipped} skipped, {result.failed} failed)"
+        ),
+        "items_added": result.success,
+        "items_skipped": result.skipped,
+        "items_failed": result.failed,
+        "total_files": result.total_files,
+        "force_reindex": force_reindex,
+        "elapsed_seconds": result.elapsed_seconds,
+    }
 
 
 # =========================================================================

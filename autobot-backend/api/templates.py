@@ -14,8 +14,9 @@ segments as path parameters.
 import logging
 from typing import Dict, Optional
 
+from auth_middleware import check_admin_permission
 from autobot_types import TaskComplexity
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from utils.advanced_cache_manager import smart_cache
 from workflow_templates import TemplateCategory, workflow_template_manager
@@ -24,7 +25,9 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 class TemplateExecutionRequest(BaseModel):
@@ -140,6 +143,37 @@ async def list_workflow_templates(
 
 
 # --- Static paths MUST be registered before /templates/{template_id} ---
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_secrets_usage",
+    error_code_prefix="TEMPLATES",
+)
+@router.get("/templates/secrets-usage")
+async def get_secrets_usage():
+    """Map secret keys to the templates that require them (#1415)."""
+    try:
+        all_templates = workflow_template_manager.list_templates()
+        usage_map: Dict[str, list] = {}
+        for template in all_templates:
+            for secret_key, meta in (template.required_secrets or {}).items():
+                if secret_key not in usage_map:
+                    usage_map[secret_key] = []
+                usage_map[secret_key].append(
+                    {
+                        "template_id": template.id,
+                        "template_name": template.name,
+                        "required": meta.get("required", True),
+                        "scope": meta.get("scope", ""),
+                    }
+                )
+        return {"success": True, "secrets_usage": usage_map}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get secrets usage: {str(e)}",
+        )
 
 
 @with_error_handling(
@@ -528,11 +562,6 @@ def _convert_template_steps(steps):
                 risk_level="medium",
                 estimated_duration=(step.get("expected_duration_ms", 30000) / 1000),
                 dependencies=step.get("dependencies", []),
-                metadata={
-                    "agent_type": step["agent_type"],
-                    "action": step["action"],
-                    "inputs": step.get("inputs", {}),
-                },
             )
         )
     return wa_steps

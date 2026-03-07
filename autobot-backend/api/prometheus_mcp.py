@@ -14,7 +14,8 @@ import logging
 from typing import List
 
 import aiohttp
-from fastapi import APIRouter
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from type_defs.common import Metadata
 
@@ -23,7 +24,10 @@ from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_config
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["prometheus_mcp", "mcp", "monitoring"])
+router = APIRouter(
+    tags=["prometheus_mcp", "mcp", "monitoring"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 # Prometheus configuration - use SSOT config
 _ssot = get_config()

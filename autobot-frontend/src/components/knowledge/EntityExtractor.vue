@@ -2,51 +2,47 @@
   <div class="entity-extractor">
     <!-- Header -->
     <div class="extractor-header">
-      <h4><i class="fas fa-brain"></i> Entity Extraction</h4>
-      <p class="header-description">Extract entities and relationships from text</p>
+      <h4><i class="fas fa-brain"></i> {{ $t('knowledge.entityExtractor.title') }}</h4>
+      <p class="header-description">{{ $t('knowledge.entityExtractor.description') }}</p>
     </div>
 
     <!-- Input Section -->
     <div class="input-section">
       <div class="form-group">
         <label for="conversation-id">
-          <i class="fas fa-tag"></i> Conversation ID
-          <span class="label-hint">(for tracking)</span>
+          <i class="fas fa-tag"></i> {{ $t('knowledge.entityExtractor.conversationId') }}
+          <span class="label-hint">{{ $t('knowledge.entityExtractor.conversationIdHint') }}</span>
         </label>
         <input
           id="conversation-id"
           v-model="conversationId"
           type="text"
-          placeholder="Enter a unique identifier (e.g., conv-001)"
+          :placeholder="$t('knowledge.entityExtractor.conversationIdPlaceholder')"
           :disabled="isExtracting"
         />
       </div>
 
       <div class="form-group">
         <label for="text-input">
-          <i class="fas fa-file-alt"></i> Text Content
-          <span class="label-hint">(supports multi-message format)</span>
+          <i class="fas fa-file-alt"></i> {{ $t('knowledge.entityExtractor.textContent') }}
+          <span class="label-hint">{{ $t('knowledge.entityExtractor.textContentHint') }}</span>
         </label>
         <textarea
           id="text-input"
           v-model="textInput"
           rows="8"
-          placeholder="Enter text to extract entities from...
-
-You can enter plain text or use message format:
-[user] What is Redis?
-[assistant] Redis is an in-memory data structure store..."
+          :placeholder="$t('knowledge.entityExtractor.textContentPlaceholder')"
           :disabled="isExtracting"
         ></textarea>
         <div class="input-actions">
-          <span class="char-count">{{ textInput.length }} characters</span>
+          <span class="char-count">{{ textInput.length }} {{ $t('knowledge.entityExtractor.characters') }}</span>
           <button
             type="button"
             @click="clearInput"
             class="text-btn"
             :disabled="isExtracting || !textInput"
           >
-            <i class="fas fa-eraser"></i> Clear
+            <i class="fas fa-eraser"></i> {{ $t('knowledge.entityExtractor.clear') }}
           </button>
           <button
             type="button"
@@ -54,7 +50,7 @@ You can enter plain text or use message format:
             class="text-btn"
             :disabled="isExtracting"
           >
-            <i class="fas fa-flask"></i> Load Sample
+            <i class="fas fa-flask"></i> {{ $t('knowledge.entityExtractor.loadSample') }}
           </button>
         </div>
       </div>
@@ -67,7 +63,7 @@ You can enter plain text or use message format:
         >
           <i v-if="isExtracting" class="fas fa-spinner fa-spin"></i>
           <i v-else class="fas fa-magic"></i>
-          {{ isExtracting ? 'Extracting...' : 'Extract Entities' }}
+          {{ isExtracting ? $t('knowledge.entityExtractor.extracting') : $t('knowledge.entityExtractor.extractEntities') }}
         </button>
       </div>
     </div>
@@ -75,7 +71,7 @@ You can enter plain text or use message format:
     <!-- Results Section -->
     <div v-if="extractionResult" class="results-section">
       <div class="results-header">
-        <h5><i class="fas fa-check-circle"></i> Extraction Results</h5>
+        <h5><i class="fas fa-check-circle"></i> {{ $t('knowledge.entityExtractor.extractionResults') }}</h5>
         <span class="processing-time">
           <i class="fas fa-clock"></i>
           {{ extractionResult.processing_time.toFixed(2) }}s
@@ -85,20 +81,20 @@ You can enter plain text or use message format:
       <div class="results-stats">
         <div class="stat-card">
           <div class="stat-value">{{ extractionResult.facts_analyzed }}</div>
-          <div class="stat-label">Facts Analyzed</div>
+          <div class="stat-label">{{ $t('knowledge.entityExtractor.factsAnalyzed') }}</div>
         </div>
         <div class="stat-card success">
           <div class="stat-value">{{ extractionResult.entities_created }}</div>
-          <div class="stat-label">Entities Created</div>
+          <div class="stat-label">{{ $t('knowledge.entityExtractor.entitiesCreated') }}</div>
         </div>
         <div class="stat-card info">
           <div class="stat-value">{{ extractionResult.relations_created }}</div>
-          <div class="stat-label">Relations Created</div>
+          <div class="stat-label">{{ $t('knowledge.entityExtractor.relationsCreated') }}</div>
         </div>
       </div>
 
       <div v-if="extractionResult.errors?.length" class="errors-section">
-        <h6><i class="fas fa-exclamation-triangle"></i> Warnings</h6>
+        <h6><i class="fas fa-exclamation-triangle"></i> {{ $t('knowledge.entityExtractor.warnings') }}</h6>
         <ul class="error-list">
           <li v-for="(error, idx) in extractionResult.errors" :key="idx">
             {{ error }}
@@ -108,10 +104,10 @@ You can enter plain text or use message format:
 
       <div class="result-actions">
         <button @click="viewInGraph" class="action-btn">
-          <i class="fas fa-project-diagram"></i> View in Graph
+          <i class="fas fa-project-diagram"></i> {{ $t('knowledge.entityExtractor.viewInGraph') }}
         </button>
         <button @click="clearResults" class="action-btn">
-          <i class="fas fa-times"></i> Clear Results
+          <i class="fas fa-times"></i> {{ $t('knowledge.entityExtractor.clearResults') }}
         </button>
       </div>
     </div>
@@ -127,7 +123,7 @@ You can enter plain text or use message format:
 
     <!-- Extraction History -->
     <div v-if="extractionHistory.length > 0" class="history-section">
-      <h5><i class="fas fa-history"></i> Recent Extractions</h5>
+      <h5><i class="fas fa-history"></i> {{ $t('knowledge.entityExtractor.recentExtractions') }}</h5>
       <div class="history-list">
         <div
           v-for="item in extractionHistory"
@@ -138,13 +134,13 @@ You can enter plain text or use message format:
           <div class="history-main">
             <span class="history-id">{{ item.conversation_id }}</span>
             <span class="history-stats">
-              {{ item.entities_created }} entities, {{ item.relations_created }} relations
+              {{ $t('knowledge.entityExtractor.entitiesAndRelations', { entities: item.entities_created, relations: item.relations_created }) }}
             </span>
           </div>
           <div class="history-meta">
             <span class="history-time">{{ formatTime(item.timestamp) }}</span>
             <span :class="['history-status', item.success ? 'success' : 'error']">
-              {{ item.success ? 'Success' : 'Failed' }}
+              {{ item.success ? $t('knowledge.entityExtractor.success') : $t('knowledge.entityExtractor.failedStatus') }}
             </span>
           </div>
         </div>
@@ -172,12 +168,14 @@ You can enter plain text or use message format:
 // Author: mrveiss
 
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('EntityExtractor')
+const { t } = useI18n()
 const router = useRouter()
 
 // ============================================================================
@@ -276,7 +274,7 @@ function parseMessages(text: string): Message[] {
  */
 async function extractEntities(): Promise<void> {
   if (!textInput.value.trim() || !conversationId.value.trim()) {
-    errorMessage.value = 'Please enter both conversation ID and text content'
+    errorMessage.value = t('knowledge.entityExtractor.errorBothRequired')
     return
   }
 
@@ -309,7 +307,7 @@ async function extractEntities(): Promise<void> {
     logger.info(`Extraction complete: ${result.entities_created} entities`)
   } catch (error) {
     logger.error('Entity extraction failed:', error)
-    errorMessage.value = error instanceof Error ? error.message : 'Entity extraction failed'
+    errorMessage.value = error instanceof Error ? error.message : t('knowledge.entityExtractor.errorExtractionFailed')
   } finally {
     isExtracting.value = false
   }

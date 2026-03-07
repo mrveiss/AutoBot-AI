@@ -4,12 +4,12 @@
     <div class="plan-header">
       <div class="plan-title">
         <i class="fas fa-sitemap" aria-hidden="true"></i>
-        <span>Execution Plan</span>
+        <span>{{ $t('chat.overseer.executionPlan') }}</span>
       </div>
       <div class="plan-progress">
         <div class="progress-bar" :style="{ width: `${progressPercentage}%` }"></div>
       </div>
-      <span class="progress-text">{{ completedSteps }}/{{ totalSteps }} steps</span>
+      <span class="progress-text">{{ $t('chat.overseer.stepsProgress', { completed: completedSteps, total: totalSteps }) }}</span>
     </div>
 
     <!-- Analysis -->
@@ -51,7 +51,10 @@
  */
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { OverseerPlan, OverseerStep } from '@/composables/useOverseerAgent'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   plan: OverseerPlan

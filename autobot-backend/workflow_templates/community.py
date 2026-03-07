@@ -6,6 +6,7 @@ Community Growth Workflow Templates
 
 Issue #1161: Autonomous community outreach templates for Reddit, Twitter,
 Discord, and GitHub — each with a human-approval gate before posting.
+Issue #1415: User-friendly step descriptions and required_secrets metadata.
 """
 
 from typing import Dict, List
@@ -22,7 +23,11 @@ def _build_reddit_monitor_gather_steps() -> List[WorkflowStep]:
             id="reddit_search",
             agent_type="community_growth",
             action="reddit_search",
-            description="Community_Growth: Search subreddits for keyword matches",
+            description=(
+                "Search target subreddits for posts matching your keywords. "
+                "Uses Reddit API (read-only, app credentials only) to find "
+                "relevant discussions, filtering by minimum score."
+            ),
             inputs={
                 "subreddits": "{subreddits}",
                 "keywords": "{keywords}",
@@ -35,7 +40,11 @@ def _build_reddit_monitor_gather_steps() -> List[WorkflowStep]:
             id="draft_replies",
             agent_type="community_growth",
             action="llm_draft_content",
-            description="Community_Growth: Draft replies for matching posts",
+            description=(
+                "AutoBot sends each matching post to the local LLM (Ollama) "
+                "and drafts a helpful, contextual reply for every result. "
+                "Replies mention the AutoBot project where relevant."
+            ),
             dependencies=["reddit_search"],
             inputs={
                 "format": "reddit_reply",
@@ -57,7 +66,9 @@ def _build_reddit_monitor_post_steps() -> List[WorkflowStep]:
             agent_type="orchestrator",
             action="human_review",
             description=(
-                "Orchestrator: Review drafted replies before posting (requires your approval)"
+                "All drafted replies are presented for your review. "
+                "You can edit, approve, or reject each reply before "
+                "anything is posted. Nothing goes live without your OK."
             ),
             requires_approval=True,
             dependencies=["draft_replies"],
@@ -67,7 +78,12 @@ def _build_reddit_monitor_post_steps() -> List[WorkflowStep]:
             id="reddit_reply",
             agent_type="community_growth",
             action="reddit_reply",
-            description="Community_Growth: Post approved replies to Reddit",
+            description=(
+                "Post the approved replies to their respective Reddit "
+                "threads. Requires full Reddit OAuth credentials "
+                "(username + password). Only replies you approved in "
+                "the previous step are posted."
+            ),
             dependencies=["review_drafts"],
             inputs={"dry_run": False},
             expected_duration_ms=20000,
@@ -101,6 +117,28 @@ def create_reddit_monitor_reply_template() -> WorkflowTemplate:
         tags=["community", "reddit", "outreach", "monitor", "reply"],
         variables=_get_reddit_monitor_variables(),
         steps=steps,
+        required_secrets={
+            "REDDIT_CLIENT_ID": {
+                "description": "Reddit OAuth app client ID",
+                "required": True,
+                "scope": "read",
+            },
+            "REDDIT_CLIENT_SECRET": {
+                "description": "Reddit OAuth app client secret",
+                "required": True,
+                "scope": "read",
+            },
+            "REDDIT_USERNAME": {
+                "description": "Reddit account username (required for posting)",
+                "required": True,
+                "scope": "write",
+            },
+            "REDDIT_PASSWORD": {
+                "description": "Reddit account password (required for posting)",
+                "required": True,
+                "scope": "write",
+            },
+        },
     )
 
 
@@ -111,7 +149,12 @@ def _build_blast_fetch_draft_steps() -> List[WorkflowStep]:
             id="fetch_release",
             agent_type="community_growth",
             action="github_get_releases",
-            description="Community_Growth: Fetch latest GitHub release notes",
+            description=(
+                "Fetch the latest release from the GitHub repository, "
+                "including tag name, release notes, and highlights. "
+                "Uses GitHub API (public repos need no token; private "
+                "repos require a GITHUB_TOKEN)."
+            ),
             inputs={"repo": "{repo}", "limit": 1},
             expected_duration_ms=10000,
         ),
@@ -119,7 +162,12 @@ def _build_blast_fetch_draft_steps() -> List[WorkflowStep]:
             id="draft_content",
             agent_type="community_growth",
             action="llm_draft_content",
-            description="Community_Growth: Draft announcements for all channels",
+            description=(
+                "AutoBot sends the release notes to the local LLM and "
+                "drafts three separate announcements: a Reddit post, a "
+                "tweet (<=280 chars), and a Discord message — each "
+                "tailored for its platform."
+            ),
             dependencies=["fetch_release"],
             inputs={
                 "format": "all_channels",
@@ -141,8 +189,10 @@ def _build_blast_review_step() -> List[WorkflowStep]:
             agent_type="orchestrator",
             action="human_review",
             description=(
-                "Orchestrator: Review release content for Reddit, Twitter, and Discord "
-                "(requires your approval)"
+                "All three drafted announcements (Reddit, Twitter, "
+                "Discord) are presented for your review. Edit wording, "
+                "approve or reject each one individually. Nothing is "
+                "posted without your approval."
             ),
             requires_approval=True,
             dependencies=["draft_content"],
@@ -158,7 +208,11 @@ def _build_blast_posting_steps() -> List[WorkflowStep]:
             id="reddit_post",
             agent_type="community_growth",
             action="reddit_post",
-            description="Community_Growth: Post release announcement to Reddit",
+            description=(
+                "Submit the approved announcement as a new post to "
+                "the target subreddit. Requires full Reddit OAuth "
+                "credentials."
+            ),
             dependencies=["review_content"],
             inputs={"subreddit": "{target_subreddits}", "dry_run": False},
             expected_duration_ms=15000,
@@ -167,7 +221,10 @@ def _build_blast_posting_steps() -> List[WorkflowStep]:
             id="twitter_post",
             agent_type="community_growth",
             action="twitter_post",
-            description="Community_Growth: Post release announcement to Twitter",
+            description=(
+                "Publish the approved tweet via Twitter API v2. "
+                "Requires a TWITTER_BEARER_TOKEN with write access."
+            ),
             dependencies=["review_content"],
             inputs={"dry_run": False},
             expected_duration_ms=10000,
@@ -176,7 +233,11 @@ def _build_blast_posting_steps() -> List[WorkflowStep]:
             id="discord_notify",
             agent_type="community_growth",
             action="discord_notify",
-            description="Community_Growth: Post release announcement to Discord",
+            description=(
+                "Send the approved announcement to the configured "
+                "Discord channel via webhook. Requires a "
+                "DISCORD_WEBHOOK_URL."
+            ),
             dependencies=["review_content"],
             inputs={"dry_run": False},
             expected_duration_ms=5000,
@@ -214,6 +275,43 @@ def create_release_announcement_blast_template() -> WorkflowTemplate:
         tags=["community", "release", "reddit", "twitter", "discord", "announcement"],
         variables=_get_blast_variables(),
         steps=steps,
+        required_secrets={
+            "GITHUB_TOKEN": {
+                "description": "GitHub token (only needed for private repos)",
+                "required": False,
+                "scope": "read",
+            },
+            "REDDIT_CLIENT_ID": {
+                "description": "Reddit OAuth app client ID",
+                "required": True,
+                "scope": "write",
+            },
+            "REDDIT_CLIENT_SECRET": {
+                "description": "Reddit OAuth app client secret",
+                "required": True,
+                "scope": "write",
+            },
+            "REDDIT_USERNAME": {
+                "description": "Reddit account username",
+                "required": True,
+                "scope": "write",
+            },
+            "REDDIT_PASSWORD": {
+                "description": "Reddit account password",
+                "required": True,
+                "scope": "write",
+            },
+            "TWITTER_BEARER_TOKEN": {
+                "description": "Twitter API v2 bearer token with write access",
+                "required": True,
+                "scope": "write",
+            },
+            "DISCORD_WEBHOOK_URL": {
+                "description": "Discord channel webhook URL",
+                "required": True,
+                "scope": "write",
+            },
+        },
     )
 
 
@@ -224,7 +322,11 @@ def _build_digest_gather_steps() -> List[WorkflowStep]:
             id="fetch_releases",
             agent_type="community_growth",
             action="github_get_releases",
-            description="Community_Growth: Fetch recent GitHub releases",
+            description=(
+                "Fetch the 5 most recent releases from the GitHub "
+                "repository. Runs in parallel with the Reddit search "
+                "step. Public repos need no token."
+            ),
             inputs={"repo": "{repo}", "limit": 5},
             expected_duration_ms=10000,
         ),
@@ -232,7 +334,11 @@ def _build_digest_gather_steps() -> List[WorkflowStep]:
             id="search_mentions",
             agent_type="community_growth",
             action="reddit_search",
-            description="Community_Growth: Search Reddit for AutoBot mentions",
+            description=(
+                "Search target subreddits for mentions of AutoBot and "
+                "mrveiss. Runs in parallel with the GitHub releases "
+                "fetch. Uses read-only Reddit app credentials."
+            ),
             inputs={
                 "subreddits": "{target_subreddits}",
                 "keywords": ["autobot", "mrveiss"],
@@ -251,7 +357,12 @@ def _build_digest_draft_review_post_steps() -> List[WorkflowStep]:
             id="draft_digest",
             agent_type="community_growth",
             action="llm_draft_content",
-            description="Community_Growth: Draft community digest post",
+            description=(
+                "AutoBot combines the GitHub releases and Reddit "
+                "mentions, then sends them to the local LLM to draft "
+                "a community digest post summarising activity over "
+                "the lookback period."
+            ),
             dependencies=["fetch_releases", "search_mentions"],
             inputs={
                 "format": "reddit_post",
@@ -267,8 +378,9 @@ def _build_digest_draft_review_post_steps() -> List[WorkflowStep]:
             agent_type="orchestrator",
             action="human_review",
             description=(
-                "Orchestrator: Review community digest before publishing "
-                "(requires your approval)"
+                "The drafted digest is presented for your review. "
+                "Edit, approve, or reject before it goes live. "
+                "Nothing is posted without your approval."
             ),
             requires_approval=True,
             dependencies=["draft_digest"],
@@ -278,7 +390,11 @@ def _build_digest_draft_review_post_steps() -> List[WorkflowStep]:
             id="post_digest",
             agent_type="community_growth",
             action="reddit_post",
-            description="Community_Growth: Post community digest to Reddit",
+            description=(
+                "Submit the approved digest as a new post to the "
+                "target subreddit. Requires full Reddit OAuth "
+                "credentials."
+            ),
             dependencies=["review_digest"],
             inputs={"subreddit": "{target_subreddits}", "dry_run": False},
             expected_duration_ms=15000,
@@ -312,6 +428,33 @@ def create_community_digest_post_template() -> WorkflowTemplate:
         tags=["community", "digest", "reddit", "github", "releases", "weekly"],
         variables=_get_digest_variables(),
         steps=steps,
+        required_secrets={
+            "GITHUB_TOKEN": {
+                "description": "GitHub token (only needed for private repos)",
+                "required": False,
+                "scope": "read",
+            },
+            "REDDIT_CLIENT_ID": {
+                "description": "Reddit OAuth app client ID",
+                "required": True,
+                "scope": "read+write",
+            },
+            "REDDIT_CLIENT_SECRET": {
+                "description": "Reddit OAuth app client secret",
+                "required": True,
+                "scope": "read+write",
+            },
+            "REDDIT_USERNAME": {
+                "description": "Reddit account username (required for posting)",
+                "required": True,
+                "scope": "write",
+            },
+            "REDDIT_PASSWORD": {
+                "description": "Reddit account password (required for posting)",
+                "required": True,
+                "scope": "write",
+            },
+        },
     )
 
 

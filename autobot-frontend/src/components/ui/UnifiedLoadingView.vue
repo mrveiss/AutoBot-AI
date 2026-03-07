@@ -6,15 +6,15 @@
         <div class="error-icon">
           <i class="fas fa-exclamation-triangle text-red-500 text-4xl"></i>
         </div>
-        <h3 class="error-title">Something went wrong</h3>
+        <h3 class="error-title">{{ t('ui.unifiedLoading.somethingWentWrong') }}</h3>
         <p class="error-message">{{ error }}</p>
         <div class="error-actions">
           <button @click="retry" class="btn-retry">
             <i class="fas fa-redo mr-2"></i>
-            Retry
+            {{ t('ui.unifiedLoading.retry') }}
           </button>
           <button @click="dismiss" class="btn-dismiss">
-            Continue Anyway
+            {{ t('ui.unifiedLoading.continueAnyway') }}
           </button>
         </div>
       </div>
@@ -26,11 +26,11 @@
         <div class="loading-spinner">
           <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600"></div>
         </div>
-        <p class="loading-message">{{ message || 'Loading...' }}</p>
+        <p class="loading-message">{{ message || t('ui.unifiedLoading.loading') }}</p>
         <div v-if="hasTimedOut" class="timeout-warning">
-          <p class="text-yellow-600">This is taking longer than expected...</p>
+          <p class="text-yellow-600">{{ t('ui.unifiedLoading.takingLonger') }}</p>
           <button @click="cancelLoading" class="btn-cancel">
-            Cancel and Continue
+            {{ t('ui.unifiedLoading.cancelAndContinue') }}
           </button>
         </div>
       </div>
@@ -43,7 +43,7 @@
       <!-- Subtle loading indicator when content exists -->
       <div v-if="isLoading && hasContent" class="updating-indicator">
         <div class="updating-pulse"></div>
-        <span class="updating-text">Updating...</span>
+        <span class="updating-text">{{ t('ui.unifiedLoading.updating') }}</span>
       </div>
     </div>
   </div>
@@ -51,10 +51,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { useUnifiedLoading } from '@/composables/useUnifiedLoading'
 
 const logger = createLogger('UnifiedLoadingView')
+const { t } = useI18n()
 
 interface Props {
   loadingKey?: string

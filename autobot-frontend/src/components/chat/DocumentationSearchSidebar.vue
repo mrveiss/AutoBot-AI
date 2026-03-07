@@ -5,7 +5,7 @@
       class="sidebar-toggle"
       @click="toggleSidebar"
       :aria-expanded="!isCollapsed"
-      aria-label="Toggle documentation sidebar"
+      :aria-label="$t('chat.docSearch.toggleSidebar')"
     >
       <i :class="isCollapsed ? 'fas fa-chevron-left' : 'fas fa-chevron-right'" aria-hidden="true"></i>
     </button>
@@ -15,12 +15,12 @@
       <div class="sidebar-header">
         <h3 class="sidebar-title">
           <i class="fas fa-book-open" aria-hidden="true"></i>
-          Documentation
+          {{ $t('chat.docSearch.title') }}
         </h3>
         <button
           class="close-btn"
           @click="$emit('close')"
-          aria-label="Close documentation sidebar"
+          :aria-label="$t('chat.docSearch.closeSidebar')"
         >
           <i class="fas fa-times" aria-hidden="true"></i>
         </button>
@@ -34,16 +34,16 @@
             v-model="searchQuery"
             type="text"
             class="search-input"
-            placeholder="Search documentation..."
+            :placeholder="$t('chat.docSearch.searchPlaceholder')"
             @input="handleSearch"
             @keydown.enter="executeSearch"
-            aria-label="Search documentation"
+            :aria-label="$t('chat.docSearch.searchDocumentation')"
           />
           <button
             v-if="searchQuery"
             class="clear-search-btn"
             @click="clearSearch"
-            aria-label="Clear search"
+            :aria-label="$t('chat.docSearch.clearSearch')"
           >
             <i class="fas fa-times" aria-hidden="true"></i>
           </button>
@@ -64,19 +64,19 @@
       <div class="results-section">
         <div class="results-header">
           <span class="results-count">
-            {{ results.length }} result{{ results.length !== 1 ? 's' : '' }}
+            {{ $t('chat.docSearch.resultsCount', { count: results.length }) }}
           </span>
           <div class="sort-controls">
             <select
               v-model="sortBy"
               class="sort-select"
-              aria-label="Sort results by"
+              :aria-label="$t('chat.docSearch.sortResultsBy')"
               @change="handleSortChange"
             >
-              <option value="relevance">Relevance</option>
-              <option value="title">Title</option>
-              <option value="category">Category</option>
-              <option value="date">Date</option>
+              <option value="relevance">{{ $t('chat.docSearch.sortRelevance') }}</option>
+              <option value="title">{{ $t('chat.docSearch.sortTitle') }}</option>
+              <option value="category">{{ $t('chat.docSearch.sortCategory') }}</option>
+              <option value="date">{{ $t('chat.docSearch.sortDate') }}</option>
             </select>
           </div>
         </div>
@@ -84,7 +84,7 @@
         <!-- Loading State -->
         <div v-if="isSearching" class="loading-state">
           <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
-          <span>Searching...</span>
+          <span>{{ $t('chat.docSearch.searching') }}</span>
         </div>
 
         <!-- Results List -->
@@ -113,17 +113,17 @@
             :disabled="isLoadingMore"
           >
             <i v-if="isLoadingMore" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
-            <span>{{ isLoadingMore ? 'Loading...' : 'Load more' }}</span>
+            <span>{{ isLoadingMore ? $t('common.loading') : $t('common.loadMore') }}</span>
           </button>
         </div>
 
         <!-- Empty State -->
         <div v-else class="empty-state">
           <i class="fas fa-file-alt" aria-hidden="true"></i>
-          <p v-if="searchQuery">No results found for "{{ searchQuery }}"</p>
-          <p v-else>Search AutoBot documentation</p>
+          <p v-if="searchQuery">{{ $t('chat.docSearch.noResults', { query: searchQuery }) }}</p>
+          <p v-else>{{ $t('chat.docSearch.searchPrompt') }}</p>
           <div v-if="!searchQuery" class="quick-searches">
-            <span class="quick-search-label">Quick searches:</span>
+            <span class="quick-search-label">{{ $t('chat.docSearch.quickSearches') }}</span>
             <div class="quick-search-chips">
               <DocumentationSuggestionChip
                 v-for="suggestion in quickSearches"
@@ -138,7 +138,7 @@
 
       <!-- Recent Docs -->
       <div v-if="recentDocs.length > 0 && !searchQuery" class="recent-section">
-        <h4 class="section-title">Recent Documents</h4>
+        <h4 class="section-title">{{ $t('chat.docSearch.recentDocuments') }}</h4>
         <div class="recent-list">
           <button
             v-for="doc in recentDocs"
@@ -169,12 +169,14 @@
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import DocumentationResultCard from './DocumentationResultCard.vue'
 import DocumentationSuggestionChip from './DocumentationSuggestionChip.vue'
 import DocumentationCategoryFilter from './DocumentationCategoryFilter.vue'
 import { useApi } from '@/composables/useApi'
 import { createLogger } from '@/utils/debugUtils'
 
+const { t } = useI18n()
 const logger = createLogger('DocumentationSearchSidebar')
 
 interface DocResult {

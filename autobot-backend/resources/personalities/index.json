@@ -3,6 +3,7 @@
   "enabled": true,
   "profiles": [
     {"id": "default", "name": "Default", "is_system": true},
-    {"id": "professional", "name": "Professional", "is_system": true}
+    {"id": "professional", "name": "Professional", "is_system": true},
+    {"id": "rude", "name": "Rude", "is_system": true}
   ]
 }

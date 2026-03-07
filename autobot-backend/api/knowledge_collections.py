@@ -30,8 +30,9 @@ from api.knowledge_models import (
     CreateCollectionRequest,
     UpdateCollectionRequest,
 )
+from auth_middleware import check_admin_permission
 from constants.threshold_constants import QueryDefaults
-from fastapi import APIRouter, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from knowledge_factory import get_or_create_knowledge_base
 from starlette.requests import Request
 
@@ -43,7 +44,10 @@ logger = logging.getLogger(__name__)
 _COLLECTION_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 # Create router for collection management endpoints
-router = APIRouter(tags=["knowledge-collections"])
+router = APIRouter(
+    tags=["knowledge-collections"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 def _raise_kb_error(error_message: str, default_code: int = 500) -> None:

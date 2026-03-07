@@ -1,14 +1,14 @@
 <template>
   <div class="workflow-management">
     <div class="section-header">
-      <h4>📋 Workflow Steps Management</h4>
+      <h4>{{ $t('workflow.steps.title') }}</h4>
       <BaseButton
         variant="outline"
         size="sm"
         @click="showManager = !showManager"
-        :aria-label="showManager ? '▼ Hide Steps' : '▶ Show Steps'"
+        :aria-label="showManager ? $t('workflow.steps.hideSteps') : $t('workflow.steps.showSteps')"
       >
-        {{ showManager ? '▼ Hide' : '▶ Show' }}
+        {{ showManager ? $t('workflow.steps.hide') : $t('workflow.steps.show') }}
       </BaseButton>
     </div>
 
@@ -27,21 +27,21 @@
               size="xs"
               @click="$emit('move-up', index)"
               :disabled="index === 0"
-              aria-label="Move step up"
+              :aria-label="$t('workflow.steps.moveUpAriaLabel')"
             >↑</BaseButton>
             <BaseButton
               variant="outline"
               size="xs"
               @click="$emit('move-down', index)"
               :disabled="index === steps.length - 1"
-              aria-label="Move step down"
+              :aria-label="$t('workflow.steps.moveDownAriaLabel')"
             >↓</BaseButton>
             <BaseButton
               variant="danger"
               size="xs"
               @click="$emit('delete', index)"
               :disabled="steps.length <= 1"
-              aria-label="Delete step"
+              :aria-label="$t('workflow.steps.deleteAriaLabel')"
             >🗑️</BaseButton>
           </div>
 
@@ -58,14 +58,14 @@
               variant="outline"
               size="xs"
               @click="$emit('edit', index)"
-              aria-label="Edit step"
-            >✏️ Edit</BaseButton>
+              :aria-label="$t('workflow.steps.editAriaLabel')"
+            >{{ $t('workflow.steps.edit') }}</BaseButton>
             <BaseButton
               variant="success"
               size="xs"
               @click="$emit('insert-after', index)"
-              aria-label="Insert step after"
-            >➕ Insert After</BaseButton>
+              :aria-label="$t('workflow.steps.insertAfterAriaLabel')"
+            >{{ $t('workflow.steps.insertAfter') }}</BaseButton>
           </div>
         </div>
       </div>
@@ -76,48 +76,48 @@
           variant="success"
           @click="showAddForm = !showAddForm"
           class="add-step-btn"
-          aria-label="Add new step"
+          :aria-label="$t('workflow.steps.addNewStepAriaLabel')"
         >
-          ➕ Add New Step
+          {{ $t('workflow.steps.addNewStep') }}
         </BaseButton>
 
         <div v-if="showAddForm" class="add-step-form">
           <div class="form-field">
-            <label>Description:</label>
+            <label>{{ $t('workflow.steps.descriptionLabel') }}</label>
             <input
               v-model="newStep.description"
               type="text"
               class="form-input"
-              placeholder="Enter step description..."
+              :placeholder="$t('workflow.steps.descriptionPlaceholder')"
             />
           </div>
 
           <div class="form-field">
-            <label>Command:</label>
+            <label>{{ $t('workflow.steps.commandLabel') }}</label>
             <textarea
               v-model="newStep.command"
               class="form-textarea"
               rows="2"
-              placeholder="Enter command to execute..."
+              :placeholder="$t('workflow.steps.commandPlaceholder')"
             ></textarea>
           </div>
 
           <div class="form-field">
-            <label>Explanation (optional):</label>
+            <label>{{ $t('workflow.steps.explanationLabel') }}</label>
             <textarea
               v-model="newStep.explanation"
               class="form-textarea"
               rows="2"
-              placeholder="Explain what this step does..."
+              :placeholder="$t('workflow.steps.explanationPlaceholder')"
             ></textarea>
           </div>
 
           <div class="form-actions">
-            <BaseButton variant="success" @click="addStep" aria-label="Add step">
-              ✅ Add Step
+            <BaseButton variant="success" @click="addStep" :aria-label="$t('workflow.steps.addStepAriaLabel')">
+              {{ $t('workflow.steps.addStep') }}
             </BaseButton>
-            <BaseButton variant="secondary" @click="cancelAdd" aria-label="Cancel">
-              ❌ Cancel
+            <BaseButton variant="secondary" @click="cancelAdd" :aria-label="$t('workflow.steps.cancelAriaLabel')">
+              {{ $t('workflow.steps.cancel') }}
             </BaseButton>
           </div>
         </div>

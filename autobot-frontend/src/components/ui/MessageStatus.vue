@@ -21,7 +21,7 @@
       v-if="status === 'failed' && allowRetry"
       @click="$emit('retry')"
       class="retry-button"
-      title="Retry sending message"
+      :title="t('ui.messageStatus.retrySending')"
     >
       <ArrowPathIcon class="h-3 w-3" />
     </button>
@@ -30,6 +30,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   CheckIcon,
   CheckCircleIcon,
@@ -55,6 +56,8 @@ const props = withDefaults(defineProps<Props>(), {
   allowRetry: true
 })
 
+const { t } = useI18n()
+
 defineEmits<{
   retry: []
 }>()
@@ -70,14 +73,14 @@ const statusClass = computed(() => ({
 }))
 
 const statusText = computed(() => {
-  const texts = {
-    sending: 'Sending...',
-    sent: 'Sent',
-    delivered: 'Delivered',
-    read: 'Read',
-    failed: 'Failed',
-    queued: 'Queued',
-    retrying: 'Retrying...'
+  const texts: Record<string, string> = {
+    sending: t('ui.messageStatus.sending'),
+    sent: t('ui.messageStatus.sent'),
+    delivered: t('ui.messageStatus.delivered'),
+    read: t('ui.messageStatus.read'),
+    failed: t('ui.messageStatus.failed'),
+    queued: t('ui.messageStatus.queued'),
+    retrying: t('ui.messageStatus.retrying')
   }
   return texts[props.status]
 })
@@ -90,7 +93,7 @@ const statusTooltip = computed(() => {
       ? new Date(props.timestamp)
       : props.timestamp
     const timeString = time.toLocaleTimeString()
-    return `${baseTooltip} at ${timeString}`
+    return t('ui.messageStatus.statusAtTime', { status: baseTooltip, time: timeString })
   }
 
   if (props.error && props.status === 'failed') {

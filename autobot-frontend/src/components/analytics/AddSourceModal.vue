@@ -6,15 +6,15 @@
           class="modal-dialog"
           role="dialog"
           aria-modal="true"
-          :aria-label="isEditMode ? 'Edit Code Source' : 'Add Code Source'"
+          :aria-label="isEditMode ? $t('analytics.sources.editSource') : $t('analytics.sources.addCodeSource')"
         >
           <!-- Header -->
           <div class="modal-header">
             <h3>
               <i :class="isEditMode ? 'fas fa-edit' : 'fas fa-plus-circle'"></i>
-              {{ isEditMode ? 'Edit Source' : 'Add Code Source' }}
+              {{ isEditMode ? $t('analytics.sources.editSource') : $t('analytics.sources.addCodeSource') }}
             </h3>
-            <button class="close-btn" @click="handleClose" aria-label="Close">
+            <button class="close-btn" @click="handleClose" :aria-label="$t('analytics.sources.form.close')">
               <i class="fas fa-times"></i>
             </button>
           </div>
@@ -23,12 +23,12 @@
           <div class="modal-body">
             <!-- Name -->
             <div class="form-group">
-              <label class="form-label" for="source-name">Name <span class="required">*</span></label>
+              <label class="form-label" for="source-name">{{ $t('analytics.sources.form.name') }} <span class="required">*</span></label>
               <input
                 id="source-name"
                 v-model="form.name"
                 class="form-input"
-                placeholder="e.g. AutoBot Main"
+                :placeholder="$t('analytics.sources.form.namePlaceholder')"
                 type="text"
                 autocomplete="off"
                 :class="{ 'form-input--error': errors.name }"
@@ -38,7 +38,7 @@
 
             <!-- Source Type -->
             <div class="form-group">
-              <label class="form-label">Source Type</label>
+              <label class="form-label">{{ $t('analytics.sources.form.sourceType') }}</label>
               <div class="type-toggle">
                 <button
                   class="type-btn"
@@ -47,7 +47,7 @@
                   type="button"
                 >
                   <i class="fab fa-github"></i>
-                  GitHub
+                  {{ $t('analytics.sources.form.github') }}
                 </button>
                 <button
                   class="type-btn"
@@ -56,7 +56,7 @@
                   type="button"
                 >
                   <i class="fas fa-folder"></i>
-                  Local Path
+                  {{ $t('analytics.sources.form.localPath') }}
                 </button>
               </div>
             </div>
@@ -64,12 +64,12 @@
             <!-- GitHub fields -->
             <template v-if="form.source_type === 'github'">
               <div class="form-group">
-                <label class="form-label" for="source-repo">Repository <span class="required">*</span></label>
+                <label class="form-label" for="source-repo">{{ $t('analytics.sources.form.repository') }} <span class="required">*</span></label>
                 <input
                   id="source-repo"
                   v-model="form.repo"
                   class="form-input"
-                  placeholder="owner/repository"
+                  :placeholder="$t('analytics.sources.form.repoPlaceholder')"
                   type="text"
                   autocomplete="off"
                   :class="{ 'form-input--error': errors.repo }"
@@ -78,25 +78,25 @@
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="source-branch">Branch</label>
+                <label class="form-label" for="source-branch">{{ $t('analytics.sources.form.branch') }}</label>
                 <input
                   id="source-branch"
                   v-model="form.branch"
                   class="form-input"
-                  placeholder="main"
+                  :placeholder="$t('analytics.sources.form.branchPlaceholder')"
                   type="text"
                   autocomplete="off"
                 />
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="source-credential">Credential (optional)</label>
+                <label class="form-label" for="source-credential">{{ $t('analytics.sources.form.credentialOptional') }}</label>
                 <select
                   id="source-credential"
                   v-model="form.credential_id"
                   class="form-select"
                 >
-                  <option value="">-- None (public repo) --</option>
+                  <option value="">{{ $t('analytics.sources.form.nonePublicRepo') }}</option>
                   <option
                     v-for="secret in filteredSecrets"
                     :key="secret.id"
@@ -107,7 +107,7 @@
                 </select>
                 <span class="form-hint">
                   <i class="fas fa-info-circle"></i>
-                  Select a stored token or API key for private repositories.
+                  {{ $t('analytics.sources.form.credentialHint') }}
                 </span>
                 <div v-if="secretsLoadError" class="form-error">{{ secretsLoadError }}</div>
               </div>
@@ -116,12 +116,12 @@
             <!-- Local Path fields -->
             <template v-if="form.source_type === 'local'">
               <div class="form-group">
-                <label class="form-label" for="source-path">Local Path <span class="required">*</span></label>
+                <label class="form-label" for="source-path">{{ $t('analytics.sources.form.localPath') }} <span class="required">*</span></label>
                 <input
                   id="source-path"
                   v-model="form.local_path"
                   class="form-input"
-                  placeholder="/home/user/projects/myapp"
+                  :placeholder="$t('analytics.sources.form.localPathPlaceholder')"
                   type="text"
                   autocomplete="off"
                   :class="{ 'form-input--error': errors.local_path }"
@@ -130,12 +130,12 @@
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="source-branch-local">Branch (optional)</label>
+                <label class="form-label" for="source-branch-local">{{ $t('analytics.sources.form.branchOptional') }}</label>
                 <input
                   id="source-branch-local"
                   v-model="form.branch"
                   class="form-input"
-                  placeholder="main"
+                  :placeholder="$t('analytics.sources.form.branchPlaceholder')"
                   type="text"
                   autocomplete="off"
                 />
@@ -144,7 +144,7 @@
 
             <!-- Access -->
             <div class="form-group">
-              <label class="form-label">Access Level</label>
+              <label class="form-label">{{ $t('analytics.sources.form.accessLevel') }}</label>
               <div class="access-selector">
                 <label
                   v-for="level in accessLevels"
@@ -174,7 +174,7 @@
 
           <!-- Footer -->
           <div class="modal-footer">
-            <button class="btn-cancel" @click="handleClose" type="button">Cancel</button>
+            <button class="btn-cancel" @click="handleClose" type="button">{{ $t('analytics.sources.form.cancel') }}</button>
             <button
               class="btn-submit"
               @click="handleSubmit"
@@ -182,7 +182,7 @@
               type="button"
             >
               <i :class="submitting ? 'fas fa-spinner fa-spin' : (isEditMode ? 'fas fa-save' : 'fas fa-plus')"></i>
-              {{ submitting ? 'Saving...' : (isEditMode ? 'Save Changes' : 'Add Source') }}
+              {{ submitting ? $t('analytics.sources.form.saving') : (isEditMode ? $t('analytics.sources.form.saveChanges') : $t('analytics.sources.addSource')) }}
             </button>
           </div>
         </div>
@@ -203,11 +203,13 @@
  */
 
 import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('AddSourceModal')
+const { t } = useI18n()
 
 // ---- Types ----------------------------------------------------------------
 
@@ -259,26 +261,26 @@ const emit = defineEmits<{
 
 // ---- Constants ------------------------------------------------------------
 
-const accessLevels = [
+const accessLevels = computed(() => [
   {
     value: 'private' as const,
-    label: 'Private',
+    label: t('analytics.sources.access.private'),
     icon: 'fas fa-lock',
-    description: 'Only you can access'
+    description: t('analytics.sources.access.privateDesc')
   },
   {
     value: 'shared' as const,
-    label: 'Shared',
+    label: t('analytics.sources.access.shared'),
     icon: 'fas fa-users',
-    description: 'Shared with specific users'
+    description: t('analytics.sources.access.sharedDesc')
   },
   {
     value: 'public' as const,
-    label: 'Public',
+    label: t('analytics.sources.access.public'),
     icon: 'fas fa-globe',
-    description: 'All users can view'
+    description: t('analytics.sources.access.publicDesc')
   }
-]
+])
 
 // ---- State ----------------------------------------------------------------
 
@@ -358,13 +360,13 @@ function resetForm() {
 function validate(): boolean {
   const newErrors: FormErrors = {}
   if (!form.value.name.trim()) {
-    newErrors.name = 'Name is required.'
+    newErrors.name = t('analytics.sources.validation.nameRequired')
   }
   if (form.value.source_type === 'github' && !form.value.repo.trim()) {
-    newErrors.repo = 'Repository (owner/repo) is required.'
+    newErrors.repo = t('analytics.sources.validation.repoRequired')
   }
   if (form.value.source_type === 'local' && !form.value.local_path.trim()) {
-    newErrors.local_path = 'Local path is required.'
+    newErrors.local_path = t('analytics.sources.validation.localPathRequired')
   }
   errors.value = newErrors
   return Object.keys(newErrors).length === 0

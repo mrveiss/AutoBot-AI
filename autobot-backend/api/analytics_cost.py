@@ -623,3 +623,135 @@ async def get_budget_status(
         "current_costs": current_costs,
         "budget_statuses": statuses,
     }
+
+
+# ============================================================================
+# PER-AGENT COST ENDPOINTS (#1401)
+# ============================================================================
+
+
+class AgentBudgetRequest(BaseModel):
+    """Per-agent budget configuration request (#1401)"""
+
+    budget_monthly_usd: float = Field(..., gt=0, description="Monthly budget in USD")
+
+
+class AgentCostResponse(BaseModel):
+    """Per-agent cost response (#1401)"""
+
+    agent_id: str
+    found: bool = False
+    cost_usd: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    call_count: int = 0
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cost_by_agent_all",
+    error_code_prefix="COST",
+)
+@router.get("/by-agent")
+async def get_cost_by_agent_all(
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Get cost breakdown for all agents.
+
+    Returns per-agent cost, token usage, and call counts
+    sorted by cost descending.
+
+    Issue #1401: Per-agent cost tracking.
+    """
+    tracker = get_cost_tracker()
+    agents = await tracker.get_all_agent_costs()
+    budgets = await tracker.get_all_agent_budgets()
+
+    result = []
+    for agent in agents:
+        agent_id = agent["agent_id"]
+        budget_data = budgets.get(agent_id)
+        budget_cents = budget_data.get("budget_monthly_cents", 0) if budget_data else 0
+        budget_usd = budget_cents / 100.0
+        spent = agent["cost_usd"]
+        utilization = (spent / budget_usd * 100) if budget_usd > 0 else 0
+        result.append(
+            {
+                **agent,
+                "budget_monthly_usd": budget_usd,
+                "utilization_percent": round(utilization, 2),
+                "exceeded": budget_usd > 0 and spent >= budget_usd,
+            }
+        )
+
+    return {
+        "timestamp": datetime.utcnow().isoformat(),
+        "agents": result,
+        "total_agents": len(result),
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_cost_by_agent_single",
+    error_code_prefix="COST",
+)
+@router.get("/by-agent/{agent_id}")
+async def get_cost_by_agent_single(
+    agent_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Get cost breakdown for a specific agent.
+
+    Issue #1401: Per-agent cost tracking.
+    """
+    tracker = get_cost_tracker()
+    cost_data = await tracker.get_cost_by_agent(agent_id)
+    budget_status = await tracker.check_agent_budget(agent_id)
+
+    return {
+        **cost_data,
+        "budget": budget_status,
+    }
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="set_agent_budget",
+    error_code_prefix="COST",
+)
+@router.put("/by-agent/{agent_id}/budget")
+async def set_agent_budget(
+    agent_id: str,
+    request: AgentBudgetRequest,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Set monthly budget for an agent.
+
+    Issue #1401: Per-agent budget enforcement.
+    """
+    tracker = get_cost_tracker()
+    result = await tracker.set_agent_budget(agent_id, request.budget_monthly_usd)
+    return result
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_agent_budget_status",
+    error_code_prefix="COST",
+)
+@router.get("/by-agent/{agent_id}/budget")
+async def get_agent_budget_status(
+    agent_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+):
+    """
+    Get budget status for a specific agent.
+
+    Issue #1401: Per-agent budget enforcement.
+    """
+    tracker = get_cost_tracker()
+    return await tracker.check_agent_budget(agent_id)

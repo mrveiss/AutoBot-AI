@@ -12,6 +12,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
+import { getTimezone } from '@/composables/useTimezone'
 
 const logger = createLogger('LogViewer')
 
@@ -80,19 +81,23 @@ function getLevelClass(level: string): string {
 
 function formatTimestamp(ts: string): string {
   const date = new Date(ts)
+  const tz = getTimezone()
   return date.toLocaleTimeString('en-US', {
     hour12: false,
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
+    ...(tz ? { timeZone: tz } : {}),
   })
 }
 
 function formatDate(ts: string): string {
   const date = new Date(ts)
+  const tz = getTimezone()
   return date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
+    ...(tz ? { timeZone: tz } : {}),
   })
 }
 

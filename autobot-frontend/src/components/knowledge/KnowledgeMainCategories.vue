@@ -14,7 +14,7 @@
         <h3>{{ mainCat.name }}</h3>
         <p>{{ mainCat.description }}</p>
         <div class="category-stats">
-          <span class="fact-count">{{ mainCat.count }} facts</span>
+          <span class="fact-count">{{ mainCat.count }} {{ $t('knowledge.mainCategories.facts') }}</span>
           <!-- Populate button for system categories -->
           <BaseButton
             v-if="mainCat.id !== 'user-knowledge'"
@@ -26,7 +26,7 @@
             class="populate-btn"
           >
             <i v-if="!populationStates[mainCat.id]?.isPopulating" class="fas fa-sync"></i>
-            <span v-if="!populationStates[mainCat.id]?.isPopulating">Populate</span>
+            <span v-if="!populationStates[mainCat.id]?.isPopulating">{{ $t('knowledge.mainCategories.populate') }}</span>
             <span v-else>{{ populationStates[mainCat.id]?.progress || 0 }}%</span>
           </BaseButton>
           <!-- Import button for user knowledge -->
@@ -38,7 +38,7 @@
             class="populate-btn"
           >
             <i class="fas fa-file-import"></i>
-            <span>Import</span>
+            <span>{{ $t('knowledge.mainCategories.import') }}</span>
           </BaseButton>
         </div>
       </div>

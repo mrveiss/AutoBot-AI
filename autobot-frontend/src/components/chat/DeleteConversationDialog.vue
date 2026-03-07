@@ -1,7 +1,7 @@
 <template>
   <BaseModal
     :model-value="visible"
-    title="Delete Conversation"
+    :title="$t('chat.deleteDialog.title')"
     size="medium"
     @update:model-value="$emit('update:visible', $event)"
     @close="handleCancel"
@@ -13,10 +13,10 @@
             <i class="fas fa-exclamation-triangle text-yellow-600 mt-0.5"></i>
             <div class="flex-1 min-w-0">
               <p class="text-sm text-yellow-800 font-medium">
-                This action cannot be undone
+                {{ $t('chat.deleteDialog.cannotUndo') }}
               </p>
               <p class="text-xs text-yellow-700 mt-1">
-                The conversation and all messages will be permanently deleted.
+                {{ $t('chat.deleteDialog.permanentDelete') }}
               </p>
             </div>
           </div>
@@ -27,10 +27,10 @@
               <i class="fas fa-brain text-purple-600"></i>
               <div class="flex-1">
                 <p class="text-sm font-medium text-purple-700">
-                  {{ kbFacts.length }} knowledge fact{{ kbFacts.length > 1 ? 's' : '' }} created during this conversation
+                  {{ $t('chat.deleteDialog.kbFactsCount', { count: kbFacts.length }) }}
                 </p>
                 <p class="text-xs text-purple-600">
-                  Select facts to preserve before deletion
+                  {{ $t('chat.deleteDialog.selectFactsToPreserve') }}
                 </p>
               </div>
             </div>
@@ -54,7 +54,7 @@
                   <div class="flex items-center gap-2 mt-1">
                     <span class="text-xs px-2 py-0.5 bg-autobot-bg-tertiary text-autobot-text-muted rounded">{{ fact.category }}</span>
                     <span v-if="fact.important" class="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded">
-                      <i class="fas fa-star text-xs"></i> Important
+                      <i class="fas fa-star text-xs"></i> {{ $t('common.important') }}
                     </span>
                   </div>
                 </div>
@@ -67,18 +67,18 @@
                 @click="selectAllFacts"
                 class="px-2 py-1 text-purple-700 hover:bg-purple-100 rounded transition-colors"
               >
-                Select All
+                {{ $t('common.selectAll') }}
               </button>
               <span class="text-autobot-border">|</span>
               <button
                 @click="deselectAllFacts"
                 class="px-2 py-1 text-autobot-text-muted hover:bg-autobot-bg-secondary rounded transition-colors"
               >
-                Deselect All
+                {{ $t('common.deselectAll') }}
               </button>
               <span class="flex-1"></span>
               <span class="text-autobot-text-muted">
-                {{ selectedFactIds.size }} selected for preservation
+                {{ $t('chat.deleteDialog.selectedForPreservation', { count: selectedFactIds.size }) }}
               </span>
             </div>
           </div>
@@ -87,7 +87,7 @@
           <div v-else-if="kbFactsLoading" class="p-3 bg-purple-50 rounded-lg">
             <p class="text-sm text-purple-600">
               <i class="fas fa-spinner fa-spin mr-2"></i>
-              Loading knowledge base facts...
+              {{ $t('chat.deleteDialog.loadingFacts') }}
             </p>
           </div>
 
@@ -97,17 +97,17 @@
               <i class="fas fa-paperclip text-autobot-text-secondary"></i>
               <div class="flex-1">
                 <p class="text-sm font-medium text-autobot-text-primary">
-                  {{ fileStats.total_files }} attached file{{ fileStats.total_files > 1 ? 's' : '' }}
+                  {{ $t('chat.deleteDialog.attachedFiles', { count: fileStats.total_files }) }}
                 </p>
                 <p class="text-xs text-autobot-text-secondary">
-                  Total size: {{ formatFileSize(fileStats.total_size_bytes) }}
+                  {{ $t('chat.deleteDialog.totalSize', { size: formatFileSize(fileStats.total_size_bytes) }) }}
                 </p>
               </div>
             </div>
 
             <!-- File Action Options -->
             <div class="space-y-2">
-              <p class="text-sm font-medium text-autobot-text-secondary">What should we do with the attached files?</p>
+              <p class="text-sm font-medium text-autobot-text-secondary">{{ $t('chat.deleteDialog.fileActionQuestion') }}</p>
 
               <label class="flex items-start p-3 border rounded-lg cursor-pointer transition-colors"
                      :class="fileAction === 'delete' ? 'border-red-500 bg-red-50' : 'border-autobot-border hover:border-autobot-text-muted'">
@@ -120,10 +120,10 @@
                 <div class="flex-1">
                   <div class="flex items-center gap-2">
                     <i class="fas fa-trash text-red-600"></i>
-                    <span class="text-sm font-medium text-autobot-text-primary">Delete files</span>
+                    <span class="text-sm font-medium text-autobot-text-primary">{{ $t('chat.deleteDialog.deleteFiles') }}</span>
                   </div>
                   <p class="text-xs text-autobot-text-secondary mt-1">
-                    Permanently delete all attached files
+                    {{ $t('chat.deleteDialog.deleteFilesDesc') }}
                   </p>
                 </div>
               </label>
@@ -139,10 +139,10 @@
                 <div class="flex-1">
                   <div class="flex items-center gap-2">
                     <i class="fas fa-book text-autobot-primary"></i>
-                    <span class="text-sm font-medium text-autobot-text-primary">Transfer to Knowledge Base</span>
+                    <span class="text-sm font-medium text-autobot-text-primary">{{ $t('chat.deleteDialog.transferToKb') }}</span>
                   </div>
                   <p class="text-xs text-autobot-text-secondary mt-1">
-                    Move files to knowledge base for future use
+                    {{ $t('chat.deleteDialog.transferToKbDesc') }}
                   </p>
                 </div>
               </label>
@@ -158,10 +158,10 @@
                 <div class="flex-1">
                   <div class="flex items-center gap-2">
                     <i class="fas fa-share-alt text-green-600"></i>
-                    <span class="text-sm font-medium text-autobot-text-primary">Transfer to Shared Storage</span>
+                    <span class="text-sm font-medium text-autobot-text-primary">{{ $t('chat.deleteDialog.transferToShared') }}</span>
                   </div>
                   <p class="text-xs text-autobot-text-secondary mt-1">
-                    Move files to shared storage for team access
+                    {{ $t('chat.deleteDialog.transferToSharedDesc') }}
                   </p>
                 </div>
               </label>
@@ -169,11 +169,11 @@
 
             <!-- Transfer Options (shown when KB transfer selected) -->
             <div v-if="fileAction === 'transfer_kb'" class="space-y-3 p-3 bg-autobot-bg-tertiary rounded-lg border border-autobot-border">
-              <p class="text-sm font-medium text-autobot-text-primary">Knowledge Base Options</p>
+              <p class="text-sm font-medium text-autobot-text-primary">{{ $t('chat.deleteDialog.kbOptions') }}</p>
 
               <div>
                 <label class="block text-xs font-medium text-autobot-text-secondary mb-1">
-                  Categories (comma-separated)
+                  {{ $t('chat.deleteDialog.categories') }}
                 </label>
                 <input
                   v-model="kbCategories"
@@ -189,17 +189,17 @@
                   v-model="extractText"
                   class="rounded border-autobot-border text-autobot-primary focus:ring-autobot-primary"
                 />
-                <span class="text-xs text-autobot-text-secondary">Extract text content from documents</span>
+                <span class="text-xs text-autobot-text-secondary">{{ $t('chat.deleteDialog.extractText') }}</span>
               </label>
             </div>
 
             <!-- Transfer Options (shown when shared transfer selected) -->
             <div v-if="fileAction === 'transfer_shared'" class="space-y-3 p-3 bg-green-50 rounded-lg border border-green-200">
-              <p class="text-sm font-medium text-green-900">Shared Storage Options</p>
+              <p class="text-sm font-medium text-green-900">{{ $t('chat.deleteDialog.sharedOptions') }}</p>
 
               <div>
                 <label class="block text-xs font-medium text-green-700 mb-1">
-                  Target Folder Path
+                  {{ $t('chat.deleteDialog.targetFolder') }}
                 </label>
                 <input
                   v-model="sharedPath"
@@ -215,15 +215,15 @@
           <div v-else class="p-3 bg-autobot-bg-secondary rounded-lg">
             <p class="text-sm text-autobot-text-secondary">
               <i class="fas fa-info-circle mr-2"></i>
-              This conversation has no attached files.
+              {{ $t('chat.deleteDialog.noAttachedFiles') }}
             </p>
           </div>
 
           <!-- Confirmation Summary -->
           <div class="p-3 bg-autobot-bg-secondary rounded-lg border border-autobot-border">
-            <p class="text-sm font-medium text-autobot-text-primary mb-2">Action Summary:</p>
+            <p class="text-sm font-medium text-autobot-text-primary mb-2">{{ $t('chat.deleteDialog.actionSummary') }}</p>
             <ul class="text-xs text-autobot-text-secondary space-y-1">
-              <li><i class="fas fa-check text-green-600 mr-2"></i>Delete conversation and all messages</li>
+              <li><i class="fas fa-check text-green-600 mr-2"></i>{{ $t('chat.deleteDialog.deleteConversation') }}</li>
               <li v-if="kbFacts && kbFacts.length > 0">
                 <i class="fas fa-check text-green-600 mr-2"></i>
                 {{ getKBFactsSummary() }}
@@ -243,7 +243,7 @@
         class="px-4 py-2 text-sm font-medium text-autobot-text-secondary bg-autobot-bg-card border border-autobot-border rounded-md hover:bg-autobot-bg-secondary transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-autobot-border"
         :disabled="isDeleting"
       >
-        Cancel
+        {{ $t('common.cancel') }}
       </button>
       <button
         @click="handleConfirm"
@@ -252,7 +252,7 @@
       >
         <i v-if="isDeleting" class="fas fa-spinner fa-spin"></i>
         <i v-else class="fas fa-trash"></i>
-        {{ isDeleting ? 'Deleting...' : 'Delete Conversation' }}
+        {{ isDeleting ? $t('chat.deleteDialog.deleting') : $t('chat.deleteDialog.title') }}
       </button>
     </template>
   </BaseModal>
@@ -260,10 +260,13 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { FileStats } from '@/composables/useConversationFiles'
 import type { SessionFact } from '@/models/repositories/ChatRepository'
 import { formatFileSize } from '@/utils/formatHelpers'
 import BaseModal from '@/components/ui/BaseModal.vue'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   visible: boolean
@@ -333,11 +336,11 @@ const getKBFactsSummary = (): string => {
   const deleteCount = totalFacts - preserveCount
 
   if (preserveCount === 0) {
-    return `Delete all ${totalFacts} knowledge fact${totalFacts > 1 ? 's' : ''}`
+    return t('chat.deleteDialog.deleteAllFacts', { count: totalFacts })
   } else if (deleteCount === 0) {
-    return `Preserve all ${totalFacts} knowledge fact${totalFacts > 1 ? 's' : ''}`
+    return t('chat.deleteDialog.preserveAllFacts', { count: totalFacts })
   } else {
-    return `Delete ${deleteCount} fact${deleteCount > 1 ? 's' : ''}, preserve ${preserveCount} fact${preserveCount > 1 ? 's' : ''}`
+    return t('chat.deleteDialog.deletePreserveFacts', { deleteCount, preserveCount })
   }
 }
 
@@ -345,13 +348,13 @@ const getFileActionSummary = (): string => {
   const fileCount = props.fileStats?.total_files || 0
   switch (fileAction.value) {
     case 'delete':
-      return `Delete ${fileCount} file${fileCount > 1 ? 's' : ''} permanently`
+      return t('chat.deleteDialog.deleteFilesPermanently', { count: fileCount })
     case 'transfer_kb':
-      return `Transfer ${fileCount} file${fileCount > 1 ? 's' : ''} to Knowledge Base`
+      return t('chat.deleteDialog.transferFilesToKb', { count: fileCount })
     case 'transfer_shared':
-      return `Transfer ${fileCount} file${fileCount > 1 ? 's' : ''} to Shared Storage`
+      return t('chat.deleteDialog.transferFilesToShared', { count: fileCount })
     default:
-      return 'No file action'
+      return t('chat.deleteDialog.noFileAction')
   }
 }
 

@@ -328,6 +328,11 @@ class ChatMessage(BaseModel):
     metadata: Optional[Metadata] = Field(
         default_factory=dict, description="Additional metadata"
     )
+    language: Optional[str] = Field(
+        None,
+        description="Preferred response language code (e.g. 'en', 'es', 'de'). "
+        "Overrides personality language when set.",
+    )
 
 
 class ChatResponse(BaseModel):
@@ -366,6 +371,12 @@ class EnhancedChatMessage(BaseModel):
     message_type: Optional[str] = Field("text", description="Message type")
     metadata: Optional[Metadata] = Field(
         default_factory=dict, description="Additional metadata"
+    )
+
+    language: Optional[str] = Field(
+        None,
+        description="Preferred response language code (e.g. 'en', 'es', 'de'). "
+        "Overrides personality language when set.",
     )
 
     # AI Stack specific fields
@@ -1013,7 +1024,8 @@ async def _stream_chat_workflow_messages(
     """Stream chat workflow messages as SSE events (Issue #398: extracted)."""
     try:
         logger.debug("[%s] Starting stream for chat_id=%s", request_id, chat_id)
-        yield f"data: {json.dumps({'type': 'start', 'session_id': chat_id, 'request_id': request_id})}\n\n"
+        evt = {"type": "start", "session_id": chat_id, "request_id": request_id}
+        yield f"data: {json.dumps(evt)}\n\n"
 
         logger.debug("[%s] Processing message: %s...", request_id, message[:50])
         message_count = 0
@@ -1022,15 +1034,15 @@ async def _stream_chat_workflow_messages(
         ):
             message_count += 1
             msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
-            logger.debug("[%s] Message %s: %s", request_id, message_count, msg_data)
             yield f"data: {json.dumps(msg_data)}\n\n"
 
-        logger.debug("[%s] Stream complete: %s messages", request_id, message_count)
+        logger.info("[%s] Stream complete: %d messages", request_id, message_count)
         yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
 
     except Exception as e:
         logger.error("[%s] Streaming error: %s", request_id, e, exc_info=True)
-        yield f"data: {json.dumps({'type': 'error', 'content': f'Error: {e}', 'request_id': request_id})}\n\n"
+        evt = {"type": "error", "content": f"Error: {e}", "request_id": request_id}
+        yield f"data: {json.dumps(evt)}\n\n"
 
 
 def _create_streaming_response(generator):
@@ -1105,7 +1117,9 @@ def _validate_workflow_manager(chat_workflow_manager) -> None:
 async def send_chat_message_by_id(
     chat_id: str,
     current_user: dict = Depends(get_current_user),
-    request_data: dict = None,
+    request_data: dict = Body(
+        default={}
+    ),  # Issue #1302: was None, preventing context/knowledge
     request: Request = None,
     ownership: Dict = Depends(validate_chat_ownership),  # SECURITY: Validate ownership
 ):
@@ -1123,12 +1137,18 @@ async def send_chat_message_by_id(
     chat_workflow_manager = await get_chat_workflow_manager(request)
     _validate_chat_services(chat_history_manager, chat_workflow_manager)
 
+    # Issue #1325: Inject language into context for system prompt resolution
+    context = request_data.get("context", {})
+    language = request_data.get("language")
+    if language:
+        context["language"] = language
+
     return _create_streaming_response(
         _stream_chat_workflow_messages(
             chat_workflow_manager,
             chat_id,
             message,
-            request_data.get("context", {}),
+            context,
             request_id,
         )
     )
@@ -1142,9 +1162,8 @@ async def _stream_graph_resume(
 ):
     """Stream graph resume after command approval interrupt (#1043)."""
     try:
-        yield (
-            f"data: {json.dumps({'type': 'start', 'session_id': chat_id, 'request_id': request_id})}\n\n"
-        )
+        evt = {"type": "start", "session_id": chat_id, "request_id": request_id}
+        yield f"data: {json.dumps(evt)}\n\n"
 
         async for msg in chat_workflow_manager.resume_graph(
             session_id=chat_id, decision=decision
@@ -1156,9 +1175,8 @@ async def _stream_graph_resume(
 
     except Exception as e:
         logger.error("[%s] Graph resume error: %s", request_id, e, exc_info=True)
-        yield (
-            f"data: {json.dumps({'type': 'error', 'content': f'Error: {e}', 'request_id': request_id})}\n\n"
-        )
+        evt = {"type": "error", "content": f"Error: {e}", "request_id": request_id}
+        yield f"data: {json.dumps(evt)}\n\n"
 
 
 @with_error_handling(
@@ -2033,6 +2051,97 @@ async def get_enhanced_chat_capabilities(
                 "enhanced_chat": True,
                 "ai_stack_integration": False,
                 "knowledge_base_integration": True,
-                "error": "Partial capabilities due to AI Stack unavailability",
+                "error": ("Partial capabilities due to" " AI Stack unavailability"),
             }
         )
+
+
+# ====================================================================
+# Issue #1328: Translation Shortcut Endpoint
+# ====================================================================
+
+
+class TranslateRequest(BaseModel):
+    """Request model for direct translation."""
+
+    text: str = Field(
+        ...,
+        min_length=1,
+        max_length=50000,
+        description="Text to translate",
+    )
+    target_language: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Target language name",
+    )
+    source_language: Optional[str] = Field(
+        None,
+        description="Source language (auto-detect if omitted)",
+    )
+
+
+class DetectLanguageRequest(BaseModel):
+    """Request model for language detection."""
+
+    text: str = Field(
+        ...,
+        min_length=1,
+        max_length=50000,
+        description="Text to detect language of",
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="translate_text",
+    error_code_prefix="TRANSLATE",
+)
+@router.post("/translate")
+async def translate_text(
+    body: TranslateRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Translate text via TranslationAgent (#1328)."""
+    from agents.base_agent import AgentRequest
+    from agents.translation_agent import get_translation_agent
+
+    agent = get_translation_agent()
+    req = AgentRequest(
+        request_id=str(uuid4()),
+        agent_type="translation",
+        action="translate",
+        payload={
+            "text": body.text,
+            "target_language": body.target_language,
+            "source_language": (body.source_language or "auto-detect"),
+        },
+    )
+    result = await agent.handle_translate(req)
+    return JSONResponse(content=result)
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="detect_language",
+    error_code_prefix="TRANSLATE",
+)
+@router.post("/detect-language")
+async def detect_language(
+    body: DetectLanguageRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Detect language via TranslationAgent (#1328)."""
+    from agents.base_agent import AgentRequest
+    from agents.translation_agent import get_translation_agent
+
+    agent = get_translation_agent()
+    req = AgentRequest(
+        request_id=str(uuid4()),
+        agent_type="translation",
+        action="detect_language",
+        payload={"text": body.text},
+    )
+    result = await agent.handle_detect_language(req)
+    return JSONResponse(content=result)

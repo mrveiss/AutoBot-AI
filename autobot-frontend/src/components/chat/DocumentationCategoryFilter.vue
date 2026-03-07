@@ -3,30 +3,30 @@
     <div class="filter-header">
       <h4 class="filter-title">
         <i class="fas fa-filter" aria-hidden="true"></i>
-        Categories
+        {{ $t('chat.docFilter.categories') }}
       </h4>
       <button
         v-if="selectedCategories.length > 0"
         class="clear-btn"
         @click="clearSelection"
-        aria-label="Clear category filters"
+        :aria-label="$t('chat.docFilter.clearCategoryFilters')"
       >
-        Clear
+        {{ $t('common.clear') }}
       </button>
     </div>
 
     <div v-if="isLoading" class="loading-state">
       <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
-      <span>Loading categories...</span>
+      <span>{{ $t('chat.docFilter.loadingCategories') }}</span>
     </div>
 
     <div v-else-if="error" class="error-state">
       <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
       <span>{{ error }}</span>
-      <button class="retry-btn" @click="$emit('retry')">Retry</button>
+      <button class="retry-btn" @click="$emit('retry')">{{ $t('common.retry') }}</button>
     </div>
 
-    <div v-else class="category-list" role="group" aria-label="Documentation categories">
+    <div v-else class="category-list" role="group" :aria-label="$t('chat.docFilter.documentationCategories')">
       <button
         v-for="category in sortedCategories"
         :key="category.id"
@@ -53,25 +53,25 @@
         class="quick-filter-btn"
         :class="{ 'active': showAllSelected }"
         @click="selectAll"
-        aria-label="Select all categories"
+        :aria-label="$t('chat.docFilter.selectAllCategories')"
       >
-        All
+        {{ $t('common.all') }}
       </button>
       <button
         class="quick-filter-btn"
         :class="{ 'active': showDevSelected }"
         @click="selectDeveloper"
-        aria-label="Select developer categories"
+        :aria-label="$t('chat.docFilter.selectDev')"
       >
-        Dev
+        {{ $t('chat.docFilter.dev') }}
       </button>
       <button
         class="quick-filter-btn"
         :class="{ 'active': showDocsSelected }"
         @click="selectDocumentation"
-        aria-label="Select documentation categories"
+        :aria-label="$t('chat.docFilter.selectDocs')"
       >
-        Docs
+        {{ $t('chat.docFilter.docs') }}
       </button>
     </div>
   </div>
@@ -91,6 +91,9 @@
  */
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 interface Category {
   id: string

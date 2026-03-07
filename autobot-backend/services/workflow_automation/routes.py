@@ -207,6 +207,28 @@ async def get_active_workflows(
 
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
+    operation="get_completed_workflows",
+    error_code_prefix="WORKFLOW_AUTOMATION",
+)
+@router.get("/completed_workflows")
+async def get_completed_workflows(
+    current_user: dict = Depends(get_current_user),
+):
+    """Return completed workflow history (#1367)."""
+    try:
+        workflows = get_workflow_manager().get_completed_workflows()
+        return {
+            "success": True,
+            "workflows": workflows,
+            "count": len(workflows),
+        }
+    except Exception as e:
+        logger.error("Failed to get completed workflows: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
     operation="create_workflow_from_chat",
     error_code_prefix="WORKFLOW_AUTOMATION",
 )
@@ -439,6 +461,35 @@ async def get_pending_approval(
 
     except Exception as e:
         logger.error("Failed to get pending approval: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================================================================
+# Issue #1380: State Machine Inspection
+# =========================================================================
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_workflow_state",
+    error_code_prefix="WORKFLOW_AUTOMATION",
+)
+@router.get("/workflow_state/{workflow_id}")
+async def get_workflow_state(
+    workflow_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the state-machine state for a workflow (#1380)."""
+    try:
+        sm = get_workflow_manager().executor.state_machine
+        state = await sm.load(workflow_id)
+        if state:
+            return {"success": True, "state": state.model_dump()}
+        raise HTTPException(status_code=404, detail="Workflow state not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get workflow state: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -13,6 +13,7 @@
 
 import { ref, computed, onMounted, watch } from 'vue'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
+import { formatDateTime } from '@/composables/useTimezone'
 import type {
   TraceItem,
   TraceDetail,
@@ -202,11 +203,8 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(2)}s`
 }
 
-/**
- * Format date string for display.
- */
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString()
+  return formatDateTime(dateStr)
 }
 
 

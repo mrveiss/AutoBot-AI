@@ -13,9 +13,9 @@
       <div class="header-content">
         <h2>
           <span class="icon">🔒</span>
-          Pre-commit Hooks
+          {{ $t('analytics.precommit.title') }}
         </h2>
-        <p class="subtitle">Automated commit quality checks</p>
+        <p class="subtitle">{{ $t('analytics.precommit.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <button
@@ -26,7 +26,7 @@
         >
           <span v-if="installing" class="spinner"></span>
           <span class="btn-icon">⬇️</span>
-          {{ installing ? 'Installing...' : 'Install Hooks' }}
+          {{ installing ? $t('analytics.precommit.installing') : $t('analytics.precommit.installHooks') }}
         </button>
         <button
           v-else
@@ -35,12 +35,12 @@
           :disabled="installing"
         >
           <span class="btn-icon">🗑️</span>
-          Uninstall
+          {{ $t('analytics.precommit.uninstall') }}
         </button>
         <button class="action-btn secondary" @click="runCheck" :disabled="checking">
           <span v-if="checking" class="spinner"></span>
           <span class="btn-icon">▶️</span>
-          {{ checking ? 'Checking...' : 'Run Check' }}
+          {{ checking ? $t('analytics.precommit.checking') : $t('analytics.precommit.runCheck') }}
         </button>
       </div>
     </div>
@@ -52,14 +52,14 @@
       </div>
       <div class="status-content">
         <span class="status-title">
-          {{ hookStatus.installed ? 'Hooks Installed' : 'Hooks Not Installed' }}
+          {{ hookStatus.installed ? $t('analytics.precommit.hooksInstalled') : $t('analytics.precommit.hooksNotInstalled') }}
         </span>
         <span class="status-detail" v-if="hookStatus.installed">
           Version {{ hookStatus.version || '1.0.0' }}
           <span v-if="hookStatus.last_run"> • Last run: {{ formatTime(hookStatus.last_run) }}</span>
         </span>
         <span class="status-detail" v-else>
-          Install hooks to enable automatic commit checks
+          {{ $t('analytics.precommit.installHint') }}
         </span>
       </div>
     </div>
@@ -69,29 +69,29 @@
       <div class="summary-card" :class="lastResult.passed ? 'success' : 'error'">
         <div class="card-icon">{{ lastResult.passed ? '✅' : '❌' }}</div>
         <div class="card-content">
-          <span class="card-value">{{ lastResult.passed ? 'PASSED' : 'BLOCKED' }}</span>
-          <span class="card-label">Status</span>
+          <span class="card-value">{{ lastResult.passed ? $t('analytics.precommit.passed') : $t('analytics.precommit.blocked') }}</span>
+          <span class="card-label">{{ $t('analytics.precommit.status') }}</span>
         </div>
       </div>
       <div class="summary-card">
         <div class="card-icon">📄</div>
         <div class="card-content">
           <span class="card-value">{{ lastResult.files_checked?.length || 0 }}</span>
-          <span class="card-label">Files Checked</span>
+          <span class="card-label">{{ $t('analytics.precommit.filesChecked') }}</span>
         </div>
       </div>
       <div class="summary-card warning" v-if="lastResult.failed_checks > 0">
         <div class="card-icon">⚠️</div>
         <div class="card-content">
           <span class="card-value">{{ lastResult.failed_checks }}</span>
-          <span class="card-label">Issues Found</span>
+          <span class="card-label">{{ $t('analytics.precommit.issuesFound') }}</span>
         </div>
       </div>
       <div class="summary-card">
         <div class="card-icon">⏱️</div>
         <div class="card-content">
           <span class="card-value">{{ lastResult.duration_ms }}ms</span>
-          <span class="card-label">Duration</span>
+          <span class="card-label">{{ $t('analytics.precommit.duration') }}</span>
         </div>
       </div>
     </div>
@@ -101,7 +101,7 @@
       <!-- Check Results -->
       <div class="panel results-panel">
         <div class="panel-header">
-          <h3>Check Results</h3>
+          <h3>{{ $t('analytics.precommit.checkResults') }}</h3>
           <div class="severity-filters">
             <button
               v-for="sev in severities"
@@ -117,12 +117,12 @@
         <div class="panel-content">
           <div v-if="!lastResult" class="empty-state">
             <span class="empty-icon">🔍</span>
-            <p>Run a check to see results</p>
+            <p>{{ $t('analytics.precommit.runCheckToSee') }}</p>
           </div>
           <div v-else-if="filteredResults.length === 0" class="empty-state">
             <span class="empty-icon">✨</span>
-            <p v-if="lastResult.passed">All checks passed!</p>
-            <p v-else>No issues in this category</p>
+            <p v-if="lastResult.passed">{{ $t('analytics.precommit.allPassed') }}</p>
+            <p v-else>{{ $t('analytics.precommit.noIssuesInCategory') }}</p>
           </div>
           <div v-else class="results-list">
             <div
@@ -158,9 +158,9 @@
       <!-- Check Configuration -->
       <div class="panel config-panel">
         <div class="panel-header">
-          <h3>Check Rules</h3>
+          <h3>{{ $t('analytics.precommit.checkRules') }}</h3>
           <span class="check-count">
-            {{ enabledChecks }}/{{ totalChecks }} enabled
+            {{ $t('analytics.precommit.enabledCount', { enabled: enabledChecks, total: totalChecks }) }}
           </span>
         </div>
         <div class="panel-content">
@@ -207,9 +207,9 @@
     <!-- History Section -->
     <div class="panel history-panel">
       <div class="panel-header">
-        <h3>Recent Checks</h3>
+        <h3>{{ $t('analytics.precommit.recentChecks') }}</h3>
         <button class="action-btn text" @click="loadHistory">
-          Refresh
+        {{ $t('analytics.precommit.refresh') }}
         </button>
       </div>
       <div class="panel-content">
@@ -237,7 +237,7 @@
           </div>
         </div>
         <div v-else class="empty-state small">
-          <p>No check history</p>
+          <p>{{ $t('analytics.precommit.noHistory') }}</p>
         </div>
       </div>
     </div>
@@ -245,30 +245,30 @@
     <!-- Statistics -->
     <div class="panel stats-panel">
       <div class="panel-header">
-        <h3>Statistics</h3>
+        <h3>{{ $t('analytics.precommit.statistics') }}</h3>
       </div>
       <div class="panel-content">
         <div class="stats-grid">
           <div class="stat-item">
             <span class="stat-value">{{ summary.total_runs }}</span>
-            <span class="stat-label">Total Runs</span>
+            <span class="stat-label">{{ $t('analytics.precommit.totalRuns') }}</span>
           </div>
           <div class="stat-item">
             <span class="stat-value">{{ summary.pass_rate }}%</span>
-            <span class="stat-label">Pass Rate</span>
+            <span class="stat-label">{{ $t('analytics.precommit.passRate') }}</span>
           </div>
           <div class="stat-item">
             <span class="stat-value">{{ summary.average_duration_ms }}ms</span>
-            <span class="stat-label">Avg Duration</span>
+            <span class="stat-label">{{ $t('analytics.precommit.avgDuration') }}</span>
           </div>
           <div class="stat-item">
             <span class="stat-value">{{ summary.checks_enabled }}</span>
-            <span class="stat-label">Active Rules</span>
+            <span class="stat-label">{{ $t('analytics.precommit.activeRules') }}</span>
           </div>
         </div>
 
         <div class="common-issues" v-if="summary.common_issues?.length > 0">
-          <h4>Common Issues</h4>
+          <h4>{{ $t('analytics.precommit.commonIssues') }}</h4>
           <div class="issue-bar-list">
             <div
               v-for="issue in summary.common_issues"
@@ -293,9 +293,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
+
+const { t } = useI18n()
 
 const logger = createLogger('PrecommitHookDashboard')
 
@@ -376,12 +379,12 @@ const activeSeverity = ref('all')
 const expandedCategories = ref<string[]>(['security', 'debug'])
 
 // Severity filters
-const severities = [
-  { id: 'all', name: 'All', icon: '📋' },
-  { id: 'block', name: 'Block', icon: '🔴' },
-  { id: 'warn', name: 'Warn', icon: '🟡' },
-  { id: 'info', name: 'Info', icon: '🔵' }
-]
+const severities = computed(() => [
+  { id: 'all', name: t('analytics.precommit.severityAll'), icon: '📋' },
+  { id: 'block', name: t('analytics.precommit.severityBlock'), icon: '🔴' },
+  { id: 'warn', name: t('analytics.precommit.severityWarn'), icon: '🟡' },
+  { id: 'info', name: t('analytics.precommit.severityInfo'), icon: '🔵' }
+])
 
 // Computed
 const filteredResults = computed(() => {
@@ -434,14 +437,9 @@ function getCategoryIcon(category: string): string {
 }
 
 function getCategoryName(category: string): string {
-  const names: Record<string, string> = {
-    security: 'Security',
-    quality: 'Quality',
-    style: 'Style',
-    debug: 'Debug',
-    docs: 'Documentation'
-  }
-  return names[category] || category.charAt(0).toUpperCase() + category.slice(1)
+  const key = `analytics.precommit.categories.${category}`
+  const translated = t(key)
+  return translated !== key ? translated : category.charAt(0).toUpperCase() + category.slice(1)
 }
 
 function getChecksForCategory(category: string): Check[] {
@@ -462,9 +460,9 @@ function formatTime(timestamp: string): string {
   const now = new Date()
   const diff = now.getTime() - date.getTime()
 
-  if (diff < 60000) return 'Just now'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+  if (diff < 60000) return t('analytics.precommit.justNow')
+  if (diff < 3600000) return t('analytics.precommit.minutesAgo', { count: Math.floor(diff / 60000) })
+  if (diff < 86400000) return t('analytics.precommit.hoursAgo', { count: Math.floor(diff / 3600000) })
   return date.toLocaleDateString()
 }
 
@@ -527,10 +525,10 @@ async function installHooks() {
     // Issue #701: api.post requires data argument
     await api.post('/api/precommit/install', {})
     await loadStatus()
-    showToast('Pre-commit hooks installed successfully', 'success')
+    showToast(t('analytics.precommit.installSuccess'), 'success')
   } catch (error) {
     logger.error('Failed to install hooks:', error)
-    showToast('Failed to install hooks', 'error')
+    showToast(t('analytics.precommit.installFailed'), 'error')
   } finally {
     installing.value = false
   }
@@ -542,10 +540,10 @@ async function uninstallHooks() {
     // Issue #701: api.post requires data argument
     await api.post('/api/precommit/uninstall', {})
     await loadStatus()
-    showToast('Pre-commit hooks uninstalled', 'info')
+    showToast(t('analytics.precommit.uninstallSuccess'), 'info')
   } catch (error) {
     logger.error('Failed to uninstall hooks:', error)
-    showToast('Failed to uninstall hooks', 'error')
+    showToast(t('analytics.precommit.uninstallFailed'), 'error')
   } finally {
     installing.value = false
   }
@@ -563,13 +561,13 @@ async function runCheck() {
 
     const result = lastResult.value
     if (result?.passed) {
-      showToast('All checks passed!', 'success')
+      showToast(t('analytics.precommit.allChecksPassed'), 'success')
     } else {
-      showToast(`Found ${result?.failed_checks || 0} issues`, 'warning')
+      showToast(t('analytics.precommit.foundIssues', { count: result?.failed_checks || 0 }), 'warning')
     }
   } catch (error) {
     logger.error('Failed to run check:', error)
-    showToast('Failed to run pre-commit check', 'error')
+    showToast(t('analytics.precommit.checkFailed'), 'error')
   } finally {
     checking.value = false
   }
@@ -584,7 +582,7 @@ async function toggleCheck(check: Check) {
   } catch (error) {
     logger.warn('Failed to toggle check:', error)
     check.enabled = !newState
-    showToast('Failed to update check', 'error')
+    showToast(t('analytics.precommit.updateCheckFailed'), 'error')
   }
 }
 

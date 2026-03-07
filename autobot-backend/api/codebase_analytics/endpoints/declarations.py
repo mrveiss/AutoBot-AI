@@ -11,6 +11,7 @@ from typing import Optional
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from utils.chromadb_client import get_all_paginated
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -30,8 +31,10 @@ def _query_chromadb_declarations(code_collection) -> tuple:
     all_declarations = []
     storage_type = "chromadb"
     try:
-        results = code_collection.get(
-            where={"type": {"$in": ["function", "class"]}}, include=["metadatas"]
+        results = get_all_paginated(
+            code_collection,
+            where={"type": {"$in": ["function", "class"]}},
+            include=["metadatas"],
         )
         for metadata in results.get("metadatas", []):
             decl = {

@@ -16,7 +16,7 @@
     </div>
     <div v-if="loading" class="chart-loading-overlay">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Loading chart...</span>
+      <span>{{ $t('charts.base.loading') }}</span>
     </div>
     <div v-else-if="error" class="chart-error">
       <i class="fas fa-exclamation-triangle"></i>
@@ -24,7 +24,7 @@
     </div>
     <div v-else-if="!hasData" class="chart-no-data">
       <i class="fas fa-chart-bar"></i>
-      <span>No data available</span>
+      <span>{{ $t('charts.base.noData') }}</span>
     </div>
     <apexchart
       v-else
@@ -40,8 +40,11 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import VueApexCharts from 'vue3-apexcharts'
 import type { ApexOptions } from 'apexcharts'
+
+const { t } = useI18n()
 
 // Register component locally
 const apexchart = VueApexCharts
@@ -304,7 +307,7 @@ const darkTheme: any = {
           total: {
             show: true,
             showAlways: false,
-            label: 'Total',
+            label: t('charts.base.total'),
             fontSize: '14px',
             fontFamily: getCssVar('--font-sans', 'Inter, system-ui, sans-serif'),
             color: getCssVar('--text-secondary', '#94a3b8')

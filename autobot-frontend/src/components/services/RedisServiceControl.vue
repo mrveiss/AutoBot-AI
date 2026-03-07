@@ -5,7 +5,7 @@
       <div class="flex items-center space-x-3">
         <i class="fas fa-database text-2xl text-red-600"></i>
         <div>
-          <h3 class="text-lg font-semibold text-autobot-text-primary">Redis Service</h3>
+          <h3 class="text-lg font-semibold text-autobot-text-primary">{{ $t('redis.title') }}</h3>
           <p class="text-sm text-autobot-text-secondary">VM3: {{ serviceStatus.vm_info?.host || NetworkConstants.REDIS_VM_IP }}</p>
         </div>
       </div>
@@ -13,7 +13,7 @@
       <!-- Status Badge -->
       <div class="flex items-center space-x-3">
         <span class="text-xs text-autobot-text-muted">
-          Last check: {{ formatLastCheck(serviceStatus.last_check) }}
+          {{ $t('redis.lastCheck') }} {{ formatLastCheck(serviceStatus.last_check) }}
         </span>
         <StatusBadge :variant="statusVariant" class="inline-flex items-center">
           <span
@@ -31,19 +31,19 @@
       class="grid grid-cols-1 md:grid-cols-4 gap-4 px-6 py-4 bg-autobot-bg-secondary border-b"
     >
       <div class="detail-item">
-        <span class="text-xs text-autobot-text-muted uppercase tracking-wide">Uptime</span>
+        <span class="text-xs text-autobot-text-muted uppercase tracking-wide">{{ $t('redis.uptime') }}</span>
         <span class="text-lg font-semibold text-autobot-text-primary">{{ formatUptime(serviceStatus.uptime_seconds) }}</span>
       </div>
       <div class="detail-item">
-        <span class="text-xs text-autobot-text-muted uppercase tracking-wide">Memory</span>
+        <span class="text-xs text-autobot-text-muted uppercase tracking-wide">{{ $t('redis.memory') }}</span>
         <span class="text-lg font-semibold text-autobot-text-primary">{{ serviceStatus.memory_mb || 0 }} MB</span>
       </div>
       <div class="detail-item">
-        <span class="text-xs text-autobot-text-muted uppercase tracking-wide">Connections</span>
+        <span class="text-xs text-autobot-text-muted uppercase tracking-wide">{{ $t('redis.connections') }}</span>
         <span class="text-lg font-semibold text-autobot-text-primary">{{ serviceStatus.connections || 0 }}</span>
       </div>
       <div class="detail-item">
-        <span class="text-xs text-autobot-text-muted uppercase tracking-wide">PID</span>
+        <span class="text-xs text-autobot-text-muted uppercase tracking-wide">{{ $t('redis.pid') }}</span>
         <span class="text-lg font-semibold text-autobot-text-primary">{{ serviceStatus.pid || 'N/A' }}</span>
       </div>
     </div>
@@ -59,7 +59,7 @@
             class="flex items-center space-x-2 px-4 py-2"
           >
             <i class="fas fa-play"></i>
-            <span>Start</span>
+            <span>{{ $t('redis.start') }}</span>
           </BaseButton>
 
           <BaseButton
@@ -69,7 +69,7 @@
             class="flex items-center space-x-2 px-4 py-2"
           >
             <i class="fas fa-sync"></i>
-            <span>Restart</span>
+            <span>{{ $t('redis.restart') }}</span>
           </BaseButton>
 
           <BaseButton
@@ -79,7 +79,7 @@
             class="flex items-center space-x-2 px-4 py-2"
           >
             <i class="fas fa-stop"></i>
-            <span>Stop</span>
+            <span>{{ $t('redis.stop') }}</span>
           </BaseButton>
         </div>
 
@@ -90,14 +90,14 @@
           class="flex items-center space-x-2 px-4 py-2"
         >
           <i class="fas fa-sync-alt"></i>
-          <span>Refresh</span>
+          <span>{{ $t('common.refresh') }}</span>
         </BaseButton>
       </div>
     </div>
 
     <!-- Health Status Section -->
     <div v-if="healthStatus" class="px-6 py-4">
-      <h4 class="text-md font-semibold text-autobot-text-primary mb-3">Health Status</h4>
+      <h4 class="text-md font-semibold text-autobot-text-primary mb-3">{{ $t('redis.healthStatus') }}</h4>
 
       <!-- Overall Health Indicator -->
       <StatusBadge :variant="healthVariant" size="medium" class="font-semibold mb-4">
@@ -130,7 +130,7 @@
       >
         <h5 class="text-sm font-semibold text-yellow-800 mb-2">
           <i class="fas fa-lightbulb mr-1"></i>
-          Recommendations
+          {{ $t('redis.recommendations') }}
         </h5>
         <ul class="list-disc list-inside space-y-1">
           <li
@@ -148,14 +148,14 @@
         v-if="healthStatus.auto_recovery"
         class="auto-recovery mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg"
       >
-        <h5 class="text-sm font-semibold text-blue-900 mb-2">Auto-Recovery Status</h5>
+        <h5 class="text-sm font-semibold text-blue-900 mb-2">{{ $t('redis.autoRecoveryStatus') }}</h5>
         <div class="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <span class="text-blue-700">Enabled:</span>
-            <span class="ml-2 font-medium">{{ healthStatus.auto_recovery.enabled ? 'Yes' : 'No' }}</span>
+            <span class="text-blue-700">{{ $t('redis.enabled') }}</span>
+            <span class="ml-2 font-medium">{{ healthStatus.auto_recovery.enabled ? $t('common.yes') : $t('common.no') }}</span>
           </div>
           <div v-if="healthStatus.auto_recovery.recent_recoveries > 0">
-            <span class="text-blue-700">Recent Recoveries:</span>
+            <span class="text-blue-700">{{ $t('redis.recentRecoveries') }}</span>
             <span class="ml-2 font-medium text-yellow-600">{{ healthStatus.auto_recovery.recent_recoveries }}</span>
           </div>
         </div>
@@ -164,7 +164,7 @@
           class="mt-3 p-3 bg-red-100 border border-red-300 rounded text-sm text-red-800"
         >
           <i class="fas fa-exclamation-triangle mr-1"></i>
-          <strong>Manual Intervention Required:</strong> Auto-recovery has failed. Please check service logs.
+          <strong>{{ $t('redis.manualInterventionTitle') }}</strong> {{ $t('redis.manualInterventionMsg') }}
         </div>
       </div>
     </div>
@@ -173,7 +173,7 @@
     <div v-if="loading" class="absolute inset-0 bg-autobot-bg-card bg-opacity-75 flex items-center justify-center">
       <div class="text-center">
         <i class="fas fa-spinner fa-spin text-4xl text-blue-600 mb-2"></i>
-        <p class="text-sm text-autobot-text-secondary">Processing...</p>
+        <p class="text-sm text-autobot-text-secondary">{{ $t('redis.processing') }}</p>
       </div>
     </div>
 
@@ -199,13 +199,13 @@
           variant="secondary"
           @click="showConfirmDialog = false"
         >
-          Cancel
+          {{ $t('common.cancel') }}
         </BaseButton>
         <BaseButton
           :variant="confirmDialog.type === 'danger' ? 'danger' : 'primary'"
           @click="confirmDialog.onConfirm"
         >
-          Confirm
+          {{ $t('common.confirm') }}
         </BaseButton>
       </template>
     </BaseModal>
@@ -214,6 +214,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useServiceManagement } from '@/composables/useServiceManagement'
 import { NetworkConstants } from '@/constants/network'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
@@ -222,6 +223,7 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('RedisServiceControl')
+const { t } = useI18n()
 
 // Service management composable
 const {
@@ -301,9 +303,9 @@ const handleStartService = async () => {
 const handleRestartService = () => {
   showConfirmDialog.value = true
   confirmDialog.value = {
-    title: 'Restart Redis Service',
-    message: 'This will temporarily interrupt Redis service. Active connections will be dropped.',
-    warning: 'All connected clients will be disconnected during restart.',
+    title: t('redis.restartTitle'),
+    message: t('redis.restartMsg'),
+    warning: t('redis.restartWarning'),
     type: 'warning',
     onConfirm: async () => {
       showConfirmDialog.value = false
@@ -322,9 +324,9 @@ const handleRestartService = () => {
 const handleStopService = () => {
   showConfirmDialog.value = true
   confirmDialog.value = {
-    title: 'Stop Redis Service',
-    message: 'This will stop Redis service completely. All dependent services will be affected.',
-    warning: 'WARNING: This action will affect system functionality. Only administrators can stop the service.',
+    title: t('redis.stopTitle'),
+    message: t('redis.stopMsg'),
+    warning: t('redis.stopWarning'),
     type: 'danger',
     onConfirm: async () => {
       showConfirmDialog.value = false
@@ -356,7 +358,7 @@ const formatUptime = (seconds) => {
  * Format last check timestamp
  */
 const formatLastCheck = (timestamp) => {
-  if (!timestamp) return 'Never'
+  if (!timestamp) return t('llm.never')
 
   try {
     const date = new Date(timestamp)

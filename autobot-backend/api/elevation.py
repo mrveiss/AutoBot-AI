@@ -13,14 +13,18 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict
 
-from fastapi import APIRouter, HTTPException
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["elevation"])
+router = APIRouter(
+    tags=["elevation"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 # Issue #380: Module-level frozenset for allowed elevated commands
 _ALLOWED_ELEVATED_COMMANDS = frozenset(

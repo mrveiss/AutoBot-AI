@@ -14,6 +14,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
+import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
 import { createLogger } from '@/utils/debugUtils'
 import type { Deployment, BlueGreenDeployment, BlueGreenDeploymentCreate, NodeRole } from '@/types/slm'
 
@@ -23,6 +24,24 @@ const ws = useSlmWebSocket()
 const fleetStore = useFleetStore()
 const route = useRoute()
 const router = useRouter()
+
+// Role ownership map: role_name -> node_id (#1389)
+const roleOwners = ref<Record<string, string>>({})
+
+async function fetchRoleOwners(): Promise<void> {
+  try {
+    roleOwners.value = await api.getRoleOwners()
+  } catch {
+    logger.warn('Failed to fetch role owners')
+  }
+}
+
+function getRoleOwnerHostname(roleName: string): string {
+  const ownerId = roleOwners.value[roleName]
+  if (!ownerId) return ''
+  const node = fleetStore.nodeList.find((n) => n.node_id === ownerId)
+  return node ? node.hostname : ownerId
+}
 
 // Active tab — route-based
 type DeployTab = 'standard' | 'blue-green'
@@ -202,6 +221,7 @@ onMounted(async () => {
     fetchBgDeployments(),
     fleetStore.fetchNodes(),
     fleetStore.fetchRoles(),
+    fetchRoleOwners(),
   ])
 
   // Connect to WebSocket for real-time updates
@@ -493,6 +513,7 @@ async function handleCreateDeployment(): Promise<void> {
     showWizard.value = false
     resetDeploymentForm()
     await fetchDeployments()
+    fetchRoleOwners()
   } catch (err: unknown) {
     logger.error('Failed to create deployment:', err)
     const errorMessage = err instanceof Error ? err.message : String(err)
@@ -553,7 +574,7 @@ function getStatusIcon(status: string): string {
 
 function formatDateTime(isoString: string | null): string {
   if (!isoString) return '-'
-  return new Date(isoString).toLocaleString()
+  return formatDateTimeTz(isoString)
 }
 
 function getNodeHostname(nodeId: string): string {
@@ -1236,6 +1257,14 @@ function getNodeHostname(nodeId: string): string {
                           >
                             needs: {{ role.dependencies.join(', ') }}
                           </span>
+                          <!-- Current Owner Badge (#1389) -->
+                          <span
+                            v-if="getRoleOwnerHostname(role.name) && roleOwners[role.name] !== newDeployment.node_id"
+                            class="px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded"
+                            :title="'Currently deployed on ' + getRoleOwnerHostname(role.name)"
+                          >
+                            on {{ getRoleOwnerHostname(role.name) }}
+                          </span>
                         </div>
                         <p class="text-xs text-gray-500 mt-0.5">{{ role.description }}</p>
                       </div>
@@ -1349,6 +1378,10 @@ function getNodeHostname(nodeId: string): string {
                 ]"
               >
                 {{ role }}
+                <span
+                  v-if="getRoleOwnerHostname(role)"
+                  class="text-xs opacity-75 ml-1"
+                >({{ getRoleOwnerHostname(role) }})</span>
               </button>
             </div>
           </div>

@@ -7,7 +7,8 @@
 import logging
 from typing import Any, Dict, List, Literal, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException, Query
 from integrations.base import IntegrationConfig
 from integrations.cicd_integration import (
     CircleCIIntegration,
@@ -18,7 +19,10 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["integrations-cicd"])
+router = APIRouter(
+    tags=["integrations-cicd"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 CICDProvider = Literal["jenkins", "gitlab", "circleci"]
 

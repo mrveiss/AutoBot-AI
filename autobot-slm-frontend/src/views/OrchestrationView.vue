@@ -24,6 +24,7 @@ import {
   type NodeRolesInfo,
   type PostSyncAction,
 } from '@/composables/useRoles'
+import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
 import ServiceStatusBadge from '@/components/orchestration/ServiceStatusBadge.vue'
 import ServiceActionButtons from '@/components/orchestration/ServiceActionButtons.vue'
@@ -38,6 +39,28 @@ const route = useRoute()
 const router = useRouter()
 const orchestration = useOrchestrationManagement()
 const roles = useRoles()
+const slmApi = useSlmApi()
+
+// Role ownership map: role_name -> node_id (#1389)
+const roleOwners = ref<Record<string, string>>({})
+const ORCH_INFRA_ROLES = ['autobot-shared', 'slm-agent']
+
+async function fetchRoleOwners(): Promise<void> {
+  try {
+    roleOwners.value = await slmApi.getRoleOwners()
+  } catch {
+    logger.warn('Failed to fetch role owners')
+  }
+}
+
+function getRoleOwnerLabel(roleName: string): string {
+  const ownerId = roleOwners.value[roleName]
+  if (!ownerId) return ''
+  const node = orchestration.fleetStore.nodeList.find(
+    (n) => n.node_id === ownerId,
+  )
+  return node ? node.hostname : ownerId
+}
 
 // =============================================================================
 // Tab Management (Issue #924: subroutes via :tab? param)
@@ -307,10 +330,25 @@ function isRoleAssigned(nodeId: string, roleName: string): boolean {
 }
 
 async function assignRoleToNode(nodeId: string, roleName: string): Promise<void> {
+  // Warn if role is already assigned to another node (#1389)
+  const currentOwner = roleOwners.value[roleName]
+  if (
+    currentOwner &&
+    currentOwner !== nodeId &&
+    !ORCH_INFRA_ROLES.includes(roleName)
+  ) {
+    const ownerLabel = getRoleOwnerLabel(roleName)
+    const confirmed = confirm(
+      `Role "${roleName}" is currently assigned to ${ownerLabel}. ` +
+        'Assigning it here may cause conflicts. Continue?',
+    )
+    if (!confirmed) return
+  }
   const result = await roles.assignRole(nodeId, roleName)
   if (!result) return
   delete nodeRolesCache[nodeId]
   await loadRolesForNode(nodeId)
+  fetchRoleOwners()
 }
 
 async function removeRoleFromNode(nodeId: string, roleName: string): Promise<void> {
@@ -318,6 +356,7 @@ async function removeRoleFromNode(nodeId: string, roleName: string): Promise<voi
   if (!result.success) return
   delete nodeRolesCache[nodeId]
   await loadRolesForNode(nodeId)
+  fetchRoleOwners()
 }
 
 // =============================================================================
@@ -784,6 +823,7 @@ onMounted(async () => {
 
   logger.info('Calling refresh()')
   await refresh()
+  fetchRoleOwners()
   logger.info('After refresh:', {
     nodes: orchestration.fleetStore.nodeList.length,
     fleetServices: orchestration.fleetServices?.length || 0,
@@ -1613,6 +1653,13 @@ onUnmounted(() => {
                     {{ role.display_name || role.name }}
                   </p>
                   <p class="text-xs text-gray-400 truncate">{{ role.systemd_service || role.name }}</p>
+                  <p
+                    v-if="getRoleOwnerLabel(role.name) && roleOwners[role.name] !== assignNodeId"
+                    class="text-xs text-amber-600 truncate"
+                    :title="'Currently assigned to ' + getRoleOwnerLabel(role.name)"
+                  >
+                    on {{ getRoleOwnerLabel(role.name) }}
+                  </p>
                 </div>
                 <div class="flex-shrink-0">
                   <button

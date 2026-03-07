@@ -23,7 +23,7 @@
         <button
           class="expand-btn"
           @click.stop="toggleExpand"
-          :aria-label="isExpanded ? 'Collapse content' : 'Expand content'"
+          :aria-label="isExpanded ? $t('chat.docResult.collapse') : $t('chat.docResult.expand')"
         >
           <i :class="isExpanded ? 'fas fa-chevron-up' : 'fas fa-chevron-down'" aria-hidden="true"></i>
         </button>
@@ -50,16 +50,16 @@
         <button
           class="action-btn copy-btn"
           @click.stop="copyContent"
-          title="Copy content"
-          aria-label="Copy documentation content"
+          :title="$t('chat.docResult.copyContent')"
+          :aria-label="$t('chat.docResult.copyContent')"
         >
           <i :class="isCopied ? 'fas fa-check' : 'fas fa-copy'" aria-hidden="true"></i>
         </button>
         <button
           class="action-btn insert-btn"
           @click.stop="insertIntoChat"
-          title="Insert into chat"
-          aria-label="Insert documentation into chat"
+          :title="$t('chat.docResult.insertIntoChat')"
+          :aria-label="$t('chat.docResult.insertIntoChat')"
         >
           <i class="fas fa-quote-right" aria-hidden="true"></i>
         </button>
@@ -67,8 +67,8 @@
           v-if="filePath"
           class="action-btn open-btn"
           @click.stop="openDocument"
-          title="Open document"
-          aria-label="Open full document"
+          :title="$t('chat.docResult.openDocument')"
+          :aria-label="$t('chat.docResult.openDocument')"
         >
           <i class="fas fa-external-link-alt" aria-hidden="true"></i>
         </button>
@@ -91,7 +91,10 @@
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
+
+const { t } = useI18n()
 
 const logger = createLogger('DocumentationResultCard')
 
@@ -126,28 +129,28 @@ const isExpanded = ref(false)
 const isCopied = ref(false)
 
 // Category configuration
-const categoryConfig: Record<string, { icon: string; label: string }> = {
-  architecture: { icon: 'fas fa-project-diagram', label: 'Architecture' },
-  developer: { icon: 'fas fa-code', label: 'Developer' },
-  api: { icon: 'fas fa-plug', label: 'API' },
-  troubleshooting: { icon: 'fas fa-wrench', label: 'Troubleshooting' },
-  deployment: { icon: 'fas fa-rocket', label: 'Deployment' },
-  security: { icon: 'fas fa-shield-alt', label: 'Security' },
-  features: { icon: 'fas fa-star', label: 'Features' },
-  testing: { icon: 'fas fa-vial', label: 'Testing' },
-  workflow: { icon: 'fas fa-sitemap', label: 'Workflow' },
-  guides: { icon: 'fas fa-book', label: 'Guides' },
-  implementation: { icon: 'fas fa-cogs', label: 'Implementation' },
-  agents: { icon: 'fas fa-robot', label: 'Agents' },
-  general: { icon: 'fas fa-file-alt', label: 'General' }
+const categoryIconMap: Record<string, string> = {
+  architecture: 'fas fa-project-diagram',
+  developer: 'fas fa-code',
+  api: 'fas fa-plug',
+  troubleshooting: 'fas fa-wrench',
+  deployment: 'fas fa-rocket',
+  security: 'fas fa-shield-alt',
+  features: 'fas fa-star',
+  testing: 'fas fa-vial',
+  workflow: 'fas fa-sitemap',
+  guides: 'fas fa-book',
+  implementation: 'fas fa-cogs',
+  agents: 'fas fa-robot',
+  general: 'fas fa-file-alt'
 }
 
 const categoryIcon = computed(() => {
-  return categoryConfig[props.category]?.icon || categoryConfig.general.icon
+  return categoryIconMap[props.category] || categoryIconMap.general
 })
 
 const categoryLabel = computed(() => {
-  return categoryConfig[props.category]?.label || props.category
+  return t(`chat.docResult.category.${props.category}`, props.category)
 })
 
 const displayContent = computed(() => {

@@ -1,14 +1,14 @@
 <template>
   <BasePanel variant="bordered" size="medium">
-    <h4>Popular Tags</h4>
-    <div class="tag-cloud" role="list" aria-label="Popular tags in knowledge base">
+    <h4>{{ $t('knowledge.stats.tagCloud.title') }}</h4>
+    <div class="tag-cloud" role="list" :aria-label="$t('knowledge.stats.tagCloud.ariaLabel')">
       <span
         v-for="tag in tags"
         :key="tag.name"
         class="tag-cloud-item"
         :style="{ fontSize: `${tag.size}rem` }"
-        :title="`${tag.count} documents`"
-        :aria-label="`${tag.name}: ${tag.count} documents`"
+        :title="$t('knowledge.stats.tagCloud.documentsCount', { count: tag.count })"
+        :aria-label="$t('knowledge.stats.tagCloud.tagAriaLabel', { name: tag.name, count: tag.count })"
         role="listitem"
         tabindex="0"
         @click="$emit('tag-click', tag.name)"

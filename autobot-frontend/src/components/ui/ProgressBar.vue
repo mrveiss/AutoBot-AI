@@ -23,7 +23,7 @@
           {{ formatSize(current) }} / {{ formatSize(total) }}
         </span>
         <span v-if="eta" class="progress-eta">
-          {{ formatTime(eta) }} remaining
+          {{ t('ui.progressBar.timeRemaining', { time: formatTime(eta) }) }}
         </span>
       </slot>
     </div>
@@ -32,6 +32,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { formatFileSize } from '@/utils/formatHelpers'
 
 interface Props {
@@ -49,6 +50,8 @@ interface Props {
   eta?: number // estimated time remaining in seconds
   rounded?: boolean
 }
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<Props>(), {
   variant: 'default',

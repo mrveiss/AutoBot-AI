@@ -13,7 +13,7 @@
       aria-live="polite"
       aria-atomic="false"
       aria-relevant="additions"
-      aria-label="Terminal command output"
+      :aria-label="$t('terminal.output.commandOutputAria')"
       @click="$emit('focus-input')"
       tabindex="0"
       @keyup.enter="($event.target as HTMLElement)?.click()"

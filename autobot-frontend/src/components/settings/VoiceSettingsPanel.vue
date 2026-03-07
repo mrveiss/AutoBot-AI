@@ -21,8 +21,8 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
           :checked="selectedVoiceId === ''"
           @change="selectVoice('')"
         />
-        <span class="voice-name">Default</span>
-        <span class="voice-badge builtin">built-in</span>
+        <span class="voice-name">{{ $t('voice.default') }}</span>
+        <span class="voice-badge builtin">{{ $t('voice.builtIn') }}</span>
       </label>
 
       <!-- Voice profiles -->
@@ -44,12 +44,12 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
           class="voice-badge"
           :class="voice.builtin ? 'builtin' : 'custom'"
         >
-          {{ voice.builtin ? 'built-in' : 'custom' }}
+          {{ voice.builtin ? $t('voice.builtIn') : $t('voice.custom') }}
         </span>
         <button
           v-if="!voice.builtin"
           class="delete-btn"
-          title="Delete voice"
+          :title="$t('voice.deleteVoice')"
           @click.prevent="handleDelete(voice.id, voice.name)"
         >
           <i class="fas fa-trash"></i>
@@ -58,13 +58,20 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
     </div>
 
     <div v-if="loading" class="loading-indicator">
-      <i class="fas fa-spinner fa-spin"></i> Loading voices...
+      <i class="fas fa-spinner fa-spin"></i> {{ $t('voice.loadingVoices') }}
     </div>
 
-    <div v-if="personalityVoiceId" class="personality-voice-hint">
+    <div v-if="personalityVoiceId || hasLanguageVoices" class="personality-voice-hint">
       <i class="fas fa-user-circle"></i>
-      Active personality overrides voice selection:
-      <strong>{{ voices.find(v => v.id === personalityVoiceId)?.name ?? personalityVoiceId }}</strong>
+      <div class="personality-voice-details">
+        <div v-if="personalityVoiceId">
+          {{ $t('voice.personalityOverride') }}
+          <strong>{{ voices.find(v => v.id === personalityVoiceId)?.name ?? personalityVoiceId }}</strong>
+        </div>
+        <div v-if="hasLanguageVoices">
+          {{ $t('voice.languageVoicesActive', { count: Object.keys(personalityVoiceIds).length }) }}
+        </div>
+      </div>
     </div>
 
     <div v-if="error" class="error-msg">{{ error }}</div>
@@ -72,28 +79,28 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
     <!-- Add Voice -->
     <div class="add-voice-section">
       <button class="add-voice-btn" @click="showAddDialog = true">
-        <i class="fas fa-plus"></i> Add Voice Profile
+        <i class="fas fa-plus"></i> {{ $t('voice.addVoiceProfile') }}
       </button>
     </div>
 
     <!-- Add Voice Dialog -->
     <div v-if="showAddDialog" class="dialog-overlay" @click.self="closeDialog">
       <div class="dialog">
-        <h3>Add Voice Profile</h3>
+        <h3>{{ $t('voice.addVoiceProfile') }}</h3>
         <div class="form-group">
-          <label>Name</label>
+          <label>{{ $t('common.name') }}</label>
           <input
             v-model="newVoiceName"
             type="text"
-            placeholder="Voice name"
+            :placeholder="$t('voice.voiceName')"
             class="form-input"
           />
         </div>
         <div class="form-group">
-          <label>Audio Sample</label>
+          <label>{{ $t('voice.audioSample') }}</label>
           <div class="audio-options">
             <button class="option-btn" @click="triggerFileUpload">
-              <i class="fas fa-upload"></i> Upload File
+              <i class="fas fa-upload"></i> {{ $t('voice.uploadFile') }}
             </button>
             <button
               class="option-btn"
@@ -101,7 +108,7 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
               @click="toggleRecording"
             >
               <i :class="isRecording ? 'fas fa-stop' : 'fas fa-microphone'"></i>
-              {{ isRecording ? 'Stop' : 'Record' }}
+              {{ isRecording ? $t('voice.stop') : $t('voice.record') }}
             </button>
           </div>
           <input
@@ -116,13 +123,13 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
           </div>
         </div>
         <div class="dialog-actions">
-          <button class="cancel-btn" @click="closeDialog">Cancel</button>
+          <button class="cancel-btn" @click="closeDialog">{{ $t('common.cancel') }}</button>
           <button
             class="submit-btn"
             :disabled="!newVoiceName || !audioFile || creating"
             @click="handleCreate"
           >
-            {{ creating ? 'Creating...' : 'Create' }}
+            {{ creating ? $t('voice.creating') : $t('common.create') }}
           </button>
         </div>
       </div>
@@ -131,17 +138,20 @@ VoiceSettingsPanel.vue - Voice profile selection and management (#1054)
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useVoiceProfiles } from '@/composables/useVoiceProfiles'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('VoiceSettingsPanel')
+const { t } = useI18n()
 
 const {
   voices,
   selectedVoiceId,
   effectiveVoiceId,
   personalityVoiceId,
+  personalityVoiceIds,
   loading,
   error,
   fetchVoices,
@@ -150,6 +160,10 @@ const {
   deleteVoice,
   fetchPersonalityVoice,
 } = useVoiceProfiles()
+
+const hasLanguageVoices = computed(() =>
+  Object.keys(personalityVoiceIds.value).length > 0
+)
 
 const showAddDialog = ref(false)
 const newVoiceName = ref('')
@@ -226,7 +240,7 @@ function closeDialog() {
 }
 
 async function handleDelete(voiceId: string, name: string) {
-  if (!confirm(`Delete voice "${name}"?`)) return
+  if (!confirm(t('voice.confirmDeleteVoice', { name }))) return
   await deleteVoice(voiceId)
 }
 </script>
@@ -459,6 +473,12 @@ async function handleDelete(voiceId: string, name: string) {
   display: flex;
   align-items: center;
   gap: var(--spacing-xs, 6px);
+}
+
+.personality-voice-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .personality-voice-hint strong {

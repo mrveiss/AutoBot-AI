@@ -15,12 +15,12 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-from config import config_manager
 from models.atomic_fact import AtomicFact, FactType, TemporalType
 from services.fact_extraction_service import FactExtractionService
 
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_redis_client
+from config import config_manager
 
 logger = get_llm_logger("temporal_invalidation")
 
@@ -34,6 +34,7 @@ class InvalidationReason(Enum):
     MANUAL_INVALIDATION = "manual_invalidation"
     CONFIDENCE_THRESHOLD = "confidence_threshold"
     BATCH_CLEANUP = "batch_cleanup"
+    CONTENT_CHANGED = "content_changed"  # Issue #1375
 
 
 class InvalidationRule:
@@ -49,8 +50,12 @@ class InvalidationRule:
         source_patterns: Optional[List[str]] = None,
         fact_types: Optional[List[FactType]] = None,
         enabled: bool = True,
+        predicate_filters: Optional[List[Dict[str, str]]] = None,
     ):
-        """Initialize invalidation rule with criteria for matching facts."""
+        """Initialize invalidation rule with criteria for matching facts.
+
+        Issue #1378: Added predicate_filters for scoped invalidation.
+        """
         self.rule_id = rule_id
         self.name = name
         self.temporal_types = temporal_types
@@ -59,6 +64,7 @@ class InvalidationRule:
         self.source_patterns = source_patterns or []
         self.fact_types = fact_types or []
         self.enabled = enabled
+        self.predicate_filters = predicate_filters or []
         self.created_at = datetime.now()
 
     def matches_fact(
@@ -105,6 +111,7 @@ class InvalidationRule:
             "source_patterns": self.source_patterns,
             "fact_types": [t.value for t in self.fact_types],
             "enabled": self.enabled,
+            "predicate_filters": self.predicate_filters,
             "created_at": self.created_at.isoformat(),
         }
 
@@ -120,6 +127,7 @@ class InvalidationRule:
             source_patterns=data.get("source_patterns", []),
             fact_types=[FactType(t) for t in data.get("fact_types", [])],
             enabled=data.get("enabled", True),
+            predicate_filters=data.get("predicate_filters", []),
         )
 
 

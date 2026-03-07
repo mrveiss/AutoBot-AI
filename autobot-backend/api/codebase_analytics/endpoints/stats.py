@@ -12,6 +12,7 @@ from typing import Optional
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+from utils.chromadb_client import get_all_paginated
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -366,7 +367,9 @@ def _fetch_problems_from_chromadb(code_collection, problem_type: Optional[str]) 
     if problem_type:
         where_filter["problem_type"] = problem_type
 
-    results = code_collection.get(where=where_filter, include=["metadatas"])
+    results = get_all_paginated(
+        code_collection, where=where_filter, include=["metadatas"]
+    )
     return [_parse_problem_metadata(m) for m in results.get("metadatas", [])]
 
 

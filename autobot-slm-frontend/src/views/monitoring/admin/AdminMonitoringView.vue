@@ -15,6 +15,7 @@ const logger = createLogger('AdminMonitoringView')
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
+import { formatDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
 
@@ -94,7 +95,7 @@ function formatUptime(seconds: number): string {
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString()
+  return formatDateTime(dateStr)
 }
 
 function getErrorLevelClass(level: string): string {

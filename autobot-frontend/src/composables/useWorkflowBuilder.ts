@@ -80,6 +80,26 @@ export interface WorkflowStep {
   completed_at?: string;
 }
 
+/** Workflow phase from state machine (#1380) */
+export type WorkflowPhase =
+  | 'planning'
+  | 'executing'
+  | 'validating'
+  | 'complete'
+  | 'failed';
+
+/** State machine info for a workflow (#1380) */
+export interface WorkflowStateInfo {
+  workflow_id: string;
+  goal: string;
+  current_step: WorkflowPhase;
+  active_service: string;
+  steps_completed: string[];
+  done: boolean;
+  errors: string[];
+  routing_table: Record<string, string>;
+}
+
 /** Active workflow definition */
 export interface ActiveWorkflow {
   workflow_id: string;
@@ -92,6 +112,8 @@ export interface ActiveWorkflow {
   is_paused: boolean;
   is_cancelled: boolean;
   automation_mode: AutomationMode;
+  phase?: WorkflowPhase;
+  active_service?: string;
   created_at?: string;
   started_at?: string;
   completed_at?: string;
@@ -440,6 +462,13 @@ class WorkflowBuilderApiClient {
     return this.request('/api/workflow-automation/active_workflows');
   }
 
+  /** Get completed workflow history (#1367) */
+  async getCompletedWorkflows(): Promise<
+    ApiResponse<{ success: boolean; workflows: ActiveWorkflow[]; count: number }>
+  > {
+    return this.request('/api/workflow-automation/completed_workflows');
+  }
+
   /** Create workflow from natural language */
   async createWorkflowFromChat(
     userRequest: string,
@@ -558,6 +587,7 @@ export function useWorkflowBuilder() {
 
   // Data state
   const activeWorkflows = ref<ActiveWorkflow[]>([]);
+  const completedWorkflows = ref<ActiveWorkflow[]>([]);
   const currentWorkflow = ref<ActiveWorkflow | null>(null);
   const workflowPlan = ref<WorkflowPlan | null>(null);
   const pendingApproval = ref<PlanApprovalRequest | null>(null);
@@ -813,6 +843,16 @@ export function useWorkflowBuilder() {
     }
 
     loading.value = false;
+  }
+
+  /** Load completed workflow history (#1367) */
+  async function loadCompletedWorkflows(): Promise<void> {
+    const response = await apiClient.getCompletedWorkflows();
+    if (response.success && response.data) {
+      completedWorkflows.value = response.data.workflows;
+    } else {
+      logger.warn('Completed workflows unavailable:', response.error);
+    }
   }
 
   /** Get workflow status */
@@ -1137,6 +1177,7 @@ export function useWorkflowBuilder() {
     error,
     apiTemplatesError,
     activeWorkflows,
+    completedWorkflows,
     currentWorkflow,
     workflowPlan,
     pendingApproval,
@@ -1175,6 +1216,7 @@ export function useWorkflowBuilder() {
 
     // Workflow automation methods
     loadActiveWorkflows,
+    loadCompletedWorkflows,
     getWorkflowStatus,
     createWorkflowFromTemplate,
     createWorkflowFromNaturalLanguage,

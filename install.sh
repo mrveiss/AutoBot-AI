@@ -303,6 +303,29 @@ code_deployment() {
             sudo -u autobot ln -sf autobot-shared "${CODE_SOURCE}/autobot_shared"
     fi
 
+    # Copy code from code_source to service directories where Ansible expects them
+    info "Distributing code to service directories..."
+    local dirs_to_copy=(
+        "autobot-slm-backend"
+        "autobot-slm-frontend"
+        "autobot-shared"
+        "autobot-infrastructure"
+    )
+    for dir in "${dirs_to_copy[@]}"; do
+        if [[ -d "${CODE_SOURCE}/${dir}" ]]; then
+            run_ok "Copying ${dir} to ${AUTOBOT_BASE}/${dir}" \
+                sudo -u autobot rsync -a --delete "${CODE_SOURCE}/${dir}/" "${AUTOBOT_BASE}/${dir}/"
+        else
+            warn "${dir} not found in code source — skipping"
+        fi
+    done
+
+    # Ensure autobot_shared symlink exists in backend dir
+    if [[ ! -L "${AUTOBOT_BASE}/autobot-slm-backend/autobot_shared" ]]; then
+        run_ok "Creating autobot_shared symlink in backend" \
+            sudo -u autobot ln -sf ../autobot-shared "${AUTOBOT_BASE}/autobot-slm-backend/autobot_shared"
+    fi
+
     success "Codebase ready at ${CODE_SOURCE}"
 }
 
@@ -321,15 +344,16 @@ ansible_deployment() {
 # AutoBot localhost inventory for self-deploy (Issue #1294)
 all:
   hosts:
-    localhost:
+    00-SLM-Manager:
       ansible_connection: local
+      ansible_host: 127.0.0.1
       ansible_python_interpreter: /usr/bin/python3
       slm_node_id: "00-SLM-Manager"
       node_role: "slm-manager"
   children:
     slm_server:
       hosts:
-        localhost:
+        00-SLM-Manager:
 INVENTORY
     success "  Localhost inventory generated"
 
@@ -403,8 +427,8 @@ service_verification() {
         systemctl start nginx || fatal "Cannot start nginx"
     fi
 
-    info "Waiting for SLM backend to be ready..."
-    local max_attempts=24
+    info "Waiting for SLM backend to be ready (up to ~7 minutes)..."
+    local max_attempts=80
     local attempt=0
     while [[ ${attempt} -lt ${max_attempts} ]]; do
         if curl -sf --max-time 3 http://127.0.0.1:8000/api/health > /dev/null 2>&1; then
@@ -417,7 +441,7 @@ service_verification() {
     done
 
     if [[ ${attempt} -ge ${max_attempts} ]]; then
-        warn "SLM backend did not respond within 2 minutes"
+        warn "SLM backend did not respond within 7 minutes"
         warn "Check: journalctl -u autobot-slm-backend -n 50"
     fi
 

@@ -13,19 +13,19 @@
       <div class="header-content">
         <h2>
           <span class="icon">⚡</span>
-          Performance Analysis
+          {{ $t('analytics.performanceAnalysis.title') }}
         </h2>
-        <p class="subtitle">Detect anti-patterns and bottlenecks</p>
+        <p class="subtitle">{{ $t('analytics.performanceAnalysis.subtitle') }}</p>
       </div>
       <div class="header-actions">
         <button class="action-btn secondary" @click="showPatterns = true">
           <span class="btn-icon">⚙️</span>
-          Patterns
+          {{ $t('analytics.performanceAnalysis.patterns') }}
         </button>
         <button class="action-btn primary" @click="runAnalysis" :disabled="loading || !selectedPath">
           <span v-if="loading" class="spinner"></span>
           <span v-else class="btn-icon">▶️</span>
-          {{ loading ? 'Analyzing...' : 'Analyze' }}
+          {{ loading ? $t('analytics.performanceAnalysis.analyzing') : $t('analytics.performanceAnalysis.analyze') }}
         </button>
       </div>
     </div>
@@ -33,11 +33,11 @@
     <!-- Path Selection -->
     <div class="path-selection">
       <div class="input-group">
-        <label>Path to Analyze</label>
+        <label>{{ $t('analytics.performanceAnalysis.pathToAnalyze') }}</label>
         <input
           v-model="selectedPath"
           type="text"
-          placeholder="Enter path (e.g., src/services/)"
+          :placeholder="$t('analytics.performanceAnalysis.pathPlaceholder')"
           @keydown.enter="runAnalysis"
         />
       </div>
@@ -82,7 +82,7 @@
             {{ lastResult.score }}
           </text>
           <text x="60" y="72" text-anchor="middle" class="score-label">
-            Health
+            {{ $t('analytics.performanceAnalysis.health') }}
           </text>
         </svg>
       </div>
@@ -90,32 +90,32 @@
         <div class="stat-item critical" v-if="lastResult.critical_count > 0">
           <span class="stat-icon">🔴</span>
           <span class="stat-value">{{ lastResult.critical_count }}</span>
-          <span class="stat-label">Critical</span>
+          <span class="stat-label">{{ $t('analytics.performanceAnalysis.critical') }}</span>
         </div>
         <div class="stat-item high" v-if="lastResult.high_count > 0">
           <span class="stat-icon">🟠</span>
           <span class="stat-value">{{ lastResult.high_count }}</span>
-          <span class="stat-label">High</span>
+          <span class="stat-label">{{ $t('analytics.performanceAnalysis.high') }}</span>
         </div>
         <div class="stat-item medium" v-if="lastResult.medium_count > 0">
           <span class="stat-icon">🟡</span>
           <span class="stat-value">{{ lastResult.medium_count }}</span>
-          <span class="stat-label">Medium</span>
+          <span class="stat-label">{{ $t('analytics.performanceAnalysis.medium') }}</span>
         </div>
         <div class="stat-item low" v-if="lastResult.low_count > 0">
           <span class="stat-icon">🟢</span>
           <span class="stat-value">{{ lastResult.low_count }}</span>
-          <span class="stat-label">Low</span>
+          <span class="stat-label">{{ $t('analytics.performanceAnalysis.low') }}</span>
         </div>
         <div class="stat-item files">
           <span class="stat-icon">📄</span>
           <span class="stat-value">{{ lastResult.files_analyzed }}</span>
-          <span class="stat-label">Files</span>
+          <span class="stat-label">{{ $t('analytics.performanceAnalysis.files') }}</span>
         </div>
         <div class="stat-item duration">
           <span class="stat-icon">⏱️</span>
           <span class="stat-value">{{ lastResult.duration_ms }}ms</span>
-          <span class="stat-label">Duration</span>
+          <span class="stat-label">{{ $t('analytics.performanceAnalysis.duration') }}</span>
         </div>
       </div>
     </div>
@@ -125,7 +125,7 @@
       <!-- Issues by Category -->
       <div class="panel issues-panel">
         <div class="panel-header">
-          <h3>Performance Issues</h3>
+          <h3>{{ $t('analytics.performanceAnalysis.performanceIssues') }}</h3>
           <div class="category-tabs">
             <button
               v-for="cat in categories"
@@ -142,11 +142,11 @@
         <div class="panel-content">
           <div v-if="!lastResult" class="empty-state">
             <span class="empty-icon">⚡</span>
-            <p>Run analysis to find performance issues</p>
+            <p>{{ $t('analytics.performanceAnalysis.runToFind') }}</p>
           </div>
           <div v-else-if="filteredIssues.length === 0" class="empty-state">
             <span class="empty-icon">✨</span>
-            <p>No issues in this category</p>
+            <p>{{ $t('analytics.performanceAnalysis.noIssuesInCategory') }}</p>
           </div>
           <div v-else class="issues-list">
             <div
@@ -169,7 +169,7 @@
               </div>
               <p class="issue-desc">{{ issue.description }}</p>
               <div class="issue-impact" v-if="issue.estimated_impact">
-                <span class="impact-label">Impact:</span>
+                <span class="impact-label">{{ $t('analytics.performanceAnalysis.impact') }}:</span>
                 <span class="impact-value">{{ issue.estimated_impact }}</span>
               </div>
             </div>
@@ -180,7 +180,7 @@
       <!-- Issue Detail or Hotspots -->
       <div class="panel detail-panel" v-if="selectedIssue">
         <div class="panel-header">
-          <h3>Issue Details</h3>
+          <h3>{{ $t('analytics.performanceAnalysis.issueDetails') }}</h3>
           <button class="close-btn" @click="selectedIssue = null">×</button>
         </div>
         <div class="panel-content">
@@ -195,27 +195,27 @@
           </div>
 
           <div class="detail-section">
-            <label>Location</label>
+            <label>{{ $t('analytics.performanceAnalysis.location') }}</label>
             <div class="location-info">
               <span class="file-path">{{ selectedIssue.file }}</span>
-              <span class="line-info">Line {{ selectedIssue.line }}</span>
+              <span class="line-info">{{ $t('analytics.performanceAnalysis.line') }} {{ selectedIssue.line }}</span>
             </div>
           </div>
 
           <div class="detail-section">
-            <label>Description</label>
+            <label>{{ $t('analytics.performanceAnalysis.descriptionLabel') }}</label>
             <p class="description">{{ selectedIssue.description }}</p>
           </div>
 
           <div class="detail-section" v-if="selectedIssue.code_snippet">
-            <label>Code</label>
+            <label>{{ $t('analytics.performanceAnalysis.code') }}</label>
             <div class="code-snippet">
               <pre><code>{{ selectedIssue.code_snippet }}</code></pre>
             </div>
           </div>
 
           <div class="detail-section" v-if="selectedIssue.estimated_impact">
-            <label>Performance Impact</label>
+            <label>{{ $t('analytics.performanceAnalysis.performanceImpact') }}</label>
             <div class="impact-box">
               <span class="impact-icon">📊</span>
               <span class="impact-text">{{ selectedIssue.estimated_impact }}</span>
@@ -223,7 +223,7 @@
           </div>
 
           <div class="detail-section">
-            <label>Suggestion</label>
+            <label>{{ $t('analytics.performanceAnalysis.suggestion') }}</label>
             <div class="suggestion-box">
               <span class="suggestion-icon">💡</span>
               <p>{{ selectedIssue.suggestion }}</p>
@@ -235,12 +235,12 @@
       <!-- Hotspots Panel -->
       <div class="panel hotspots-panel" v-else>
         <div class="panel-header">
-          <h3>Hotspots</h3>
-          <span class="subtitle">Files with most issues</span>
+          <h3>{{ $t('analytics.performanceAnalysis.hotspots') }}</h3>
+          <span class="subtitle">{{ $t('analytics.performanceAnalysis.filesWithMostIssues') }}</span>
         </div>
         <div class="panel-content">
           <div v-if="hotspots.length === 0" class="empty-state small">
-            <p>Run analysis to see hotspots</p>
+            <p>{{ $t('analytics.performanceAnalysis.runToSeeHotspots') }}</p>
           </div>
           <div v-else class="hotspots-list">
             <div
@@ -254,12 +254,12 @@
               </div>
               <div class="hotspot-stats">
                 <span v-if="hotspot.critical_count > 0" class="stat critical">
-                  {{ hotspot.critical_count }} critical
+                  {{ hotspot.critical_count }} {{ $t('analytics.performanceAnalysis.critical') }}
                 </span>
                 <span v-if="hotspot.high_count > 0" class="stat high">
-                  {{ hotspot.high_count }} high
+                  {{ hotspot.high_count }} {{ $t('analytics.performanceAnalysis.high') }}
                 </span>
-                <span class="stat total">{{ hotspot.issue_count }} total</span>
+                <span class="stat total">{{ hotspot.issue_count }} {{ $t('analytics.performanceAnalysis.total') }}</span>
               </div>
             </div>
           </div>
@@ -270,7 +270,7 @@
     <!-- Category Distribution -->
     <div class="panel distribution-panel">
       <div class="panel-header">
-        <h3>Issue Distribution</h3>
+        <h3>{{ $t('analytics.performanceAnalysis.issueDistribution') }}</h3>
       </div>
       <div class="panel-content">
         <div class="category-bars">
@@ -311,7 +311,7 @@
     <div v-if="showPatterns" class="modal-overlay" @click.self="showPatterns = false">
       <div class="modal patterns-modal">
         <div class="modal-header">
-          <h3>Performance Patterns</h3>
+          <h3>{{ $t('analytics.performanceAnalysis.performancePatterns') }}</h3>
           <button class="close-btn" @click="showPatterns = false">×</button>
         </div>
         <div class="modal-content">
@@ -353,10 +353,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useToast } from '@/composables/useToast'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
 
+const { t } = useI18n()
 const logger = createLogger('PerformanceAnalysisDashboard')
 
 // Issue #701: Type for API response with data property
@@ -524,7 +526,7 @@ function getPatternsForCategory(category: string): Pattern[] {
 
 async function runAnalysis() {
   if (!selectedPath.value) {
-    showToast('Please enter a path to analyze', 'warning')
+    showToast(t('analytics.performanceAnalysis.enterPathWarning'), 'warning')
     return
   }
 
@@ -539,15 +541,15 @@ async function runAnalysis() {
 
     const totalIssues = (response as ApiDataResponse).total_issues ?? (response as ApiDataResponse).data?.total_issues ?? 0
     if (totalIssues === 0) {
-      showToast('No performance issues found!', 'success')
+      showToast(t('analytics.performanceAnalysis.noIssuesFound'), 'success')
     } else {
-      showToast(`Found ${totalIssues} issues`, 'info')
+      showToast(t('analytics.performanceAnalysis.foundIssues', { count: totalIssues }), 'info')
     }
 
     await loadHotspots()
   } catch (error) {
     logger.error('Failed to run analysis:', error)
-    showToast('Failed to run performance analysis', 'error')
+    showToast(t('analytics.performanceAnalysis.analysisFailed'), 'error')
   } finally {
     loading.value = false
   }

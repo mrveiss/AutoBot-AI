@@ -11,8 +11,8 @@
     :height="height"
     :series="chartSeries"
     :options="chartOptions"
-    :title="title"
-    :subtitle="subtitle"
+    :title="title ?? $t('charts.moduleImports.title')"
+    :subtitle="subtitle ?? $t('charts.moduleImports.subtitle')"
     :loading="loading"
     :error="error"
   />
@@ -20,8 +20,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
+
+const { t } = useI18n()
 
 /**
  * Get CSS variable value from the document
@@ -52,8 +55,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'Modules with Most Imports',
-  subtitle: 'Files with highest dependency count',
+  title: undefined,
+  subtitle: undefined,
   height: 400,
   maxModules: 15,
   loading: false,
@@ -70,7 +73,7 @@ const sortedData = computed(() => {
 // Transform data for bar chart
 const chartSeries = computed(() => [
   {
-    name: 'Imports',
+    name: t('charts.moduleImports.seriesName'),
     data: sortedData.value.map((item) => item.import_count)
   }
 ])
@@ -92,7 +95,7 @@ const chartOptions = computed<ApexOptions>(() => ({
   xaxis: {
     categories: sortedData.value.map((item) => truncatePath(item.path)),
     title: {
-      text: 'Number of Imports',
+      text: t('charts.moduleImports.xAxisTitle'),
       style: {
         fontSize: '12px',
         color: getCssVar('--text-secondary', '#94a3b8')
@@ -136,9 +139,9 @@ const chartOptions = computed<ApexOptions>(() => ({
             ${item.path}
           </div>
           <div style="color: ${textSecondary}; display: flex; flex-direction: column; gap: 4px;">
-            <div><span style="color: ${chartPurple}; font-weight: 600;">${item.import_count}</span> imports</div>
-            <div><span style="color: ${colorSuccess};">${item.functions}</span> functions</div>
-            <div><span style="color: ${colorWarning};">${item.classes}</span> classes</div>
+            <div><span style="color: ${chartPurple}; font-weight: 600;">${item.import_count}</span> ${t('charts.moduleImports.tooltipImports')}</div>
+            <div><span style="color: ${colorSuccess};">${item.functions}</span> ${t('charts.moduleImports.tooltipFunctions')}</div>
+            <div><span style="color: ${colorWarning};">${item.classes}</span> ${t('charts.moduleImports.tooltipClasses')}</div>
           </div>
         </div>
       `

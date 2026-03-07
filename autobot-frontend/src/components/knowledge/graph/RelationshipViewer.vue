@@ -2,22 +2,22 @@
 <template>
   <div class="relationship-viewer">
     <div class="viewer-header">
-      <h4><i class="fas fa-sitemap"></i> Relationship Explorer</h4>
+      <h4><i class="fas fa-sitemap"></i> {{ $t('knowledge.graph.relationships.title') }}</h4>
       <p class="header-description">
-        View and filter relationships for an entity
+        {{ $t('knowledge.graph.relationships.description') }}
       </p>
     </div>
 
     <!-- Controls -->
     <div class="viewer-controls">
       <div class="control-group">
-        <label for="rel-type-filter">Filter by Type</label>
+        <label for="rel-type-filter">{{ $t('knowledge.graph.relationships.filterByType') }}</label>
         <select
           id="rel-type-filter"
           v-model="selectedRelType"
           class="control-input"
         >
-          <option value="">All Types</option>
+          <option value="">{{ $t('knowledge.graph.relationships.allTypes') }}</option>
           <option
             v-for="relType in uniqueRelTypes"
             :key="relType"
@@ -33,7 +33,7 @@
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Loading relationships...</span>
+      <span>{{ $t('knowledge.graph.relationships.loading') }}</span>
     </div>
 
     <!-- Error -->
@@ -48,7 +48,7 @@
       class="empty-state"
     >
       <i class="fas fa-link"></i>
-      <p>No relationships found</p>
+      <p>{{ $t('knowledge.graph.relationships.noResults') }}</p>
     </div>
 
     <!-- Relationship Cards -->
@@ -96,8 +96,7 @@
       v-if="filteredRelationships.length > 0"
       class="viewer-summary"
     >
-      Showing {{ filteredRelationships.length }}
-      of {{ relationships.length }} relationships
+      {{ $t('knowledge.graph.relationships.showing', { filtered: filteredRelationships.length, total: relationships.length }) }}
     </div>
   </div>
 </template>

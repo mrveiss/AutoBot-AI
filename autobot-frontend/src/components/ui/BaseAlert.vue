@@ -27,7 +27,7 @@
         v-if="dismissible"
         @click="dismiss"
         class="alert-dismiss"
-        aria-label="Dismiss alert"
+        :aria-label="t('ui.alert.dismissAlert')"
       >
         <XMarkIcon class="h-4 w-4" />
       </button>
@@ -37,6 +37,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   CheckCircleIcon,
   InformationCircleIcon,
@@ -67,6 +68,8 @@ const props = withDefaults(defineProps<BaseAlertProps>(), {
 const emit = defineEmits<{
   dismiss: []
 }>()
+
+const { t } = useI18n()
 
 const dismissed = ref(false)
 

@@ -3,7 +3,7 @@
     <div class="gallery-header">
       <div class="search-box">
         <i class="fas fa-search"></i>
-        <input v-model="searchQuery" placeholder="Search templates..." />
+        <input v-model="searchQuery" :placeholder="$t('workflow.templates.searchPlaceholder')" />
       </div>
       <div class="category-filters">
         <button v-for="cat in categories" :key="cat" class="filter-btn" :class="{ active: selectedCategory === cat }" @click="onCategoryChange(cat)">
@@ -17,17 +17,17 @@
     <div v-if="apiError" class="error-state">
       <i class="fas fa-exclamation-triangle"></i>
       <p>{{ apiError }}</p>
-      <button class="btn-secondary" @click="retryLoad"><i class="fas fa-redo"></i> Retry</button>
+      <button class="btn-secondary" @click="retryLoad"><i class="fas fa-redo"></i> {{ $t('workflow.templates.retry') }}</button>
     </div>
 
     <div v-else-if="effectiveLoading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Loading templates...</span>
+      <span>{{ $t('workflow.templates.loading') }}</span>
     </div>
 
     <div v-else-if="filteredTemplates.length === 0" class="empty-state">
       <i class="fas fa-clone"></i>
-      <p>No templates match your search</p>
+      <p>{{ $t('workflow.templates.noMatch') }}</p>
     </div>
 
     <div v-else class="templates-grid">
@@ -40,13 +40,13 @@
           <p>{{ template.description }}</p>
           <div class="template-meta">
             <span class="category-badge">{{ template.category }}</span>
-            <span v-if="getStepsCount(template)" class="steps-count"><i class="fas fa-list-ol"></i> {{ getStepsCount(template) }} steps</span>
+            <span v-if="getStepsCount(template)" class="steps-count"><i class="fas fa-list-ol"></i> {{ $t('workflow.templates.stepsCount', { count: getStepsCount(template) }) }}</span>
             <span v-if="template.estimated_duration_minutes" class="duration"><i class="fas fa-clock"></i> {{ template.estimated_duration_minutes }}m</span>
           </div>
         </div>
         <div class="template-actions">
-          <button class="btn-icon" @click.stop="previewTemplate = template" title="Preview"><i class="fas fa-eye"></i></button>
-          <button class="btn-run" @click.stop="$emit('run-template', template)" title="Run Now"><i class="fas fa-play"></i></button>
+          <button class="btn-icon" @click.stop="openPreview(template)" :title="$t('workflow.templates.preview')"><i class="fas fa-eye"></i></button>
+          <button class="btn-run" @click.stop="$emit('run-template', template)" :title="$t('workflow.templates.runNow')"><i class="fas fa-play"></i></button>
         </div>
       </div>
     </div>
@@ -63,13 +63,28 @@
 
           <!-- Template metadata -->
           <div v-if="previewTemplate.agents_involved?.length" class="preview-agents">
-            <h4>Agents Involved</h4>
+            <h4>{{ $t('workflow.templates.agentsInvolved') }}</h4>
             <div class="agent-tags">
               <span v-for="agent in previewTemplate.agents_involved" :key="agent" class="agent-tag">{{ agent }}</span>
             </div>
           </div>
 
-          <h4>Steps</h4>
+          <!-- Required Credentials (#1415) -->
+          <div v-if="(previewTemplate as any).required_secrets && Object.keys((previewTemplate as any).required_secrets).length" class="preview-secrets">
+            <h4>Required Credentials</h4>
+            <div class="secret-items">
+              <div v-for="(meta, key) in (previewTemplate as any).required_secrets" :key="key" class="secret-item">
+                <i class="fas fa-key"></i>
+                <div class="secret-info">
+                  <span class="secret-name">{{ key }}</span>
+                  <span class="secret-desc">{{ meta.description }}</span>
+                </div>
+                <span class="secret-scope" :class="meta.scope">{{ meta.scope }}</span>
+              </div>
+            </div>
+          </div>
+
+          <h4>{{ $t('workflow.templates.steps') }}</h4>
           <div class="preview-steps">
             <div v-for="(step, i) in getTemplateSteps(previewTemplate)" :key="i" class="preview-step">
               <span class="step-num">{{ i + 1 }}</span>
@@ -78,15 +93,15 @@
                 <code v-if="step.command">{{ step.command }}</code>
                 <div class="step-meta">
                   <span v-if="step.risk_level" class="risk" :class="step.risk_level">{{ step.risk_level }}</span>
-                  <span v-if="step.requires_confirmation"><i class="fas fa-shield-alt"></i> Requires confirmation</span>
+                  <span v-if="step.requires_confirmation"><i class="fas fa-shield-alt"></i> {{ $t('workflow.templates.requiresConfirmation') }}</span>
                 </div>
               </div>
             </div>
           </div>
         </div>
         <div class="preview-actions">
-          <button class="btn-secondary" @click="$emit('select-template', previewTemplate)"><i class="fas fa-edit"></i> Edit in Canvas</button>
-          <button class="btn-primary" @click="$emit('run-template', previewTemplate)"><i class="fas fa-play"></i> Run Workflow</button>
+          <button class="btn-secondary" @click="$emit('select-template', previewTemplate)"><i class="fas fa-edit"></i> {{ $t('workflow.templates.editInCanvas') }}</button>
+          <button class="btn-primary" @click="$emit('run-template', previewTemplate)"><i class="fas fa-play"></i> {{ $t('workflow.templates.runWorkflow') }}</button>
         </div>
       </div>
     </Transition>
@@ -130,7 +145,8 @@ const {
   loading: apiLoading,
   error: apiError,
   fetchTemplates,
-  fetchCategories
+  fetchCategories,
+  fetchTemplateDetail
 } = useWorkflowTemplates()
 
 // Local state
@@ -223,10 +239,24 @@ watch(searchQuery, (query) => {
   }, 300)
 })
 
-// Get steps count - handle both API and local templates
+// Open preview - fetch full detail if steps missing (#1415)
+const openPreview = async (template: AnyTemplate) => {
+  previewTemplate.value = template
+  if (!('steps' in template) || !Array.isArray(template.steps) || template.steps.length === 0) {
+    const detail = await fetchTemplateDetail(template.id)
+    if (detail) {
+      previewTemplate.value = detail
+    }
+  }
+}
+
+// Get steps count - handle both API and local templates (#1415)
 const getStepsCount = (template: AnyTemplate): number => {
   if ('steps' in template && Array.isArray(template.steps)) {
     return template.steps.length
+  }
+  if ('step_count' in template && typeof template.step_count === 'number') {
+    return template.step_count
   }
   return 0
 }
@@ -247,7 +277,7 @@ const getTemplateSteps = (template: AnyTemplate): TemplateStep[] => {
   return []
 }
 
-// Get default icon based on category
+// Get default icon based on category (#1415)
 const getDefaultIcon = (category: string): string => {
   const icons: Record<string, string> = {
     security: 'fas fa-shield-alt',
@@ -255,22 +285,25 @@ const getDefaultIcon = (category: string): string => {
     development: 'fas fa-code',
     system_admin: 'fas fa-server',
     analysis: 'fas fa-chart-bar',
+    community: 'fas fa-users',
     System: 'fas fa-cog',
     Development: 'fas fa-code',
     Security: 'fas fa-lock',
-    Backup: 'fas fa-database'
+    Backup: 'fas fa-database',
+    Community: 'fas fa-users'
   }
   return icons[category] || 'fas fa-tasks'
 }
 
-// Category styling
+// Category styling (#1415)
 const getCategoryClass = (cat: string) => ({
   system: cat === 'System' || cat === 'system_admin',
   development: cat === 'Development' || cat === 'development',
   security: cat === 'Security' || cat === 'security',
   backup: cat === 'Backup',
   research: cat === 'Research' || cat === 'research',
-  analysis: cat === 'Analysis' || cat === 'analysis'
+  analysis: cat === 'Analysis' || cat === 'analysis',
+  community: cat === 'Community' || cat === 'community'
 })
 
 // Retry loading on error
@@ -314,6 +347,7 @@ onMounted(async () => {
 .template-icon.backup { background: var(--color-success-bg); color: var(--color-success); }
 .template-icon.research { background: #e8f4fd; color: #0077b6; }
 .template-icon.analysis { background: #f3e8ff; color: #7c3aed; }
+.template-icon.community { background: #e8fdf0; color: #059669; }
 
 .template-info { flex: 1; min-width: 0; }
 .template-info h4 { margin: 0 0 4px; font-size: 15px; color: var(--text-primary); }
@@ -339,6 +373,17 @@ onMounted(async () => {
 .preview-agents { margin-bottom: 20px; }
 .agent-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .agent-tag { padding: 4px 10px; background: var(--color-primary-bg); color: var(--color-primary); border-radius: 12px; font-size: 12px; }
+
+.preview-secrets { margin-bottom: 20px; }
+.secret-items { display: flex; flex-direction: column; gap: 8px; }
+.secret-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg-tertiary); border-radius: 8px; font-size: 13px; }
+.secret-item i { color: var(--text-tertiary); font-size: 12px; }
+.secret-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.secret-name { font-weight: 600; color: var(--text-primary); font-size: 12px; }
+.secret-desc { color: var(--text-tertiary); font-size: 11px; }
+.secret-scope { padding: 2px 6px; border-radius: 8px; font-size: 10px; background: var(--bg-secondary); color: var(--text-tertiary); }
+.secret-scope.write { background: var(--color-warning-bg); color: var(--color-warning); }
+.secret-scope.read { background: var(--color-success-bg); color: var(--color-success); }
 
 .preview-steps { display: flex; flex-direction: column; gap: 12px; }
 .preview-step { display: flex; gap: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; }

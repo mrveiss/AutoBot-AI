@@ -37,9 +37,9 @@
               <button
                 @click="dismissNotification"
                 class="bg-autobot-bg-card rounded-md inline-flex text-autobot-text-muted hover:text-autobot-text-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                title="Dismiss notification"
+                :title="t('ui.systemStatus.dismissNotification')"
               >
-                <span class="sr-only">Close</span>
+                <span class="sr-only">{{ t('ui.systemStatus.close') }}</span>
                 <XMarkIcon class="h-5 w-5" />
               </button>
             </div>
@@ -102,8 +102,8 @@
                   notificationData.severity === 'info' ? 'hover:text-blue-700' :
                   'hover:text-green-700'
                 ]"
-                aria-label="Close notification"
-                title="Dismiss notification"
+                :aria-label="t('ui.systemStatus.closeNotification')"
+                :title="t('ui.systemStatus.dismissNotification')"
               >
                 <XMarkIcon class="w-5 h-5" />
               </button>
@@ -120,11 +120,11 @@
             <div v-if="notificationData.statusDetails && notificationData.showDetails" class="space-y-3">
               <div class="bg-autobot-bg-secondary rounded-lg p-3">
                 <h4 class="text-sm font-medium text-autobot-text-primary mb-2">
-                  System Details
+                  {{ t('ui.systemStatus.systemDetails') }}
                 </h4>
                 <dl class="space-y-1">
                   <div class="flex justify-between text-sm">
-                    <dt class="text-autobot-text-secondary">Status:</dt>
+                    <dt class="text-autobot-text-secondary">{{ t('ui.systemStatus.status') }}</dt>
                     <dd :class="[
                       'font-medium',
                       notificationData.statusDetails.status === 'online' ? 'text-green-600' :
@@ -135,19 +135,19 @@
                     </dd>
                   </div>
                   <div class="flex justify-between text-sm">
-                    <dt class="text-autobot-text-secondary">Last Check:</dt>
+                    <dt class="text-autobot-text-secondary">{{ t('ui.systemStatus.lastCheck') }}</dt>
                     <dd class="text-autobot-text-primary font-medium">
                       {{ formatTimestamp(notificationData.statusDetails.lastCheck) }}
                     </dd>
                   </div>
                   <div v-if="notificationData.statusDetails.consecutiveFailures" class="flex justify-between text-sm">
-                    <dt class="text-autobot-text-secondary">Consecutive Failures:</dt>
+                    <dt class="text-autobot-text-secondary">{{ t('ui.systemStatus.consecutiveFailures') }}</dt>
                     <dd class="text-red-600 font-medium">
                       {{ notificationData.statusDetails.consecutiveFailures }}
                     </dd>
                   </div>
                   <div v-if="notificationData.statusDetails.error" class="mt-2">
-                    <dt class="text-sm text-autobot-text-secondary mb-1">Error Details:</dt>
+                    <dt class="text-sm text-autobot-text-secondary mb-1">{{ t('ui.systemStatus.errorDetails') }}</dt>
                     <dd class="text-xs text-red-600 bg-red-50 p-2 rounded font-mono">
                       {{ notificationData.statusDetails.error }}
                     </dd>
@@ -169,7 +169,7 @@
                 'bg-green-600 hover:bg-green-700 text-white focus:ring-green-500'
               ]"
             >
-              Dismiss
+              {{ t('ui.systemStatus.dismiss') }}
             </button>
           </div>
         </div>
@@ -181,6 +181,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/useAppStore'
 
 // Now using wrapper div to avoid fragment root issues
@@ -226,6 +227,7 @@ const emit = defineEmits<{
   remove: []
 }>()
 
+const { t } = useI18n()
 const appStore = useAppStore()
 
 // Computed properties for notification data

@@ -39,6 +39,7 @@ from api import (
     nodes_router,
     npu_router,
     orchestration_router,
+    secrets_router,
     security_router,
     services_router,
     settings_router,
@@ -57,6 +58,7 @@ from api.code_source import router as code_source_router
 from api.performance import router as performance_router
 from api.personality_proxy import router as personality_proxy_router
 from api.roles import router as roles_router
+from config import settings
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.a2a_card_fetcher import start_card_refresh_task
@@ -64,8 +66,6 @@ from services.database import db_service
 from services.git_tracker import start_version_checker
 from services.reconciler import reconciler_service
 from services.schedule_executor import start_schedule_executor, stop_schedule_executor
-
-from config import settings
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -283,6 +283,7 @@ app.include_router(node_vnc_router, prefix="/api")
 app.include_router(vnc_router, prefix="/api")
 app.include_router(node_tls_router, prefix="/api")
 app.include_router(tls_router, prefix="/api")
+app.include_router(secrets_router, prefix="/api")
 app.include_router(security_router, prefix="/api")
 app.include_router(code_sync_router, prefix="/api")
 app.include_router(roles_router, prefix="/api")

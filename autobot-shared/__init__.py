@@ -16,7 +16,18 @@ _backend_path = Path(__file__).parent.parent / "backend"
 if _backend_path.exists() and str(_backend_path) not in sys.path:
     sys.path.insert(0, str(_backend_path))
 
-__all__ = ["get_redis_client", "config", "get_tracer", "init_tracing"]
+__all__ = [
+    "get_redis_client",
+    "config",
+    "get_tracer",
+    "init_tracing",
+    "ServiceMessage",
+    "ServiceName",
+    "MessageType",
+    "serialize_message",
+    "deserialize_message",
+    "create_reply",
+]
 
 # Lazy import map — module attribute → (submodule, name)
 _LAZY_IMPORTS = {
@@ -24,6 +35,12 @@ _LAZY_IMPORTS = {
     "config": (".ssot_config", "config"),
     "get_tracer": (".tracing", "get_tracer"),
     "init_tracing": (".tracing", "init_tracing"),
+    "ServiceMessage": (".models.service_message", "ServiceMessage"),
+    "ServiceName": (".models.service_message", "ServiceName"),
+    "MessageType": (".models.service_message", "MessageType"),
+    "serialize_message": (".models.service_message", "serialize_message"),
+    "deserialize_message": (".models.service_message", "deserialize_message"),
+    "create_reply": (".models.service_message", "create_reply"),
 }
 
 

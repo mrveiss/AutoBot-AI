@@ -14,6 +14,18 @@ export class ChatController {
   private retryAttempts = 3
   private retryDelay = 1000
 
+  // Issue #1312: Streaming update throttle state
+  private _pendingStreamUpdate: {
+    messageId: string
+    content: string
+    type: any
+    metadata: any
+  } | null = null
+  private _streamFlushTimer: ReturnType<typeof setTimeout> | null = null
+  private _previewThrottleTimer: ReturnType<typeof setTimeout> | null = null
+  private static readonly STREAM_FLUSH_INTERVAL_MS = 80
+  private static readonly PREVIEW_THROTTLE_MS = 200
+
   constructor() {
     // Stores will be initialized lazily when needed
   }
@@ -179,6 +191,52 @@ export class ChatController {
     return `Failed to send message: ${error.message || 'Unknown error'}`
   }
 
+  /**
+   * Issue #1312: Flush pending streaming update to the store.
+   * Batches rapid chunk updates into a single store mutation per flush interval.
+   */
+  private flushStreamUpdate(): void {
+    if (!this._pendingStreamUpdate) return
+    const { messageId, content, type, metadata } = this._pendingStreamUpdate
+    this._pendingStreamUpdate = null
+    this.chatStore.updateMessage(messageId, { content, type, metadata })
+  }
+
+  /**
+   * Issue #1312: Schedule a throttled streaming update.
+   * Instead of mutating the store on every chunk, we buffer the latest state
+   * and flush at ~12fps (80ms) which is perceptually smooth for text.
+   */
+  private scheduleStreamUpdate(
+    messageId: string,
+    content: string,
+    type: any,
+    metadata: any
+  ): void {
+    this._pendingStreamUpdate = { messageId, content, type, metadata }
+    if (!this._streamFlushTimer) {
+      this._streamFlushTimer = setTimeout(() => {
+        this._streamFlushTimer = null
+        this.flushStreamUpdate()
+      }, ChatController.STREAM_FLUSH_INTERVAL_MS)
+    }
+  }
+
+  /**
+   * Issue #1312: Throttled preview extraction.
+   * Runs at most every 200ms instead of per-chunk.
+   */
+  private schedulePreviewUpdate(content: string, messageType?: string): void {
+    if (this._previewThrottleTimer) return // Already scheduled
+    this._previewThrottleTimer = setTimeout(() => {
+      this._previewThrottleTimer = null
+      const preview = this.extractStreamingPreview(content, messageType)
+      if (preview) {
+        this.chatStore.setStreamingPreview(preview)
+      }
+    }, ChatController.PREVIEW_THROTTLE_MS)
+  }
+
   private async handleStreamingResponse(response: Response): Promise<void> {
     const reader = response.body?.getReader()
     if (!reader) {
@@ -262,6 +320,11 @@ export class ChatController {
                 continue
               }
 
+              // Map backend type to frontend type (must be before addMessage to set type immediately,
+              // preventing the 80ms throttle window where the message appears as 'response' then
+              // disappears when the real type is applied — issue #1364)
+              const messageType = this.mapMessageType(data.type, data.metadata?.message_type)
+
               // Agent Zero Pattern: Use backend message_id for stable identity
               const backendMessageId = data.metadata?.message_id || data.id
               let frontendMessageId: string
@@ -274,20 +337,18 @@ export class ChatController {
                 // Prevents duplicate messages when chunks lack message_id
                 frontendMessageId = fallbackMessageId
               } else {
-                // New message - create it
+                // New message - create it with type set immediately to prevent filter flicker (#1364)
                 const sender = data.type === 'terminal_output' ? 'system' : 'assistant'
                 frontendMessageId = this.chatStore.addMessage({
                   content: '',
-                  sender
+                  sender,
+                  type: messageType
                 })
                 if (backendMessageId) {
                   messageIdMap.set(backendMessageId, frontendMessageId)
                 }
                 fallbackMessageId = frontendMessageId
               }
-
-              // Map backend type to frontend type
-              const messageType = this.mapMessageType(data.type, data.metadata?.message_type)
 
               // Handle special message types
               if (data.type === 'command_approval_request') {
@@ -308,20 +369,18 @@ export class ChatController {
               }
 
               // Agent Zero Pattern: Backend sends CUMULATIVE content - just replace
-              // No local accumulation needed - content is already complete in each update
-              this.chatStore.updateMessage(frontendMessageId, {
-                content: data.content,
-                type: messageType,
-                metadata: data.metadata || {}
-              })
+              // Issue #1312: Throttle store updates to ~12fps instead of per-chunk
+              // This reduces 200+ re-renders to ~20 per streaming response
+              this.scheduleStreamUpdate(
+                frontendMessageId,
+                data.content,
+                messageType,
+                data.metadata || {}
+              )
 
-              // Issue #691: Update streaming preview with actual content for real-time feedback
-              // Extract meaningful preview text from the streaming content
+              // Issue #1312: Throttle preview extraction to max every 200ms
               if (data.content && this.chatStore.isTyping) {
-                const preview = this.extractStreamingPreview(data.content, messageType)
-                if (preview) {
-                  this.chatStore.setStreamingPreview(preview)
-                }
+                this.schedulePreviewUpdate(data.content, messageType)
               }
 
             } catch (e) {
@@ -331,18 +390,32 @@ export class ChatController {
         }
       }
 
-      // Finalize all messages
-      for (const frontendId of messageIdMap.values()) {
-        const msg = this.chatStore.currentSession?.messages.find(m => m.id === frontendId)
-        if (msg && msg.content?.trim()) {
-          this.chatStore.updateMessage(frontendId, { status: 'sent' })
-        }
+      // Issue #1312: Flush any remaining buffered update before finalization
+      if (this._streamFlushTimer) {
+        clearTimeout(this._streamFlushTimer)
+        this._streamFlushTimer = null
+      }
+      this.flushStreamUpdate()
+      if (this._previewThrottleTimer) {
+        clearTimeout(this._previewThrottleTimer)
+        this._previewThrottleTimer = null
       }
 
-      // Clean up empty messages
+      // Issue #1302: Finalize all messages and clean up truly empty ones
+      // Check displayable content (after stripping internal tags) not raw content
+      // to prevent deleting messages that have visible text between tags
       for (const frontendId of messageIdMap.values()) {
         const msg = this.chatStore.currentSession?.messages.find(m => m.id === frontendId)
-        if (msg && !msg.content?.trim()) {
+        if (!msg) continue
+
+        const displayContent = (msg.content || '')
+          .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
+          .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?/gi, '')
+          .trim()
+
+        if (displayContent) {
+          this.chatStore.updateMessage(frontendId, { status: 'sent' })
+        } else {
           this.chatStore.deleteMessage(frontendId)
         }
       }
@@ -373,8 +446,10 @@ export class ChatController {
     if (!content || content.length < 3) return ''
 
     // Strip internal tags that shouldn't be shown to users
+    // Handles complete tags and partial/truncated tags from streaming (e.g. [/THO)
     let preview = content
       .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
+      .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?$/gi, '')
       .replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
       .replace(/<TOOL_CALL[^>]*>.*?<\/TOOL_CALL>/gs, '')
       .trim()
@@ -549,18 +624,28 @@ export class ChatController {
       // Update session with loaded messages
       const session = this.chatStore.sessions.find(s => s.id === sessionId)
       if (session) {
-        // CRITICAL FIX: Only update if message count or last message ID changed
-        // This prevents UI flickering during polling when nothing changed
-        const lastExisting = session.messages[session.messages.length - 1]
-        const lastNew = messages[messages.length - 1]
-        const hasChanges = session.messages.length !== messages.length ||
-          lastExisting?.id !== lastNew?.id
-
-        if (hasChanges) {
-          logger.debug(`Updating messages (${session.messages.length} → ${messages.length})`)
-          session.messages = messages as any
+        // Issue #1371: Never replace local messages with empty/fewer backend
+        // messages. The poller can get [] on transient API errors or stale
+        // data before the backend has persisted the streaming response.
+        if (messages.length === 0 && session.messages.length > 0) {
+          logger.debug('Skipping update - backend returned empty but local has messages')
+        } else if (messages.length < session.messages.length) {
+          logger.debug(
+            `Skipping update - backend has fewer messages (${messages.length}) than local (${session.messages.length})`
+          )
         } else {
-          logger.debug(`No message changes, skipping update`)
+          // Only update if message count or last message content changed
+          const lastExisting = session.messages[session.messages.length - 1]
+          const lastNew = messages[messages.length - 1]
+          const hasChanges = session.messages.length !== messages.length ||
+            lastExisting?.content !== lastNew?.content
+
+          if (hasChanges) {
+            logger.debug(`Updating messages (${session.messages.length} → ${messages.length})`)
+            session.messages = messages as any
+          } else {
+            logger.debug(`No message changes, skipping update`)
+          }
         }
 
         // Only switch session if not already current

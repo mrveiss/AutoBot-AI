@@ -17,7 +17,7 @@
           <span class="operation-type">{{ OPERATION_TYPE_LABELS[operation.operation_type] }}</span>
         </div>
       </div>
-      <button class="close-btn" @click="emit('close')" title="Close">
+      <button class="close-btn" @click="emit('close')" :title="$t('operations.detail.close')">
         <i class="fas fa-times"></i>
       </button>
     </div>
@@ -29,13 +29,13 @@
         {{ STATUS_CONFIG[operation.status].label }}
       </span>
       <span class="priority-badge" :class="`priority-${operation.priority}`">
-        {{ PRIORITY_CONFIG[operation.priority].label }} Priority
+        {{ $t('operations.detail.priorityLabel', { priority: PRIORITY_CONFIG[operation.priority].label }) }}
       </span>
     </div>
 
     <!-- Progress -->
     <div class="progress-section">
-      <h4 class="section-title">Progress</h4>
+      <h4 class="section-title">{{ $t('operations.detail.progressTitle') }}</h4>
       <OperationProgress
         :progress="operation.progress"
         :status="operation.status"
@@ -48,28 +48,28 @@
 
     <!-- Description -->
     <div class="description-section" v-if="operation.description">
-      <h4 class="section-title">Description</h4>
+      <h4 class="section-title">{{ $t('operations.detail.descriptionTitle') }}</h4>
       <p class="description-text">{{ operation.description }}</p>
     </div>
 
     <!-- Timing info -->
     <div class="timing-section">
-      <h4 class="section-title">Timing</h4>
+      <h4 class="section-title">{{ $t('operations.detail.timingTitle') }}</h4>
       <div class="timing-grid">
         <div class="timing-item">
-          <span class="timing-label">Created</span>
+          <span class="timing-label">{{ $t('operations.detail.created') }}</span>
           <span class="timing-value">{{ formatDateTime(operation.created_at) }}</span>
         </div>
         <div class="timing-item" v-if="operation.started_at">
-          <span class="timing-label">Started</span>
+          <span class="timing-label">{{ $t('operations.detail.started') }}</span>
           <span class="timing-value">{{ formatDateTime(operation.started_at) }}</span>
         </div>
         <div class="timing-item" v-if="operation.completed_at">
-          <span class="timing-label">Completed</span>
+          <span class="timing-label">{{ $t('operations.detail.completed') }}</span>
           <span class="timing-value">{{ formatDateTime(operation.completed_at) }}</span>
         </div>
         <div class="timing-item">
-          <span class="timing-label">Duration</span>
+          <span class="timing-label">{{ $t('operations.detail.duration') }}</span>
           <span class="timing-value">{{ formatDuration(operation.started_at, operation.completed_at) }}</span>
         </div>
       </div>
@@ -79,18 +79,18 @@
     <div class="error-section" v-if="operation.error_message">
       <h4 class="section-title error-title">
         <i class="fas fa-exclamation-triangle"></i>
-        Error
+        {{ $t('operations.detail.errorTitle') }}
       </h4>
       <div class="error-message">{{ operation.error_message }}</div>
     </div>
 
     <!-- Checkpoints info -->
     <div class="checkpoints-section" v-if="operation.checkpoints_count > 0">
-      <h4 class="section-title">Checkpoints</h4>
+      <h4 class="section-title">{{ $t('operations.detail.checkpointsTitle') }}</h4>
       <div class="checkpoints-info">
-        <span class="checkpoints-count">{{ operation.checkpoints_count }} checkpoints saved</span>
+        <span class="checkpoints-count">{{ $t('operations.detail.checkpointsSaved', { count: operation.checkpoints_count }) }}</span>
         <span class="can-resume" v-if="operation.can_resume">
-          <i class="fas fa-redo"></i> Can be resumed
+          <i class="fas fa-redo"></i> {{ $t('operations.detail.canBeResumed') }}
         </span>
       </div>
     </div>
@@ -99,7 +99,7 @@
     <div class="context-section" v-if="hasContext">
       <button class="context-toggle" @click="showContext = !showContext">
         <i :class="showContext ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-        <h4 class="section-title">Context Details</h4>
+        <h4 class="section-title">{{ $t('operations.detail.contextDetails') }}</h4>
       </button>
       <div class="context-content" v-if="showContext">
         <pre class="context-json">{{ JSON.stringify(operation.context, null, 2) }}</pre>
@@ -115,7 +115,7 @@
         :disabled="actionLoading"
       >
         <i class="fas fa-stop-circle"></i>
-        Cancel Operation
+        {{ $t('operations.detail.cancelOperation') }}
       </button>
       <button
         class="action-btn resume-btn"
@@ -124,7 +124,7 @@
         :disabled="actionLoading"
       >
         <i class="fas fa-play-circle"></i>
-        Resume Operation
+        {{ $t('operations.detail.resumeOperation') }}
       </button>
       <button
         class="action-btn refresh-btn"
@@ -132,14 +132,14 @@
         :disabled="actionLoading"
       >
         <i class="fas fa-sync-alt" :class="{ 'fa-spin': actionLoading }"></i>
-        Refresh
+        {{ $t('operations.detail.refresh') }}
       </button>
     </div>
 
     <!-- Operation ID footer -->
     <div class="detail-footer">
-      <span class="operation-id">ID: {{ operation.operation_id }}</span>
-      <button class="copy-id-btn" @click="copyId" :title="copied ? 'Copied!' : 'Copy ID'">
+      <span class="operation-id">{{ $t('operations.detail.idLabel') }} {{ operation.operation_id }}</span>
+      <button class="copy-id-btn" @click="copyId" :title="copied ? $t('operations.detail.copied') : $t('operations.detail.copyId')">
         <i :class="copied ? 'fas fa-check' : 'fas fa-copy'"></i>
       </button>
     </div>
@@ -148,6 +148,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Operation } from '@/types/operations'
 import {
   STATUS_CONFIG,
@@ -165,6 +166,7 @@ interface Props {
   operation: Operation
 }
 
+const { t } = useI18n()
 const props = defineProps<Props>()
 
 const emit = defineEmits<{

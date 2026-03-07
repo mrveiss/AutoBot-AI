@@ -18,8 +18,10 @@ import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import BaseButton from '@/components/base/BaseButton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { createLogger } from '@/utils/debugUtils'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('BulkEditModal')
+const { t } = useI18n()
 
 // =============================================================================
 // Type Definitions
@@ -75,13 +77,13 @@ const isOpen = computed({
 const modalTitle = computed(() => {
   switch (props.mode) {
     case 'category':
-      return 'Change Category'
+      return t('knowledge.modals.bulkEdit.changeCategory')
     case 'tags-add':
-      return 'Add Tags'
+      return t('knowledge.modals.bulkEdit.addTags')
     case 'tags-remove':
-      return 'Remove Tags'
+      return t('knowledge.modals.bulkEdit.removeTags')
     default:
-      return 'Bulk Edit'
+      return t('knowledge.modals.bulkEdit.title')
   }
 })
 
@@ -89,11 +91,11 @@ const modalDescription = computed(() => {
   const count = props.selectedEntries.length
   switch (props.mode) {
     case 'category':
-      return `Change the category for ${count} selected ${count === 1 ? 'entry' : 'entries'}`
+      return t('knowledge.modals.bulkEdit.changeCategoryDesc', { count })
     case 'tags-add':
-      return `Add tags to ${count} selected ${count === 1 ? 'entry' : 'entries'}`
+      return t('knowledge.modals.bulkEdit.addTagsDesc', { count })
     case 'tags-remove':
-      return `Remove tags from ${count} selected ${count === 1 ? 'entry' : 'entries'}`
+      return t('knowledge.modals.bulkEdit.removeTagsDesc', { count })
     default:
       return ''
   }
@@ -102,13 +104,13 @@ const modalDescription = computed(() => {
 const confirmButtonText = computed(() => {
   switch (props.mode) {
     case 'category':
-      return 'Change Category'
+      return t('knowledge.modals.bulkEdit.changeCategory')
     case 'tags-add':
-      return 'Add Tags'
+      return t('knowledge.modals.bulkEdit.addTags')
     case 'tags-remove':
-      return 'Remove Tags'
+      return t('knowledge.modals.bulkEdit.removeTags')
     default:
-      return 'Apply'
+      return t('knowledge.modals.bulkEdit.apply')
   }
 })
 
@@ -224,7 +226,7 @@ watch(() => props.modelValue, (newValue) => {
       <div class="selected-preview">
         <div class="preview-header">
           <i class="fas fa-list-check"></i>
-          <span>Selected Entries ({{ selectedEntries.length }})</span>
+          <span>{{ $t('knowledge.modals.bulkEdit.selectedEntries', { count: selectedEntries.length }) }}</span>
         </div>
         <div class="preview-list">
           <div
@@ -232,11 +234,11 @@ watch(() => props.modelValue, (newValue) => {
             :key="entry.id"
             class="preview-item"
           >
-            <span class="preview-title">{{ entry.title || 'Untitled' }}</span>
+            <span class="preview-title">{{ entry.title || $t('knowledge.modals.bulkEdit.untitled') }}</span>
             <span class="preview-category">{{ entry.category }}</span>
           </div>
           <div v-if="selectedEntries.length > 5" class="preview-more">
-            +{{ selectedEntries.length - 5 }} more entries
+            {{ $t('knowledge.modals.bulkEdit.moreEntries', { count: selectedEntries.length - 5 }) }}
           </div>
         </div>
       </div>
@@ -245,10 +247,10 @@ watch(() => props.modelValue, (newValue) => {
       <div v-if="mode === 'category'" class="form-section">
         <label class="form-label">
           <i class="fas fa-folder"></i>
-          New Category
+          {{ $t('knowledge.modals.bulkEdit.newCategory') }}
         </label>
         <select v-model="selectedCategory" class="form-select">
-          <option value="">Select a category...</option>
+          <option value="">{{ $t('knowledge.modals.bulkEdit.selectCategory') }}</option>
           <option
             v-for="cat in store.categories"
             :key="cat.id"
@@ -258,7 +260,7 @@ watch(() => props.modelValue, (newValue) => {
           </option>
         </select>
         <p v-if="currentCategories.length > 1" class="form-hint">
-          Currently: {{ currentCategories.join(', ') }}
+          {{ $t('knowledge.modals.bulkEdit.currently') }} {{ currentCategories.join(', ') }}
         </p>
       </div>
 
@@ -266,21 +268,21 @@ watch(() => props.modelValue, (newValue) => {
       <div v-if="mode === 'tags-add'" class="form-section">
         <label class="form-label">
           <i class="fas fa-tags"></i>
-          Tags to Add
+          {{ $t('knowledge.modals.bulkEdit.tagsToAdd') }}
         </label>
         <input
           v-model="tagsInput"
           type="text"
           class="form-input"
-          placeholder="Enter tags separated by commas..."
+          :placeholder="$t('knowledge.modals.bulkEdit.tagsPlaceholder')"
         />
         <p class="form-hint">
-          Example: documentation, api, important
+          {{ $t('knowledge.modals.bulkEdit.tagsExample') }}
         </p>
 
         <!-- Tag Preview -->
         <div v-if="parsedTags.length > 0" class="tags-preview">
-          <span class="preview-label">Will add:</span>
+          <span class="preview-label">{{ $t('knowledge.modals.bulkEdit.willAdd') }}</span>
           <div class="tags-list">
             <span
               v-for="tag in parsedTags"
@@ -298,12 +300,12 @@ watch(() => props.modelValue, (newValue) => {
       <div v-if="mode === 'tags-remove'" class="form-section">
         <label class="form-label">
           <i class="fas fa-tag"></i>
-          Tags to Remove
+          {{ $t('knowledge.modals.bulkEdit.tagsToRemove') }}
         </label>
 
         <!-- Quick select from existing tags -->
         <div v-if="allTags.length > 0" class="existing-tags">
-          <span class="existing-label">Click to select:</span>
+          <span class="existing-label">{{ $t('knowledge.modals.bulkEdit.clickToSelect') }}</span>
           <div class="tags-list clickable">
             <button
               v-for="tag in allTags"
@@ -314,7 +316,7 @@ watch(() => props.modelValue, (newValue) => {
               @click="selectTagToRemove(tag)"
             >
               {{ tag }}
-              <span v-if="commonTags.includes(tag)" class="common-indicator" title="Common to all selected">
+              <span v-if="commonTags.includes(tag)" class="common-indicator" :title="$t('knowledge.modals.bulkEdit.commonToAll')">
                 <i class="fas fa-check-double"></i>
               </span>
             </button>
@@ -325,12 +327,12 @@ watch(() => props.modelValue, (newValue) => {
           v-model="tagsInput"
           type="text"
           class="form-input"
-          placeholder="Or type tags to remove..."
+          :placeholder="$t('knowledge.modals.bulkEdit.typeTagsToRemove')"
         />
 
         <!-- Tag Preview -->
         <div v-if="parsedTags.length > 0" class="tags-preview">
-          <span class="preview-label">Will remove:</span>
+          <span class="preview-label">{{ $t('knowledge.modals.bulkEdit.willRemove') }}</span>
           <div class="tags-list">
             <span
               v-for="tag in parsedTags"
@@ -347,7 +349,7 @@ watch(() => props.modelValue, (newValue) => {
 
     <template #actions>
       <BaseButton variant="secondary" @click="closeModal">
-        Cancel
+        {{ $t('knowledge.modals.bulkEdit.cancel') }}
       </BaseButton>
       <BaseButton
         variant="primary"

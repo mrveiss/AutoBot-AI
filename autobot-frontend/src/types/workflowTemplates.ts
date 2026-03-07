@@ -7,7 +7,7 @@
  * Issue #778 - Workflow Templates Enhancement
  */
 
-export type TemplateCategory = 'security' | 'research' | 'development' | 'system_admin' | 'analysis'
+export type TemplateCategory = 'security' | 'research' | 'development' | 'system_admin' | 'analysis' | 'community'
 export type TaskComplexity = 'simple' | 'moderate' | 'complex' | 'research' | 'security_scan' | 'install'
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
 
@@ -21,6 +21,12 @@ export interface TemplateStep {
   agent_type?: string
 }
 
+export interface SecretRequirement {
+  description: string
+  required: boolean
+  scope: string
+}
+
 export interface WorkflowTemplateSummary {
   id: string
   name: string
@@ -31,6 +37,9 @@ export interface WorkflowTemplateSummary {
   agents_involved: string[]
   tags: string[]
   icon?: string
+  step_count?: number
+  approval_steps?: number
+  required_secrets?: Record<string, SecretRequirement>
 }
 
 export interface WorkflowTemplateDetail extends WorkflowTemplateSummary {

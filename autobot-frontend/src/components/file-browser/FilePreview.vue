@@ -13,7 +13,7 @@
         <button
           class="close-btn"
           @click="$emit('close')"
-          aria-label="Close preview"
+          :aria-label="$t('fileBrowser.preview.closeAriaLabel')"
         >
           &times;
         </button>
@@ -27,7 +27,7 @@
             :src="previewFile.url"
             class="preview-frame"
             sandbox="allow-same-origin allow-scripts"
-            title="HTML Preview"
+            :title="$t('fileBrowser.preview.htmlPreview')"
           ></iframe>
         </div>
 
@@ -55,30 +55,30 @@
           <iframe
             :src="previewFile.url"
             class="preview-frame"
-            title="PDF Preview"
+            :title="$t('fileBrowser.preview.pdfPreview')"
           ></iframe>
         </div>
 
         <!-- Other file types -->
         <div v-else class="file-info">
           <div class="info-item">
-            <strong>File:</strong> {{ previewFile.name }}
+            <strong>{{ $t('fileBrowser.preview.file') }}</strong> {{ previewFile.name }}
           </div>
           <div class="info-item">
-            <strong>Type:</strong> {{ previewFile.fileType }}
+            <strong>{{ $t('fileBrowser.preview.type') }}</strong> {{ previewFile.fileType }}
           </div>
           <div class="info-item">
-            <strong>Size:</strong> {{ formatSize(previewFile.size) }}
+            <strong>{{ $t('fileBrowser.preview.size') }}</strong> {{ formatSize(previewFile.size) }}
           </div>
           <p class="no-preview-message">
-            This file type cannot be previewed directly.
+            {{ $t('fileBrowser.preview.noPreview') }}
           </p>
           <button
             @click="downloadFile"
             class="download-btn"
           >
             <i class="fas fa-download"></i>
-            Download File
+            {{ $t('fileBrowser.preview.downloadFile') }}
           </button>
         </div>
       </div>

@@ -9,7 +9,11 @@
  */
 
 import { createRouter, createWebHistory } from 'vue-router'
+import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+
+// One-time wizard completion check (Issue #1294)
+let wizardCheckDone = false
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -203,6 +207,13 @@ const router = createRouter({
           name: 'settings-admin-personality',
           component: () => import('@/views/settings/admin/PersonalitySettings.vue'),
           meta: { title: 'Personality', parent: 'settings', admin: true }
+        },
+        {
+          // Issue #1417: System Secrets Management
+          path: 'admin/secrets',
+          name: 'settings-admin-secrets',
+          component: () => import('@/views/settings/admin/SecretsSettings.vue'),
+          meta: { title: 'System Secrets', parent: 'settings', admin: true }
         },
         {
           path: 'admin/log-forwarding',
@@ -479,27 +490,29 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
-  // Issue #1294: Redirect to setup wizard on first run
-  if (to.name !== 'setup') {
-    try {
-      const res = await fetch('/api/setup/status')
-      if (res.ok) {
-        const status = await res.json()
-        if (!status.completed) {
-          next({ name: 'setup' })
-          return
-        }
-      }
-    } catch {
-      // Setup endpoint unavailable — skip redirect
-    }
-  }
-
   // Check admin routes require admin role (Issue #729)
   if (to.meta.admin && !authStore.isAdmin) {
     // Redirect non-admin users to fleet overview
     next({ name: 'fleet' })
     return
+  }
+
+  // First-run wizard redirect (Issue #1294)
+  // Check once per session if the setup wizard has been completed
+  if (!wizardCheckDone && to.name !== 'setup') {
+    wizardCheckDone = true
+    try {
+      const token = localStorage.getItem('slm_access_token')
+      const { data } = await axios.get('/api/setup/status', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!data.completed) {
+        next({ name: 'setup' })
+        return
+      }
+    } catch {
+      // If setup endpoint fails, skip redirect (endpoint may not exist)
+    }
   }
 
   next()

@@ -8,9 +8,11 @@
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSessionActivityLogger, type SecretUsageAction } from '@/composables/useSessionActivityLogger'
 import { useChatStore } from '@/stores/useChatStore'
 
+const { t } = useI18n()
 const chatStore = useChatStore()
 const { getActivities } = useSessionActivityLogger()
 
@@ -111,9 +113,9 @@ const formatTime = (date: Date): string => {
   const minutes = Math.floor(diff / 60000)
   const hours = Math.floor(minutes / 60)
 
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes}m ago`
-  if (hours < 24) return `${hours}h ago`
+  if (minutes < 1) return t('secrets.auditLog.justNow')
+  if (minutes < 60) return t('secrets.auditLog.minutesAgo', { minutes })
+  if (hours < 24) return t('secrets.auditLog.hoursAgo', { hours })
   return date.toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
@@ -138,7 +140,7 @@ const getActionStyle = (action: SecretUsageAction): { color: string; icon: strin
     <div class="px-4 py-3 border-b border-gray-700">
       <h3 class="text-lg font-semibold text-gray-200 flex items-center gap-2">
         <i class="bi bi-clipboard-data" />
-        Secret Audit Log
+        {{ $t('secrets.auditLog.title') }}
       </h3>
 
       <!-- Filters -->
@@ -147,17 +149,17 @@ const getActionStyle = (action: SecretUsageAction): { color: string; icon: strin
           v-model="filterAction"
           class="px-3 py-1.5 text-xs bg-gray-700 border border-gray-600 rounded text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="all">All Actions</option>
-          <option value="access">Access</option>
-          <option value="inject">Inject</option>
-          <option value="copy">Copy</option>
-          <option value="reveal">Reveal</option>
+          <option value="all">{{ $t('secrets.auditLog.allActions') }}</option>
+          <option value="access">{{ $t('secrets.auditLog.access') }}</option>
+          <option value="inject">{{ $t('secrets.auditLog.inject') }}</option>
+          <option value="copy">{{ $t('secrets.auditLog.copy') }}</option>
+          <option value="reveal">{{ $t('secrets.auditLog.reveal') }}</option>
         </select>
         <select
           v-model="filterUser"
           class="px-3 py-1.5 text-xs bg-gray-700 border border-gray-600 rounded text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
-          <option value="all">All Users</option>
+          <option value="all">{{ $t('secrets.auditLog.allUsers') }}</option>
           <option v-for="user in uniqueUsers" :key="user.id" :value="user.id">
             {{ user.name }}
           </option>
@@ -191,7 +193,7 @@ const getActionStyle = (action: SecretUsageAction): { color: string; icon: strin
                   {{ entry.secretName }}
                 </div>
                 <div class="text-xs text-gray-400">
-                  <span class="capitalize">{{ entry.action }}</span> by
+                  <span class="capitalize">{{ entry.action }}</span> {{ $t('secrets.auditLog.by') }}
                   <span class="font-medium">{{ entry.username }}</span>
                 </div>
               </div>
@@ -203,7 +205,7 @@ const getActionStyle = (action: SecretUsageAction): { color: string; icon: strin
             <!-- Metadata -->
             <div v-if="entry.metadata" class="text-xs text-gray-500 mt-1">
               <details class="cursor-pointer">
-                <summary class="hover:text-gray-400">Details</summary>
+                <summary class="hover:text-gray-400">{{ $t('secrets.auditLog.details') }}</summary>
                 <pre class="mt-1 p-2 bg-gray-800 rounded text-xs overflow-x-auto">{{ JSON.stringify(entry.metadata, null, 2) }}</pre>
               </details>
             </div>
@@ -217,9 +219,9 @@ const getActionStyle = (action: SecretUsageAction): { color: string; icon: strin
         class="flex flex-col items-center justify-center py-12 text-gray-500"
       >
         <i class="bi bi-clipboard-data text-4xl mb-3" />
-        <div class="text-sm font-medium mb-1">No audit entries</div>
+        <div class="text-sm font-medium mb-1">{{ $t('secrets.auditLog.noEntries') }}</div>
         <div class="text-xs text-gray-600">
-          Secret usage will be logged here
+          {{ $t('secrets.auditLog.noEntriesHint') }}
         </div>
       </div>
     </div>

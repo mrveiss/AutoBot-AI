@@ -182,6 +182,10 @@ class ActiveWorkflow:
 
     # === Issue #372: Feature Envy Reduction Methods ===
 
+    # Issue #1380: Current workflow phase from state machine
+    phase: Optional[str] = None
+    active_service: Optional[str] = None
+
     def to_status_dict(self) -> Metadata:
         """Convert workflow to status dictionary (Issue #372 - reduces feature envy)."""
         return {
@@ -194,6 +198,8 @@ class ActiveWorkflow:
             "is_paused": self.is_paused,
             "is_cancelled": self.is_cancelled,
             "automation_mode": self.automation_mode.value,
+            "phase": self.phase,
+            "active_service": self.active_service,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat()

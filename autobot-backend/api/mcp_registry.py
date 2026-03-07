@@ -37,8 +37,9 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 
 import aiohttp
+from auth_middleware import check_admin_permission
 from constants.network_constants import NetworkConstants
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from type_defs.common import Metadata
 
@@ -46,7 +47,11 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="", tags=["mcp", "registry"])
+router = APIRouter(
+    prefix="",
+    tags=["mcp", "registry"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 # ============================================================================

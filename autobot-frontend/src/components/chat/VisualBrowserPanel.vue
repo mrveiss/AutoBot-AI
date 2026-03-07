@@ -12,7 +12,9 @@
  */
 
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
+import InteractiveScreenshot from '@/components/browser/InteractiveScreenshot.vue'
 import GUIAutomationControls from '@/components/vision/GUIAutomationControls.vue'
 import {
   visionMultimodalApiClient,
@@ -20,6 +22,7 @@ import {
 } from '@/utils/VisionMultimodalApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
+const { t } = useI18n()
 const logger = createLogger('VisualBrowserPanel')
 
 const loading = ref(false)
@@ -30,6 +33,8 @@ const currentUrl = ref<string | null>(null)
 const pageTitle = ref<string | null>(null)
 const isConnected = ref(false)
 const statusChecked = ref(false)
+const viewportWidth = ref(1280)
+const viewportHeight = ref(720)
 
 // GUI Automation panel state (#1242)
 const showAutomation = ref(false)
@@ -89,10 +94,12 @@ async function navigate(): Promise<void> {
     currentUrl.value = (nav.url as string) || targetUrl
     pageTitle.value = (nav.title as string) || null
     isConnected.value = true
-    await captureScreenshot()
+    if (nav.screenshot) screenshot.value = nav.screenshot as string
+    if (nav.viewportWidth) viewportWidth.value = nav.viewportWidth as number
+    if (nav.viewportHeight) viewportHeight.value = nav.viewportHeight as number
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } }; message?: string }
-    error.value = err?.response?.data?.detail ?? (e instanceof Error ? e.message : 'Navigation failed')
+    error.value = err?.response?.data?.detail ?? (e instanceof Error ? e.message : t('chat.visualBrowser.navigationFailed'))
     logger.error('Navigation failed:', e)
   } finally {
     loading.value = false
@@ -116,9 +123,9 @@ async function goBack(): Promise<void> {
     const nav = await ApiClient.post('/api/playwright/back', {}) as Record<string, unknown>
     if (nav.url) { currentUrl.value = nav.url as string; url.value = nav.url as string }
     if (nav.title) pageTitle.value = nav.title as string
-    await captureScreenshot()
+    if (nav.screenshot) screenshot.value = nav.screenshot as string
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Back navigation failed'
+    error.value = e instanceof Error ? e.message : t('chat.visualBrowser.backFailed')
   } finally {
     loading.value = false
   }
@@ -132,9 +139,9 @@ async function goForward(): Promise<void> {
     const nav = await ApiClient.post('/api/playwright/forward', {}) as Record<string, unknown>
     if (nav.url) { currentUrl.value = nav.url as string; url.value = nav.url as string }
     if (nav.title) pageTitle.value = nav.title as string
-    await captureScreenshot()
+    if (nav.screenshot) screenshot.value = nav.screenshot as string
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Forward navigation failed'
+    error.value = e instanceof Error ? e.message : t('chat.visualBrowser.forwardFailed')
   } finally {
     loading.value = false
   }
@@ -145,10 +152,28 @@ async function reload(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    await ApiClient.post('/api/playwright/reload', {})
-    await captureScreenshot()
+    const nav = await ApiClient.post('/api/playwright/reload', {}) as Record<string, unknown>
+    if (nav.screenshot) screenshot.value = nav.screenshot as string
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Reload failed'
+    error.value = e instanceof Error ? e.message : t('chat.visualBrowser.reloadFailed')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleInteract(payload: { action: string; params: Record<string, unknown> }): Promise<void> {
+  if (!isConnected.value || loading.value) return
+  loading.value = true
+  try {
+    const result = await ApiClient.post('/api/playwright/interact', {
+      action: payload.action,
+      ...payload.params,
+    }) as Record<string, unknown>
+    if (result.screenshot) screenshot.value = result.screenshot as string
+    if (result.url) { currentUrl.value = result.url as string; url.value = result.url as string }
+    if (result.title) pageTitle.value = result.title as string
+  } catch (e) {
+    logger.warn('Interaction failed:', e)
   } finally {
     loading.value = false
   }
@@ -178,7 +203,7 @@ onMounted(() => {
               'status-dot--pending': !statusChecked
             }"
           ></span>
-          <span class="status-label">{{ !statusChecked ? 'Checking...' : isConnected ? 'Connected' : 'Disconnected' }}</span>
+          <span class="status-label">{{ !statusChecked ? $t('chat.visualBrowser.checking') : isConnected ? $t('chat.visualBrowser.connected') : $t('chat.visualBrowser.disconnected') }}</span>
         </div>
 
         <span v-if="pageTitle" class="page-title">{{ pageTitle }}</span>
@@ -188,13 +213,13 @@ onMounted(() => {
       <div class="address-row">
         <!-- Back / Forward / Reload -->
         <div class="nav-controls">
-          <button @click="goBack" :disabled="!isConnected || loading" class="nav-btn" title="Back">
+          <button @click="goBack" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.back')">
             <i class="fas fa-arrow-left"></i>
           </button>
-          <button @click="goForward" :disabled="!isConnected || loading" class="nav-btn" title="Forward">
+          <button @click="goForward" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.forward')">
             <i class="fas fa-arrow-right"></i>
           </button>
-          <button @click="reload" :disabled="!isConnected || loading" class="nav-btn" title="Reload">
+          <button @click="reload" :disabled="!isConnected || loading" class="nav-btn" :title="$t('chat.visualBrowser.reload')">
             <i class="fas fa-redo" :class="{ 'fa-spin': loading }"></i>
           </button>
         </div>
@@ -207,7 +232,7 @@ onMounted(() => {
             @keydown="handleKeydown"
             type="text"
             class="url-input"
-            placeholder="Enter URL or search…"
+            :placeholder="$t('chat.visualBrowser.urlPlaceholder')"
           />
         </div>
 
@@ -218,7 +243,7 @@ onMounted(() => {
         </button>
 
         <!-- Screenshot button -->
-        <button @click="captureScreenshot" :disabled="!isConnected || loading" class="nav-btn screenshot-btn" title="Refresh Screenshot">
+        <button @click="captureScreenshot" :disabled="!isConnected || loading" class="nav-btn screenshot-btn" :title="$t('chat.visualBrowser.refreshScreenshot')">
           <i class="fas fa-camera"></i>
         </button>
 
@@ -227,7 +252,7 @@ onMounted(() => {
           @click="toggleAutomation"
           class="nav-btn automation-toggle-btn"
           :class="{ 'automation-active': showAutomation }"
-          title="Toggle GUI Automation Panel"
+          :title="$t('chat.visualBrowser.toggleAutomation')"
         >
           <i class="fas fa-robot"></i>
         </button>
@@ -248,31 +273,33 @@ onMounted(() => {
         <!-- Loading Spinner -->
         <div v-if="loading && !screenshot" class="viewport-state">
           <i class="fas fa-spinner fa-spin viewport-icon"></i>
-          <p class="viewport-msg">Loading…</p>
+          <p class="viewport-msg">{{ $t('common.loading') }}</p>
         </div>
 
         <!-- Disconnected / not started -->
         <div v-else-if="!isConnected" class="viewport-state">
           <i class="fas fa-globe viewport-icon viewport-icon--dim"></i>
-          <h3 class="viewport-title">Browser</h3>
-          <p class="viewport-msg">Enter a URL above and press Enter or click the search icon to start browsing.</p>
+          <h3 class="viewport-title">{{ $t('chat.visualBrowser.browserTitle') }}</h3>
+          <p class="viewport-msg">{{ $t('chat.visualBrowser.startBrowsing') }}</p>
         </div>
 
-        <!-- Screenshot Display -->
-        <img
+        <!-- Interactive Screenshot Display (#1416) -->
+        <InteractiveScreenshot
           v-else-if="screenshot"
-          :src="`data:image/png;base64,${screenshot}`"
-          alt="Browser screenshot"
-          class="screenshot-img"
-          :class="{ 'screenshot-img--loading': loading }"
+          :screenshot="screenshot"
+          :loading="loading"
+          :interactive="isConnected"
+          :viewport-width="viewportWidth"
+          :viewport-height="viewportHeight"
+          @interact="handleInteract"
         />
 
         <!-- Connected but no screenshot yet -->
         <div v-else class="viewport-state">
           <i class="fas fa-camera viewport-icon viewport-icon--dim"></i>
-          <p class="viewport-msg">No screenshot yet — navigate to a URL to capture the browser view.</p>
+          <p class="viewport-msg">{{ $t('chat.visualBrowser.noScreenshot') }}</p>
           <button @click="captureScreenshot" class="capture-btn">
-            <i class="fas fa-camera mr-2"></i>Capture Screenshot
+            <i class="fas fa-camera mr-2"></i>{{ $t('chat.visualBrowser.captureScreenshot') }}
           </button>
         </div>
       </div>

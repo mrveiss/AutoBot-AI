@@ -6,7 +6,7 @@
         <span>{{ connectionStatusText }}</span>
       </div>
       <div class="session-info">
-        <span>Session: {{ sessionId || 'unknown' }}</span>
+        <span>{{ $t('terminal.session') }} {{ sessionId || $t('terminal.unknown') }}</span>
       </div>
       <div class="debug-info" v-if="!canInput">
         <span style="color: orange; font-size: 12px;">
@@ -16,7 +16,7 @@
     </div>
     <div class="status-right">
       <div class="terminal-stats">
-        Lines: {{ outputLinesCount }}
+        {{ $t('terminal.lines') }} {{ outputLinesCount }}
       </div>
     </div>
   </div>
@@ -24,6 +24,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 interface Props {
   connectionStatus: string
@@ -34,14 +35,15 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const { t } = useI18n()
 
 const connectionStatusText = computed(() => {
   switch (props.connectionStatus) {
-    case 'connected': return 'Connected'
-    case 'connecting': return 'Connecting...'
-    case 'disconnected': return 'Disconnected'
-    case 'error': return 'Error'
-    default: return 'Unknown'
+    case 'connected': return t('status.connected')
+    case 'connecting': return t('status.connecting')
+    case 'disconnected': return t('status.disconnected')
+    case 'error': return t('status.error')
+    default: return t('terminal.unknown')
   }
 })
 </script>

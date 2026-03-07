@@ -1,5 +1,5 @@
 <template>
-  <ErrorBoundary fallback="Knowledge Base failed to load. Please try refreshing.">
+  <ErrorBoundary :fallback="$t('knowledge.manager.errorFallback')">
     <div class="knowledge-manager">
       <div class="tabs">
         <button
@@ -22,6 +22,9 @@
 
 <script setup lang="ts">
 import { computed, defineAsyncComponent } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 import { useKnowledgeStore } from '@/stores/useKnowledgeStore'
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 
@@ -38,14 +41,14 @@ const KnowledgeAdvanced = () => import('./KnowledgeAdvanced.vue')
 const store = useKnowledgeStore()
 
 // Tab configuration - Added Advanced tab
-const tabs = [
-  { id: 'search', label: 'Search' },
-  { id: 'categories', label: 'Categories' },
-  { id: 'upload', label: 'Upload' },
-  { id: 'manage', label: 'Manage' },
-  { id: 'stats', label: 'Statistics' },
-  { id: 'advanced', label: 'Advanced' }
-] as const
+const tabs = computed(() => [
+  { id: 'search', label: t('knowledge.manager.tabSearch') },
+  { id: 'categories', label: t('knowledge.manager.tabCategories') },
+  { id: 'upload', label: t('knowledge.manager.tabUpload') },
+  { id: 'manage', label: t('knowledge.manager.tabManage') },
+  { id: 'stats', label: t('knowledge.manager.tabStatistics') },
+  { id: 'advanced', label: t('knowledge.manager.tabAdvanced') }
+])
 
 // Component mapping - Added KnowledgeAdvanced
 const componentMap = {

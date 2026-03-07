@@ -7,28 +7,28 @@
           <svg class="header-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
           </svg>
-          Workflow Builder
+          {{ $t('workflow.views.title') }}
         </h3>
       </div>
 
       <!-- Category Navigation -->
-      <nav class="category-nav" aria-label="Workflow builder navigation">
+      <nav class="category-nav" :aria-label="$t('workflow.views.navAriaLabel')">
         <button
           class="category-item"
           :class="{ active: activeSection === 'overview' }"
           @click="activeSection = 'overview'"
           role="button"
-          aria-label="View workflow overview"
+          :aria-label="$t('workflow.views.overviewAriaLabel')"
           tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
           </svg>
-          <span>Overview</span>
+          <span>{{ $t('workflow.views.overview') }}</span>
         </button>
 
         <div class="category-divider">
-          <span>Build</span>
+          <span>{{ $t('workflow.views.build') }}</span>
         </div>
 
         <button
@@ -36,13 +36,13 @@
           :class="{ active: activeSection === 'canvas' }"
           @click="activeSection = 'canvas'"
           role="button"
-          aria-label="Open visual workflow builder"
+          :aria-label="$t('workflow.views.visualBuilderAriaLabel')"
           tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 16a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-3zM14 12a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z"></path>
           </svg>
-          <span>Visual Builder</span>
+          <span>{{ $t('workflow.views.visualBuilder') }}</span>
         </button>
 
         <button
@@ -50,13 +50,13 @@
           :class="{ active: activeSection === 'templates' }"
           @click="activeSection = 'templates'"
           role="button"
-          aria-label="Browse workflow templates"
+          :aria-label="$t('workflow.views.templatesAriaLabel')"
           tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
           </svg>
-          <span>Templates</span>
+          <span>{{ $t('workflow.views.templates') }}</span>
           <span class="count" aria-label="{{ templates.length }} templates">{{ templates.length }}</span>
         </button>
 
@@ -65,17 +65,17 @@
           :class="{ active: activeSection === 'natural-language' }"
           @click="activeSection = 'natural-language'"
           role="button"
-          aria-label="Natural language workflow builder"
+          :aria-label="$t('workflow.views.naturalLanguageAriaLabel')"
           tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
           </svg>
-          <span>Natural Language</span>
+          <span>{{ $t('workflow.views.naturalLanguage') }}</span>
         </button>
 
         <div class="category-divider">
-          <span>Execute</span>
+          <span>{{ $t('workflow.views.execute') }}</span>
         </div>
 
         <button
@@ -83,14 +83,14 @@
           :class="{ active: activeSection === 'runner' }"
           @click="activeSection = 'runner'"
           role="button"
-          aria-label="Workflow runner"
+          :aria-label="$t('workflow.views.runnerAriaLabel')"
           tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
-          <span>Runner</span>
+          <span>{{ $t('workflow.views.runner') }}</span>
           <span class="count active-badge" v-if="hasActiveWorkflows" :aria-label="`${activeWorkflows.length} active workflows`">
             {{ activeWorkflows.length }}
           </span>
@@ -104,7 +104,7 @@
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
           </svg>
-          <span>History</span>
+          <span>{{ $t('workflow.views.history') }}</span>
         </div>
 
         <button
@@ -112,18 +112,18 @@
           :class="{ active: activeSection === 'gui-automation' }"
           @click="activeSection = 'gui-automation'"
           role="button"
-          aria-label="GUI automation from screen capture"
+          :aria-label="$t('workflow.views.guiAutomationAriaLabel')"
           tabindex="0"
         >
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
           </svg>
-          <span>GUI Automation</span>
+          <span>{{ $t('workflow.views.guiAutomation') }}</span>
         </button>
 
         <div class="category-divider">
-          <span>Orchestration</span>
+          <span>{{ $t('workflow.views.orchestration') }}</span>
         </div>
 
         <div
@@ -134,7 +134,7 @@
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
           </svg>
-          <span>Visualizer</span>
+          <span>{{ $t('workflow.views.visualizer') }}</span>
         </div>
 
         <div
@@ -145,7 +145,7 @@
           <svg class="item-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
           </svg>
-          <span>Agents</span>
+          <span>{{ $t('workflow.views.agents') }}</span>
         </div>
       </nav>
 
@@ -155,7 +155,7 @@
           <svg class="refresh-icon" :class="{ 'spinning': loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
           </svg>
-          Refresh
+          {{ $t('workflow.views.refresh') }}
         </button>
       </div>
     </aside>
@@ -179,7 +179,7 @@
       <!-- Loading State -->
       <div v-if="loading && !hasData" class="loading-container">
         <LoadingSpinner size="lg" />
-        <p>Loading workflow services...</p>
+        <p>{{ $t('workflow.views.loadingServices') }}</p>
       </div>
 
       <!-- Error State -->
@@ -187,10 +187,10 @@
         <div class="error-icon">
           <i class="fas fa-exclamation-triangle"></i>
         </div>
-        <h3>Failed to Load Data</h3>
+        <h3>{{ $t('workflow.views.failedToLoad') }}</h3>
         <p>{{ error }}</p>
         <button @click="refreshAll" class="btn-primary">
-          <i class="fas fa-redo"></i> Retry
+          <i class="fas fa-redo"></i> {{ $t('workflow.views.retry') }}
         </button>
       </div>
 
@@ -204,8 +204,8 @@
                 <i class="fas fa-cogs"></i>
               </div>
               <div class="stat-info">
-                <span class="stat-value">{{ orchestrationHealthy ? 'Ready' : 'Offline' }}</span>
-                <span class="stat-label">Orchestration</span>
+                <span class="stat-value">{{ orchestrationHealthy ? $t('workflow.views.ready') : $t('workflow.views.offline') }}</span>
+                <span class="stat-label">{{ $t('workflow.views.orchestrationLabel') }}</span>
               </div>
             </div>
 
@@ -215,7 +215,7 @@
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ activeWorkflows.length }}</span>
-                <span class="stat-label">Active Workflows</span>
+                <span class="stat-label">{{ $t('workflow.views.activeWorkflows') }}</span>
               </div>
             </div>
 
@@ -225,7 +225,7 @@
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ totalAgents }}</span>
-                <span class="stat-label">Available Agents</span>
+                <span class="stat-label">{{ $t('workflow.views.availableAgents') }}</span>
               </div>
             </div>
 
@@ -235,7 +235,7 @@
               </div>
               <div class="stat-info">
                 <span class="stat-value">{{ Object.keys(executionStrategies).length }}</span>
-                <span class="stat-label">Strategies</span>
+                <span class="stat-label">{{ $t('workflow.views.strategies') }}</span>
               </div>
             </div>
           </div>
@@ -243,30 +243,30 @@
           <div class="overview-sections">
             <!-- Quick Actions Card -->
             <div class="overview-card">
-              <h4><i class="fas fa-bolt"></i> Quick Actions</h4>
+              <h4><i class="fas fa-bolt"></i> {{ $t('workflow.views.quickActions') }}</h4>
               <div class="quick-actions-grid">
                 <button class="quick-action" @click="activeSection = 'canvas'">
                   <i class="fas fa-plus-circle"></i>
-                  <span>New Workflow</span>
+                  <span>{{ $t('workflow.views.newWorkflow') }}</span>
                 </button>
                 <button class="quick-action" @click="activeSection = 'templates'">
                   <i class="fas fa-clone"></i>
-                  <span>Use Template</span>
+                  <span>{{ $t('workflow.views.useTemplate') }}</span>
                 </button>
                 <button class="quick-action" @click="activeSection = 'natural-language'">
                   <i class="fas fa-magic"></i>
-                  <span>Natural Language</span>
+                  <span>{{ $t('workflow.views.naturalLanguage') }}</span>
                 </button>
                 <button class="quick-action" @click="activeSection = 'runner'">
                   <i class="fas fa-play"></i>
-                  <span>View Runner</span>
+                  <span>{{ $t('workflow.views.viewRunner') }}</span>
                 </button>
               </div>
             </div>
 
             <!-- Strategies Card -->
             <div class="overview-card" v-if="Object.keys(executionStrategies).length > 0">
-              <h4><i class="fas fa-chess"></i> Execution Strategies</h4>
+              <h4><i class="fas fa-chess"></i> {{ $t('workflow.views.executionStrategies') }}</h4>
               <div class="strategies-grid">
                 <div
                   v-for="(strategy, key) in executionStrategies"
@@ -285,7 +285,7 @@
 
             <!-- Recent Examples Card -->
             <div class="overview-card" v-if="Object.keys(exampleWorkflows).length > 0">
-              <h4><i class="fas fa-lightbulb"></i> Example Workflows</h4>
+              <h4><i class="fas fa-lightbulb"></i> {{ $t('workflow.views.exampleWorkflows') }}</h4>
               <div class="examples-list">
                 <div
                   v-for="(example, key) in exampleWorkflows"
@@ -332,14 +332,14 @@
         <section v-if="activeSection === 'natural-language'" class="section-natural-language">
           <div class="nl-container">
             <div class="nl-header">
-              <h3><i class="fas fa-magic"></i> Create Workflow from Description</h3>
-              <p>Describe what you want to accomplish and we'll create a workflow for you.</p>
+              <h3><i class="fas fa-magic"></i> {{ $t('workflow.views.createFromDescription') }}</h3>
+              <p>{{ $t('workflow.views.createFromDescriptionHelp') }}</p>
             </div>
 
             <div class="nl-input-area">
               <textarea
                 v-model="naturalLanguageInput"
-                placeholder="Example: Update my system, install Docker, and deploy a test container"
+                :placeholder="$t('workflow.views.naturalLanguagePlaceholder')"
                 rows="4"
                 :disabled="executingWorkflow"
               ></textarea>
@@ -347,11 +347,11 @@
               <div class="nl-options">
                 <label class="checkbox-option">
                   <input type="checkbox" v-model="requireApprovalBeforeRun" />
-                  <span>Review plan before execution</span>
+                  <span>{{ $t('workflow.views.reviewPlanBeforeExecution') }}</span>
                 </label>
 
                 <select v-model="selectedStrategy" class="strategy-select">
-                  <option value="">Auto-select strategy</option>
+                  <option value="">{{ $t('workflow.views.autoSelectStrategy') }}</option>
                   <option v-for="(strategy, key) in executionStrategies" :key="key" :value="key">
                     {{ strategy.name }}
                   </option>
@@ -365,7 +365,7 @@
                   :disabled="!naturalLanguageInput.trim() || executingWorkflow"
                 >
                   <i class="fas fa-wand-magic-sparkles"></i>
-                  {{ executingWorkflow ? 'Creating...' : 'Create Workflow' }}
+                  {{ executingWorkflow ? $t('workflow.views.creating') : $t('workflow.views.createWorkflow') }}
                 </button>
               </div>
             </div>
@@ -374,14 +374,14 @@
             <div v-if="pendingApproval" class="approval-panel">
               <div class="approval-header">
                 <i class="fas fa-clipboard-check"></i>
-                <h4>Plan Awaiting Approval</h4>
+                <h4>{{ $t('workflow.views.planAwaitingApproval') }}</h4>
               </div>
 
               <div class="approval-summary">
                 <p>{{ pendingApproval.plan_summary }}</p>
                 <div class="approval-meta">
-                  <span><i class="fas fa-list-ol"></i> {{ pendingApproval.total_steps }} steps</span>
-                  <span><i class="fas fa-clock"></i> ~{{ Math.round(pendingApproval.estimated_total_duration / 60) }} min</span>
+                  <span><i class="fas fa-list-ol"></i> {{ $t('workflow.views.stepsCount', { count: pendingApproval.total_steps }) }}</span>
+                  <span><i class="fas fa-clock"></i> ~{{ Math.round(pendingApproval.estimated_total_duration / 60) }} {{ $t('workflow.views.min') }}</span>
                 </div>
               </div>
 
@@ -402,10 +402,10 @@
 
               <div class="approval-actions">
                 <button class="btn-success" @click="handleApprovePlan">
-                  <i class="fas fa-check"></i> Approve & Run
+                  <i class="fas fa-check"></i> {{ $t('workflow.views.approveAndRun') }}
                 </button>
                 <button class="btn-danger" @click="handleRejectPlan">
-                  <i class="fas fa-times"></i> Reject
+                  <i class="fas fa-times"></i> {{ $t('workflow.views.reject') }}
                 </button>
               </div>
             </div>
@@ -432,6 +432,7 @@
         <section v-if="activeSection === 'history'" class="section-history">
           <WorkflowHistory
             :workflows="activeWorkflows"
+            :completed-workflows="completedWorkflows"
             @view-workflow="handleViewWorkflow"
             @re-run="handleReRunWorkflow"
           />
@@ -460,7 +461,7 @@
         <section v-if="activeSection === 'agents'" class="section-agents">
           <div class="agents-container">
             <div class="agents-header">
-              <h3><i class="fas fa-users-cog"></i> Agent Capabilities & Performance</h3>
+              <h3><i class="fas fa-users-cog"></i> {{ $t('workflow.views.agentCapabilities') }}</h3>
               <button @click="loadAgentCapabilities" class="btn-refresh-sm" :disabled="loadingCapabilities">
                 <i class="fas fa-sync-alt" :class="{ 'fa-spin': loadingCapabilities }"></i>
               </button>
@@ -468,7 +469,7 @@
 
             <div v-if="loadingCapabilities" class="loading-inline">
               <LoadingSpinner size="sm" />
-              <span>Loading agent data...</span>
+              <span>{{ $t('workflow.views.loadingAgentData') }}</span>
             </div>
 
             <div v-else class="agents-grid">
@@ -494,7 +495,7 @@
 
                 <div class="agent-performance">
                   <div class="perf-item">
-                    <span class="label">Reliability</span>
+                    <span class="label">{{ $t('workflow.views.reliability') }}</span>
                     <div class="progress-bar">
                       <div
                         class="progress-fill"
@@ -504,7 +505,7 @@
                     <span class="value">{{ Math.round(agent.performance.reliability * 100) }}%</span>
                   </div>
                   <div class="perf-item">
-                    <span class="label">Total Tasks</span>
+                    <span class="label">{{ $t('workflow.views.totalTasks') }}</span>
                     <span class="value">{{ agent.performance.total_tasks }}</span>
                   </div>
                 </div>
@@ -519,6 +520,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import { useToast } from '@/composables/useToast';
 import {
@@ -528,6 +530,7 @@ import {
   type ExecutionStrategy,
 } from '@/composables/useWorkflowBuilder';
 import type { WorkflowTemplateSummary } from '@/types/workflowTemplates';
+import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import WorkflowCanvas from '@/components/workflow/WorkflowCanvas.vue';
 import WorkflowTemplateGallery from '@/components/workflow/WorkflowTemplateGallery.vue';
@@ -541,6 +544,7 @@ import {
 } from '@/utils/VisionMultimodalApiClient';
 
 const logger = createLogger('WorkflowBuilderView');
+const { t } = useI18n();
 const { showToast } = useToast();
 
 // Section Types
@@ -562,6 +566,7 @@ const {
   loadingCapabilities,
   error,
   activeWorkflows,
+  completedWorkflows,
   currentWorkflow,
   pendingApproval,
   orchestrationStatus,
@@ -577,6 +582,7 @@ const {
   loadAgentCapabilities,
   loadExampleWorkflows,
   loadActiveWorkflows,
+  loadCompletedWorkflows,
   createWorkflowFromTemplate,
   createWorkflowFromNaturalLanguage,
   executeApiTemplate,
@@ -598,6 +604,9 @@ const {
   connectWebSocket,
   disconnectWebSocket,
 } = useWorkflowBuilder();
+
+// Issue #1367: Fetch full template detail when summary lacks steps
+const { fetchTemplateDetail } = useWorkflowTemplates();
 
 // Local State
 const activeSection = ref<SectionType>('overview');
@@ -654,39 +663,39 @@ const statusIcon = computed(() => {
 
 const statusLabel = computed(() => {
   const labels: Record<string, string> = {
-    healthy: 'System Operational',
-    degraded: 'Partial Availability',
-    unhealthy: 'Services Offline',
+    healthy: t('workflow.views.systemOperational'),
+    degraded: t('workflow.views.partialAvailability'),
+    unhealthy: t('workflow.views.servicesOffline'),
   };
-  return labels[systemStatusClass.value] || 'Unknown';
+  return labels[systemStatusClass.value] || t('workflow.views.unknown');
 });
 
 const sectionTitle = computed(() => {
   const titles: Record<SectionType, string> = {
-    overview: 'Workflow Builder Overview',
-    canvas: 'Visual Workflow Builder',
-    templates: 'Workflow Templates',
-    'natural-language': 'Natural Language Builder',
-    runner: 'Workflow Runner',
-    history: 'Execution History',
-    orchestration: 'Orchestration Visualizer',
-    agents: 'Agent Management',
-    'gui-automation': 'GUI Automation',
+    overview: t('workflow.views.sectionTitleOverview'),
+    canvas: t('workflow.views.sectionTitleCanvas'),
+    templates: t('workflow.views.sectionTitleTemplates'),
+    'natural-language': t('workflow.views.sectionTitleNaturalLanguage'),
+    runner: t('workflow.views.sectionTitleRunner'),
+    history: t('workflow.views.sectionTitleHistory'),
+    orchestration: t('workflow.views.sectionTitleOrchestration'),
+    agents: t('workflow.views.sectionTitleAgents'),
+    'gui-automation': t('workflow.views.sectionTitleGuiAutomation'),
   };
-  return titles[activeSection.value] || 'Workflow Builder';
+  return titles[activeSection.value] || t('workflow.views.title');
 });
 
 const sectionDescription = computed(() => {
   const descriptions: Record<SectionType, string> = {
-    overview: 'Monitor workflows and system status',
-    canvas: 'Build workflows visually with drag-and-drop',
-    templates: 'Start from pre-built workflow templates',
-    'natural-language': 'Describe your task and we create the workflow',
-    runner: 'Execute and monitor active workflows',
-    history: 'View past workflow executions and results',
-    orchestration: 'Visualize multi-agent orchestration chains',
-    agents: 'View agent capabilities and performance metrics',
-    'gui-automation': 'Detect and execute GUI automation opportunities from screen capture',
+    overview: t('workflow.views.sectionDescOverview'),
+    canvas: t('workflow.views.sectionDescCanvas'),
+    templates: t('workflow.views.sectionDescTemplates'),
+    'natural-language': t('workflow.views.sectionDescNaturalLanguage'),
+    runner: t('workflow.views.sectionDescRunner'),
+    history: t('workflow.views.sectionDescHistory'),
+    orchestration: t('workflow.views.sectionDescOrchestration'),
+    agents: t('workflow.views.sectionDescAgents'),
+    'gui-automation': t('workflow.views.sectionDescGuiAutomation'),
   };
   return descriptions[activeSection.value] || '';
 });
@@ -708,6 +717,7 @@ async function refreshAll(): Promise<void> {
     loadOrchestrationStatus(),
     loadExecutionStrategies(),
     loadActiveWorkflows(),
+    loadCompletedWorkflows(),
     loadExampleWorkflows(),
   ]);
 }
@@ -803,10 +813,15 @@ async function handleSaveWorkflow(name: string, description: string): Promise<vo
 }
 
 async function handleTemplateSelected(template: WorkflowTemplate | WorkflowTemplateSummary): Promise<void> {
-  const full = template as WorkflowTemplate;
+  let full = template as WorkflowTemplate;
+  // Issue #1367: API summaries lack steps — fetch full detail
   if (!full.steps?.length) {
-    showToast('Template has no steps to load', 'warning');
-    return;
+    const detail = await fetchTemplateDetail(template.id);
+    if (!detail?.steps?.length) {
+      showToast('Template has no steps to load', 'warning');
+      return;
+    }
+    full = { ...template, steps: detail.steps } as WorkflowTemplate;
   }
   clearCanvas();
   full.steps.forEach((step, index) => {
@@ -876,9 +891,17 @@ async function handleSkipStep(workflowId: string, stepId: string): Promise<void>
   }
 }
 
-function handleViewWorkflow(workflowId: string): void {
-  // Switch to runner and load specific workflow
+async function handleViewWorkflow(workflowId: string): Promise<void> {
+  // Issue #1367: Load the selected workflow before switching to runner
   activeSection.value = 'runner';
+  const local = activeWorkflows.value.find(
+    (wf) => wf.workflow_id === workflowId,
+  );
+  if (local) {
+    currentWorkflow.value = local;
+  } else {
+    await getWorkflowStatus(workflowId);
+  }
 }
 
 async function handleReRunWorkflow(workflowId: string): Promise<void> {

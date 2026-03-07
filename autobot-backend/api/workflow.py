@@ -7,10 +7,12 @@ Handles workflow approvals, progress tracking, and coordination
 """
 
 import asyncio
+import logging
 import time
 from datetime import datetime
 from typing import Awaitable, Callable, Dict, Optional
 
+from api.workflow_state import get_workflow_state_machine
 from auth_middleware import check_admin_permission
 from event_manager import event_manager
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -22,6 +24,8 @@ from pydantic import BaseModel
 from type_defs.common import Metadata
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -366,6 +370,38 @@ _workflows_lock = asyncio.Lock()
 _approvals_lock = asyncio.Lock()
 
 
+def _workflow_state_to_summary(state) -> Dict:
+    """Convert a WorkflowState to the API summary format (#1380)."""
+    meta = state.metadata or {}
+    total = len(state.steps_completed) + len(state.steps_remaining)
+    return {
+        "workflow_id": state.workflow_id,
+        "user_message": state.goal,
+        "classification": meta.get("classification", "unknown"),
+        "total_steps": total,
+        "current_step": state.current_step,
+        "status": state.current_step,
+        "created_at": state.created_at,
+        "estimated_duration": meta.get("estimated_duration", "unknown"),
+        "agents_involved": meta.get("agents_involved", []),
+    }
+
+
+def _legacy_workflow_to_summary(workflow_id: str, workflow_data: Dict) -> Dict:
+    """Convert a legacy in-memory workflow dict to API summary."""
+    return {
+        "workflow_id": workflow_id,
+        "user_message": workflow_data.get("user_message", ""),
+        "classification": workflow_data.get("classification", "unknown"),
+        "total_steps": len(workflow_data.get("steps", [])),
+        "current_step": workflow_data.get("current_step", 0),
+        "status": workflow_data.get("status", "unknown"),
+        "created_at": workflow_data.get("created_at", ""),
+        "estimated_duration": workflow_data.get("estimated_duration", "unknown"),
+        "agents_involved": workflow_data.get("agents_involved", []),
+    }
+
+
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_active_workflows",
@@ -375,32 +411,34 @@ _approvals_lock = asyncio.Lock()
 async def list_active_workflows(admin_check: bool = Depends(check_admin_permission)):
     """List all active workflows with their current status.
 
+    Queries Redis-persisted workflows first, then merges legacy
+    in-memory workflows.  Redis takes precedence (#1380).
+
     Issue #744: Requires admin authentication."""
+    summaries_by_id: Dict[str, Dict] = {}
+
+    # 1. Try Redis-persisted workflows (takes precedence)
+    try:
+        sm = get_workflow_state_machine()
+        for state in await sm.list_active():
+            summaries_by_id[state.workflow_id] = _workflow_state_to_summary(state)
+    except Exception:
+        logger.warning(
+            "Redis workflow query failed, using in-memory only",
+            exc_info=True,
+        )
+
+    # 2. Merge legacy in-memory workflows (Redis wins on conflict)
     async with _workflows_lock:
-        workflows_summary = []
+        for wf_id, wf_data in active_workflows.items():
+            if wf_id not in summaries_by_id:
+                summaries_by_id[wf_id] = _legacy_workflow_to_summary(wf_id, wf_data)
 
-        for workflow_id, workflow_data in active_workflows.items():
-            summary = {
-                "workflow_id": workflow_id,
-                "user_message": workflow_data.get("user_message", ""),
-                "classification": workflow_data.get("classification", "unknown"),
-                "total_steps": len(workflow_data.get("steps", [])),
-                "current_step": workflow_data.get("current_step", 0),
-                "status": workflow_data.get("status", "unknown"),
-                "created_at": workflow_data.get("created_at", ""),
-                "estimated_duration": workflow_data.get(
-                    "estimated_duration", "unknown"
-                ),
-                "agents_involved": workflow_data.get("agents_involved", []),
-            }
-            workflows_summary.append(summary)
-
-        active_count = len(active_workflows)
-
+    workflows_list = list(summaries_by_id.values())
     return {
         "success": True,
-        "active_workflows": active_count,
-        "workflows": workflows_summary,
+        "active_workflows": len(workflows_list),
+        "workflows": workflows_list,
     }
 
 

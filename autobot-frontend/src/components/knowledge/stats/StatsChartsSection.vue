@@ -2,7 +2,7 @@
   <div class="charts-section">
     <!-- Documents by Category -->
     <BasePanel variant="bordered" size="medium">
-      <h4>Documents by Category</h4>
+      <h4>{{ $t('knowledge.stats.charts.documentsByCategory') }}</h4>
       <div class="bar-chart">
         <div
           v-for="category in topCategories"
@@ -26,7 +26,7 @@
 
     <!-- Documents by Type -->
     <BasePanel variant="bordered" size="medium">
-      <h4>Documents by Type</h4>
+      <h4>{{ $t('knowledge.stats.charts.documentsByType') }}</h4>
       <div class="pie-chart">
         <div class="type-stats">
           <div v-for="(count, type) in documentsByType" :key="type" class="type-item">

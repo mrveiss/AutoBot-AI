@@ -9,7 +9,6 @@
  */
 
 import { ref, computed, readonly } from 'vue';
-import { secretsApiClient } from '@/utils/SecretsApiClient';
 import { getBackendUrl } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 
@@ -68,33 +67,12 @@ const loadHosts = async (): Promise<InfrastructureHost[]> => {
   try {
     const backendUrl = getBackendUrl();
 
-    // Fetch both secrets (infrastructure_host type) and legacy hosts
-    const [secretsResponse, legacyHostsResponse] = await Promise.all([
-      secretsApiClient.getSecrets({}) as Promise<Record<string, any>>,
-      fetch(`${backendUrl}/api/infrastructure/hosts`)
-        .then(r => r.ok ? r.json() : { hosts: [] })
-        .catch(() => ({ hosts: [] }))
-    ]);
+    // Issue #1310: Single source — only user-configured hosts from secrets.
+    // Fleet/system VMs no longer included (they belong in SLM).
+    const response = await fetch(`${backendUrl}/api/infrastructure/hosts`);
+    const data = response.ok ? await response.json() : { hosts: [] };
 
-    // Filter to infrastructure_host type secrets
-    const infraSecrets = (secretsResponse.secrets || [])
-      .filter((s: any) => s.type === 'infrastructure_host')
-      .map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        host: s.metadata?.host || '',
-        ssh_port: s.metadata?.ssh_port || 22,
-        username: s.metadata?.username || 'root',
-        auth_type: s.metadata?.auth_type || 'password',
-        capabilities: s.metadata?.capabilities || ['ssh'],
-        purpose: s.metadata?.purpose || s.description,
-        os: s.metadata?.os,
-        metadata: s.metadata,
-        _isLegacyHost: false
-      }));
-
-    // Convert legacy hosts
-    const legacyHosts = (legacyHostsResponse.hosts || []).map((h: any) => ({
+    hosts.value = (data.hosts || []).map((h: any) => ({
       id: h.id,
       name: h.name,
       host: h.host,
@@ -105,21 +83,10 @@ const loadHosts = async (): Promise<InfrastructureHost[]> => {
       purpose: h.purpose || h.description,
       os: h.os,
       metadata: h,
-      _isLegacyHost: true
+      _isLegacyHost: false,
     }));
 
-    // Combine and deduplicate by host+port
-    const hostMap = new Map<string, InfrastructureHost>();
-    [...infraSecrets, ...legacyHosts].forEach(h => {
-      const key = `${h.host}:${h.ssh_port}`;
-      if (!hostMap.has(key)) {
-        hostMap.set(key, h);
-      }
-    });
-
-    hosts.value = Array.from(hostMap.values());
     logger.info('Loaded infrastructure hosts:', { count: hosts.value.length });
-
     return hosts.value;
   } catch (err) {
     logger.error('Failed to load hosts:', err);

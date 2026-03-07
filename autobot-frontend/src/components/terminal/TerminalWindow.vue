@@ -3,7 +3,7 @@
     <div class="window-header">
       <div class="window-title">
         <span class="terminal-icon">⬛</span>
-        <span>Terminal - {{ sessionTitle }}</span>
+        <span>{{ t('terminal.window.titlePrefix') }} {{ sessionTitle }}</span>
       </div>
       <div class="window-controls">
         <!-- Emergency Kill Button -->
@@ -11,7 +11,7 @@
           class="control-button emergency-kill"
           @click="emergencyKillAll"
           :disabled="!hasRunningProcesses"
-          title="EMERGENCY KILL - Stop all running processes immediately"
+          :title="t('terminal.window.emergencyKillTitle')"
         >
           🛑 KILL
         </button>
@@ -22,7 +22,7 @@
           @click="toggleAutomationPause"
           :class="{ 'active': automationPaused }"
           :disabled="!hasAutomatedWorkflow"
-          :title="automationPaused ? 'Resume automated workflow' : 'Pause automation and take manual control'"
+          :title="automationPaused ? t('terminal.window.resumeAutomation') : t('terminal.window.pauseAutomation')"
         >
           {{ automationPaused ? '▶️ RESUME' : '⏸️ PAUSE' }}
         </button>
@@ -32,7 +32,7 @@
           class="control-button interrupt"
           @click="interruptProcess"
           :disabled="!hasActiveProcess"
-          title="Send Ctrl+C to interrupt current process"
+          :title="t('terminal.window.interruptProcess')"
         >
           ⚡ INT
         </button>
@@ -41,21 +41,21 @@
           class="control-button"
           @click="reconnect"
           :disabled="connecting"
-          title="Reconnect"
+          :title="t('terminal.window.reconnect')"
         >
           {{ connecting ? '⟳' : '🔄' }}
         </button>
         <button
           class="control-button"
           @click="clearTerminal"
-          title="Clear"
+          :title="t('terminal.window.clear')"
         >
           🗑️
         </button>
         <button
           class="control-button danger"
           @click="closeWindow"
-          title="Close Window"
+          :title="t('terminal.window.closeWindow')"
         >
           ✕
         </button>
@@ -69,12 +69,12 @@
           <span>{{ connectionStatusText }}</span>
         </div>
         <div class="session-info">
-          <span>Session: {{ sessionId?.slice(0, 8) }}...</span>
+          <span>{{ t('terminal.window.session') }} {{ sessionId?.slice(0, 8) }}...</span>
         </div>
       </div>
       <div class="status-right">
         <div class="terminal-stats">
-          Lines: {{ outputLines.length }}
+          {{ t('terminal.window.lines') }} {{ outputLines.length }}
         </div>
       </div>
     </div>
@@ -121,30 +121,30 @@
 
     <div class="terminal-footer">
       <div class="footer-info">
-        <span>Press Ctrl+C to interrupt, Ctrl+D to exit</span>
+        <span>{{ t('terminal.window.shortcutHint') }}</span>
       </div>
       <div class="footer-actions">
         <button
           class="footer-button workflow-test"
           @click="startExampleWorkflow"
-          title="Start Example Automated Workflow (for testing)"
+          :title="t('terminal.window.startExampleWorkflowTitle')"
           v-if="!hasAutomatedWorkflow"
         >
-          🤖 Test Workflow
+          🤖 {{ t('terminal.window.testWorkflow') }}
         </button>
         <button
           class="footer-button"
           @click="downloadLog"
-          title="Download Session Log"
+          :title="t('terminal.window.downloadLogTitle')"
         >
-          💾 Save Log
+          💾 {{ t('terminal.window.saveLog') }}
         </button>
         <button
           class="footer-button"
           @click="shareSession"
-          title="Share Session"
+          :title="t('terminal.window.shareSessionTitle')"
         >
-          🔗 Share
+          🔗 {{ t('terminal.window.share') }}
         </button>
       </div>
     </div>
@@ -152,14 +152,14 @@
     <!-- Connection Lost Modal -->
     <div v-if="showReconnectModal" class="modal-overlay" @click="hideReconnectModal" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
       <div class="modal-content" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
-        <h3>Connection Lost</h3>
-        <p>The terminal connection was lost. Would you like to reconnect?</p>
+        <h3>{{ t('terminal.window.connectionLost') }}</h3>
+        <p>{{ t('terminal.window.connectionLostMessage') }}</p>
         <div class="modal-actions">
-          <button class="btn btn-secondary" @click="hideReconnectModal" aria-label="Cancel">
-            Cancel
+          <button class="btn btn-secondary" @click="hideReconnectModal" :aria-label="t('terminal.window.cancel')">
+            {{ t('terminal.window.cancel') }}
           </button>
-          <button class="btn btn-primary" @click="reconnect" aria-label="Reconnect">
-            Reconnect
+          <button class="btn btn-primary" @click="reconnect" :aria-label="t('terminal.window.reconnect')">
+            {{ t('terminal.window.reconnect') }}
           </button>
         </div>
       </div>
@@ -169,17 +169,17 @@
     <div v-if="showCommandConfirmation" class="confirmation-modal-overlay" @click="cancelCommand" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
       <div class="confirmation-modal" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
         <div class="modal-header">
-          <h3 class="modal-title">⚠️ Potentially Destructive Command</h3>
+          <h3 class="modal-title">⚠️ {{ t('terminal.window.destructiveCommand') }}</h3>
         </div>
         <div class="modal-content">
           <div class="command-preview">
-            <div class="command-label">Command to execute:</div>
+            <div class="command-label">{{ t('terminal.window.commandToExecute') }}</div>
             <div class="command-text">{{ pendingCommand }}</div>
           </div>
 
           <div class="risk-assessment">
             <div class="risk-level" :class="pendingCommandRisk">
-              Risk Level: <strong>{{ pendingCommandRisk.toUpperCase() }}</strong>
+              {{ t('terminal.window.riskLevel') }} <strong>{{ pendingCommandRisk.toUpperCase() }}</strong>
             </div>
             <div class="risk-reasons">
               <div v-for="reason in pendingCommandReasons" :key="reason" class="risk-reason">
@@ -189,14 +189,14 @@
           </div>
 
           <div class="confirmation-message">
-            <p><strong>This command may:</strong></p>
+            <p><strong>{{ t('terminal.window.commandMay') }}</strong></p>
             <ul>
-              <li>Delete files or directories permanently</li>
-              <li>Modify system configurations</li>
-              <li>Change file permissions or ownership</li>
-              <li>Install or remove software packages</li>
+              <li>{{ t('terminal.window.riskDeleteFiles') }}</li>
+              <li>{{ t('terminal.window.riskModifyConfig') }}</li>
+              <li>{{ t('terminal.window.riskChangePermissions') }}</li>
+              <li>{{ t('terminal.window.riskInstallRemove') }}</li>
             </ul>
-            <p><strong>Are you sure you want to proceed?</strong></p>
+            <p><strong>{{ t('terminal.window.confirmProceed') }}</strong></p>
           </div>
         </div>
 
@@ -221,18 +221,18 @@
     <div v-if="showKillConfirmation" class="confirmation-modal-overlay" @click="showKillConfirmation = false" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
       <div class="confirmation-modal emergency" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
         <div class="modal-header">
-          <h3 class="modal-title">🛑 Emergency Kill All Processes</h3>
+          <h3 class="modal-title">🛑 {{ t('terminal.window.emergencyKillAllProcesses') }}</h3>
         </div>
         <div class="modal-content">
           <div class="emergency-warning">
-            <p><strong>⚠️ WARNING: This will immediately terminate ALL running processes in this terminal session!</strong></p>
-            <p>Running processes:</p>
+            <p><strong>⚠️ {{ t('terminal.window.emergencyKillWarning') }}</strong></p>
+            <p>{{ t('terminal.window.runningProcesses') }}</p>
             <ul>
               <li v-for="process in runningProcesses" :key="process.pid" class="process-item">
                 PID {{ process.pid }}: {{ process.command }}
               </li>
             </ul>
-            <p><strong>This action cannot be undone. Continue?</strong></p>
+            <p><strong>{{ t('terminal.window.cannotBeUndone') }}</strong></p>
           </div>
         </div>
 
@@ -273,7 +273,7 @@
     <div v-if="showLegacyModal" class="confirmation-modal-overlay" @click="takeManualControl" tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
       <div class="confirmation-modal workflow-step" @click.stop tabindex="0" @keyup.enter="$event.target.click()" @keyup.space="$event.target.click()">
         <div class="modal-header">
-          <h3 class="modal-title">🤖 AI Workflow Step Confirmation</h3>
+          <h3 class="modal-title">🤖 {{ t('terminal.window.workflowStepConfirmation') }}</h3>
         </div>
         <div class="modal-content">
           <div class="workflow-step-info" v-if="pendingWorkflowStep">
@@ -283,21 +283,21 @@
 
             <div class="step-description">
               <h4>{{ pendingWorkflowStep.description }}</h4>
-              <p>{{ pendingWorkflowStep.explanation || 'The AI wants to execute the following command:' }}</p>
+              <p>{{ pendingWorkflowStep.explanation || t('terminal.window.aiWantsToExecute') }}</p>
             </div>
 
             <div class="command-preview">
-              <div class="command-label">Command to Execute:</div>
+              <div class="command-label">{{ t('terminal.window.commandToExecute') }}</div>
               <div class="command-text">{{ pendingWorkflowStep.command }}</div>
             </div>
 
             <div class="workflow-options">
               <div class="option-info">
-                <p><strong>Choose your action:</strong></p>
+                <p><strong>{{ t('terminal.window.chooseAction') }}</strong></p>
                 <ul>
-                  <li><strong>Execute:</strong> Run this command and continue to next step</li>
-                  <li><strong>Skip:</strong> Skip this command and continue to next step</li>
-                  <li><strong>Take Control:</strong> Pause automation and perform manual steps</li>
+                  <li><strong>{{ t('terminal.window.executeLabel') }}</strong> {{ t('terminal.window.executeDesc') }}</li>
+                  <li><strong>{{ t('terminal.window.skipLabel') }}</strong> {{ t('terminal.window.skipDesc') }}</li>
+                  <li><strong>{{ t('terminal.window.takeControlLabel') }}</strong> {{ t('terminal.window.takeControlDesc') }}</li>
                 </ul>
               </div>
             </div>
@@ -331,6 +331,7 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useTerminalService } from '@/services/TerminalService';
 import { useRoute, useRouter } from 'vue-router';
 import AdvancedStepConfirmationModal from './AdvancedStepConfirmationModal.vue';
@@ -347,6 +348,7 @@ export default {
     CompletionSuggestions
   },
   setup() {
+    const { t } = useI18n();
     const route = useRoute();
     const router = useRouter();
 
@@ -386,7 +388,7 @@ export default {
     };
 
     const sessionId = ref(getCurrentChatId());
-    const sessionTitle = ref(route?.query?.title || 'Terminal');
+    const sessionTitle = ref(route?.query?.title || t('terminal.window.defaultTitle'));
     const outputLines = ref([]);
     const currentInput = ref('');
     const currentPrompt = ref('$ ');
@@ -441,11 +443,11 @@ export default {
     const hasRunningProcesses = computed(() => runningProcesses.value.length > 0);
     const connectionStatusText = computed(() => {
       switch (connectionStatus.value) {
-        case 'connected': return 'Connected';
-        case 'connecting': return 'Connecting...';
-        case 'disconnected': return 'Disconnected';
-        case 'error': return 'Error';
-        default: return 'Unknown';
+        case 'connected': return t('terminal.window.statusConnected');
+        case 'connecting': return t('terminal.window.statusConnecting');
+        case 'disconnected': return t('terminal.window.statusDisconnected');
+        case 'error': return t('terminal.window.statusError');
+        default: return t('terminal.window.statusUnknown');
       }
     });
 
@@ -1355,6 +1357,9 @@ export default {
     };
 
     return {
+      // i18n
+      t,
+
       // Tab completion (Issue #503)
       tabCompletion,
       handleCompletionSelect,

@@ -12,8 +12,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import aiofiles
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from fastapi.responses import JSONResponse
+from utils.background_task_manager import BackgroundTaskManager
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -22,6 +23,9 @@ from .shared import INTERNAL_MODULE_PREFIXES, STDLIB_MODULES, get_project_root
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Background task manager for import tree analysis (#1304)
+_manager = BackgroundTaskManager(redis_prefix="import_task:")
 
 
 def _build_module_to_file_mapping(
@@ -256,4 +260,94 @@ def _build_summary(import_tree: List[Dict]) -> Dict:
                 :10
             ]
         ],
+    }
+
+
+# ------------------------------------------------------------------
+# Background task endpoints (#1304)
+# ------------------------------------------------------------------
+
+
+async def _run_import_analysis(task_id: str) -> None:
+    """Background worker for import tree analysis (#1304)."""
+    try:
+        await _manager.update_progress(task_id, "Scanning project files", 10.0)
+        project_root = get_project_root()
+        python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
+        excluded_dirs = {
+            ".git",
+            "__pycache__",
+            "node_modules",
+            ".venv",
+            "venv",
+            "env",
+            ".env",
+            "archive",
+            "dist",
+            "build",
+        }
+        python_files = [
+            f for f in python_files if not any(ex in f.parts for ex in excluded_dirs)
+        ]
+
+        await _manager.update_progress(task_id, "Building module mappings", 30.0)
+        file_imports: Dict[str, List[Dict]] = {}
+        file_imported_by: Dict[str, List[Dict]] = {}
+        module_to_file = _build_module_to_file_mapping(python_files, project_root)
+
+        await _manager.update_progress(task_id, "Analyzing file imports", 50.0)
+        for py_file in python_files[:500]:
+            await _analyze_file_imports(
+                py_file,
+                project_root,
+                module_to_file,
+                file_imports,
+                file_imported_by,
+            )
+
+        await _manager.update_progress(task_id, "Building import tree", 80.0)
+        import_tree = _build_import_tree(file_imports, file_imported_by)
+
+        result = {
+            "status": "success",
+            "import_tree": import_tree,
+            "summary": _build_summary(import_tree),
+        }
+        await _manager.complete_task(task_id, result)
+    except Exception as e:
+        logger.error("Import tree analysis failed: %s", e)
+        await _manager.fail_task(task_id, str(e))
+
+
+@router.post("/analytics/import-tree/analyze")
+async def start_import_tree_analysis(
+    background_tasks: BackgroundTasks,
+):
+    """Start background import tree analysis (#1304)."""
+    task_id = await _manager.create_task()
+    background_tasks.add_task(_run_import_analysis, task_id)
+    return {"task_id": task_id, "status": "pending"}
+
+
+@router.get("/analytics/import-tree/status/{task_id}")
+async def get_import_tree_status(task_id: str):
+    """Get import tree analysis task status (#1304)."""
+    task = await _manager.get_status(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    return task
+
+
+@router.post("/analytics/import-tree/tasks/clear-stuck")
+async def clear_stuck_import_tasks(
+    force: bool = Query(
+        default=False,
+        description="Force clear ALL running tasks",
+    ),
+):
+    """Clear stuck import tree analysis tasks (#1304)."""
+    cleaned = await _manager.clear_stuck(force=force)
+    return {
+        "cleared_count": cleaned,
+        "message": f"Cleared {cleaned} task(s)" + (" (forced)" if force else ""),
     }

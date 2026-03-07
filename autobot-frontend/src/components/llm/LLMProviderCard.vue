@@ -9,11 +9,13 @@
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { LLMProvider } from '@/composables/useLlmConfig'
 import type { ConnectionTestResult } from '@/composables/useLlmConfig'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('LLMProviderCard')
+const { t } = useI18n()
 
 interface Props {
   provider: LLMProvider
@@ -38,9 +40,9 @@ const statusColor = computed(() => {
 })
 
 const statusText = computed(() => {
-  if (!props.provider.is_available) return 'Unavailable'
-  if (props.isActive) return 'Active'
-  return 'Available'
+  if (!props.provider.is_available) return t('llm.unavailable')
+  if (props.isActive) return t('llm.active')
+  return t('llm.available')
 })
 
 function handleActivate() {
@@ -86,7 +88,7 @@ function handleConfigure() {
 
     <!-- Models List -->
     <div v-if="provider.models.length > 0" class="mb-4">
-      <div class="text-sm font-medium text-primary mb-2">Available Models:</div>
+      <div class="text-sm font-medium text-primary mb-2">{{ $t('llm.availableModels') }}</div>
       <div class="flex flex-wrap gap-2">
         <span
           v-for="model in provider.models.slice(0, 3)"
@@ -99,7 +101,7 @@ function handleConfigure() {
           v-if="provider.models.length > 3"
           class="px-2 py-1 text-xs bg-autobot-bg-secondary text-secondary rounded"
         >
-          +{{ provider.models.length - 3 }} more
+          {{ $t('llm.moreModels', { count: provider.models.length - 3 }) }}
         </span>
       </div>
     </div>
@@ -130,7 +132,7 @@ function handleConfigure() {
             {{ testResult.message }}
           </p>
           <p v-if="testResult.latency_ms" class="text-xs text-secondary mt-1">
-            Latency: {{ testResult.latency_ms }}ms
+            {{ $t('llm.latencyMs') }} {{ testResult.latency_ms }}ms
           </p>
         </div>
       </div>
@@ -143,14 +145,14 @@ function handleConfigure() {
         @click="handleActivate"
         class="flex-1 px-4 py-2 text-sm font-medium text-white bg-autobot-primary rounded hover:bg-autobot-primary-hover transition-colors"
       >
-        Activate
+        {{ $t('llm.activate') }}
       </button>
       <button
         v-if="isActive"
         disabled
         class="flex-1 px-4 py-2 text-sm font-medium text-white bg-autobot-success rounded cursor-default"
       >
-        Active Provider
+        {{ $t('llm.activeProvider') }}
       </button>
       <button
         @click="handleTest"
@@ -166,14 +168,14 @@ function handleConfigure() {
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
-        {{ testing ? 'Testing...' : 'Test' }}
+        {{ testing ? $t('llm.testing') : $t('llm.test') }}
       </button>
       <button
         @click="handleConfigure"
         :disabled="!provider.is_available"
         class="px-4 py-2 text-sm font-medium text-primary bg-autobot-bg-card border border-default rounded hover:bg-autobot-bg-secondary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
-        Configure
+        {{ $t('llm.configure') }}
       </button>
     </div>
   </div>

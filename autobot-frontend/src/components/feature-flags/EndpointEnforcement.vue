@@ -2,13 +2,13 @@
   <div class="endpoint-enforcement">
     <div class="section-header">
       <div class="header-info">
-        <h3><i class="fas fa-sitemap"></i> Endpoint Overrides</h3>
+        <h3><i class="fas fa-sitemap"></i> {{ $t('featureFlags.enforcement.title') }}</h3>
         <p class="description">
-          Configure custom enforcement modes for specific API endpoints. Endpoints without overrides use the global mode.
+          {{ $t('featureFlags.enforcement.description') }}
         </p>
       </div>
       <button @click="showAddModal = true" class="btn-add">
-        <i class="fas fa-plus"></i> Add Override
+        <i class="fas fa-plus"></i> {{ $t('featureFlags.enforcement.addOverride') }}
       </button>
     </div>
 
@@ -17,10 +17,10 @@
       <div class="empty-icon">
         <i class="fas fa-sitemap"></i>
       </div>
-      <h4>No Endpoint Overrides</h4>
-      <p>All endpoints are using the global enforcement mode: <strong>{{ globalModeLabel }}</strong></p>
+      <h4>{{ $t('featureFlags.enforcement.noOverrides') }}</h4>
+      <p>{{ $t('featureFlags.enforcement.noOverridesDesc') }}</p>
       <button @click="showAddModal = true" class="btn-primary">
-        <i class="fas fa-plus"></i> Add First Override
+        <i class="fas fa-plus"></i> {{ $t('featureFlags.enforcement.addOverride') }}
       </button>
     </div>
 
@@ -28,7 +28,7 @@
     <div v-else class="overrides-list">
       <div class="global-mode-banner">
         <i class="fas fa-globe"></i>
-        <span>Global Mode: <strong>{{ globalModeLabel }}</strong></span>
+        <span>{{ $t('featureFlags.enforcement.globalMode') }} <strong>{{ globalModeLabel }}</strong></span>
       </div>
 
       <div
@@ -46,7 +46,7 @@
               {{ getModeLabel(mode) }}
             </span>
             <span class="vs-global" v-if="mode !== globalMode">
-              (Override)
+              ({{ t('featureFlags.enforcement.override') }})
             </span>
           </div>
         </div>
@@ -54,14 +54,14 @@
           <button
             @click="editOverride(endpoint, mode)"
             class="action-btn"
-            title="Edit"
+            :title="t('featureFlags.enforcement.edit')"
           >
             <i class="fas fa-edit"></i>
           </button>
           <button
             @click="confirmRemove(endpoint)"
             class="action-btn delete"
-            title="Remove"
+            :title="t('featureFlags.enforcement.removeLabel')"
           >
             <i class="fas fa-trash"></i>
           </button>
@@ -72,25 +72,25 @@
     <!-- Add/Edit Modal -->
     <BaseModal
       v-model="showAddModal"
-      :title="editingEndpoint ? 'Edit Override' : 'Add Endpoint Override'"
+      :title="editingEndpoint ? $t('featureFlags.enforcement.editOverride') : $t('featureFlags.enforcement.addEndpointOverride')"
       size="medium"
     >
       <form @submit.prevent="saveOverride" class="override-form">
         <div class="form-group">
-          <label>Endpoint Path <span class="required">*</span></label>
+          <label>{{ $t('featureFlags.enforcement.endpointPath') }} <span class="required">*</span></label>
           <input
             type="text"
             v-model="form.endpoint"
             :disabled="!!editingEndpoint"
             required
-            placeholder="/api/chat/sessions/{session_id}"
+            :placeholder="$t('featureFlags.enforcement.endpointPlaceholder')"
             class="form-input"
           />
-          <small class="input-hint">The API endpoint path (supports path parameters like {id})</small>
+          <small class="input-hint">{{ t('featureFlags.enforcement.endpointHint') }}</small>
         </div>
 
         <div class="form-group">
-          <label>Enforcement Mode <span class="required">*</span></label>
+          <label>{{ $t('featureFlags.enforcement.mode') }} <span class="required">*</span></label>
           <div class="mode-selector">
             <label
               v-for="option in modeOptions"
@@ -112,7 +112,7 @@
       </form>
 
       <template #actions>
-        <button type="button" @click="closeModal" class="btn-secondary">Cancel</button>
+        <button type="button" @click="closeModal" class="btn-secondary">{{ $t('featureFlags.enforcement.cancel') }}</button>
         <button
           type="submit"
           @click="saveOverride"
@@ -120,7 +120,7 @@
           :disabled="!isFormValid || loading"
         >
           <i v-if="loading" class="fas fa-spinner fa-spin"></i>
-          {{ editingEndpoint ? 'Update' : 'Add' }} Override
+          {{ $t('featureFlags.enforcement.save') }}
         </button>
       </template>
     </BaseModal>
@@ -128,25 +128,24 @@
     <!-- Remove Confirmation Modal -->
     <BaseModal
       v-model="showRemoveModal"
-      title="Remove Override"
+      :title="$t('featureFlags.enforcement.removeOverride')"
       size="small"
     >
       <div class="remove-content">
         <div class="remove-icon">
           <i class="fas fa-undo"></i>
         </div>
-        <h4>Revert to Global Mode?</h4>
+        <h4>{{ t('featureFlags.enforcement.revertTitle') }}</h4>
         <p>
-          This will remove the override for <code>{{ removingEndpoint }}</code>
-          and the endpoint will use the global enforcement mode.
+          {{ t('featureFlags.enforcement.revertDescription', { endpoint: removingEndpoint }) }}
         </p>
       </div>
 
       <template #actions>
-        <button @click="showRemoveModal = false" class="btn-secondary">Cancel</button>
+        <button @click="showRemoveModal = false" class="btn-secondary">{{ $t('featureFlags.enforcement.cancel') }}</button>
         <button @click="removeOverride" class="btn-primary" :disabled="loading">
           <i v-if="loading" class="fas fa-spinner fa-spin"></i>
-          Remove Override
+          {{ $t('featureFlags.enforcement.remove') }}
         </button>
       </template>
     </BaseModal>
@@ -155,8 +154,11 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive } from 'vue';
+import { useI18n } from 'vue-i18n';
 import type { EnforcementMode } from '@/utils/FeatureFlagsApiClient';
 import BaseModal from '@/components/ui/BaseModal.vue';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   overrides: Record<string, EnforcementMode>;
@@ -183,26 +185,26 @@ const form = reactive({
 });
 
 // Mode Options
-const modeOptions = [
+const modeOptions = computed(() => [
   {
     value: 'disabled' as EnforcementMode,
-    label: 'Disabled',
+    label: t('featureFlags.enforcement.modeDisabled'),
     icon: 'fas fa-ban',
-    shortDesc: 'No validation',
+    shortDesc: t('featureFlags.enforcement.modeDisabledDesc'),
   },
   {
     value: 'log_only' as EnforcementMode,
-    label: 'Log Only',
+    label: t('featureFlags.enforcement.modeLogOnly'),
     icon: 'fas fa-clipboard-list',
-    shortDesc: 'Log but allow',
+    shortDesc: t('featureFlags.enforcement.modeLogOnlyDesc'),
   },
   {
     value: 'enforced' as EnforcementMode,
-    label: 'Enforced',
+    label: t('featureFlags.enforcement.modeEnforced'),
     icon: 'fas fa-shield-alt',
-    shortDesc: 'Block violations',
+    shortDesc: t('featureFlags.enforcement.modeEnforcedDesc'),
   },
-];
+]);
 
 // Computed
 const globalModeLabel = computed(() => getModeLabel(props.globalMode));
@@ -214,9 +216,9 @@ const isFormValid = computed(() => {
 // Methods
 const getModeLabel = (mode: EnforcementMode) => {
   const labels: Record<EnforcementMode, string> = {
-    disabled: 'Disabled',
-    log_only: 'Log Only',
-    enforced: 'Enforced',
+    disabled: t('featureFlags.enforcement.modeDisabled'),
+    log_only: t('featureFlags.enforcement.modeLogOnly'),
+    enforced: t('featureFlags.enforcement.modeEnforced'),
   };
   return labels[mode] || mode;
 };

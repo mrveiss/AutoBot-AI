@@ -13,6 +13,7 @@ import appConfig from '@/config/AppConfig.js'
 import { getConfig } from '@/config/ssot-config'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { useBackgroundTask } from '@/composables/useBackgroundTask'
 
 const logger = createLogger('usePatternAnalysis')
 
@@ -107,6 +108,15 @@ export interface PatternStorageStats {
   collection_name: string
 }
 
+export interface PartialResults {
+  regex?: any[]
+  complexity?: any[]
+  modularization?: any[]
+  other_patterns?: any[]
+  files_processed?: number
+  total_files?: number
+}
+
 export interface AnalysisTaskStatus {
   task_id: string
   status: 'pending' | 'running' | 'completed' | 'failed'
@@ -115,12 +125,19 @@ export interface AnalysisTaskStatus {
   result?: PatternAnalysisReport
   error?: string
   reason?: string  // orphaned, timeout, manual (#1250)
+  partial_results?: PartialResults
 }
 
 /**
  * Composable for Code Pattern Analysis
  */
 export function usePatternAnalysis() {
+  // Background task for pattern summary (#1332)
+  const summaryTask = useBackgroundTask(
+    '/api/analytics/codebase/patterns/summary',
+    '/api/analytics/codebase/patterns/summary/tasks/clear-stuck'
+  )
+
   // Reactive state
   const loading = ref(false)
   const analyzing = ref(false)
@@ -255,7 +272,43 @@ export function usePatternAnalysis() {
           status: 'pending'
         }
         // Poll until task completes — caller awaits this
-        await pollTaskStatus(data.task_id)
+        const pollResult = await pollTaskStatus(data.task_id)
+
+        // Auto-retry once if orphaned: clear stuck tasks and start fresh
+        if (pollResult === 'orphaned') {
+          logger.info('Pattern task orphaned, clearing stuck tasks and retrying…')
+          wasInterrupted.value = false
+          error.value = null
+
+          await fetchWithAuth(
+            `${backendUrl}/api/analytics/codebase/patterns/tasks/clear-stuck?force=true`,
+            { method: 'POST' },
+          )
+          const retryResp = await fetchWithAuth(
+            `${backendUrl}/api/analytics/codebase/patterns/analyze`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                path,
+                enable_regex_detection: enableRegex,
+                enable_complexity_analysis: enableComplexity,
+                enable_duplicate_detection: enableDuplicates,
+                similarity_threshold: similarityThreshold,
+                run_in_background: true,
+              }),
+            },
+          )
+          if (retryResp.ok) {
+            const retryData = await retryResp.json()
+            if (retryData.task_id) {
+              currentTaskId.value = retryData.task_id
+              taskStatus.value = { task_id: retryData.task_id, status: 'pending' }
+              await pollTaskStatus(retryData.task_id)
+            }
+          }
+        }
+
         return !error.value
       } else if (data.status === 'success' && data.report) {
         analysisReport.value = data.report
@@ -281,14 +334,16 @@ export function usePatternAnalysis() {
    * Transient fetch errors are retried — a single network glitch
    * does not kill the polling loop.
    */
-  const pollTaskStatus = (taskId: string): Promise<void> => {
+  const pollTaskStatus = (
+    taskId: string,
+  ): Promise<'completed' | 'failed' | 'orphaned' | 'error'> => {
     const POLL_INTERVAL_MS = 2000
     const MAX_CONSECUTIVE_ERRORS = 5
 
     let consecutiveErrors = 0
     let intervalId: ReturnType<typeof setInterval> | null = null
 
-    return new Promise<void>((resolve) => {
+    return new Promise<'completed' | 'failed' | 'orphaned' | 'error'>((resolve) => {
       const stopPolling = () => {
         if (intervalId !== null) {
           clearInterval(intervalId)
@@ -311,6 +366,50 @@ export function usePatternAnalysis() {
           taskStatus.value = data
           consecutiveErrors = 0 // Reset on success
 
+          // Apply partial results while analysis is running
+          if (data.partial_results && data.status === 'running') {
+            const pr = data.partial_results
+            if (pr.regex?.length) {
+              regexOpportunities.value = pr.regex
+            }
+            if (pr.complexity?.length) {
+              complexityHotspots.value = pr.complexity
+            }
+            if (pr.modularization?.length || pr.other_patterns?.length) {
+              refactoringSuggestions.value = [
+                ...(pr.modularization || []),
+                ...(pr.other_patterns || []),
+              ]
+            }
+            // Build incremental summary so UI can show results
+            const partialTotal =
+              (pr.regex?.length || 0) +
+              (pr.complexity?.length || 0) +
+              (pr.modularization?.length || 0) +
+              (pr.other_patterns?.length || 0)
+            if (partialTotal > 0) {
+              analysisReport.value = {
+                analysis_summary: {
+                  scan_path: '',
+                  timestamp: new Date().toISOString(),
+                  files_analyzed: pr.files_processed || 0,
+                  lines_analyzed: 0,
+                  duration_seconds: 0,
+                  total_patterns_found: partialTotal,
+                  potential_loc_reduction: 0,
+                  complexity_score: 'N/A',
+                },
+                pattern_counts: {},
+                severity_distribution: {},
+                duplicate_patterns: [],
+                regex_opportunities: pr.regex || [],
+                complexity_hotspots: pr.complexity || [],
+                modularization_suggestions: pr.modularization || [],
+                other_patterns: pr.other_patterns || [],
+              }
+            }
+          }
+
           if (data.status === 'completed' && data.result) {
             analysisReport.value = data.result
             duplicatePatterns.value = data.result.duplicate_patterns || []
@@ -318,7 +417,7 @@ export function usePatternAnalysis() {
             complexityHotspots.value = data.result.complexity_hotspots || []
             analyzing.value = false
             stopPolling()
-            resolve()
+            resolve('completed')
             return
           }
 
@@ -328,12 +427,15 @@ export function usePatternAnalysis() {
             if (isOrphaned) {
               wasInterrupted.value = true
               error.value = 'Previous analysis was interrupted by a server restart.'
+              analyzing.value = false
+              stopPolling()
+              resolve('orphaned')
             } else {
               error.value = data.error || 'Analysis failed'
+              analyzing.value = false
+              stopPolling()
+              resolve('failed')
             }
-            analyzing.value = false
-            stopPolling()
-            resolve()
             return
           }
 
@@ -348,7 +450,7 @@ export function usePatternAnalysis() {
             error.value = `Lost connection to backend after ${MAX_CONSECUTIVE_ERRORS} retries`
             analyzing.value = false
             stopPolling()
-            resolve()
+            resolve('error')
           }
           // Otherwise interval continues — transient error, keep trying
         }
@@ -420,41 +522,36 @@ export function usePatternAnalysis() {
         return
       }
 
-      // Fall back to full summary if no cached data
-      const backendUrl = await getBackendUrl()
-      const url = path
-        ? `${backendUrl}/api/analytics/codebase/patterns/summary?path=${encodeURIComponent(path)}`
-        : `${backendUrl}/api/analytics/codebase/patterns/summary`
+      // Fall back to background task analysis (#1332)
+      // The sync GET /patterns/summary runs analysis inline and times out
+      // on large codebases. Use POST /patterns/summary/analyze instead.
+      const query = path ? { path } : undefined
+      const success = await summaryTask.start(undefined, query)
 
-      const response = await fetchWithAuth(url)
-
-      if (!response.ok) {
-        throw new Error(`Summary fetch failed: ${response.statusText}`)
+      if (!success) {
+        throw new Error(summaryTask.error.value || 'Summary analysis failed')
       }
 
-      const data = await response.json()
-      if (data.status === 'success') {
-        // Update counts from summary
-        if (data.summary) {
-          analysisReport.value = {
-            analysis_summary: {
-              scan_path: path || '',
-              timestamp: new Date().toISOString(),
-              files_analyzed: 0,
-              lines_analyzed: 0,
-              duration_seconds: 0,
-              total_patterns_found: data.summary.total_patterns || 0,
-              potential_loc_reduction: data.summary.loc_reduction_potential || 0,
-              complexity_score: data.summary.complexity_score || 'N/A'
-            },
-            pattern_counts: data.summary.pattern_counts || {},
-            severity_distribution: data.summary.severity_distribution || {},
-            duplicate_patterns: [],
-            regex_opportunities: [],
-            complexity_hotspots: [],
-            modularization_suggestions: [],
-            other_patterns: []
-          }
+      const data = summaryTask.result.value
+      if (data) {
+        analysisReport.value = {
+          analysis_summary: {
+            scan_path: path || '',
+            timestamp: new Date().toISOString(),
+            files_analyzed: 0,
+            lines_analyzed: 0,
+            duration_seconds: 0,
+            total_patterns_found: (data.total_patterns as number) || 0,
+            potential_loc_reduction: (data.potential_loc_reduction as number) || 0,
+            complexity_score: (data.complexity_score as string) || 'N/A'
+          },
+          pattern_counts: {},
+          severity_distribution: {},
+          duplicate_patterns: [],
+          regex_opportunities: [],
+          complexity_hotspots: [],
+          modularization_suggestions: [],
+          other_patterns: []
         }
       }
     } catch (e: any) {

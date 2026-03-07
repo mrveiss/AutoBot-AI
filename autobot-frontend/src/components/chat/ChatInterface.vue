@@ -1,5 +1,5 @@
 <template>
-  <ErrorBoundary fallback="Chat interface failed to load. Please refresh the page.">
+  <ErrorBoundary :fallback="$t('chat.interface.loadFailed')">
     <div class="chat-interface flex h-full bg-autobot-bg-card overflow-hidden">
 
       <!-- Chat Sidebar with Unified Loading -->
@@ -36,7 +36,7 @@
               @click="toggleVoiceOutput"
               class="header-btn"
               :class="{ 'bg-electric-100 text-electric-600': voiceOutputEnabled }"
-              :title="voiceOutputEnabled ? 'Voice output on — click to mute' : 'Voice output off — click to enable'"
+              :title="voiceOutputEnabled ? $t('chat.interface.voiceOutputOn') : $t('chat.interface.voiceOutputOff')"
             >
               <i :class="isSpeaking ? 'fas fa-volume-up animate-pulse' : voiceOutputEnabled ? 'fas fa-volume-up' : 'fas fa-volume-mute'"></i>
             </button>
@@ -45,7 +45,7 @@
               @click="openVoiceConversation"
               class="header-btn"
               :class="{ 'bg-electric-100 text-electric-600': showVoiceOverlay || showVoicePanel }"
-              title="Voice chat — talk to AutoBot"
+              :title="$t('chat.interface.voiceChat')"
             >
               <i class="fas fa-headset"></i>
             </button>
@@ -54,7 +54,7 @@
               @click="toggleFilePanel"
               class="header-btn"
               :class="{ 'bg-electric-100 text-electric-600': showFilePanel }"
-              title="Toggle file panel"
+              :title="$t('chat.interface.toggleFilePanel')"
             >
               <i class="fas fa-paperclip"></i>
             </button>
@@ -149,6 +149,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useBackoffPoller } from '@/composables/useBackoffPoller'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useVoiceConversation } from '@/composables/useVoiceConversation'
@@ -183,13 +184,19 @@ import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
 import VoiceConversationPanel from './VoiceConversationPanel.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 
+// i18n
+const { t } = useI18n()
+
 // Stores and controller
 const store = useChatStore()
 const controller = useChatController()
 const appStore = useAppStore()
 
 // Voice output (#928)
-const { voiceOutputEnabled, isSpeaking, toggleVoiceOutput, speak } = useVoiceOutput()
+const {
+  voiceOutputEnabled, isSpeaking, toggleVoiceOutput,
+  speak, speakStreaming, flushStreaming,
+} = useVoiceOutput()
 
 // Voice conversation (#1029)
 const voiceConversation = useVoiceConversation()
@@ -258,7 +265,7 @@ const overseerAgent = computed(() => {
     autoConnect: true,
     onPlanCreated: (plan) => {
       logger.info('[Overseer] Plan created:', plan.plan_id)
-      notify('Execution plan created', 'info')
+      notify(t('chat.interface.executionPlanCreated'), 'info')
     },
     onStepUpdate: (step) => {
       logger.debug('[Overseer] Step update:', { step_number: step.step_number, status: step.status })
@@ -268,11 +275,11 @@ const overseerAgent = computed(() => {
     },
     onError: (error) => {
       logger.error('[Overseer] Error:', error)
-      notify(`Overseer error: ${error}`, 'error')
+      notify(t('chat.interface.overseerError', { error }), 'error')
     },
     onComplete: () => {
       logger.info('[Overseer] Execution complete')
-      notify('Execution completed', 'success')
+      notify(t('chat.interface.executionCompleted'), 'success')
     }
   })
 })
@@ -301,13 +308,13 @@ const submitOverseerQuery = async (query: string) => {
 provide('submitOverseerQuery', submitOverseerQuery)
 
 // Connection state with stabilized status management
-const baseConnectionStatus = ref('Connected')
+const baseConnectionStatus = ref(t('status.connected'))
 const isConnected = ref(true)
 const lastHeartbeat = ref(Date.now())
 const connectionStatus = computed(() => {
   // If typing, show typing status temporarily
   if (store.isTyping) {
-    return 'AI is typing...'
+    return t('chat.interface.aiTyping')
   }
   // Otherwise show base connection status
   return baseConnectionStatus.value
@@ -354,14 +361,14 @@ const loadNovncUrl = async () => {
 // Computed
 const currentSessionTitle = computed(() => {
   const session = store.currentSession
-  if (!session) return 'New Chat'
+  if (!session) return t('chat.newChat')
 
   return session.title || `Chat ${session.id.slice(-8)}...`
 })
 
 const sessionInfo = computed(() => {
   const session = store.currentSession
-  if (!session) return 'Start a conversation'
+  if (!session) return t('chat.interface.startConversation')
 
   const messageCount = session.messages.length
   const lastMessage = session.messages[session.messages.length - 1]
@@ -369,10 +376,10 @@ const sessionInfo = computed(() => {
   const sessionId = session.id  // Display full UUID
 
   if (messageCount === 0) {
-    return `Session: ${sessionId} • No messages yet`
+    return t('chat.interface.sessionNoMessages', { sessionId })
   }
 
-  return `Session: ${sessionId} • ${messageCount} message${messageCount > 1 ? 's' : ''} • Last: ${lastMessageTime}`
+  return t('chat.interface.sessionInfo', { sessionId, count: messageCount, time: lastMessageTime })
 })
 
 
@@ -408,19 +415,19 @@ const exportSession = async () => {
 
   } catch (error) {
     logger.error('Failed to export session:', error)
-    appStore.setGlobalError('Failed to export chat session')
+    appStore.setGlobalError(t('chat.interface.failedToExport'))
   }
 }
 
 const clearSession = async () => {
   if (!store.currentSessionId) return
 
-  if (confirm('Clear all messages in this chat? This action cannot be undone.')) {
+  if (confirm(t('chat.interface.confirmClear'))) {
     try {
       await controller.resetCurrentChat()
     } catch (error) {
       logger.error('Failed to clear session:', error)
-      appStore.setGlobalError('Failed to clear chat session')
+      appStore.setGlobalError(t('chat.interface.failedToClear'))
     }
   }
 }
@@ -432,7 +439,7 @@ const handleSidebarLoadingComplete = () => {
 
 const handleSidebarLoadingError = (error: any) => {
   logger.error('Sidebar loading error:', error)
-  appStore.setGlobalError('Failed to load chat sessions')
+  appStore.setGlobalError(t('chat.interface.failedToLoadSessions'))
 }
 
 const handleSidebarLoadingTimeout = () => {
@@ -445,7 +452,7 @@ const handleContentLoadingComplete = () => {
 
 const handleContentLoadingError = (error: any) => {
   logger.error('Content loading error:', error)
-  appStore.setGlobalError('Failed to load chat content')
+  appStore.setGlobalError(t('chat.interface.failedToLoadContent'))
 }
 
 const handleContentLoadingTimeout = () => {
@@ -628,7 +635,7 @@ const onCommandCommented = async (commentData: any) => {
       const result = await response.json()
 
       logger.debug('Command denied with user feedback/alternative approach')
-      notify('Feedback sent to agent', 'success')
+      notify(t('chat.interface.feedbackSent'), 'success')
     }
 
     // Close the dialog
@@ -638,7 +645,7 @@ const onCommandCommented = async (commentData: any) => {
     // The agent will receive the denial + feedback and can propose an alternative
   } catch (error) {
     logger.error('Error sending command comment/denial:', error)
-    notify('Failed to send feedback to agent', 'error')
+    notify(t('chat.interface.feedbackFailed'), 'error')
   }
 }
 
@@ -650,15 +657,15 @@ const checkConnection = async () => {
 
     if (isConnectionValid) {
       isConnected.value = true
-      baseConnectionStatus.value = 'Connected'
+      baseConnectionStatus.value = t('status.connected')
       lastHeartbeat.value = Date.now()
     } else {
       isConnected.value = false
-      baseConnectionStatus.value = 'Disconnected'
+      baseConnectionStatus.value = t('status.disconnected')
     }
   } catch (error) {
     isConnected.value = false
-    baseConnectionStatus.value = 'Disconnected'
+    baseConnectionStatus.value = t('status.disconnected')
   }
 }
 
@@ -771,7 +778,7 @@ const initializeChatInterface = async () => {
       // Update connection status
       if (data.system_health && !data.system_health.error) {
         isConnected.value = data.system_health.status === 'healthy'
-        baseConnectionStatus.value = isConnected.value ? 'Connected' : 'Disconnected'
+        baseConnectionStatus.value = isConnected.value ? t('status.connected') : t('status.disconnected')
       }
 
       // Issue #671: Clear initialization state on success
@@ -796,9 +803,9 @@ const initializeChatInterface = async () => {
     // Issue #671: Set error state and show toast notification
     const errorMessage = error instanceof Error ? error.message : 'Failed to initialize chat interface'
     store.setInitializationError(errorMessage)
-    notify('Chat initialization failed. Some features may not work correctly.', 'error')
+    notify(t('chat.interface.initFailed'), 'error')
 
-    appStore.setGlobalError('Failed to initialize chat interface')
+    appStore.setGlobalError(t('chat.interface.failedToInit'))
   }
 }
 
@@ -858,23 +865,66 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
   }
 })
 
-// Auto-speak last assistant message when voice output is enabled (#928)
-// Skip when voice conversation is active — it handles its own TTS (#1029)
-// Skip during streaming to avoid calling /api/voice/synthesize on every chunk
+// Streaming sentence-level TTS (#1319)
+// During LLM streaming: extract completed sentences and send each to TTS immediately.
+// After streaming: flush remainder. Falls back to HTTP speak() if WS unavailable.
+const _SPEAKABLE_TYPES = new Set(['response', 'message'])
+let _lastSpokenIdx = 0
+let _lastStreamingMsgId: string | null = null
+
 watch(
   () => {
     const session = store.sessions.find(s => s.id === store.currentSessionId)
     const msgs = session?.messages ?? []
-    const last = msgs[msgs.length - 1]
-    return last?.sender === 'assistant' ? last.content : null
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i]
+      if (m.sender !== 'assistant' || !m.content) continue
+      if (m.type && !_SPEAKABLE_TYPES.has(m.type)) continue
+      return { id: m.id, content: m.content }
+    }
+    return null
   },
-  (newContent, oldContent) => {
-    if (store.isTyping) return  // Wait for streaming to finish
-    if (newContent && newContent !== oldContent && !voiceConversation.isActive.value) {
-      speak(newContent)
+  (current, previous) => {
+    if (!voiceOutputEnabled.value || voiceConversation.isActive.value) return
+    if (!current) return
+
+    // Reset index when message changes
+    if (current.id !== _lastStreamingMsgId) {
+      _lastSpokenIdx = 0
+      _lastStreamingMsgId = current.id
+    }
+
+    if (store.isTyping && current.content) {
+      // During streaming: extract and speak completed sentences
+      const newText = current.content.slice(_lastSpokenIdx)
+      const sentences = _extractCompleteSentences(newText)
+      for (const s of sentences) {
+        speakStreaming(s)
+        _lastSpokenIdx += s.length
+      }
+    } else if (!store.isTyping && current.content) {
+      // Stream ended: flush any remaining text
+      const remainder = current.content.slice(_lastSpokenIdx).trim()
+      if (remainder) speakStreaming(remainder)
+      flushStreaming()
+      _lastSpokenIdx = 0
+      _lastStreamingMsgId = null
     }
   }
 )
+
+/** Extract sentences terminated by ". ", "! ", or "? " — remainder stays buffered. */
+function _extractCompleteSentences(text: string): string[] {
+  const sentences: string[] = []
+  const terminators = /(?<=[.!?])\s+/g
+  let lastEnd = 0
+  let match
+  while ((match = terminators.exec(text)) !== null) {
+    sentences.push(text.slice(lastEnd, match.index + 1))
+    lastEnd = match.index + match[0].length
+  }
+  return sentences
+}
 </script>
 
 <style scoped>

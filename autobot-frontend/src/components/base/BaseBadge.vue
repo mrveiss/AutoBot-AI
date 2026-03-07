@@ -7,7 +7,7 @@
       type="button"
       class="badge-remove"
       @click="handleRemove"
-      aria-label="Remove badge"
+      :aria-label="t('base.badge.removeBadge')"
     >
       <svg class="remove-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -18,6 +18,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 interface Props {
   label?: string
@@ -28,6 +29,8 @@ interface Props {
   removable?: boolean
   monospace?: boolean
 }
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<Props>(), {
   variant: 'default',

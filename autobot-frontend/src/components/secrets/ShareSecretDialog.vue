@@ -8,8 +8,10 @@
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSessionCollaboration } from '@/composables/useSessionCollaboration'
 
+const { t } = useI18n()
 const { sessionPresence, shareSecretWithSession } = useSessionCollaboration()
 
 // Props
@@ -87,7 +89,7 @@ const getInitials = (username: string): string => {
           <!-- Header -->
           <div class="flex items-center justify-between px-6 py-4 border-b border-autobot-border">
             <h2 class="text-lg font-semibold text-autobot-text-primary">
-              Share Secret
+              {{ $t('secrets.share.title') }}
             </h2>
             <button
               class="text-autobot-text-muted hover:text-autobot-text-primary transition-colors"
@@ -101,7 +103,7 @@ const getInitials = (username: string): string => {
           <div class="px-6 py-4 space-y-4">
             <!-- Secret info -->
             <div class="px-3 py-2 bg-autobot-bg-secondary rounded border border-autobot-border">
-              <div class="text-xs text-autobot-text-muted mb-1">Secret</div>
+              <div class="text-xs text-autobot-text-muted mb-1">{{ $t('secrets.share.secretLabel') }}</div>
               <div class="text-sm font-medium text-autobot-text-primary">{{ props.secretName }}</div>
               <div class="text-xs text-autobot-text-muted">{{ props.secretType }}</div>
             </div>
@@ -109,7 +111,7 @@ const getInitials = (username: string): string => {
             <!-- Participant selection -->
             <div>
               <label class="block text-sm font-medium text-autobot-text-secondary mb-2">
-                Share with participants
+                {{ $t('secrets.share.shareWithParticipants') }}
               </label>
               <div class="max-h-48 overflow-y-auto space-y-2 custom-scrollbar">
                 <button
@@ -146,7 +148,7 @@ const getInitials = (username: string): string => {
                   class="text-center py-6 text-autobot-text-muted"
                 >
                   <i class="bi bi-people text-2xl mb-2" />
-                  <div class="text-sm">No participants in session</div>
+                  <div class="text-sm">{{ $t('secrets.share.noParticipants') }}</div>
                 </div>
               </div>
             </div>
@@ -154,17 +156,17 @@ const getInitials = (username: string): string => {
             <!-- Expiry -->
             <div>
               <label class="block text-sm font-medium text-autobot-text-secondary mb-2">
-                Access expires in
+                {{ $t('secrets.share.expiresIn') }}
               </label>
               <select
                 v-model="expiresIn"
                 class="w-full px-3 py-2 bg-autobot-bg-secondary border border-autobot-border rounded-lg text-autobot-text-primary focus:outline-none focus:ring-2 focus:ring-electric-500"
               >
-                <option :value="1">1 hour</option>
-                <option :value="6">6 hours</option>
-                <option :value="24">24 hours</option>
-                <option :value="168">1 week</option>
-                <option :value="0">Never</option>
+                <option :value="1">{{ $t('secrets.share.expire1Hour') }}</option>
+                <option :value="6">{{ $t('secrets.share.expire6Hours') }}</option>
+                <option :value="24">{{ $t('secrets.share.expire24Hours') }}</option>
+                <option :value="168">{{ $t('secrets.share.expire1Week') }}</option>
+                <option :value="0">{{ $t('secrets.share.expireNever') }}</option>
               </select>
             </div>
           </div>
@@ -175,7 +177,7 @@ const getInitials = (username: string): string => {
               class="px-4 py-2 text-sm rounded bg-autobot-bg-secondary hover:bg-autobot-bg-tertiary text-autobot-text-primary transition-colors"
               @click="closeDialog"
             >
-              Cancel
+              {{ $t('secrets.share.cancel') }}
             </button>
             <button
               class="px-4 py-2 text-sm rounded bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50 flex items-center gap-2"
@@ -183,7 +185,7 @@ const getInitials = (username: string): string => {
               @click="share"
             >
               <i v-if="sharing" class="bi bi-arrow-repeat animate-spin" />
-              <span>{{ sharing ? 'Sharing...' : 'Share Secret' }}</span>
+              <span>{{ sharing ? $t('secrets.share.sharing') : $t('secrets.share.shareSecret') }}</span>
             </button>
           </div>
         </div>

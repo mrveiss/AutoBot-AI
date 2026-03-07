@@ -9,11 +9,17 @@ Tracks wizard progress via the Settings key-value store and orchestrates
 node addition, enrollment, role assignment, and fleet provisioning.
 """
 
+import asyncio
 import logging
-from typing import Optional
+import tempfile
+import time
+from pathlib import Path
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, HTTPException
+import yaml
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from services.auth import get_current_user
 from services.database import db_service
 from services.playbook_executor import get_playbook_executor
 
@@ -89,11 +95,171 @@ async def _set_setting(key: str, value: str) -> None:
         await session.commit()
 
 
+def _build_inventory_children(
+    hosts: dict[str, dict],
+    node_roles: list,
+    node_id_to_hostname: dict[str, str],
+) -> tuple[dict[str, dict], dict[str, set[str]]]:
+    """Build Ansible inventory ``children`` with role-based groups (#1346).
+
+    Returns (children dict, ansible_groups) where ansible_groups maps
+    group name to set of hostnames for logging.
+    """
+    from services.role_registry import ROLE_ANSIBLE_GROUPS
+
+    ansible_groups: dict[str, set[str]] = {}
+    for nr in node_roles:
+        hostname = node_id_to_hostname.get(nr.node_id)
+        if not hostname:
+            continue
+        group = ROLE_ANSIBLE_GROUPS.get(nr.role_name)
+        if group:
+            ansible_groups.setdefault(group, set()).add(hostname)
+
+    children: dict[str, dict] = {
+        "slm_nodes": {"hosts": {h: None for h in hosts}},
+    }
+    for group_name, group_hosts in sorted(ansible_groups.items()):
+        children[group_name] = {"hosts": {h: None for h in sorted(group_hosts)}}
+    return children, ansible_groups
+
+
+async def _generate_dynamic_inventory(
+    node_ids: Optional[list[str]] = None,
+) -> Optional[Path]:
+    """Build Ansible inventory with role-based groups (#1346)."""
+    from models.database import Node, NodeRole
+    from sqlalchemy import select
+
+    async with db_service.session() as session:
+        query = select(Node)
+        if node_ids:
+            query = query.where(Node.node_id.in_(node_ids))
+        db_nodes = (await session.execute(query)).scalars().all()
+        if not db_nodes:
+            return None
+
+        hosts: dict[str, dict] = {}
+        node_id_to_hostname: dict[str, str] = {}
+        for node in db_nodes:
+            host_vars = {
+                "ansible_host": node.ip_address,
+                "ansible_user": node.ssh_user or "autobot",
+                "slm_node_id": node.node_id,
+            }
+            if node.ssh_port and node.ssh_port != 22:
+                host_vars["ansible_port"] = node.ssh_port
+            hosts[node.hostname] = host_vars
+            node_id_to_hostname[node.node_id] = node.hostname
+
+        nr_query = select(NodeRole)
+        if node_ids:
+            nr_query = nr_query.where(NodeRole.node_id.in_(node_ids))
+        all_node_roles = (await session.execute(nr_query)).scalars().all()
+
+    children, ansible_groups = _build_inventory_children(
+        hosts, all_node_roles, node_id_to_hostname
+    )
+    inventory = {
+        "all": {
+            "vars": {
+                "ansible_ssh_private_key_file": "~/.ssh/autobot_key",
+                "ansible_python_interpreter": "/usr/bin/python3",
+            },
+            "hosts": hosts,
+            "children": children,
+        },
+    }
+
+    fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-")
+    with open(fd, "w", encoding="utf-8") as f:
+        yaml.dump(inventory, f, default_flow_style=False)
+
+    grp = ", ".join(f"{g}({len(h)})" for g, h in sorted(ansible_groups.items()))
+    logger.info(
+        "Generated inventory at %s: %d nodes, groups: %s",
+        path,
+        len(hosts),
+        grp or "(none)",
+    )
+    return Path(path)
+
+
+# ── Provisioning State (#1384) ──────────────────────────────────────────────
+
+_provision_state: dict = {
+    "status": "idle",  # idle | running | completed | failed
+    "started_at": None,
+    "finished_at": None,
+    "output_lines": [],
+    "error": None,
+}
+_provision_lock = asyncio.Lock()
+
+
+async def _run_provisioning_task(
+    node_ids: Optional[list[str]],
+) -> None:
+    """Run Ansible provisioning in background (#1384)."""
+    global _provision_state
+
+    temp_inventory_path = None
+    try:
+        temp_inventory_path = await _generate_dynamic_inventory(node_ids)
+        if not temp_inventory_path:
+            _provision_state["status"] = "failed"
+            _provision_state["error"] = "No nodes found for provisioning"
+            _provision_state["finished_at"] = time.time()
+            return
+
+        executor = get_playbook_executor()
+
+        async def log_callback(progress: dict) -> None:
+            msg = progress.get("message", "")
+            if msg:
+                _provision_state["output_lines"].append(msg)
+
+        result = await executor.execute_playbook(
+            playbook_name="playbooks/provision-fleet-roles.yml",
+            extra_vars={},
+            inventory_path=temp_inventory_path,
+            progress_callback=log_callback,
+        )
+
+        raw_output = result.get("output", "")
+        if raw_output:
+            for line in raw_output.splitlines():
+                _provision_state["output_lines"].append(line)
+
+        if result.get("success"):
+            _provision_state["status"] = "completed"
+            logger.info("Fleet provisioning completed successfully")
+        else:
+            _provision_state["status"] = "failed"
+            _provision_state["error"] = (
+                "Ansible exited with code " f"{result.get('returncode', -1)}"
+            )
+            logger.error(
+                "Fleet provisioning failed (rc=%s)",
+                result.get("returncode", -1),
+            )
+    except Exception as exc:
+        _provision_state["status"] = "failed"
+        _provision_state["error"] = str(exc)
+        logger.exception("Fleet provisioning error: %s", exc)
+    finally:
+        _provision_state["finished_at"] = time.time()
+        if temp_inventory_path and temp_inventory_path.exists():
+            temp_inventory_path.unlink(missing_ok=True)
+
+
 # ── Endpoints ───────────────────────────────────────────────────────────────
 
 
 @router.get("/status", response_model=WizardStatus)
-async def get_wizard_status():
+async def get_wizard_status(
+    _: Annotated[dict, Depends(get_current_user)],
+):
     """Get the current setup wizard status."""
     is_completed = (await _get_setting("setup_wizard_completed")) == "true"
     current_step = await _get_setting("setup_wizard_current_step", "welcome")
@@ -128,26 +294,29 @@ async def get_wizard_status():
 
 
 @router.post("/complete-step")
-async def complete_step(request: StepCompleteRequest):
+async def complete_step(
+    request: StepCompleteRequest,
+    _: Annotated[dict, Depends(get_current_user)],
+):
     """Mark a wizard step as completed and advance to the next."""
     step = request.step
     if step not in WIZARD_STEPS:
         raise HTTPException(status_code=400, detail=f"Unknown step: {step}")
 
-    # Add to completed steps
     completed_raw = await _get_setting("setup_wizard_completed_steps", "")
     completed = set(completed_raw.split(",")) if completed_raw else set()
     completed.discard("")
     completed.add(step)
-    await _set_setting("setup_wizard_completed_steps", ",".join(sorted(completed)))
+    await _set_setting(
+        "setup_wizard_completed_steps",
+        ",".join(sorted(completed)),
+    )
 
-    # Advance to next step
     current_index = WIZARD_STEPS.index(step)
     if current_index + 1 < len(WIZARD_STEPS):
         next_step = WIZARD_STEPS[current_index + 1]
         await _set_setting("setup_wizard_current_step", next_step)
     else:
-        # Final step — mark wizard as completed
         await _set_setting("setup_wizard_completed", "true")
         await _set_setting("setup_wizard_current_step", "complete")
 
@@ -156,7 +325,9 @@ async def complete_step(request: StepCompleteRequest):
 
 
 @router.post("/skip")
-async def skip_wizard():
+async def skip_wizard(
+    _: Annotated[dict, Depends(get_current_user)],
+):
     """Skip the setup wizard entirely (mark as completed)."""
     await _set_setting("setup_wizard_completed", "true")
     await _set_setting("setup_wizard_current_step", "complete")
@@ -165,7 +336,9 @@ async def skip_wizard():
 
 
 @router.post("/reset")
-async def reset_wizard():
+async def reset_wizard(
+    _: Annotated[dict, Depends(get_current_user)],
+):
     """Reset the setup wizard to run again."""
     await _set_setting("setup_wizard_completed", "false")
     await _set_setting("setup_wizard_current_step", "welcome")
@@ -175,66 +348,91 @@ async def reset_wizard():
 
 
 @router.post("/provision-fleet")
-async def provision_fleet(request: ProvisionRequest):
-    """Trigger fleet provisioning via Ansible.
+async def provision_fleet(
+    request: ProvisionRequest,
+    _: Annotated[dict, Depends(get_current_user)],
+):
+    """Start fleet provisioning as a background task (#1384).
 
-    Runs the provision-fleet-roles.yml playbook, optionally limited to
-    specific node IDs.
+    Returns immediately. Poll GET /provision-status for logs.
     """
-    executor = get_playbook_executor()
+    global _provision_state
 
-    extra_vars = {}
-    limit = request.node_ids if request.node_ids else None
+    async with _provision_lock:
+        if _provision_state["status"] == "running":
+            raise HTTPException(
+                status_code=409,
+                detail="Provisioning is already running",
+            )
+
+        _provision_state = {
+            "status": "running",
+            "started_at": time.time(),
+            "finished_at": None,
+            "output_lines": [],
+            "error": None,
+        }
 
     logger.info(
         "Starting fleet provisioning (nodes: %s)",
-        limit or "all",
+        request.node_ids or "all",
     )
 
-    result = await executor.execute_playbook(
-        playbook_name="playbooks/provision-fleet-roles.yml",
-        limit=limit,
-        extra_vars=extra_vars,
-    )
+    asyncio.create_task(_run_provisioning_task(request.node_ids))
 
-    if result.get("success"):
-        logger.info("Fleet provisioning completed successfully")
-        return {
-            "status": "ok",
-            "message": "Fleet provisioning completed",
-            "output": result.get("output", ""),
-        }
-    else:
-        logger.error("Fleet provisioning failed: %s", result.get("output", ""))
-        raise HTTPException(
-            status_code=500,
-            detail=f"Provisioning failed: {result.get('output', 'unknown error')}",
-        )
+    return {
+        "status": "started",
+        "message": "Provisioning started in background",
+    }
+
+
+@router.get("/provision-status")
+async def get_provision_status(
+    _: Annotated[dict, Depends(get_current_user)],
+    since_line: int = 0,
+):
+    """Poll provisioning progress and log output (#1384).
+
+    Args:
+        since_line: Return lines from this index (incremental).
+    """
+    lines = _provision_state["output_lines"]
+    new_lines = lines[since_line:] if since_line < len(lines) else []
+
+    result = {
+        "status": _provision_state["status"],
+        "lines": new_lines,
+        "total_lines": len(lines),
+        "error": _provision_state.get("error"),
+    }
+
+    if _provision_state["started_at"]:
+        elapsed = (
+            _provision_state.get("finished_at") or time.time()
+        ) - _provision_state["started_at"]
+        result["elapsed_seconds"] = round(elapsed, 1)
+
+    return result
 
 
 @router.get("/validate")
-async def validate_fleet():
-    """Validate that all fleet nodes are healthy.
-
-    Checks the roles/fleet-health endpoint logic to determine if the fleet
-    is ready for production use.
-    """
+async def validate_fleet(
+    _: Annotated[dict, Depends(get_current_user)],
+):
+    """Validate that all fleet nodes are healthy."""
     from models.database import Node, NodeRole
     from services.role_registry import DEFAULT_ROLES
     from sqlalchemy import func, select
 
     async with db_service.session() as session:
-        # Count total nodes
         node_count_result = await session.execute(select(func.count(Node.id)))
         total_nodes = node_count_result.scalar() or 0
 
-        # Count online nodes
         online_result = await session.execute(
             select(func.count(Node.id)).where(Node.status == "online")
         )
         online_nodes = online_result.scalar() or 0
 
-        # Check required roles have active assignments
         required_roles = [r["name"] for r in DEFAULT_ROLES if r.get("required")]
         missing_roles = []
         for role_name in required_roles:

@@ -13,6 +13,7 @@
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
+import { formatDateTime } from '@/composables/useTimezone'
 import {
   useSystemUpdates,
   type UpdatePackage,
@@ -194,7 +195,7 @@ function getSeverityBadge(severity: string): string {
 
 function formatDate(d: string | null): string {
   if (!d) return '-'
-  return new Date(d).toLocaleString()
+  return formatDateTime(d)
 }
 
 // Watch for running jobs to start polling

@@ -4,7 +4,7 @@
       <div class="toolbar-content">
         <div class="toolbar-info">
           <i class="fas fa-check-square"></i>
-          <span>{{ selectionCount }} document{{ selectionCount > 1 ? 's' : '' }} selected</span>
+          <span>{{ $t('knowledge.batchToolbar.documentsSelected', { count: selectionCount }) }}</span>
         </div>
         <div class="toolbar-actions">
           <BaseButton
@@ -15,7 +15,7 @@
             class="toolbar-btn vectorize"
           >
             <i v-if="!isVectorizing" class="fas fa-cubes"></i>
-            Vectorize Selected
+            {{ $t('knowledge.batchToolbar.vectorizeSelected') }}
           </BaseButton>
           <BaseButton
             variant="secondary"
@@ -23,7 +23,7 @@
             class="toolbar-btn cancel"
           >
             <i class="fas fa-times"></i>
-            Clear Selection
+            {{ $t('knowledge.batchToolbar.clearSelection') }}
           </BaseButton>
         </div>
       </div>

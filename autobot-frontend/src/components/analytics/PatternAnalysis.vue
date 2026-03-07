@@ -1,63 +1,66 @@
 <template>
   <div class="pattern-analysis-section analytics-section">
     <h3>
-      <i class="fas fa-puzzle-piece"></i> Code Pattern Analysis
-      <span v-if="totalPatterns > 0" class="total-count">({{ totalPatterns }} patterns)</span>
+      <i class="fas fa-puzzle-piece"></i> {{ $t('analytics.patterns.title') }}
+      <span v-if="totalPatterns > 0" class="total-count">({{ $t('analytics.patterns.patternsCount', { count: totalPatterns }) }})</span>
       <button @click="runAnalysis" :disabled="analyzing || !rootPath" class="section-action-btn">
         <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
-        {{ analyzing ? 'Analyzing...' : 'Analyze Patterns' }}
+        {{ analyzing ? $t('analytics.patterns.analyzing') : $t('analytics.patterns.analyzePatterns') }}
       </button>
     </h3>
 
-    <!-- Loading State -->
+    <!-- Progress Bar (shown above results while analyzing) -->
     <div v-if="analyzing" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <span v-if="taskStatus">{{ taskStatus.current_step || 'Analyzing code patterns...' }}</span>
-      <span v-else>Starting pattern analysis...</span>
+      <span v-if="taskStatus">{{ taskStatus.current_step || $t('analytics.patterns.analyzingCode') }}</span>
+      <span v-else>{{ $t('analytics.patterns.startingAnalysis') }}</span>
       <div v-if="taskStatus?.progress" class="mini-progress">
         <div class="mini-progress-bar" :style="{ width: taskStatus.progress + '%' }"></div>
       </div>
+      <span v-if="taskStatus?.partial_results?.files_processed" class="files-progress">
+        {{ taskStatus.partial_results.files_processed }} / {{ taskStatus.partial_results.total_files }} files
+      </span>
     </div>
 
     <!-- Interrupted State (#1250) -->
-    <div v-else-if="wasInterrupted" class="interrupted-state">
+    <div v-if="!analyzing && wasInterrupted" class="interrupted-state">
       <i class="fas fa-info-circle"></i>
-      Previous analysis was interrupted by a server restart.
+      {{ $t('analytics.patterns.interrupted') }}
       <button @click="runAnalysis" :disabled="!rootPath" class="rerun-btn">
-        <i class="fas fa-redo"></i> Re-run Analysis
+        <i class="fas fa-redo"></i> {{ $t('analytics.patterns.rerunAnalysis') }}
       </button>
       <button @click="reset" class="dismiss-btn">
-        <i class="fas fa-times"></i> Dismiss
+        <i class="fas fa-times"></i> {{ $t('analytics.patterns.dismiss') }}
       </button>
     </div>
 
     <!-- Error State -->
-    <div v-else-if="error" class="error-state">
+    <div v-if="!analyzing && !wasInterrupted && error" class="error-state">
       <i class="fas fa-exclamation-triangle"></i> {{ error }}
       <button @click="reset" class="retry-btn">
-        <i class="fas fa-redo"></i> Reset
+        <i class="fas fa-redo"></i> {{ $t('analytics.patterns.reset') }}
       </button>
     </div>
 
-    <!-- Results -->
-    <div v-else-if="hasResults" class="section-content">
+    <!-- Results (shown alongside progress bar when partial results arrive) -->
+    <div v-if="hasResults" class="section-content">
       <!-- Summary Cards -->
       <div class="pattern-summary-cards">
         <div class="summary-card">
           <div class="summary-value">{{ analysisReport?.analysis_summary?.files_analyzed || 0 }}</div>
-          <div class="summary-label">Files Analyzed</div>
+          <div class="summary-label">{{ $t('analytics.patterns.filesAnalyzed') }}</div>
         </div>
         <div class="summary-card">
           <div class="summary-value">{{ totalPatterns }}</div>
-          <div class="summary-label">Patterns Found</div>
+          <div class="summary-label">{{ $t('analytics.patterns.patternsFound') }}</div>
         </div>
         <div class="summary-card">
           <div class="summary-value">{{ analysisReport?.analysis_summary?.potential_loc_reduction || 0 }}</div>
-          <div class="summary-label">LOC Reduction</div>
+          <div class="summary-label">{{ $t('analytics.patterns.locReduction') }}</div>
         </div>
         <div class="summary-card" :class="'grade-' + (analysisReport?.analysis_summary?.complexity_score || 'N').toLowerCase()">
           <div class="summary-value">{{ analysisReport?.analysis_summary?.complexity_score || 'N/A' }}</div>
-          <div class="summary-label">Complexity Grade</div>
+          <div class="summary-label">{{ $t('analytics.patterns.complexityGrade') }}</div>
         </div>
       </div>
 
@@ -72,7 +75,7 @@
       <div v-if="duplicatePatterns.length > 0" class="accordion-group">
         <div class="accordion-header" @click="expandedSections.duplicates = !expandedSections.duplicates">
           <i :class="expandedSections.duplicates ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-          <span class="header-title"><i class="fas fa-clone"></i> Duplicate Code</span>
+          <span class="header-title"><i class="fas fa-clone"></i> {{ $t('analytics.patterns.duplicateCode') }}</span>
           <span class="header-count">({{ duplicatePatterns.length }})</span>
         </div>
         <div v-show="expandedSections.duplicates" class="accordion-content">
@@ -85,11 +88,11 @@
             <div class="pattern-details">
               <div class="detail-row">
                 <i class="fas fa-map-marker-alt"></i>
-                <span>{{ dup.locations?.length || 0 }} locations</span>
+                <span>{{ $t('analytics.patterns.locations', { count: dup.locations?.length || 0 }) }}</span>
               </div>
               <div class="detail-row">
                 <i class="fas fa-compress-alt"></i>
-                <span>{{ dup.code_reduction_potential }} lines saveable</span>
+                <span>{{ $t('analytics.patterns.linesSaveable', { count: dup.code_reduction_potential }) }}</span>
               </div>
             </div>
             <div class="pattern-locations">
@@ -98,7 +101,7 @@
                 <span v-if="loc.function_name" class="function-name">{{ loc.function_name }}</span>
               </div>
               <div v-if="(dup.locations?.length || 0) > 3" class="more-locations">
-                +{{ (dup.locations?.length || 0) - 3 }} more locations
+                {{ $t('analytics.patterns.moreLocations', { count: (dup.locations?.length || 0) - 3 }) }}
               </div>
             </div>
             <div class="pattern-suggestion">
@@ -106,7 +109,7 @@
             </div>
           </div>
           <div v-if="duplicatePatterns.length > 20" class="show-more">
-            <span class="muted">Showing 20 of {{ duplicatePatterns.length }} duplicate patterns</span>
+            <span class="muted">{{ $t('analytics.patterns.showingOfDuplicates', { shown: 20, total: duplicatePatterns.length }) }}</span>
           </div>
         </div>
       </div>
@@ -115,7 +118,7 @@
       <div v-if="regexOpportunities.length > 0" class="accordion-group">
         <div class="accordion-header" @click="expandedSections.regex = !expandedSections.regex">
           <i :class="expandedSections.regex ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-          <span class="header-title"><i class="fas fa-asterisk"></i> Regex Opportunities</span>
+          <span class="header-title"><i class="fas fa-asterisk"></i> {{ $t('analytics.patterns.regexOpportunities') }}</span>
           <span class="header-count">({{ regexOpportunities.length }})</span>
         </div>
         <div v-show="expandedSections.regex" class="accordion-content">
@@ -130,17 +133,17 @@
             </div>
             <div class="code-comparison">
               <div class="code-block current">
-                <span class="code-label">Current:</span>
+                <span class="code-label">{{ $t('analytics.patterns.current') }}:</span>
                 <pre>{{ truncateCode(opp.current_code) }}</pre>
               </div>
               <div class="code-block suggested">
-                <span class="code-label">Suggested:</span>
+                <span class="code-label">{{ $t('analytics.patterns.suggested') }}:</span>
                 <code>{{ opp.suggested_regex }}</code>
               </div>
             </div>
           </div>
           <div v-if="regexOpportunities.length > 15" class="show-more">
-            <span class="muted">Showing 15 of {{ regexOpportunities.length }} opportunities</span>
+            <span class="muted">{{ $t('analytics.patterns.showingOfOpportunities', { shown: 15, total: regexOpportunities.length }) }}</span>
           </div>
         </div>
       </div>
@@ -149,18 +152,18 @@
       <div v-if="complexityHotspots.length > 0" class="accordion-group">
         <div class="accordion-header" @click="expandedSections.complexity = !expandedSections.complexity">
           <i :class="expandedSections.complexity ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-          <span class="header-title"><i class="fas fa-brain"></i> Complexity Hotspots</span>
+          <span class="header-title"><i class="fas fa-brain"></i> {{ $t('analytics.patterns.complexityHotspots') }}</span>
           <span class="header-count">({{ complexityHotspots.length }})</span>
         </div>
         <div v-show="expandedSections.complexity" class="accordion-content">
           <table class="complexity-table">
             <thead>
               <tr>
-                <th>Location</th>
-                <th>CC</th>
-                <th>Cognitive</th>
-                <th>MI</th>
-                <th>Nesting</th>
+                <th>{{ $t('analytics.patterns.location') }}</th>
+                <th>{{ $t('analytics.patterns.cc') }}</th>
+                <th>{{ $t('analytics.patterns.cognitive') }}</th>
+                <th>{{ $t('analytics.patterns.mi') }}</th>
+                <th>{{ $t('analytics.patterns.nesting') }}</th>
               </tr>
             </thead>
             <tbody>
@@ -183,7 +186,7 @@
             </tbody>
           </table>
           <div v-if="complexityHotspots.length > 20" class="show-more">
-            <span class="muted">Showing 20 of {{ complexityHotspots.length }} hotspots</span>
+            <span class="muted">{{ $t('analytics.patterns.showingOfHotspots', { shown: 20, total: complexityHotspots.length }) }}</span>
           </div>
         </div>
       </div>
@@ -192,7 +195,7 @@
       <div v-if="refactoringSuggestions.length > 0" class="accordion-group">
         <div class="accordion-header" @click="expandedSections.refactoring = !expandedSections.refactoring">
           <i :class="expandedSections.refactoring ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-          <span class="header-title"><i class="fas fa-magic"></i> Refactoring Suggestions</span>
+          <span class="header-title"><i class="fas fa-magic"></i> {{ $t('analytics.patterns.refactoringSuggestions') }}</span>
           <span class="header-count">({{ refactoringSuggestions.length }})</span>
         </div>
         <div v-show="expandedSections.refactoring" class="accordion-content">
@@ -220,7 +223,7 @@
             </div>
           </div>
           <div v-if="refactoringSuggestions.length > 15" class="show-more">
-            <span class="muted">Showing 15 of {{ refactoringSuggestions.length }} suggestions</span>
+            <span class="muted">{{ $t('analytics.patterns.showingOfSuggestions', { shown: 15, total: refactoringSuggestions.length }) }}</span>
           </div>
         </div>
       </div>
@@ -228,8 +231,8 @@
       <!-- Storage Stats -->
       <div v-if="storageStats" class="storage-stats">
         <i class="fas fa-database"></i>
-        {{ storageStats.total_patterns }} patterns in ChromaDB
-        <button @click="clearStorage" class="clear-btn" title="Clear stored patterns">
+        {{ $t('analytics.patterns.patternsInChromaDB', { count: storageStats.total_patterns }) }}
+        <button @click="clearStorage" class="clear-btn" :title="$t('analytics.patterns.clearStoredPatterns')">
           <i class="fas fa-trash-alt"></i>
         </button>
       </div>
@@ -237,7 +240,7 @@
       <!-- Timestamp -->
       <div v-if="analysisReport?.analysis_summary?.timestamp" class="scan-timestamp">
         <i class="fas fa-clock"></i>
-        Last scan: {{ formatTimestamp(analysisReport.analysis_summary.timestamp) }}
+        {{ $t('analytics.patterns.lastScan') }}: {{ formatTimestamp(analysisReport.analysis_summary.timestamp) }}
         <span v-if="analysisReport?.analysis_summary?.duration_seconds" class="analysis-time">
           ({{ analysisReport.analysis_summary.duration_seconds.toFixed(1) }}s)
         </span>
@@ -245,17 +248,20 @@
     </div>
 
     <!-- Empty State -->
-    <div v-else class="empty-state">
+    <div v-if="!analyzing && !wasInterrupted && !error && !hasResults" class="empty-state">
       <i class="fas fa-puzzle-piece"></i>
-      <p>No pattern analysis available</p>
-      <p class="empty-hint">Click 'Analyze Patterns' to detect duplicates, complexity hotspots, and optimization opportunities.</p>
+      <p>{{ $t('analytics.patterns.noAnalysis') }}</p>
+      <p class="empty-hint">{{ $t('analytics.patterns.emptyHint') }}</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { watch, onMounted, reactive } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { usePatternAnalysis } from '@/composables/usePatternAnalysis'
+
+const { t } = useI18n()
 
 // Props
 const props = defineProps<{
@@ -325,7 +331,7 @@ const runAnalysis = async () => {
 
 // Clear storage handler
 const clearStorage = async () => {
-  if (confirm('Clear all stored patterns from ChromaDB?')) {
+  if (confirm(t('analytics.patterns.confirmClear'))) {
     await clearStorageApi()
     await getStorageStats()
   }
@@ -530,6 +536,11 @@ defineExpose({
   height: 100%;
   background: var(--color-purple);
   transition: width var(--duration-300) var(--ease-in-out);
+}
+
+.files-progress {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
 }
 
 .error-state {

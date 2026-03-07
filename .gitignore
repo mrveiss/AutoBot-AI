@@ -435,3 +435,12 @@ ansible/inventory/group_vars/vault.yml
 certs/.redis-admin-credentials
 slm-server/.env
 dev_creds_backup
+docs/.obsidian/app.json
+docs/.obsidian/appearance.json
+docs/.obsidian/core-plugins.json
+.obsidian/app.json
+.obsidian/appearance.json
+.obsidian/core-plugins.json
+
+# Git worktrees
+.worktrees/

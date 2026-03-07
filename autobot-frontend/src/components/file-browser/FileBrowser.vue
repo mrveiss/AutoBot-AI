@@ -32,7 +32,7 @@
         <!-- File List Panel in Tree View -->
         <div class="files-panel">
           <div class="files-header">
-            <h3><i class="fas fa-files"></i> {{ selectedPath || '/' }} Contents</h3>
+            <h3><i class="fas fa-files"></i> {{ $t('fileBrowser.browser.contentsOf', { path: selectedPath || '/' }) }}</h3>
 
             <!-- File Upload (Inline) -->
             <FileUpload
@@ -42,12 +42,12 @@
             />
 
             <div class="file-actions-inline">
-              <button @click="refreshFiles" aria-label="Refresh files">
-                <i class="fas fa-sync-alt"></i> Refresh
+              <button @click="refreshFiles" :aria-label="t('fileBrowser.browser.refreshAriaLabel')">
+                <i class="fas fa-sync-alt"></i> {{ $t('fileBrowser.browser.refresh') }}
               </button>
-              <button @click="toggleView" aria-label="Toggle view mode">
+              <button @click="toggleView" :aria-label="t('fileBrowser.browser.toggleViewAriaLabel')">
                 <i :class="viewMode === 'tree' ? 'fas fa-list' : 'fas fa-tree'"></i>
-                {{ viewMode === 'tree' ? 'List View' : 'Tree View' }}
+                {{ viewMode === 'tree' ? $t('fileBrowser.browser.listView') : $t('fileBrowser.browser.treeView') }}
               </button>
             </div>
           </div>
@@ -85,10 +85,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { useUserStore } from '@/stores/useUserStore'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { useSessionActivityLogger } from '@/composables/useSessionActivityLogger'
+
+const { t } = useI18n()
 
 // Issue #608: Activity logger for session tracking
 const { logFileActivity } = useSessionActivityLogger()
@@ -254,7 +257,7 @@ const { execute: uploadFiles, loading: isUploadingFiles } = useAsyncHandler(
   },
   {
     onError: () => {
-      alert('Failed to upload files. Please check file size limits and format requirements, then try again.')
+      alert(t('fileBrowser.browser.uploadFailed', { error: 'Please check file size limits and format requirements' }))
     },
     logErrors: true,
     errorPrefix: '[FileBrowser]'
@@ -313,7 +316,7 @@ const { execute: performDelete, loading: isDeletingFile } = useAsyncHandler(
   },
   {
     onError: () => {
-      alert(`Failed to delete item. Please try again.`)
+      alert(t('fileBrowser.browser.errorDeletingFile'))
     },
     logErrors: true,
     errorPrefix: '[FileBrowser]'
@@ -321,9 +324,7 @@ const { execute: performDelete, loading: isDeletingFile } = useAsyncHandler(
 )
 
 const deleteFile = async (file: any) => {
-  const message = file.is_dir
-    ? `Are you sure you want to delete the folder "${file.name}" and all its contents?`
-    : `Are you sure you want to delete "${file.name}"?`
+  const message = t('fileBrowser.browser.deleteConfirm', { name: file.name })
 
   if (confirm(message)) {
     await performDelete(file)
@@ -350,7 +351,7 @@ const { execute: performRename, loading: isRenamingFile } = useAsyncHandler(
   },
   {
     onError: () => {
-      alert(`Failed to rename item. Please try again.`)
+      alert(t('fileBrowser.browser.errorRenamingFile'))
     },
     logErrors: true,
     errorPrefix: '[FileBrowser]'
@@ -358,8 +359,7 @@ const { execute: performRename, loading: isRenamingFile } = useAsyncHandler(
 )
 
 const renameFile = async (file: any) => {
-  const itemType = file.is_dir ? 'folder' : 'file'
-  const newName = prompt(`Enter new name for ${itemType} "${file.name}":`, file.name)
+  const newName = prompt(t('fileBrowser.browser.renamePrompt'), file.name)
 
   if (newName && newName !== file.name) {
     await performRename(file, newName)
@@ -385,7 +385,7 @@ const { execute: performCreateFolder, loading: isCreatingFolder } = useAsyncHand
   },
   {
     onError: () => {
-      alert('Failed to create folder. Please try again.')
+      alert(t('fileBrowser.browser.errorCreatingFolder'))
     },
     logErrors: true,
     errorPrefix: '[FileBrowser]'
@@ -393,7 +393,7 @@ const { execute: performCreateFolder, loading: isCreatingFolder } = useAsyncHand
 )
 
 const createNewFolder = async () => {
-  const folderName = prompt('Enter new folder name:')
+  const folderName = prompt(t('fileBrowser.browser.createFolderPrompt'))
 
   if (folderName) {
     await performCreateFolder(folderName)

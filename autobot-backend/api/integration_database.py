@@ -12,7 +12,8 @@ and executing read-only queries.
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from auth_middleware import check_admin_permission
+from fastapi import APIRouter, Depends, HTTPException
 from integrations.base import IntegrationConfig
 from integrations.database_integration import (
     MongoDBIntegration,
@@ -23,7 +24,10 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["integrations-database"])
+router = APIRouter(
+    tags=["integrations-database"],
+    dependencies=[Depends(check_admin_permission)],
+)
 
 
 class DatabaseConnectionRequest(BaseModel):

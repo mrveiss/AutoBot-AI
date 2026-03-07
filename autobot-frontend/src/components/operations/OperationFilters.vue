@@ -10,13 +10,13 @@
   <div class="operation-filters">
     <!-- Status filter -->
     <div class="filter-group">
-      <label class="filter-label">Status</label>
+      <label class="filter-label">{{ $t('operations.filters.statusLabel') }}</label>
       <select
         v-model="localStatus"
         class="filter-select"
         @change="emitFilter"
       >
-        <option :value="undefined">All Statuses</option>
+        <option :value="undefined">{{ $t('operations.filters.allStatuses') }}</option>
         <option
           v-for="status in statuses"
           :key="status"
@@ -29,13 +29,13 @@
 
     <!-- Type filter -->
     <div class="filter-group">
-      <label class="filter-label">Type</label>
+      <label class="filter-label">{{ $t('operations.filters.typeLabel') }}</label>
       <select
         v-model="localType"
         class="filter-select"
         @change="emitFilter"
       >
-        <option :value="undefined">All Types</option>
+        <option :value="undefined">{{ $t('operations.filters.allTypes') }}</option>
         <option
           v-for="(label, type) in OPERATION_TYPE_LABELS"
           :key="type"
@@ -48,7 +48,7 @@
 
     <!-- Limit filter -->
     <div class="filter-group">
-      <label class="filter-label">Show</label>
+      <label class="filter-label">{{ $t('operations.filters.showLabel') }}</label>
       <select
         v-model.number="localLimit"
         class="filter-select"
@@ -68,15 +68,18 @@
       :disabled="!hasActiveFilters"
     >
       <i class="fas fa-times"></i>
-      Clear
+      {{ $t('operations.filters.clear') }}
     </button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { OperationsFilter, OperationStatus, OperationType } from '@/types/operations'
 import { STATUS_CONFIG, OPERATION_TYPE_LABELS } from '@/types/operations'
+
+const { t } = useI18n()
 
 interface Props {
   filter: OperationsFilter

@@ -11,7 +11,7 @@
 
         <div class="flex items-center space-x-2 text-sm">
           <i class="fas fa-globe" :class="iconClass"></i>
-          <span class="font-medium">Chat Browser</span>
+          <span class="font-medium">{{ $t('chat.browser.title') }}</span>
 
           <!-- Session State Badge -->
           <div class="session-badge" :class="sessionBadgeClass">
@@ -21,7 +21,7 @@
         </div>
 
         <div class="text-xs text-autobot-text-muted">
-          Chat: {{ chatSessionId?.slice(-8) || 'None' }} | Browser: {{ browserSessionId?.slice(-8) || 'Not Connected' }}
+          {{ $t('chat.browser.chatLabel') }} {{ chatSessionId?.slice(-8) || $t('chat.browser.none') }} | {{ $t('chat.browser.browserLabel') }} {{ browserSessionId?.slice(-8) || $t('chat.browser.notConnected') }}
         </div>
       </div>
 
@@ -39,7 +39,7 @@
         <button
           @click="refreshSession"
           class="browser-btn"
-          title="Refresh Browser Session"
+          :title="$t('chat.browser.refreshSession')"
           :disabled="isConnecting"
         >
           <i class="fas fa-sync" :class="{ 'fa-spin': isConnecting }"></i>
@@ -59,7 +59,7 @@
       <div v-else class="flex-1 flex items-center justify-center bg-autobot-bg-secondary">
         <div class="text-center">
           <i class="fas fa-spinner fa-spin text-4xl text-autobot-text-muted mb-4"></i>
-          <p class="text-autobot-text-muted">{{ isConnecting ? 'Connecting to browser session...' : 'No chat session' }}</p>
+          <p class="text-autobot-text-muted">{{ isConnecting ? $t('chat.browser.connecting') : $t('chat.browser.noChatSession') }}</p>
         </div>
       </div>
     </div>
@@ -72,10 +72,12 @@
 // Author: mrveiss
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import PopoutChromiumBrowser from '@/components/desktop/PopoutChromiumBrowser.vue'
 import apiClient from '@/utils/ApiClient'
 
+const { t } = useI18n()
 const logger = createLogger('ChatBrowser')
 
 // Props
@@ -117,10 +119,10 @@ const connectionStatusClass = computed(() => ({
 }))
 
 const sessionStateText = computed(() => {
-  if (interactionRequired.value) return 'Interaction Required'
-  if (browserStatus.value === 'connected') return 'Active'
-  if (browserStatus.value === 'connecting') return 'Connecting'
-  return 'Disconnected'
+  if (interactionRequired.value) return t('chat.browser.interactionRequired')
+  if (browserStatus.value === 'connected') return t('chat.browser.active')
+  if (browserStatus.value === 'connecting') return t('chat.browser.connectingStatus')
+  return t('chat.browser.disconnected')
 })
 
 const sessionBadgeClass = computed(() => ({

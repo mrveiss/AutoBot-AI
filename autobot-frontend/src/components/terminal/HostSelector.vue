@@ -2,7 +2,7 @@
   <div class="host-selector">
     <div class="selector-label">
       <i class="fas fa-server text-autobot-text-secondary mr-2"></i>
-      <span class="text-sm font-medium text-autobot-text-primary">Host:</span>
+      <span class="text-sm font-medium text-autobot-text-primary">{{ $t('terminal.host') }}</span>
     </div>
     <select
       v-model="selectedHostId"
@@ -11,7 +11,7 @@
       :disabled="disabled || loading"
     >
       <!-- Infrastructure hosts from API (Issue #715) -->
-      <optgroup v-if="infrastructureHosts.length > 0" label="Infrastructure Hosts">
+      <optgroup v-if="infrastructureHosts.length > 0" :label="$t('terminal.infrastructureHosts')">
         <option
           v-for="host in infrastructureHosts"
           :key="host.id"
@@ -21,7 +21,7 @@
         </option>
       </optgroup>
       <!-- Default VM hosts -->
-      <optgroup label="AutoBot VMs">
+      <optgroup :label="$t('terminal.autobotVMs')">
         <option
           v-for="host in defaultHosts"
           :key="host.id"

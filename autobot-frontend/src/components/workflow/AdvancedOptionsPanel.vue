@@ -1,6 +1,6 @@
 <template>
   <div v-if="show" class="advanced-options">
-    <h4>⚙️ Advanced Options</h4>
+    <h4>{{ $t('workflow.advancedOptions.title') }}</h4>
 
     <!-- Automatic Execution -->
     <div class="option-group">
@@ -10,13 +10,13 @@
           :checked="autoExecution"
           @change="$emit('update:autoExecution', ($event.target as HTMLInputElement).checked)"
         />
-        🔄 Automatic execution of remaining steps
+        {{ $t('workflow.advancedOptions.autoExecution') }}
       </label>
     </div>
 
     <!-- Timeout Settings -->
     <div class="option-group">
-      <label>⏱️ Execution timeout (seconds):</label>
+      <label>{{ $t('workflow.advancedOptions.timeoutLabel') }}</label>
       <input
         type="number"
         :value="timeout"
@@ -29,7 +29,7 @@
 
     <!-- Password Protection -->
     <div class="option-group">
-      <label>🔐 Password protection for destructive commands:</label>
+      <label>{{ $t('workflow.advancedOptions.passwordProtectionLabel') }}</label>
       <div class="password-options">
         <label>
           <input
@@ -37,7 +37,7 @@
             :checked="passwordProtection === 'none'"
             @change="$emit('update:passwordProtection', 'none')"
           />
-          None
+          {{ $t('workflow.advancedOptions.passwordNone') }}
         </label>
         <label>
           <input
@@ -45,7 +45,7 @@
             :checked="passwordProtection === 'required'"
             @change="$emit('update:passwordProtection', 'required')"
           />
-          Required
+          {{ $t('workflow.advancedOptions.passwordRequired') }}
         </label>
         <label>
           <input
@@ -53,7 +53,7 @@
             :checked="passwordProtection === 'optional'"
             @change="$emit('update:passwordProtection', 'optional')"
           />
-          Optional
+          {{ $t('workflow.advancedOptions.passwordOptional') }}
         </label>
       </div>
 
@@ -62,10 +62,10 @@
           type="password"
           :value="password"
           @input="$emit('update:password', ($event.target as HTMLInputElement).value)"
-          placeholder="Enter admin password..."
+          :placeholder="$t('workflow.advancedOptions.passwordPlaceholder')"
           class="password-field"
         />
-        <div class="password-note">Required for executing high-risk commands</div>
+        <div class="password-note">{{ $t('workflow.advancedOptions.passwordNote') }}</div>
       </div>
     </div>
   </div>

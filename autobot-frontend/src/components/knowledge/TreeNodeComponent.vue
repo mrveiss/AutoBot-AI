@@ -37,7 +37,7 @@
 
       <!-- Folder count or file size -->
       <span v-if="node.type === 'folder' && node.children" class="folder-count">
-        {{ node.children.length }} items
+        {{ $t('knowledge.treeNode.itemsCount', { count: node.children.length }) }}
       </span>
       <span v-else-if="node.type === 'file' && node.size !== undefined" class="node-size">
         {{ formatSize(node.size) }}
@@ -47,11 +47,11 @@
       <button
         v-if="node.type === 'folder' && unvectorizedCount > 0"
         class="unvectorized-badge"
-        :title="`Click to vectorize ${unvectorizedCount} document${unvectorizedCount !== 1 ? 's' : ''}`"
+        :title="$t('knowledge.treeNode.vectorizeFolderTitle', { count: unvectorizedCount, plural: unvectorizedCount !== 1 ? 's' : '' })"
         @click.stop="$emit('vectorize-folder', node)"
       >
         <i class="fas fa-exclamation-circle"></i>
-        {{ unvectorizedCount }} unvectorized
+        {{ $t('knowledge.treeNode.unvectorized', { count: unvectorizedCount }) }}
         <i class="fas fa-play-circle"></i>
       </button>
 
@@ -66,7 +66,7 @@
       <button
         v-if="node.type === 'file' && canVectorize"
         :class="['vectorize-btn', { 'retry-btn': vectorizationStatus === 'failed' }]"
-        :title="vectorizationStatus === 'failed' ? 'Retry vectorization' : 'Vectorize this document'"
+        :title="vectorizationStatus === 'failed' ? $t('knowledge.treeNode.retryTitle') : $t('knowledge.treeNode.vectorizeTitle')"
         @click.stop="$emit('vectorize', node.id)"
       >
         <i :class="vectorizationStatus === 'failed' ? 'fas fa-redo' : 'fas fa-cube'"></i>

@@ -3,23 +3,23 @@
     <div class="filter-row">
       <!-- Date Range Filter -->
       <div class="filter-group">
-        <label for="date-range">Date Range</label>
+        <label for="date-range">{{ $t('audit.filters.dateRange') }}</label>
         <select
           id="date-range"
           :value="filter.dateRange"
           @change="handleDateRangeChange"
         >
-          <option value="today">Today</option>
-          <option value="week">Last 7 Days</option>
-          <option value="month">Last 30 Days</option>
-          <option value="custom">Custom</option>
+          <option value="today">{{ $t('audit.filters.today') }}</option>
+          <option value="week">{{ $t('audit.filters.last7Days') }}</option>
+          <option value="month">{{ $t('audit.filters.last30Days') }}</option>
+          <option value="custom">{{ $t('audit.filters.custom') }}</option>
         </select>
       </div>
 
       <!-- Custom Date Inputs -->
       <template v-if="filter.dateRange === 'custom'">
         <div class="filter-group">
-          <label for="start-date">Start Date</label>
+          <label for="start-date">{{ $t('audit.filters.startDate') }}</label>
           <input
             id="start-date"
             type="datetime-local"
@@ -28,7 +28,7 @@
           />
         </div>
         <div class="filter-group">
-          <label for="end-date">End Date</label>
+          <label for="end-date">{{ $t('audit.filters.endDate') }}</label>
           <input
             id="end-date"
             type="datetime-local"
@@ -40,13 +40,13 @@
 
       <!-- Operation Filter -->
       <div class="filter-group">
-        <label for="operation">Operation</label>
+        <label for="operation">{{ $t('audit.filters.operation') }}</label>
         <select
           id="operation"
           :value="filter.operation || ''"
           @change="handleOperationChange"
         >
-          <option value="">All Operations</option>
+          <option value="">{{ $t('audit.filters.allOperations') }}</option>
           <optgroup
             v-for="(ops, category) in operationCategories"
             :key="category"
@@ -61,17 +61,17 @@
 
       <!-- Result Filter -->
       <div class="filter-group">
-        <label for="result">Result</label>
+        <label for="result">{{ $t('audit.filters.result') }}</label>
         <select
           id="result"
           :value="filter.result || ''"
           @change="handleResultChange"
         >
-          <option value="">All Results</option>
-          <option value="success">Success</option>
-          <option value="denied">Denied</option>
-          <option value="failed">Failed</option>
-          <option value="error">Error</option>
+          <option value="">{{ $t('audit.filters.allResults') }}</option>
+          <option value="success">{{ $t('audit.filters.success') }}</option>
+          <option value="denied">{{ $t('audit.filters.denied') }}</option>
+          <option value="failed">{{ $t('audit.filters.failed') }}</option>
+          <option value="error">{{ $t('audit.filters.error') }}</option>
         </select>
       </div>
     </div>
@@ -79,43 +79,43 @@
     <div class="filter-row">
       <!-- User Filter -->
       <div class="filter-group">
-        <label for="user-id">User</label>
+        <label for="user-id">{{ $t('audit.filters.user') }}</label>
         <input
           id="user-id"
           type="text"
           :value="filter.userId || ''"
-          placeholder="Filter by user..."
+          :placeholder="$t('audit.filters.userPlaceholder')"
           @input="handleUserIdChange"
         />
       </div>
 
       <!-- Session Filter -->
       <div class="filter-group">
-        <label for="session-id">Session</label>
+        <label for="session-id">{{ $t('audit.filters.session') }}</label>
         <input
           id="session-id"
           type="text"
           :value="filter.sessionId || ''"
-          placeholder="Filter by session..."
+          :placeholder="$t('audit.filters.sessionPlaceholder')"
           @input="handleSessionIdChange"
         />
       </div>
 
       <!-- VM Filter -->
       <div class="filter-group">
-        <label for="vm-name">VM</label>
+        <label for="vm-name">{{ $t('audit.filters.vm') }}</label>
         <input
           id="vm-name"
           type="text"
           :value="filter.vmName || ''"
-          placeholder="Filter by VM..."
+          :placeholder="$t('audit.filters.vmPlaceholder')"
           @input="handleVmNameChange"
         />
       </div>
 
       <!-- Limit -->
       <div class="filter-group filter-group-small">
-        <label for="limit">Limit</label>
+        <label for="limit">{{ $t('audit.filters.limit') }}</label>
         <select
           id="limit"
           :value="filter.limit"
@@ -133,11 +133,11 @@
     <div class="filter-actions">
       <button class="btn btn-primary" @click="applyFilters">
         <i class="fas fa-search"></i>
-        Apply Filters
+        {{ $t('audit.filters.applyFilters') }}
       </button>
       <button class="btn btn-secondary" @click="resetFilters">
         <i class="fas fa-undo"></i>
-        Reset
+        {{ $t('audit.filters.reset') }}
       </button>
       <button
         v-if="hasActiveFilters"
@@ -145,7 +145,7 @@
         @click="clearFilters"
       >
         <i class="fas fa-times"></i>
-        Clear All
+        {{ $t('audit.filters.clearAll') }}
       </button>
     </div>
   </div>

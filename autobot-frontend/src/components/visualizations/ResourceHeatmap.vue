@@ -10,19 +10,19 @@
 <template>
   <div class="resource-heatmap">
     <div class="heatmap-header">
-      <h3>{{ title }}</h3>
+      <h3>{{ title || t('visualizations.resourceHeatmap.defaultTitle') }}</h3>
       <div class="header-actions">
         <select v-model="selectedMetric" @change="updateData" class="metric-select">
-          <option value="cpu">CPU Usage</option>
-          <option value="memory">Memory Usage</option>
-          <option value="disk">Disk I/O</option>
-          <option value="network">Network I/O</option>
+          <option value="cpu">{{ t('visualizations.resourceHeatmap.cpuUsage') }}</option>
+          <option value="memory">{{ t('visualizations.resourceHeatmap.memoryUsage') }}</option>
+          <option value="disk">{{ t('visualizations.resourceHeatmap.diskIo') }}</option>
+          <option value="network">{{ t('visualizations.resourceHeatmap.networkIo') }}</option>
         </select>
         <select v-model="timeRange" @change="fetchData" class="time-select">
-          <option value="1h">Last Hour</option>
-          <option value="6h">Last 6 Hours</option>
-          <option value="24h">Last 24 Hours</option>
-          <option value="7d">Last 7 Days</option>
+          <option value="1h">{{ t('visualizations.resourceHeatmap.lastHour') }}</option>
+          <option value="6h">{{ t('visualizations.resourceHeatmap.last6Hours') }}</option>
+          <option value="24h">{{ t('visualizations.resourceHeatmap.last24Hours') }}</option>
+          <option value="7d">{{ t('visualizations.resourceHeatmap.last7Days') }}</option>
         </select>
         <button @click="fetchData" class="refresh-btn" :disabled="isLoading">
           <i class="fas fa-sync" :class="{ 'fa-spin': isLoading }"></i>
@@ -32,13 +32,13 @@
 
     <div v-if="isLoading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Loading heatmap data...</span>
+      <span>{{ t('visualizations.resourceHeatmap.loadingData') }}</span>
     </div>
 
     <div v-else-if="error" class="error-state">
       <i class="fas fa-exclamation-triangle"></i>
       <span>{{ error }}</span>
-      <button @click="fetchData" class="retry-btn">Retry</button>
+      <button @click="fetchData" class="retry-btn">{{ t('visualizations.resourceHeatmap.retry') }}</button>
     </div>
 
     <div v-else class="heatmap-container">
@@ -53,23 +53,23 @@
 
       <!-- Legend -->
       <div class="heatmap-legend">
-        <span class="legend-label">Low</span>
+        <span class="legend-label">{{ t('visualizations.resourceHeatmap.legendLow') }}</span>
         <div class="legend-gradient"></div>
-        <span class="legend-label">High</span>
+        <span class="legend-label">{{ t('visualizations.resourceHeatmap.legendHigh') }}</span>
       </div>
 
       <!-- Summary Stats -->
       <div class="heatmap-stats">
         <div class="stat-item">
-          <span class="stat-label">Peak</span>
+          <span class="stat-label">{{ t('visualizations.resourceHeatmap.peak') }}</span>
           <span class="stat-value peak">{{ peakValue }}%</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">Average</span>
+          <span class="stat-label">{{ t('visualizations.resourceHeatmap.average') }}</span>
           <span class="stat-value">{{ averageValue }}%</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">Minimum</span>
+          <span class="stat-label">{{ t('visualizations.resourceHeatmap.minimum') }}</span>
           <span class="stat-value low">{{ minValue }}%</span>
         </div>
       </div>
@@ -79,10 +79,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import VueApexCharts from 'vue3-apexcharts'
 import type { ApexOptions } from 'apexcharts'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+
+const { t } = useI18n()
 
 const apexchart = VueApexCharts
 const logger = createLogger('ResourceHeatmap')
@@ -96,7 +99,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'Resource Utilization Heatmap',
+  title: undefined,
   height: 350,
   refreshInterval: 60000,
   machine: 'all'
@@ -200,11 +203,11 @@ const chartOptions = computed<ApexOptions>(() => ({
       useFillColorAsStroke: false,
       colorScale: {
         ranges: [
-          { from: 0, to: 20, color: getCssVar('--color-info-dark'), name: 'Low' },
-          { from: 21, to: 40, color: getCssVar('--color-info-hover'), name: 'Moderate' },
-          { from: 41, to: 60, color: getCssVar('--chart-blue'), name: 'Medium' },
-          { from: 61, to: 80, color: getCssVar('--color-warning'), name: 'High' },
-          { from: 81, to: 100, color: getCssVar('--color-error'), name: 'Critical' }
+          { from: 0, to: 20, color: getCssVar('--color-info-dark'), name: t('visualizations.resourceHeatmap.rangeLow') },
+          { from: 21, to: 40, color: getCssVar('--color-info-hover'), name: t('visualizations.resourceHeatmap.rangeModerate') },
+          { from: 41, to: 60, color: getCssVar('--chart-blue'), name: t('visualizations.resourceHeatmap.rangeMedium') },
+          { from: 61, to: 80, color: getCssVar('--color-warning'), name: t('visualizations.resourceHeatmap.rangeHigh') },
+          { from: 81, to: 100, color: getCssVar('--color-error'), name: t('visualizations.resourceHeatmap.rangeCritical') }
         ]
       }
     }
@@ -272,12 +275,12 @@ const chartOptions = computed<ApexOptions>(() => ({
 // Methods
 function getMetricLabel(): string {
   const labels: Record<string, string> = {
-    cpu: 'CPU Usage',
-    memory: 'Memory Usage',
-    disk: 'Disk I/O',
-    network: 'Network I/O'
+    cpu: t('visualizations.resourceHeatmap.cpuUsage'),
+    memory: t('visualizations.resourceHeatmap.memoryUsage'),
+    disk: t('visualizations.resourceHeatmap.diskIo'),
+    network: t('visualizations.resourceHeatmap.networkIo')
   }
-  return labels[selectedMetric.value] || 'Usage'
+  return labels[selectedMetric.value] || t('visualizations.resourceHeatmap.usage')
 }
 
 function getValueClass(value: number): string {

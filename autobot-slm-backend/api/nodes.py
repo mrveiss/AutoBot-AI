@@ -19,9 +19,12 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from models.database import (
     Certificate,
     CodeStatus,
+    Deployment,
+    DeploymentStatus,
     EventSeverity,
     EventType,
     Node,
+    NodeCodeVersion,
     NodeEvent,
     NodeRole,
     NodeStatus,
@@ -34,6 +37,8 @@ from models.schemas import (
     CertificateResponse,
     ConnectionTestRequest,
     ConnectionTestResponse,
+    DecommissionPreflightResponse,
+    DecommissionRequest,
     EnrollRequest,
     HeartbeatRequest,
     HeartbeatResponse,
@@ -58,7 +63,7 @@ from services.auth import get_current_user
 from services.database import get_db
 from services.encryption import encrypt_data
 from services.reconciler import reconciler_service
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
@@ -736,6 +741,19 @@ async def assign_role_to_node(
             detail="Node not found",
         )
 
+    # Check role uniqueness — one service role per node (#1389)
+    from services.role_registry import check_role_uniqueness
+
+    owner = await check_role_uniqueness(db, role_request.role_name, node_id)
+    if owner:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Role '{role_request.role_name}' is already assigned "
+                f"to node '{owner}'. Migrate or unassign it first."
+            ),
+        )
+
     preflight = await _run_preflight(node_id, role_request.role_name, db)
     if not preflight.allowed:
         conflict_details = "; ".join(c.detail for c in preflight.conflicts)
@@ -869,13 +887,13 @@ async def remove_role_from_node(
             detail=f"Role assignment not found: {role_name}",
         )
 
-    # Look up the systemd service name from Role table
-    service_name = await _get_role_service_name(db, role_name)
+    # Look up the systemd service name and target path from Role table
+    service_name, target_path = await _get_role_service_and_path(db, role_name)
 
     # If there's a service, run Ansible to stop and clean up
     if service_name:
         ansible_result = await _run_role_removal(
-            node_id, role_name, service_name, backup
+            node_id, role_name, service_name, backup, target_path
         )
         if not ansible_result["success"]:
             raise HTTPException(
@@ -899,12 +917,17 @@ async def remove_role_from_node(
     return response
 
 
-async def _get_role_service_name(db: AsyncSession, role_name: str) -> str | None:
-    """Look up the systemd service name for a role."""
+async def _get_role_service_and_path(
+    db: AsyncSession, role_name: str
+) -> tuple[str | None, str | None]:
+    """Look up the systemd service name and target path for a role."""
     result = await db.execute(
-        select(Role.systemd_service).where(Role.name == role_name)
+        select(Role.systemd_service, Role.target_path).where(Role.name == role_name)
     )
-    return result.scalar_one_or_none()
+    row = result.one_or_none()
+    if row is None:
+        return None, None
+    return row[0], row[1]
 
 
 async def _run_role_removal(
@@ -912,19 +935,25 @@ async def _run_role_removal(
     role_name: str,
     service_name: str,
     backup: bool,
+    target_path: str | None = None,
 ) -> dict:
     """Execute the remove-role Ansible playbook."""
     from services.playbook_executor import get_playbook_executor
 
     executor = get_playbook_executor()
+    extra_vars = {
+        "role_name": role_name,
+        "systemd_service": service_name,
+        "backup_before_removal": str(backup).lower(),
+    }
+    if target_path:
+        # Extract directory name from full path
+        # e.g. /opt/autobot/autobot-npu-worker -> autobot-npu-worker
+        extra_vars["role_target_dir"] = os.path.basename(target_path.rstrip("/"))
     result = await executor.execute_playbook(
         playbook_name="playbooks/remove-role.yml",
         limit=[node_id],
-        extra_vars={
-            "role_name": role_name,
-            "systemd_service": service_name,
-            "backup_before_removal": str(backup).lower(),
-        },
+        extra_vars=extra_vars,
     )
     # Extract backup path from output if backup was requested
     if backup and result["success"]:
@@ -941,6 +970,277 @@ def _parse_backup_path(output: str) -> str | None:
                 path = "/opt/autobot/backups/" + parts[1].strip().rstrip('"')
                 return path
     return None
+
+
+# ── Decommission helpers (Issue #1369) ──────────────────────────────
+
+
+async def _verify_node_not_manager(db: AsyncSession, node_id: str) -> Node:
+    """Fetch node and block SLM Manager decommission (#1369)."""
+    result = await db.execute(select(Node).where(Node.node_id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Node not found",
+        )
+    # Block SLM Manager via node_id convention or DB setting
+    is_manager = node_id.startswith("00-")
+    if not is_manager:
+        mgr_result = await db.execute(
+            select(Setting.value).where(Setting.key == "slm_manager_node")
+        )
+        manager_node = mgr_result.scalar_one_or_none()
+        is_manager = manager_node is not None and node_id == manager_node
+    if is_manager:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot decommission the SLM Manager node",
+        )
+    return node
+
+
+async def _classify_role(
+    db: AsyncSession, nr: NodeRole, node_id: str
+) -> tuple[str, dict]:
+    """Classify a single role for decommission preflight (#1369).
+
+    Returns (bucket, info) where bucket is one of:
+    must_migrate, should_migrate, safe_to_remove.
+    """
+    role_result = await db.execute(select(Role).where(Role.name == nr.role_name))
+    role = role_result.scalar_one_or_none()
+    if not role:
+        return "safe_to_remove", {
+            "role_name": nr.role_name,
+            "display_name": nr.role_name,
+            "reason": "Role definition not found",
+        }
+
+    display = role.display_name or role.name
+    other_result = await db.execute(
+        select(func.count())
+        .select_from(NodeRole)
+        .join(Node, Node.node_id == NodeRole.node_id)
+        .where(
+            NodeRole.role_name == nr.role_name,
+            NodeRole.node_id != node_id,
+            Node.status.in_(
+                [
+                    NodeStatus.ONLINE.value,
+                    NodeStatus.DEGRADED.value,
+                ]
+            ),
+        )
+    )
+    other_count = other_result.scalar() or 0
+    info = {"role_name": nr.role_name, "display_name": display}
+
+    if role.required and other_count == 0:
+        info["reason"] = "Required role, only instance"
+        return "must_migrate", info
+    if role.degraded_without and other_count == 0:
+        reasons = ", ".join(role.degraded_without)
+        info["reason"] = f"System degraded without: {reasons}"
+        return "should_migrate", info
+
+    info["reason"] = (
+        "Redundant (other nodes have this role)" if other_count > 0 else "Optional role"
+    )
+    return "safe_to_remove", info
+
+
+@router.get(
+    "/{node_id}/decommission/preflight",
+    response_model=DecommissionPreflightResponse,
+)
+async def decommission_preflight(
+    node_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """Preflight check for node decommission (#1369).
+
+    Classifies each role on the node into:
+    - must_migrate: required roles with no other active host
+    - should_migrate: degraded_without roles with no other active host
+    - safe_to_remove: optional/redundant roles
+    """
+    await _verify_node_not_manager(db, node_id)
+
+    result = await db.execute(select(NodeRole).where(NodeRole.node_id == node_id))
+    node_roles = result.scalars().all()
+
+    buckets: dict[str, list] = {
+        "must_migrate": [],
+        "should_migrate": [],
+        "safe_to_remove": [],
+    }
+    for nr in node_roles:
+        bucket, info = await _classify_role(db, nr, node_id)
+        buckets[bucket].append(info)
+
+    return {
+        "can_proceed": len(buckets["must_migrate"]) == 0,
+        **buckets,
+    }
+
+
+async def _run_decommission_playbook(node_id: str, backup: bool) -> dict:
+    """Execute the decommission Ansible playbook (#1369)."""
+    from services.playbook_executor import get_playbook_executor
+
+    executor = get_playbook_executor()
+    return await executor.execute_playbook(
+        playbook_name="playbooks/decommission-node.yml",
+        limit=[node_id],
+        extra_vars={
+            "backup_before_decommission": str(backup).lower(),
+        },
+    )
+
+
+async def _cleanup_decommissioned_node(
+    db: AsyncSession,
+    node: Node,
+    deployment: Deployment,
+    ansible_result: dict,
+) -> None:
+    """Remove DB records and mark node decommissioned (#1369)."""
+    await db.execute(delete(NodeRole).where(NodeRole.node_id == node.node_id))
+    await db.execute(
+        delete(NodeCodeVersion).where(NodeCodeVersion.node_id == node.node_id)
+    )
+    node.status = NodeStatus.DECOMMISSIONED.value
+    node.updated_at = datetime.utcnow()
+
+    deployment.status = DeploymentStatus.COMPLETED.value
+    deployment.completed_at = datetime.utcnow()
+    deployment.playbook_output = ansible_result.get("output", "")
+    await db.commit()
+
+
+async def _fail_deployment(
+    db: AsyncSession,
+    deployment: Deployment,
+    error_msg: str,
+    output: str = "",
+) -> None:
+    """Mark a deployment as failed and persist (#1369)."""
+    deployment.status = DeploymentStatus.FAILED.value
+    deployment.completed_at = datetime.utcnow()
+    deployment.error = error_msg[:2000]
+    if output:
+        deployment.playbook_output = output
+    await db.commit()
+
+
+async def _execute_decommission(
+    db: AsyncSession,
+    deployment: Deployment,
+    node_id: str,
+    backup: bool,
+) -> dict:
+    """Run decommission playbook; fail deployment on error (#1369)."""
+    try:
+        result = await _run_decommission_playbook(node_id, backup)
+    except Exception as e:
+        await _fail_deployment(db, deployment, str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Decommission playbook failed: {str(e)[:300]}",
+        )
+
+    if not result["success"]:
+        output = result.get("output", "")
+        await _fail_deployment(db, deployment, output, output)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Decommission failed: {output[:300]}",
+        )
+    return result
+
+
+@router.post("/{node_id}/decommission")
+async def decommission_node(
+    node_id: str,
+    request: DecommissionRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[dict, Depends(get_current_user)],
+) -> dict:
+    """Decommission a node (#1369).
+
+    Runs Ansible playbook, cleans DB records, marks decommissioned.
+    """
+    if request.confirm_node_id != node_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="confirm_node_id does not match node_id",
+        )
+
+    node = await _verify_node_not_manager(db, node_id)
+
+    preflight = await decommission_preflight(node_id, db, current_user)
+    if not preflight["can_proceed"]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Required roles must be migrated first",
+        )
+
+    deployment = _create_decommission_deployment(
+        node_id,
+        preflight,
+        request.backup,
+        current_user,
+    )
+    db.add(deployment)
+    await db.commit()
+
+    ansible_result = await _execute_decommission(
+        db,
+        deployment,
+        node_id,
+        request.backup,
+    )
+    await _cleanup_decommissioned_node(
+        db,
+        node,
+        deployment,
+        ansible_result,
+    )
+    logger.info("Node decommissioned: %s", node_id)
+    await _broadcast_lifecycle_event(
+        node_id,
+        "node_decommissioned",
+        {"hostname": node.hostname, "ip_address": node.ip_address},
+    )
+    return {
+        "success": True,
+        "message": f"Node {node_id} decommissioned successfully",
+        "deployment_id": deployment.deployment_id,
+    }
+
+
+def _create_decommission_deployment(
+    node_id: str,
+    preflight: dict,
+    backup: bool,
+    current_user: dict,
+) -> Deployment:
+    """Build a Deployment audit record for decommission (#1369)."""
+    all_roles = preflight["safe_to_remove"] + preflight["should_migrate"]
+    return Deployment(
+        deployment_id=str(uuid.uuid4()),
+        node_id=node_id,
+        roles=[r["role_name"] for r in all_roles],
+        status=DeploymentStatus.IN_PROGRESS.value,
+        started_at=datetime.utcnow(),
+        triggered_by=current_user.get("username", "unknown"),
+        extra_data={
+            "action": "decommission",
+            "backup": backup,
+        },
+    )
 
 
 @router.delete("/{node_id}", status_code=status.HTTP_204_NO_CONTENT)

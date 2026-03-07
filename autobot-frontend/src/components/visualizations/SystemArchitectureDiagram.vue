@@ -6,21 +6,21 @@
     <!-- Header -->
     <div class="diagram-header">
       <div class="header-content">
-        <h3><i class="fas fa-sitemap"></i> {{ title }}</h3>
-        <p class="header-description">Interactive system architecture visualization</p>
+        <h3><i class="fas fa-sitemap"></i> {{ title || t('visualizations.systemArchitecture.defaultTitle') }}</h3>
+        <p class="header-description">{{ t('visualizations.systemArchitecture.headerDescription') }}</p>
       </div>
       <div class="header-actions">
         <button @click="refreshArchitecture" :disabled="isLoading" class="action-btn">
           <i class="fas fa-sync" :class="{ 'fa-spin': isLoading }"></i>
-          Refresh
+          {{ t('visualizations.systemArchitecture.refresh') }}
         </button>
         <button @click="autoLayout" class="action-btn">
           <i class="fas fa-magic"></i>
-          Auto Layout
+          {{ t('visualizations.systemArchitecture.autoLayout') }}
         </button>
         <button @click="exportDiagram" class="action-btn">
           <i class="fas fa-download"></i>
-          Export
+          {{ t('visualizations.systemArchitecture.export') }}
         </button>
       </div>
     </div>
@@ -28,7 +28,7 @@
     <!-- View Controls -->
     <div class="view-controls">
       <div class="control-group">
-        <label>View:</label>
+        <label>{{ t('visualizations.systemArchitecture.viewLabel') }}</label>
         <div class="view-toggle">
           <button
             v-for="view in viewModes"
@@ -42,23 +42,23 @@
         </div>
       </div>
       <div class="control-group">
-        <label>Detail Level:</label>
+        <label>{{ t('visualizations.systemArchitecture.detailLevel') }}</label>
         <select v-model="detailLevel">
-          <option value="high">High (All Components)</option>
-          <option value="medium">Medium (Services Only)</option>
-          <option value="low">Low (Overview)</option>
+          <option value="high">{{ t('visualizations.systemArchitecture.detailHigh') }}</option>
+          <option value="medium">{{ t('visualizations.systemArchitecture.detailMedium') }}</option>
+          <option value="low">{{ t('visualizations.systemArchitecture.detailLow') }}</option>
         </select>
       </div>
       <div class="control-group">
         <label>
           <input type="checkbox" v-model="showConnections" />
-          Show Connections
+          {{ t('visualizations.systemArchitecture.showConnections') }}
         </label>
       </div>
       <div class="control-group">
         <label>
           <input type="checkbox" v-model="showMetrics" />
-          Show Metrics
+          {{ t('visualizations.systemArchitecture.showMetrics') }}
         </label>
       </div>
     </div>
@@ -66,7 +66,7 @@
     <!-- Loading State -->
     <div v-if="isLoading" class="loading-state">
       <div class="spinner"><i class="fas fa-circle-notch fa-spin"></i></div>
-      <p>Loading architecture data...</p>
+      <p>{{ t('visualizations.systemArchitecture.loadingArchitecture') }}</p>
     </div>
 
     <!-- Diagram Canvas -->
@@ -316,17 +316,17 @@
 
       <!-- Zoom Controls -->
       <div class="zoom-controls">
-        <button @click="zoomIn" title="Zoom in">
+        <button @click="zoomIn" :title="t('visualizations.systemArchitecture.zoomIn')">
           <i class="fas fa-plus"></i>
         </button>
         <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-        <button @click="zoomOut" title="Zoom out">
+        <button @click="zoomOut" :title="t('visualizations.systemArchitecture.zoomOut')">
           <i class="fas fa-minus"></i>
         </button>
-        <button @click="resetView" title="Reset view">
+        <button @click="resetView" :title="t('visualizations.systemArchitecture.resetView')">
           <i class="fas fa-expand"></i>
         </button>
-        <button @click="showGrid = !showGrid" title="Toggle grid" :class="{ active: showGrid }">
+        <button @click="showGrid = !showGrid" :title="t('visualizations.systemArchitecture.toggleGrid')" :class="{ active: showGrid }">
           <i class="fas fa-th"></i>
         </button>
       </div>
@@ -376,36 +376,36 @@
           <!-- Basic Info -->
           <div class="info-section">
             <div class="info-row">
-              <label>Type:</label>
+              <label>{{ t('visualizations.systemArchitecture.type') }}</label>
               <span class="type-badge" :style="{ background: getComponentCategoryColor(selectedComponent.category) }">
                 {{ selectedComponent.type }}
               </span>
             </div>
             <div class="info-row">
-              <label>Status:</label>
+              <label>{{ t('visualizations.systemArchitecture.status') }}</label>
               <span class="status-badge" :class="`status-${selectedComponent.status}`">
                 {{ selectedComponent.status }}
               </span>
             </div>
             <div class="info-row" v-if="selectedComponent.host">
-              <label>Host:</label>
+              <label>{{ t('visualizations.systemArchitecture.host') }}</label>
               <code>{{ selectedComponent.host }}</code>
             </div>
             <div class="info-row" v-if="selectedComponent.port">
-              <label>Port:</label>
+              <label>{{ t('visualizations.systemArchitecture.port') }}</label>
               <code>{{ selectedComponent.port }}</code>
             </div>
           </div>
 
           <!-- Description -->
           <div class="description-section" v-if="selectedComponent.description">
-            <h5><i class="fas fa-info-circle"></i> Description</h5>
+            <h5><i class="fas fa-info-circle"></i> {{ t('visualizations.systemArchitecture.descriptionLabel') }}</h5>
             <p>{{ selectedComponent.description }}</p>
           </div>
 
           <!-- Metrics -->
           <div class="metrics-section" v-if="selectedComponent.detailedMetrics">
-            <h5><i class="fas fa-chart-bar"></i> Metrics</h5>
+            <h5><i class="fas fa-chart-bar"></i> {{ t('visualizations.systemArchitecture.metricsLabel') }}</h5>
             <div class="metrics-grid">
               <div
                 v-for="(value, key) in selectedComponent.detailedMetrics"
@@ -420,7 +420,7 @@
 
           <!-- Connections -->
           <div class="connections-section" v-if="getComponentConnections(selectedComponent.id).length">
-            <h5><i class="fas fa-link"></i> Connections</h5>
+            <h5><i class="fas fa-link"></i> {{ t('visualizations.systemArchitecture.connectionsLabel') }}</h5>
             <ul class="connections-list">
               <li
                 v-for="conn in getComponentConnections(selectedComponent.id)"
@@ -444,11 +444,11 @@
           <div class="panel-actions">
             <button @click="focusOnComponent(selectedComponent)" class="action-btn">
               <i class="fas fa-crosshairs"></i>
-              Focus
+              {{ t('visualizations.systemArchitecture.focus') }}
             </button>
             <button @click="expandConnections(selectedComponent)" class="action-btn">
               <i class="fas fa-expand-arrows-alt"></i>
-              Expand
+              {{ t('visualizations.systemArchitecture.expand') }}
             </button>
           </div>
         </div>
@@ -457,46 +457,46 @@
 
     <!-- Legend -->
     <div class="diagram-legend">
-      <h5>Legend</h5>
+      <h5>{{ t('visualizations.systemArchitecture.legend') }}</h5>
       <div class="legend-section">
-        <span class="legend-title">Components:</span>
+        <span class="legend-title">{{ t('visualizations.systemArchitecture.components') }}</span>
         <div class="legend-items">
           <div class="legend-item">
             <span class="legend-color legend-color-frontend"></span>
-            <span>Frontend</span>
+            <span>{{ t('visualizations.systemArchitecture.componentFrontend') }}</span>
           </div>
           <div class="legend-item">
             <span class="legend-color legend-color-backend"></span>
-            <span>Backend</span>
+            <span>{{ t('visualizations.systemArchitecture.componentBackend') }}</span>
           </div>
           <div class="legend-item">
             <span class="legend-color legend-color-database"></span>
-            <span>Database</span>
+            <span>{{ t('visualizations.systemArchitecture.componentDatabase') }}</span>
           </div>
           <div class="legend-item">
             <span class="legend-color legend-color-ai"></span>
-            <span>AI/ML</span>
+            <span>{{ t('visualizations.systemArchitecture.componentAiMl') }}</span>
           </div>
           <div class="legend-item">
             <span class="legend-color legend-color-infrastructure"></span>
-            <span>Infrastructure</span>
+            <span>{{ t('visualizations.systemArchitecture.componentInfrastructure') }}</span>
           </div>
         </div>
       </div>
       <div class="legend-section">
-        <span class="legend-title">Connections:</span>
+        <span class="legend-title">{{ t('visualizations.systemArchitecture.connectionsLegend') }}</span>
         <div class="legend-items">
           <div class="legend-item">
             <span class="legend-line legend-line-api"></span>
-            <span>API</span>
+            <span>{{ t('visualizations.systemArchitecture.connApi') }}</span>
           </div>
           <div class="legend-item">
             <span class="legend-line legend-line-data"></span>
-            <span>Data</span>
+            <span>{{ t('visualizations.systemArchitecture.connData') }}</span>
           </div>
           <div class="legend-item">
             <span class="legend-line legend-line-event dashed"></span>
-            <span>Event</span>
+            <span>{{ t('visualizations.systemArchitecture.connEvent') }}</span>
           </div>
         </div>
       </div>
@@ -510,10 +510,13 @@
 // Author: mrveiss
 
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+
+const { t } = useI18n()
 
 const logger = createLogger('SystemArchitectureDiagram')
 
@@ -592,7 +595,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'System Architecture',
+  title: undefined,
   height: 600,
   autoRefresh: true,
   refreshInterval: 30000
@@ -627,11 +630,11 @@ const lastPanPoint = ref({ x: 0, y: 0 })
 const viewBox = ref('0 0 1600 800')
 
 // View modes
-const viewModes: ViewMode[] = [
-  { id: 'physical', label: 'Physical', icon: 'fas fa-server' },
-  { id: 'logical', label: 'Logical', icon: 'fas fa-project-diagram' },
-  { id: 'dataflow', label: 'Data Flow', icon: 'fas fa-exchange-alt' }
-]
+const viewModes = computed<ViewMode[]>(() => [
+  { id: 'physical', label: t('visualizations.systemArchitecture.physical'), icon: 'fas fa-server' },
+  { id: 'logical', label: t('visualizations.systemArchitecture.logical'), icon: 'fas fa-project-diagram' },
+  { id: 'dataflow', label: t('visualizations.systemArchitecture.dataFlow'), icon: 'fas fa-exchange-alt' }
+])
 
 // ============================================================================
 // Issue #704: Computed colors for SVG elements using design tokens

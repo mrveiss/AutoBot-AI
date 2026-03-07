@@ -2,16 +2,16 @@
   <div class="access-metrics" :class="{ compact }">
     <div class="section-header">
       <div class="header-info">
-        <h3><i class="fas fa-chart-bar"></i> Access Control Metrics</h3>
+        <h3><i class="fas fa-chart-bar"></i> {{ $t('featureFlags.accessMetrics.title') }}</h3>
         <p v-if="!compact" class="description">
-          Monitor access control violations during LOG_ONLY mode before enabling full enforcement
+          {{ $t('featureFlags.accessMetrics.description') }}
         </p>
       </div>
       <div class="header-actions">
         <select v-model="selectedDays" class="days-selector" @change="handleDaysChange">
-          <option :value="7">Last 7 days</option>
+          <option :value="7">{{ $t('featureFlags.accessMetrics.last7Days') }}</option>
           <option :value="14">Last 14 days</option>
-          <option :value="30">Last 30 days</option>
+          <option :value="30">{{ $t('featureFlags.accessMetrics.last30Days') }}</option>
         </select>
         <button @click="handleRefresh" class="btn-refresh" :disabled="loading">
           <i class="fas fa-sync-alt" :class="{ 'fa-spin': loading }"></i>
@@ -29,8 +29,8 @@
       <div class="no-data-icon">
         <i class="fas fa-check-circle"></i>
       </div>
-      <h4>No Violations Recorded</h4>
-      <p>No access control violations have been detected in the selected period.</p>
+      <h4>{{ $t('featureFlags.accessMetrics.noData') }}</h4>
+      <p>{{ $t('featureFlags.accessMetrics.noData') }}</p>
     </div>
 
     <!-- Metrics Content -->
@@ -43,14 +43,14 @@
           </div>
           <div class="summary-info">
             <span class="summary-value">{{ metrics.total_violations }}</span>
-            <span class="summary-label">Total Violations</span>
+            <span class="summary-label">{{ $t('featureFlags.accessMetrics.totalViolations') }}</span>
           </div>
           <div class="trend" v-if="metrics.daily_change_percent !== undefined">
             <span :class="trendClass">
               <i :class="trendIcon"></i>
               {{ Math.abs(metrics.daily_change_percent) }}%
             </span>
-            <span class="trend-label">vs yesterday</span>
+            <span class="trend-label">{{ $t('featureFlags.accessMetrics.vsYesterday') }}</span>
           </div>
         </div>
 
@@ -60,7 +60,7 @@
           </div>
           <div class="summary-info">
             <span class="summary-value">{{ endpointCount }}</span>
-            <span class="summary-label">Endpoints Affected</span>
+            <span class="summary-label">{{ $t('featureFlags.accessMetrics.endpointsAffected') }}</span>
           </div>
         </div>
 
@@ -70,7 +70,7 @@
           </div>
           <div class="summary-info">
             <span class="summary-value">{{ userCount }}</span>
-            <span class="summary-label">Users Involved</span>
+            <span class="summary-label">{{ $t('featureFlags.accessMetrics.usersInvolved') }}</span>
           </div>
         </div>
 
@@ -80,7 +80,7 @@
           </div>
           <div class="summary-info">
             <span class="summary-value">{{ metrics.period_days }}</span>
-            <span class="summary-label">Days Analyzed</span>
+            <span class="summary-label">{{ $t('featureFlags.accessMetrics.daysAnalyzed') }}</span>
           </div>
         </div>
       </div>
@@ -89,9 +89,9 @@
       <div v-if="!compact" class="breakdowns">
         <!-- By Endpoint -->
         <div class="breakdown-section">
-          <h4><i class="fas fa-sitemap"></i> By Endpoint</h4>
+          <h4><i class="fas fa-sitemap"></i> {{ $t('featureFlags.accessMetrics.byEndpoint') }}</h4>
           <div v-if="Object.keys(metrics.by_endpoint).length === 0" class="empty-breakdown">
-            No endpoint data available
+            {{ $t('featureFlags.accessMetrics.noEndpointData') }}
           </div>
           <div v-else class="breakdown-list">
             <div
@@ -116,9 +116,9 @@
 
         <!-- By User -->
         <div class="breakdown-section">
-          <h4><i class="fas fa-users"></i> By User</h4>
+          <h4><i class="fas fa-users"></i> {{ $t('featureFlags.accessMetrics.byUser') }}</h4>
           <div v-if="Object.keys(metrics.by_user).length === 0" class="empty-breakdown">
-            No user data available
+            {{ $t('featureFlags.accessMetrics.noUserData') }}
           </div>
           <div v-else class="breakdown-list">
             <div
@@ -143,9 +143,9 @@
 
         <!-- Daily Trend -->
         <div class="breakdown-section full-width">
-          <h4><i class="fas fa-chart-line"></i> Daily Trend</h4>
+          <h4><i class="fas fa-chart-line"></i> {{ $t('featureFlags.accessMetrics.dailyTrend') }}</h4>
           <div v-if="Object.keys(metrics.by_day).length === 0" class="empty-breakdown">
-            No daily data available
+            {{ $t('featureFlags.accessMetrics.noTrendData') }}
           </div>
           <div v-else class="daily-chart">
             <div
@@ -167,13 +167,13 @@
 
         <!-- Recent Violations -->
         <div v-if="metrics.recent_violations?.length" class="breakdown-section full-width">
-          <h4><i class="fas fa-clock"></i> Recent Violations</h4>
+          <h4><i class="fas fa-clock"></i> {{ $t('featureFlags.accessMetrics.recentViolations') }}</h4>
           <div class="violations-table">
             <div class="table-header">
-              <span class="col-time">Time</span>
-              <span class="col-user">User</span>
-              <span class="col-endpoint">Endpoint</span>
-              <span class="col-owner">Owner</span>
+              <span class="col-time">{{ $t('featureFlags.accessMetrics.time') }}</span>
+              <span class="col-user">{{ $t('featureFlags.accessMetrics.user') }}</span>
+              <span class="col-endpoint">{{ $t('featureFlags.accessMetrics.endpoint') }}</span>
+              <span class="col-owner">{{ $t('featureFlags.accessMetrics.owner') }}</span>
             </div>
             <div
               v-for="violation in metrics.recent_violations.slice(0, 10)"

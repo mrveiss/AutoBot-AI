@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
+from config import ConfigManager
 from fastapi import FastAPI
 from knowledge_factory import get_or_create_knowledge_base
 from security_layer import SecurityLayer
@@ -31,7 +32,6 @@ from autobot_shared.tracing import (
     instrument_redis,
     shutdown_tracing,
 )
-from config import ConfigManager
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -436,6 +436,73 @@ async def _init_documentation_watcher():
         logger.warning("Documentation watcher failed: %s", watcher_error)
 
 
+async def _run_background_doc_indexing():
+    """Background task for documentation indexing (#1385, #1390).
+
+    Runs as a fire-and-forget task so it doesn't block startup.
+    After indexing, patches HNSW pickle metadata so subsequent
+    PersistentClient instances can load the index correctly.
+    """
+    try:
+        from services.knowledge.doc_indexer import get_doc_indexer_service
+
+        indexer = get_doc_indexer_service()
+        result = await indexer.index_all(force=False)
+        logger.info(
+            "Doc Index: done — %d indexed, %d skipped in %.1fs",
+            result.success,
+            result.skipped,
+            result.elapsed_seconds,
+        )
+
+        # Fix HNSW pickle format after indexing (#1390)
+        from constants.path_constants import PATH
+        from utils.chromadb_client import _fix_hnsw_pickle_format
+
+        chroma_path = PATH.PROJECT_ROOT / "data" / "chromadb"
+        _fix_hnsw_pickle_format(chroma_path)
+    except Exception as e:
+        logger.warning("Background doc indexing failed (non-critical): %s", e)
+
+
+async def _auto_index_documentation():
+    """
+    Auto-index documentation into ChromaDB if collection is empty (NON-CRITICAL).
+
+    Issue #1385: Ensures autobot_docs ChromaDB collection is populated on startup
+    so the chat RAG pipeline can answer documentation queries without hallucinating.
+    Initialization is synchronous (fast), but actual indexing runs in background
+    to avoid blocking startup.
+    """
+    logger.info("✅ [ 85%] Doc Index: Checking documentation index...")
+    try:
+        from services.knowledge.doc_indexer import get_doc_indexer_service
+
+        indexer = get_doc_indexer_service()
+        if not await indexer.initialize():
+            logger.warning("⚠️ [ 85%] Doc Index: Failed to initialize (non-critical)")
+            return
+
+        if not indexer.needs_indexing():
+            stats = await indexer.get_stats()
+            logger.info(
+                "✅ [ 85%] Doc Index: Collection has %d vectors, skipping",
+                stats.get("count", 0),
+            )
+            return
+
+        # Fire-and-forget: run indexing in background so startup continues
+        logger.info(
+            "✅ [ 85%] Doc Index: Collection empty, " "scheduling background indexing..."
+        )
+        asyncio.create_task(_run_background_doc_indexing())
+
+    except Exception as index_error:
+        logger.warning(
+            "Documentation auto-index failed (non-critical): %s", index_error
+        )
+
+
 async def _init_log_forwarding():
     """
     Initialize log forwarding service if auto-start is enabled (NON-CRITICAL).
@@ -727,6 +794,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_slm_client()
         await _init_background_llm_sync(app)
         await _init_documentation_watcher()
+        await _auto_index_documentation()
         await _init_log_forwarding()
         await _init_slm_reconciler(app)
         await _init_metrics_collection()

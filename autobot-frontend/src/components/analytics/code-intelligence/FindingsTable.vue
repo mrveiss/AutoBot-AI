@@ -17,9 +17,9 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search files or messages..."
+          :placeholder="$t('analytics.findings.table.searchPlaceholder')"
           class="search-input"
-          aria-label="Search findings by file path or message"
+          :aria-label="$t('analytics.findings.table.searchAriaLabel')"
         />
       </div>
     </div>
@@ -27,7 +27,7 @@
     <!-- Loading state -->
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
-      <span>Loading findings...</span>
+      <span>{{ $t('analytics.findings.table.loading') }}</span>
     </div>
 
     <!-- Empty state -->
@@ -41,10 +41,10 @@
       <table>
         <thead>
           <tr>
-            <th class="col-severity">Severity</th>
-            <th class="col-file">File:Line</th>
-            <th class="col-type">Type</th>
-            <th class="col-message">Message</th>
+            <th class="col-severity">{{ $t('analytics.findings.table.severity') }}</th>
+            <th class="col-file">{{ $t('analytics.findings.table.fileLine') }}</th>
+            <th class="col-type">{{ $t('analytics.findings.table.type') }}</th>
+            <th class="col-message">{{ $t('analytics.findings.table.message') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -76,24 +76,24 @@
               <td colspan="4">
                 <div class="detail-card">
                   <div class="detail-section">
-                    <strong>Full Message:</strong>
+                    <strong>{{ $t('analytics.findings.table.fullMessage') }}</strong>
                     <p>{{ finding.message }}</p>
                   </div>
                   <div class="detail-section">
-                    <strong>Recommendation:</strong>
+                    <strong>{{ $t('analytics.findings.table.recommendation') }}</strong>
                     <p>{{ getRemediation(finding) }}</p>
                   </div>
                   <div v-if="finding.owasp_category" class="detail-section">
-                    <strong>OWASP:</strong>
+                    <strong>{{ $t('analytics.findings.table.owasp') }}</strong>
                     <span class="owasp-tag">{{ finding.owasp_category }}</span>
                   </div>
                   <div class="detail-actions">
                     <button
                       @click.stop="copyPath(finding)"
                       class="btn-small"
-                      aria-label="Copy file path to clipboard"
+                      :aria-label="$t('analytics.findings.table.copyPathAriaLabel')"
                     >
-                      <i class="fas fa-copy" aria-hidden="true"></i> Copy Path
+                      <i class="fas fa-copy" aria-hidden="true"></i> {{ $t('analytics.findings.table.copyPath') }}
                     </button>
                   </div>
                 </div>
@@ -108,7 +108,10 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Severity } from '@/types/codeIntelligence'
+
+const { t } = useI18n()
 
 interface Finding {
   severity: Severity
@@ -169,7 +172,7 @@ function truncateMessage(message: string): string {
 }
 
 function getRemediation(finding: Finding): string {
-  return finding.remediation || finding.recommendation || 'No recommendation available'
+  return finding.remediation || finding.recommendation || t('analytics.findings.table.noRecommendation')
 }
 
 function toggleExpand(index: number): void {

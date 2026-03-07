@@ -9,6 +9,7 @@
 
 import { ref, computed } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { usePreferences } from '@/composables/usePreferences'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('useVoiceProfiles')
@@ -31,9 +32,20 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 // Personality-assigned voice — overrides user selection when set (#1135)
 const personalityVoiceId = ref<string>('')
-const effectiveVoiceId = computed<string>(() =>
-  personalityVoiceId.value || selectedVoiceId.value
-)
+// Per-language voice map from personality profile (#1333)
+const personalityVoiceIds = ref<Record<string, string>>({})
+const effectiveVoiceId = computed<string>(() => {
+  // Voice resolution order (#1333):
+  // 1. voice_ids[current_language] (language-specific)
+  // 2. voice_id (profile default, backward compatible)
+  // 3. User-selected voice (selectedVoiceId)
+  const { language } = usePreferences()
+  const lang = language.value || 'en'
+  const langVoice = personalityVoiceIds.value[lang]
+  if (langVoice) return langVoice
+  if (personalityVoiceId.value) return personalityVoiceId.value
+  return selectedVoiceId.value
+})
 
 export function useVoiceProfiles() {
   async function fetchVoices(): Promise<void> {
@@ -128,11 +140,14 @@ export function useVoiceProfiles() {
       if (res.ok) {
         const profile = await res.json()
         personalityVoiceId.value = profile?.voice_id ?? ''
+        personalityVoiceIds.value = profile?.voice_ids ?? {}
       } else {
         personalityVoiceId.value = ''
+        personalityVoiceIds.value = {}
       }
     } catch {
       personalityVoiceId.value = ''
+      personalityVoiceIds.value = {}
     }
   }
 
@@ -140,6 +155,7 @@ export function useVoiceProfiles() {
     voices,
     selectedVoiceId,
     personalityVoiceId,
+    personalityVoiceIds,
     effectiveVoiceId,
     loading,
     error,

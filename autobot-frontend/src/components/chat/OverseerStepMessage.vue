@@ -30,8 +30,8 @@
         <button
           class="copy-btn"
           @click="copyCommand"
-          title="Copy command"
-          aria-label="Copy command"
+          :title="$t('chat.overseer.copyCommand')"
+          :aria-label="$t('chat.overseer.copyCommand')"
         >
           <i class="fas fa-copy" aria-hidden="true"></i>
         </button>
@@ -41,7 +41,7 @@
       <div v-if="step.command_explanation" class="command-explanation">
         <div class="explanation-header">
           <i class="fas fa-info-circle" aria-hidden="true"></i>
-          <span>What this command does:</span>
+          <span>{{ $t('chat.overseer.whatCommandDoes') }}</span>
         </div>
         <p class="explanation-summary">{{ step.command_explanation.summary }}</p>
 
@@ -74,14 +74,14 @@
           <span></span>
           <span></span>
         </div>
-        <span>Running...</span>
+        <span>{{ $t('chat.overseer.running') }}</span>
       </div>
 
       <!-- Output Content -->
       <div class="output-content">
         <div class="output-header">
           <i class="fas fa-terminal" aria-hidden="true"></i>
-          <span>Output</span>
+          <span>{{ $t('chat.overseer.output') }}</span>
           <span v-if="step.return_code !== undefined" class="return-code" :class="{ error: step.return_code !== 0 }">
             Exit: {{ step.return_code }}
           </span>
@@ -93,7 +93,7 @@
       <div v-if="step.output_explanation && step.stream_complete" class="output-explanation">
         <div class="explanation-header">
           <i class="fas fa-chart-bar" aria-hidden="true"></i>
-          <span>What we're looking at:</span>
+          <span>{{ $t('chat.overseer.whatLookingAt') }}</span>
         </div>
         <p class="explanation-summary">{{ step.output_explanation.summary }}</p>
 
@@ -114,7 +114,7 @@
         <div v-if="step.output_explanation.next_steps?.length" class="next-steps">
           <div class="next-steps-header">
             <i class="fas fa-arrow-right" aria-hidden="true"></i>
-            <span>Suggested next steps:</span>
+            <span>{{ $t('chat.overseer.suggestedNextSteps') }}</span>
           </div>
           <ul>
             <li v-for="(nextStep, idx) in step.output_explanation.next_steps" :key="idx">
@@ -148,6 +148,7 @@
  */
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useClipboard } from '@/composables/useClipboard'
 import type { OverseerStep } from '@/composables/useOverseerAgent'
 
@@ -155,6 +156,7 @@ const props = defineProps<{
   step: OverseerStep
 }>()
 
+const { t } = useI18n()
 const { copy } = useClipboard()
 
 // Computed
@@ -180,15 +182,8 @@ const statusIcon = computed(() => {
 })
 
 const statusText = computed(() => {
-  const texts: Record<string, string> = {
-    pending: 'Pending',
-    running: 'Running',
-    streaming: 'Streaming',
-    explaining: 'Explaining',
-    completed: 'Completed',
-    failed: 'Failed'
-  }
-  return texts[props.step.status] || props.step.status
+  const key = `chat.overseer.status.${props.step.status}`
+  return t(key)
 })
 
 // Methods

@@ -12,6 +12,7 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
+import { formatDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
 
@@ -55,10 +56,8 @@ function formatSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-// Format date
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleString()
+  return formatDateTime(dateStr)
 }
 
 // Get file icon

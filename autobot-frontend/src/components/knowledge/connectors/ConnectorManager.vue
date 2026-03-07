@@ -21,8 +21,10 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { formatTimeAgo } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
+import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('ConnectorManager')
+const { t } = useI18n()
 
 const store = useKnowledgeStore()
 
@@ -194,7 +196,7 @@ onMounted(() => {
               d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
             />
           </svg>
-          Source Connectors
+          {{ $t('knowledge.connectors.title') }}
         </h2>
       </div>
 
@@ -214,29 +216,29 @@ onMounted(() => {
             />
           </svg>
         </template>
-        Add Connector
+        {{ $t('knowledge.connectors.addConnector') }}
       </BaseButton>
     </div>
 
     <!-- Loading State -->
     <div v-if="store.connectorsLoading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <p>Loading connectors...</p>
+      <p>{{ $t('knowledge.connectors.loadingConnectors') }}</p>
     </div>
 
     <!-- Empty State -->
     <EmptyState
       v-else-if="store.connectors.length === 0"
       icon="fas fa-plug"
-      title="No connectors configured"
-      message="Add a source connector to automatically ingest documents from file servers, web pages, or databases."
+      :title="$t('knowledge.connectors.noConnectorsTitle')"
+      :message="$t('knowledge.connectors.noConnectorsMessage')"
     >
       <template #actions>
         <BaseButton variant="primary" size="sm" @click="openCreate">
-          Add Connector
-        </BaseButton>
-      </template>
-    </EmptyState>
+          {{ $t('knowledge.connectors.addConnector') }}
+          </BaseButton>
+          </template>
+          </EmptyState>
 
     <!-- Connector Grid -->
     <div v-else class="connector-grid">
@@ -263,19 +265,19 @@ onMounted(() => {
     <!-- History Modal -->
     <BaseModal
       v-model="showHistoryModal"
-      :title="`Sync History - ${historyConnectorName}`"
+      :title="t('knowledge.connectors.syncHistoryTitle', { name: historyConnectorName })"
       size="medium"
     >
       <div v-if="historyLoading" class="loading-state compact">
         <i class="fas fa-spinner fa-spin"></i>
-        <p>Loading history...</p>
+        <p>{{ $t('knowledge.connectors.loadingHistory') }}</p>
       </div>
 
       <div
         v-else-if="historyItems.length === 0"
         class="history-empty"
       >
-        No sync history yet.
+        {{ $t('knowledge.connectors.noSyncHistory') }}
       </div>
 
       <div v-else class="history-list">
@@ -298,15 +300,15 @@ onMounted(() => {
           <div class="history-stats">
             <span class="history-stat">
               <span class="stat-num added">+{{ item.added }}</span>
-              added
+              {{ $t('knowledge.connectors.historyAdded') }}
             </span>
             <span class="history-stat">
               <span class="stat-num updated">~{{ item.updated }}</span>
-              updated
+              {{ $t('knowledge.connectors.historyUpdated') }}
             </span>
             <span class="history-stat">
               <span class="stat-num deleted">-{{ item.deleted }}</span>
-              deleted
+              {{ $t('knowledge.connectors.historyDeleted') }}
             </span>
           </div>
           <div v-if="item.errors.length > 0" class="history-errors">
@@ -321,7 +323,7 @@ onMounted(() => {
               v-if="item.errors.length > 3"
               class="history-more-errors"
             >
-              +{{ item.errors.length - 3 }} more errors
+              {{ $t('knowledge.connectors.moreErrors', { count: item.errors.length - 3 }) }}
             </span>
           </div>
         </div>

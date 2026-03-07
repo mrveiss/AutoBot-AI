@@ -6,13 +6,16 @@
 /**
  * DevSpeedupView - Developer productivity tools and code generation
  * Issue #902 - Developer Speedup Tools
+ * Issue #1359: i18n string extraction
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useDevSpeedup } from '@/composables/useDevSpeedup'
 import type { CodeSnippet, CodeTemplate } from '@/composables/useDevSpeedup'
 import { createLogger } from '@/utils/debugUtils'
 
+const { t } = useI18n()
 const logger = createLogger('DevSpeedupView')
 
 const {
@@ -108,7 +111,7 @@ function copyToClipboard(text: string) {
 
 const templateCategories = computed(() => {
   const cats = new Set<string>()
-  templates.value.forEach(t => cats.add(t.category))
+  templates.value.forEach(tmpl => cats.add(tmpl.category))
   return Array.from(cats)
 })
 </script>
@@ -118,11 +121,11 @@ const templateCategories = computed(() => {
     <!-- Page Header -->
     <div class="page-header">
       <div class="page-header-content">
-        <h2 class="page-title">Developer Speedup</h2>
-        <p class="page-subtitle">Code search, generation, and productivity tools</p>
+        <h2 class="page-title">{{ $t('views.devSpeedup.title') }}</h2>
+        <p class="page-subtitle">{{ $t('views.devSpeedup.subtitle') }}</p>
       </div>
       <div v-if="actionHistory.length > 0" class="actions-summary">
-        <div class="actions-label">Actions Today</div>
+        <div class="actions-label">{{ $t('views.devSpeedup.actionsToday') }}</div>
         <div class="actions-count">{{ actionHistory.length }}</div>
       </div>
     </div>
@@ -131,7 +134,7 @@ const templateCategories = computed(() => {
     <div v-if="error" class="alert alert-error">
       <i class="fas fa-exclamation-circle"></i>
       <div class="alert-content">
-        <strong>Error</strong>
+        <strong>{{ $t('views.devSpeedup.error') }}</strong>
         <p>{{ error }}</p>
       </div>
     </div>
@@ -139,16 +142,16 @@ const templateCategories = computed(() => {
     <!-- Tabs -->
     <nav class="tab-nav">
       <button @click="activeTab = 'search'" :class="['tab-btn', { active: activeTab === 'search' }]">
-        <i class="fas fa-search"></i> Quick Search
+        <i class="fas fa-search"></i> {{ $t('views.devSpeedup.quickSearch') }}
       </button>
       <button @click="activeTab = 'snippets'" :class="['tab-btn', { active: activeTab === 'snippets' }]">
-        <i class="fas fa-puzzle-piece"></i> Snippets ({{ snippets.length }})
+        <i class="fas fa-puzzle-piece"></i> {{ $t('views.devSpeedup.snippetsTab', { count: snippets.length }) }}
       </button>
       <button @click="activeTab = 'templates'" :class="['tab-btn', { active: activeTab === 'templates' }]">
-        <i class="fas fa-file-code"></i> Templates ({{ templates.length }})
+        <i class="fas fa-file-code"></i> {{ $t('views.devSpeedup.templatesTab', { count: templates.length }) }}
       </button>
       <button @click="activeTab = 'actions'" :class="['tab-btn', { active: activeTab === 'actions' }]">
-        <i class="fas fa-bolt"></i> Quick Actions
+        <i class="fas fa-bolt"></i> {{ $t('views.devSpeedup.quickActions') }}
       </button>
     </nav>
 
@@ -157,36 +160,36 @@ const templateCategories = computed(() => {
       <!-- Search Tab -->
       <div v-show="activeTab === 'search'" class="tab-panel">
         <div class="card">
-          <div class="card-header"><span class="card-title">Quick Code Search</span></div>
+          <div class="card-header"><span class="card-title">{{ $t('views.devSpeedup.quickCodeSearch') }}</span></div>
           <div class="card-body">
             <div class="search-row">
-              <input v-model="searchQuery" type="text" placeholder="Search for files, code, or symbols..." class="field-input search-input">
+              <input v-model="searchQuery" type="text" :placeholder="$t('views.devSpeedup.searchPlaceholder')" class="field-input search-input">
               <select v-model="searchType" class="field-select">
-                <option :value="undefined">All Types</option>
-                <option value="file">Files</option>
-                <option value="code">Code</option>
-                <option value="symbol">Symbols</option>
+                <option :value="undefined">{{ $t('views.devSpeedup.allTypes') }}</option>
+                <option value="file">{{ $t('views.devSpeedup.files') }}</option>
+                <option value="code">{{ $t('views.devSpeedup.code') }}</option>
+                <option value="symbol">{{ $t('views.devSpeedup.symbols') }}</option>
               </select>
               <button @click="handleSearch" :disabled="isLoading || !searchQuery.trim()" class="btn-action-primary">
-                Search
+                {{ $t('views.devSpeedup.search') }}
               </button>
             </div>
           </div>
         </div>
 
         <div v-if="searchResults.length > 0" class="card">
-          <div class="card-header"><span class="card-title">Results ({{ searchResults.length }})</span></div>
+          <div class="card-header"><span class="card-title">{{ $t('views.devSpeedup.results', { count: searchResults.length }) }}</span></div>
           <div class="card-body">
             <div class="results-list">
               <div v-for="(result, idx) in searchResults" :key="idx" class="result-item">
                 <span :class="['badge', 'badge-' + result.type]">{{ result.type }}</span>
                 <div class="result-content">
                   <p class="result-path">{{ result.path }}</p>
-                  <p v-if="result.line" class="result-line">Line {{ result.line }}</p>
+                  <p v-if="result.line" class="result-line">{{ $t('views.devSpeedup.line', { num: result.line }) }}</p>
                   <p class="result-text">{{ result.content }}</p>
                   <p v-if="result.context" class="result-context">{{ result.context }}</p>
                 </div>
-                <div class="result-score">Score: {{ result.score.toFixed(2) }}</div>
+                <div class="result-score">{{ $t('views.devSpeedup.score', { value: result.score.toFixed(2) }) }}</div>
               </div>
             </div>
           </div>
@@ -194,17 +197,17 @@ const templateCategories = computed(() => {
 
         <div v-else-if="searchQuery && !isLoading" class="empty-state">
           <i class="fas fa-search"></i>
-          <p>No results found</p>
+          <p>{{ $t('views.devSpeedup.noResults') }}</p>
         </div>
       </div>
 
       <!-- Snippets Tab -->
       <div v-show="activeTab === 'snippets'" class="tab-panel">
         <div class="card">
-          <div class="card-header"><span class="card-title">Generate Code Snippet</span></div>
+          <div class="card-header"><span class="card-title">{{ $t('views.devSpeedup.generateCodeSnippet') }}</span></div>
           <div class="card-body">
             <div class="field-group">
-              <label class="field-label">Language</label>
+              <label class="field-label">{{ $t('views.devSpeedup.language') }}</label>
               <select v-model="snippetLanguage" class="field-select">
                 <option v-for="lang in supportedLanguages" :key="lang" :value="lang">
                   {{ lang.charAt(0).toUpperCase() + lang.slice(1) }}
@@ -212,11 +215,11 @@ const templateCategories = computed(() => {
               </select>
             </div>
             <div class="field-group">
-              <label class="field-label">Description</label>
-              <textarea v-model="snippetDescription" rows="3" placeholder="Describe what you want the code to do..." class="field-input"></textarea>
+              <label class="field-label">{{ $t('views.devSpeedup.description') }}</label>
+              <textarea v-model="snippetDescription" rows="3" :placeholder="$t('views.devSpeedup.snippetPlaceholder')" class="field-input"></textarea>
             </div>
             <button @click="handleGenerateSnippet" :disabled="isLoading || !snippetDescription.trim()" class="btn-action-primary btn-full">
-              Generate Snippet
+              {{ $t('views.devSpeedup.generateSnippet') }}
             </button>
           </div>
         </div>
@@ -229,18 +232,18 @@ const templateCategories = computed(() => {
                   <span class="badge badge-info">{{ snippet.language }}</span>
                   <span v-for="tag in snippet.tags" :key="tag" class="badge badge-neutral">{{ tag }}</span>
                 </div>
-                <button @click="copyToClipboard(snippet.code)" class="btn-copy">Copy</button>
+                <button @click="copyToClipboard(snippet.code)" class="btn-copy">{{ $t('views.devSpeedup.copy') }}</button>
               </div>
               <p class="snippet-desc">{{ snippet.description }}</p>
               <pre class="code-block"><code>{{ snippet.code }}</code></pre>
-              <p class="snippet-date">Created: {{ new Date(snippet.created_at).toLocaleString() }}</p>
+              <p class="snippet-date">{{ $t('views.devSpeedup.created', { date: new Date(snippet.created_at).toLocaleString() }) }}</p>
             </div>
           </div>
         </div>
 
         <div v-else class="empty-state">
           <i class="fas fa-puzzle-piece"></i>
-          <p>No snippets yet. Generate your first one above!</p>
+          <p>{{ $t('views.devSpeedup.noSnippets') }}</p>
         </div>
       </div>
 
@@ -249,10 +252,10 @@ const templateCategories = computed(() => {
         <div class="card template-filter">
           <div class="card-body filter-row">
             <select v-model="selectedCategory" class="field-select filter-select">
-              <option :value="undefined">All Categories</option>
+              <option :value="undefined">{{ $t('views.devSpeedup.allCategories') }}</option>
               <option v-for="cat in templateCategories" :key="cat" :value="cat">{{ cat }}</option>
             </select>
-            <button @click="handleFetchTemplates" :disabled="isLoading" class="btn-action-primary">Refresh</button>
+            <button @click="handleFetchTemplates" :disabled="isLoading" class="btn-action-primary">{{ $t('views.devSpeedup.refresh') }}</button>
           </div>
         </div>
 
@@ -267,11 +270,11 @@ const templateCategories = computed(() => {
                     <span class="badge badge-purple">{{ template.category }}</span>
                   </div>
                 </div>
-                <button @click="copyToClipboard(template.template)" class="btn-copy">Copy</button>
+                <button @click="copyToClipboard(template.template)" class="btn-copy">{{ $t('views.devSpeedup.copy') }}</button>
               </div>
               <p class="template-desc">{{ template.description }}</p>
               <p v-if="template.variables.length > 0" class="template-vars">
-                Variables: {{ template.variables.join(', ') }}
+                {{ $t('views.devSpeedup.variables') }}: {{ template.variables.join(', ') }}
               </p>
               <pre class="code-block"><code>{{ template.template }}</code></pre>
             </div>
@@ -280,18 +283,18 @@ const templateCategories = computed(() => {
 
         <div v-else class="empty-state">
           <i class="fas fa-file-code"></i>
-          <p>No templates available</p>
+          <p>{{ $t('views.devSpeedup.noTemplates') }}</p>
         </div>
       </div>
 
       <!-- Actions Tab -->
       <div v-show="activeTab === 'actions'" class="tab-panel">
         <div class="card">
-          <div class="card-header"><span class="card-title">Quick Code Actions</span></div>
+          <div class="card-header"><span class="card-title">{{ $t('views.devSpeedup.quickCodeActions') }}</span></div>
           <div class="card-body">
             <div class="form-grid">
               <div class="field-group">
-                <label class="field-label">Language</label>
+                <label class="field-label">{{ $t('views.devSpeedup.language') }}</label>
                 <select v-model="actionLanguage" class="field-select">
                   <option v-for="lang in supportedLanguages" :key="lang" :value="lang">
                     {{ lang.charAt(0).toUpperCase() + lang.slice(1) }}
@@ -299,22 +302,22 @@ const templateCategories = computed(() => {
                 </select>
               </div>
               <div class="field-group">
-                <label class="field-label">Action</label>
+                <label class="field-label">{{ $t('views.devSpeedup.action') }}</label>
                 <select v-model="actionType" class="field-select">
-                  <option value="refactor">Suggest Refactorings</option>
-                  <option value="optimize">Optimize Code</option>
-                  <option value="format">Format Code</option>
-                  <option value="lint">Fix Linting Issues</option>
-                  <option value="test">Generate Tests</option>
+                  <option value="refactor">{{ $t('views.devSpeedup.suggestRefactorings') }}</option>
+                  <option value="optimize">{{ $t('views.devSpeedup.optimizeCode') }}</option>
+                  <option value="format">{{ $t('views.devSpeedup.formatCode') }}</option>
+                  <option value="lint">{{ $t('views.devSpeedup.fixLinting') }}</option>
+                  <option value="test">{{ $t('views.devSpeedup.generateTests') }}</option>
                 </select>
               </div>
             </div>
             <div class="field-group">
-              <label class="field-label">Code</label>
-              <textarea v-model="codeInput" rows="12" placeholder="Paste your code here..." class="field-input code-textarea"></textarea>
+              <label class="field-label">{{ $t('views.devSpeedup.code') }}</label>
+              <textarea v-model="codeInput" rows="12" :placeholder="$t('views.devSpeedup.codePlaceholder')" class="field-input code-textarea"></textarea>
             </div>
             <button @click="handleCodeAction" :disabled="isLoading || !codeInput.trim()" class="btn-action-primary btn-full">
-              {{ isLoading ? 'Processing...' : 'Run Action' }}
+              {{ isLoading ? $t('views.devSpeedup.processing') : $t('views.devSpeedup.runAction') }}
             </button>
           </div>
         </div>
@@ -322,7 +325,7 @@ const templateCategories = computed(() => {
         <!-- Refactor Suggestions -->
         <div v-if="actionType === 'refactor' && refactorSuggestions.length > 0" class="card">
           <div class="card-header">
-            <span class="card-title">Refactor Suggestions ({{ refactorSuggestions.length }})</span>
+            <span class="card-title">{{ $t('views.devSpeedup.refactorSuggestions', { count: refactorSuggestions.length }) }}</span>
           </div>
           <div class="card-body suggestions-list">
             <div v-for="(suggestion, idx) in refactorSuggestions" :key="idx" class="suggestion-item">
@@ -333,17 +336,17 @@ const templateCategories = computed(() => {
                   suggestion.impact === 'high' ? 'badge-error' :
                   suggestion.impact === 'medium' ? 'badge-warning' : 'badge-neutral'
                 ]">
-                  {{ suggestion.impact }} impact
+                  {{ $t('views.devSpeedup.impact', { level: suggestion.impact }) }}
                 </span>
               </div>
               <p class="suggestion-desc">{{ suggestion.description }}</p>
               <div class="diff-grid">
                 <div>
-                  <p class="diff-label">Before:</p>
+                  <p class="diff-label">{{ $t('views.devSpeedup.before') }}:</p>
                   <pre class="code-block code-sm"><code>{{ suggestion.before }}</code></pre>
                 </div>
                 <div>
-                  <p class="diff-label">After:</p>
+                  <p class="diff-label">{{ $t('views.devSpeedup.after') }}:</p>
                   <pre class="code-block code-sm"><code>{{ suggestion.after }}</code></pre>
                 </div>
               </div>
@@ -354,7 +357,7 @@ const templateCategories = computed(() => {
         <!-- Generated Tests -->
         <div v-if="actionType === 'test' && generatedTests.length > 0" class="card">
           <div class="card-header">
-            <span class="card-title">Generated Tests ({{ generatedTests.length }})</span>
+            <span class="card-title">{{ $t('views.devSpeedup.generatedTests', { count: generatedTests.length }) }}</span>
           </div>
           <div class="card-body tests-list">
             <div v-for="(test, idx) in generatedTests" :key="idx" class="test-item">
@@ -363,7 +366,7 @@ const templateCategories = computed(() => {
                   <h4 class="test-name">{{ test.name }}</h4>
                   <span class="badge badge-success">{{ test.framework }}</span>
                 </div>
-                <button @click="copyToClipboard(test.code)" class="btn-copy">Copy</button>
+                <button @click="copyToClipboard(test.code)" class="btn-copy">{{ $t('views.devSpeedup.copy') }}</button>
               </div>
               <p class="test-desc">{{ test.description }}</p>
               <pre class="code-block"><code>{{ test.code }}</code></pre>

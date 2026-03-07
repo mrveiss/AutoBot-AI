@@ -1,7 +1,7 @@
 <template>
   <div class="scope-selector">
     <label for="scope-select" class="scope-label">
-      <span class="label-text">Knowledge Scope:</span>
+      <span class="label-text">{{ $t('knowledge.scopeSelector.label') }}</span>
       <span v-if="showHelp" class="label-help">
         <i class="fas fa-question-circle" @click="helpVisible = !helpVisible"></i>
       </span>
@@ -15,44 +15,44 @@
       :disabled="disabled"
     >
       <option value="private">
-        <i class="fas fa-lock"></i> Private (Only me)
+        <i class="fas fa-lock"></i> {{ $t('knowledge.scopeSelector.private') }}
       </option>
       <option value="shared" v-if="allowShared">
-        <i class="fas fa-user-friends"></i> Shared (Specific users/groups)
+        <i class="fas fa-user-friends"></i> {{ $t('knowledge.scopeSelector.shared') }}
       </option>
       <option value="group" v-if="allowGroup && userGroups.length > 0">
-        <i class="fas fa-users"></i> Group ({{ userGroups.length }} team{{ userGroups.length > 1 ? 's' : '' }})
+        <i class="fas fa-users"></i> {{ $t('knowledge.scopeSelector.group', { count: userGroups.length, plural: userGroups.length > 1 ? 's' : '' }) }}
       </option>
       <option value="organization" v-if="allowOrganization && hasOrganization">
-        <i class="fas fa-building"></i> Organization (Company-wide)
+        <i class="fas fa-building"></i> {{ $t('knowledge.scopeSelector.organization') }}
       </option>
       <option value="system" v-if="allowSystem && isAdmin">
-        <i class="fas fa-globe"></i> System (Platform-wide)
+        <i class="fas fa-globe"></i> {{ $t('knowledge.scopeSelector.system') }}
       </option>
     </select>
 
     <!-- Help text -->
     <div v-if="helpVisible" class="scope-help">
       <div class="help-item">
-        <strong>Private:</strong> Only you can access this knowledge.
+        <strong>{{ $t('knowledge.scopeSelector.private').split(' (')[0] }}:</strong> {{ $t('knowledge.scopeSelector.helpPrivate') }}
       </div>
       <div class="help-item">
-        <strong>Shared:</strong> You control who has access by explicitly sharing.
+        <strong>{{ $t('knowledge.scopeSelector.shared').split(' (')[0] }}:</strong> {{ $t('knowledge.scopeSelector.helpShared') }}
       </div>
       <div class="help-item" v-if="userGroups.length > 0">
-        <strong>Group:</strong> Accessible to members of selected team(s).
+        <strong>{{ $t('knowledge.scopeSelector.group', { count: userGroups.length, plural: userGroups.length > 1 ? 's' : '' }).split(' (')[0] }}:</strong> {{ $t('knowledge.scopeSelector.helpGroup') }}
       </div>
       <div class="help-item" v-if="hasOrganization">
-        <strong>Organization:</strong> All members of your organization can access.
+        <strong>{{ $t('knowledge.scopeSelector.organization').split(' (')[0] }}:</strong> {{ $t('knowledge.scopeSelector.helpOrganization') }}
       </div>
       <div class="help-item" v-if="isAdmin">
-        <strong>System:</strong> Accessible to all users on the platform.
+        <strong>{{ $t('knowledge.scopeSelector.system').split(' (')[0] }}:</strong> {{ $t('knowledge.scopeSelector.helpSystem') }}
       </div>
     </div>
 
     <!-- Group selector (shown when group scope selected) -->
     <div v-if="selectedScope === 'group' && showGroupSelector" class="group-selector">
-      <label>Select Teams:</label>
+      <label>{{ $t('knowledge.scopeSelector.selectTeams') }}</label>
       <div class="group-list">
         <label
           v-for="group in userGroups"

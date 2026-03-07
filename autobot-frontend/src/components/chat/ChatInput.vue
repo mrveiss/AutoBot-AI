@@ -26,7 +26,7 @@
           size="xs"
           @click="retryUpload(upload.id)"
           class="retry-upload-btn"
-          aria-label="Retry upload"
+          :aria-label="$t('chat.input.retryUpload')"
         >
           <i class="fas fa-redo" aria-hidden="true"></i>
         </BaseButton>
@@ -38,10 +38,10 @@
       <div class="attached-files-header">
         <h4 class="text-sm font-medium text-autobot-text-secondary">
           <i class="fas fa-paperclip mr-1" aria-hidden="true"></i>
-          {{ attachedFiles.length }} file{{ attachedFiles.length > 1 ? 's' : '' }} attached
+          {{ $t('chat.input.filesAttached', { count: attachedFiles.length }) }}
         </h4>
         <BaseButton variant="ghost" size="sm" @click="clearAllFiles" class="text-red-600 hover:text-red-800">
-          Clear all
+          {{ $t('chat.input.clearAll') }}
         </BaseButton>
       </div>
 
@@ -63,7 +63,7 @@
             size="xs"
             @click="removeFile(index)"
             class="remove-file-btn"
-            aria-label="Remove file"
+            :aria-label="$t('chat.input.removeFile')"
           >
             <i class="fas fa-times" aria-hidden="true"></i>
           </BaseButton>
@@ -89,7 +89,7 @@
           class="message-input-wrapper"
           :class="{ 'focused': isInputFocused }"
         >
-          <label for="chat-message-input" class="sr-only">Chat message</label>
+          <label for="chat-message-input" class="sr-only">{{ $t('chat.input.chatMessage') }}</label>
           <textarea
             id="chat-message-input"
             ref="messageInput"
@@ -97,7 +97,7 @@
             :placeholder="inputPlaceholder"
             class="message-input"
             :disabled="isDisabled"
-            aria-label="Type your chat message here. Press Enter to send, Shift+Enter for new line"
+            :aria-label="$t('chat.input.ariaLabel')"
             aria-describedby="chat-input-help"
             @keydown="handleKeydown"
             @focus="isInputFocused = true"
@@ -106,13 +106,13 @@
             rows="1"
           ></textarea>
           <span id="chat-input-help" class="sr-only">
-            Press Enter to send your message. Press Shift+Enter to create a new line.
+            {{ $t('chat.input.helpText') }}
           </span>
 
           <!-- Input Actions -->
           <div class="input-actions">
             <!-- Issue #249: Knowledge Base Toggle -->
-            <label class="knowledge-toggle" :class="{ 'active': useKnowledge }" title="Use Knowledge Base for enhanced answers">
+            <label class="knowledge-toggle" :class="{ 'active': useKnowledge }" :title="$t('chat.input.useKnowledge')">
               <input
                 type="checkbox"
                 v-model="useKnowledge"
@@ -127,11 +127,11 @@
             <label
               class="overseer-toggle"
               :class="{ 'active': overseerEnabled }"
-              title="Overseer Mode: Break down tasks into steps with command explanations"
+              :title="$t('chat.input.overseerMode')"
               @click.prevent="toggleOverseer"
             >
               <i class="fas fa-sitemap" aria-hidden="true"></i>
-              <span class="toggle-label">Explain</span>
+              <span class="toggle-label">{{ $t('chat.input.explain') }}</span>
             </label>
 
             <!-- Vertical Divider after toggles -->
@@ -144,7 +144,7 @@
               @click="attachFile"
               class="action-btn"
               :disabled="isDisabled"
-              aria-label="Attach file"
+              :aria-label="$t('chat.input.attachFile')"
             >
               <i class="fas fa-paperclip" aria-hidden="true"></i>
             </BaseButton>
@@ -156,7 +156,7 @@
               @click="showVisionModal = true"
               class="action-btn"
               :disabled="isDisabled"
-              aria-label="Analyze image"
+              :aria-label="$t('chat.input.analyzeImage')"
             >
               <i class="fas fa-eye" aria-hidden="true"></i>
             </BaseButton>
@@ -169,7 +169,7 @@
               class="action-btn"
               :class="{ 'active': isVoiceRecording }"
               :disabled="isDisabled"
-              aria-label="Voice input"
+              :aria-label="$t('chat.input.voiceInput')"
             >
               <i :class="isVoiceRecording ? 'fas fa-stop' : 'fas fa-microphone'" aria-hidden="true"></i>
             </BaseButton>
@@ -181,7 +181,7 @@
               @click="toggleEmojiPicker"
               class="action-btn"
               :disabled="isDisabled"
-              aria-label="Add emoji"
+              :aria-label="$t('chat.input.addEmoji')"
             >
               <i class="fas fa-smile" aria-hidden="true"></i>
             </BaseButton>
@@ -214,7 +214,7 @@
           :disabled="!canSend"
           :loading="isSending"
           :class="{ 'pulse': messageQueueLength > 0 }"
-          :aria-label="isSending ? 'Sending...' : canSend ? 'Send message (Enter)' : 'Enter a message to send'"
+          :aria-label="isSending ? $t('chat.input.sending') : canSend ? $t('chat.input.sendMessage') : $t('chat.input.enterMessage')"
         >
           <div v-if="!isSending && messageQueueLength > 0" class="queue-indicator">
             <i class="fas fa-paper-plane" aria-hidden="true"></i>
@@ -229,7 +229,7 @@
         <div class="status-left">
           <span v-if="isTypingIndicatorVisible" class="typing-indicator">
             <i class="fas fa-keyboard" aria-hidden="true"></i>
-            Typing...
+            {{ $t('chat.input.typing') }}
           </span>
           <span v-if="characterCount > 0" class="character-count" :class="{ 'warning': isNearLimit }">
             {{ characterCount }}/{{ maxCharacters }}
@@ -239,9 +239,9 @@
         <div class="status-right">
           <span v-if="isVoiceRecording" class="voice-status">
             <i class="fas fa-circle text-red-500 animate-pulse" aria-hidden="true"></i>
-            Recording...
+            {{ $t('chat.input.recording') }}
           </span>
-          <span class="keyboard-hint">Enter to send • Shift+Enter for new line</span>
+          <span class="keyboard-hint">{{ $t('chat.input.keyboardHint') }}</span>
         </div>
       </div>
     </div>
@@ -249,8 +249,8 @@
     <!-- Emoji Picker -->
     <div v-if="showEmojiPicker" class="emoji-picker" ref="emojiPicker">
       <div class="emoji-header">
-        <span class="emoji-title">Add Emoji</span>
-        <BaseButton variant="ghost" size="xs" @click="showEmojiPicker = false" class="close-emoji-btn" aria-label="Close emoji picker">
+        <span class="emoji-title">{{ $t('chat.input.addEmoji') }}</span>
+        <BaseButton variant="ghost" size="xs" @click="showEmojiPicker = false" class="close-emoji-btn" :aria-label="$t('chat.input.closeEmojiPicker')">
           <i class="fas fa-times" aria-hidden="true"></i>
         </BaseButton>
       </div>
@@ -269,6 +269,14 @@
       </div>
     </div>
 
+    <!-- Issue #1328: Translation Shortcut Panel -->
+    <TranslationShortcutPanel
+      v-if="showTranslatePanel"
+      :initial-text="messageText"
+      @close="showTranslatePanel = false"
+      @translation-result="handleTranslationResult"
+    />
+
     <!-- Vision Analysis Modal (#1242) -->
     <VisionAnalysisModal
       v-if="showVisionModal"
@@ -280,6 +288,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onUnmounted, inject, type Ref, type ComputedRef } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import globalWebSocketService from '@/services/GlobalWebSocketService'
@@ -287,6 +296,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import ProgressBar from '@/components/ui/ProgressBar.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import VisionAnalysisModal from './VisionAnalysisModal.vue'
+import TranslationShortcutPanel from './TranslationShortcutPanel.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
@@ -294,6 +304,7 @@ import type { UseOverseerAgentOptions } from '@/composables/useOverseerAgent'
 import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 
+const { t } = useI18n()
 const logger = createLogger('ChatInput')
 // Issue #1146: unlock AudioContext on first user gesture so TTS can play even
 // when voice output was re-enabled from a previous session via localStorage.
@@ -320,6 +331,7 @@ const isVoiceRecording = ref(false)
 const isSending = ref(false)
 const showEmojiPicker = ref(false)
 const showVisionModal = ref(false)
+const showTranslatePanel = ref(false)
 const showQuickActions = ref(true)
 
 // Issue #249: Knowledge-Enhanced Chat (RAG) toggle
@@ -344,12 +356,12 @@ const maxCharacters = 4000
 const maxFileSize = 10 * 1024 * 1024 // 10MB
 
 // Quick actions
-const quickActions = [
-  { id: 'help', label: 'Help', icon: 'fas fa-question-circle', description: 'Get help with using the assistant' },
-  { id: 'summarize', label: 'Summarize', icon: 'fas fa-compress', description: 'Summarize the conversation' },
-  { id: 'translate', label: 'Translate', icon: 'fas fa-language', description: 'Translate text' },
-  { id: 'explain', label: 'Explain', icon: 'fas fa-lightbulb', description: 'Get an explanation' }
-]
+const quickActions = computed(() => [
+  { id: 'help', label: t('chat.input.help'), icon: 'fas fa-question-circle', description: t('chat.input.helpDesc') },
+  { id: 'summarize', label: t('chat.input.summarize'), icon: 'fas fa-compress', description: t('chat.input.summarizeDesc') },
+  { id: 'translate', label: t('agent.translate'), icon: 'fas fa-language', description: t('chat.input.translateDesc') },
+  { id: 'explain', label: t('chat.input.explain'), icon: 'fas fa-lightbulb', description: t('chat.input.explainDesc') },
+])
 
 // Common emojis
 const commonEmojis = [
@@ -369,10 +381,10 @@ const commonEmojis = [
 
 // Computed
 const inputPlaceholder = computed(() => {
-  if (isVoiceRecording.value) return 'Listening...'
-  if (isSending.value) return 'Sending message...'
-  if (store.isTyping) return 'AI is responding...'
-  return 'Type your message...'
+  if (isVoiceRecording.value) return t('voice.listening')
+  if (isSending.value) return t('chat.input.sendingMessage')
+  if (store.isTyping) return t('chat.input.aiResponding')
+  return t('chat.input.typeMessage')
 })
 
 const isDisabled = computed(() => {
@@ -682,21 +694,41 @@ const insertEmoji = (emoji: typeof commonEmojis[0]) => {
   showEmojiPicker.value = false
 }
 
-const useQuickAction = (action: typeof quickActions[0]) => {
-  const actionTexts = {
-    help: 'Can you help me with ',
-    summarize: 'Please summarize our conversation',
-    translate: 'Please translate the following text: ',
-    explain: 'Can you explain '
+const useQuickAction = (action: { id: string; label: string; icon: string; description: string }) => {
+  // Issue #1328: Translate opens the translation panel
+  if (action.id === 'translate') {
+    showTranslatePanel.value = !showTranslatePanel.value
+    return
   }
 
-  const text = actionTexts[action.id as keyof typeof actionTexts] || ''
+  const actionTexts: Record<string, string> = {
+    help: 'Can you help me with ',
+    summarize: 'Please summarize our conversation',
+    explain: 'Can you explain ',
+  }
+
+  const text = actionTexts[action.id] || ''
   messageText.value = text
 
   nextTick(() => {
     messageInput.value?.focus()
     const textarea = messageInput.value!
     textarea.setSelectionRange(text.length, text.length)
+  })
+}
+
+// Issue #1328: Handle translation result — display in chat
+const handleTranslationResult = (payload: {
+  originalText: string
+  translatedText: string
+  targetLanguage: string
+}) => {
+  showTranslatePanel.value = false
+  store.addMessage({
+    content: `**${payload.targetLanguage}:**\n${payload.translatedText}`,
+    sender: 'assistant',
+    status: 'sent',
+    type: 'message',
   })
 }
 

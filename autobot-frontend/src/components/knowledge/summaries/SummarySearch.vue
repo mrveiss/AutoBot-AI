@@ -2,9 +2,9 @@
 <template>
   <div class="summary-search">
     <div class="search-header">
-      <h4><i class="fas fa-search"></i> Summary Search</h4>
+      <h4><i class="fas fa-search"></i> {{ $t('knowledge.summaries.search.title') }}</h4>
       <p class="header-description">
-        Search across all generated summaries by content and level
+        {{ $t('knowledge.summaries.search.description') }}
       </p>
     </div>
 
@@ -15,7 +15,7 @@
         <input
           v-model="searchQuery"
           type="text"
-          placeholder="Search summaries..."
+          :placeholder="$t('knowledge.summaries.search.placeholder')"
           class="search-input"
           @keydown.enter="handleSearch"
         />
@@ -23,10 +23,10 @@
 
       <div class="filter-row">
         <select v-model="levelFilter" class="level-select">
-          <option value="">All Levels</option>
-          <option value="chunk">Chunk</option>
-          <option value="section">Section</option>
-          <option value="document">Document</option>
+          <option value="">{{ $t('knowledge.summaries.search.allLevels') }}</option>
+          <option value="chunk">{{ $t('knowledge.summaries.search.chunk') }}</option>
+          <option value="section">{{ $t('knowledge.summaries.search.section') }}</option>
+          <option value="document">{{ $t('knowledge.summaries.search.document') }}</option>
         </select>
 
         <button
@@ -35,7 +35,7 @@
           @click="handleSearch"
         >
           <i :class="loading ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
-          Search
+          {{ $t('knowledge.summaries.search.searchBtn') }}
         </button>
       </div>
     </div>
@@ -49,7 +49,7 @@
     <!-- Loading -->
     <div v-if="loading" class="loading-state">
       <i class="fas fa-spinner fa-spin"></i>
-      <span>Searching summaries...</span>
+      <span>{{ $t('knowledge.summaries.search.searching') }}</span>
     </div>
 
     <!-- Empty -->
@@ -58,7 +58,7 @@
       class="empty-state"
     >
       <i class="fas fa-search"></i>
-      <p>No summaries found matching your search</p>
+      <p>{{ $t('knowledge.summaries.search.noResults') }}</p>
     </div>
 
     <!-- Results -->
@@ -78,7 +78,7 @@
               {{ summary.level }}
             </span>
             <span v-if="summary.score" class="score-badge">
-              {{ (summary.score * 100).toFixed(0) }}% match
+              {{ $t('knowledge.summaries.search.matchPercent', { percent: (summary.score * 100).toFixed(0) }) }}
             </span>
           </div>
           <i
@@ -124,17 +124,17 @@
             @click="$emit('drill-down', summary.id)"
           >
             <i class="fas fa-search-plus"></i>
-            Drill Down
+            {{ $t('knowledge.summaries.search.drillDown') }}
           </button>
           <span class="result-meta">
-            Doc: {{ summary.document_id }}
+            {{ $t('knowledge.summaries.search.doc') }}: {{ summary.document_id }}
           </span>
         </div>
       </div>
 
       <!-- Result Count -->
       <div class="result-count">
-        {{ summaries.length }} results found
+        {{ $t('knowledge.summaries.search.resultsFound', { count: summaries.length }) }}
       </div>
     </div>
   </div>

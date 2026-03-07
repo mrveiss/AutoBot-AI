@@ -1,13 +1,13 @@
 <template>
   <div class="file-browser-header">
-    <h2>{{ title }}</h2>
+    <h2>{{ title || $t('fileBrowser.header.title') }}</h2>
 
     <!-- Path Navigation (Inline) -->
     <div class="path-navigation-inline">
       <!-- Breadcrumb Navigation -->
       <div class="breadcrumb">
         <span @click="$emit('navigate-to-path', '/')" class="breadcrumb-item">
-          <i class="fas fa-home"></i> Home
+          <i class="fas fa-home"></i> {{ $t('fileBrowser.header.home') }}
         </span>
         <span v-for="(part, index) in pathParts" :key="index" class="breadcrumb-item">
           <i class="fas fa-chevron-right breadcrumb-separator"></i>
@@ -22,7 +22,7 @@
         <input
           v-model="pathInput"
           @keyup.enter="$emit('navigate-to-path', pathInput)"
-          placeholder="/path/to/directory"
+          :placeholder="$t('fileBrowser.header.pathPlaceholder')"
           class="path-field"
         />
         <BaseButton
@@ -30,7 +30,7 @@
           size="sm"
           @click="$emit('navigate-to-path', pathInput)"
           class="path-go-btn"
-          aria-label="Navigate to path"
+          :aria-label="$t('fileBrowser.header.goToPath')"
         >
           <i class="fas fa-arrow-right"></i>
         </BaseButton>
@@ -42,17 +42,17 @@
         variant="outline"
         size="sm"
         @click="$emit('new-folder')"
-        aria-label="Create new folder"
+        :aria-label="$t('fileBrowser.header.newFolder')"
       >
-        <i class="fas fa-folder-plus"></i> New Folder
+        <i class="fas fa-folder-plus"></i> {{ $t('fileBrowser.header.newFolder') }}
       </BaseButton>
       <BaseButton
         variant="outline"
         size="sm"
         @click="$emit('upload')"
-        aria-label="Upload file"
+        :aria-label="$t('fileBrowser.header.uploadFile')"
       >
-        <i class="fas fa-upload"></i> Upload File
+        <i class="fas fa-upload"></i> {{ $t('fileBrowser.header.uploadFile') }}
       </BaseButton>
     </div>
   </div>
@@ -75,7 +75,7 @@ interface Emits {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  title: 'File Browser',
+  title: '',
   currentPath: '/'
 })
 
