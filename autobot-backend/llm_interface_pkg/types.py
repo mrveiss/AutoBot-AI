@@ -21,6 +21,8 @@ class ProviderType(Enum):
     TRANSFORMERS = "transformers"
     MOCK = "mock"
     LOCAL = "local"
+    AI_STACK = "ai_stack"  # Issue #1403
+    PROCESS = "process"  # Issue #1403
 
 
 class LLMType(Enum):

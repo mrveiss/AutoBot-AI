@@ -20,6 +20,9 @@ Package Structure:
     providers/     - Provider-specific implementations (Ollama, OpenAI, vLLM, etc.)
 """
 
+# Adapter registry (Issue #1403)
+from .adapters import AdapterBase, AdapterRegistry, get_adapter_registry
+
 # Issue #551: L1/L2 dual-tier caching
 from .cache import CachedResponse, LLMResponseCache, get_llm_cache, get_llm_cache_async
 
@@ -84,4 +87,8 @@ __all__ = [
     "VLLMProviderHandler",
     "MockHandler",
     "LocalHandler",
+    # Adapter registry (Issue #1403)
+    "AdapterBase",
+    "AdapterRegistry",
+    "get_adapter_registry",
 ]

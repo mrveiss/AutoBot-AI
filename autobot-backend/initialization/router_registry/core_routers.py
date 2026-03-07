@@ -10,6 +10,7 @@ and are imported at module level to fail fast if missing.
 """
 
 # Core router imports - these are required for basic functionality
+from api.adapters import router as adapters_router  # Issue #1403
 from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
 from api.audit import router as audit_router
@@ -210,6 +211,7 @@ def _get_service_routers() -> list:
     routers = [
         (llm_router, "/llm", ["llm"], "llm"),
         (llm_providers_router, "/llm", ["llm", "providers"], "llm_providers"),
+        (adapters_router, "/adapters", ["adapters"], "adapters"),
         (redis_router, "/redis", ["redis"], "redis"),
         (voice_router, "/voice", ["voice"], "voice"),
         (voice_stream_router, "/voice", ["voice", "websocket"], "voice_stream"),
