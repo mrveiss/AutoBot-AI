@@ -102,6 +102,12 @@ export function useBackgroundTask(baseUrl: string, clearStuckUrl?: string) {
     body?: Record<string, unknown>,
     query?: Record<string, string>,
   ): Promise<boolean> => {
+    // #1432: Skip if already running to prevent 409 retry storms
+    if (running.value) {
+      logger.debug('Task already running, skipping start')
+      return false
+    }
+
     running.value = true
     progress.value = 0
     currentStep.value = null
