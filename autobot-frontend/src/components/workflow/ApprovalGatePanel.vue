@@ -213,8 +213,6 @@ const typeFilter = ref('')
 const activeCommentId = ref<string | null>(null)
 const commentText = ref('')
 
-const currentUser = 'web_user'
-
 async function refresh() {
   await fetchApprovals({
     status: statusFilter.value || undefined,
@@ -223,17 +221,17 @@ async function refresh() {
 }
 
 async function handleApprove(id: string) {
-  await doApprove(id, currentUser)
+  await doApprove(id)
   await refresh()
 }
 
 async function handleReject(id: string) {
-  await doReject(id, currentUser)
+  await doReject(id)
   await refresh()
 }
 
 async function handleRequestRevision(id: string) {
-  await doRequestRevision(id, currentUser)
+  await doRequestRevision(id)
   await refresh()
 }
 
@@ -249,7 +247,7 @@ function cancelComment() {
 
 async function submitComment(approvalId: string) {
   if (!commentText.value.trim()) return
-  await doAddComment(approvalId, currentUser, commentText.value)
+  await doAddComment(approvalId, commentText.value)
   cancelComment()
   await refresh()
 }

@@ -9,10 +9,13 @@ CRUD and lifecycle endpoints for human-in-the-loop approval gates.
 
 import logging
 import uuid
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from api.user_management.dependencies import get_db_session
-from fastapi import APIRouter, Depends, HTTPException, status
+from auth_middleware import get_current_user
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from models.approval import ApprovalStatus, ApprovalType
 from pydantic import BaseModel, Field
 from services.approval_gate_service import ApprovalGateService
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,11 +27,19 @@ router = APIRouter()
 # -- Request / Response schemas ----------------------------------------
 
 
+class AuthorTypeEnum(str, Enum):
+    """Valid author types for comments."""
+
+    HUMAN = "human"
+    AGENT = "agent"
+    SYSTEM = "system"
+
+
 class CreateApprovalRequest(BaseModel):
     """Request body for creating an approval gate."""
 
     title: str
-    approval_type: str
+    approval_type: ApprovalType
     description: Optional[str] = None
     requested_by_agent: Optional[str] = None
     workflow_id: Optional[str] = None
@@ -40,7 +51,6 @@ class CreateApprovalRequest(BaseModel):
 class TransitionRequest(BaseModel):
     """Request body for approve / reject / request-revision."""
 
-    decided_by: str
     comment: Optional[str] = None
 
 
@@ -54,9 +64,8 @@ class ResubmitRequest(BaseModel):
 class AddCommentRequest(BaseModel):
     """Request body for adding a comment."""
 
-    author: str
     body: str
-    author_type: str = "human"
+    author_type: AuthorTypeEnum = AuthorTypeEnum.HUMAN
 
 
 class LinkTaskRequest(BaseModel):
@@ -172,13 +181,14 @@ def _to_response(approval) -> ApprovalResponse:
 )
 async def create_approval(
     body: CreateApprovalRequest,
+    current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Create a new approval gate request (#1402)."""
     svc = ApprovalGateService(session)
     approval = await svc.create_approval(
         title=body.title,
-        approval_type=body.approval_type,
+        approval_type=body.approval_type.value,
         description=body.description,
         requested_by_agent=body.requested_by_agent,
         workflow_id=body.workflow_id,
@@ -194,19 +204,20 @@ async def create_approval(
     response_model=List[ApprovalResponse],
 )
 async def list_approvals(
-    status_filter: Optional[str] = None,
-    approval_type: Optional[str] = None,
+    status_filter: Optional[ApprovalStatus] = None,
+    approval_type: Optional[ApprovalType] = None,
     workflow_id: Optional[str] = None,
     agent_id: Optional[str] = None,
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
     """List approval gates with optional filters (#1402)."""
     svc = ApprovalGateService(session)
     approvals = await svc.list_approvals(
-        status=status_filter,
-        approval_type=approval_type,
+        status=status_filter.value if status_filter else None,
+        approval_type=approval_type.value if approval_type else None,
         workflow_id=workflow_id,
         agent_id=agent_id,
         limit=limit,
@@ -221,6 +232,7 @@ async def list_approvals(
 )
 async def get_approval(
     approval_id: uuid.UUID,
+    current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Get a single approval gate by ID (#1402)."""
@@ -241,14 +253,16 @@ async def get_approval(
 async def approve(
     approval_id: uuid.UUID,
     body: TransitionRequest,
+    current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Approve a pending approval gate (#1402)."""
     svc = ApprovalGateService(session)
+    username = current_user.get("username", "unknown")
     try:
         approval = await svc.approve(
             approval_id,
-            body.decided_by,
+            username,
             body.comment,
         )
     except ValueError as e:
@@ -266,14 +280,16 @@ async def approve(
 async def reject(
     approval_id: uuid.UUID,
     body: TransitionRequest,
+    current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Reject a pending approval gate (#1402)."""
     svc = ApprovalGateService(session)
+    username = current_user.get("username", "unknown")
     try:
         approval = await svc.reject(
             approval_id,
-            body.decided_by,
+            username,
             body.comment,
         )
     except ValueError as e:
@@ -291,14 +307,16 @@ async def reject(
 async def request_revision(
     approval_id: uuid.UUID,
     body: TransitionRequest,
+    current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Request revision on a pending approval gate (#1402)."""
     svc = ApprovalGateService(session)
+    username = current_user.get("username", "unknown")
     try:
         approval = await svc.request_revision(
             approval_id,
-            body.decided_by,
+            username,
             body.comment,
         )
     except ValueError as e:
@@ -316,6 +334,7 @@ async def request_revision(
 async def resubmit(
     approval_id: uuid.UUID,
     body: ResubmitRequest,
+    current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Resubmit an approval after revision request (#1402)."""
@@ -342,16 +361,18 @@ async def resubmit(
 async def add_comment(
     approval_id: uuid.UUID,
     body: AddCommentRequest,
+    current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Add a comment to an approval gate (#1402)."""
     svc = ApprovalGateService(session)
+    username = current_user.get("username", "unknown")
     try:
         comment = await svc.add_comment(
             approval_id,
-            body.author,
+            username,
             body.body,
-            body.author_type,
+            body.author_type.value,
         )
     except ValueError as e:
         raise HTTPException(
@@ -376,6 +397,7 @@ async def add_comment(
 async def link_task(
     approval_id: uuid.UUID,
     body: LinkTaskRequest,
+    current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Link a task/issue to an approval gate (#1402)."""
@@ -406,6 +428,7 @@ async def link_task(
 async def unlink_task(
     approval_id: uuid.UUID,
     task_id: str,
+    current_user: dict = Depends(get_current_user),
     session: AsyncSession = Depends(get_db_session),
 ):
     """Unlink a task from an approval gate (#1402)."""
