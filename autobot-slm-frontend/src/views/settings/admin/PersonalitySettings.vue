@@ -54,7 +54,7 @@ const voiceList = ref<{ id: string; name: string; builtin: boolean }[]>([])
 async function fetchVoices() {
   try {
     const token = authStore.token || localStorage.getItem('autobot_access_token') || ''
-    const res = await fetch('/autobot-api/voice/voices', {
+    const res = await fetch('/api/voice/voices', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
     if (res.ok) {

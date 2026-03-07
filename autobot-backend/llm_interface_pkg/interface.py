@@ -25,6 +25,8 @@ from autobot_shared.error_boundaries import error_boundary, get_error_boundary_m
 from autobot_shared.http_client import get_http_client
 from autobot_shared.tracing import get_tracer
 
+# Issue #1403: Adapter registry
+from .adapters.registry import get_adapter_registry
 from .cache import CachedResponse, get_llm_cache
 from .hardware import HardwareDetector
 from .models import ChatMessage, LLMRequest, LLMResponse, LLMSettings
@@ -229,6 +231,40 @@ class LLMInterface:
         self._vllm_handler = VLLMProviderHandler()
         self._mock_handler = MockHandler()
         self._local_handler = LocalHandler()
+
+        # Issue #1403: Initialize adapter registry
+        self._init_adapter_registry()
+
+    def _init_adapter_registry(self) -> None:
+        """
+        Issue #1403: Register adapters in the global registry.
+
+        Creates adapter instances wrapping existing providers and
+        registers them for unified lookup and fallback.
+        """
+        from .adapters import (
+            AIStackAdapter,
+            AnthropicAdapter,
+            OllamaAdapter,
+            OpenAIAdapter,
+            ProcessAdapter,
+        )
+
+        registry = get_adapter_registry()
+
+        registry.register(OllamaAdapter())
+        registry.register(AIStackAdapter())
+        registry.register(OpenAIAdapter())
+        registry.register(AnthropicAdapter())
+        registry.register(ProcessAdapter())
+
+        registry.set_fallback_chain(self._provider_priority)
+        self._adapter_registry = registry
+
+        logger.info(
+            "Adapter registry initialized with %d adapters",
+            len(registry.list_adapters()),
+        )
 
     def _init_provider_routing(self) -> None:
         """
