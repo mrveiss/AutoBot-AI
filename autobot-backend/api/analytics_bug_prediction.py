@@ -917,7 +917,7 @@ async def analyze_codebase(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
-    limit: int = Query(1000, ge=1, le=5000, description="Maximum files to analyze"),
+    limit: int = Query(10000, ge=1, le=100000, description="Maximum files to analyze"),
     refresh: bool = Query(False, description="Force refresh, bypass cache"),
 ) -> dict[str, Any]:
     """
@@ -1032,7 +1032,7 @@ async def start_bug_analysis(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
-    limit: int = Query(1000, ge=1, le=5000, description="Maximum files to analyze"),
+    limit: int = Query(10000, ge=1, le=100000, description="Maximum files to analyze"),
 ):
     """Start batched bug prediction analysis as background task (#1418)."""
     task_id = await _bg_manager.create_task(
@@ -1401,7 +1401,7 @@ async def get_prediction_summary(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
-    limit: int = Query(1000, ge=1, le=5000, description="Maximum files to analyze"),
+    limit: int = Query(10000, ge=1, le=100000, description="Maximum files to analyze"),
 ) -> dict[str, Any]:
     """
     Get summary of bug predictions and risk assessment (Issue #543: no demo data).
