@@ -660,7 +660,8 @@ async def get_redis_checkpointer() -> AsyncRedisSaver:
             _REDIS_URI,
         )
 
-    _checkpointer = AsyncRedisSaver.from_conn_string(_REDIS_URI)
+    # Issue #1433: from_conn_string() is an async generator, use direct init
+    _checkpointer = AsyncRedisSaver(redis_url=_REDIS_URI)
     await _checkpointer.asetup()
     logger.info("LangGraph Redis checkpointer initialized: %s", _REDIS_URI)
     return _checkpointer
