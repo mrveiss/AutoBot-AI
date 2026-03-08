@@ -257,6 +257,29 @@ class WorkflowStepEvaluator:
             workflow_judgment, security_judgment = await self._run_judge_evaluations(
                 step_data, workflow_context, user_context, step.command
             )
+
+            # Fail-open: if either judge errored (LLM unavailable),
+            # approve with warning instead of silently rejecting (#1464)
+            error_judges = [
+                j
+                for j in (workflow_judgment, security_judgment)
+                if j.llm_model_used == "error"
+            ]
+            if error_judges:
+                reasons = [j.reasoning for j in error_judges]
+                logger.warning(
+                    "LLM judge(s) unavailable for step %s, " "approving by default: %s",
+                    step.step_id,
+                    "; ".join(reasons),
+                )
+                return {
+                    "should_proceed": True,
+                    "reason": f"Approved (judge unavailable): {'; '.join(reasons)}",
+                    "suggestions": [
+                        "Manual review recommended — judge was unavailable"
+                    ],
+                }
+
             should_approve_workflow = (
                 workflow_judgment.recommendation in APPROVAL_RECOMMENDATIONS
             )
