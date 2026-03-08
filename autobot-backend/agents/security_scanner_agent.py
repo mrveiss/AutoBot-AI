@@ -461,13 +461,14 @@ class SecurityScannerAgent:
             research_result = await research_agent.research_specific_tools(request)
 
             # Extract tool recommendations
+            summary = research_result.get("summary", "")
             tools_info = {
                 "scan_type": scan_type,
-                "recommended_tools": self._extract_tool_names(research_result.summary),
-                "installation_info": research_result.summary,
-                "research_summary": research_result.summary,
-                "confidence": getattr(research_result, "confidence", 0.8),
-                "sources": getattr(research_result, "sources", [])[:3],
+                "recommended_tools": self._extract_tool_names(summary),
+                "installation_info": summary,
+                "research_summary": summary,
+                "confidence": research_result.get("confidence", 0.8),
+                "sources": research_result.get("sources", [])[:3],
             }
 
             return tools_info
@@ -528,26 +529,24 @@ class SecurityScannerAgent:
     async def get_tool_installation_guide(self, tool_name: str) -> Dict[str, Any]:
         """Get installation guide for a specific tool using research agent"""
         try:
-            from agents.web_researcher import ResearchRequest, WebResearcher
+            from agents.web_researcher import WebResearcher
 
             research_agent = WebResearcher()
-            query = f"how to install {tool_name} on Kali Linux Ubuntu apt package manager 2024"
+            guide = await research_agent.get_tool_installation_guide(tool_name)
 
-            request = ResearchRequest(query=query, focus="installation")
-
-            research_result = await research_agent.research_installation_guide(request)
+            # Build summary text from the guide dict
+            summary = guide.get(
+                "installation_command",
+                f"Try: sudo apt install {tool_name}",
+            )
 
             return {
                 "tool": tool_name,
-                "installation_guide": research_result.summary,
-                "package_manager": self._detect_package_manager(
-                    research_result.summary
-                ),
-                "install_commands": self._extract_install_commands(
-                    research_result.summary
-                ),
-                "confidence": getattr(research_result, "confidence", 0.8),
-                "sources": getattr(research_result, "sources", [])[:2],
+                "installation_guide": summary,
+                "package_manager": self._detect_package_manager(summary),
+                "install_commands": self._extract_install_commands(summary),
+                "confidence": 0.8 if guide.get("success") else 0.3,
+                "sources": guide.get("web_resources", [])[:2],
             }
 
         except Exception as e:
