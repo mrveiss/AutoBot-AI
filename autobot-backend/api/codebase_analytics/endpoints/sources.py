@@ -138,6 +138,23 @@ async def _do_sync(source: CodeSource) -> None:
     await save_source(source)
 
 
+def _create_sync_cleanup(task_id: str):
+    """Done-callback for sync tasks: remove from _active_tasks, log errors (#1467)."""
+
+    def _cleanup(t: asyncio.Task) -> None:
+        from ..scanner import _active_tasks
+
+        _active_tasks.pop(task_id, None)
+        if t.cancelled():
+            logger.info("Sync task %s was cancelled", task_id)
+        elif exc := t.exception():
+            logger.error("Sync task %s failed: %s", task_id, exc)
+        else:
+            logger.info("Sync task %s completed", task_id)
+
+    return _cleanup
+
+
 async def _trigger_indexing(source: CodeSource) -> None:
     """Queue an indexing job for the source's clone path (#1133).
 
@@ -293,8 +310,12 @@ async def sync_code_source(source_id: str):
         source.clone_path = _make_clone_path(source.id)
         await save_source(source)
 
+    from ..scanner import _active_tasks
+
     task_id = str(uuid.uuid4())
-    asyncio.create_task(_do_sync(source))
+    task = asyncio.create_task(_do_sync(source))
+    _active_tasks[task_id] = task
+    task.add_done_callback(_create_sync_cleanup(task_id))
     logger.info("Sync initiated for source %s (task %s)", source_id, task_id)
     resp = SourceSyncResponse(
         source_id=source_id,
