@@ -200,7 +200,7 @@
             <span class="section-header">Core Services</span>
             <div class="role-chips">
               <label
-                v-for="role in requiredRoles"
+                v-for="role in rolesForNode(node.node_id, requiredRoles)"
                 :key="role.name"
                 class="role-chip"
                 :class="[
@@ -224,11 +224,11 @@
           </div>
 
           <!-- Optional Services (#1350) -->
-          <div class="role-section" v-if="optionalRoles.length">
+          <div class="role-section" v-if="rolesForNode(node.node_id, optionalRoles).length">
             <span class="section-header optional-header">Optional Services</span>
             <div class="role-chips">
               <label
-                v-for="role in optionalRoles"
+                v-for="role in rolesForNode(node.node_id, optionalRoles)"
                 :key="role.name"
                 class="role-chip optional-chip"
                 :class="[
@@ -465,6 +465,16 @@ const savingRoles = ref(false)
 const requiredRoles = computed(() => availableRoles.value.filter(r => r.required))
 const optionalRoles = computed(() => availableRoles.value.filter(r => !r.required))
 
+/** Roles visible for a given node: unassigned or assigned to this node (#1455). */
+function rolesForNode(nodeId: string, roles: RoleInfo[]): RoleInfo[] {
+  return roles.filter(r => {
+    const assignedTo = nodes.value.find(
+      n => n.node_id !== nodeId && (nodeRoles.value[n.node_id] || []).includes(r.name)
+    )
+    return !assignedTo
+  })
+}
+
 /** Determine per-chip state for a role on a given node (#1353). */
 function roleState(node: Node, roleName: string): RoleState {
   if (node.detected_roles.includes(roleName)) return 'running'
@@ -531,9 +541,9 @@ async function loadNodes() {
 async function loadRoles() {
   try {
     const result = await fetchRoles()
-    // Filter out SLM-internal and infra roles (#1349, #1344)
+    // Filter out infra roles only (#1349, #1344, #1455: show SLM roles)
     availableRoles.value = result
-      .filter(r => !r.name.startsWith('slm-') && !INFRA_ROLES.includes(r.name))
+      .filter(r => !INFRA_ROLES.includes(r.name))
       .map(r => ({
         name: r.name,
         display_name: r.description || r.name,

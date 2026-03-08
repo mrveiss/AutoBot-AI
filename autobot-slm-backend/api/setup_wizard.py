@@ -16,6 +16,8 @@ import time
 from pathlib import Path
 from typing import Annotated, Optional
 
+_PROVISION_LOG = Path("/var/log/autobot/provision-wizard.log")
+
 import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -244,11 +246,48 @@ _provision_state: dict = {
 _provision_lock = asyncio.Lock()
 
 
+def _write_provision_log(line: str) -> None:
+    """Append a line to the persistent provision log (#1455)."""
+    try:
+        _PROVISION_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with open(_PROVISION_LOG, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
+
+
+def _handle_provision_result(result: dict) -> None:
+    """Record provisioning result to state and log (#1455)."""
+    raw_output = result.get("output", "")
+    if raw_output:
+        for line in raw_output.splitlines():
+            _provision_state["output_lines"].append(line)
+            _write_provision_log(line)
+
+    if result.get("success"):
+        _provision_state["status"] = "completed"
+        _write_provision_log("SUCCESS: Fleet provisioning completed")
+        logger.info("Fleet provisioning completed successfully")
+    else:
+        rc = result.get("returncode", -1)
+        _provision_state["status"] = "failed"
+        _provision_state["error"] = f"Ansible exited with code {rc}"
+        _write_provision_log(f"FAILED: Ansible exited with code {rc}")
+        logger.error("Fleet provisioning failed (rc=%s)", rc)
+
+
 async def _run_provisioning_task(
     node_ids: Optional[list[str]],
 ) -> None:
     """Run Ansible provisioning in background (#1384)."""
     global _provision_state
+
+    _write_provision_log(
+        f"\n{'=' * 60}\n"
+        f"Provisioning started at {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"Node IDs: {node_ids or 'all'}\n"
+        f"{'=' * 60}"
+    )
 
     temp_inventory_path = None
     try:
@@ -257,7 +296,13 @@ async def _run_provisioning_task(
             _provision_state["status"] = "failed"
             _provision_state["error"] = "No nodes found for provisioning"
             _provision_state["finished_at"] = time.time()
+            _write_provision_log("ERROR: No nodes found for provisioning")
             return
+
+        _write_provision_log(
+            f"Inventory: {temp_inventory_path}\n"
+            f"{temp_inventory_path.read_text(encoding='utf-8')}"
+        )
 
         executor = get_playbook_executor()
 
@@ -265,6 +310,7 @@ async def _run_provisioning_task(
             msg = progress.get("message", "")
             if msg:
                 _provision_state["output_lines"].append(msg)
+                _write_provision_log(msg)
 
         result = await executor.execute_playbook(
             playbook_name="playbooks/provision-fleet-roles.yml",
@@ -272,27 +318,11 @@ async def _run_provisioning_task(
             inventory_path=temp_inventory_path,
             progress_callback=log_callback,
         )
-
-        raw_output = result.get("output", "")
-        if raw_output:
-            for line in raw_output.splitlines():
-                _provision_state["output_lines"].append(line)
-
-        if result.get("success"):
-            _provision_state["status"] = "completed"
-            logger.info("Fleet provisioning completed successfully")
-        else:
-            _provision_state["status"] = "failed"
-            _provision_state["error"] = (
-                "Ansible exited with code " f"{result.get('returncode', -1)}"
-            )
-            logger.error(
-                "Fleet provisioning failed (rc=%s)",
-                result.get("returncode", -1),
-            )
+        _handle_provision_result(result)
     except Exception as exc:
         _provision_state["status"] = "failed"
         _provision_state["error"] = str(exc)
+        _write_provision_log(f"EXCEPTION: {exc}")
         logger.exception("Fleet provisioning error: %s", exc)
     finally:
         _provision_state["finished_at"] = time.time()

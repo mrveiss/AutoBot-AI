@@ -367,6 +367,11 @@ ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
     # tts-worker has no dedicated phase in provision-fleet-roles.yml;
     # it co-locates with npu-worker by convention.
     "tts-worker": "npu-worker",
+    # SLM roles run on the manager node (#1455)
+    "slm-backend": "00-SLM-Manager",
+    "slm-frontend": "00-SLM-Manager",
+    "slm-database": "00-SLM-Manager",
+    "slm-monitoring": "00-SLM-Manager",
 }
 
 
