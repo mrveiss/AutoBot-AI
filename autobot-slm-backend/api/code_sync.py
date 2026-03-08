@@ -468,8 +468,8 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
         )
     else:
         ssh_key = os.environ.get(
-            "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"
-        )  # noqa: ssot-path
+            "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"  # noqa: ssot-path
+        )
         if not Path(ssh_key).exists():
             logger.error("SLM self-sync failed: SSH key not found at %s", ssh_key)
             return

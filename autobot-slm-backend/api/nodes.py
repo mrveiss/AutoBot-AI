@@ -2383,8 +2383,8 @@ async def get_node_service_order(
 # =============================================================================
 
 _DEFAULT_SSH_KEY = os.environ.get(
-    "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"
-)  # noqa: ssot-path
+    "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"  # noqa: ssot-path
+)
 _DEFAULT_SSH_USER = os.environ.get("SLM_SSH_USER", "autobot")
 
 

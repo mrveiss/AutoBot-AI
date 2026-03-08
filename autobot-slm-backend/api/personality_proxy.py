@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/personality", tags=["personality-proxy"])
 
 AUTOBOT_BACKEND_URL = os.getenv(
-    "AUTOBOT_BACKEND_URL", "https://172.16.168.20:8443"
-)  # noqa: ssot-fallback
+    "AUTOBOT_BACKEND_URL", "https://172.16.168.20:8443"  # noqa: ssot-fallback
+)
 AUTOBOT_INTERNAL_API_KEY = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
 
 _MUTATION_METHODS = {"POST", "PUT", "DELETE", "PATCH"}

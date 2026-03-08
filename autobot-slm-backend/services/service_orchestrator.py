@@ -70,8 +70,8 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_BACKEND_HOST",
         default_port_env="AUTOBOT_BACKEND_PORT",
         default_host=os.environ.get(
-            "AUTOBOT_BACKEND_HOST", "172.16.168.20"
-        ),  # noqa: ssot-fallback
+            "AUTOBOT_BACKEND_HOST", "172.16.168.20"  # noqa: ssot-fallback
+        ),
         default_port=8443,  # Issue #858/#861: HTTPS port
         start_command=(
             "cd /opt/autobot/autobot-backend && "
@@ -92,8 +92,8 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_FRONTEND_HOST",
         default_port_env="AUTOBOT_FRONTEND_PORT",
         default_host=os.environ.get(
-            "AUTOBOT_FRONTEND_HOST", "172.16.168.21"
-        ),  # noqa: ssot-fallback
+            "AUTOBOT_FRONTEND_HOST", "172.16.168.21"  # noqa: ssot-fallback
+        ),
         default_port=443,  # Production nginx serves HTTPS on 443
         systemd_service="nginx",  # Production uses nginx
         start_command=(
@@ -114,8 +114,8 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_REDIS_HOST",
         default_port_env="AUTOBOT_REDIS_PORT",
         default_host=os.environ.get(
-            "AUTOBOT_REDIS_HOST", "172.16.168.23"
-        ),  # noqa: ssot-fallback
+            "AUTOBOT_REDIS_HOST", "172.16.168.23"  # noqa: ssot-fallback
+        ),
         default_port=6379,
         systemd_service="redis-stack-server",
         health_check_type="redis",
@@ -129,8 +129,8 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_NPU_WORKER_HOST",
         default_port_env="AUTOBOT_NPU_WORKER_PORT",
         default_host=os.environ.get(
-            "AUTOBOT_NPU_WORKER_HOST", "172.16.168.22"
-        ),  # noqa: ssot-fallback
+            "AUTOBOT_NPU_WORKER_HOST", "172.16.168.22"  # noqa: ssot-fallback
+        ),
         default_port=8081,
         systemd_service="autobot-npu-worker",
         start_command=(
@@ -153,8 +153,8 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_AI_STACK_HOST",
         default_port_env="AUTOBOT_AI_STACK_PORT",
         default_host=os.environ.get(
-            "AUTOBOT_AI_STACK_HOST", "172.16.168.20"
-        ),  # noqa: ssot-fallback
+            "AUTOBOT_AI_STACK_HOST", "172.16.168.20"  # noqa: ssot-fallback
+        ),
         default_port=11434,
         systemd_service="ollama",
         start_command="ollama serve",
@@ -171,8 +171,8 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_BROWSER_SERVICE_HOST",
         default_port_env="AUTOBOT_BROWSER_SERVICE_PORT",
         default_host=os.environ.get(
-            "AUTOBOT_BROWSER_SERVICE_HOST", "172.16.168.25"
-        ),  # noqa: ssot-fallback
+            "AUTOBOT_BROWSER_SERVICE_HOST", "172.16.168.25"  # noqa: ssot-fallback
+        ),
         default_port=3000,
         start_command=(
             "cd /opt/autobot/autobot-browser-worker && "

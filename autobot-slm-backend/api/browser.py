@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/browser/mcp", tags=["browser"])
 
 BROWSER_WORKER_URL = os.getenv(
-    "BROWSER_WORKER_URL", "http://172.16.168.25:3000"
-)  # noqa: ssot-fallback
+    "BROWSER_WORKER_URL", "http://172.16.168.25:3000"  # noqa: ssot-fallback
+)
 
 
 class NavigateRequest(BaseModel):

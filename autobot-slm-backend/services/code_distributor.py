@@ -31,8 +31,8 @@ DEFAULT_REPO_PATH = os.environ.get("SLM_REPO_PATH", "/opt/autobot")
 REMOTE_AGENT_PATH = "/opt/slm-agent"
 # SSH key for connecting to managed nodes
 SSH_KEY_PATH = os.environ.get(
-    "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"
-)  # noqa: ssot-path
+    "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"  # noqa: ssot-path
+)
 
 
 class CodeDistributor:

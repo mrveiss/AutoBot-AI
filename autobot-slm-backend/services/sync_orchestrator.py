@@ -42,8 +42,8 @@ class SyncNodeContext:
 # Code cache directory
 CODE_CACHE_DIR = Path(os.environ.get("SLM_CODE_CACHE", "/var/lib/slm/code-cache"))
 SSH_KEY_PATH = os.environ.get(
-    "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"
-)  # noqa: ssot-path
+    "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"  # noqa: ssot-path
+)
 
 
 class SyncOrchestrator:

@@ -406,12 +406,12 @@ def _resolve_service_urls() -> tuple:
         npu_host = ConfigRegistry.get("vm.npu", "172.16.168.22")  # noqa: ssot-fallback
         npu_port = ConfigRegistry.get("port.npu", "8081")
         browser_host = ConfigRegistry.get(
-            "vm.browser", "172.16.168.25"
-        )  # noqa: ssot-fallback
+            "vm.browser", "172.16.168.25"  # noqa: ssot-fallback
+        )
         browser_port = ConfigRegistry.get("port.browser", "3000")
         ollama_host = ConfigRegistry.get(
-            "vm.llm", "172.16.168.20"
-        )  # noqa: ssot-fallback
+            "vm.llm", "172.16.168.20"  # noqa: ssot-fallback
+        )
         ollama_port = ConfigRegistry.get("port.ollama", "11434")
         npu_url = f"http://{npu_host}:{npu_port}/health"
         browser_url = f"http://{browser_host}:{browser_port}/health"

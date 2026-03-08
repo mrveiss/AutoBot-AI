@@ -143,8 +143,8 @@ class Settings(BaseSettings):
 
     # External URL - remote nodes use nginx reverse proxy
     external_url: str = os.getenv(
-        "SLM_EXTERNAL_URL", "https://172.16.168.19"
-    )  # noqa: ssot-fallback
+        "SLM_EXTERNAL_URL", "https://172.16.168.19"  # noqa: ssot-fallback
+    )
 
     class Config:
         env_prefix = "SLM_"

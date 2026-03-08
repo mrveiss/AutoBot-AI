@@ -72,8 +72,8 @@ DEFAULT_NOTIFY_PORT = int(os.getenv("SLM_NOTIFY_PORT", "8000"))
 # These are configured via CLI args or environment variables at deployment
 # Issue #694: Use environment variable with fallback
 DEFAULT_ADMIN_URL = os.getenv(
-    "SLM_ADMIN_URL", "https://172.16.168.19"
-)  # noqa: ssot-fallback
+    "SLM_ADMIN_URL", "https://172.16.168.19"  # noqa: ssot-fallback
+)
 DEFAULT_HEARTBEAT_INTERVAL = 30  # seconds
 # Buffer database path - use /var/lib/slm-agent for systemd compatibility
 # (systemd service has ProtectHome=read-only and ReadWritePaths=/var/lib/slm-agent)
