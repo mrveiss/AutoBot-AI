@@ -10,10 +10,10 @@ SQLAlchemy models for human-in-the-loop approval gates.
 import uuid
 from enum import Enum
 
-from api.user_management.models.base import Base, TimestampMixin
 from sqlalchemy import Column, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
+from user_management.models.base import Base, TimestampMixin
 
 
 class ApprovalStatus(str, Enum):
