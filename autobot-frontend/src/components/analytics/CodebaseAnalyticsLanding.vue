@@ -71,6 +71,26 @@
           {{ source.error_message }}
         </div>
 
+        <!-- Actions (#1468) -->
+        <div class="card-actions" @click.stop>
+          <button
+            class="btn-card-action btn-card-action--sync"
+            :disabled="source.status === 'syncing' || syncingId === source.id"
+            :title="source.status === 'syncing' ? $t('analytics.sources.syncing') : $t('analytics.sources.syncNow')"
+            @click="syncSource(source)"
+          >
+            <i :class="syncingId === source.id ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+          </button>
+          <button
+            class="btn-card-action btn-card-action--delete"
+            :disabled="deletingId === source.id"
+            :title="$t('analytics.sources.deleteTitle')"
+            @click="deleteSource(source)"
+          >
+            <i :class="deletingId === source.id ? 'fas fa-spinner fa-spin' : 'fas fa-trash-alt'"></i>
+          </button>
+        </div>
+
         <!-- Timestamps -->
         <div class="card-timestamps">
           <div class="timestamp-row">
@@ -195,6 +215,8 @@ const sources = ref<CodeSource[]>([])
 const summaries = ref<Record<string, SourceSummary>>({})
 const loading = ref(false)
 const showAddModal = ref(false)
+const syncingId = ref<string | null>(null)
+const deletingId = ref<string | null>(null)
 
 // ---- API helpers ----------------------------------------------------------
 
@@ -228,24 +250,22 @@ async function loadSources() {
 
 async function loadSummaries() {
   const backendUrl = await getBackendUrl()
-  const results = await Promise.allSettled(
-    sources.value.map(async (source) => {
-      const resp = await fetchWithAuth(
-        `${backendUrl}/api/analytics/codebase/sources/${source.id}/summary`
-      )
-      if (!resp.ok) return { id: source.id, summary: null }
-      const summary: SourceSummary = await resp.json()
-      return { id: source.id, summary }
-    })
-  )
-
-  const newSummaries: Record<string, SourceSummary> = {}
-  for (const result of results) {
-    if (result.status === 'fulfilled' && result.value.summary) {
-      newSummaries[result.value.id] = result.value.summary
+  try {
+    const resp = await fetchWithAuth(
+      `${backendUrl}/api/analytics/codebase/sources/summary`
+    )
+    if (!resp.ok) {
+      logger.warn('Batch summary failed, HTTP %d', resp.status)
+      return
     }
+    const data = await resp.json()
+    summaries.value = data.summaries ?? {}
+  } catch (err: unknown) {
+    logger.error(
+      'Failed to load summaries:',
+      err instanceof Error ? err.message : String(err)
+    )
   }
-  summaries.value = newSummaries
 }
 
 // ---- Navigation -----------------------------------------------------------
@@ -262,10 +282,10 @@ function formatRelativeTime(isoString: string): string {
   const diffMs = now - then
   const diffMins = Math.floor(diffMs / 60000)
   if (diffMins < 1) return t('common.justNow', 'just now')
-  if (diffMins < 60) return t('common.timeAgo.minutes', '{n}m ago', { n: diffMins })
+  if (diffMins < 60) return t('common.timeAgo.minutes', { n: diffMins })
   const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return t('common.timeAgo.hours', '{n}h ago', { n: diffHours })
-  return t('common.timeAgo.days', '{n}d ago', { n: Math.floor(diffHours / 24) })
+  if (diffHours < 24) return t('common.timeAgo.hours', { n: diffHours })
+  return t('common.timeAgo.days', { n: Math.floor(diffHours / 24) })
 }
 
 function getStatusIcon(status: string): string {
@@ -285,6 +305,60 @@ function getAccessIcon(access: string): string {
     public: 'fas fa-globe'
   }
   return icons[access] ?? 'fas fa-lock'
+}
+
+// ---- Source Actions (#1468) ------------------------------------------------
+
+async function syncSource(source: CodeSource) {
+  syncingId.value = source.id
+  try {
+    const backendUrl = await getBackendUrl()
+    const response = await fetchWithAuth(
+      `${backendUrl}/api/analytics/codebase/sources/${source.id}/sync`,
+      { method: 'POST' }
+    )
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`HTTP ${response.status}: ${text}`)
+    }
+    logger.info('Sync started for source:', source.name)
+    await loadSources()
+  } catch (err: unknown) {
+    logger.error(
+      'Sync failed:',
+      err instanceof Error ? err.message : String(err)
+    )
+  } finally {
+    syncingId.value = null
+  }
+}
+
+async function deleteSource(source: CodeSource) {
+  const msg = t(
+    'analytics.sources.confirmDelete', { name: source.name }
+  )
+  if (!confirm(msg)) return
+  deletingId.value = source.id
+  try {
+    const backendUrl = await getBackendUrl()
+    const response = await fetchWithAuth(
+      `${backendUrl}/api/analytics/codebase/sources/${source.id}`,
+      { method: 'DELETE' }
+    )
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`HTTP ${response.status}: ${text}`)
+    }
+    logger.info('Deleted source:', source.name)
+    await loadSources()
+  } catch (err: unknown) {
+    logger.error(
+      'Delete failed:',
+      err instanceof Error ? err.message : String(err)
+    )
+  } finally {
+    deletingId.value = null
+  }
 }
 
 // ---- Modal Handlers -------------------------------------------------------
@@ -599,5 +673,44 @@ onMounted(() => {
   background: var(--bg-tertiary);
   border-radius: var(--radius-sm);
   flex-shrink: 0;
+}
+
+/* Card Actions (#1468) */
+.card-actions {
+  display: flex;
+  gap: var(--spacing-2);
+  justify-content: flex-end;
+}
+
+.btn-card-action {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: var(--spacing-1-5) var(--spacing-2);
+  font-size: var(--text-xs);
+  display: flex;
+  align-items: center;
+  transition: all var(--duration-200);
+}
+
+.btn-card-action:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.btn-card-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-card-action--sync:hover:not(:disabled) {
+  color: var(--color-info);
+  border-color: var(--color-info);
+}
+
+.btn-card-action--delete:hover:not(:disabled) {
+  color: var(--color-error);
+  border-color: var(--color-error);
 }
 </style>

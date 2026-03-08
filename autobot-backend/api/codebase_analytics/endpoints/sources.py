@@ -421,6 +421,37 @@ async def _get_last_commit(clone_path: str, repo: Optional[str]) -> Optional[dic
         return None
 
 
+async def _build_summary(source: CodeSource) -> dict:
+    """Build summary dict for a single source (#1468)."""
+    last_indexed = None
+    last_commit = None
+    if source.clone_path:
+        last_indexed = await _get_last_indexed(source.id)
+        last_commit = await _get_last_commit(source.clone_path, source.repo)
+    return {
+        "source_id": source.id,
+        "last_indexed": last_indexed,
+        "last_commit": last_commit,
+    }
+
+
+@router.get("/sources/summary")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="batch_source_summary",
+    error_code_prefix="CODEBASE",
+)
+async def get_all_source_summaries():
+    """Return summaries for all sources in one request (#1468).
+
+    Replaces N+1 per-source /summary calls from the landing page.
+    """
+    sources = await list_sources()
+    results = await asyncio.gather(*[_build_summary(s) for s in sources])
+    summaries = {r["source_id"]: r for r in results}
+    return JSONResponse({"summaries": summaries})
+
+
 @router.get("/sources/{source_id}/summary")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
