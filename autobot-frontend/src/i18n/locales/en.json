@@ -657,10 +657,23 @@
         "exporting": "Exporting...",
         "exportReport": "Export Report",
         "clearing": "Clearing...",
-        "clearCache": "Clear Cache"
+        "clearCache": "Clear Cache",
+        "backToProjects": "Projects",
+        "indexNow": "Index Now"
+      },
+      "landing": {
+        "subtitle": "Select a project to view analytics",
+        "addProject": "Add Project",
+        "neverIndexed": "Never indexed",
+        "indexed": "Indexed"
+      },
+      "empty": {
+        "title": "No Analysis Results",
+        "description": "This project hasn't been indexed yet. Click below to start indexing."
       },
       "actions": {
         "cancel": "Cancel",
+        "stop": "Stop",
         "loadMetrics": "Load Metrics",
         "retry": "Retry",
         "realTimeUpdates": "Real-time Updates",
@@ -998,6 +1011,7 @@
         "indexingMonitoring": "Indexing job already running, now monitoring",
         "indexingQueued": "Indexing queued behind current job",
         "indexingStarted": "Codebase indexing started",
+        "sourceNotFound": "Source not found",
         "declarationsFound": "Found {count} declarations ({time}ms)",
         "declarationsFailed": "Declarations failed: {error} ({time}ms)",
         "duplicatesFound": "Found {count} duplicates ({time}ms)",

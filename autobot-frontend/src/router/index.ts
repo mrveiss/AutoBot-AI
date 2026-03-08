@@ -295,6 +295,15 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'codebase',
         name: 'analytics-codebase',
+        component: () => import('@/components/analytics/CodebaseAnalyticsLanding.vue'),
+        meta: {
+          title: 'Codebase Analytics',
+          parent: 'analytics'
+        }
+      },
+      {
+        path: 'codebase/:sourceId',
+        name: 'analytics-codebase-project',
         component: () => import('@/components/analytics/CodebaseAnalytics.vue'),
         meta: {
           title: 'Codebase Analytics',
