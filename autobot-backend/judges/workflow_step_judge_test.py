@@ -331,19 +331,19 @@ class TestWorkflowStepJudge:
         assert comparison["recommendation"] == "APPROVE"
 
     @pytest.mark.asyncio
-    async def test_error_handling(
+    async def test_error_handling_fails_open(
         self, judge, sample_step_data, sample_workflow_context, sample_user_context
     ):
-        """Test error handling in evaluation"""
-        # Mock LLM interface to raise an exception
+        """Test that LLM errors fail open — approve with warning (#1464)"""
         judge.llm_interface.chat_completion.side_effect = Exception("LLM API error")
 
         should_approve, reason = await judge.should_approve_step(
             sample_step_data, sample_workflow_context, sample_user_context
         )
 
-        assert should_approve is False
-        assert "Safety score" in reason or "Evaluation error" in reason
+        assert should_approve is True
+        assert "judge unavailable" in reason
+        assert "LLM API error" in reason
 
     def test_system_prompt_generation(self, judge):
         """Test system prompt generation"""
