@@ -19,7 +19,7 @@
   ],
   "license": "ISC",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.9.0",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/inquirer": "^9.0.7",
     "@types/uuid": "^10.0.0",
