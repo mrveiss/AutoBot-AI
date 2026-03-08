@@ -86,7 +86,7 @@ class TestWorkflowStepJudge:
             "improvement_suggestions": [],
         }
 
-        judge.llm_interface.chat_completion_async.return_value = mock_response
+        judge.llm_interface.chat_completion.return_value = mock_response
 
         # Test evaluation
         result = await judge.evaluate_workflow_step(
@@ -100,7 +100,7 @@ class TestWorkflowStepJudge:
         assert len(result.criterion_scores) == 2
 
         # Verify LLM interface was called
-        judge.llm_interface.chat_completion_async.assert_called_once()
+        judge.llm_interface.chat_completion.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_evaluate_risky_step(
@@ -135,7 +135,7 @@ class TestWorkflowStepJudge:
             ],
         }
 
-        judge.llm_interface.chat_completion_async.return_value = mock_response
+        judge.llm_interface.chat_completion.return_value = mock_response
 
         result = await judge.evaluate_workflow_step(
             risky_step_data, sample_workflow_context, sample_user_context
@@ -175,7 +175,7 @@ class TestWorkflowStepJudge:
             "improvement_suggestions": [],
         }
 
-        judge.llm_interface.chat_completion_async.return_value = mock_response
+        judge.llm_interface.chat_completion.return_value = mock_response
 
         should_approve, reason = await judge.should_approve_step(
             sample_step_data, sample_workflow_context, sample_user_context
@@ -224,7 +224,7 @@ class TestWorkflowStepJudge:
             ],
         }
 
-        judge.llm_interface.chat_completion_async.return_value = mock_response
+        judge.llm_interface.chat_completion.return_value = mock_response
 
         should_approve, reason = await judge.should_approve_step(
             unsafe_step_data, sample_workflow_context, sample_user_context
@@ -251,7 +251,7 @@ class TestWorkflowStepJudge:
             ],
         }
 
-        judge.llm_interface.chat_completion_async.return_value = mock_response
+        judge.llm_interface.chat_completion.return_value = mock_response
 
         suggestions = await judge.suggest_improvements(
             sample_step_data, sample_workflow_context, sample_user_context
@@ -320,7 +320,7 @@ class TestWorkflowStepJudge:
             call_count[0] += 1
             return result
 
-        judge.llm_interface.chat_completion_async.side_effect = mock_response_generator
+        judge.llm_interface.chat_completion.side_effect = mock_response_generator
 
         comparison = await judge.compare_alternatives(
             primary_step, alternatives, sample_workflow_context, sample_user_context
@@ -336,9 +336,7 @@ class TestWorkflowStepJudge:
     ):
         """Test error handling in evaluation"""
         # Mock LLM interface to raise an exception
-        judge.llm_interface.chat_completion_async.side_effect = Exception(
-            "LLM API error"
-        )
+        judge.llm_interface.chat_completion.side_effect = Exception("LLM API error")
 
         should_approve, reason = await judge.should_approve_step(
             sample_step_data, sample_workflow_context, sample_user_context
@@ -370,7 +368,7 @@ class TestWorkflowStepJudge:
             "improvement_suggestions": [],
         }
 
-        judge.llm_interface.chat_completion_async.return_value = mock_response
+        judge.llm_interface.chat_completion.return_value = mock_response
 
         # Evaluate step
         await judge.evaluate_workflow_step(

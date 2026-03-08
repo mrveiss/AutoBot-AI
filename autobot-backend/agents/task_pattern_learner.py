@@ -95,7 +95,7 @@ class TaskPatternLearner:
         try:
             llm = await self._get_llm()
             prompt = self._build_synthesis_prompt(task_type, outcomes, best_outcome)
-            response = await llm.chat_completion_async(
+            response = await llm.chat_completion(
                 messages=[
                     {"role": "system", "content": self._system_prompt()},
                     {"role": "user", "content": prompt},

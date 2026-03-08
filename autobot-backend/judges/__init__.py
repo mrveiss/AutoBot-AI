@@ -165,7 +165,7 @@ class BaseLLMJudge:
             self.llm_interface = LLMInterface()
 
         try:
-            response = await self.llm_interface.chat_completion_async(
+            response = await self.llm_interface.chat_completion(
                 messages=[
                     {"role": "system", "content": self._get_system_prompt()},
                     {"role": "user", "content": prompt},
