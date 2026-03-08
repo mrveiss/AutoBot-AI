@@ -28,6 +28,7 @@ from api.monitoring_utils import (
     _identify_bottlenecks,
 )
 from auth_middleware import check_admin_permission
+from config import ConfigManager
 from config.registry import ConfigRegistry
 
 # Issue #474: Import ServiceURLs for AlertManager integration
@@ -58,7 +59,6 @@ from utils.performance_monitor import (
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.ssot_config import get_config
-from config import ConfigManager
 
 logger = logging.getLogger(__name__)
 config = ConfigManager()
@@ -403,11 +403,15 @@ def _resolve_service_urls() -> tuple:
         ollama_url = f"{config.get_ollama_url()}/api/version"
     except Exception:
         # Issue #1229: Use ConfigRegistry instead of hardcoded IPs
-        npu_host = ConfigRegistry.get("vm.npu", "172.16.168.22")
+        npu_host = ConfigRegistry.get("vm.npu", "172.16.168.22")  # noqa: ssot-fallback
         npu_port = ConfigRegistry.get("port.npu", "8081")
-        browser_host = ConfigRegistry.get("vm.browser", "172.16.168.25")
+        browser_host = ConfigRegistry.get(
+            "vm.browser", "172.16.168.25"
+        )  # noqa: ssot-fallback
         browser_port = ConfigRegistry.get("port.browser", "3000")
-        ollama_host = ConfigRegistry.get("vm.llm", "172.16.168.20")
+        ollama_host = ConfigRegistry.get(
+            "vm.llm", "172.16.168.20"
+        )  # noqa: ssot-fallback
         ollama_port = ConfigRegistry.get("port.ollama", "11434")
         npu_url = f"http://{npu_host}:{npu_port}/health"
         browser_url = f"http://{browser_host}:{browser_port}/health"
@@ -447,35 +451,35 @@ def _build_service_list(results: list) -> list:
     return [
         _to_service(
             "Backend API",
-            ConfigRegistry.get("vm.main", "172.16.168.20"),
+            ConfigRegistry.get("vm.main", "172.16.168.20"),  # noqa: ssot-fallback
             int(ConfigRegistry.get("port.backend", "8443")),
             "online",
             "Running",
         ),
         _to_service(
             "Redis",
-            ConfigRegistry.get("vm.redis", "172.16.168.23"),
+            ConfigRegistry.get("vm.redis", "172.16.168.23"),  # noqa: ssot-fallback
             int(ConfigRegistry.get("port.redis", "6379")),
             redis_s,
             redis_m,
         ),
         _to_service(
             "NPU Worker",
-            ConfigRegistry.get("vm.npu", "172.16.168.22"),
+            ConfigRegistry.get("vm.npu", "172.16.168.22"),  # noqa: ssot-fallback
             int(ConfigRegistry.get("port.npu", "8081")),
             npu_s,
             npu_m,
         ),
         _to_service(
             "Ollama",
-            ConfigRegistry.get("vm.llm", "172.16.168.20"),
+            ConfigRegistry.get("vm.llm", "172.16.168.20"),  # noqa: ssot-fallback
             int(ConfigRegistry.get("port.ollama", "11434")),
             ollama_s,
             ollama_m,
         ),
         _to_service(
             "Browser",
-            ConfigRegistry.get("vm.browser", "172.16.168.25"),
+            ConfigRegistry.get("vm.browser", "172.16.168.25"),  # noqa: ssot-fallback
             int(ConfigRegistry.get("port.browser", "3000")),
             browser_s,
             browser_m,

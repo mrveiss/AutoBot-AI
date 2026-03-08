@@ -4,7 +4,7 @@
 """
 SLM Admin User Management API
 
-Manages users in the local SLM database (172.16.168.19:5432/slm_users).
+Manages users in the local SLM database (SLM server:5432/slm_users).
 These are fleet administrators who can access the SLM admin dashboard.
 """
 

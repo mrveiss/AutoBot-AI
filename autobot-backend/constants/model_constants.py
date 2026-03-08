@@ -227,7 +227,7 @@ def get_model_endpoint(provider: str) -> str:
 
     Issue #763: Prefer using ConfigRegistry directly:
         from config.registry import ConfigRegistry
-        host = ConfigRegistry.get("vm.ollama", "172.16.168.24")
+        host = ConfigRegistry.get("vm.ollama", "172.16.168.24")  # noqa: ssot-fallback
         port = ConfigRegistry.get("port.ollama", "11434")
 
     Issue #380: Added @lru_cache since endpoints don't change at runtime.

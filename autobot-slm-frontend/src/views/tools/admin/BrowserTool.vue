@@ -22,7 +22,7 @@ const api = useAutobotApi()
 const loading = ref(false)
 const error = ref<string | null>(null)
 // Default to an internal URL that passes the backend URL whitelist (#985)
-const url = ref('http://172.16.168.19/')
+const url = ref('/')
 const screenshot = ref<string | null>(null)
 const browserStatus = ref<'disconnected' | 'connecting' | 'connected'>('disconnected')
 

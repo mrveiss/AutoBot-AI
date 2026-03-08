@@ -176,9 +176,9 @@ interface TLSServiceStatus {
 }
 
 const tlsServices = ref<TLSServiceStatus[]>([
-  { name: 'frontend', displayName: 'Frontend (Vue)', enabled: false, port: 443, description: 'Web interface on 172.16.168.21' },
-  { name: 'backend', displayName: 'Backend API', enabled: false, port: 8443, description: 'FastAPI backend on 172.16.168.20' },
-  { name: 'redis', displayName: 'Redis', enabled: false, port: 6380, description: 'Redis data store on 172.16.168.23' },
+  { name: 'frontend', displayName: 'Frontend (Vue)', enabled: false, port: 443, description: 'Web interface' },
+  { name: 'backend', displayName: 'Backend API', enabled: false, port: 8443, description: 'FastAPI backend' },
+  { name: 'redis', displayName: 'Redis', enabled: false, port: 6380, description: 'Redis data store' },
 ])
 const selectedTlsServices = ref<string[]>(['frontend', 'backend', 'redis'])
 const deployCertsFirst = ref(true)
@@ -840,8 +840,8 @@ const scoreColor = computed(() => {
               <li>TLS certificates are deployed to the selected nodes</li>
               <li>Service configurations are updated to use HTTPS/TLS</li>
               <li>Services are restarted to apply the changes</li>
-              <li>Frontend will be accessible at https://172.16.168.21:443</li>
-              <li>Backend API will be accessible at https://172.16.168.20:8443</li>
+              <li>Frontend will be accessible at https://frontend-host:443</li>
+              <li>Backend API will be accessible at https://backend-host:8443</li>
               <li>Redis will accept TLS connections on port 6380</li>
             </ul>
           </div>

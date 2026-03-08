@@ -102,7 +102,7 @@
                         type="text"
                         id="ip_address"
                         :class="['input', { 'border-danger-500 focus:ring-danger-500 focus:border-danger-500': errors.ip_address }]"
-                        placeholder="e.g., 172.16.168.26"
+                        placeholder="e.g., 10.0.0.26"
                         aria-required="true"
                         :aria-invalid="!!errors.ip_address"
                         :aria-describedby="errors.ip_address ? 'ip-error' : undefined"

@@ -19,7 +19,7 @@
  * logFileActivity('upload', '/path/to/file.txt', { size: 1024 })
  *
  * // Log desktop automation
- * logDesktopActivity('connect', 'Connected to VNC', { host: '172.16.168.20' })
+ * logDesktopActivity('connect', 'Connected to VNC', { host: 'backend-host' })
  * ```
  */
 

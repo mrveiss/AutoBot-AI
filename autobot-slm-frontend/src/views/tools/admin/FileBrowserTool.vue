@@ -19,8 +19,8 @@ const api = useAutobotApi()
 // State
 const loading = ref(false)
 const error = ref<string | null>(null)
-const currentPath = ref('/home/autobot')
-const pathInput = ref('/home/autobot')
+const currentPath = ref('/home/autobot') // noqa
+const pathInput = ref('/home/autobot') // noqa
 
 interface FileEntry {
   name: string

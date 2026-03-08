@@ -5,7 +5,7 @@
 Browser MCP API Routes
 
 Proxy endpoints for the SLM admin browser tool (BrowserTool.vue).
-Forwards requests to the browser worker at 172.16.168.25:3000.
+Forwards requests to the browser worker.
 Related to Issue #1120.
 """
 
@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/browser/mcp", tags=["browser"])
 
-BROWSER_WORKER_URL = os.getenv("BROWSER_WORKER_URL", "http://172.16.168.25:3000")
+BROWSER_WORKER_URL = os.getenv(
+    "BROWSER_WORKER_URL", "http://172.16.168.25:3000"
+)  # noqa: ssot-fallback
 
 
 class NavigateRequest(BaseModel):

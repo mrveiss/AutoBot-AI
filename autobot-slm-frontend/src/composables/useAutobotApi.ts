@@ -5,7 +5,7 @@
 /**
  * AutoBot Backend API Composable
  *
- * Provides REST API integration for the main AutoBot backend (172.16.168.20:8001).
+ * Provides REST API integration for the main AutoBot backend (the main backend server).
  * Used for settings, tools, and monitoring functionality that requires the main backend.
  * Issue #729 - Migrating admin functionality to SLM.
  */

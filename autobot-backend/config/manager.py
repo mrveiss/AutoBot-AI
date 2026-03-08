@@ -12,7 +12,7 @@ SSOT Migration (Issue #763):
 
     For infrastructure values, use ConfigRegistry:
         from config.registry import ConfigRegistry
-        redis_host = ConfigRegistry.get("vm.redis", "172.16.168.23")
+        redis_host = ConfigRegistry.get("vm.redis", "172.16.168.23")  # noqa: ssot-fallback
         default_model = ConfigRegistry.get("llm.default_model", "mistral:7b-instruct")
 """
 

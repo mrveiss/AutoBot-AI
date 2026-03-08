@@ -38,14 +38,14 @@ def _get_cors_origins() -> list:
             port = host["port"]
             origins.add(f"http://{ip}:{port}")
             origins.add(f"https://{ip}")
-        origins.add("https://172.16.168.19")
-        origins.add("https://172.16.168.21")
+        origins.add("https://172.16.168.19")  # noqa: ssot-cors
+        origins.add("https://172.16.168.21")  # noqa: ssot-cors
         return sorted(origins)
     except ImportError:
         logger.warning("autobot_shared not available; using SLM-only CORS")
         return [
-            "https://172.16.168.19",
-            "https://172.16.168.21",
+            "https://172.16.168.19",  # noqa: ssot-cors
+            "https://172.16.168.21",  # noqa: ssot-cors
         ]
 
 
@@ -142,7 +142,9 @@ class Settings(BaseSettings):
     cors_origins: list = _get_cors_origins()
 
     # External URL - remote nodes use nginx reverse proxy
-    external_url: str = os.getenv("SLM_EXTERNAL_URL", "https://172.16.168.19")
+    external_url: str = os.getenv(
+        "SLM_EXTERNAL_URL", "https://172.16.168.19"
+    )  # noqa: ssot-fallback
 
     class Config:
         env_prefix = "SLM_"

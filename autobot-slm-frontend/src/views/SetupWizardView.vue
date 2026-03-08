@@ -97,7 +97,7 @@
           <h3>Add a Node</h3>
           <div class="form-row">
             <input v-model="newNode.hostname" placeholder="Hostname (e.g. frontend-01)" />
-            <input v-model="newNode.ip_address" placeholder="IP Address (e.g. 172.16.168.21)" />
+            <input v-model="newNode.ip_address" placeholder="IP Address (e.g. 10.0.0.21)" />
           </div>
           <div class="form-row">
             <input v-model="newNode.ssh_user" placeholder="SSH User (default: autobot)" />

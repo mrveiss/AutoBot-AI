@@ -675,7 +675,9 @@ async def proxy_npu_health():
     """
     from autobot_shared.ssot_config import config as ssot_config
 
-    npu_host = ssot_config.get_host("npu_worker", "172.16.168.22")
+    npu_host = ssot_config.get_host(
+        "npu_worker", "172.16.168.22"
+    )  # noqa: ssot-fallback
     npu_port = ssot_config.get_port("npu_worker", 8081)
     url = f"http://{npu_host}:{npu_port}/health"
 

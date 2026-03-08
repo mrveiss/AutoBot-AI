@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+from config import settings
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from models.database import (
@@ -55,8 +56,6 @@ from services.sync_orchestrator import get_sync_orchestrator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
-
-from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -289,7 +288,7 @@ async def _rsync_component(
         "--delete",
         "-e",
         ssh_opts,
-        "--rsync-path=sudo rsync",  # source may need root to read e.g. /home/kali/
+        "--rsync-path=sudo rsync",  # source may need root to read e.g. /home/kali/  # noqa
     ]
     for exc in excludes:
         cmd.append(f"--exclude={exc}")
@@ -468,7 +467,9 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
             "SLM self-sync: code source is local at %s, using direct rsync", repo_path
         )
     else:
-        ssh_key = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
+        ssh_key = os.environ.get(
+            "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"
+        )  # noqa: ssot-path
         if not Path(ssh_key).exists():
             logger.error("SLM self-sync failed: SSH key not found at %s", ssh_key)
             return
@@ -623,7 +624,7 @@ async def sync_node(
     if is_slm_server and request.restart:
         # SLM server cannot self-sync via the Ansible playbook because
         # ansible.posix.synchronize runs rsync FROM the controller (SLM server),
-        # but the source path /home/kali/Desktop/AutoBot only exists on the dev
+        # but the source path /home/kali/Desktop/AutoBot only exists on the dev  # noqa
         # machine. Instead, pull code FROM the code source node directly (#913).
         logger.info("SLM self-sync: pulling from code source (fire-and-forget)")
         asyncio.create_task(_sync_slm_from_code_source(node_id))

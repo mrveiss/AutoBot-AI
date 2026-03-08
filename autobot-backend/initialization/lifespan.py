@@ -547,7 +547,7 @@ async def _init_slm_reconciler(app: FastAPI):
     """
     Initialize SLM reconciliation loop with WebSocket broadcasting (NON-CRITICAL).
 
-    DEPRECATED: Issue #729 - SLM services moved to slm-server at 172.16.168.19.
+    DEPRECATED: Issue #729 - SLM services moved to SLM server.
     This function is disabled as backend/services/slm/ has been removed.
     SLM server runs its own reconciler independently.
 
@@ -555,9 +555,7 @@ async def _init_slm_reconciler(app: FastAPI):
     node health and triggers remediation actions. Wires up WebSocket callbacks
     for real-time event broadcasting.
     """
-    logger.info(
-        "✅ [ 92%] SLM Reconciler: Skipped (moved to SLM server at 172.16.168.19)"
-    )
+    logger.info("✅ [ 92%] SLM Reconciler: Skipped (moved to SLM server)")
     # REMOVED as part of Issue #729 layer separation
     # SLM server now runs its own reconciler - no longer initialized from backend
     return

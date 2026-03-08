@@ -608,7 +608,7 @@ onUnmounted(() => {
               v-model="workerForm.ip_address"
               type="text"
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-              placeholder="172.16.168.22"
+              placeholder="10.0.0.22"
             />
           </div>
         </div>

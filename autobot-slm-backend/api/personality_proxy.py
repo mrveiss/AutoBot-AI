@@ -7,7 +7,7 @@ Personality API Proxy
 Proxies personality profile requests to the main AutoBot backend.
 Validates SLM admin JWT for mutating operations.
 
-The main backend personality API lives at /api/personality/* on 172.16.168.20:8443.
+The main backend personality API lives at /api/personality/* on the main backend server.
 This proxy authenticates via X-Internal-API-Key so the main backend can trust
 requests originating from the SLM admin without requiring a main-backend JWT.
 
@@ -27,7 +27,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/personality", tags=["personality-proxy"])
 
-AUTOBOT_BACKEND_URL = os.getenv("AUTOBOT_BACKEND_URL", "https://172.16.168.20:8443")
+AUTOBOT_BACKEND_URL = os.getenv(
+    "AUTOBOT_BACKEND_URL", "https://172.16.168.20:8443"
+)  # noqa: ssot-fallback
 AUTOBOT_INTERNAL_API_KEY = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
 
 _MUTATION_METHODS = {"POST", "PUT", "DELETE", "PATCH"}

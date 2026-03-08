@@ -327,7 +327,7 @@ function loadSampleText(): void {
 
 [assistant] Redis connection timeouts can occur due to several reasons. Let me help you troubleshoot:
 
-1. Check if Redis server is running on 172.16.168.23:6379
+1. Check if the Redis server is running
 2. Verify network connectivity between your application and Redis
 3. Check if there are too many concurrent connections
 
