@@ -23,6 +23,12 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install dependencies
+        run: |
+          if ! command -v jq &>/dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq jq
+          fi
+
       - name: Determine next version
         id: version
         uses: orhun/git-cliff-action@v4
