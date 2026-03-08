@@ -5,62 +5,22 @@
       <div class="header-content">
         <h2><i class="fas fa-code"></i> {{ $t('analytics.codebase.title') }}</h2>
         <div class="header-controls">
-          <!-- Issue #1133: Source selector row -->
-          <div class="source-selector-row">
-            <div class="source-selector-wrapper">
-              <select
-                class="source-select"
-                :value="selectedSource ? selectedSource.id : '__custom__'"
-                @change="(e) => {
-                  const val = (e.target as HTMLSelectElement).value
-                  if (val === '__custom__') {
-                    handleClearSource()
-                  } else {
-                    const found = sources.find(s => s.id === val)
-                    if (found) handleSelectSource(found)
-                  }
-                }"
-              >
-                <option value="__custom__">{{ $t('analytics.codebase.buttons.customPath') }}</option>
-                <option v-for="src in sources" :key="src.id" :value="src.id">
-                  {{ src.name }} ({{ src.source_type === 'github' ? src.repo : $t('analytics.codebase.sourceLocal') }})
-                </option>
-              </select>
-              <i class="fas fa-chevron-down select-chevron"></i>
-            </div>
-            <button class="btn-manage-sources" @click="showSourceManager = true">
-              <i class="fas fa-code-branch"></i>
-              {{ $t('analytics.codebase.buttons.manageSources') }}
-            </button>
-          </div>
-
-          <!-- Path input shown when no source selected -->
-          <input
-            v-if="!selectedSource"
-            v-model="rootPath"
-            :placeholder="$t('analytics.codebase.pathPlaceholder')"
-            class="path-input"
-            @keyup.enter="runFullAnalysis"
-          />
-
-          <!-- Selected source bar -->
-          <div v-if="selectedSource" class="selected-source-bar">
-            <i :class="selectedSource.source_type === 'github' ? 'fab fa-github' : 'fas fa-folder'"></i>
-            <span class="selected-source-name">{{ selectedSource.name }}</span>
-            <span class="selected-source-path">{{ selectedSource.repo ?? selectedSource.clone_path ?? '' }}</span>
-            <span class="selected-source-status" :class="`status--${selectedSource.status}`">{{ selectedSource.status }}</span>
-            <button class="btn-clear-source" @click="handleClearSource" :title="$t('analytics.codebase.buttons.useCustomPath')">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
+          <router-link :to="{ name: 'analytics-codebase' }" class="btn-back">
+            <i class="fas fa-arrow-left"></i>
+            {{ $t('analytics.codebase.buttons.backToProjects') }}
+          </router-link>
 
           <button @click="indexCodebase" :disabled="analyzing" class="btn-primary">
             <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-database'"></i>
             {{ analyzing ? $t('analytics.codebase.buttons.indexing') : $t('analytics.codebase.buttons.indexCodebase') }}
           </button>
-          <button v-if="analyzing && currentJobId" @click="cancelIndexingJob" class="btn-cancel">
+          <button
+            v-if="analyzing || scanRunner.running.value"
+            @click="handleStop"
+            class="btn-cancel"
+          >
             <i class="fas fa-stop-circle"></i>
-            {{ $t('analytics.codebase.actions.cancel') }}
+            {{ $t('analytics.codebase.actions.stop') }}
           </button>
           <button @click="runFullAnalysis" :disabled="analyzing || (!rootPath && !selectedSource)" class="btn-secondary">
             <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'fas fa-chart-bar'"></i>
@@ -227,6 +187,22 @@
           <span v-if="result.error" class="scan-error">{{ result.error }}</span>
         </div>
       </div>
+    </div>
+
+    <!-- Empty state when no cached results exist (#1458) -->
+    <div v-if="!analyzing && !scanRunner.running.value && !hasAnyResults" class="empty-state-container">
+      <EmptyState
+        icon="fas fa-database"
+        :title="$t('analytics.codebase.empty.title')"
+        :message="$t('analytics.codebase.empty.description')"
+      >
+        <template #actions>
+          <button @click="indexCodebase" class="btn-primary btn-lg">
+            <i class="fas fa-database"></i>
+            {{ $t('analytics.codebase.buttons.indexNow') }}
+          </button>
+        </template>
+      </EmptyState>
     </div>
 
     <!-- Enhanced Analytics Dashboard Cards -->
@@ -2811,6 +2787,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import appConfig from '@/config/AppConfig.js'
@@ -2856,6 +2833,8 @@ import {
 
 // i18n
 const { t } = useI18n()
+const route = useRoute()
+const analyticsRouter = useRouter()
 
 // Toast notifications
 const { showToast } = useToast()
@@ -4006,26 +3985,40 @@ const showAllDeclarations = ref(false)
 const showAllDuplicates = ref(false)
 
 onMounted(async () => {
+  const sourceId = route.params.sourceId as string | undefined
+  if (!sourceId) {
+    analyticsRouter.replace({ name: 'analytics-codebase' })
+    return
+  }
 
-  // Fetch project root from backend config
-  await loadProjectRoot()
+  // Load the source metadata from backend
+  try {
+    const backendUrl = await appConfig.getServiceUrl('backend')
+    const resp = await fetchWithAuth(
+      `${backendUrl}/api/analytics/codebase/sources/${sourceId}`,
+    )
+    if (resp.ok) {
+      const source = await resp.json()
+      selectedSource.value = source
+      rootPath.value = source.clone_path || ''
+      localStorage.setItem(STORAGE_KEY_PATH, rootPath.value)
+    } else {
+      notify(t('analytics.codebase.notify.sourceNotFound'), 'error')
+      analyticsRouter.replace({ name: 'analytics-codebase' })
+      return
+    }
+  } catch {
+    analyticsRouter.replace({ name: 'analytics-codebase' })
+    return
+  }
 
   // Check if there's already an indexing job running
   await checkCurrentIndexingJob()
 
-  // Load initial data - Enhanced analytics (top section)
-  loadSystemOverview()
-  loadCommunicationPatterns()
-  loadCodeQuality()
-  loadPerformanceMetrics()
-
-  // Load codebase analytics data (bottom section)
+  // Load cached/historic results (no auto-indexing)
   loadCodebaseAnalyticsData()
 
-  // Load unified analytics report for category filtering
-  loadUnifiedReport()
-
-  // Issue #1133: Load registered code sources
+  // Load sources list for any modals
   loadSources()
 })
 
@@ -4309,6 +4302,24 @@ const cancelIndexingJob = async () => {
     notify(t('analytics.codebase.notify.cancelError', { error: errorMessage }), 'error')
   }
 }
+
+const handleStop = () => {
+  if (analyzing.value && currentJobId.value) {
+    cancelIndexingJob()
+  }
+  if (scanRunner.running.value) {
+    scanRunner.cancel()
+  }
+}
+
+const hasAnyResults = computed(() => {
+  return !!(
+    codebaseStats.value ||
+    problemsReport.value.length > 0 ||
+    declarationAnalysis.value.length > 0 ||
+    duplicateAnalysis.value.length > 0
+  )
+})
 
 // Fetch project root from backend configuration (only if no localStorage path)
 // Issue #677: Uses centralized appConfig to avoid duplicate API calls
@@ -6815,6 +6826,34 @@ const getDeclarationTypeClass = (type: string | undefined): string => {
 .btn-cancel:hover {
   background: var(--color-error-dark);
   transform: translateY(-1px);
+}
+
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: var(--text-sm);
+  padding: var(--spacing-1-5) var(--spacing-3);
+  border-radius: var(--radius-md);
+  transition: color var(--duration-200), background var(--duration-200);
+}
+
+.btn-back:hover {
+  color: var(--color-info);
+  background: var(--bg-tertiary);
+}
+
+.empty-state-container {
+  padding: var(--spacing-8) var(--spacing-4);
+  display: flex;
+  justify-content: center;
+}
+
+.btn-lg {
+  padding: var(--spacing-3) var(--spacing-6);
+  font-size: var(--text-base);
 }
 
 .debug-controls {
