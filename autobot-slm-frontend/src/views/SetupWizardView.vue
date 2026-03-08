@@ -253,9 +253,25 @@
             </div>
           </div>
 
+          <!-- SLM services: shown as locked on manager node (#1455) -->
+          <div
+            v-if="node.detected_roles.some(r => SLM_ROLES.includes(r))"
+            class="infra-roles-row"
+          >
+            <span class="infra-label">SLM Services:</span>
+            <span
+              v-for="slm in SLM_ROLES.filter(r => node.detected_roles.includes(r))"
+              :key="slm"
+              class="role-chip infra-chip state-running"
+            >
+              <span class="state-dot"></span>
+              {{ slm }}
+            </span>
+          </div>
+
           <!-- Infra roles: auto-deployed, shown as locked (#1344) -->
           <div
-            v-if="(nodeRoles[node.node_id] || []).some(r => !INFRA_ROLES.includes(r))"
+            v-if="(nodeRoles[node.node_id] || []).some(r => !INFRA_ROLES.includes(r) && !SLM_ROLES.includes(r))"
             class="infra-roles-row"
           >
             <span class="infra-label">Auto-deployed:</span>
@@ -457,6 +473,7 @@ interface RoleInfo {
 }
 
 const INFRA_ROLES = ['autobot-shared', 'slm-agent']
+const SLM_ROLES = ['slm-backend', 'slm-frontend', 'slm-database', 'slm-monitoring']
 
 const availableRoles = ref<RoleInfo[]>([])
 const nodeRoles = ref<Record<string, string[]>>({})
@@ -541,9 +558,9 @@ async function loadNodes() {
 async function loadRoles() {
   try {
     const result = await fetchRoles()
-    // Filter out infra roles only (#1349, #1344, #1455: show SLM roles)
+    // Filter out infra + SLM roles (SLM already on manager) (#1349, #1344, #1455)
     availableRoles.value = result
-      .filter(r => !INFRA_ROLES.includes(r.name))
+      .filter(r => !INFRA_ROLES.includes(r.name) && !SLM_ROLES.includes(r.name))
       .map(r => ({
         name: r.name,
         display_name: r.description || r.name,
