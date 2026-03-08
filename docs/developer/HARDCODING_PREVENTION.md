@@ -62,8 +62,8 @@ Run the detection script manually to audit the entire codebase:
 ./infrastructure/shared/scripts/detect-hardcoded-values.sh | less
 
 # Scan specific file or directory
-./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-user-backend/api/chat.py
-./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-backend/
+./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-backend/api/chat.py
+./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-backend/
 ```
 
 **Script location**: `infrastructure/shared/scripts/detect-hardcoded-values.sh`
@@ -193,7 +193,7 @@ Create/edit `.hardcode-exceptions` in repository root:
 # Hardcoding Exceptions
 # Format: file_path:line_number:reason
 
-autobot-user-backend/utils/legacy_module.py:45:Legacy API requires hardcoded endpoint
+autobot-backend/utils/legacy_module.py:45:Legacy API requires hardcoded endpoint
 infrastructure/shared/tests/integration/test_fixtures.py:120:Test fixture needs static IP
 ```
 
@@ -311,7 +311,7 @@ chmod +x .git/hooks/pre-commit-hardcode-check
 ./infrastructure/shared/scripts/detect-hardcoded-values.sh
 
 # After making changes
-./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-user-backend/api/
+./infrastructure/shared/scripts/detect-hardcoded-values.sh autobot-user-autobot-backend/api/
 ```
 
 ### 3. Keep .env.example Updated
@@ -392,7 +392,7 @@ git commit --no-verify -m "Emergency fix - see issue #123"
 - **Migration Checklist**: [CONFIG_MIGRATION_CHECKLIST.md](CONFIG_MIGRATION_CHECKLIST.md) - Migrating code to SSOT
 - **SSOT Architecture**: [../architecture/SSOT_CONFIGURATION_ARCHITECTURE.md](../architecture/SSOT_CONFIGURATION_ARCHITECTURE.md)
 - **Python SSOT Config**: `autobot-shared/ssot_config.py`
-- **TypeScript SSOT Config**: `autobot-user-frontend/src/config/ssot-config.ts`
+- **TypeScript SSOT Config**: `autobot-frontend/src/config/ssot-config.ts`
 - **Environment Setup**: [PHASE_5_DEVELOPER_SETUP.md](PHASE_5_DEVELOPER_SETUP.md)
 - **Code Quality**: [CODE_QUALITY_ENFORCEMENT.md](CODE_QUALITY_ENFORCEMENT.md)
 

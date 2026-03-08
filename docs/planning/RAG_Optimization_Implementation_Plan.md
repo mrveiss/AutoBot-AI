@@ -28,11 +28,11 @@ This document outlines the implementation of advanced RAG optimization technique
 **Files to Modify**:
 - `src/knowledge_base.py`
 - `backend/services/knowledge_service.py`
-- Add: `autobot-user-backend/utils/semantic_chunker.py`
+- Add: `autobot-backend/utils/semantic_chunker.py`
 
 **Technical Implementation**:
 ```python
-# autobot-user-backend/utils/semantic_chunker.py
+# autobot-backend/utils/semantic_chunker.py
 from langchain_experimental.text_splitter import SemanticChunker
 from sentence_transformers import SentenceTransformer
 
@@ -68,7 +68,7 @@ class AutoBotSemanticChunker:
 **Objective**: Create intelligent fact extraction with temporal awareness
 
 **Files to Create**:
-- `autobot-user-backend/agents/knowledge_extraction_agent.py`
+- `autobot-backend/agents/knowledge_extraction_agent.py`
 - `src/models/atomic_fact.py`
 - `src/services/fact_extraction_service.py`
 
@@ -92,7 +92,7 @@ class AtomicFact:
     invalid_at: Optional[datetime] = None
     entities: List[str] = None
 
-# autobot-user-backend/agents/knowledge_extraction_agent.py
+# autobot-backend/agents/knowledge_extraction_agent.py
 class KnowledgeExtractionAgent(BaseAgent):
     async def extract_facts(self, content: str, source: str) -> List[AtomicFact]:
         """Extract temporal atomic facts from content"""
@@ -126,7 +126,7 @@ class KnowledgeExtractionAgent(BaseAgent):
 
 **Files to Create**:
 - `src/services/entity_resolution_service.py`
-- `autobot-user-backend/utils/entity_resolver.py`
+- `autobot-backend/utils/entity_resolver.py`
 - `src/models/entity_mapping.py`
 
 **Technical Implementation**:
@@ -192,8 +192,8 @@ class EntityResolutionService:
 
 **Files to Create**:
 - `src/services/temporal_invalidation_service.py`
-- `autobot-user-backend/agents/contradiction_detection_agent.py`
-- `autobot-user-backend/utils/temporal_knowledge_manager.py`
+- `autobot-backend/agents/contradiction_detection_agent.py`
+- `autobot-backend/utils/temporal_knowledge_manager.py`
 
 **Technical Implementation**:
 ```python
@@ -254,13 +254,13 @@ class TemporalInvalidationService:
 **Objective**: Extend ChromaDB with graph capabilities for complex queries
 
 **Files to Create**:
-- `autobot-user-backend/utils/temporal_knowledge_graph.py`
+- `autobot-backend/utils/temporal_knowledge_graph.py`
 - `src/services/graph_query_service.py`
-- `autobot-user-backend/agents/multi_step_retrieval_agent.py`
+- `autobot-backend/agents/multi_step_retrieval_agent.py`
 
 **Technical Implementation**:
 ```python
-# autobot-user-backend/utils/temporal_knowledge_graph.py
+# autobot-backend/utils/temporal_knowledge_graph.py
 import networkx as nx
 from typing import Dict, List, Optional
 

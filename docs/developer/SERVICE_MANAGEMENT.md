@@ -128,7 +128,7 @@ journalctl -u autobot-backend -p err  # Only errors
 **Option A: Foreground (debugging)**
 ```bash
 # Activate venv
-cd autobot-user-backend
+cd autobot-backend
 source venv/bin/activate
 
 # Run directly
@@ -222,7 +222,7 @@ systemctl cat autobot-backend
 **4. Test service manually:**
 ```bash
 # Run command from service file manually
-cd /opt/autobot/autobot-user-backend
+cd /opt/autobot/autobot-backend
 source venv/bin/activate
 python backend/main.py
 
@@ -277,15 +277,15 @@ sudo systemctl restart autobot-backend
 
 **Configuration Sources (in order):**
 1. Ansible variables: `autobot-slm-backend/ansible/roles/backend/defaults/main.yml`
-2. Environment file: `/opt/autobot/autobot-user-backend/.env`
+2. Environment file: `/opt/autobot/autobot-backend/.env`
 3. Service auth keys: `/etc/autobot/service-keys/main-backend.env`
 
 **Key Configuration:**
 ```ini
 [Service]
-WorkingDirectory=/opt/autobot/autobot-user-backend
-ExecStart=/opt/autobot/autobot-user-backend/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8443
-EnvironmentFile=/opt/autobot/autobot-user-backend/.env
+WorkingDirectory=/opt/autobot/autobot-backend
+ExecStart=/opt/autobot/autobot-backend/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8443
+EnvironmentFile=/opt/autobot/autobot-backend/.env
 Restart=always
 ```
 
@@ -361,7 +361,7 @@ ansible-playbook playbooks/deploy-native-services.yml --tags npu
 **Method 2: Manual Sync**
 ```bash
 # Sync code to remote node
-./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/
 
 # SSH to node and restart
 ssh autobot@172.16.168.20
@@ -392,7 +392,7 @@ systemctl status autobot-backend
 journalctl -u autobot-backend -n 50
 
 # Try manual start
-cd /opt/autobot/autobot-user-backend
+cd /opt/autobot/autobot-backend
 source venv/bin/activate
 python backend/main.py
 ```
@@ -538,7 +538,7 @@ A: Edit the systemd service file or Ansible template, don't modify run_autobot.s
 A: They're in systemd journal now. Use `journalctl -u autobot-backend -f`
 
 **Q: Can I still use environment variables?**
-A: Yes, they're in `/opt/autobot/autobot-user-backend/.env` and loaded by systemd.
+A: Yes, they're in `/opt/autobot/autobot-backend/.env` and loaded by systemd.
 
 **Q: What about VNC and desktop access?**
 A: VNC is a separate service: `sudo systemctl start vncserver@1`

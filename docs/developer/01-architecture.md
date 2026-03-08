@@ -62,7 +62,7 @@ graph TB
 
 ### Frontend (Vue 3 + TypeScript)
 
-**Location**: `autobot-user-frontend/`
+**Location**: `autobot-frontend/`
 
 **Key Features**:
 - Modern Vue 3 with Composition API and TypeScript

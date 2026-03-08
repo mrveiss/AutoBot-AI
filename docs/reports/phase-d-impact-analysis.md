@@ -24,7 +24,7 @@ This analysis compares the critical issues identified in the August 16, 2025 com
 - `docker/secure-sandbox.Dockerfile` - Enhanced security container
 - `docker/security/` - Security configurations and monitoring
 - `src/secure_sandbox_executor.py` - Python integration layer
-- `autobot-user-backend/api/sandbox.py` - Secure execution API
+- `autobot-backend/api/sandbox.py` - Secure execution API
 
 **Impact**: **CRITICAL VULNERABILITY ELIMINATED** - Commands now execute in isolated, monitored environment.
 
@@ -44,9 +44,9 @@ This analysis compares the critical issues identified in the August 16, 2025 com
 - ✅ **Health monitoring** tracks tier performance and availability
 
 **Files Implemented**:
-- `autobot-user-backend/agents/llm_failsafe_agent.py` - Multi-tier failsafe system
-- `autobot-user-backend/agents/json_formatter_agent.py` - Robust JSON parsing
-- `autobot-user-backend/api/chat.py` - Integration into chat endpoints
+- `autobot-backend/agents/llm_failsafe_agent.py` - Multi-tier failsafe system
+- `autobot-backend/agents/json_formatter_agent.py` - Robust JSON parsing
+- `autobot-backend/api/chat.py` - Integration into chat endpoints
 
 **Impact**: **SYSTEM RELIABILITY GUARANTEED** - Chat system never fails to respond, even with missing credentials.
 
@@ -64,7 +64,7 @@ This analysis compares the critical issues identified in the August 16, 2025 com
 
 **Files Implemented**:
 - `src/enhanced_multi_agent_orchestrator.py` - Advanced coordination
-- `autobot-user-backend/api/orchestration.py` - Control and monitoring APIs
+- `autobot-backend/api/orchestration.py` - Control and monitoring APIs
 - Enhanced `src/enhanced_security_layer.py` - Approval workflows
 
 **Impact**: **HUMAN OVERSIGHT RESTORED** - Operators can monitor, control, and intervene in agent operations.

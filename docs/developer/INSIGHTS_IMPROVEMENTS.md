@@ -229,7 +229,7 @@ Perfect for repetitive, well-defined tasks like:
 **Example:**
 ```bash
 # Batch lint fix
-claude -p "Fix all flake8 E501 line-length violations (max 100 chars) in all Python files under autobot-user-backend/. Do not change logic, only fix line lengths. Commit each file individually with message 'fix: E501 line length #<issue>'" --allowedTools "Edit,Read,Bash,Write,Grep,Glob"
+claude -p "Fix all flake8 E501 line-length violations (max 100 chars) in all Python files under autobot-backend/. Do not change logic, only fix line lengths. Commit each file individually with message 'fix: E501 line length #<issue>'" --allowedTools "Edit,Read,Bash,Write,Grep,Glob"
 
 # Batch function refactoring
 claude -p "Read REFACTOR_PLAN.md and execute the next 3 batches of function refactoring. For each function: extract into smaller functions, run flake8, commit with issue reference." --allowedTools "Edit,Read,Bash,Write,Grep,Glob,Task"
@@ -275,7 +275,7 @@ If you encounter error or ambiguity, state it clearly and propose two options. N
 
 **Copyable Prompt (Experimental):**
 ```
-I need to refactor all functions exceeding 50 lines in autobot-user-backend/. Execute as parallel batch operation:
+I need to refactor all functions exceeding 50 lines in autobot-backend/. Execute as parallel batch operation:
 
 1. SCAN: Use Grep/Bash to identify all functions >50 lines. Group into batches of 5-8 functions by module.
 2. EXECUTE IN PARALLEL: For each batch, dispatch Task subagent with:

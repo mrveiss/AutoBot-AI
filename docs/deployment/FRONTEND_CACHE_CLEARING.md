@@ -180,8 +180,8 @@ This ensures:
 ### 2. Verify Deployment on Server
 ```bash
 ssh autobot@172.16.168.21
-ls -lh /opt/autobot/autobot-user-frontend/dist/
-cat /opt/autobot/autobot-user-frontend/dist/index.html
+ls -lh /opt/autobot/autobot-frontend/dist/
+cat /opt/autobot/autobot-frontend/dist/index.html
 ```
 
 Check that:

@@ -96,7 +96,7 @@ Backend (172.16.168.20:8443)
 
 ### NPU Worker Management (Verified)
 
-**Component**: `autobot-user-frontend/src/components/settings/NPUWorkersSettings.vue`
+**Component**: `autobot-frontend/src/components/settings/NPUWorkersSettings.vue`
 
 **Endpoints Used**:
 - `GET /api/npu/workers` - List workers

@@ -32,20 +32,20 @@
 curl https://172.16.168.20:8443/api/health
 
 # 2. Check CORS configuration
-grep -r "get_cors_origins" autobot-user-backend/
+grep -r "get_cors_origins" autobot-backend/
 
 # 3. Verify API routes are registered
 curl https://172.16.168.20:8443/docs | grep -i "advanced-control"
 
 # 4. Check frontend API client configuration
-grep -r "ApiClient" autobot-user-frontend/src/ | grep import
+grep -r "ApiClient" autobot-frontend/src/ | grep import
 ```
 
 ## Detailed Resolution Steps
 
 ### Step 1: Install API Plugin in Frontend
 
-**File**: `autobot-user-frontend/src/main.ts`
+**File**: `autobot-frontend/src/main.ts`
 
 ```typescript
 import { ApiPlugin } from '@/plugins/api'
@@ -67,16 +67,16 @@ Common mismatches and their fixes:
 
 **Fix in API clients**:
 ```typescript
-// autobot-user-frontend/src/api/AdvancedControlApiClient.ts
+// autobot-frontend/src/api/AdvancedControlApiClient.ts
 const BASE_URL = '/api/advanced-control'  // NOT /api/control
 
-// autobot-user-frontend/src/composables/useWorkflowBuilder.ts
+// autobot-frontend/src/composables/useWorkflowBuilder.ts
 const API_URL = '/api/workflow-automation'  // NOT /api/workflow_automation
 ```
 
 ### Step 3: Add Frontend VM to CORS Origins
 
-**File**: `autobot-user-backend/config.py`
+**File**: `autobot-backend/config.py`
 
 ```python
 from autobot_shared.ssot_config import NetworkConstants
@@ -97,19 +97,19 @@ Ensure this includes `172.16.168.21` (Frontend VM).
 
 ```bash
 # Find dual implementations
-find autobot-user-frontend/src -name "*.js" -o -name "*.ts" | sort | uniq -d
+find autobot-frontend/src -name "*.js" -o -name "*.ts" | sort | uniq -d
 
 # Remove .js versions if .ts exists
-rm autobot-user-frontend/src/api/ApiClient.js
-rm autobot-user-frontend/src/services/api.js
+rm autobot-frontend/src/api/ApiClient.js
+rm autobot-frontend/src/services/api.js
 
 # Update imports to use .ts versions
-grep -rl "from.*ApiClient.js" autobot-user-frontend/src/ | xargs sed -i 's/ApiClient\.js/ApiClient.ts/g'
+grep -rl "from.*ApiClient.js" autobot-frontend/src/ | xargs sed -i 's/ApiClient\.js/ApiClient.ts/g'
 ```
 
 ### Step 5: Register Missing Routers
 
-**File**: `autobot-user-backend/api/feature_routers.py`
+**File**: `autobot-backend/api/feature_routers.py`
 
 ```python
 from api.endpoints import feature_flags
@@ -123,7 +123,7 @@ app.include_router(
 
 ### Step 6: Fix API Client Response Handling
 
-**File**: `autobot-user-frontend/src/api/ApiClient.ts`
+**File**: `autobot-frontend/src/api/ApiClient.ts`
 
 ```typescript
 async post<T>(endpoint: string, data: any): Promise<T> {
@@ -197,5 +197,5 @@ curl https://172.16.168.20:8443/docs
 
 - PR #810: API connectivity fixes
 - Commit: `d4a8f9c2`
-- File: `autobot-user-frontend/src/main.ts`
-- File: `autobot-user-backend/config.py`
+- File: `autobot-frontend/src/main.ts`
+- File: `autobot-backend/config.py`

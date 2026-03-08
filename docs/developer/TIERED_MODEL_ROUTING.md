@@ -370,12 +370,12 @@ This enables serving more users on the same hardware.
 
 ### Core Components
 
-- **Scorer**: `autobot-user-backend/llm_interface_pkg/tiered_routing/complexity_scorer.py`
-- **Router**: `autobot-user-backend/llm_interface_pkg/tiered_routing/tier_router.py`
-- **Config**: `autobot-user-backend/llm_interface_pkg/tiered_routing/tier_config.py`
-- **Integration**: `autobot-user-backend/llm_interface_pkg/interface.py:795`
-- **API**: `autobot-user-backend/api/llm.py:874-1150`
-- **Tests**: `autobot-user-backend/llm_interface_pkg/tiered_routing_test.py`
+- **Scorer**: `autobot-backend/llm_interface_pkg/tiered_routing/complexity_scorer.py`
+- **Router**: `autobot-backend/llm_interface_pkg/tiered_routing/tier_router.py`
+- **Config**: `autobot-backend/llm_interface_pkg/tiered_routing/tier_config.py`
+- **Integration**: `autobot-backend/llm_interface_pkg/interface.py:795`
+- **API**: `autobot-backend/api/llm.py:874-1150`
+- **Tests**: `autobot-backend/llm_interface_pkg/tiered_routing_test.py`
 
 ### Usage Example
 

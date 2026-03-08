@@ -116,7 +116,7 @@ git
 - Target node for Ansible must support ansible-core 2.17+ modules
 
 ### Python Packages (requirements.txt)
-See `autobot-user-backend/requirements.txt`
+See `autobot-backend/requirements.txt`
 
 Key packages:
 - fastapi (0.104+)
@@ -150,7 +150,7 @@ nodejs (20.x from NodeSource)
 ```
 
 ### Frontend Packages (package.json)
-See `autobot-user-frontend/package.json`
+See `autobot-frontend/package.json`
 
 Key packages:
 - vue (3.4+)
@@ -335,7 +335,7 @@ passlib[bcrypt]>=1.7.4
 
 ### User Backend
 ```python
-# See autobot-user-backend/requirements.txt
+# See autobot-backend/requirements.txt
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 sqlalchemy>=2.0.0

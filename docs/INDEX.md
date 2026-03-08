@@ -205,12 +205,12 @@
 
 | Directory | Purpose |
 |-----------|---------|
-| `autobot-user-backend/` | Main backend API |
-| `autobot-user-frontend/` | User chat interface |
+| `autobot-backend/` | Main backend API |
+| `autobot-frontend/` | User chat interface |
 | `autobot-slm-backend/` | SLM backend |
 | `autobot-slm-frontend/` | SLM dashboard |
 | `autobot-shared/` | Shared utilities |
-| `infrastructure/` | Deployment infrastructure |
+| `autobot-infrastructure/` | Deployment infrastructure |
 
 ---
 
@@ -220,4 +220,4 @@
 
 ---
 
-**Last Updated:** 2026-02-07
+**Last Updated:** 2026-03-08

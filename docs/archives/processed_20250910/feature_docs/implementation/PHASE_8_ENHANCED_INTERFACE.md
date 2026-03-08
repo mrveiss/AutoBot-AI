@@ -89,7 +89,7 @@ sequenceDiagram
     TM->>S: resume_paused_tasks()
 ```
 
-### 3. Advanced Control API (`autobot-user-backend/api/advanced_control.py`)
+### 3. Advanced Control API (`autobot-backend/api/advanced_control.py`)
 
 **Purpose**: RESTful and WebSocket API endpoints for all Phase 8 functionality.
 

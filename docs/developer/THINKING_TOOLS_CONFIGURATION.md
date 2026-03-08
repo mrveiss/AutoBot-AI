@@ -153,10 +153,10 @@ The system prompt has been updated to include mandatory thinking tool usage inst
 **Backend API Endpoints**:
 ```bash
 # Sequential Thinking MCP
-autobot-user-backend/api/sequential_thinking_mcp.py
+autobot-backend/api/sequential_thinking_mcp.py
 
 # Structured Thinking MCP
-autobot-user-backend/api/structured_thinking_mcp.py
+autobot-backend/api/structured_thinking_mcp.py
 ```
 
 **Check Tool Registration**:
@@ -376,7 +376,7 @@ tail -100 logs/backend.log | grep -i "thinking\|mcp"
 
 **Add Logging** (optional enhancement):
 ```python
-# In autobot-user-backend/api/sequential_thinking_mcp.py or structured_thinking_mcp.py
+# In autobot-backend/api/sequential_thinking_mcp.py or structured_thinking_mcp.py
 
 @router.post("/think")
 async def process_thinking(...):
@@ -474,8 +474,8 @@ def _ensure_thinking_tools(self, available_tools):
 
 ### Documentation Files:
 - System Prompt: `prompts/chat/system_prompt.md`
-- Sequential Thinking API: `autobot-user-backend/api/sequential_thinking_mcp.py`
-- Structured Thinking API: `autobot-user-backend/api/structured_thinking_mcp.py`
+- Sequential Thinking API: `autobot-backend/api/sequential_thinking_mcp.py`
+- Structured Thinking API: `autobot-backend/api/structured_thinking_mcp.py`
 - LLM Interface: `src/llm_interface.py`
 
 ### MCP Tools:

@@ -122,8 +122,8 @@ class UserService:
 ### Files to Delete from AutoBot
 
 - Remove `src/user_management/` entirely
-- Remove `autobot-user-backend/api/user_management/` entirely
-- Update `autobot-user-backend/api/auth.py` to connect to Redis VM PostgreSQL
+- Remove `autobot-backend/api/user_management/` entirely
+- Update `autobot-backend/api/auth.py` to connect to Redis VM PostgreSQL
 
 ## API Structure
 
@@ -185,7 +185,7 @@ User → Frontend UI → POST /api/auth/login
 ### AutoBot Backend Changes
 
 ```python
-# autobot-user-backend/api/auth.py
+# autobot-backend/api/auth.py
 async def login(username, password):
     # Connect to 172.16.168.23:5432/autobot_users
     async with get_autobot_db_session() as db:
@@ -255,7 +255,7 @@ async def update_autobot_user(user_id: str, updates: UserUpdate):
 ```
 
 ```python
-# autobot-user-backend/api/auth.py (AutoBot Main Backend)
+# autobot-backend/api/auth.py (AutoBot Main Backend)
 async def listen_for_user_changes():
     """Subscribe to Redis pub/sub for user cache invalidation"""
     pubsub = redis_client.pubsub()
@@ -327,7 +327,7 @@ async function loadAutoBotUsers() {
 Minimal changes - just update API connection:
 
 ```typescript
-// autobot-user-frontend/src/stores/auth.ts
+// autobot-frontend/src/stores/auth.ts
 // No changes - still connects to Main Backend
 const API_BASE = 'https://172.16.168.20:8443/api'
 
@@ -350,9 +350,9 @@ const API_BASE = 'https://172.16.168.20:8443/api'
 - [ ] Create SLM API endpoints (`/api/slm-users`, `/api/autobot-users`)
 
 ### Phase 3: AutoBot Backend Updates
-- [ ] Update `autobot-user-backend/api/auth.py` to connect to `172.16.168.23:5432/autobot_users`
+- [ ] Update `autobot-backend/api/auth.py` to connect to `172.16.168.23:5432/autobot_users`
 - [ ] Remove `src/user_management/` from AutoBot
-- [ ] Remove `autobot-user-backend/api/user_management/` from AutoBot
+- [ ] Remove `autobot-backend/api/user_management/` from AutoBot
 - [ ] Update SSOT config for PostgreSQL connections
 
 ### Phase 4: Frontend Updates
@@ -418,4 +418,4 @@ const API_BASE = 'https://172.16.168.20:8443/api'
 
 - Existing user management: `src/user_management/`
 - SLM auth: `slm-server/api/auth.py`
-- AutoBot auth: `autobot-user-backend/api/auth.py`
+- AutoBot auth: `autobot-backend/api/auth.py`

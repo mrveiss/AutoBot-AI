@@ -62,7 +62,7 @@ cd autobot-slm-backend/ansible && ansible-playbook playbooks/<playbook>.yml --sy
 
 **Critical project structure rules:**
 - The SLM frontend is in `autobot-slm-frontend/`, NOT `autobot-vue`
-- Worktrees: `../worktrees/issue-<number>/`
+- Worktrees: `.worktrees/` (project-local, gitignored)
 - Ansible playbooks and roles: `autobot-slm-backend/ansible/`
 - Primary working branch: `Dev_new_gui`
 - Test files are colocated next to source files (not in a separate `tests/` directory)

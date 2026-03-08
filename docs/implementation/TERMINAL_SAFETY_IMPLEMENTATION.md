@@ -215,8 +215,8 @@ const interruptProcess = () => {
 ### ✅ Implementation Complete
 
 **Files Modified:**
-- `/autobot-user-frontend/src/components/TerminalWindow.vue` - Complete safety implementation
-- `/autobot-user-frontend/src/components/ChatInterface.vue` - Terminal tab integration
+- `/autobot-frontend/src/components/TerminalWindow.vue` - Complete safety implementation
+- `/autobot-frontend/src/components/ChatInterface.vue` - Terminal tab integration
 
 **Features Delivered:**
 - ✅ Emergency kill button with confirmation

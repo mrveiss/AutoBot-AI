@@ -155,7 +155,7 @@ Speculative Decoding (fast):
 
 ### Implementation for AutoBot
 
-**File:** `src/llm_interface_pkg/speculative/speculative_decoder.py`
+**File:** `autobot-backend/llm_interface_pkg/speculative/speculative_decoder.py`
 
 ```python
 # AutoBot - AI-Powered Automation Platform
@@ -412,7 +412,7 @@ def _create_vllm_instance_with_speculation(self) -> LLM:
 
 ### LLM Compressor Integration
 
-**File:** `src/llm_interface_pkg/quantization/llm_compressor.py`
+**File:** `autobot-backend/llm_interface_pkg/quantization/llm_compressor.py`
 
 ```python
 # AutoBot - AI-Powered Automation Platform
@@ -1468,7 +1468,7 @@ COMPRESSED_SYSTEM_PROMPTS = {
 AutoBot can leverage vLLM's prefix caching for repeated system prompts:
 
 ```python
-# In src/llm_interface_pkg/cache.py
+# In autobot-backend/llm_interface_pkg/cache.py
 
 class PrefixCacheManager:
     """Manage prefix caching for common prompts."""
@@ -1518,7 +1518,7 @@ class PrefixCacheManager:
 
 ### Phase 2: Speculative Decoding (1 week)
 
-- [ ] Create `src/llm_interface_pkg/speculative/` package
+- [ ] Create `autobot-backend/llm_interface_pkg/speculative/` package
 - [ ] Implement `SpeculativeDecoder` class
 - [ ] Add draft model configuration to SSOT
 - [ ] Integrate with vLLM provider
@@ -1529,7 +1529,7 @@ class PrefixCacheManager:
 
 ### Phase 3: Quantization Integration (1 week)
 
-- [ ] Create `src/llm_interface_pkg/quantization/` package
+- [ ] Create `autobot-backend/llm_interface_pkg/quantization/` package
 - [ ] Implement `QuantizedModelLoader`
 - [ ] Add INT8 model registry
 - [ ] Test accuracy vs baseline
@@ -1581,7 +1581,7 @@ AUTOBOT_KV_SLIDING_WINDOW=4096
 
 ### 14.2 Provider Registration
 
-Update `src/llm_interface_pkg/interface.py`:
+Update `autobot-backend/llm_interface_pkg/interface.py`:
 
 ```python
 # In LLMInterface.__init__()
@@ -1638,10 +1638,10 @@ OPTIMIZATION_METRICS = {
 
 ### AutoBot Integration Files
 
-- LLM Interface: `src/llm_interface_pkg/interface.py`
+- LLM Interface: `autobot-backend/llm_interface_pkg/interface.py`
 - vLLM Provider: `src/llm_providers/vllm_provider.py`
-- Ollama Provider: `src/llm_interface_pkg/providers/ollama.py`
-- Response Cache: `src/llm_interface_pkg/cache.py`
+- Ollama Provider: `autobot-backend/llm_interface_pkg/providers/ollama.py`
+- Response Cache: `autobot-backend/llm_interface_pkg/cache.py`
 - Performance Monitor: `src/utils/performance_monitoring/monitor.py`
 
 ---
@@ -1760,7 +1760,7 @@ class OptimizationRouter:
 
 #### 1. Response Caching (Already Implemented)
 
-The existing L1/L2 cache in `src/llm_interface_pkg/cache.py` works for **both** local and cloud models:
+The existing L1/L2 cache in `autobot-backend/llm_interface_pkg/cache.py` works for **both** local and cloud models:
 
 ```text
 Request → Cache Check → Hit? → Return cached response (skip API call)

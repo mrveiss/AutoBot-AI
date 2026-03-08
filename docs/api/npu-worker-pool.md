@@ -264,7 +264,7 @@ From issue #168:
 
 **Implementation**:
 - `src/npu_integration.py` - Core pool logic
-- `autobot-user-backend/api/npu_workers.py` - API endpoints
+- `autobot-backend/api/npu_workers.py` - API endpoints
 
 **Tests**:
 - `tests/test_npu_worker_pool.py` - Unit tests (30 tests)

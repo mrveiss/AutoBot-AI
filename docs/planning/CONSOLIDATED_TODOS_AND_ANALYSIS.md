@@ -22,7 +22,7 @@
 
 ### ⚠️ P0 CRITICAL TASKS (8 items) - IMMEDIATE ACTION REQUIRED
 
-1. **Re-enable strict file permissions** `autobot-user-backend/api/files.py:317`
+1. **Re-enable strict file permissions** `autobot-backend/api/files.py:317`
    - **Issue**: Security vulnerability - unrestricted file access
    - **Dependencies**: Frontend authentication system completion
    - **Effort**: 3-5 days
@@ -34,22 +34,22 @@
    - **Effort**: 5-7 days
    - **Status**: READY
 
-3. **Implement provider availability checking** `autobot-user-backend/api/agent_config.py:372`
+3. **Implement provider availability checking** `autobot-backend/api/agent_config.py:372`
    - **Issue**: System may attempt to use unavailable LLM providers
    - **Effort**: 2-3 days
    - **Status**: IN PROGRESS (Provider availability checking 90% implemented)
 
-4. **Fix LLM response caching compatibility** `autobot-user-backend/api/llm.py:57`
+4. **Fix LLM response caching compatibility** `autobot-backend/api/llm.py:57`
    - **Issue**: Performance degradation, increased API costs
    - **Dependencies**: FastAPI version compatibility
    - **Effort**: 2-4 days
 
-5. **Complete WebSocket integration** `autobot-user-frontend/src/services/`
+5. **Complete WebSocket integration** `autobot-frontend/src/services/`
    - **Issue**: Real-time communication gaps
    - **Effort**: 4-5 days
    - **Status**: READY
 
-6. **Fix terminal integration gaps** `autobot-user-backend/agents/interactive_terminal_agent.py`
+6. **Fix terminal integration gaps** `autobot-backend/agents/interactive_terminal_agent.py`
    - **Issue**: Terminal functionality incomplete
    - **Effort**: 3-4 days
    - **Status**: READY
@@ -67,35 +67,35 @@
 ### 🔥 P1 HIGH PRIORITY (24+ items) - MAJOR FEATURE GAPS
 
 #### Knowledge Manager Frontend (10+ items)
-9. **Implement category editing** `autobot-user-frontend/src/components/KnowledgeManager.vue:2260`
-10. **Implement system doc viewer** `autobot-user-frontend/src/components/KnowledgeManager.vue:2319`
-11. **Implement system doc editor** `autobot-user-frontend/src/components/KnowledgeManager.vue:2327`
-12. **Implement system doc export** `autobot-user-frontend/src/components/KnowledgeManager.vue:2331`
-13. **Implement prompt usage tracking** `autobot-user-frontend/src/components/KnowledgeManager.vue:2396`
-14. **Implement system prompt viewer** `autobot-user-frontend/src/components/KnowledgeManager.vue:2400`
-15. **Implement system prompt editor** `autobot-user-frontend/src/components/KnowledgeManager.vue:2408`
-16. **Implement system prompt duplication** `autobot-user-frontend/src/components/KnowledgeManager.vue:2412`
-17. **Implement system prompt creation** `autobot-user-frontend/src/components/KnowledgeManager.vue:2416`
-18. **Implement knowledge base search result viewer** `autobot-user-frontend/src/components/KnowledgeManager.vue:1342`
+9. **Implement category editing** `autobot-frontend/src/components/KnowledgeManager.vue:2260`
+10. **Implement system doc viewer** `autobot-frontend/src/components/KnowledgeManager.vue:2319`
+11. **Implement system doc editor** `autobot-frontend/src/components/KnowledgeManager.vue:2327`
+12. **Implement system doc export** `autobot-frontend/src/components/KnowledgeManager.vue:2331`
+13. **Implement prompt usage tracking** `autobot-frontend/src/components/KnowledgeManager.vue:2396`
+14. **Implement system prompt viewer** `autobot-frontend/src/components/KnowledgeManager.vue:2400`
+15. **Implement system prompt editor** `autobot-frontend/src/components/KnowledgeManager.vue:2408`
+16. **Implement system prompt duplication** `autobot-frontend/src/components/KnowledgeManager.vue:2412`
+17. **Implement system prompt creation** `autobot-frontend/src/components/KnowledgeManager.vue:2416`
+18. **Implement knowledge base search result viewer** `autobot-frontend/src/components/KnowledgeManager.vue:1342`
 
 **Combined Impact**: Knowledge management functionality 80% incomplete
 **Estimated Effort**: 15-20 days for complete Knowledge Manager
 
 #### Terminal & System Integration (3+ items)
 19. **Implement tab completion**
-    - `autobot-user-frontend/src/components/TerminalWindow.vue:1058`
-    - `autobot-user-frontend/src/components/TerminalSidebar.vue:324`
+    - `autobot-frontend/src/components/TerminalWindow.vue:1058`
+    - `autobot-frontend/src/components/TerminalSidebar.vue:324`
     - **Effort**: 3-4 days
 
 20. **Implement hardware priority updates endpoint**
-    - `autobot-user-frontend/src/components/SettingsPanel.vue:1902`
+    - `autobot-frontend/src/components/SettingsPanel.vue:1902`
     - **Effort**: 2-3 days
 
 #### Backend Integration (9+ items)
-21. **Implement actual usage tracking for agents** `autobot-user-backend/api/agent_config.py:144`
-22. **Integrate with model manager for available models** `autobot-user-backend/api/agent_config.py:203`
+21. **Implement actual usage tracking for agents** `autobot-backend/api/agent_config.py:144`
+22. **Integrate with model manager for available models** `autobot-backend/api/agent_config.py:203`
 23. **Complete chat workflow research integration** `src/chat_workflow_manager.py:159`
-24. **Implement human-in-the-loop for web research** `autobot-user-backend/agents/advanced_web_research.py:608`
+24. **Implement human-in-the-loop for web research** `autobot-backend/agents/advanced_web_research.py:608`
 25. **Complete enhanced orchestrator success criteria** `src/enhanced_multi_agent_orchestrator.py:883`
 
 ### 📈 P2 MEDIUM PRIORITY (47+ items) - SYSTEM IMPROVEMENTS

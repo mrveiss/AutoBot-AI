@@ -79,24 +79,24 @@
 * [x] Centralized configuration in `src/config.py` with unified structure
 
 #### 6.2 Specialized Agent Implementation
-* [x] **Chat Agent** (`autobot-user-backend/agents/chat_agent.py`) - Llama 3.2 1B for conversational interactions
+* [x] **Chat Agent** (`autobot-backend/agents/chat_agent.py`) - Llama 3.2 1B for conversational interactions
   - Quick conversational responses (200-500ms)
   - Natural language processing for greetings, simple Q&A
   - Context-aware chat history management
   - Low resource usage (1.2GB RAM)
-* [x] **Enhanced System Commands Agent** (`autobot-user-backend/agents/enhanced_system_commands_agent.py`) - Llama 3.2 1B for secure command generation
+* [x] **Enhanced System Commands Agent** (`autobot-backend/agents/enhanced_system_commands_agent.py`) - Llama 3.2 1B for secure command generation
   - Security-focused command generation with validation
   - Whitelist of allowed commands and dangerous pattern detection
   - Command explanation and alternative suggestions
   - Shell command parsing with shlex security validation
-* [x] **RAG Agent** (`autobot-user-backend/agents/rag_agent.py`) - Llama 3.2 3B for document synthesis
+* [x] **RAG Agent** (`autobot-backend/agents/rag_agent.py`) - Llama 3.2 3B for document synthesis
   - Multi-document information synthesis and analysis
   - Query reformulation for improved retrieval effectiveness
   - Document relevance ranking and context optimization
   - Complex reasoning over retrieved knowledge
 
 #### 6.3 Agent Orchestration System
-* [x] **Agent Orchestrator** (`autobot-user-backend/agents/agent_orchestrator.py`) - Central coordination with Llama 3.2 3B
+* [x] **Agent Orchestrator** (`autobot-backend/agents/agent_orchestrator.py`) - Central coordination with Llama 3.2 3B
   - Intelligent request routing based on complexity and content analysis
   - Multi-agent workflow coordination with primary/secondary agent strategies
   - Agent capability mapping and resource management
@@ -126,7 +126,7 @@
   - Resource usage characteristics and performance metrics
   - Development guidelines and troubleshooting
 * [x] **Setup Guide** (`MULTI_AGENT_SETUP.md`) - User-friendly installation instructions
-* [x] **Package Integration** (`autobot-user-backend/agents/__init__.py`) - Unified agent imports and exports
+* [x] **Package Integration** (`autobot-backend/agents/__init__.py`) - Unified agent imports and exports
 
 ### Implementation Statistics
 * **Total New Code**: 4,200+ lines across 6 major agent files
@@ -162,10 +162,10 @@ Research Request: "Find latest information about AI developments"
 ```
 
 ### Files Implemented
-* `autobot-user-backend/agents/chat_agent.py` - Conversational interaction specialist
-* `autobot-user-backend/agents/enhanced_system_commands_agent.py` - Security-focused command generation
-* `autobot-user-backend/agents/rag_agent.py` - Document synthesis and analysis
-* `autobot-user-backend/agents/agent_orchestrator.py` - Central coordination and routing
+* `autobot-backend/agents/chat_agent.py` - Conversational interaction specialist
+* `autobot-backend/agents/enhanced_system_commands_agent.py` - Security-focused command generation
+* `autobot-backend/agents/rag_agent.py` - Document synthesis and analysis
+* `autobot-backend/agents/agent_orchestrator.py` - Central coordination and routing
 * `src/config.py` (enhanced) - Multi-agent model configuration
 * `setup_agent.sh` (updated) - Automated installation with model management
 * `verify_installation.sh` - Installation validation and health checks
@@ -353,11 +353,11 @@ User Input: "what devices are on our network?"
 
 ### Tasks
 
-* [x] Build frontend in `autobot-user-frontend/` using Vue with Vite
+* [x] Build frontend in `autobot-frontend/` using Vue with Vite
 * [ ] Use NoVNC or WebSocket proxy to stream desktop
 * [x] Show logs, currently running task, and options to interrupt/resume
 * [ ] Allow human-in-the-loop takeover if needed (interrupt/takeover button)
-* [ ] **Embed noVNC in the Web UI:** Integrate an iframe or dynamic viewer in `autobot-user-frontend/index.html` to display the Kex VNC session, enabling real-time observation and control.
+* [ ] **Embed noVNC in the Web UI:** Integrate an iframe or dynamic viewer in `autobot-frontend/index.html` to display the Kex VNC session, enabling real-time observation and control.
 
 ## Phase 9: Redis Integration for Enhanced Performance
 
@@ -501,7 +501,7 @@ graph TD
 *   **Redis:** Serves as the unified backend for all memory (chat history, agent scratchpad), logs, and LlamaIndex's vector store. This ensures high performance and a centralized, persistent state.
 *   **LLM Interface Module (Local/Remote, GPU/NPU Aware):** Provides unified access to LLMs, now ensuring compatibility with LangChain's LLM integrations (e.g., `ChatOllama`).
 *   **OS Interaction Module (Local/Remote):** Provides cross-platform OS interaction (commands, files, processes), exposed as LangChain tools.
-*   **Control Panel Frontend (Manus Style):** Web-based UI built with Vue and Vite in `autobot-user-frontend/`, focusing on a real-time event stream.
+*   **Control Panel Frontend (Manus Style):** Web-based UI built with Vue and Vite in `autobot-frontend/`, focusing on a real-time event stream.
 *   **Control Panel Backend:** Provides API/WebSocket endpoints using FastAPI in `backend/main.py`, relays commands, and streams events.
 *   **Task Queue / Dispatcher:** Mechanism (e.g., Redis, RabbitMQ, gRPC) for sending tasks to workers and receiving results.
 *   **Worker Node (GPU/NPU Capable):** Separate agent instance on local/remote machine. Listens for tasks, executes them using local modules.

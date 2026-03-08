@@ -125,7 +125,7 @@ DISPLAY=:99
 **Key Features**:
 ```javascript
 // Vue 3 Composition API with TypeScript
-autobot-user-frontend/
+autobot-frontend/
 ├── src/
 │   ├── components/
 │   │   ├── chat/           # Chat interface with multi-modal support

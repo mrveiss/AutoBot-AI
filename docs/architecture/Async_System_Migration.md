@@ -15,7 +15,7 @@ This document details the comprehensive migration from synchronous to asynchrono
 
 ## Components Migrated
 
-### 1. Chat API Endpoints (`autobot-user-backend/api/chat.py`)
+### 1. Chat API Endpoints (`autobot-backend/api/chat.py`)
 
 #### Problem
 
@@ -39,10 +39,10 @@ sessions = await asyncio.to_thread(chat_history_manager.list_sessions)
 - `DELETE /api/delete_session`
 - `GET /api/chat_sessions`
 
-### 2. LLM Interface (`src/llm_interface.py` and `src/llm_interface_pkg/`)
+### 2. LLM Interface (`src/llm_interface.py` and `autobot-backend/llm_interface_pkg/`)
 
 > **Note (2026-01-31):** The LLM interface has been consolidated as part of Issue #738.
-> The canonical interface is now `src/llm_interface.py` (facade) + `src/llm_interface_pkg/` (implementation).
+> The canonical interface is now `src/llm_interface.py` (facade) + `autobot-backend/llm_interface_pkg/` (implementation).
 > The old files `llm_interface_unified.py` and `unified_llm_interface.py` have been deleted.
 
 #### Problem
@@ -68,7 +68,7 @@ async with aiohttp.ClientSession() as session:
 - **Connection Pooling**: Reusable HTTP connections
 - **Timeout Handling**: Proper async timeout management
 
-### 3. Knowledge Base API (`autobot-user-backend/api/knowledge.py`)
+### 3. Knowledge Base API (`autobot-backend/api/knowledge.py`)
 
 #### Problem
 
@@ -91,7 +91,7 @@ content = await asyncio.to_thread(knowledge_base.crawl_url, url)
 - Database queries and updates
 - Search operations
 
-### 4. File I/O Operations (`autobot-user-backend/api/files.py`)
+### 4. File I/O Operations (`autobot-backend/api/files.py`)
 
 #### Problem
 

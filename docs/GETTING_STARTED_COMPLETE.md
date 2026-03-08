@@ -62,8 +62,8 @@ Regardless of your role, get AutoBot running in 5 minutes:
 
 ### **Prerequisites**
 - Linux/WSL2 environment
-- Docker and Docker Compose
-- Python 3.10+
+- Python 3.10+ (3.12 recommended for backend)
+- Ansible (for fleet deployment)
 - 16GB+ RAM recommended
 
 ### **Installation**
@@ -80,19 +80,21 @@ ansible-playbook playbooks/deploy-full.yml
 ./run_agent.sh
 
 # 3. Access AutoBot
-open http://localhost:5173
+# Production frontend: https://172.16.168.21 (Frontend VM)
+# Backend API: https://172.16.168.20:8443
+# SLM Admin: https://172.16.168.19
 ```
 
 ### **Verification**
 ```bash
-# Check all services are running
-docker ps | grep autobot
+# Verify backend health (from another VM due to WSL2 loopback)
+ssh autobot@172.16.168.19 'curl --insecure https://172.16.168.20:8443/api/health'
 
-# Verify backend health
-curl https://localhost:8443/api/system/health
+# Verify Redis
+redis-cli -h 172.16.168.23 ping
 
-# Test agent communication
-curl https://localhost:8443/api/agents/health
+# Check service status
+ansible all -m ping
 ```
 
 ## 🧭 **Navigation Guide**

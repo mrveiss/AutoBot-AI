@@ -15,7 +15,7 @@ Previously, the file upload functionality had limitations for automated testing:
 
 ### 1. Dual File Input Approach
 
-**File**: `autobot-user-frontend/src/components/FileBrowser.vue`
+**File**: `autobot-frontend/src/components/FileBrowser.vue`
 
 #### Hidden File Input (Legacy)
 ```html
@@ -209,7 +209,7 @@ page.on('dialog', async (dialog) => {
 
 ## Files Modified
 
-1. **autobot-user-frontend/src/components/FileBrowser.vue**
+1. **autobot-frontend/src/components/FileBrowser.vue**
    - Added visible file input with drag & drop UI
    - Enhanced upload processing with centralized error handling
    - Improved accessibility with ARIA labels and keyboard navigation

@@ -87,14 +87,14 @@ The knowledge base endpoints have a critical naming mismatch. The frontend expec
 
 ### Option 1: Update Frontend (Recommended)
 Change all `/api/knowledge_base/` references to `/api/knowledge/` in:
-- `/autobot-user-frontend/autobot-user-backend/utils/ApiClient.js`
-- `/autobot-user-frontend/src/components/KnowledgeManager.vue`
+- `/autobot-frontend/autobot-backend/utils/ApiClient.js`
+- `/autobot-frontend/src/components/KnowledgeManager.vue`
 - Any other components using knowledge base APIs
 
 ### Option 2: Add Backend Aliases
 Add route aliases in the backend to support both paths:
 ```python
-# In autobot-user-backend/api/knowledge.py
+# In autobot-backend/api/knowledge.py
 @router.post("/search")
 @router.post("_base/search")  # Alias for compatibility
 async def search_knowledge(request: dict):

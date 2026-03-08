@@ -53,23 +53,23 @@
 ## 📁 **KEY FILES IMPLEMENTED**
 
 ### **Frontend Components**
-1. **`/autobot-user-frontend/src/components/TerminalWindow.vue`** (1,848 lines)
+1. **`/autobot-frontend/src/components/TerminalWindow.vue`** (1,848 lines)
    - Complete terminal interface with automation controls
    - Step confirmation modals and risk assessment
    - Emergency controls and process management
 
 ### **Backend API Services**
-2. **`/autobot-user-backend/api/workflow_automation.py`** (854 lines)
+2. **`/autobot-backend/api/workflow_automation.py`** (854 lines)
    - Full workflow automation management system
    - API endpoints and WebSocket handling
    - Workflow templates and chat integration
 
-3. **`/autobot-user-backend/api/simple_terminal_websocket.py`** (Enhanced)
+3. **`/autobot-backend/api/simple_terminal_websocket.py`** (Enhanced)
    - Added workflow message handling
    - Automation control integration
    - Real-time communication support
 
-4. **`/autobot-user-backend/api/chat.py`** (Enhanced)
+4. **`/autobot-backend/api/chat.py`** (Enhanced)
    - Added workflow automation detection
    - Natural language workflow creation
    - Chat-to-terminal integration

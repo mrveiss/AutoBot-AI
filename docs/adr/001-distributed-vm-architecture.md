@@ -96,7 +96,7 @@ All VMs are on the same subnet (172.16.168.0/24) for low-latency communication.
 ssh -i ~/.ssh/autobot_key autobot@172.16.168.21
 
 # Sync files to VM
-./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/ /home/autobot/autobot-user-frontend/src/
+./scripts/utilities/sync-to-vm.sh frontend autobot-frontend/src/ /home/autobot/autobot-frontend/src/
 ```
 
 ### Health Checks

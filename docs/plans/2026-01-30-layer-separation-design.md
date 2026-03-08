@@ -31,7 +31,7 @@ Separate AutoBot into two distinct layers:
 ┌─────────────────────────────────────────────────────────────┐
 │                 SEPARATE: APPLICATION LAYER                  │
 │                                                             │
-│   backend/ ←──→ autobot-user-frontend/ (user-facing app)              │
+│   backend/ ←──→ autobot-frontend/ (user-facing app)              │
 │      │                                                      │
 │      └── uses src/ for business logic                       │
 └─────────────────────────────────────────────────────────────┘
@@ -73,21 +73,21 @@ Separate AutoBot into two distinct layers:
 
 | File | Action |
 |------|--------|
-| `autobot-user-backend/api/infrastructure.py` | DELETE |
-| `autobot-user-backend/api/infrastructure_hosts.py` | DELETE |
-| `autobot-user-backend/api/infrastructure_nodes.py` | DELETE |
-| `autobot-user-backend/api/infrastructure_monitor.py` | DELETE |
-| `autobot-user-backend/api/slm/*` (entire folder) | DELETE |
+| `autobot-backend/api/infrastructure.py` | DELETE |
+| `autobot-backend/api/infrastructure_hosts.py` | DELETE |
+| `autobot-backend/api/infrastructure_nodes.py` | DELETE |
+| `autobot-backend/api/infrastructure_monitor.py` | DELETE |
+| `autobot-backend/api/slm/*` (entire folder) | DELETE |
 
 ### Infrastructure Monitoring → slm-server/
 
 | File | Action |
 |------|--------|
-| `autobot-user-backend/api/monitoring.py` | REVIEW - split infra vs app |
-| `autobot-user-backend/api/monitoring_hardware.py` | DELETE → SLM |
-| `autobot-user-backend/api/monitoring_alerts.py` | DELETE → SLM |
-| `autobot-user-backend/api/service_monitor.py` | DELETE → SLM |
-| `autobot-user-backend/api/phase9_monitoring.py` | DELETE (rename to monitoring in SLM) |
+| `autobot-backend/api/monitoring.py` | REVIEW - split infra vs app |
+| `autobot-backend/api/monitoring_hardware.py` | DELETE → SLM |
+| `autobot-backend/api/monitoring_alerts.py` | DELETE → SLM |
+| `autobot-backend/api/service_monitor.py` | DELETE → SLM |
+| `autobot-backend/api/phase9_monitoring.py` | DELETE (rename to monitoring in SLM) |
 | `backend/services/consolidated_health_service.py` | DELETE → SLM |
 
 ### Infrastructure DB/Services → DELETE
@@ -182,9 +182,9 @@ Separate AutoBot into two distinct layers:
 
 ## Files to Review (May Have Mixed Concerns)
 
-- `autobot-user-backend/api/monitoring.py` - Split app vs infra monitoring
-- `autobot-user-backend/api/services.py` - Check if infrastructure-related
-- `autobot-user-backend/api/vm_services.py` - Likely DELETE
+- `autobot-backend/api/monitoring.py` - Split app vs infra monitoring
+- `autobot-backend/api/services.py` - Check if infrastructure-related
+- `autobot-backend/api/vm_services.py` - Likely DELETE
 - `backend/services/redis_service_manager.py` - Review
 - `backend/services/vm_service_registry.py` - Likely DELETE
 

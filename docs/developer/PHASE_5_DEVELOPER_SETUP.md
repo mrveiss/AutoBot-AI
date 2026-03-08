@@ -316,16 +316,16 @@ cd autobot-vue
 npm run dev  # Runs automatically with --dev flag
 
 # Files watched for changes:
-autobot-user-frontend/src/**/*.vue     # Vue components
-autobot-user-frontend/src/**/*.ts      # TypeScript files  
-autobot-user-frontend/src/**/*.js      # JavaScript files
-autobot-user-frontend/src/**/*.css     # Stylesheets
+autobot-frontend/src/**/*.vue     # Vue components
+autobot-frontend/src/**/*.ts      # TypeScript files  
+autobot-frontend/src/**/*.js      # JavaScript files
+autobot-frontend/src/**/*.css     # Stylesheets
 ```
 
 **Backend (FastAPI)**:
 ```bash
 # For development with hot reload, run in foreground
-cd autobot-user-backend
+cd autobot-backend
 source venv/bin/activate
 python backend/main.py
 
@@ -493,7 +493,7 @@ systemctl status autobot-backend
 sudo systemctl restart autobot-backend
 
 # Check frontend configuration
-cat autobot-user-frontend/src/config/ssot-config.ts
+cat autobot-frontend/src/config/ssot-config.ts
 ```
 
 **Problem: "Module not found" errors in Python**
@@ -526,7 +526,7 @@ sudo systemctl restart autobot-npu-worker
 **Enable Debug Mode**:
 ```bash
 # Enable detailed logging in .env file
-cd autobot-user-backend
+cd autobot-backend
 echo "AUTOBOT_LOG_LEVEL=DEBUG" >> .env
 
 # Restart backend service
@@ -586,7 +586,7 @@ curl -k -X POST https://172.16.168.20:8443/api/multimodal/process \
 
 **1. Create API module**:
 ```python  
-# autobot-user-backend/api/your_feature.py
+# autobot-backend/api/your_feature.py
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -632,7 +632,7 @@ def create_app():
 
 **1. Create Vue component**:
 ```vue
-<!-- autobot-user-frontend/src/components/YourComponent.vue -->
+<!-- autobot-frontend/src/components/YourComponent.vue -->
 <template>
   <div class="your-component">
     <h2>{{ title }}</h2>
@@ -681,7 +681,7 @@ const handleAction = async () => {
 
 **2. Add to router**:
 ```typescript
-// autobot-user-frontend/src/router/index.ts
+// autobot-frontend/src/router/index.ts
 import YourComponent from '@/components/YourComponent.vue'
 
 const routes = [

@@ -23,7 +23,7 @@ All SQLAlchemy relationship fixes are implemented and verified:
 Run the verification script to confirm code is correct:
 
 ```bash
-python3 autobot-user-backend/scripts/verify_issue_898.py
+python3 autobot-backend/scripts/verify_issue_898.py
 ```
 
 Expected output:
@@ -52,7 +52,7 @@ ssh autobot@172.16.168.20 "systemctl status autobot-backend"
 
 ```bash
 # Sync backend code to server
-./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/
 
 # SSH to server and restart backend
 ssh autobot@172.16.168.20
@@ -120,15 +120,15 @@ ssh autobot@172.16.168.21 \
 ```bash
 # Verify file on server has List import
 ssh autobot@172.16.168.20 \
-  "head -20 /opt/autobot/autobot-user-backend/api/vnc_manager.py | grep 'from typing'"
+  "head -20 /opt/autobot/autobot-backend/api/vnc_manager.py | grep 'from typing'"
 ```
 
 Expected output should include: `from typing import Dict, List`
 
 If not, manually copy the file:
 ```bash
-scp autobot-user-backend/api/vnc_manager.py \
-  autobot@172.16.168.20:/opt/autobot/autobot-user-backend/api/vnc_manager.py
+scp autobot-backend/api/vnc_manager.py \
+  autobot@172.16.168.20:/opt/autobot/autobot-backend/api/vnc_manager.py
 ssh autobot@172.16.168.20 "sudo systemctl restart autobot-backend"
 ```
 

@@ -252,8 +252,8 @@ Extended the per-role infrastructure pattern to all AutoBot components. Each com
 
 | Component              | VM   | Port           | Service Type            | Files   |
 | ---------------------- | ---- | -------------- | ----------------------- | ------- |
-| autobot-user-backend   | .20  | 8001           | systemd + uvicorn       | 4 files |
-| autobot-user-frontend  | .21  | 443            | nginx                   | 4 files |
+| autobot-backend   | .20  | 8001           | systemd + uvicorn       | 4 files |
+| autobot-frontend  | .21  | 443            | nginx                   | 4 files |
 | autobot-npu-worker     | .22  | 8081           | systemd + uvicorn       | 4 files |
 | autobot-db-stack       | .23  | 6379/5432/8000 | native systemd          | 6 files |
 | autobot-ai-stack       | .24  | 8080           | systemd + uvicorn       | 4 files |
@@ -264,12 +264,12 @@ Extended the per-role infrastructure pattern to all AutoBot components. Each com
 
 ```text
 infrastructure/
-├── autobot-user-backend/templates/
-│   ├── autobot-user-backend.service
+├── autobot-backend/templates/
+│   ├── autobot-backend.service
 │   ├── backend-start.sh
 │   ├── backend-stop.sh
 │   └── backend-status.sh
-├── autobot-user-frontend/templates/
+├── autobot-frontend/templates/
 │   ├── autobot-user.conf (nginx)
 │   ├── frontend-start.sh
 │   ├── frontend-stop.sh

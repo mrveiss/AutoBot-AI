@@ -320,8 +320,8 @@ Potential improvements for future iterations:
 
 - [Unified Frontend Style Design](./plans/2026-02-04-unified-frontend-style-design.md)
 - [Dark Mode Implementation](./plans/2026-02-05-unified-dark-mode-design-system.md)
-- [CSS Design Tokens](../autobot-user-frontend/src/assets/styles/theme.css)
-- [Tailwind Config](../autobot-user-frontend/tailwind.config.js)
+- [CSS Design Tokens](../autobot-frontend/src/assets/styles/theme.css)
+- [Tailwind Config](../autobot-frontend/tailwind.config.js)
 
 ## 🎉 Conclusion
 

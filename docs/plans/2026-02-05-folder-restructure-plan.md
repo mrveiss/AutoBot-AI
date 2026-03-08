@@ -24,8 +24,8 @@ The infrastructure folder now uses a per-role organization:
 
 ```text
 infrastructure/
-├── autobot-user-backend/       # User backend: docker, tests, config, scripts, templates
-├── autobot-user-frontend/      # User frontend infra
+├── autobot-backend/       # User backend: docker, tests, config, scripts, templates
+├── autobot-frontend/      # User frontend infra
 ├── autobot-slm-backend/        # SLM backend infra
 ├── autobot-slm-frontend/       # SLM frontend infra
 ├── autobot-npu-worker/         # NPU worker infra
@@ -52,10 +52,10 @@ infrastructure/
 - Create: `autobot-shared/__init__.py`
 - Create: `autobot-shared/README.md`
 - Create: `autobot-shared/requirements.txt`
-- Copy: `autobot-user-backend/utils/redis_client.py` to `autobot-shared/redis_client.py`
-- Copy: `autobot-user-backend/utils/http_client.py` to `autobot-shared/http_client.py`
-- Copy: `autobot-user-backend/utils/logging_manager.py` to `autobot-shared/logging_manager.py`
-- Copy: `autobot-user-backend/utils/error_boundaries.py` to `autobot-shared/error_boundaries.py`
+- Copy: `autobot-backend/utils/redis_client.py` to `autobot-shared/redis_client.py`
+- Copy: `autobot-backend/utils/http_client.py` to `autobot-shared/http_client.py`
+- Copy: `autobot-backend/utils/logging_manager.py` to `autobot-shared/logging_manager.py`
+- Copy: `autobot-backend/utils/error_boundaries.py` to `autobot-shared/error_boundaries.py`
 - Copy: `src/config/ssot_config.py` to `autobot-shared/ssot_config.py`
 
 ### Task 2: Create infrastructure directory
@@ -68,7 +68,7 @@ infrastructure/
 - Move: `config/` to `infrastructure/config/`
 - Move: `certs/` to `infrastructure/certs/`
 - Move: `mcp-servers/` to `infrastructure/mcp/servers/`
-- Move: `mcp-tools/` to `infrastructure/mcp/tools/`
+- Move: `autobot-backend/api/*_mcp.py` to `infrastructure/mcp/tools/`
 - Move: `novnc/` to `infrastructure/novnc/`
 
 **Note:** Infrastructure has since been reorganized to per-role structure.
@@ -86,8 +86,8 @@ See `infrastructure/README.md` for current layout.
 
 **Files:**
 
-- Move: `autobot-user-frontend/` to `autobot-user-frontend/`
-- Create: `autobot-user-backend/` (placeholder for Phase 2)
+- Move: `autobot-frontend/` to `autobot-frontend/`
+- Create: `autobot-backend/` (placeholder for Phase 2)
 
 ### Task 5: Create worker directories
 
@@ -106,8 +106,8 @@ Update sync commands to use new paths:
 
 ```bash
 # User backend/frontend to Main
-./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/
-./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-frontend/
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-frontend/
 
 # SLM backend to SLM machine
 ./infrastructure/shared/scripts/sync-to-vm.sh slm autobot-slm-backend/
@@ -133,12 +133,12 @@ Update sync commands to use new paths:
 
 ## Phase 2: Migrate Code (Future - Separate Plan)
 
-> **Note:** Phase 2 involves migrating `src/` and `backend/` into `autobot-user-backend/` and updating all imports. This is a significant undertaking that should be planned separately after Phase 1 is stable.
+> **Note:** Phase 2 involves migrating `src/` and `backend/` into `autobot-backend/` and updating all imports. This is a significant undertaking that should be planned separately after Phase 1 is stable.
 
 ### Tasks for Phase 2 (outline):
 
-1. Copy `src/` contents to `autobot-user-backend/`
-2. Merge `backend/` into `autobot-user-backend/`
+1. Copy `src/` contents to `autobot-backend/`
+2. Merge `backend/` into `autobot-backend/`
 3. Update all imports from `from src.` to `from autobot_user_backend.`
 4. Update all imports from `from src.utils.` to `from autobot_shared.`
 5. Extract NPU code to `autobot-npu-worker/`
@@ -168,8 +168,8 @@ After Phase 1:
 - [ ] `autobot-shared/` contains utility files
 - [ ] `infrastructure/` contains all tooling
 - [ ] `autobot-slm-backend/` and `autobot-slm-frontend/` renamed
-- [ ] `autobot-user-frontend/` renamed
-- [ ] `autobot-user-backend/` placeholder created
+- [ ] `autobot-frontend/` renamed
+- [ ] `autobot-backend/` placeholder created
 - [ ] Worker placeholders created
 - [ ] CLAUDE.md updated
 - [ ] Deprecated files removed

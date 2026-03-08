@@ -174,7 +174,7 @@ VALIDATION_TIMEOUT = 30.0  # seconds
 
 ### Phase 5: Performance Optimization
 **Requirements:**
-- Files: `autobot-user-backend/utils/database_pool.py`, `autobot-user-backend/utils/advanced_cache_manager.py`, `autobot-user-backend/utils/memory_optimization.py`
+- Files: `autobot-backend/utils/database_pool.py`, `autobot-backend/utils/advanced_cache_manager.py`, `autobot-backend/utils/memory_optimization.py`
 - Performance Metrics: API response time < 100ms, Memory usage < 85%, CPU usage < 80%
 
 ### Phase 6: Monitoring and Alerting
@@ -185,19 +185,19 @@ VALIDATION_TIMEOUT = 30.0  # seconds
 
 ### Phase 7: Frontend and UI
 **Requirements:**
-- Files: `autobot-user-frontend/src/App.vue`, `autobot-user-frontend/package.json`, `autobot-user-frontend/src/components/`
+- Files: `autobot-frontend/src/App.vue`, `autobot-frontend/package.json`, `autobot-frontend/src/components/`
 - Endpoints: `http://localhost:5173`
 - UI Features: `chat_interface`, `terminal_interface`, `settings_panel`
 
 ### Phase 8: Agent Orchestration
 **Requirements:**
-- Files: `src/orchestrator.py`, `src/lightweight_orchestrator.py`, `autobot-user-backend/api/orchestration.py`
+- Files: `src/orchestrator.py`, `src/lightweight_orchestrator.py`, `autobot-backend/api/orchestration.py`
 - Endpoints: `/api/orchestration/status`
 - Orchestration Features: `task_distribution`, `agent_coordination`, `workflow_management`
 
 ### Phase 9: Advanced AI Features
 **Requirements:**
-- Files: `autobot-user-backend/agents/`, `src/multi_modal/`, `test_phase9_ai.py`
+- Files: `autobot-backend/agents/`, `src/multi_modal/`, `test_phase9_ai.py`
 - Endpoints: `/api/agent/status`, `/api/multi-modal/status`
 - AI Features: `multi_modal_processing`, `advanced_reasoning`, `context_awareness`
 

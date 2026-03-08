@@ -568,7 +568,7 @@ grep "Service auth failed" logs/backend.log | tail -50
 1. **Does Frontend VM make server-side API calls to backend?**
    ```bash
    ssh -i ~/.ssh/autobot_key autobot@172.16.168.21
-   grep -r "https://172.16.168.20:8443" /home/autobot/autobot-user-frontend/
+   grep -r "https://172.16.168.20:8443" /home/autobot/autobot-frontend/
    ```
 
 2. **Are these calls from browser or from server-side code?**
@@ -1614,7 +1614,7 @@ grep "ERROR\|FAILED" logs/backend.log | tail -50
 1. **Prometheus metrics endpoint**
 
    ```python
-   # autobot-user-backend/api/metrics.py
+   # autobot-backend/api/metrics.py
 
    from prometheus_client import Counter, Histogram, Gauge
 

@@ -88,7 +88,7 @@ This document provides a comprehensive validation of the terminal integration ar
 
 | Component | Current State | Gap Analysis |
 |-----------|---------------|--------------|
-| **xterm.js** | Installed (`autobot-user-frontend/node_modules/xterm`) | Not integrated - custom rendering used instead |
+| **xterm.js** | Installed (`autobot-frontend/node_modules/xterm`) | Not integrated - custom rendering used instead |
 | **WebSocket** | Fully implemented with reconnection | ✅ Production-ready |
 | **PTY Process** | Local-only via Python `ptyprocess` | ❌ No remote machine support |
 | **Security** | 3-level system + risk assessment | ⚠️ 3 CRITICAL vulnerabilities (see 1.3) |
@@ -100,7 +100,7 @@ This document provides a comprehensive validation of the terminal integration ar
 **🚨 These vulnerabilities MUST be resolved before implementing new features:**
 
 #### Vulnerability 1: Command Injection via Unsanitized Input
-**Location:** `autobot-user-backend/api/terminal.py:line 210-239` (`send_to_terminal` method)
+**Location:** `autobot-backend/api/terminal.py:line 210-239` (`send_to_terminal` method)
 **Risk:** HIGH
 **Description:** User input is sent directly to PTY without sanitization
 
@@ -134,7 +134,7 @@ async def send_to_terminal(self, text: str):
 ```
 
 #### Vulnerability 2: Session Hijacking - No Authentication
-**Location:** `autobot-user-backend/api/terminal.py:line 771-822` (WebSocket endpoint)
+**Location:** `autobot-backend/api/terminal.py:line 771-822` (WebSocket endpoint)
 **Risk:** CRITICAL
 **Description:** WebSocket connections accepted without authentication
 
@@ -174,7 +174,7 @@ async def consolidated_terminal_websocket(
 ```
 
 #### Vulnerability 3: Information Disclosure via Audit Logs
-**Location:** `autobot-user-backend/api/terminal.py:line 743-765` (audit endpoint)
+**Location:** `autobot-backend/api/terminal.py:line 743-765` (audit endpoint)
 **Risk:** MEDIUM
 **Description:** Audit logs accessible without permission checks
 

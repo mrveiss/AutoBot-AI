@@ -456,7 +456,7 @@ AUTOBOT_REASONING_MODEL=mistral:7b-instruct
 | LLM usage logging | ✓ | Comprehensive | ✅ |
 | Providers | 1-2 planned | 8 provider types | ✅ Exceeded |
 
-**8 LLM Provider Types** (verified from `src/llm_interface_pkg/`):
+**8 LLM Provider Types** (verified from `autobot-backend/llm_interface_pkg/providers/`):
 
 1. OLLAMA - Local models (primary)
 2. OPENAI - GPT models
@@ -607,7 +607,9 @@ AUTOBOT_REASONING_MODEL=mistral:7b-instruct
 
 ### ✅ PHASE 20: MCP Integration (COMPLETE)
 
-**6 MCP Bridges** (verified from `mcp-tools/`):
+**6 External MCP Bridges** + **10 Backend MCP Bridges**:
+
+External (standalone MCP servers):
 
 1. **context7** - Code documentation/reference
 2. **mcp-structured-thinking** - Structured reasoning
@@ -615,6 +617,19 @@ AUTOBOT_REASONING_MODEL=mistral:7b-instruct
 4. **mcp-task-manager-server** - Task management
 5. **mcp-autobot-tracker** - AutoBot tracking
 6. **code-index-mcp** - Code indexing
+
+Backend bridges (verified from `autobot-backend/api/*_mcp.py`):
+
+1. **browser_mcp** - Playwright browser automation
+2. **database_mcp** - Database operations
+3. **filesystem_mcp** - File system access
+4. **git_mcp** - Git operations
+5. **http_client_mcp** - HTTP client
+6. **knowledge_mcp** - Knowledge base
+7. **prometheus_mcp** - Monitoring metrics
+8. **sequential_thinking_mcp** - Sequential reasoning
+9. **structured_thinking_mcp** - Structured reasoning
+10. **vnc_mcp** - VNC desktop access
 
 ---
 
@@ -684,6 +699,65 @@ These phases from the archived roadmap were **replaced** with custom implementat
 - TTS volume control (#1394, `e36774ce`)
 - Voice language awareness (#1334, `d52f6983`)
 - TTS worker deployed on AI Stack VM (.24, port 8082)
+
+### COMPLETED (Beyond Original Roadmap — Feb-Mar 2026)
+
+These features were not in the original 20-phase roadmap but were implemented based on evolving requirements.
+
+#### ✅ Internationalization (i18n) — Epic #1317
+
+- Vue i18n plugin integration, language switcher (#1330, `4d02153e`)
+- Locale persistence across sessions (#1331, `e18e4a54`)
+- Translated locale files for 6 languages (#1335, `2c5325ba`)
+- Residual hardcoded string cleanup (#1410, `8d85a4ff`)
+- TTS voice-per-language mapping (#1333, `e152541a`)
+- Voice language awareness (#1334, `d52f6983`)
+
+#### ✅ Approval Gates for Agent Workflows — #1402, `6a8474df`
+
+- Approval/ApprovalComment/TaskApprovalLink models, migration 20260307_006
+- ApprovalGateService lifecycle, REST API, WebSocket notifications
+- AWAITING_APPROVAL phase in workflow state machine
+- ApprovalGatePanel.vue + useApprovalGates composable
+
+#### ✅ Formal Adapter Registry for LLM Backends — #1403, `d069d3a6`
+
+- AdapterBase ABC, AdapterRegistry singleton
+- 5 adapters: Ollama, AI Stack, OpenAI, Anthropic, Process
+- REST API at `/api/adapters/*`
+
+#### ✅ Per-Agent Cost Tracking — #1401, `264acf64`
+
+- Token usage and cost attribution per agent invocation
+
+#### ✅ Workflow Templates & Gallery — #1415, `0236eb68`
+
+- Community template descriptions, secrets metadata, gallery UI
+
+#### ✅ Interactive Browser Control — #1416, `37d04fb7`
+
+- Live browser interaction from frontend via Playwright
+
+#### ✅ System Secrets Management — #1417, `58b2ef86`
+
+- Encrypted secrets store with Fernet, CRUD API, SecretsView
+
+#### ✅ Codebase Analytics Improvements — #1418, #1430
+
+- Analytics scan runner refactor (#1418)
+- Bug prediction display fix, Load More pagination (#1430, `b1d2e1e6`)
+
+#### 🔄 In Progress
+
+#### ⏳ AutoResearch Integration — #1440
+
+- Self-improving experiment loop with web search
+- Plan: `docs/plans/2026-03-08-autoresearch-integration.md`
+- 11 tasks across 3 milestones (standalone runner, orchestrated loop, self-improvement)
+
+#### ⏳ Web Research Consolidation — #1443
+
+- Consolidate 4 duplicate web research files into single `web_researcher.py`
 
 ---
 

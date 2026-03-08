@@ -151,7 +151,7 @@ backend/services/
 ├── agent_analytics.py         # Agent performance tracking
 └── llm_cost_tracker.py        # LLM cost tracking
 
-autobot-user-backend/api/
+autobot-backend/api/
 ├── analytics_maintenance.py      # Predictive maintenance & optimization
 ├── analytics_behavior.py      # User behavior endpoints
 ├── analytics_agents.py        # Agent analytics endpoints
@@ -163,7 +163,7 @@ autobot-user-backend/api/
 ### Frontend Components
 
 ```
-autobot-user-frontend/src/
+autobot-frontend/src/
 ├── views/
 │   └── AnalyticsView.vue     # Main analytics page (Issue #59)
 └── components/analytics/

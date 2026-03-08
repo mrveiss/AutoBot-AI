@@ -240,7 +240,7 @@ if __name__ == "__main__":
 
 ### 2. Add KB Status Endpoint
 ```python
-# autobot-user-backend/api/knowledge_base.py - add new endpoint
+# autobot-backend/api/knowledge_base.py - add new endpoint
 @router.get("/sync-status")
 async def get_kb_sync_status():
     """Get knowledge base synchronization status"""

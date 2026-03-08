@@ -9,7 +9,7 @@ This document summarizes the major enhancements and improvements made to the Aut
 ### 1. Workflow Templates System
 **Files Added:**
 - `src/workflow_templates.py` - Core template management system
-- `autobot-user-backend/api/templates.py` - REST API endpoints for templates
+- `autobot-backend/api/templates.py` - REST API endpoints for templates
 
 **Features Implemented:**
 - 14 pre-configured workflow templates across 5 categories
@@ -27,7 +27,7 @@ This document summarizes the major enhancements and improvements made to the Aut
 ### 2. Workflow Scheduling and Queuing
 **Files Added:**
 - `src/workflow_scheduler.py` - Scheduler and queue management system
-- `autobot-user-backend/api/scheduler.py` - REST API endpoints for scheduling
+- `autobot-backend/api/scheduler.py` - REST API endpoints for scheduling
 
 **Features Implemented:**
 - Priority-based workflow scheduling (5 priority levels)
@@ -49,7 +49,7 @@ This document summarizes the major enhancements and improvements made to the Aut
 **Files Added:**
 - `src/metrics/workflow_metrics.py` - Workflow performance tracking
 - `src/metrics/system_monitor.py` - System resource monitoring
-- `autobot-user-backend/api/metrics.py` - Metrics API endpoints
+- `autobot-backend/api/metrics.py` - Metrics API endpoints
 
 **Features Implemented:**
 - Real-time workflow performance tracking
@@ -68,8 +68,8 @@ This document summarizes the major enhancements and improvements made to the Aut
 
 ### 4. Enhanced Security Agents
 **Files Enhanced:**
-- `autobot-user-backend/agents/security_scanner_agent.py` - Dynamic security scanning
-- `autobot-user-backend/agents/network_discovery_agent.py` - Network asset discovery
+- `autobot-backend/agents/security_scanner_agent.py` - Dynamic security scanning
+- `autobot-backend/agents/network_discovery_agent.py` - Network asset discovery
 
 **Features Implemented:**
 - Dynamic tool discovery using research agent integration
@@ -89,7 +89,7 @@ This document summarizes the major enhancements and improvements made to the Aut
 ### Backend Architecture Enhancements
 **Files Modified:**
 - `backend/app_factory.py` - Added new API routers and initialization
-- `autobot-user-backend/api/workflow.py` - Enhanced with metrics integration
+- `autobot-backend/api/workflow.py` - Enhanced with metrics integration
 - `src/orchestrator.py` - Added security agent support
 
 **Improvements:**
@@ -100,7 +100,7 @@ This document summarizes the major enhancements and improvements made to the Aut
 
 ### Frontend Improvements
 **Files Modified:**
-- `autobot-user-frontend/src/components/ChatInterface.vue` - Fixed console error messages
+- `autobot-frontend/src/components/ChatInterface.vue` - Fixed console error messages
 
 **Improvements:**
 - Resolved chat deletion console error spam
