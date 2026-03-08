@@ -321,3 +321,106 @@ async def share_code_source(source_id: str, request: SourceShareRequest):
     await save_source(source)
     logger.info("Updated sharing for source %s: %s", source_id, request.access)
     return JSONResponse(source.model_dump())
+
+
+async def _get_last_indexed(source_id: str) -> Optional[str]:
+    """Read last_indexed timestamp from ChromaDB stats metadata.
+
+    Helper for get_source_summary (#1458).
+    """
+    try:
+        from ..storage import get_code_collection
+
+        collection = await get_code_collection()
+        if collection:
+            results = await asyncio.to_thread(
+                collection.get,
+                ids=["codebase_stats"],
+                include=["metadatas"],
+            )
+            if results and results.get("metadatas"):
+                return results["metadatas"][0].get("last_indexed")
+    except Exception as exc:
+        logger.warning(
+            "Could not read last_indexed for %s: %s",
+            source_id,
+            exc,
+        )
+    return None
+
+
+async def _get_last_commit(clone_path: str, repo: Optional[str]) -> Optional[dict]:
+    """Read latest git commit info from a clone directory.
+
+    Helper for get_source_summary (#1458).
+    """
+    clone = Path(clone_path)
+    if not clone.is_dir():
+        return None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(clone),
+            "log",
+            "-1",
+            "--format=%H%n%h%n%s%n%aI",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await proc.communicate()
+        if proc.returncode != 0 or not stdout:
+            return None
+        lines = stdout.decode("utf-8").strip().split("\n")
+        if len(lines) < 4:
+            return None
+        url = None
+        if repo:
+            url = f"https://github.com/{repo}/commit/{lines[0]}"
+        return {
+            "hash": lines[0],
+            "short_hash": lines[1],
+            "message": lines[2],
+            "timestamp": lines[3],
+            "url": url,
+        }
+    except Exception as exc:
+        logger.warning(
+            "Could not read last commit for %s: %s",
+            clone_path,
+            exc,
+        )
+        return None
+
+
+@router.get("/sources/{source_id}/summary")
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="source_summary",
+    error_code_prefix="CODEBASE",
+)
+async def get_source_summary(source_id: str):
+    """Return summary info for a source (#1458).
+
+    Provides last_indexed and last_commit for landing page cards.
+    """
+    source = await get_source(source_id)
+    if source is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Source {source_id} not found",
+        )
+
+    last_indexed = None
+    last_commit = None
+    if source.clone_path:
+        last_indexed = await _get_last_indexed(source_id)
+        last_commit = await _get_last_commit(source.clone_path, source.repo)
+
+    return JSONResponse(
+        {
+            "source_id": source_id,
+            "last_indexed": last_indexed,
+            "last_commit": last_commit,
+        }
+    )
