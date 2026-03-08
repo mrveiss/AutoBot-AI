@@ -217,6 +217,23 @@ class WorkflowStepEvaluator:
         )
         return workflow_judgment, security_judgment
 
+    def _check_judge_errors(self, judgments: tuple, step_id: str) -> Metadata | None:
+        """Return fail-open response if any judge errored, else None. (#1464)"""
+        error_judges = [j for j in judgments if j.llm_model_used == "error"]
+        if not error_judges:
+            return None
+        reasons = [j.reasoning for j in error_judges]
+        logger.warning(
+            "LLM judge(s) unavailable for step %s, approving by default: %s",
+            step_id,
+            "; ".join(reasons),
+        )
+        return {
+            "should_proceed": True,
+            "reason": f"Approved (judge unavailable): {'; '.join(reasons)}",
+            "suggestions": ["Manual review recommended — judge was unavailable"],
+        }
+
     def _build_evaluation_error_response(self, error: Exception) -> Metadata:
         """
         Build error response for evaluation failure.
@@ -260,25 +277,11 @@ class WorkflowStepEvaluator:
 
             # Fail-open: if either judge errored (LLM unavailable),
             # approve with warning instead of silently rejecting (#1464)
-            error_judges = [
-                j
-                for j in (workflow_judgment, security_judgment)
-                if j.llm_model_used == "error"
-            ]
-            if error_judges:
-                reasons = [j.reasoning for j in error_judges]
-                logger.warning(
-                    "LLM judge(s) unavailable for step %s, " "approving by default: %s",
-                    step.step_id,
-                    "; ".join(reasons),
-                )
-                return {
-                    "should_proceed": True,
-                    "reason": f"Approved (judge unavailable): {'; '.join(reasons)}",
-                    "suggestions": [
-                        "Manual review recommended — judge was unavailable"
-                    ],
-                }
+            judge_error = self._check_judge_errors(
+                (workflow_judgment, security_judgment), step.step_id
+            )
+            if judge_error:
+                return judge_error
 
             should_approve_workflow = (
                 workflow_judgment.recommendation in APPROVAL_RECOMMENDATIONS
