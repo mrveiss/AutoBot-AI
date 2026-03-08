@@ -262,10 +262,10 @@ function formatRelativeTime(isoString: string): string {
   const diffMs = now - then
   const diffMins = Math.floor(diffMs / 60000)
   if (diffMins < 1) return t('common.justNow', 'just now')
-  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffMins < 60) return t('common.timeAgo.minutes', '{n}m ago', { n: diffMins })
   const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours}h ago`
-  return `${Math.floor(diffHours / 24)}d ago`
+  if (diffHours < 24) return t('common.timeAgo.hours', '{n}h ago', { n: diffHours })
+  return t('common.timeAgo.days', '{n}d ago', { n: Math.floor(diffHours / 24) })
 }
 
 function getStatusIcon(status: string): string {

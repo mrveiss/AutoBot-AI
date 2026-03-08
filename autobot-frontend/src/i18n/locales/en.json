@@ -60,6 +60,12 @@
       "goToHome": "Go to Home",
       "contactAdmin": "If you believe you should have access, please contact your administrator."
     },
+    "justNow": "just now",
+    "timeAgo": {
+      "minutes": "{n}m ago",
+      "hours": "{n}h ago",
+      "days": "{n}d ago"
+    },
     "welcome": {
       "message": "Welcome to AutoBot."
     },

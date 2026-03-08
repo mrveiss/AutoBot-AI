@@ -327,6 +327,10 @@ async def _get_last_indexed(source_id: str) -> Optional[str]:
     """Read last_indexed timestamp from ChromaDB stats metadata.
 
     Helper for get_source_summary (#1458).
+
+    Note: currently reads the global ``codebase_stats`` document, so
+    the timestamp reflects the most recent indexing run across *all*
+    sources.  Per-source tracking requires a schema change (#1458).
     """
     try:
         from ..storage import get_code_collection
@@ -356,6 +360,9 @@ async def _get_last_commit(clone_path: str, repo: Optional[str]) -> Optional[dic
     """
     clone = Path(clone_path)
     if not clone.is_dir():
+        return None
+    if not clone.resolve().is_relative_to(_CODE_SOURCES_BASE):
+        logger.warning("Clone path %s outside base directory", clone_path)
         return None
     try:
         proc = await asyncio.create_subprocess_exec(

@@ -4007,7 +4007,10 @@ onMounted(async () => {
       analyticsRouter.replace({ name: 'analytics-codebase' })
       return
     }
-  } catch {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    logger.error('Failed to load source metadata:', msg)
+    notify(t('analytics.codebase.notify.sourceNotFound'), 'error')
     analyticsRouter.replace({ name: 'analytics-codebase' })
     return
   }
