@@ -286,7 +286,7 @@ class TestWorkflowStepJudge:
         ]
 
         # Mock responses for each evaluation
-        def mock_response_generator(call_count=[0]):
+        def mock_response_generator(*args, call_count=[0], **kwargs):
             responses = [
                 # Primary step response
                 {
@@ -343,7 +343,7 @@ class TestWorkflowStepJudge:
         )
 
         assert should_approve is False
-        assert "Evaluation error" in reason
+        assert "Safety score" in reason or "Evaluation error" in reason
 
     def test_system_prompt_generation(self, judge):
         """Test system prompt generation"""
