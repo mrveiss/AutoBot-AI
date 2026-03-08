@@ -134,7 +134,9 @@ async def test_live_workflow_system():
 
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-            from agents.research_agent import ResearchRequest, research_agent
+            from agents.web_researcher import ResearchRequest, get_web_researcher
+
+            research_agent = get_web_researcher()
 
             request = ResearchRequest(**research_request)
             result = await research_agent.research_specific_tools(request)

@@ -450,9 +450,9 @@ class SecurityScannerAgent:
         """Use research agent to find appropriate scanning tools"""
         try:
             # Import research agent
-            from agents.research_agent import ResearchAgent, ResearchRequest
+            from agents.web_researcher import ResearchRequest, WebResearcher
 
-            research_agent = ResearchAgent()
+            research_agent = WebResearcher()
             query = f"{scan_type} tools for security assessment Kali Linux 2024"
 
             request = ResearchRequest(query=query, focus="tools")
@@ -528,9 +528,9 @@ class SecurityScannerAgent:
     async def get_tool_installation_guide(self, tool_name: str) -> Dict[str, Any]:
         """Get installation guide for a specific tool using research agent"""
         try:
-            from agents.research_agent import ResearchAgent, ResearchRequest
+            from agents.web_researcher import ResearchRequest, WebResearcher
 
-            research_agent = ResearchAgent()
+            research_agent = WebResearcher()
             query = f"how to install {tool_name} on Kali Linux Ubuntu apt package manager 2024"
 
             request = ResearchRequest(query=query, focus="installation")

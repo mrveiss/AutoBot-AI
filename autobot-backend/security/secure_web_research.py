@@ -13,7 +13,8 @@ import time
 from datetime import datetime
 from typing import Any, Dict, FrozenSet, Optional
 
-from ..agents.web_research_integration import ResearchType, WebResearchIntegration
+from ..agents.web_researcher import ResearchType
+from ..agents.web_researcher import WebResearcher as WebResearchIntegration
 from .domain_security import DomainSecurityConfig, DomainSecurityManager
 from .input_validator import WebResearchInputValidator
 

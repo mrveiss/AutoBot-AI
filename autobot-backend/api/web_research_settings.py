@@ -54,7 +54,9 @@ class ResearchPreferences(BaseModel):
 async def get_research_status():
     """Get current web research status and configuration"""
     try:
-        from agents.web_research_integration import get_web_research_integration
+        from agents.web_researcher import (
+            get_web_researcher as get_web_research_integration,
+        )
 
         # Get web research integration instance
         integration = get_web_research_integration()
@@ -73,7 +75,7 @@ async def get_research_status():
             content={
                 "status": "success",
                 "enabled": health_status["enabled"],
-                "preferred_method": health_status["preferred_method"],
+                "preferred_method": "advanced",
                 "health": health_status,
                 "circuit_breakers": circuit_status,
                 "cache_stats": cache_stats,
@@ -103,7 +105,9 @@ async def get_research_status():
 async def enable_web_research():
     """Enable web research functionality"""
     try:
-        from agents.web_research_integration import get_web_research_integration
+        from agents.web_researcher import (
+            get_web_researcher as get_web_research_integration,
+        )
         from services.config_service import ConfigService
         from unified_unified_config_manager import unified_unified_config_manager
 
@@ -156,7 +160,9 @@ async def enable_web_research():
 async def disable_web_research():
     """Disable web research functionality"""
     try:
-        from agents.web_research_integration import get_web_research_integration
+        from agents.web_researcher import (
+            get_web_researcher as get_web_research_integration,
+        )
         from services.config_service import ConfigService
         from unified_unified_config_manager import unified_unified_config_manager
 
@@ -263,8 +269,9 @@ async def get_research_settings():
 async def update_research_settings(settings: WebResearchSettings):
     """Update web research settings"""
     try:
-        from config import unified_config_manager
         from services.config_service import ConfigService
+
+        from config import unified_config_manager
 
         # Update research agent settings
         unified_config_manager.set_nested("agents.research.enabled", settings.enabled)
@@ -325,7 +332,7 @@ async def update_research_settings(settings: WebResearchSettings):
 async def test_web_research(query: str = "test query"):
     """Test web research functionality"""
     try:
-        from agents.web_research_integration import conduct_web_research
+        from agents.web_researcher import conduct_web_research
 
         logger.info("Testing web research with query: %s", query)
 
@@ -368,12 +375,14 @@ async def test_web_research(query: str = "test query"):
 async def clear_research_cache():
     """Clear web research cache"""
     try:
-        from agents.web_research_integration import get_web_research_integration
+        from agents.web_researcher import (
+            get_web_researcher as get_web_research_integration,
+        )
 
         integration = get_web_research_integration()
 
         # Clear cache
-        integration.cache.clear()
+        integration._cache.clear()
 
         logger.info("Web research cache cleared")
 
@@ -402,7 +411,9 @@ async def clear_research_cache():
 async def reset_circuit_breakers():
     """Reset all circuit breakers for web research"""
     try:
-        from agents.web_research_integration import get_web_research_integration
+        from agents.web_researcher import (
+            get_web_researcher as get_web_research_integration,
+        )
 
         integration = get_web_research_integration()
 
@@ -436,7 +447,9 @@ async def reset_circuit_breakers():
 async def get_usage_stats():
     """Get web research usage statistics"""
     try:
-        from agents.web_research_integration import get_web_research_integration
+        from agents.web_researcher import (
+            get_web_researcher as get_web_research_integration,
+        )
 
         integration = get_web_research_integration()
 
@@ -450,7 +463,7 @@ async def get_usage_stats():
             "rate_limiter": cache_stats["rate_limiter"],
             "circuit_breakers": circuit_status,
             "enabled": integration.enabled,
-            "preferred_method": integration.preferred_method.value,
+            "preferred_method": "advanced",
         }
 
         return JSONResponse(

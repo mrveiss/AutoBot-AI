@@ -13,7 +13,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from agents.web_research_assistant import WebResearchAssistant
+from agents.web_researcher import WebResearcher as WebResearchAssistant
 from event_manager import event_manager
 from knowledge_base import KnowledgeBase
 
