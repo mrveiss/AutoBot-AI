@@ -26,6 +26,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
@@ -95,7 +96,7 @@ class ChatState(TypedDict, total=False):
 # ---------------------------------------------------------------------------
 
 
-async def initialize_session(state: ChatState, config: dict) -> dict:
+async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
     """Initialize chat session, load history, detect exit intent."""
     manager = config["configurable"]["manager"]
     stream_cb = config["configurable"].get("stream_callback")
@@ -135,7 +136,7 @@ async def initialize_session(state: ChatState, config: dict) -> dict:
         return {"error": str(exc), "workflow_messages": [error_msg]}
 
 
-async def detect_intent(state: ChatState, config: dict) -> dict:
+async def detect_intent(state: ChatState, config: RunnableConfig) -> dict:
     """Check for exit intent and slash commands."""
     if state.get("error"):
         return {}
@@ -170,7 +171,7 @@ async def detect_intent(state: ChatState, config: dict) -> dict:
     }
 
 
-async def prepare_llm(state: ChatState, config: dict) -> dict:
+async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     """Prepare LLM parameters and create iteration context."""
     if state.get("error"):
         return {}
@@ -273,7 +274,7 @@ async def _run_llm_iteration(manager, ctx, iteration, messages, stream_cb):
     return messages, llm_response, should_continue
 
 
-async def generate_response(state: ChatState, config: dict) -> dict:
+async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
     """Run one LLM iteration: call LLM, stream response, parse tool calls.
 
     Delegates to the manager's continuation loop logic for one iteration.
@@ -317,7 +318,7 @@ async def generate_response(state: ChatState, config: dict) -> dict:
     }
 
 
-async def reflect_on_response(state: ChatState, config: dict) -> dict:
+async def reflect_on_response(state: ChatState, config: RunnableConfig) -> dict:
     """RLM self-reflection: evaluate LLM response quality (#1373).
 
     Uses ResponseQualityEvaluator to score the latest LLM response.
@@ -364,7 +365,7 @@ async def reflect_on_response(state: ChatState, config: dict) -> dict:
     }
 
 
-async def request_approval(state: ChatState, config: dict) -> dict:
+async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
     """Interrupt execution to request command approval from the user.
 
     Uses LangGraph's interrupt() to pause the graph. The frontend receives
@@ -411,7 +412,7 @@ async def request_approval(state: ChatState, config: dict) -> dict:
     }
 
 
-async def execute_tools(state: ChatState, config: dict) -> dict:
+async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
     """Execute approved tool calls."""
     if state.get("error"):
         return {}
@@ -474,7 +475,7 @@ async def execute_tools(state: ChatState, config: dict) -> dict:
     }
 
 
-async def persist_conversation(state: ChatState, config: dict) -> dict:
+async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict:
     """Persist conversation to Redis and file storage."""
     if state.get("error"):
         return {}

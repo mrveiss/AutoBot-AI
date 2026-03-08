@@ -126,6 +126,10 @@ export function useAnalyticsScanRunner(): ScanRunnerReturn {
    * @param scans  Array of scan definitions to execute in order.
    */
   const runAll = async (scans: ScanDefinition[]): Promise<void> => {
+    if (running.value) {
+      logger.info('runAll already in progress, skipping')
+      return
+    }
     running.value = true
     cancelled.value = false
     results.value = scans.map((s) => ({
