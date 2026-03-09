@@ -17,7 +17,6 @@ from contextlib import asynccontextmanager
 
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
-from config import ConfigManager
 from fastapi import FastAPI
 from knowledge_factory import get_or_create_knowledge_base
 from security_layer import SecurityLayer
@@ -32,6 +31,7 @@ from autobot_shared.tracing import (
     instrument_redis,
     shutdown_tracing,
 )
+from config import ConfigManager
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -543,6 +543,28 @@ async def _init_log_forwarding():
         logger.warning("Log forwarding initialization failed: %s", log_fwd_error)
 
 
+async def _init_heartbeat_scheduler(app: FastAPI) -> None:
+    """
+    Start heartbeat scheduler for scheduled agent wakeups (NON-CRITICAL).
+
+    Issue #1407: Loads enabled agents from DB and spawns their asyncio loops.
+    """
+    logger.info("Heartbeat: Starting heartbeat scheduler...")
+    try:
+        from api.heartbeat import configure_scheduler
+        from services.heartbeat_scheduler import HeartbeatScheduler
+        from user_management.database import get_async_session_factory
+
+        scheduler = HeartbeatScheduler(get_async_session_factory())
+        await scheduler.start()
+        app.state.heartbeat_scheduler = scheduler
+        configure_scheduler(scheduler)
+        logger.info("Heartbeat: Scheduler started")
+    except Exception as hb_error:
+        logger.warning("Heartbeat scheduler initialization failed: %s", hb_error)
+        app.state.heartbeat_scheduler = None
+
+
 async def _init_slm_reconciler(app: FastAPI):
     """
     Initialize SLM reconciliation loop with WebSocket broadcasting (NON-CRITICAL).
@@ -794,6 +816,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_documentation_watcher()
         await _auto_index_documentation()
         await _init_log_forwarding()
+        await _init_heartbeat_scheduler(app)
         await _init_slm_reconciler(app)
         await _init_metrics_collection()
 
