@@ -25,6 +25,8 @@ from models.database import (
     EventType,
     Node,
     NodeCodeVersion,
+    NodeConfig,
+    NodeCredential,
     NodeEvent,
     NodeRole,
     NodeStatus,
@@ -1112,6 +1114,10 @@ async def _cleanup_decommissioned_node(
         delete(NodeCodeVersion).where(NodeCodeVersion.node_id == node.node_id)
     )
     await db.execute(delete(Service).where(Service.node_id == node.node_id))
+    await db.execute(
+        delete(NodeCredential).where(NodeCredential.node_id == node.node_id)
+    )
+    await db.execute(delete(NodeConfig).where(NodeConfig.node_id == node.node_id))
     node.status = NodeStatus.DECOMMISSIONED.value
     node.updated_at = datetime.utcnow()
 
