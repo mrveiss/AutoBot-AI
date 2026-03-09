@@ -670,6 +670,23 @@ async def get_redis_checkpointer() -> AsyncRedisSaver:
     return _checkpointer
 
 
+async def delete_thread_checkpoints(thread_id: str) -> None:
+    """Delete all LangGraph checkpoints for a session thread.
+
+    Issue #1475: Called after unrecoverable graph errors to prevent corrupted
+    checkpoints from blocking future invocations on the same chat session.
+
+    Args:
+        thread_id: The session ID whose checkpoints should be deleted.
+    """
+    try:
+        checkpointer = await get_redis_checkpointer()
+        await checkpointer.adelete_thread(thread_id)
+        logger.info("Cleared LangGraph checkpoints for thread: %s", thread_id)
+    except Exception as exc:
+        logger.warning("Failed to clear checkpoints for thread %s: %s", thread_id, exc)
+
+
 async def get_compiled_graph(manager):
     """Get a compiled graph instance with Redis checkpointer.
 

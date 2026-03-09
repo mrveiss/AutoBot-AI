@@ -2924,6 +2924,12 @@ before summarizing.
                     queue.put_nowait(intr.value)
         except Exception as exc:
             logger.error("Graph execution error: %s", exc, exc_info=True)
+            # Issue #1475: Delete corrupted checkpoint so the session can recover.
+            session_id = initial_state.get("session_id")
+            if session_id:
+                from .graph import delete_thread_checkpoints
+
+                await delete_thread_checkpoints(session_id)
             queue.put_nowait(
                 {
                     "type": "error",
