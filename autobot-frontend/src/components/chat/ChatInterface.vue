@@ -862,6 +862,20 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
     // Close file panel when switching sessions
     showFilePanel.value = false
     showVoicePanel.value = false
+
+    // Prime TTS cursor to end of new session's last speakable message (#1488).
+    // Without this the TTS watcher fires, sees current.id !== _lastStreamingMsgId,
+    // resets _lastSpokenIdx = 0, and re-speaks the full existing message.
+    const newSession = store.sessions.find(s => s.id === newSessionId)
+    const msgs = newSession?.messages ?? []
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i]
+      if (m.sender !== 'assistant' || !m.content) continue
+      if (m.type && !_SPEAKABLE_TYPES.has(m.type)) continue
+      _lastStreamingMsgId = m.id
+      _lastSpokenIdx = m.content.length
+      break
+    }
   }
 })
 
