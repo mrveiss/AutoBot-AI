@@ -10,6 +10,15 @@
 #   ansible-playbook playbooks/update-all-nodes.yml
 #   ansible-playbook playbooks/update-all-nodes.yml -e deploy_ref=main
 #   ansible-playbook playbooks/update-all-nodes.yml -e skip_branch_check=true
+#   ansible-playbook playbooks/update-all-nodes.yml --skip-tags restart   # code-only, no restarts
+#
+# Tags:
+#   restart        - all service restart tasks (skip for code-only deploys)
+#   backend        - autobot-backend service tasks
+#   frontend       - nginx restart on frontend node
+#   npu, npu-worker  - NPU worker service tasks
+#   browser, browser-worker - browser worker service tasks
+#   slm, slm-backend, slm-frontend - SLM node service tasks
 
 # =============================================================================
 # PLAY 0: Pre-flight Git Safety Check & Create Deploy Archives
@@ -191,12 +200,14 @@
         state: restarted
         daemon_reload: true
       become: true
+      tags: [slm, slm-backend, restart]
 
     - name: "[PLAY 1] SLM | Restart nginx"
       systemd:
         name: nginx
         state: restarted
       become: true
+      tags: [slm, slm-frontend, restart]
 
     - name: "[PLAY 1] SLM | Wait for backend to be ready"
       wait_for:
@@ -318,6 +329,7 @@
         daemon_reload: true
       become: true
       when: "'01-Backend' in inventory_hostname"
+      tags: [backend, restart]
 
     # ----- Frontend (172.16.168.21) -----
     - name: "[PLAY 2] Frontend | Deploy autobot-frontend"
@@ -351,6 +363,7 @@
         state: restarted
       become: true
       when: "'02-Frontend' in inventory_hostname"
+      tags: [frontend, restart]
 
     # ----- NPU Worker (172.16.168.22) -----
     - name: "[PLAY 2] NPU | Deploy autobot-npu-worker"
@@ -382,6 +395,7 @@
         '03-NPU' in inventory_hostname or
         'npu-worker' in inventory_hostname
       failed_when: false
+      tags: [npu, npu-worker, restart]
 
     # ----- Browser Worker (172.16.168.25) -----
     - name: "[PLAY 2] Browser | Deploy autobot-browser-worker"
@@ -413,6 +427,7 @@
         '05-Browser' in inventory_hostname or
         'browser-automation' in inventory_hostname
       failed_when: false
+      tags: [browser, browser-worker, restart]
 
     # ----- Shared (non-backend nodes) -----
     - name: "[PLAY 2] Shared | Deploy autobot-shared"
