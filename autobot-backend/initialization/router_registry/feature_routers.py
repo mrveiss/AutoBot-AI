@@ -210,6 +210,13 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["advanced-control"],
         "advanced_control",
     ),
+    # Issue #1407: Heartbeat system - scheduled agent wakeups and session persistence
+    (
+        "api.heartbeat",
+        "/heartbeat",
+        ["heartbeat", "agents"],
+        "heartbeat",
+    ),
     # Long-running and validation
     (
         "api.long_running_operations",
