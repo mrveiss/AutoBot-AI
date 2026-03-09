@@ -549,7 +549,7 @@ async def validate_research_safety(
 ) -> Dict[str, Any]:
     """Validate research query and optional URL for safety"""
     async with SecureWebResearch() as secure_research:
-        results = {
+        results: Dict[str, Any] = {
             "query_validation": await secure_research.validate_research_query(query)
         }
 
