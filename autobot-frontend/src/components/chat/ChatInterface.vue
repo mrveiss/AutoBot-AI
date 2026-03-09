@@ -902,10 +902,14 @@ watch(
     if (!voiceOutputEnabled.value || voiceConversation.isActive.value) return
     if (!current) return
 
-    // Reset index when message changes
+    // Reset index when message changes.
+    // If not actively streaming, treat the incoming message as already-spoken (#1490):
+    // it is a historical message (session switch with unloaded messages, page reload,
+    // etc.) and should not be re-spoken. Only reset to 0 when isTyping so newly
+    // generated content is picked up from the start.
     if (current.id !== _lastStreamingMsgId) {
-      _lastSpokenIdx = 0
       _lastStreamingMsgId = current.id
+      _lastSpokenIdx = store.isTyping ? 0 : current.content.length
     }
 
     if (store.isTyping && current.content) {
