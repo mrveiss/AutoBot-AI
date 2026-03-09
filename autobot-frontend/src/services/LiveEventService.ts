@@ -12,10 +12,6 @@
 import { ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
 type LiveEventCallback = (event: LiveEvent) => void
 
@@ -28,7 +24,6 @@ export interface LiveEvent {
   payload: Record<string, unknown>
 }
 
-/** Possible message types from the server */
 type ServerMessage =
   | LiveEvent
   | { type: 'connection_established'; message: string }
@@ -40,10 +35,6 @@ type ServerMessage =
 
 const logger = createLogger('LiveEventService')
 
-// ---------------------------------------------------------------------------
-// Class
-// ---------------------------------------------------------------------------
-
 class LiveEventService {
   private ws: WebSocket | null = null
   private reconnectAttempts = 0
@@ -53,32 +44,18 @@ class LiveEventService {
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null
   private readonly heartbeatTimeout = 30000
 
-  /** Channels this client is currently subscribed to (re-subscribed on reconnect) */
   private readonly subscribedChannels = new Set<string>()
-
-  /** Per-channel callback sets */
   private readonly channelListeners = new Map<string, Set<LiveEventCallback>>()
 
-  /** Reactive connection state for Vue components */
   readonly isConnected: Ref<boolean> = ref(false)
   readonly connectionState: Ref<ConnectionState> = ref('disconnected')
 
-  // -------------------------------------------------------------------------
-  // URL
-  // -------------------------------------------------------------------------
-
   private getUrl(token?: string): string {
-    const wsProtocol =
-      window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const base = `${wsProtocol}//${window.location.host}/api/ws/live`
     return token ? `${base}?token=${encodeURIComponent(token)}` : base
   }
 
-  // -------------------------------------------------------------------------
-  // Connection lifecycle
-  // -------------------------------------------------------------------------
-
-  /** Connect to /ws/live.  Pass the JWT token when auth is required. */
   async connect(token?: string): Promise<void> {
     if (
       this.ws &&
@@ -87,15 +64,10 @@ class LiveEventService {
     ) {
       return
     }
-
     this.connectionState.value = 'connecting'
     this._cleanup()
-
     const url = this.getUrl(token)
-    logger.debug('Connecting LiveEventService', {
-      attempt: this.reconnectAttempts + 1
-    })
-
+    logger.debug('Connecting LiveEventService', { attempt: this.reconnectAttempts + 1 })
     return new Promise<void>((resolve, reject) => {
       try {
         this.ws = new WebSocket(url)
@@ -104,13 +76,11 @@ class LiveEventService {
         reject(err)
         return
       }
-
       const timeout = setTimeout(() => {
         this._handleError(new Error('Connection timeout'))
         this.ws?.close()
         reject(new Error('Connection timeout'))
       }, 5000)
-
       this.ws.onopen = () => {
         clearTimeout(timeout)
         this._onOpen(resolve)
@@ -134,12 +104,9 @@ class LiveEventService {
     this.isConnected.value = true
     this.reconnectAttempts = 0
     this._startHeartbeat()
-
-    // Re-subscribe to all channels after reconnect
     for (const channel of this.subscribedChannels) {
       this._sendAction('subscribe', channel)
     }
-
     resolve()
   }
 
@@ -151,20 +118,18 @@ class LiveEventService {
       logger.error('Failed to parse live event message')
       return
     }
-
     if (msg.type === 'ping') {
       this._send({ action: 'ping' })
       return
     }
-    if (msg.type === 'pong') {
-      return
-    }
-    if (msg.type === 'error') {
-      logger.warn('Server error:', (msg as { type: 'error'; message: string }).message)
-      return
-    }
-    if (msg.type === 'connection_established' || msg.type === 'subscribed' || msg.type === 'unsubscribed') {
-      logger.debug('Server ack:', msg.type, 'channel' in msg ? msg.channel : '')
+    if (msg.type === 'pong') return
+    if (
+      msg.type === 'error' ||
+      msg.type === 'connection_established' ||
+      msg.type === 'subscribed' ||
+      msg.type === 'unsubscribed'
+    ) {
+      logger.debug('Server ack:', msg.type)
       return
     }
     if (msg.type === 'live_event') {
@@ -186,10 +151,7 @@ class LiveEventService {
   }
 
   private _onClose(event: CloseEvent): void {
-    logger.debug('LiveEventService closed', {
-      code: event.code,
-      reason: event.reason
-    })
+    logger.debug('LiveEventService closed', { code: event.code, reason: event.reason })
     this.connectionState.value = 'disconnected'
     this.isConnected.value = false
     this._stopHeartbeat()
@@ -202,27 +164,19 @@ class LiveEventService {
   }
 
   private _scheduleReconnect(event: CloseEvent): void {
-    if (event.code === 1000 || event.code === 4001) {
-      // Normal close or auth rejection — don't reconnect
-      return
-    }
-
+    if (event.code === 1000 || event.code === 4001) return
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       logger.debug('LiveEventService: max reconnect attempts reached')
       return
     }
-
     this.reconnectAttempts++
     const delay = Math.min(
-      this.baseDelay * Math.pow(2, this.reconnectAttempts - 1) +
-        Math.random() * 1000,
+      this.baseDelay * Math.pow(2, this.reconnectAttempts - 1) + Math.random() * 1000,
       this.maxDelay
     )
-
     logger.debug(
       `LiveEventService: reconnecting in ${Math.round(delay)}ms (${this.reconnectAttempts}/${this.maxReconnectAttempts})`
     )
-
     setTimeout(() => {
       if (this.connectionState.value !== 'connected') {
         this.connect().catch((err: unknown) =>
@@ -232,13 +186,8 @@ class LiveEventService {
     }, delay)
   }
 
-  // -------------------------------------------------------------------------
-  // Subscribe / Unsubscribe
-  // -------------------------------------------------------------------------
-
   /**
    * Subscribe to a channel and register a callback.
-   * Automatically sends the subscribe action to the server.
    * Returns an unsubscribe function.
    */
   subscribe(channel: string, callback: LiveEventCallback): () => void {
@@ -246,47 +195,33 @@ class LiveEventService {
       this.channelListeners.set(channel, new Set())
     }
     this.channelListeners.get(channel)!.add(callback)
-
-    // Track channel for reconnect re-subscription
     const isNew = !this.subscribedChannels.has(channel)
     this.subscribedChannels.add(channel)
-
-    // Send subscribe only when this is the first listener for the channel
     if (isNew && this.isConnected.value) {
       this._sendAction('subscribe', channel)
     }
-
     return () => this.unsubscribe(channel, callback)
   }
 
-  /** Unsubscribe a specific callback from a channel. */
   unsubscribe(channel: string, callback: LiveEventCallback): void {
     const listeners = this.channelListeners.get(channel)
     if (!listeners) return
-
     listeners.delete(callback)
-
     if (listeners.size === 0) {
       this.channelListeners.delete(channel)
       this.subscribedChannels.delete(channel)
-
       if (this.isConnected.value) {
         this._sendAction('unsubscribe', channel)
       }
     }
   }
 
-  /** Unsubscribe all callbacks from all channels and disconnect. */
   disconnect(): void {
     this.reconnectAttempts = this.maxReconnectAttempts
     this._cleanup()
     this.connectionState.value = 'disconnected'
     this.isConnected.value = false
   }
-
-  // -------------------------------------------------------------------------
-  // Internal helpers
-  // -------------------------------------------------------------------------
 
   private _sendAction(action: 'subscribe' | 'unsubscribe', channel: string): void {
     this._send({ action, channel })
@@ -336,10 +271,6 @@ class LiveEventService {
     }
   }
 }
-
-// ---------------------------------------------------------------------------
-// Singleton export
-// ---------------------------------------------------------------------------
 
 const liveEventService = new LiveEventService()
 export default liveEventService

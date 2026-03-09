@@ -143,13 +143,11 @@ export function usePreferences() {
   // Load preferences on first use
   loadPreferences()
 
-  // Apply current preferences (#1331: sync language to vue-i18n on startup)
+  // Apply current preferences (#1331: sync language; #1337: setLocale also sets html[dir] for RTL)
   applyFontSize(fontSize.value)
   applyAccentColor(accentColor.value)
   applyLayoutDensity(layoutDensity.value)
-  if (language.value !== 'en') {
-    setLocale(language.value)
-  }
+  setLocale(language.value)
 
   // Watch for changes and persist
   watch(fontSize, (newSize) => {
