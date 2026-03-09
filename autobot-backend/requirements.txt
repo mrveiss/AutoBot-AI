@@ -31,9 +31,9 @@ vanna>=0.7.0  # Issue #723: Natural language to SQL via Vanna.ai
 xxhash>=3.6.0          # Hash functions for LLM caching
 structlog>=25.5.0      # Structured logging for service auth
 llama-index>=0.10.0,<0.14.0    # RAG framework (pinned for API compatibility)
-llama-index-llms-ollama>=0.1.0,<0.2.0  # Ollama LLM integration (older API)
-llama-index-embeddings-ollama>=0.1.0,<0.2.0  # Ollama embeddings (older API)
-llama-index-vector-stores-chroma>=0.1.0,<0.2.0  # ChromaDB vector store (older API)
+llama-index-llms-ollama>=0.5.0,<1.0.0  # Ollama LLM integration
+llama-index-embeddings-ollama>=0.5.0,<1.0.0  # Ollama embeddings
+llama-index-vector-stores-chroma>=0.5.0,<1.0.0  # ChromaDB vector store
 # LangChain 1.x ecosystem — pinned to 0.3.x minor to prevent drift (#1047)
 langchain>=0.3.0,<0.4.0               # Issue #1043: Upgraded for LangGraph compatibility
 langchain-core>=0.3.81,<0.4.0         # Issue #1043 + SECURITY UPDATE (injection + SSRF)
