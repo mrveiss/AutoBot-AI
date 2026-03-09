@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 # Redis connection for checkpointer
 _REDIS_URI = None  # Set lazily from SSOT config
 _checkpointer = None
+_compiled_graph = None
 
 
 class ChatState(TypedDict, total=False):
@@ -690,12 +691,22 @@ async def delete_thread_checkpoints(thread_id: str) -> None:
 async def get_compiled_graph(manager):
     """Get a compiled graph instance with Redis checkpointer.
 
+    The compiled graph is cached as a module-level singleton since the graph
+    structure is static — only per-invocation config (thread_id, manager,
+    stream_callback) varies.
+
     Args:
         manager: ChatWorkflowManager instance (passed to nodes via config)
 
     Returns:
         Compiled StateGraph ready for invocation
     """
+    global _compiled_graph
+
+    if _compiled_graph is not None:
+        return _compiled_graph
+
     checkpointer = await get_redis_checkpointer()
     builder = build_chat_graph()
-    return builder.compile(checkpointer=checkpointer)
+    _compiled_graph = builder.compile(checkpointer=checkpointer)
+    return _compiled_graph
