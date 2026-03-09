@@ -866,16 +866,7 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
     // Prime TTS cursor to end of new session's last speakable message (#1488).
     // Without this the TTS watcher fires, sees current.id !== _lastStreamingMsgId,
     // resets _lastSpokenIdx = 0, and re-speaks the full existing message.
-    const newSession = store.sessions.find(s => s.id === newSessionId)
-    const msgs = newSession?.messages ?? []
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      const m = msgs[i]
-      if (m.sender !== 'assistant' || !m.content) continue
-      if (m.type && !_SPEAKABLE_TYPES.has(m.type)) continue
-      _lastStreamingMsgId = m.id
-      _lastSpokenIdx = m.content.length
-      break
-    }
+    _primeTtsCursor()
   }
 })
 
@@ -885,6 +876,26 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
 const _SPEAKABLE_TYPES = new Set(['response', 'message'])
 let _lastSpokenIdx = 0
 let _lastStreamingMsgId: string | null = null
+
+/** Prime TTS cursor to end of current last message. Used on voice-enable and session switch. */
+function _primeTtsCursor(): void {
+  const session = store.sessions.find(s => s.id === store.currentSessionId)
+  const msgs = session?.messages ?? []
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i]
+    if (m.sender !== 'assistant' || !m.content) continue
+    if (m.type && !_SPEAKABLE_TYPES.has(m.type)) continue
+    _lastStreamingMsgId = m.id
+    _lastSpokenIdx = m.content.length
+    break
+  }
+}
+
+// When voice output is enabled mid-stream, prime cursor to current content end
+// so already-accumulated text is not re-spoken (#1491).
+watch(voiceOutputEnabled, (enabled) => {
+  if (enabled) _primeTtsCursor()
+})
 
 watch(
   () => {
