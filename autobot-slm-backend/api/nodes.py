@@ -1111,6 +1111,7 @@ async def _cleanup_decommissioned_node(
     await db.execute(
         delete(NodeCodeVersion).where(NodeCodeVersion.node_id == node.node_id)
     )
+    await db.execute(delete(Service).where(Service.node_id == node.node_id))
     node.status = NodeStatus.DECOMMISSIONED.value
     node.updated_at = datetime.utcnow()
 
