@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Core workflow and batch processing
     ("api.websockets", "", ["websockets"], "websockets"),
+    # Issue #1408: scoped real-time event channels
+    ("api.live_events", "", ["live-events"], "live_events"),
     ("api.workflow", "/workflow", ["workflow"], "workflow"),
     # Issue #1287: batch.py consolidated into batch_jobs.py
     (
