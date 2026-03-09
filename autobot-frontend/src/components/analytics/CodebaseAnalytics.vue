@@ -535,6 +535,7 @@
       <CodeSmellsSection
         :smells="codeSmellsForPanel"
         :code-health-score="codeHealthScore"
+        @export="(fmt) => exportSection('code-smells', fmt)"
       />
 
       <!-- Code Intelligence Analysis (#1469, #566) -->
@@ -550,10 +551,16 @@
       />
 
       <!-- Duplicate Code Analysis (#1469, #184) -->
-      <DuplicatesSection :duplicates="duplicateAnalysis" />
+      <DuplicatesSection
+        :duplicates="duplicateAnalysis"
+        @export="(fmt) => exportSection('duplicates', fmt)"
+      />
 
       <!-- Function Declarations (#1469, #184) -->
-      <DeclarationsSection :declarations="declarationsForPanel" />
+      <DeclarationsSection
+        :declarations="declarationsForPanel"
+        @export="(fmt) => exportSection('declarations', fmt)"
+      />
 
       <!-- Issue #527: API Endpoint Checker Section -->
       <div class="api-endpoints-section analytics-section">
