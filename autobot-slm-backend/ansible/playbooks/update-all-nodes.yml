@@ -222,6 +222,7 @@
         timeout: 60
         delay: 5
       delegate_to: localhost
+      tags: [always]
 
     - name: "[PLAY 1] SLM | Login to get auth token"
       uri:
@@ -236,6 +237,7 @@
       register: slm_login_play1
       delegate_to: localhost
       no_log: true
+      tags: [always]
 
     - name: "[PLAY 1] SLM | Mark node as synced in DB"
       uri:
@@ -250,6 +252,7 @@
         status_code: [200, 404]
       delegate_to: localhost
       ignore_errors: true
+      tags: [always]
 
     - name: "[PLAY 1] SLM Update Complete"
       debug:
@@ -284,12 +287,14 @@
       delegate_to: localhost
       run_once: true
       no_log: true
+      tags: [always]
 
     - name: "[PLAY 2] Set SLM auth token"
       set_fact:
         slm_token: "{{ slm_login.json.access_token }}"
       delegate_to: localhost
       run_once: true
+      tags: [always]
 
   tasks:
     - name: "[PLAY 2] Starting Node Update"
@@ -479,6 +484,7 @@
         status_code: [200, 404]
       delegate_to: localhost
       ignore_errors: true
+      tags: [always]
 
     - name: "[PLAY 2] Node Update Complete"
       debug:
