@@ -13,5 +13,4 @@ __all__ = [
     "websockets",
     "enhanced_search",  # New NPU-accelerated search API
     "analytics",  # Enhanced backend analytics API
-    "live_events",  # Issue #1408: scoped real-time event channels
 ]
