@@ -7,11 +7,12 @@ Unit tests for cognifier _parse_llm_response and conversion logic.
 Issue #1075: Test coverage for knowledge pipeline cognifiers.
 """
 
+import asyncio
 import json
 import sys
 from datetime import datetime
 from types import ModuleType
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -20,6 +21,13 @@ import pytest
 _mock_llm = ModuleType("llm_interface_pkg")
 _mock_llm.LLMInterface = MagicMock
 sys.modules["llm_interface_pkg"] = _mock_llm
+
+# Mock autobot_shared.redis_client before importing cognifiers
+_mock_shared = ModuleType("autobot_shared")
+_mock_redis_mod = ModuleType("autobot_shared.redis_client")
+_mock_redis_mod.get_redis_client = MagicMock()
+sys.modules["autobot_shared"] = _mock_shared
+sys.modules["autobot_shared.redis_client"] = _mock_redis_mod
 
 from knowledge.pipeline.cognifiers.entity_extractor import EntityExtractor  # noqa: E402
 from knowledge.pipeline.cognifiers.event_extractor import EventExtractor  # noqa: E402
@@ -542,3 +550,146 @@ class TestSummarizerEntityResolution:
     def test_empty_list(self, summarizer):
         ids = summarizer._resolve_entity_ids([], {})
         assert ids == []
+
+
+# ---------------------------------------------------------------------------
+# Issue #1498: ContextGeneratorCognifier tests
+# ---------------------------------------------------------------------------
+
+
+def _make_context(n_chunks=2, doc_id="doc-1"):
+    from knowledge.pipeline.base import PipelineContext
+    from knowledge.pipeline.models.chunk import ProcessedChunk
+
+    ctx = PipelineContext(document_id=doc_id)
+    for i in range(n_chunks):
+        chunk = ProcessedChunk(content=f"chunk text {i}", metadata={})
+        ctx.chunks.append(chunk)
+    return ctx
+
+
+class TestContextGeneratorDisabled:
+    """ContextGeneratorCognifier is a no-op when CONTEXT_ENABLED=false."""
+
+    def test_returns_context_unchanged(self):
+        from knowledge.pipeline.cognifiers.context_generator import (
+            ContextGeneratorCognifier,
+        )
+
+        cog = ContextGeneratorCognifier()
+        ctx = _make_context()
+        original_contents = [c.content for c in ctx.chunks]
+        result = asyncio.get_event_loop().run_until_complete(cog.process(ctx))
+        assert [c.content for c in result.chunks] == original_contents
+
+    def test_empty_chunks_returns_early(self):
+        from knowledge.pipeline.cognifiers.context_generator import (
+            ContextGeneratorCognifier,
+        )
+
+        cog = ContextGeneratorCognifier()
+        ctx = _make_context(n_chunks=0)
+        result = asyncio.get_event_loop().run_until_complete(cog.process(ctx))
+        assert result.chunks == []
+
+
+@patch.dict("os.environ", {"CONTEXT_ENABLED": "true"})
+class TestContextGeneratorEnabled:
+    """ContextGeneratorCognifier enriches chunks when CONTEXT_ENABLED=true."""
+
+    def _mock_redis(self, cached=None):
+        mock_r = MagicMock()
+        mock_r.get.return_value = cached
+        mock_r.setex.return_value = True
+        return mock_r
+
+    def _mock_llm_response(self, text):
+        resp = MagicMock()
+        resp.content = text
+        return resp
+
+    @patch("knowledge.pipeline.cognifiers.context_generator.get_redis_client")
+    def test_enriches_chunks(self, mock_get_redis):
+        from knowledge.pipeline.cognifiers.context_generator import (
+            ContextGeneratorCognifier,
+        )
+
+        mock_get_redis.return_value = self._mock_redis()
+        cog = ContextGeneratorCognifier()
+        cog.llm = MagicMock()
+        summary_resp = self._mock_llm_response("Doc summary.")
+        chunk_resp = self._mock_llm_response("Chunk context.")
+        cog.llm.chat_completion = AsyncMock(
+            side_effect=[summary_resp, chunk_resp, chunk_resp]
+        )
+
+        ctx = _make_context(n_chunks=2)
+        result = asyncio.get_event_loop().run_until_complete(cog.process(ctx))
+
+        for chunk in result.chunks:
+            assert chunk.metadata["has_context"] is True
+            assert chunk.metadata["contextual_text"] == "Chunk context."
+            assert "original_chunk" in chunk.metadata
+            assert "context_model" in chunk.metadata
+            assert "context_generated_at" in chunk.metadata
+
+    @patch("knowledge.pipeline.cognifiers.context_generator.get_redis_client")
+    def test_cache_hit_skips_summary_llm_call(self, mock_get_redis):
+        import json
+
+        from knowledge.pipeline.cognifiers.context_generator import (
+            ContextGeneratorCognifier,
+        )
+
+        cached_payload = json.dumps(
+            {"summary": "cached summary", "model": "llama3.2:3b"}
+        )
+        mock_get_redis.return_value = self._mock_redis(cached=cached_payload)
+        cog = ContextGeneratorCognifier()
+        cog.llm = MagicMock()
+        chunk_resp = self._mock_llm_response("ctx")
+        cog.llm.chat_completion = AsyncMock(return_value=chunk_resp)
+
+        ctx = _make_context(n_chunks=2)
+        asyncio.get_event_loop().run_until_complete(cog.process(ctx))
+
+        assert cog.llm.chat_completion.call_count == 2
+
+    @patch("knowledge.pipeline.cognifiers.context_generator.get_redis_client")
+    def test_llm_failure_sets_has_context_false(self, mock_get_redis):
+        from knowledge.pipeline.cognifiers.context_generator import (
+            ContextGeneratorCognifier,
+        )
+
+        mock_get_redis.return_value = self._mock_redis()
+        cog = ContextGeneratorCognifier()
+        cog.llm = MagicMock()
+        cog.llm.chat_completion = AsyncMock(side_effect=RuntimeError("LLM down"))
+
+        ctx = _make_context(n_chunks=1)
+        result = asyncio.get_event_loop().run_until_complete(cog.process(ctx))
+
+        assert result.chunks[0].metadata["has_context"] is False
+        assert result.chunks[0].metadata["contextual_text"] == ""
+
+    @patch("knowledge.pipeline.cognifiers.context_generator.get_redis_client")
+    def test_enriched_content_format(self, mock_get_redis):
+        from knowledge.pipeline.cognifiers.context_generator import (
+            ContextGeneratorCognifier,
+        )
+
+        mock_get_redis.return_value = self._mock_redis()
+        cog = ContextGeneratorCognifier()
+        cog.llm = MagicMock()
+        cog.llm.chat_completion = AsyncMock(
+            side_effect=[
+                self._mock_llm_response("doc summary"),
+                self._mock_llm_response("ctx sentence"),
+            ]
+        )
+
+        ctx = _make_context(n_chunks=1)
+        original = ctx.chunks[0].content
+        result = asyncio.get_event_loop().run_until_complete(cog.process(ctx))
+
+        assert result.chunks[0].content == f"ctx sentence\n\n{original}"

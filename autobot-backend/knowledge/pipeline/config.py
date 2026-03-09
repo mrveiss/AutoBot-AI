@@ -27,6 +27,7 @@ DEFAULT_KNOWLEDGE_PIPELINE = {
         {"task": "extract_entities", "params": {}},
         {"task": "extract_relationships", "params": {}},
         {"task": "summarize", "params": {"levels": ["sentence", "paragraph"]}},
+        {"task": "add_context", "params": {}},  # Issue #1498: Contextual Retrieval
     ],
     "load": [
         {"task": "chromadb", "params": {}},
