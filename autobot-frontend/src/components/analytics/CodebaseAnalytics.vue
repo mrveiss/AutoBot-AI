@@ -531,118 +531,11 @@
         />
       </div>
 
-      <!-- Code Intelligence: Anti-Pattern / Code Smells Report -->
-      <div class="code-smells-section analytics-section">
-        <h3>
-          <i class="fas fa-bug"></i> {{ $t('analytics.codebase.intelligence.codeSmellsTitle') }}
-          <span v-if="codeHealthScore" class="health-badge" :class="getHealthGradeClass(codeHealthScore.grade)">
-            {{ codeHealthScore.grade }} ({{ codeHealthScore.health_score }}/100)
-          </span>
-          <span v-if="codeSmellsFromProblems.length > 0" class="total-count">
-            ({{ codeSmellsFromProblems.length.toLocaleString() }} found)
-          </span>
-          <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons">
-            <button @click="exportSection('code-smells', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')" :disabled="codeSmellsFromProblems.length === 0">
-              <i class="fas fa-file-alt"></i> MD
-            </button>
-            <button @click="exportSection('code-smells', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')" :disabled="codeSmellsFromProblems.length === 0">
-              <i class="fas fa-file-code"></i> JSON
-            </button>
-          </div>
-        </h3>
-        <div v-if="codeSmellsFromProblems.length > 0" class="section-content">
-          <!-- Summary Cards by Severity -->
-          <div class="summary-cards">
-            <div class="summary-card total">
-              <div class="summary-value">{{ codeSmellsFromProblems.length.toLocaleString() }}</div>
-              <div class="summary-label">{{ $t('analytics.codebase.stats.total') }}</div>
-            </div>
-            <div class="summary-card critical">
-              <div class="summary-value">{{ codeSmellsSeveritySummary.critical }}</div>
-              <div class="summary-label">{{ $t('analytics.codebase.severity.critical') }}</div>
-            </div>
-            <div class="summary-card high">
-              <div class="summary-value">{{ codeSmellsSeveritySummary.high }}</div>
-              <div class="summary-label">{{ $t('analytics.codebase.severity.high') }}</div>
-            </div>
-            <div class="summary-card medium">
-              <div class="summary-value">{{ codeSmellsSeveritySummary.medium }}</div>
-              <div class="summary-label">{{ $t('analytics.codebase.severity.medium') }}</div>
-            </div>
-            <div class="summary-card low">
-              <div class="summary-value">{{ codeSmellsSeveritySummary.low }}</div>
-              <div class="summary-label">{{ $t('analytics.codebase.severity.low') }}</div>
-            </div>
-          </div>
-
-          <!-- Code Smells by Type (Accordion) -->
-          <div class="accordion-groups">
-            <div
-              v-for="(group, smellType) in codeSmellsByType"
-              :key="smellType"
-              class="accordion-group"
-            >
-              <div
-                class="accordion-header"
-                @click="toggleCodeSmellType(smellType)"
-              >
-                <div class="header-info">
-                  <i :class="expandedCodeSmellTypes[smellType] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-                  <span class="header-name">{{ formatCodeSmellType(smellType) }}</span>
-                  <span class="header-count">({{ group.smells.length.toLocaleString() }})</span>
-                </div>
-                <div class="header-badges">
-                  <span v-if="group.severityCounts.critical > 0" class="severity-badge critical">
-                    {{ group.severityCounts.critical }} {{ $t('analytics.codebase.severity.critical') }}
-                  </span>
-                  <span v-if="group.severityCounts.high > 0" class="severity-badge high">
-                    {{ group.severityCounts.high }} {{ $t('analytics.codebase.severity.high') }}
-                  </span>
-                  <span v-if="group.severityCounts.medium > 0" class="severity-badge medium">
-                    {{ group.severityCounts.medium }} {{ $t('analytics.codebase.severity.medium') }}
-                  </span>
-                  <span v-if="group.severityCounts.low > 0" class="severity-badge low">
-                    {{ group.severityCounts.low }} {{ $t('analytics.codebase.severity.low') }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- Expanded smell items -->
-              <transition name="accordion">
-                <div v-if="expandedCodeSmellTypes[smellType]" class="accordion-items">
-                  <div
-                    v-for="(smell, idx) in group.smells.slice(0, 20)"
-                    :key="idx"
-                    class="list-item"
-                    :class="getItemSeverityClass(smell.severity)"
-                  >
-                    <div class="item-header">
-                      <span class="item-severity" :class="smell.severity?.toLowerCase()">
-                        {{ smell.severity || 'unknown' }}
-                      </span>
-                    </div>
-                    <div class="item-description">{{ smell.description }}</div>
-                    <div class="item-location">
-                      📁 {{ smell.file_path }}{{ smell.line_number ? ':' + smell.line_number : '' }}
-                    </div>
-                    <div v-if="smell.suggestion" class="item-suggestion">💡 {{ smell.suggestion }}</div>
-                  </div>
-                  <div v-if="group.smells.length > 20" class="show-more">
-                    <span class="muted">Showing 20 of {{ group.smells.length.toLocaleString() }} {{ formatCodeSmellType(smellType) }} issues</span>
-                  </div>
-                </div>
-              </transition>
-            </div>
-          </div>
-        </div>
-        <EmptyState
-          v-else
-          icon="fas fa-sparkles"
-          :message="$t('analytics.codebase.intelligence.noCodeSmells')"
-          variant="info"
-        />
-      </div>
+      <!-- Code Intelligence: Anti-Pattern / Code Smells Report (#1469, #184) -->
+      <CodeSmellsSection
+        :smells="codeSmellsForPanel"
+        :code-health-score="codeHealthScore"
+      />
 
       <!-- Code Intelligence Analysis (#1469, #566) -->
       <CodebaseSecurityPanel
@@ -656,189 +549,11 @@
         @scan-file="handleFileScan"
       />
 
-      <!-- Duplicate Code Analysis - Grouped by Similarity -->
-      <div class="duplicates-section analytics-section">
-        <h3>
-          <i class="fas fa-copy"></i> {{ $t('analytics.codebase.duplicates.title') }}
-          <span v-if="duplicateAnalysis && duplicateAnalysis.length > 0" class="total-count">
-            ({{ duplicateAnalysis.length.toLocaleString() }} pairs)
-          </span>
-          <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons">
-            <button @click="exportSection('duplicates', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')" :disabled="!duplicateAnalysis || duplicateAnalysis.length === 0">
-              <i class="fas fa-file-alt"></i> MD
-            </button>
-            <button @click="exportSection('duplicates', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')" :disabled="!duplicateAnalysis || duplicateAnalysis.length === 0">
-              <i class="fas fa-file-code"></i> JSON
-            </button>
-          </div>
-        </h3>
-        <div v-if="duplicateAnalysis && duplicateAnalysis.length > 0" class="section-content">
-          <!-- Similarity Summary Cards -->
-          <div class="summary-cards">
-            <div class="summary-card total">
-              <div class="summary-value">{{ duplicateAnalysis.length.toLocaleString() }}</div>
-              <div class="summary-label">{{ $t('analytics.codebase.duplicates.totalPairs') }}</div>
-            </div>
-            <div class="summary-card high">
-              <div class="summary-value">{{ duplicatesBySimilarity.high?.length || 0 }}</div>
-              <div class="summary-label">{{ $t('analytics.codebase.duplicates.highSimilarity') }}</div>
-            </div>
-            <div class="summary-card medium">
-              <div class="summary-value">{{ duplicatesBySimilarity.medium?.length || 0 }}</div>
-              <div class="summary-label">{{ $t('analytics.codebase.duplicates.mediumSimilarity') }}</div>
-            </div>
-            <div class="summary-card low">
-              <div class="summary-value">{{ duplicatesBySimilarity.low?.length || 0 }}</div>
-              <div class="summary-label">{{ $t('analytics.codebase.duplicates.lowSimilarity') }}</div>
-            </div>
-            <div class="summary-card info">
-              <div class="summary-value">{{ totalDuplicateLines.toLocaleString() }}</div>
-              <div class="summary-label">{{ $t('analytics.codebase.duplicates.totalLines') }}</div>
-            </div>
-          </div>
+      <!-- Duplicate Code Analysis (#1469, #184) -->
+      <DuplicatesSection :duplicates="duplicateAnalysis" />
 
-          <!-- Duplicates by Similarity Group -->
-          <div class="accordion-groups">
-            <div
-              v-for="(group, similarity) in duplicatesBySimilarity"
-              :key="similarity"
-              v-show="group && group.length > 0"
-              class="accordion-group"
-            >
-              <div
-                class="accordion-header"
-                @click="toggleDuplicateGroup(similarity)"
-              >
-                <div class="header-info">
-                  <i :class="expandedDuplicateGroups[similarity] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-                  <span class="header-name">{{ formatSimilarityGroup(similarity) }}</span>
-                  <span class="header-count">({{ group.length }})</span>
-                </div>
-                <div class="header-badges">
-                  <span class="similarity-badge" :class="similarity">
-                    {{ similarity === 'high' ? '90%+' : similarity === 'medium' ? '70-89%' : '<70%' }}
-                  </span>
-                </div>
-              </div>
-              <transition name="accordion">
-                <div v-if="expandedDuplicateGroups[similarity]" class="accordion-items">
-                  <div
-                    v-for="(duplicate, index) in group.slice(0, 20)"
-                    :key="index"
-                    class="list-item"
-                    :class="`item-${similarity}`"
-                  >
-                    <div class="item-header">
-                      <span class="item-similarity" :class="similarity">{{ duplicate.similarity }}% similar</span>
-                      <span class="item-lines">{{ duplicate.lines }} lines</span>
-                    </div>
-                    <div class="item-files">
-                      <div class="item-file">📄 {{ duplicate.file1 }}</div>
-                      <div class="item-file">📄 {{ duplicate.file2 }}</div>
-                    </div>
-                  </div>
-                  <div v-if="group.length > 20" class="show-more">
-                    <span class="muted">Showing 20 of {{ group.length.toLocaleString() }} pairs</span>
-                  </div>
-                </div>
-              </transition>
-            </div>
-          </div>
-        </div>
-        <EmptyState
-          v-else
-          icon="fas fa-check-circle"
-          :message="$t('analytics.codebase.duplicates.noData')"
-          variant="success"
-        />
-      </div>
-
-      <!-- Function Declarations - Grouped by Type -->
-      <div class="declarations-section analytics-section">
-        <h3>
-          <i class="fas fa-code"></i> {{ $t('analytics.codebase.declarations.title') }}
-          <span v-if="declarationAnalysis && declarationAnalysis.length > 0" class="total-count">
-            ({{ declarationAnalysis.length.toLocaleString() }} total)
-          </span>
-          <!-- Issue #609: Section Export Buttons -->
-          <div class="section-export-buttons">
-            <button @click="exportSection('declarations', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')" :disabled="!declarationAnalysis || declarationAnalysis.length === 0">
-              <i class="fas fa-file-alt"></i> MD
-            </button>
-            <button @click="exportSection('declarations', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')" :disabled="!declarationAnalysis || declarationAnalysis.length === 0">
-              <i class="fas fa-file-code"></i> JSON
-            </button>
-          </div>
-        </h3>
-        <div v-if="declarationAnalysis && declarationAnalysis.length > 0" class="section-content">
-          <!-- Type Summary Cards -->
-          <div class="summary-cards">
-            <div class="summary-card total">
-              <div class="summary-value">{{ declarationAnalysis.length.toLocaleString() }}</div>
-              <div class="summary-label">Total</div>
-            </div>
-            <div
-              v-for="(typeData, type) in declarationsByType"
-              :key="type"
-              class="summary-card"
-              :class="getDeclarationTypeClass(type)"
-            >
-              <div class="summary-value">{{ typeData.declarations.length.toLocaleString() }}</div>
-              <div class="summary-label">{{ formatDeclarationType(type) }}</div>
-            </div>
-          </div>
-
-          <!-- Grouped by Type (Accordion) -->
-          <div class="accordion-groups">
-            <div
-              v-for="(typeData, type) in declarationsByType"
-              :key="type"
-              class="accordion-group"
-            >
-              <div
-                class="accordion-header"
-                @click="toggleDeclarationType(type)"
-              >
-                <div class="header-info">
-                  <i :class="expandedDeclarationTypes[type] ? 'fas fa-chevron-down' : 'fas fa-chevron-right'"></i>
-                  <span class="header-name">{{ formatDeclarationType(type) }}</span>
-                  <span class="header-count">({{ typeData.declarations.length.toLocaleString() }})</span>
-                </div>
-                <div class="header-badges">
-                  <span v-if="typeData.exportedCount > 0" class="export-badge">
-                    {{ typeData.exportedCount }} exported
-                  </span>
-                </div>
-              </div>
-              <transition name="accordion">
-                <div v-if="expandedDeclarationTypes[type]" class="accordion-items">
-                  <div
-                    v-for="(declaration, index) in typeData.declarations.slice(0, 30)"
-                    :key="index"
-                    class="list-item"
-                    :class="{ 'item-exported': declaration.is_exported }"
-                  >
-                    <div class="item-header">
-                      <span class="item-name">{{ declaration.name }}</span>
-                      <span v-if="declaration.is_exported" class="export-badge small">exported</span>
-                    </div>
-                    <div class="item-location">📁 {{ declaration.file_path }}:{{ declaration.line_number }}</div>
-                  </div>
-                  <div v-if="typeData.declarations.length > 30" class="show-more">
-                    <span class="muted">Showing 30 of {{ typeData.declarations.length.toLocaleString() }} {{ formatDeclarationType(type).toLowerCase() }}s</span>
-                  </div>
-                </div>
-              </transition>
-            </div>
-          </div>
-        </div>
-        <EmptyState
-          v-else
-          icon="fas fa-code"
-          :message="$t('analytics.codebase.declarations.noData')"
-        />
-      </div>
+      <!-- Function Declarations (#1469, #184) -->
+      <DeclarationsSection :declarations="declarationsForPanel" />
 
       <!-- Issue #527: API Endpoint Checker Section -->
       <div class="api-endpoints-section analytics-section">
@@ -2417,6 +2132,9 @@ import { createLogger } from '@/utils/debugUtils'
 import CodebaseOverviewPanel from '@/components/analytics/CodebaseOverviewPanel.vue'
 import CodebaseDependenciesPanel from '@/components/analytics/CodebaseDependenciesPanel.vue'
 import CodebaseSecurityPanel from '@/components/analytics/CodebaseSecurityPanel.vue'
+import CodeSmellsSection from '@/components/analytics/CodeSmellsSection.vue'
+import DuplicatesSection from '@/components/analytics/DuplicatesSection.vue'
+import DeclarationsSection from '@/components/analytics/DeclarationsSection.vue'
 import SourceManager from '@/components/analytics/SourceManager.vue'
 import AddSourceModal from '@/components/analytics/AddSourceModal.vue'
 import ShareSourceModal from '@/components/analytics/ShareSourceModal.vue'
@@ -2460,37 +2178,15 @@ const codeIntelSecurityFindings = ref<SecurityFinding[]>([])
 const codeIntelPerformanceFindings = ref<PerformanceFinding[]>([])
 const codeIntelRedisFindings = ref<RedisOptimizationFinding[]>([])
 
-// Issue #566: Code Intelligence UI state
-const showFileScanModal = ref(false)
-const activeCodeIntelTab = ref<'security' | 'performance' | 'redis'>('security')
+// Issue #566: Code Intelligence UI state — tab/modal state moved to CodebaseSecurityPanel (#1469)
 const codeIntelFindingsLoading = ref(false)
 const codeIntelFindingsFetched = ref({ security: false, performance: false, redis: false })
-
-// Issue #566: Code Intelligence tabs definition
-const codeIntelTabs = [
-  { id: 'security' as const, labelKey: 'analytics.codebase.intelligence.security', icon: 'fas fa-shield-alt' },
-  { id: 'performance' as const, labelKey: 'analytics.codebase.intelligence.performanceLabel', icon: 'fas fa-tachometer-alt' },
-  { id: 'redis' as const, labelKey: 'analytics.codebase.intelligence.redisLabel', icon: 'fas fa-database' }
-]
 
 // Issue #566: Code Intelligence computed properties
 // Suggestions from analyzeCode serve as findings until dedicated endpoints exist (#920)
 const codeIntelTotalFindings = computed(() =>
   codeIntelSuggestions.value.length
 )
-
-const hasCodeIntelFindings = computed(() => codeIntelTotalFindings.value > 0)
-
-// Issue #566: Code Intelligence methods
-// Tab counts reflect suggestion categories until dedicated endpoints exist (#920)
-function getCodeIntelTabCount(tabId: string): number {
-  switch (tabId) {
-    case 'security': return codeIntelSecurityFindings.value.length
-    case 'performance': return codeIntelPerformanceFindings.value.length
-    case 'redis': return codeIntelRedisFindings.value.length
-    default: return 0
-  }
-}
 
 async function runCodeIntelligenceAnalysis() {
   if (!rootPath.value) return
@@ -2522,7 +2218,6 @@ async function handleFileScan(
   filePath: string,
   _types: { security: boolean; performance: boolean; redis: boolean }
 ) {
-  showFileScanModal.value = false
   codeIntelFindingsLoading.value = true
 
   try {
@@ -6061,107 +5756,6 @@ const toggleProblemType = (type: string): void => {
   expandedProblemTypes.value[type] = !expandedProblemTypes.value[type]
 }
 
-// Declaration group interface
-interface DeclarationGroup {
-  declarations: Declaration[]
-  exportedCount: number
-}
-
-// Group declarations by type for summary view
-const declarationsByType = computed((): Record<string, DeclarationGroup> => {
-  if (!declarationAnalysis.value || declarationAnalysis.value.length === 0) return {}
-  const grouped: Record<string, DeclarationGroup> = {}
-
-  for (const decl of declarationAnalysis.value) {
-    const type = decl.type || 'unknown'
-    if (!grouped[type]) {
-      grouped[type] = {
-        declarations: [],
-        exportedCount: 0
-      }
-    }
-    grouped[type].declarations.push(decl)
-    if (decl.is_exported) {
-      grouped[type].exportedCount++
-    }
-  }
-
-  // Sort by count (highest first)
-  return Object.fromEntries(
-    Object.entries(grouped).sort((a, b) => b[1].declarations.length - a[1].declarations.length)
-  )
-})
-
-// Track which declaration groups are expanded
-const expandedDeclarationTypes = ref<Record<string, boolean>>({})
-
-const toggleDeclarationType = (type: string): void => {
-  expandedDeclarationTypes.value[type] = !expandedDeclarationTypes.value[type]
-}
-
-const formatDeclarationType = (type: string | undefined): string => {
-  return type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Unknown'
-}
-
-// Duplicates by similarity type
-interface DuplicatesByGroup {
-  high: DuplicateCode[]
-  medium: DuplicateCode[]
-  low: DuplicateCode[]
-}
-
-// Group duplicates by similarity level
-const duplicatesBySimilarity = computed((): DuplicatesByGroup => {
-  if (!duplicateAnalysis.value || duplicateAnalysis.value.length === 0) {
-    return { high: [], medium: [], low: [] }
-  }
-  const grouped: DuplicatesByGroup = {
-    high: [],    // 90%+
-    medium: [],  // 70-89%
-    low: []      // <70%
-  }
-
-  for (const dup of duplicateAnalysis.value) {
-    const sim = dup.similarity || 0
-    if (sim >= 90) {
-      grouped.high.push(dup)
-    } else if (sim >= 70) {
-      grouped.medium.push(dup)
-    } else {
-      grouped.low.push(dup)
-    }
-  }
-
-  // Sort each group by similarity (highest first)
-  for (const key of Object.keys(grouped) as (keyof DuplicatesByGroup)[]) {
-    grouped[key].sort((a, b) => (b.similarity || 0) - (a.similarity || 0))
-  }
-
-  return grouped
-})
-
-// Calculate total duplicate lines
-const totalDuplicateLines = computed((): number => {
-  if (!duplicateAnalysis.value || duplicateAnalysis.value.length === 0) return 0
-  return duplicateAnalysis.value.reduce((sum, dup) => sum + (dup.lines || 0), 0)
-})
-
-// Track which duplicate groups are expanded
-const expandedDuplicateGroups = ref<Record<string, boolean>>({})
-
-const toggleDuplicateGroup = (similarity: string): void => {
-  expandedDuplicateGroups.value[similarity] = !expandedDuplicateGroups.value[similarity]
-}
-
-const formatSimilarityGroup = (similarity: string): string => {
-  const labels: Record<string, string> = {
-    high: t('analytics.codebase.duplicates.similarityHigh'),
-    medium: t('analytics.codebase.duplicates.similarityMedium'),
-    low: t('analytics.codebase.duplicates.similarityLow')
-  }
-  return labels[similarity] || similarity
-}
-
 // Filter code smells from indexed problems
 // Issue #609: Code smell types that should appear in the Code Smells section
 const CODE_SMELL_TYPES = new Set([
@@ -6194,110 +5788,28 @@ const codeSmellsFromProblems = computed(() => {
   )
 })
 
-// Code smell group interface
-interface CodeSmellGroup {
-  smells: Problem[]
-  severityCounts: { critical: number; high: number; medium: number; low: number }
-}
+// Adapter: map Problem[] to the shape CodeSmellsSection expects (#1469)
+const codeSmellsForPanel = computed(() =>
+  codeSmellsFromProblems.value.map(p => ({
+    severity: p.severity,
+    description: p.description || p.message,
+    file_path: p.file_path,
+    line_number: p.line_number ?? p.line,
+    suggestion: p.suggestion,
+    smell_type: p.type,
+  }))
+)
 
-// Group code smells by type
-const codeSmellsByType = computed((): Record<string, CodeSmellGroup> => {
-  if (codeSmellsFromProblems.value.length === 0) return {}
-  const grouped: Record<string, CodeSmellGroup> = {}
-
-  for (const smell of codeSmellsFromProblems.value) {
-    const type = smell.type || 'unknown'
-    if (!grouped[type]) {
-      grouped[type] = {
-        smells: [],
-        severityCounts: { critical: 0, high: 0, medium: 0, low: 0 }
-      }
-    }
-    grouped[type].smells.push(smell)
-    const sev = (smell.severity?.toLowerCase() || 'low') as keyof CodeSmellGroup['severityCounts']
-    if (grouped[type].severityCounts[sev] !== undefined) {
-      grouped[type].severityCounts[sev]++
-    }
-  }
-
-  // Sort by count (highest first)
-  return Object.fromEntries(
-    Object.entries(grouped).sort((a, b) => (b[1] as CodeSmellGroup).smells.length - (a[1] as CodeSmellGroup).smells.length)
-  ) as Record<string, CodeSmellGroup>
-})
-
-// Code smells severity summary
-const codeSmellsSeveritySummary = computed((): { critical: number; high: number; medium: number; low: number } => {
-  const summary = { critical: 0, high: 0, medium: 0, low: 0 }
-  for (const smell of codeSmellsFromProblems.value) {
-    const sev = (smell.severity?.toLowerCase() || 'low') as keyof typeof summary
-    if (summary[sev] !== undefined) {
-      summary[sev]++
-    }
-  }
-  return summary
-})
-
-// Track which code smell groups are expanded
-const expandedCodeSmellTypes = ref<Record<string, boolean>>({})
-
-const toggleCodeSmellType = (type: string): void => {
-  expandedCodeSmellTypes.value[type] = !expandedCodeSmellTypes.value[type]
-}
-
-const formatCodeSmellType = (type: string | number): string => {
-  // Remove 'code_smell_' prefix and format
-  const typeStr = String(type)
-  return typeStr?.replace('code_smell_', '').replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Unknown'
-}
-
-const getHealthClass = (health: string | undefined): string => {
-  switch (health?.toLowerCase()) {
-    case 'healthy': return 'health-good'
-    case 'warning': return 'health-warning'
-    case 'critical': return 'health-critical'
-    default: return 'health-unknown'
-  }
-}
-
-const getEfficiencyClass = (score: number): string => {
-  if (score >= 80) return 'efficiency-high'
-  if (score >= 60) return 'efficiency-medium'
-  return 'efficiency-low'
-}
-
-const getQualityClass = (score: number): string => {
-  if (score >= 80) return 'quality-high'
-  if (score >= 60) return 'quality-medium'
-  return 'quality-low'
-}
-
-// Code Intelligence helper methods
-const getHealthGradeClass = (grade: string | undefined): string => {
-  switch (grade?.toUpperCase()) {
-    case 'A': return 'grade-a'
-    case 'B': return 'grade-b'
-    case 'C': return 'grade-c'
-    case 'D': return 'grade-d'
-    case 'F': return 'grade-f'
-    default: return 'grade-unknown'
-  }
-}
-
-const getSmellSeverityClass = (severity: string | undefined): string => {
-  switch (severity?.toLowerCase()) {
-    case 'critical': return 'smell-critical'
-    case 'high': return 'smell-high'
-    case 'medium': return 'smell-medium'
-    case 'low': return 'smell-low'
-    case 'info': return 'smell-info'
-    default: return 'smell-unknown'
-  }
-}
-
-const formatSmellType = (type: string | undefined): string => {
-  return type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Unknown'
-}
+// Adapter: map Declaration[] to the shape DeclarationsSection expects (#1469)
+const declarationsForPanel = computed(() =>
+  declarationAnalysis.value.map(d => ({
+    name: d.name,
+    file_path: d.file_path,
+    line_number: d.line_number ?? d.line ?? 0,
+    is_exported: d.is_exported ?? false,
+    declaration_type: d.type,
+  }))
+)
 
 // Unified item severity class for consistent styling
 const getItemSeverityClass = (severity: string | undefined): string => {
@@ -6308,19 +5820,6 @@ const getItemSeverityClass = (severity: string | undefined): string => {
     case 'low': return 'item-low'
     case 'info': return 'item-info'
     default: return 'item-unknown'
-  }
-}
-
-// Declaration type class for summary cards
-const getDeclarationTypeClass = (type: string | undefined): string => {
-  switch (type?.toLowerCase()) {
-    case 'function': return 'type-function'
-    case 'class': return 'type-class'
-    case 'method': return 'type-method'
-    case 'variable': return 'type-variable'
-    case 'constant': return 'type-constant'
-    case 'import': return 'type-import'
-    default: return 'type-other'
   }
 }
 
