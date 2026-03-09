@@ -14,6 +14,7 @@ import logging
 from typing import Any, Dict, List
 
 from async_chat_workflow import WorkflowMessage
+from chat_intent_detector import detect_user_intent, select_context_prompt
 from constants.model_constants import ModelConstants
 from dependencies import global_config_manager
 from prompt_manager import get_language_instruction, get_prompt, resolve_language
@@ -315,6 +316,10 @@ NEVER teach commands - ALWAYS execute them."""
         else:
             ollama_endpoint = self._get_ollama_endpoint_for_model(selected_model)
         system_prompt = self._get_system_prompt(language=language)
+        # Intent-based context injection (#1494): select specialized context prompt
+        # (installation, architecture, troubleshooting, api) based on message intent.
+        intent = detect_user_intent(message, session.conversation_history or [])
+        system_prompt = select_context_prompt(intent, system_prompt)
         conversation_context = self._build_conversation_context(session)
 
         # Knowledge retrieval for RAG
