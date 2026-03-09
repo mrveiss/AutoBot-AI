@@ -149,7 +149,7 @@ export function usePreferences() {
 
     loadPreferences()
 
-    // Apply current preferences (#1331, #1547: always call setLocale for html[lang])
+    // Apply current preferences (#1331, #1547: always call setLocale for html[lang]; #1337: setLocale also sets html[dir] for RTL)
     applyFontSize(fontSize.value)
     applyAccentColor(accentColor.value)
     applyLayoutDensity(layoutDensity.value)
