@@ -13,12 +13,13 @@
 #   ansible-playbook playbooks/update-all-nodes.yml --skip-tags restart   # code-only, no restarts
 #
 # Tags:
-#   restart        - all service restart tasks (skip for code-only deploys)
-#   backend        - autobot-backend service tasks
-#   frontend       - nginx restart on frontend node
-#   npu, npu-worker  - NPU worker service tasks
-#   browser, browser-worker - browser worker service tasks
-#   slm, slm-backend, slm-frontend - SLM node service tasks
+#   restart              - all service restart tasks (skip for code-only deploys)
+#   backend              - autobot-backend deploy + restart tasks
+#   frontend             - autobot-frontend deploy + build + nginx restart tasks
+#   npu, npu-worker      - NPU worker deploy + restart tasks
+#   browser, browser-worker - browser worker deploy + restart tasks
+#   slm, slm-backend, slm-frontend - SLM node deploy + build + restart tasks
+#   shared               - autobot-shared deploy tasks (all nodes)
 
 # =============================================================================
 # PLAY 0: Pre-flight Git Safety Check & Create Deploy Archives
@@ -163,18 +164,21 @@
         src: "{{ deploy_tmp }}/slm-backend.tar.gz"
         dest: /opt/autobot/
       become: true
+      tags: [slm, slm-backend]
 
     - name: "[PLAY 1] SLM | Deploy autobot-slm-frontend"
       unarchive:
         src: "{{ deploy_tmp }}/slm-frontend.tar.gz"
         dest: /opt/autobot/
       become: true
+      tags: [slm, slm-frontend]
 
     - name: "[PLAY 1] SLM | Deploy autobot-shared"
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: /opt/autobot/
       become: true
+      tags: [slm, shared]
 
     - name: "[PLAY 1] SLM | Fix ownership (unarchive runs as root)"
       file:
@@ -187,12 +191,14 @@
         - autobot-slm-backend
         - autobot-slm-frontend
         - autobot-shared
+      tags: [slm]
 
     - name: "[PLAY 1] SLM | Rebuild frontend production build"
       command:
         cmd: npm run build
         chdir: /opt/autobot/autobot-slm-frontend
       register: slm_build
+      tags: [slm, slm-frontend]
 
     - name: "[PLAY 1] SLM | Restart backend service"
       systemd:
@@ -301,6 +307,7 @@
         dest: /opt/autobot/
       become: true
       when: "'01-Backend' in inventory_hostname"
+      tags: [backend]
 
     - name: "[PLAY 2] Backend | Deploy autobot-shared"
       unarchive:
@@ -308,12 +315,14 @@
         dest: /opt/autobot/
       become: true
       when: "'01-Backend' in inventory_hostname"
+      tags: [backend, shared]
 
     - name: "[PLAY 2] Backend | Fix ownership"
       command: chown --no-dereference -R autobot:autobot /opt/autobot/autobot-backend
       become: true
       when: "'01-Backend' in inventory_hostname"
       changed_when: true
+      tags: [backend]
 
     - name: "[PLAY 2] Backend | Remove legacy backend symlink"
       file:
@@ -321,6 +330,7 @@
         state: absent
       become: true
       when: "'01-Backend' in inventory_hostname"
+      tags: [backend]
 
     - name: "[PLAY 2] Backend | Restart service"
       systemd:
@@ -338,6 +348,7 @@
         dest: /opt/autobot/
       become: true
       when: "'02-Frontend' in inventory_hostname"
+      tags: [frontend]
 
     - name: "[PLAY 2] Frontend | Fix ownership"
       file:
@@ -347,6 +358,7 @@
         recurse: true
       become: true
       when: "'02-Frontend' in inventory_hostname"
+      tags: [frontend]
 
     - name: "[PLAY 2] Frontend | Rebuild production dist"
       command:
@@ -356,6 +368,7 @@
       become: true
       when: "'02-Frontend' in inventory_hostname"
       register: frontend_build
+      tags: [frontend]
 
     - name: "[PLAY 2] Frontend | Restart nginx"
       systemd:
@@ -374,6 +387,7 @@
       when: >-
         '03-NPU' in inventory_hostname or
         'npu-worker' in inventory_hostname
+      tags: [npu, npu-worker]
 
     - name: "[PLAY 2] NPU | Fix ownership"
       file:
@@ -385,6 +399,7 @@
       when: >-
         '03-NPU' in inventory_hostname or
         'npu-worker' in inventory_hostname
+      tags: [npu, npu-worker]
 
     - name: "[PLAY 2] NPU | Restart service"
       systemd:
@@ -406,6 +421,7 @@
       when: >-
         '05-Browser' in inventory_hostname or
         'browser-automation' in inventory_hostname
+      tags: [browser, browser-worker]
 
     - name: "[PLAY 2] Browser | Fix ownership"
       file:
@@ -417,6 +433,7 @@
       when: >-
         '05-Browser' in inventory_hostname or
         'browser-automation' in inventory_hostname
+      tags: [browser, browser-worker]
 
     - name: "[PLAY 2] Browser | Restart service"
       systemd:
@@ -436,6 +453,7 @@
         dest: /opt/autobot/
       become: true
       when: "'01-Backend' not in inventory_hostname"
+      tags: [shared]
 
     - name: "[PLAY 2] Shared | Fix ownership"
       file:
@@ -445,6 +463,7 @@
         recurse: true
       become: true
       when: "'01-Backend' not in inventory_hostname"
+      tags: [shared]
 
     # ----- Mark synced -----
     - name: "[PLAY 2] Mark node as synced in SLM DB"
