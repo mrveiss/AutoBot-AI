@@ -215,12 +215,15 @@
       become: true
       tags: [slm, slm-frontend, restart]
 
-    - name: "[PLAY 1] SLM | Wait for backend to be ready"
-      wait_for:
-        host: "{{ ansible_host }}"
-        port: 443
-        timeout: 60
-        delay: 5
+    - name: "[PLAY 1] SLM | Wait for API to be ready"
+      uri:
+        url: "https://{{ ansible_host }}/api/health"
+        validate_certs: false
+        status_code: 200
+      register: slm_health_check
+      until: slm_health_check.status == 200
+      retries: 12
+      delay: 10
       delegate_to: localhost
       tags: [always]
 
@@ -346,12 +349,15 @@
       when: "'01-Backend' in inventory_hostname"
       tags: [backend, restart]
 
-    - name: "[PLAY 2] Backend | Wait for service to be ready"
-      wait_for:
-        host: "{{ ansible_host }}"
-        port: 8443
-        timeout: 420
-        delay: 10
+    - name: "[PLAY 2] Backend | Wait for API to be ready"
+      uri:
+        url: "https://{{ ansible_host }}:8443/api/health"
+        validate_certs: false
+        status_code: 200
+      register: backend_health_check
+      until: backend_health_check.status == 200
+      retries: 42
+      delay: 10
       delegate_to: localhost
       when: "'01-Backend' in inventory_hostname"
       tags: [backend, restart]
