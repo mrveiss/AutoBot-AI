@@ -38,7 +38,7 @@ These six rules override convenience, speed, and assumptions. No exceptions.
 
 ---
 
-## Rule 1: Check Before Writing
+## Rule 1: Check Before Writing or Answering
 
 **Before writing a single line of code or documentation:**
 
@@ -48,6 +48,15 @@ These six rules override convenience, speed, and assumptions. No exceptions.
 - Search Memory MCP: `mcp__memory__search_nodes` for prior decisions
 - Only after confirming nothing exists should you write new code or docs
 
+**Before answering ANY question about AutoBot setup, deployment, installation, or configuration:**
+
+1. Read `CLAUDE.md` operational notes (fleet IPs, Ansible gotchas, deployment verification)
+2. Search Memory MCP: `mcp__memory__search_nodes` for infrastructure/setup context
+3. Check relevant docs: `docs/developer/AUTOBOT_REFERENCE.md`, `docs/developer/PHASE_5_DEVELOPER_SETUP.md`, `docs/developer/INFRASTRUCTURE_DEPLOYMENT.md`
+4. Search codebase: `ls docs/developer/`, `ls docs/plans/`, `ls autobot-infrastructure/`
+
+**NEVER fabricate setup steps, commands, IPs, or procedures.** If the docs don't cover the question, say so and ask clarifying questions. Hallucinating installation instructions is a critical rule violation — it erodes trust and can cause broken deployments.
+
 **Before implementing anything, verify:**
 1. Is the issue still open? `gh issue view <number>`
 2. Are there any existing PRs or branches? `gh pr list | grep <issue>`
@@ -56,7 +65,7 @@ These six rules override convenience, speed, and assumptions. No exceptions.
 
 If you find existing work, USE IT — don't reimplement from scratch.
 
-> Violation: Writing a utility that already exists in `autobot-shared/`, or starting implementation without checking for an existing PR.
+> Violation: Writing a utility that already exists in `autobot-shared/`, starting implementation without checking for an existing PR, or answering an operational question without first checking docs and Memory MCP.
 
 ---
 
@@ -217,7 +226,8 @@ Wait for user confirmation before writing code. Do NOT assume `systemd` vs `dock
   git log -1 --stat
   git diff
   ```
-- If hooks revert edits, fix the underlying issue (don't retry blindly)
+- **Pre-commit retry strategy:** When Black/isort reformat files and the commit fails, do NOT debug why files changed — it's the formatters. Run `git add -u` and retry. Max 3 retries before stopping.
+- **Auto-format before committing:** Run Black (`--line-length=88`) and isort on staged Python files before every `git commit` to avoid hook reformats. Use `/home/kali/.cache/pre-commit/repoefsi1klb/py_env-python3/bin/black` (not system black).
 - Never mix unrelated staged files — stage and commit in focused batches
 - Bulk operations: commit in batches of 10–15 files max
 - **NEVER** use `git commit --no-verify`
@@ -325,6 +335,8 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 - Prefer direct implementation over extended brainstorming/design phases
 - When the user says "work on issue #X", brief plan (max 10 lines) then implement
 - Do NOT invoke brainstorming skills when direct answers are needed
+- **Exploration time limit:** Do NOT spend more than 2 minutes exploring codebase state before taking action. If resuming a session, check TodoWrite list and start working immediately.
+- **GitHub tasks:** ALWAYS use `gh` CLI for issue/PR creation, comments, and lookups. NEVER open a browser, Playwright, or Puppeteer for GitHub tasks.
 
 **Implementation Approach:**
 - For large features (backend + frontend), complete and commit backend fully first
@@ -344,6 +356,12 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 2. Check for uncommitted work: `git status`
 3. Check for stashes: `git stash list` — if present, ask user how to handle
 4. Verify target branch: `git fetch origin Dev_new_gui && git log --oneline origin/Dev_new_gui -3`
+
+### CI/CD
+
+- CI must exactly mirror production: **Python 3.10**, llama-index 0.12.x.
+- Do NOT upgrade major versions or change Python versions without explicit user approval.
+- `requirements-ci.txt` pinned to exact production versions — never assume newer = better.
 
 ### Memory Hygiene
 
