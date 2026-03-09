@@ -533,46 +533,4 @@ const formattedContent = computed(() => {
     @apply text-xs;
   }
 }
-
-/* RTL layout support (#1337) */
-:global([dir="rtl"]) .message-wrapper.user-message {
-  margin-left: 0;
-  margin-right: auto;
-  border-radius: 18px 18px 18px 4px;
-}
-
-:global([dir="rtl"]) .message-wrapper.assistant-message {
-  margin-right: 0;
-  margin-left: auto;
-  border-radius: 18px 18px 4px 18px;
-}
-
-:global([dir="rtl"]) .message-info {
-  margin-left: 0;
-  margin-right: 0.375rem;
-}
-
-:global([dir="rtl"]) .message-status-container {
-  justify-content: flex-start;
-}
-
-/* Code blocks stay LTR inside RTL (#1337) */
-:global([dir="rtl"]) .message-text :deep(pre),
-:global([dir="rtl"]) .message-text :deep(code) {
-  direction: ltr;
-  unicode-bidi: isolate;
-  text-align: left;
-}
-
-@media (max-width: 768px) {
-  :global([dir="rtl"]) .message-wrapper.user-message {
-    margin-left: 0;
-    margin-right: 0.125rem;
-  }
-
-  :global([dir="rtl"]) .message-wrapper.assistant-message {
-    margin-right: 0;
-    margin-left: 0.125rem;
-  }
-}
 </style>

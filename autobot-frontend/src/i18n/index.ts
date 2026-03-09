@@ -7,9 +7,6 @@ import en from './locales/en.json'
 
 export type MessageSchema = typeof en
 
-// Locales that use right-to-left text direction (#1337)
-const RTL_LOCALES = new Set(['ar', 'he', 'fa', 'ur'])
-
 const i18n = createI18n<[MessageSchema], 'en'>({
   legacy: false,
   locale: localStorage.getItem('autobot-language') || 'en',
@@ -39,14 +36,12 @@ export async function loadLocaleMessages(locale: string): Promise<boolean> {
 
 /**
  * Set the active locale. Loads the locale file if not yet loaded.
- * Also updates the html[dir] attribute for RTL languages (#1337).
  */
 export async function setLocale(locale: string): Promise<void> {
   await loadLocaleMessages(locale)
   i18n.global.locale.value = locale
   localStorage.setItem('autobot-language', locale)
   document.documentElement.setAttribute('lang', locale)
-  document.documentElement.setAttribute('dir', RTL_LOCALES.has(locale) ? 'rtl' : 'ltr')
 }
 
 export default i18n
