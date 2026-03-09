@@ -346,6 +346,16 @@
       when: "'01-Backend' in inventory_hostname"
       tags: [backend, restart]
 
+    - name: "[PLAY 2] Backend | Wait for service to be ready"
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: 8443
+        timeout: 420
+        delay: 10
+      delegate_to: localhost
+      when: "'01-Backend' in inventory_hostname"
+      tags: [backend, restart]
+
     # ----- Frontend (172.16.168.21) -----
     - name: "[PLAY 2] Frontend | Deploy autobot-frontend"
       unarchive:
@@ -383,6 +393,16 @@
       when: "'02-Frontend' in inventory_hostname"
       tags: [frontend, restart]
 
+    - name: "[PLAY 2] Frontend | Wait for nginx to be ready"
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: 443
+        timeout: 60
+        delay: 5
+      delegate_to: localhost
+      when: "'02-Frontend' in inventory_hostname"
+      tags: [frontend, restart]
+
     # ----- NPU Worker (172.16.168.22) -----
     - name: "[PLAY 2] NPU | Deploy autobot-npu-worker"
       unarchive:
@@ -417,6 +437,14 @@
       failed_when: false
       tags: [npu, npu-worker, restart]
 
+    - name: "[PLAY 2] NPU | Wait for service to stabilize"
+      pause:
+        seconds: 10
+      when: >-
+        '03-NPU' in inventory_hostname or
+        'npu-worker' in inventory_hostname
+      tags: [npu, npu-worker, restart]
+
     # ----- Browser Worker (172.16.168.25) -----
     - name: "[PLAY 2] Browser | Deploy autobot-browser-worker"
       unarchive:
@@ -449,6 +477,18 @@
         '05-Browser' in inventory_hostname or
         'browser-automation' in inventory_hostname
       failed_when: false
+      tags: [browser, browser-worker, restart]
+
+    - name: "[PLAY 2] Browser | Wait for service to be ready"
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: 3000
+        timeout: 60
+        delay: 5
+      delegate_to: localhost
+      when: >-
+        '05-Browser' in inventory_hostname or
+        'browser-automation' in inventory_hostname
       tags: [browser, browser-worker, restart]
 
     # ----- Shared (non-backend nodes) -----
