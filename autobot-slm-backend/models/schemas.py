@@ -2115,3 +2115,4 @@ class DecommissionRequest(BaseModel):
 
     backup: bool = True
     confirm_node_id: str
+    force: bool = False  # Skip Ansible playbook; for nodes already physically removed

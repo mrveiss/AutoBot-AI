@@ -1180,12 +1180,20 @@ async def decommission_node(
 
     node = await _verify_node_not_manager(db, node_id)
 
-    preflight = await decommission_preflight(node_id, db, current_user)
-    if not preflight["can_proceed"]:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Required roles must be migrated first",
-        )
+    if request.force:
+        preflight: dict = {
+            "can_proceed": True,
+            "must_migrate": [],
+            "should_migrate": [],
+            "safe_to_remove": [],
+        }
+    else:
+        preflight = await decommission_preflight(node_id, db, current_user)
+        if not preflight["can_proceed"]:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Required roles must be migrated first",
+            )
 
     deployment = _create_decommission_deployment(
         node_id,
@@ -1196,19 +1204,24 @@ async def decommission_node(
     db.add(deployment)
     await db.commit()
 
-    ansible_result = await _execute_decommission(
-        db,
-        deployment,
-        node_id,
-        request.backup,
-    )
+    if request.force:
+        ansible_result = {
+            "output": "Force decommission: Ansible playbook skipped (node already removed)"
+        }
+    else:
+        ansible_result = await _execute_decommission(
+            db,
+            deployment,
+            node_id,
+            request.backup,
+        )
     await _cleanup_decommissioned_node(
         db,
         node,
         deployment,
         ansible_result,
     )
-    logger.info("Node decommissioned: %s", node_id)
+    logger.info("Node decommissioned: %s (force=%s)", node_id, request.force)
     await _broadcast_lifecycle_event(
         node_id,
         "node_decommissioned",
