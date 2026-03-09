@@ -373,6 +373,16 @@
         '03-NPU' in inventory_hostname or
         'npu-worker' in inventory_hostname
 
+    - name: "[PLAY 2] NPU | Restart service"
+      systemd:
+        name: autobot-npu-worker
+        state: restarted
+      become: true
+      when: >-
+        '03-NPU' in inventory_hostname or
+        'npu-worker' in inventory_hostname
+      failed_when: false
+
     # ----- Browser Worker (172.16.168.25) -----
     - name: "[PLAY 2] Browser | Deploy autobot-browser-worker"
       unarchive:
@@ -393,6 +403,16 @@
       when: >-
         '05-Browser' in inventory_hostname or
         'browser-automation' in inventory_hostname
+
+    - name: "[PLAY 2] Browser | Restart service"
+      systemd:
+        name: autobot-playwright
+        state: restarted
+      become: true
+      when: >-
+        '05-Browser' in inventory_hostname or
+        'browser-automation' in inventory_hostname
+      failed_when: false
 
     # ----- Shared (non-backend nodes) -----
     - name: "[PLAY 2] Shared | Deploy autobot-shared"
