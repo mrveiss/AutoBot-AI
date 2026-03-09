@@ -907,11 +907,20 @@ watch(
       const remainder = current.content.slice(_lastSpokenIdx).trim()
       if (remainder) speakStreaming(remainder)
       flushStreaming()
-      _lastSpokenIdx = 0
-      _lastStreamingMsgId = null
+      // Mark all content as spoken — do NOT reset to 0/null here.
+      // Resetting _lastStreamingMsgId to null would cause any subsequent reactive
+      // trigger (e.g. updateMessage({status:'sent'}) in the finalization loop) to
+      // see current.id !== null, reset _lastSpokenIdx to 0, and re-speak the full
+      // accumulated content. Keep current.id so spurious re-triggers are no-ops.
+      _lastSpokenIdx = current.content.length
     }
   }
 )
+
+// Minimum chars a candidate sentence must have before it is dispatched to TTS (#1485).
+// Short fragments like "Hello there! " (13 chars) sound choppy when spoken alone —
+// buffer them until they combine with the next sentence or flush as a remainder.
+const _MIN_TTS_SENTENCE_CHARS = 20
 
 /** Extract sentences terminated by ". ", "! ", or "? " — remainder stays buffered. */
 function _extractCompleteSentences(text: string): string[] {
@@ -920,8 +929,11 @@ function _extractCompleteSentences(text: string): string[] {
   let lastEnd = 0
   let match
   while ((match = terminators.exec(text)) !== null) {
-    sentences.push(text.slice(lastEnd, match.index + 1))
-    lastEnd = match.index + match[0].length
+    const candidate = text.slice(lastEnd, match.index + 1)
+    if (candidate.length >= _MIN_TTS_SENTENCE_CHARS) {
+      sentences.push(candidate)
+      lastEnd = match.index + match[0].length
+    }
   }
   return sentences
 }

@@ -205,155 +205,17 @@
       </EmptyState>
     </div>
 
-    <!-- Enhanced Analytics Dashboard Cards -->
-    <div class="enhanced-analytics-grid">
-      <!-- System Overview -->
-      <BasePanel variant="dark" size="medium">
-        <template #header>
-          <div class="card-header-content">
-            <h3><i class="fas fa-tachometer-alt"></i> {{ $t('analytics.codebase.overview.title') }}</h3>
-            <div class="refresh-indicator" :class="{ active: realTimeEnabled }">
-              <i class="fas fa-circle"></i>
-              {{ realTimeEnabled ? $t('analytics.codebase.overview.live') : $t('analytics.codebase.overview.static') }}
-            </div>
-          </div>
-        </template>
-        <div v-if="systemOverview" class="metrics-grid">
-          <div class="metric-item">
-            <div class="metric-label">{{ $t('analytics.codebase.overview.apiRequestsPerMin') }}</div>
-            <div class="metric-value">{{ systemOverview.api_requests_per_minute || 0 }}</div>
-          </div>
-          <div class="metric-item">
-            <div class="metric-label">{{ $t('analytics.codebase.overview.avgResponseTime') }}</div>
-            <div class="metric-value">{{ systemOverview.average_response_time || 0 }}ms</div>
-          </div>
-          <div class="metric-item">
-            <div class="metric-label">{{ $t('analytics.codebase.overview.activeConnections') }}</div>
-            <div class="metric-value">{{ systemOverview.active_connections || 0 }}</div>
-          </div>
-          <div class="metric-item">
-            <div class="metric-label">{{ $t('analytics.codebase.overview.systemHealth') }}</div>
-            <div class="metric-value" :class="getHealthClass(systemOverview.system_health)">
-              {{ systemOverview.system_health || 'Unknown' }}
-            </div>
-          </div>
-        </div>
-        <EmptyState
-          v-else
-          icon="fas fa-database"
-          :message="$t('analytics.codebase.overview.noMetrics')"
-        >
-          <template #actions>
-            <button @click="loadSystemOverview" class="btn-link">{{ $t('analytics.codebase.actions.loadMetrics') }}</button>
-          </template>
-        </EmptyState>
-      </BasePanel>
-
-      <!-- Communication Patterns -->
-      <BasePanel variant="dark" size="medium">
-        <template #header>
-          <div class="card-header-content">
-            <h3><i class="fas fa-network-wired"></i> {{ $t('analytics.codebase.communication.title') }}</h3>
-            <button @click="loadCommunicationPatterns" class="refresh-btn">
-              <i class="fas fa-sync"></i>
-            </button>
-          </div>
-        </template>
-        <div v-if="communicationPatterns" class="communication-metrics">
-          <div class="pattern-item">
-            <div class="pattern-label">{{ $t('analytics.codebase.communication.websocketConnections') }}</div>
-            <div class="pattern-value">{{ communicationPatterns.websocket_connections || 0 }}</div>
-          </div>
-          <div class="pattern-item">
-            <div class="pattern-label">{{ $t('analytics.codebase.communication.apiCallFrequency') }}</div>
-            <div class="pattern-value">{{ communicationPatterns.api_call_frequency || 0 }}/min</div>
-          </div>
-          <div class="pattern-item">
-            <div class="pattern-label">{{ $t('analytics.codebase.communication.dataTransferRate') }}</div>
-            <div class="pattern-value">{{ communicationPatterns.data_transfer_rate || 0 }} KB/s</div>
-          </div>
-        </div>
-        <EmptyState
-          v-else
-          icon="fas fa-wifi"
-          :message="$t('analytics.codebase.communication.noData')"
-        />
-      </BasePanel>
-
-      <!-- Code Quality -->
-      <BasePanel variant="dark" size="medium">
-        <template #header>
-          <div class="card-header-content">
-            <h3><i class="fas fa-code-branch"></i> {{ $t('analytics.codebase.quality.title') }}</h3>
-            <button @click="loadCodeQuality" class="refresh-btn">
-              <i class="fas fa-sync"></i>
-            </button>
-          </div>
-        </template>
-        <div v-if="codeQuality" class="quality-metrics">
-          <div class="quality-score" :class="getQualityClass(codeQuality.overall_score)">
-            <div class="score-value">{{ codeQuality.overall_score || 0 }}</div>
-            <div class="score-label">{{ $t('analytics.codebase.quality.overallScore') }}</div>
-          </div>
-          <div class="quality-details">
-            <div class="quality-item">
-              <span class="quality-label">{{ $t('analytics.codebase.quality.testCoverage') }}:</span>
-              <span class="quality-value">{{ codeQuality.test_coverage || 0 }}%</span>
-            </div>
-            <div class="quality-item">
-              <span class="quality-label">{{ $t('analytics.codebase.quality.codeDuplicates') }}:</span>
-              <span class="quality-value">{{ codeQuality.code_duplicates || 0 }}</span>
-            </div>
-            <div class="quality-item">
-              <span class="quality-label">{{ $t('analytics.codebase.quality.technicalDebt') }}:</span>
-              <span class="quality-value">{{ codeQuality.technical_debt || 0 }}h</span>
-            </div>
-          </div>
-        </div>
-        <EmptyState
-          v-else
-          icon="fas fa-star"
-          :message="$t('analytics.codebase.quality.noMetrics')"
-        />
-      </BasePanel>
-
-      <!-- Performance Metrics -->
-      <BasePanel variant="dark" size="medium">
-        <template #header>
-          <div class="card-header-content">
-            <h3><i class="fas fa-bolt"></i> {{ $t('analytics.codebase.performance.title') }}</h3>
-            <button @click="loadPerformanceMetrics" class="refresh-btn">
-              <i class="fas fa-sync"></i>
-            </button>
-          </div>
-        </template>
-        <div v-if="performanceMetrics" class="performance-metrics">
-          <div class="performance-gauge" :class="getEfficiencyClass(performanceMetrics.efficiency_score)">
-            <div class="gauge-value">{{ performanceMetrics.efficiency_score || 0 }}%</div>
-            <div class="gauge-label">{{ $t('analytics.codebase.performance.efficiency') }}</div>
-          </div>
-          <div class="performance-details">
-            <div class="performance-item">
-              <span class="performance-label">{{ $t('analytics.codebase.performance.memoryUsage') }}:</span>
-              <span class="performance-value">{{ performanceMetrics.memory_usage || 0 }}MB</span>
-            </div>
-            <div class="performance-item">
-              <span class="performance-label">{{ $t('analytics.codebase.performance.cpuUsage') }}:</span>
-              <span class="performance-value">{{ performanceMetrics.cpu_usage || 0 }}%</span>
-            </div>
-            <div class="performance-item">
-              <span class="performance-label">{{ $t('analytics.codebase.performance.loadTime') }}:</span>
-              <span class="performance-value">{{ performanceMetrics.load_time || 0 }}ms</span>
-            </div>
-          </div>
-        </div>
-        <EmptyState
-          v-else
-          icon="fas fa-rocket"
-          :message="$t('analytics.codebase.performance.noData')"
-        />
-      </BasePanel>
-    </div>
+    <!-- Enhanced Analytics Dashboard Cards (#1469) -->
+    <CodebaseOverviewPanel
+      :system-overview="systemOverview"
+      :communication-patterns="communicationPatterns"
+      :code-quality="codeQuality"
+      :performance-metrics="performanceMetrics"
+      @load-system-overview="loadSystemOverview"
+      @load-communication-patterns="loadCommunicationPatterns"
+      @load-code-quality="loadCodeQuality"
+      @load-performance-metrics="loadPerformanceMetrics"
+    />
 
     <!-- Traditional Analytics Section -->
     <div class="analytics-section">
@@ -550,215 +412,25 @@
         </EmptyState>
       </div>
 
-      <!-- Dependency Analysis Section -->
-      <div class="dependency-section">
-        <div class="section-header">
-          <h3><i class="fas fa-project-diagram"></i> {{ $t('analytics.codebase.dependencies.title') }}</h3>
-          <button @click="loadDependencyData" class="refresh-btn" :disabled="dependencyLoading">
-            <i :class="dependencyLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
-          </button>
-        </div>
-
-        <div v-if="dependencyLoading" class="charts-loading">
-          <i class="fas fa-spinner fa-spin"></i>
-          <span>{{ $t('analytics.codebase.dependencies.analyzing') }}</span>
-        </div>
-
-        <div v-else-if="dependencyError" class="charts-error">
-          <i class="fas fa-exclamation-triangle"></i>
-          <span>{{ dependencyError }}</span>
-          <button @click="loadDependencyData" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
-        </div>
-
-        <div v-else-if="dependencyData" class="dependency-grid">
-          <!-- Summary Stats -->
-          <div v-if="dependencyData.summary" class="chart-summary">
-            <div class="summary-stat">
-              <span class="summary-value">{{ dependencyData.summary.total_modules?.toLocaleString() || 0 }}</span>
-              <span class="summary-label">{{ $t('analytics.codebase.dependencies.pythonModules') }}</span>
-            </div>
-            <div class="summary-stat">
-              <span class="summary-value">{{ dependencyData.summary.total_import_relationships?.toLocaleString() || 0 }}</span>
-              <span class="summary-label">{{ $t('analytics.codebase.dependencies.importRelationships') }}</span>
-            </div>
-            <div class="summary-stat">
-              <span class="summary-value">{{ dependencyData.summary.external_dependency_count || 0 }}</span>
-              <span class="summary-label">{{ $t('analytics.codebase.dependencies.externalPackages') }}</span>
-            </div>
-            <div class="summary-stat" :class="{ 'race-highlight': (dependencyData.summary.circular_dependency_count ?? 0) > 0 }">
-              <span class="summary-value">{{ dependencyData.summary.circular_dependency_count || 0 }}</span>
-              <span class="summary-label">{{ $t('analytics.codebase.dependencies.circularDependencies') }}</span>
-            </div>
-          </div>
-
-          <!-- Charts Row: External Dependencies + Top Importing Modules -->
-          <div class="charts-row">
-            <DependencyTreemap
-              v-if="dependencyData.external_dependencies && dependencyData.external_dependencies.length > 0"
-              :data="(dependencyData.external_dependencies as any)"
-              :title="$t('analytics.codebase.charts.externalDependencies')"
-              :subtitle="$t('analytics.codebase.charts.packageUsageAcrossCodebase')"
-              :height="350"
-              class="chart-item"
-            />
-            <div v-else class="chart-empty-slot">
-              <EmptyState icon="fas fa-cube" message="No external dependencies found" />
-            </div>
-            <ModuleImportsChart
-              v-if="dependencyData.modules && dependencyData.modules.length > 0"
-              :data="(dependencyData.modules.filter(m => m.import_count > 0) as any)"
-              :title="$t('analytics.codebase.charts.modulesWithMostImports')"
-              :subtitle="$t('analytics.codebase.charts.filesWithHighestDependencyCount')"
-              :height="350"
-              :maxModules="12"
-              class="chart-item"
-            />
-            <div v-else class="chart-empty-slot">
-              <EmptyState icon="fas fa-file-import" message="No module data available" />
-            </div>
-          </div>
-
-          <!-- Circular Dependencies Warning -->
-          <div v-if="dependencyData.circular_dependencies && dependencyData.circular_dependencies.length > 0" class="circular-deps-warning">
-            <div class="warning-header">
-              <i class="fas fa-exclamation-triangle"></i>
-              <span>{{ $t('analytics.codebase.dependencies.circularDetected') }}</span>
-            </div>
-            <div class="circular-deps-list">
-              <div
-                v-for="(cycle, index) in dependencyData.circular_dependencies.slice(0, 10)"
-                :key="index"
-                class="circular-dep-item"
-              >
-                <i class="fas fa-sync-alt"></i>
-                <span>{{ Array.isArray(cycle) ? cycle.join(' ↔ ') : (cycle.modules || []).join(' ↔ ') }}</span>
-              </div>
-            </div>
-            <div v-if="dependencyData.circular_dependencies.length > 10" class="show-more">
-              <span class="muted">and {{ dependencyData.circular_dependencies.length - 10 }} more...</span>
-            </div>
-          </div>
-
-          <!-- Top External Dependencies Table -->
-          <div v-if="dependencyData.external_dependencies && dependencyData.external_dependencies.length > 0" class="external-deps-table">
-            <h4><i class="fas fa-cube"></i> {{ $t('analytics.codebase.dependencies.topExternal') }}</h4>
-            <div class="deps-table-content">
-              <div
-                v-for="(dep, index) in dependencyData.external_dependencies.slice(0, 20)"
-                :key="index"
-                class="dep-row"
-              >
-                <span class="dep-name">{{ dep.package }}</span>
-                <span class="dep-count">{{ dep.usage_count }} imports</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <EmptyState
-          v-else
-          icon="fas fa-project-diagram"
-          :message="$t('analytics.codebase.dependencies.noData')"
-        >
-          <template #actions>
-            <button @click="loadDependencyData" class="btn-primary" :disabled="dependencyLoading">
-              <i class="fas fa-project-diagram"></i> {{ $t('analytics.codebase.dependencies.analyze') }}
-            </button>
-          </template>
-        </EmptyState>
-      </div>
-
-      <!-- Import Tree Section -->
-      <div class="import-tree-section">
-        <div class="section-header">
-          <h3><i class="fas fa-sitemap"></i> {{ $t('analytics.codebase.importTree.title') }}</h3>
-          <button @click="loadImportTreeData" class="refresh-btn" :disabled="importTreeLoading">
-            <i :class="importTreeLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
-            {{ importTreeLoading ? $t('analytics.codebase.actions.loading') : $t('analytics.codebase.actions.refresh') }}
-          </button>
-        </div>
-
-        <!-- Error state -->
-        <div v-if="importTreeError" class="section-error">
-          <i class="fas fa-exclamation-triangle"></i>
-          <span>{{ importTreeError }}</span>
-          <button @click="loadImportTreeData" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
-        </div>
-
-        <!-- Import Tree Content -->
-        <div v-else-if="importTreeData && importTreeData.length > 0" class="import-tree-content">
-          <ImportTreeChart
-            :data="importTreeData"
-            :title="$t('analytics.codebase.charts.fileImportRelationships')"
-            :subtitle="$t('analytics.codebase.charts.clickToExpandImports')"
-            :height="500"
-            :loading="importTreeLoading"
-            :error="importTreeError"
-            @navigate="handleFileNavigate"
-          />
-        </div>
-
-        <!-- Empty state -->
-        <EmptyState
-          v-else-if="!importTreeLoading"
-          icon="fas fa-sitemap"
-          :message="$t('analytics.codebase.importTree.noData')"
-          variant="info"
-        >
-          <template #actions>
-            <button @click="loadImportTreeData" class="btn-primary" :disabled="importTreeLoading">
-              <i class="fas fa-sitemap"></i> {{ $t('analytics.codebase.importTree.analyze') }}
-            </button>
-          </template>
-        </EmptyState>
-      </div>
-
-      <!-- Function Call Graph Section -->
-      <div class="call-graph-section">
-        <div class="section-header">
-          <h3><i class="fas fa-project-diagram"></i> {{ $t('analytics.codebase.callGraph.title') }}</h3>
-          <button @click="loadCallGraphData" class="refresh-btn" :disabled="callGraphLoading">
-            <i :class="callGraphLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
-            {{ callGraphLoading ? $t('analytics.codebase.actions.loading') : $t('analytics.codebase.actions.refresh') }}
-          </button>
-        </div>
-
-        <!-- Error state -->
-        <div v-if="callGraphError" class="section-error">
-          <i class="fas fa-exclamation-triangle"></i>
-          <span>{{ callGraphError }}</span>
-          <button @click="loadCallGraphData" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
-        </div>
-
-        <!-- Call Graph Content -->
-        <div v-else-if="callGraphData && callGraphData.nodes?.length > 0" class="call-graph-content">
-          <FunctionCallGraph
-            :data="callGraphData"
-            :summary="(callGraphSummary as any)"
-            :orphaned-functions="callGraphOrphaned"
-            :title="$t('analytics.codebase.charts.functionCallRelationships')"
-            :subtitle="$t('analytics.codebase.charts.viewFunctionCalls')"
-            :height="600"
-            :loading="callGraphLoading"
-            :error="callGraphError"
-            @select="handleFunctionSelect"
-          />
-        </div>
-
-        <!-- Empty state -->
-        <EmptyState
-          v-else-if="!callGraphLoading"
-          icon="fas fa-project-diagram"
-          :message="$t('analytics.codebase.callGraph.noData')"
-          variant="info"
-        >
-          <template #actions>
-            <button @click="loadCallGraphData" class="btn-primary" :disabled="callGraphLoading">
-              <i class="fas fa-project-diagram"></i> {{ $t('analytics.codebase.callGraph.analyze') }}
-            </button>
-          </template>
-        </EmptyState>
-      </div>
+      <!-- Dependency Analysis, Import Tree, Function Call Graph (#1469) -->
+      <CodebaseDependenciesPanel
+        :dependency-data="dependencyData"
+        :dependency-loading="dependencyLoading"
+        :dependency-error="dependencyError"
+        :import-tree-data="importTreeData ?? []"
+        :import-tree-loading="importTreeLoading"
+        :import-tree-error="importTreeError"
+        :call-graph-data="callGraphData"
+        :call-graph-summary="callGraphSummary"
+        :call-graph-orphaned="callGraphOrphaned"
+        :call-graph-loading="callGraphLoading"
+        :call-graph-error="callGraphError"
+        @load-dependency-data="loadDependencyData"
+        @load-import-tree="loadImportTreeData"
+        @load-call-graph="loadCallGraphData"
+        @file-navigate="handleFileNavigate"
+        @function-select="handleFunctionSelect"
+      />
 
       <!-- Problems Report - Grouped by Type and Severity -->
       <div class="problems-section analytics-section">
@@ -972,78 +644,17 @@
         />
       </div>
 
-      <!-- Issue #566: Code Intelligence Analysis (Security, Performance, Redis) -->
-      <div class="code-intelligence-section analytics-section">
-        <h3>
-          <i class="fas fa-brain"></i> {{ $t('analytics.codebase.intelligence.title') }}
-          <span v-if="codeIntelTotalFindings > 0" class="total-count">
-            ({{ codeIntelTotalFindings.toLocaleString() }} findings)
-          </span>
-          <div class="section-actions">
-            <button @click="showFileScanModal = true" class="action-btn" :title="$t('analytics.codebase.intelligence.scanFileTitle')">
-              <i class="fas fa-file-code"></i> {{ $t('analytics.codebase.intelligence.scanFile') }}
-            </button>
-            <button @click="runCodeIntelligenceAnalysis" :disabled="codeIntelLoading" class="action-btn primary" :title="$t('analytics.codebase.intelligence.runAnalysisTitle')">
-              <i :class="codeIntelLoading ? 'fas fa-spinner fa-spin' : 'fas fa-search'"></i>
-              {{ codeIntelLoading ? $t('analytics.codebase.buttons.analyzing') : $t('analytics.codebase.intelligence.analyze') }}
-            </button>
-          </div>
-        </h3>
-
-        <!-- Code Intelligence Tabs -->
-        <div v-if="hasCodeIntelFindings" class="code-intel-tabs">
-          <div class="tabs-header">
-            <button
-              v-for="tab in codeIntelTabs"
-              :key="tab.id"
-              @click="activeCodeIntelTab = tab.id"
-              :class="['tab-btn', { active: activeCodeIntelTab === tab.id }]"
-            >
-              <i :class="tab.icon"></i>
-              {{ $t(tab.labelKey) }}
-              <span v-if="getCodeIntelTabCount(tab.id) > 0" class="tab-count">
-                {{ getCodeIntelTabCount(tab.id) }}
-              </span>
-            </button>
-          </div>
-
-          <div class="tabs-content">
-            <SecurityFindingsPanel
-              v-if="activeCodeIntelTab === 'security'"
-              :findings="codeIntelSecurityFindings"
-              :loading="codeIntelFindingsLoading"
-            />
-            <PerformanceFindingsPanel
-              v-if="activeCodeIntelTab === 'performance'"
-              :findings="codeIntelPerformanceFindings"
-              :loading="codeIntelFindingsLoading"
-            />
-            <RedisFindingsPanel
-              v-if="activeCodeIntelTab === 'redis'"
-              :findings="codeIntelRedisFindings"
-              :loading="codeIntelFindingsLoading"
-            />
-          </div>
-        </div>
-
-        <EmptyState
-          v-else-if="!codeIntelLoading"
-          icon="fas fa-brain"
-          :message="$t('analytics.codebase.intelligence.noData')"
-          variant="info"
-        >
-          <template #actions>
-            <button @click="runCodeIntelligenceAnalysis" class="btn-link">{{ $t('analytics.codebase.intelligence.runAnalysis') }}</button>
-          </template>
-        </EmptyState>
-
-        <!-- File Scan Modal -->
-        <FileScanModal
-          :show="showFileScanModal"
-          @close="showFileScanModal = false"
-          @scan="handleFileScan"
-        />
-      </div>
+      <!-- Code Intelligence Analysis (#1469, #566) -->
+      <CodebaseSecurityPanel
+        :security-findings="codeIntelSecurityFindings"
+        :performance-findings="codeIntelPerformanceFindings"
+        :redis-findings="codeIntelRedisFindings"
+        :findings-loading="codeIntelFindingsLoading"
+        :analysis-loading="codeIntelLoading"
+        :total-findings="codeIntelTotalFindings"
+        @run-analysis="runCodeIntelligenceAnalysis"
+        @scan-file="handleFileScan"
+      />
 
       <!-- Duplicate Code Analysis - Grouped by Similarity -->
       <div class="duplicates-section analytics-section">
@@ -2803,14 +2414,12 @@ import { useAnalyticsFetch } from '@/composables/useAnalyticsFetch'
 import { useAnalyticsScanRunner } from '@/composables/useAnalyticsScanRunner'
 import { createLogger } from '@/utils/debugUtils'
 // Issue #1133: Code Source Registry Components
+import CodebaseOverviewPanel from '@/components/analytics/CodebaseOverviewPanel.vue'
+import CodebaseDependenciesPanel from '@/components/analytics/CodebaseDependenciesPanel.vue'
+import CodebaseSecurityPanel from '@/components/analytics/CodebaseSecurityPanel.vue'
 import SourceManager from '@/components/analytics/SourceManager.vue'
 import AddSourceModal from '@/components/analytics/AddSourceModal.vue'
 import ShareSourceModal from '@/components/analytics/ShareSourceModal.vue'
-// Issue #566: Code Intelligence Dashboard Components
-import SecurityFindingsPanel from '@/components/analytics/code-intelligence/SecurityFindingsPanel.vue'
-import PerformanceFindingsPanel from '@/components/analytics/code-intelligence/PerformanceFindingsPanel.vue'
-import RedisFindingsPanel from '@/components/analytics/code-intelligence/RedisFindingsPanel.vue'
-import FileScanModal from '@/components/analytics/code-intelligence/FileScanModal.vue'
 import type {
   SecurityFinding,
   PerformanceFinding,
@@ -2819,16 +2428,12 @@ import type {
 
 const logger = createLogger('CodebaseAnalytics')
 
-// ApexCharts components
+// ApexCharts components (still used in Analytics Charts section)
 import {
   ProblemTypesChart,
   SeverityBarChart,
   RaceConditionsDonut,
   TopFilesChart,
-  DependencyTreemap,
-  ModuleImportsChart,
-  ImportTreeChart,
-  FunctionCallGraph
 } from '@/components/charts'
 
 // i18n
