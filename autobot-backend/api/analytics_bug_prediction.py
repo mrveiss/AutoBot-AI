@@ -1026,6 +1026,20 @@ async def _run_batched_bug_analysis(
         await _bg_manager.fail_task(task_id, str(e))
 
 
+@router.get("/cached")
+async def get_cached_bug_prediction():
+    """Return the latest completed bug prediction result (#1540)."""
+    cached = await _bg_manager.get_latest_result()
+    if cached and cached.get("result"):
+        return {
+            "status": "success",
+            "from_cache": True,
+            "completed_at": cached.get("completed_at"),
+            **cached["result"],
+        }
+    return _no_data_response("No cached bug prediction available")
+
+
 @router.post("/analyze")
 async def start_bug_analysis(
     background_tasks: BackgroundTasks,

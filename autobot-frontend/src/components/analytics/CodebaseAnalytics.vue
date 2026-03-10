@@ -3661,6 +3661,69 @@ const loadProjectRoot = async () => {
 // Phase 1: Critical data (stats, problems) - show immediately
 // Phase 2: Important data (declarations, duplicates, charts) - load next
 // Phase 3: Secondary data (call graph, analysis) - load in background
+// Issue #1540: Cached-result loaders for background-task scans.
+// These fetch from GET /cached endpoints (no new analysis triggered).
+const loadCachedDuplicates = async () => {
+  const backendUrl = await appConfig.getServiceUrl('backend')
+  const resp = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/duplicates/cached`)
+  if (!resp.ok) return
+  const data = await resp.json()
+  if (data.status === 'success' && Array.isArray(data.duplicates)) {
+    duplicateAnalysis.value = data.duplicates as DuplicateCode[]
+  }
+}
+
+const loadCachedDependencies = async () => {
+  const backendUrl = await appConfig.getServiceUrl('backend')
+  const resp = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/analytics/dependencies/cached`)
+  if (!resp.ok) return
+  const data = await resp.json()
+  if (data.status === 'success' && data.dependency_data) {
+    dependencyData.value = data.dependency_data as unknown as DependencyGraph
+  }
+}
+
+const loadCachedImportTree = async () => {
+  const backendUrl = await appConfig.getServiceUrl('backend')
+  const resp = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/analytics/import-tree/cached`)
+  if (!resp.ok) return
+  const data = await resp.json()
+  if (data.status === 'success' && data.import_tree) {
+    importTreeData.value = data.import_tree as unknown as ImportTreeNode[]
+  }
+}
+
+const loadCachedBugPrediction = async () => {
+  const backendUrl = await appConfig.getServiceUrl('backend')
+  const resp = await fetchWithAuth(`${backendUrl}/api/analytics/bug-prediction/cached`)
+  if (!resp.ok) return
+  const data = await resp.json()
+  if (data.status === 'success' && data.files) {
+    bugPredictionTask.result.value = data as Record<string, unknown>
+  }
+}
+
+const loadCachedSecurityScore = async () => {
+  const backendUrl = await appConfig.getServiceUrl('backend')
+  const resp = await fetchWithAuth(`${backendUrl}/api/code-intelligence/security/score/cached`)
+  if (!resp.ok) return
+  const data = await resp.json()
+  if (data.status === 'success' && data.security_score !== undefined) {
+    securityScore.value = {
+      security_score: data.security_score ?? 0,
+      grade: data.grade ?? 'N/A',
+      risk_level: data.risk_level ?? 'unknown',
+      status_message: data.status_message ?? '',
+      total_findings: data.total_findings ?? 0,
+      critical_issues: data.critical_issues ?? 0,
+      high_issues: data.high_issues ?? 0,
+      files_analyzed: data.files_analyzed ?? 0,
+      severity_breakdown: data.severity_breakdown ?? {},
+      owasp_breakdown: data.owasp_breakdown ?? {},
+    }
+  }
+}
+
 // Issue #1469: Load only cached/stored results on mount (no POST-based analysis triggers).
 // Scans that trigger new computation (POST /analyze, real-time scans) are excluded here
 // and only run via runAllAnalysisScans() after manual indexing or explicit user action.
@@ -3670,11 +3733,16 @@ const loadCachedAnalyticsData = async () => {
       { id: 'stats', label: t('analytics.codebase.scans.stats'), run: () => getCodebaseStats() },
       { id: 'problems', label: t('analytics.codebase.scans.problems'), run: () => getProblemsReport() },
       { id: 'declarations', label: t('analytics.codebase.scans.declarations'), run: () => loadDeclarations() },
+      { id: 'duplicates', label: t('analytics.codebase.scans.duplicates'), run: () => loadCachedDuplicates() },
       { id: 'hardcodes', label: t('analytics.codebase.scans.hardcodes'), run: () => loadHardcodes() },
       { id: 'charts', label: t('analytics.codebase.scans.charts'), run: () => loadChartData() },
+      { id: 'dependencies', label: t('analytics.codebase.scans.dependencies'), run: () => loadCachedDependencies() },
+      { id: 'imports', label: t('analytics.codebase.scans.imports'), run: () => loadCachedImportTree() },
       { id: 'callgraph', label: t('analytics.codebase.scans.callGraph'), run: () => loadCallGraphData() },
       { id: 'configDuplicates', label: t('analytics.codebase.scans.configDuplicates'), run: () => loadConfigDuplicates() },
       { id: 'apiEndpoints', label: t('analytics.codebase.scans.apiEndpoints'), run: () => loadApiEndpointAnalysis() },
+      { id: 'bugPrediction', label: t('analytics.codebase.scans.bugPrediction'), run: () => loadCachedBugPrediction() },
+      { id: 'security', label: t('analytics.codebase.scans.security'), run: () => loadCachedSecurityScore() },
       { id: 'crossLanguage', label: t('analytics.codebase.scans.crossLanguage'), run: () => getCrossLanguageAnalysis() },
     ])
 

@@ -541,6 +541,20 @@ async def _run_dup_analysis(task_id: str) -> None:
         await _manager.fail_task(task_id, str(e))
 
 
+@router.get("/duplicates/cached")
+async def get_cached_duplicate_result():
+    """Return the latest completed duplicate analysis result (#1540)."""
+    cached = await _manager.get_latest_result()
+    if cached and cached.get("result"):
+        return {
+            "status": "success",
+            "from_cache": True,
+            "completed_at": cached.get("completed_at"),
+            **cached["result"],
+        }
+    return {"status": "no_data"}
+
+
 @router.post("/duplicates/analyze")
 async def start_duplicate_analysis(
     background_tasks: BackgroundTasks,

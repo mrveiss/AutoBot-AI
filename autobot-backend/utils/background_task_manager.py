@@ -260,7 +260,11 @@ class BackgroundTaskManager:
         await self._save_to_redis(task_id)
 
     async def complete_task(self, task_id: str, result: Any) -> None:
-        """Mark task as completed with *result*."""
+        """Mark task as completed with *result*.
+
+        Also stores the result at ``{prefix}latest_result`` for quick
+        retrieval on page load without triggering new analysis (#1540).
+        """
         task = self._tasks.get(task_id)
         if not task:
             return
@@ -270,6 +274,47 @@ class BackgroundTaskManager:
         task["completed_at"] = datetime.now().isoformat()
         task["result"] = result
         await self._save_to_redis(task_id)
+        await self._save_latest_result(result, task["completed_at"])
+
+    async def _save_latest_result(self, result: Any, completed_at: str) -> None:
+        """Store latest completed result at a well-known Redis key (#1540)."""
+        try:
+            redis = await self._get_redis()
+            if not redis:
+                return
+            payload = json.dumps(
+                {
+                    "result": result,
+                    "completed_at": completed_at,
+                },
+                default=str,
+            )
+            await redis.set(
+                f"{self._prefix}latest_result",
+                payload,
+                ex=self._ttl,
+            )
+        except Exception as exc:
+            logger.debug("Latest result save failed (non-fatal): %s", exc)
+
+    async def get_latest_result(self) -> Optional[Dict[str, Any]]:
+        """Return the most recent completed result, or *None* (#1540).
+
+        Reads from the ``{prefix}latest_result`` Redis key written by
+        ``complete_task``.  Returns ``{"result": ..., "completed_at": ...}``
+        or *None* if no cached result exists.
+        """
+        try:
+            redis = await self._get_redis()
+            if not redis:
+                return None
+            data = await redis.get(f"{self._prefix}latest_result")
+            if not data:
+                return None
+            return json.loads(data)
+        except Exception as exc:
+            logger.debug("Latest result load failed (non-fatal): %s", exc)
+        return None
 
     async def fail_task(
         self,
