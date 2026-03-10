@@ -3325,8 +3325,8 @@ onMounted(async () => {
   // Check if there's already an indexing job running
   await checkCurrentIndexingJob()
 
-  // Load cached/historic results (no auto-indexing)
-  loadCodebaseAnalyticsData()
+  // Issue #1469: Load only cached results on mount (no analysis triggers)
+  loadCachedAnalyticsData()
 
   // Load sources list for any modals
   loadSources()
@@ -3529,8 +3529,8 @@ const pollJobStatus = async () => {
           // Issue #1133: Show knowledge base opt-in after indexing
           showKnowledgeBaseOptIn.value = true
 
-          // Refresh data
-          await loadCodebaseAnalyticsData()
+          // Refresh data — full analysis after manual indexing
+          await runAllAnalysisScans()
         } else if (data.status === 'cancelled') {
           progressStatus.value = t('analytics.codebase.status.indexingCancelled')
           notify(t('analytics.codebase.notify.indexingCancelled'), 'warning')
@@ -3661,7 +3661,41 @@ const loadProjectRoot = async () => {
 // Phase 1: Critical data (stats, problems) - show immediately
 // Phase 2: Important data (declarations, duplicates, charts) - load next
 // Phase 3: Secondary data (call graph, analysis) - load in background
-const loadCodebaseAnalyticsData = async () => {
+// Issue #1469: Load only cached/stored results on mount (no POST-based analysis triggers).
+// Scans that trigger new computation (POST /analyze, real-time scans) are excluded here
+// and only run via runAllAnalysisScans() after manual indexing or explicit user action.
+const loadCachedAnalyticsData = async () => {
+  try {
+    await scanRunner.runAll([
+      { id: 'stats', label: t('analytics.codebase.scans.stats'), run: () => getCodebaseStats() },
+      { id: 'problems', label: t('analytics.codebase.scans.problems'), run: () => getProblemsReport() },
+      { id: 'declarations', label: t('analytics.codebase.scans.declarations'), run: () => loadDeclarations() },
+      { id: 'hardcodes', label: t('analytics.codebase.scans.hardcodes'), run: () => loadHardcodes() },
+      { id: 'charts', label: t('analytics.codebase.scans.charts'), run: () => loadChartData() },
+      { id: 'callgraph', label: t('analytics.codebase.scans.callGraph'), run: () => loadCallGraphData() },
+      { id: 'configDuplicates', label: t('analytics.codebase.scans.configDuplicates'), run: () => loadConfigDuplicates() },
+      { id: 'apiEndpoints', label: t('analytics.codebase.scans.apiEndpoints'), run: () => loadApiEndpointAnalysis() },
+      { id: 'crossLanguage', label: t('analytics.codebase.scans.crossLanguage'), run: () => getCrossLanguageAnalysis() },
+    ])
+
+    if (scanRunner.failedCount.value > 0) {
+      progressStatus.value = t('analytics.codebase.status.loadPartialFailed', {
+        failed: scanRunner.failedCount.value,
+        total: scanRunner.totalCount.value,
+      })
+    } else {
+      progressStatus.value = t('analytics.codebase.status.loadComplete')
+    }
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logger.error('Failed to load cached analytics data:', error)
+    progressStatus.value = t('analytics.codebase.status.loadFailed', { error: errorMessage })
+  }
+}
+
+// Issue #1469: Full analysis scan list — only runs after manual indexing or explicit user action.
+// Includes POST-based analysis triggers and real-time computation scans.
+const runAllAnalysisScans = async () => {
   try {
     await scanRunner.runAll([
       { id: 'stats', label: t('analytics.codebase.scans.stats'), run: () => getCodebaseStats() },

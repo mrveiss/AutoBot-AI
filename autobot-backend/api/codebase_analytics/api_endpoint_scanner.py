@@ -485,13 +485,11 @@ class BackendEndpointScanner:
         if module_name in self._module_prefix_map:
             return self._module_prefix_map[module_name]
 
-        # Check if file is in codebase_analytics subdirectory
+        # Issue #1469: Check if file is in codebase_analytics subdirectory
+        # (e.g., api/codebase_analytics/endpoints/pattern_analysis.py)
         if "codebase_analytics" in str(file_path):
-            # Check for router prefix in parent
             if "api.codebase_analytics" in self._module_prefix_map:
-                base_prefix = self._module_prefix_map["api.codebase_analytics"]
-                # Check for additional prefix from codebase/router.py
-                return f"{base_prefix}/codebase"
+                return self._module_prefix_map["api.codebase_analytics"]
 
         # Default: use /api prefix with no additional router prefix
         return self.API_PREFIX
