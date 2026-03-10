@@ -165,11 +165,11 @@ score_threshold=0.85
 
 # Balanced (default)
 top_k=5
-score_threshold=0.7
+score_threshold=0.3
 
 # High recall (more facts, lower quality threshold)
 top_k=10
-score_threshold=0.5
+score_threshold=0.15
 
 # No knowledge augmentation
 knowledge_service=None  # Simply don't initialize the service
@@ -282,7 +282,7 @@ knowledge_service = ChatKnowledgeService(rag_service)
 context, citations = await knowledge_service.retrieve_relevant_knowledge(
     query="How do I configure Redis?",
     top_k=5,
-    score_threshold=0.7
+    score_threshold=0.3
 )
 
 print(f"Context:\n{context}")
@@ -342,7 +342,7 @@ logger.info(f"Service stats: {stats}")
 # Lower threshold temporarily
 context, citations = await knowledge_service.retrieve_relevant_knowledge(
     query=message,
-    score_threshold=0.5  # Lower from 0.7
+    score_threshold=0.2  # Lower from 0.3 for debugging
 )
 
 # Check RAG service directly

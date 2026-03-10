@@ -10,6 +10,7 @@ Contains cross-encoder reranking functionality.
 
 import asyncio
 import logging
+import math
 import threading
 from typing import Any, Dict, List, Optional
 
@@ -38,12 +39,21 @@ class ResultReranker:
         return self._cross_encoder
 
     def _apply_rerank_scores(self, results: List[Dict[str, Any]], scores: list) -> None:
-        """Apply rerank scores to results. Issue #281: Extracted helper."""
+        """Apply rerank scores to results.
+
+        Issue #281: Extracted helper.
+        Issue #1533: Normalize raw cross-encoder logits with sigmoid
+        so rerank_score stays in 0-1 range. Combine with original
+        similarity score instead of overwriting it.
+        """
         for i, result in enumerate(results):
-            result["rerank_score"] = float(scores[i])
+            # Sigmoid: raw logits → 0-1 probability
+            normalized = 1.0 / (1.0 + math.exp(-float(scores[i])))
+            original_score = result.get("score", 0)
+            result["original_score"] = original_score
+            result["rerank_score"] = normalized * 0.8 + original_score * 0.2
         results.sort(key=lambda x: x.get("rerank_score", 0), reverse=True)
         for result in results:
-            result["original_score"] = result.get("score", 0)
             result["score"] = result.get("rerank_score", 0)
 
     async def rerank(

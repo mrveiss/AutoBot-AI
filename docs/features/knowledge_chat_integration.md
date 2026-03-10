@@ -292,7 +292,7 @@ Content-Type: application/json
   "use_knowledge": true,
   "knowledge_options": {
     "top_k": 5,
-    "score_threshold": 0.7,
+    "score_threshold": 0.3,
     "categories": ["commands"]
   }
 }
