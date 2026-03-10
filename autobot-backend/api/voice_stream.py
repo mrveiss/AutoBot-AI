@@ -99,19 +99,42 @@ async def _synthesize_and_stream(
 
     await _send_json(ws, {"type": "tts_start", "text": text})
 
+    tts = get_tts_client()
+    # Pipeline synthesis: pre-fetch next chunk while sending current (#1527)
+    next_task: asyncio.Task | None = None
+    if total > 0 and not cancel_event.is_set():
+        next_task = asyncio.create_task(
+            tts.synthesize(chunks[0], voice_id=voice_id, language=language)
+        )
+
     for i, chunk_text in enumerate(chunks):
         if cancel_event.is_set():
             logger.debug("TTS cancelled by barge-in at chunk %d/%d", i, total)
+            if next_task and not next_task.done():
+                next_task.cancel()
             break
 
         try:
-            tts = get_tts_client()
-            wav_bytes = await tts.synthesize(
-                chunk_text, voice_id=voice_id, language=language
-            )
+            wav_bytes = await next_task if next_task else b""
+            if not wav_bytes:
+                break
+
+            # Start synthesizing the NEXT chunk immediately
+            next_task = None
+            if i + 1 < total and not cancel_event.is_set():
+                next_task = asyncio.create_task(
+                    tts.synthesize(
+                        chunks[i + 1],
+                        voice_id=voice_id,
+                        language=language,
+                    )
+                )
+
             audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
 
             if cancel_event.is_set():
+                if next_task and not next_task.done():
+                    next_task.cancel()
                 break
 
             sent = await _send_json(
@@ -124,7 +147,11 @@ async def _synthesize_and_stream(
                 },
             )
             if not sent:
+                if next_task and not next_task.done():
+                    next_task.cancel()
                 break
+        except asyncio.CancelledError:
+            break
         except Exception as e:
             logger.error("TTS synthesis error for chunk %d: %s", i, e)
             await _send_json(
@@ -134,6 +161,8 @@ async def _synthesize_and_stream(
                     "message": f"TTS synthesis failed: {e}",
                 },
             )
+            if next_task and not next_task.done():
+                next_task.cancel()
             break
 
     await _send_json(ws, {"type": "tts_end"})

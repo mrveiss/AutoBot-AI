@@ -30,9 +30,11 @@ const isSpeaking = ref<boolean>(false)
 let _audioContext: AudioContext | null = null
 let _currentSource: AudioBufferSourceNode | null = null
 
-// Queue for streaming audio chunks (#1031)
-let _chunkQueue: ArrayBuffer[] = []
-let _isPlayingChunks = false
+// Gapless audio scheduling (#1527) — schedule chunks on AudioContext timeline
+// instead of sequential play-await-decode-play which causes audible gaps.
+let _scheduledSources: AudioBufferSourceNode[] = []
+let _nextStartTime = 0
+let _activeChunkCount = 0
 
 // Streaming TTS WebSocket connection (#1319)
 let _ttsWs: WebSocket | null = null
@@ -60,8 +62,13 @@ function _stopCurrentAudio(): void {
     try { _currentSource.stop() } catch { /* already stopped */ }
     _currentSource = null
   }
-  _chunkQueue = []
-  _isPlayingChunks = false
+  // Stop all scheduled gapless sources (#1527)
+  for (const src of _scheduledSources) {
+    try { src.stop() } catch { /* already stopped */ }
+  }
+  _scheduledSources = []
+  _nextStartTime = 0
+  _activeChunkCount = 0
   isSpeaking.value = false
 }
 
@@ -90,24 +97,46 @@ async function _playAudioBuffer(arrayBuffer: ArrayBuffer): Promise<void> {
   })
 }
 
-async function _drainChunkQueue(): Promise<void> {
-  if (_isPlayingChunks) return
-  _isPlayingChunks = true
+/**
+ * Schedule an audio chunk for gapless playback on the AudioContext timeline (#1527).
+ * Instead of awaiting each chunk sequentially (which causes gaps during decode),
+ * we decode immediately and schedule at the next available time slot.
+ */
+async function _scheduleGaplessChunk(arrayBuffer: ArrayBuffer): Promise<void> {
+  const ctx = _getOrCreateContext()
+  if (ctx.state === 'suspended') await ctx.resume()
 
-  while (_chunkQueue.length > 0) {
-    const chunk = _chunkQueue.shift()!
-    try {
-      await _playAudioBuffer(chunk)
-    } catch (e) {
-      logger.error('Chunk playback error:', e)
+  const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0))
+  const source = ctx.createBufferSource()
+  source.buffer = audioBuffer
+
+  const gainNode = ctx.createGain()
+  gainNode.gain.value = 3.5
+  source.connect(gainNode)
+  gainNode.connect(ctx.destination)
+
+  // Schedule gaplessly: start where the last chunk ends, or now if behind
+  const now = ctx.currentTime
+  const startTime = _nextStartTime > now ? _nextStartTime : now
+  _nextStartTime = startTime + audioBuffer.duration
+
+  _scheduledSources.push(source)
+  _activeChunkCount++
+
+  source.onended = () => {
+    const idx = _scheduledSources.indexOf(source)
+    if (idx >= 0) _scheduledSources.splice(idx, 1)
+    _activeChunkCount--
+    if (_activeChunkCount <= 0) {
+      _activeChunkCount = 0
+      isSpeaking.value = false
     }
   }
 
-  _isPlayingChunks = false
-  isSpeaking.value = false
+  source.start(startTime)
 }
 
-/** Decode base64 audio and queue for playback (module-level for WS handler). */
+/** Decode base64 audio and schedule for gapless playback (#1527). */
 function _playAudioChunkFromBase64(base64Data: string): void {
   try {
     const binary = atob(base64Data)
@@ -115,9 +144,8 @@ function _playAudioChunkFromBase64(base64Data: string): void {
     for (let i = 0; i < binary.length; i++) {
       bytes[i] = binary.charCodeAt(i)
     }
-    _chunkQueue.push(bytes.buffer)
     isSpeaking.value = true
-    _drainChunkQueue()
+    _scheduleGaplessChunk(bytes.buffer)
   } catch (e) {
     logger.error('playAudioChunk error:', e)
   }
