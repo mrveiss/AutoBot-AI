@@ -90,6 +90,18 @@ export class BatchApiService {
   }
 
   /**
+   * Extract sessions array from API response, handling multiple response formats.
+   * Backend returns {success, data: {sessions: [...]}} but ChatInterface expects a flat array.
+   */
+  private extractSessionsList(response: any): any[] {
+    if (Array.isArray(response)) return response;
+    return response?.data?.sessions
+      || response?.data
+      || response?.sessions
+      || [];
+  }
+
+  /**
    * Fallback chat initialization using PARALLEL API calls with graceful error handling
    * Issue #671: Changed from sequential to parallel calls to reduce load time
    */
@@ -112,7 +124,7 @@ export class BatchApiService {
     // Process results with graceful error handling
     const results: FallbackResults = {
       chat_sessions: chatSessionsResult.status === 'fulfilled'
-        ? chatSessionsResult.value
+        ? this.extractSessionsList(chatSessionsResult.value)
         : { error: (chatSessionsResult as PromiseRejectedResult).reason?.message || 'Failed to load', sessions: [] },
 
       system_health: systemHealthResult.status === 'fulfilled'

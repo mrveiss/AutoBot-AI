@@ -463,8 +463,7 @@ const deleteSession = async (sessionId: string) => {
   const [fileStatsResult, kbFactsResult] = await Promise.allSettled([
     // Fetch file stats
     (async () => {
-      const response = await ApiClient.get(`/api/conversation-files/conversation/${sessionId}/list`)
-      const data = await (response as any).json()
+      const data = await ApiClient.get(`/api/conversation-files/conversation/${sessionId}/list`)
       return data?.stats || null
     })(),
     // Fetch KB facts (Issue #547)
