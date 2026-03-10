@@ -47,6 +47,9 @@ const language = ref<string>('en')
 // Local storage key
 const STORAGE_KEY = 'autobot-preferences'
 
+// Module-level initialization flag (#1502)
+let _initialized = false
+
 /**
  * Load preferences from localStorage
  */
@@ -140,36 +143,40 @@ function syncLanguageToBackend(code: string): void {
  * Main composable function
  */
 export function usePreferences() {
-  // Load preferences on first use
-  loadPreferences()
+  // Initialize once: load preferences, apply to DOM, register watchers (#1502)
+  if (!_initialized) {
+    _initialized = true
 
-  // Apply current preferences (#1331: sync language to vue-i18n on startup)
-  applyFontSize(fontSize.value)
-  applyAccentColor(accentColor.value)
-  applyLayoutDensity(layoutDensity.value)
-  if (language.value !== 'en') {
-    setLocale(language.value)
+    loadPreferences()
+
+    // Apply current preferences (#1331: sync language to vue-i18n on startup)
+    applyFontSize(fontSize.value)
+    applyAccentColor(accentColor.value)
+    applyLayoutDensity(layoutDensity.value)
+    if (language.value !== 'en') {
+      setLocale(language.value)
+    }
+
+    // Watch for changes and persist
+    watch(fontSize, (newSize) => {
+      applyFontSize(newSize)
+      savePreferences()
+    })
+
+    watch(accentColor, (newColor) => {
+      applyAccentColor(newColor)
+      savePreferences()
+    })
+
+    watch(layoutDensity, (newDensity) => {
+      applyLayoutDensity(newDensity)
+      savePreferences()
+    })
+
+    watch(voiceDisplayMode, () => {
+      savePreferences()
+    })
   }
-
-  // Watch for changes and persist
-  watch(fontSize, (newSize) => {
-    applyFontSize(newSize)
-    savePreferences()
-  })
-
-  watch(accentColor, (newColor) => {
-    applyAccentColor(newColor)
-    savePreferences()
-  })
-
-  watch(layoutDensity, (newDensity) => {
-    applyLayoutDensity(newDensity)
-    savePreferences()
-  })
-
-  watch(voiceDisplayMode, () => {
-    savePreferences()
-  })
 
   /**
    * Set font size preference
