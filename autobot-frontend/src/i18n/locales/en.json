@@ -2228,7 +2228,19 @@
       "scanForChanges": "Scan for Changes",
       "clearHistory": "Clear History",
       "exportChanges": "Export Changes",
-      "confirmClearHistory": "Clear all change history? This cannot be undone."
+      "confirmClearHistory": "Clear all change history? This cannot be undone.",
+      "changeTypeAdded": "Added",
+      "changeTypeUpdated": "Updated",
+      "changeTypeRemoved": "Removed",
+      "changeTypeChanged": "Changed",
+      "timeJustNow": "just now",
+      "timeMinutesAgo": "{count}m ago",
+      "timeHoursAgo": "{count}h ago",
+      "timeDaysAgo": "{count}d ago",
+      "filterAll": "All",
+      "filterAdded": "Added",
+      "filterUpdated": "Updated",
+      "filterRemoved": "Removed"
     },
     "entityExtractor": {
       "title": "Entity Extraction",

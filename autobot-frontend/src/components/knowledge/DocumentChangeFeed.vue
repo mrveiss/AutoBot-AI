@@ -115,7 +115,7 @@
           size="sm"
           @click="activeFilter = 'all'"
         >
-          All ({{ totalChanges }})
+          {{ $t('knowledge.changeFeed.filterAll') }} ({{ totalChanges }})
         </BaseButton>
         <BaseButton
           :variant="activeFilter === 'added' ? 'primary' : 'outline'"
@@ -123,7 +123,7 @@
           @click="activeFilter = 'added'"
           v-if="changeSummary.added > 0"
         >
-          Added ({{ changeSummary.added }})
+          {{ $t('knowledge.changeFeed.filterAdded') }} ({{ changeSummary.added }})
         </BaseButton>
         <BaseButton
           :variant="activeFilter === 'updated' ? 'primary' : 'outline'"
@@ -131,7 +131,7 @@
           @click="activeFilter = 'updated'"
           v-if="changeSummary.updated > 0"
         >
-          Updated ({{ changeSummary.updated }})
+          {{ $t('knowledge.changeFeed.filterUpdated') }} ({{ changeSummary.updated }})
         </BaseButton>
         <BaseButton
           :variant="activeFilter === 'removed' ? 'primary' : 'outline'"
@@ -139,7 +139,7 @@
           @click="activeFilter = 'removed'"
           v-if="changeSummary.removed > 0"
         >
-          Removed ({{ changeSummary.removed }})
+          {{ $t('knowledge.changeFeed.filterRemoved') }} ({{ changeSummary.removed }})
         </BaseButton>
       </div>
 

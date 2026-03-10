@@ -12,6 +12,7 @@
  */
 
 import { ref, computed, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import ApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -65,20 +66,78 @@ export interface ChangeDetectionResult {
   vectorization?: VectorizationResult
 }
 
+const STORAGE_KEY = 'autobot-document-changes'
+
+interface PersistedState {
+  recentChanges: Array<DocumentChange & { timestamp: string }>
+  changeSummary: ChangeSummary
+  lastScanTime: string | null
+  lastVectorizationResult: VectorizationResult | null
+  machineId: string
+}
+
+function loadPersistedState(): Partial<PersistedState> | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+function persistState(state: PersistedState): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // localStorage full or unavailable — ignore
+  }
+}
+
 export function useDocumentChanges() {
+  const { t } = useI18n()
+
+  // Restore persisted state
+  const persisted = loadPersistedState()
+
   // State
-  const recentChanges = ref<DocumentChange[]>([])
-  const changeSummary = ref<ChangeSummary>({
-    added: 0,
-    updated: 0,
-    removed: 0,
-    unchanged: 0
-  })
+  const recentChanges = ref<DocumentChange[]>(
+    persisted?.recentChanges?.map(c => ({
+      ...c,
+      timestamp: new Date(c.timestamp)
+    })) ?? []
+  )
+  const changeSummary = ref<ChangeSummary>(
+    persisted?.changeSummary ?? {
+      added: 0,
+      updated: 0,
+      removed: 0,
+      unchanged: 0
+    }
+  )
   const isScanning = ref(false)
-  const lastScanTime = ref<Date | null>(null)
-  const machineId = ref<string>('default-host')
+  const lastScanTime = ref<Date | null>(
+    persisted?.lastScanTime ? new Date(persisted.lastScanTime) : null
+  )
+  const machineId = ref<string>(persisted?.machineId ?? 'default-host')
   const autoRefreshInterval = ref<number | null>(null)
-  const lastVectorizationResult = ref<VectorizationResult | null>(null)
+  const lastVectorizationResult = ref<VectorizationResult | null>(
+    persisted?.lastVectorizationResult ?? null
+  )
+
+  /** Save current state to localStorage */
+  const saveState = () => {
+    persistState({
+      recentChanges: recentChanges.value.map(c => ({
+        ...c,
+        timestamp: c.timestamp.toISOString()
+      })) as PersistedState['recentChanges'],
+      changeSummary: changeSummary.value,
+      lastScanTime: lastScanTime.value?.toISOString() ?? null,
+      lastVectorizationResult: lastVectorizationResult.value,
+      machineId: machineId.value
+    })
+  }
 
   // Computed
   const totalChanges = computed(() => {
@@ -150,6 +209,7 @@ export function useDocumentChanges() {
         recentChanges.value = [...newChanges, ...recentChanges.value].slice(0, 50)
 
         lastScanTime.value = new Date()
+        saveState()
 
         return result
       }
@@ -180,23 +240,23 @@ export function useDocumentChanges() {
   }
 
   /**
-   * Get change type display name
+   * Get change type display name (i18n)
    */
   const getChangeTypeName = (changeType: string): string => {
     switch (changeType) {
       case 'added':
-        return 'Added'
+        return t('knowledge.changeFeed.changeTypeAdded')
       case 'updated':
-        return 'Updated'
+        return t('knowledge.changeFeed.changeTypeUpdated')
       case 'removed':
-        return 'Removed'
+        return t('knowledge.changeFeed.changeTypeRemoved')
       default:
-        return 'Changed'
+        return t('knowledge.changeFeed.changeTypeChanged')
     }
   }
 
   /**
-   * Format timestamp relative to now
+   * Format timestamp relative to now (i18n)
    */
   const formatRelativeTime = (timestamp: Date): string => {
     const now = new Date()
@@ -206,10 +266,10 @@ export function useDocumentChanges() {
     const diffHour = Math.floor(diffMin / 60)
     const diffDay = Math.floor(diffHour / 24)
 
-    if (diffSec < 60) return 'just now'
-    if (diffMin < 60) return `${diffMin}m ago`
-    if (diffHour < 24) return `${diffHour}h ago`
-    return `${diffDay}d ago`
+    if (diffSec < 60) return t('knowledge.changeFeed.timeJustNow')
+    if (diffMin < 60) return t('knowledge.changeFeed.timeMinutesAgo', { count: diffMin })
+    if (diffHour < 24) return t('knowledge.changeFeed.timeHoursAgo', { count: diffHour })
+    return t('knowledge.changeFeed.timeDaysAgo', { count: diffDay })
   }
 
   /**
@@ -223,6 +283,8 @@ export function useDocumentChanges() {
       removed: 0,
       unchanged: 0
     }
+    lastVectorizationResult.value = null
+    saveState()
   }
 
   /**
@@ -251,6 +313,7 @@ export function useDocumentChanges() {
    */
   const setMachineId = (id: string) => {
     machineId.value = id
+    saveState()
   }
 
   /**
