@@ -197,12 +197,11 @@ async def _tts_queue_worker(
     """Drain sentence queue, streaming each with pipelining (#1319).
 
     Receives (text, voice_id, language) tuples; None is the flush
-    sentinel that triggers tts_end.
+    sentinel (no-op since _stream_chunks_pipelined sends tts_end).
     """
     while True:
         item = await queue.get()
         if item is None:
-            await _send_json(ws, {"type": "tts_end"})
             continue
         text, voice_id, language = item
         if cancel_event.is_set():
