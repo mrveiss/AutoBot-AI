@@ -268,11 +268,13 @@ class AdvancedRAGOptimizer:
                 # Issue #429: Fixed - metadata is already parsed, no need for json.loads
                 metadata = fact.get("metadata", {})
 
-                # Create search result with semantic scoring
+                # Issue #1526: Use real ChromaDB cosine similarity score
+                # instead of artificial rank-based score
+                real_score = fact.get("score", 0.0)
                 result = SearchResult(
                     content=fact.get("content", ""),
                     metadata=metadata,
-                    semantic_score=0.8 - (i * 0.05),  # Decrease score by rank
+                    semantic_score=real_score,
                     keyword_score=0.0,  # Will be computed later
                     hybrid_score=0.0,  # Will be computed later
                     relevance_rank=i + 1,
@@ -454,14 +456,22 @@ class AdvancedRAGOptimizer:
     async def _apply_cross_encoder_scores(
         self, query: str, results: List[SearchResult]
     ) -> None:
-        """Apply cross-encoder scores to results (Issue #398: extracted)."""
+        """Apply cross-encoder scores to results (Issue #398: extracted).
+
+        Issue #1526: Normalize cross-encoder logits with sigmoid before
+        combining with hybrid_score so the final rerank_score stays in 0-1.
+        """
+        import math
+
         pairs = [(query, result.content) for result in results]
         cross_encoder_scores = await asyncio.to_thread(
             self._cross_encoder.predict, pairs
         )
 
         for result, ce_score in zip(results, cross_encoder_scores):
-            result.rerank_score = float(ce_score) * 0.8 + result.hybrid_score * 0.2
+            # Sigmoid normalization: raw logits → 0-1 probability
+            normalized_ce = 1.0 / (1.0 + math.exp(-float(ce_score)))
+            result.rerank_score = normalized_ce * 0.8 + result.hybrid_score * 0.2
 
         logger.debug("Cross-encoder reranking completed for %s results", len(results))
 
@@ -477,8 +487,10 @@ class AdvancedRAGOptimizer:
             content_lower = result.content.lower()
             term_matches = sum(1 for term in query_terms if term in content_lower)
             exact_match_bonus = 2 if query_lower in content_lower else 0
+            # Issue #1526: Use semantic_score (real similarity) as base,
+            # not hybrid_score which is already weighted down
             result.rerank_score = (
-                result.hybrid_score * 0.7
+                result.semantic_score * 0.7
                 + (term_matches / len(query_terms)) * 0.2
                 + exact_match_bonus * 0.1
             )

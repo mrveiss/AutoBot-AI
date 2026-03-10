@@ -173,11 +173,14 @@ async def _tts_queue_worker(
     queue: asyncio.Queue,
     cancel_event: asyncio.Event,
 ) -> None:
-    """Drain sentence queue, synthesizing and streaming each sequentially.
+    """Drain sentence queue, chunking and streaming each with pipelining.
 
     Runs as background task per WS connection. Receives
     (text, voice_id, language) tuples; None is the flush sentinel
     that triggers tts_end.
+
+    Long text is split via _split_text_for_tts() and synthesized with
+    one-chunk-ahead pipelining for low time-to-first-audio (#1534).
     """
     while True:
         item = await queue.get()
@@ -187,28 +190,64 @@ async def _tts_queue_worker(
         text, voice_id, language = item
         if cancel_event.is_set():
             continue
-        try:
-            tts = get_tts_client()
-            wav_bytes = await tts.synthesize(text, voice_id=voice_id, language=language)
+
+        chunks = _split_text_for_tts(text)
+        if not chunks:
+            continue
+
+        tts = get_tts_client()
+        # Pipeline: pre-fetch first chunk (#1534)
+        next_task: asyncio.Task | None = asyncio.create_task(
+            tts.synthesize(chunks[0], voice_id=voice_id, language=language)
+        )
+
+        for i in range(len(chunks)):
             if cancel_event.is_set():
-                continue
-            audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
-            await _send_json(
-                ws,
-                {
-                    "type": "tts_audio",
-                    "data": audio_b64,
-                },
-            )
-        except Exception as e:
-            logger.error("Sentence TTS error: %s", e)
-            await _send_json(
-                ws,
-                {
-                    "type": "error",
-                    "message": f"Sentence TTS failed: {e}",
-                },
-            )
+                if next_task and not next_task.done():
+                    next_task.cancel()
+                break
+            try:
+                wav_bytes = await next_task if next_task else b""
+                if not wav_bytes:
+                    break
+
+                # Start next chunk synthesis immediately
+                next_task = None
+                if i + 1 < len(chunks) and not cancel_event.is_set():
+                    next_task = asyncio.create_task(
+                        tts.synthesize(
+                            chunks[i + 1],
+                            voice_id=voice_id,
+                            language=language,
+                        )
+                    )
+
+                audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
+                if cancel_event.is_set():
+                    if next_task and not next_task.done():
+                        next_task.cancel()
+                    break
+                await _send_json(
+                    ws,
+                    {
+                        "type": "tts_audio",
+                        "data": audio_b64,
+                    },
+                )
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error("Sentence TTS error: %s", e)
+                await _send_json(
+                    ws,
+                    {
+                        "type": "error",
+                        "message": f"Sentence TTS failed: {e}",
+                    },
+                )
+                if next_task and not next_task.done():
+                    next_task.cancel()
+                break
 
 
 async def _cancel_active_tts(

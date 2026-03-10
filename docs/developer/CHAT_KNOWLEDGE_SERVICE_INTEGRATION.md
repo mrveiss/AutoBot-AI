@@ -90,7 +90,7 @@ async def _prepare_llm_request_params(
             knowledge_context, citations = await self.knowledge_service.retrieve_relevant_knowledge(
                 query=message,
                 top_k=5,  # Maximum 5 knowledge facts
-                score_threshold=0.7  # Only high-quality facts (score > 0.7)
+                score_threshold=0.3  # Relevance threshold (Issue #1526: lowered from 0.7)
             )
 
             if knowledge_context:
@@ -153,7 +153,7 @@ async def process_message(self, session_id: str, message: str) -> Dict[str, Any]
 ```python
 # Default values in ChatKnowledgeService.retrieve_relevant_knowledge()
 top_k=5              # Maximum number of facts to retrieve
-score_threshold=0.7  # Minimum relevance score (0.0-1.0)
+score_threshold=0.3  # Minimum relevance score (0.0-1.0)
 ```
 
 ### Recommended Settings by Use Case
