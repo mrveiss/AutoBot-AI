@@ -413,7 +413,7 @@ class BackgroundTaskManager:
         return True
 
     async def clear_all(self) -> int:
-        """Remove all tasks from memory and Redis."""
+        """Remove all tasks from memory and Redis (incl. cached result)."""
         count = len(self._tasks)
         redis = await self._get_redis()
         if redis:
@@ -422,5 +422,10 @@ class BackgroundTaskManager:
                     await redis.delete(f"{self._prefix}{tid}")
                 except Exception:
                     pass
+            # Issue #1552: Also clear the latest_result cache key
+            try:
+                await redis.delete(f"{self._prefix}latest_result")
+            except Exception:
+                pass
         self._tasks.clear()
         return count
