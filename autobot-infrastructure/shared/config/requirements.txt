@@ -82,7 +82,7 @@ markdownify>=0.14.1              # SECURITY UPDATE - CVE fix (GHSA-7mpr-5m44-h73
 langchain
 langchain-community
 langchain-experimental             # For advanced LangChain features
-llama-index
+llama-index>=0.12.41
 llama-index-llms-ollama
 llama-index-embeddings-ollama
 llama-index-vector-stores-redis
