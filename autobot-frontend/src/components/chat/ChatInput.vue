@@ -287,12 +287,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted, inject, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, inject, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
-import globalWebSocketService from '@/services/GlobalWebSocketService'
-import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import ProgressBar from '@/components/ui/ProgressBar.vue'
 import BaseButton from '@/components/base/BaseButton.vue'
 import VisionAnalysisModal from './VisionAnalysisModal.vue'
@@ -300,7 +298,6 @@ import TranslationShortcutPanel from './TranslationShortcutPanel.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
-import type { UseOverseerAgentOptions } from '@/composables/useOverseerAgent'
 import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 
@@ -332,7 +329,6 @@ const isSending = ref(false)
 const showEmojiPicker = ref(false)
 const showVisionModal = ref(false)
 const showTranslatePanel = ref(false)
-const showQuickActions = ref(true)
 
 // Issue #249: Knowledge-Enhanced Chat (RAG) toggle
 const useKnowledge = ref(true) // Default enabled
@@ -763,7 +759,7 @@ const getFileIcon = (type: string): string => {
 // NOTE: formatFileSize removed - now using shared utility from @/utils/formatHelpers
 
 const generateId = (): string => {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2)
+  return Date.now().toString(36) + Math.random().toString(36).slice(2)
 }
 
 // Real file upload implementation
