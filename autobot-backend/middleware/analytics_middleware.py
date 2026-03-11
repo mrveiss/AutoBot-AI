@@ -25,6 +25,7 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.analytics_controller = analytics_controller
         self.tracked_paths = {"/api/", "/docs", "/redoc"}
+        self._background_tasks: set = set()
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         """Track API calls and response times"""
@@ -55,9 +56,11 @@ class AnalyticsMiddleware(BaseHTTPMiddleware):
         if self.analytics_controller and hasattr(
             self.analytics_controller, "track_api_call"
         ):
-            asyncio.create_task(
+            task = asyncio.create_task(
                 self._track_call_async(endpoint, response_time, status_code, method)
             )
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
 
         # Add analytics headers to response
         response.headers["X-Response-Time"] = f"{response_time:.3f}s"
