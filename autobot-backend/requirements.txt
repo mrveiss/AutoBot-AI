@@ -39,10 +39,10 @@ langchain>=0.3.0,<0.4.0               # Issue #1043: Upgraded for LangGraph comp
 langchain-core>=0.3.81,<0.4.0         # Issue #1043 + SECURITY UPDATE (injection + SSRF)
 langchain-community>=0.3.0,<0.4.0     # Issue #1043: Community integrations
 langchain-ollama>=0.3.0,<0.4.0        # Issue #1047: ChatOllama for QA chain (replaces legacy Ollama)
-langgraph>=1.0.0,<2.0.0               # Issue #1043: StateGraph for chat orchestration
+langgraph>=1.0.10,<2.0.0              # Issue #1043: StateGraph for chat orchestration
 langgraph-checkpoint-redis>=0.3.0,<1.0.0  # Issue #1043: Redis checkpointer for thread persistence
 markdownify>=0.11.0  # HTML to Markdown conversion
-mcp>=1.0.0             # MCP protocol for skill subprocesses (Issue #731)
+mcp>=1.23.0            # MCP protocol for skill subprocesses (Issue #731)
 PyYAML>=6.0            # SKILL.md frontmatter parsing (Phase 3 sync engine)
 
 # Community growth skill (Issue #1161)
