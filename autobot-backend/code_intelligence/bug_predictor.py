@@ -29,6 +29,7 @@ Issue #554: Enhanced with Vector/Redis/LLM infrastructure:
 import logging
 import re
 import subprocess  # nosec B404 - required for git operations
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -38,6 +39,10 @@ from typing import Any, Dict, List, Optional
 from constants.threshold_constants import TimingConstants
 
 logger = logging.getLogger(__name__)
+
+# TTL for git-based caches (seconds); prevents unbounded memory growth (#1551)
+_CHANGE_FREQ_CACHE_TTL = 3600  # 1 hour — git log --since=90 days
+_BUG_HISTORY_CACHE_TTL = 21600  # 6 hours — git log --since=1 year
 
 # Issue #554: Flag to enable semantic analysis infrastructure
 SEMANTIC_ANALYSIS_AVAILABLE = False
@@ -348,7 +353,9 @@ class BugPredictor(_BaseClass):
 
         # Cache for expensive operations
         self._bug_history_cache: Optional[dict[str, list[dict]]] = None
+        self._bug_history_cache_time: Optional[float] = None
         self._change_freq_cache: Optional[dict[str, int]] = None
+        self._change_freq_cache_time: Optional[float] = None
         self._author_stats_cache: Optional[dict[str, dict]] = None
         # Issue #554: Cache for semantic bug pattern embeddings
         self._bug_pattern_embeddings: Optional[Dict[str, List[float]]] = None
@@ -786,7 +793,11 @@ class BugPredictor(_BaseClass):
 
     def _get_change_frequency(self, file_path: str) -> dict[str, Any]:
         """Get change frequency for a file in the last 90 days."""
-        if self._change_freq_cache is None:
+        if self._change_freq_cache is None or (
+            self._change_freq_cache_time is not None
+            and time.monotonic() - self._change_freq_cache_time > _CHANGE_FREQ_CACHE_TTL
+        ):
+            self._change_freq_cache = None
             self._build_change_frequency_cache()
 
         count = self._change_freq_cache.get(file_path, 0)
@@ -798,6 +809,7 @@ class BugPredictor(_BaseClass):
     def _build_change_frequency_cache(self) -> None:
         """Build cache of change frequency from git."""
         self._change_freq_cache = {}
+        self._change_freq_cache_time = time.monotonic()
         try:
             result = subprocess.run(  # nosec B607 - git is safe
                 [
@@ -825,7 +837,11 @@ class BugPredictor(_BaseClass):
 
     def _get_bug_history(self, file_path: str) -> dict[str, Any]:
         """Get bug fix history for a file."""
-        if self._bug_history_cache is None:
+        if self._bug_history_cache is None or (
+            self._bug_history_cache_time is not None
+            and time.monotonic() - self._bug_history_cache_time > _BUG_HISTORY_CACHE_TTL
+        ):
+            self._bug_history_cache = None
             self._build_bug_history_cache()
 
         bugs = self._bug_history_cache.get(file_path, [])
@@ -862,6 +878,7 @@ class BugPredictor(_BaseClass):
     def _build_bug_history_cache(self) -> None:
         """Build cache of bug history from git."""
         self._bug_history_cache = {}
+        self._bug_history_cache_time = time.monotonic()
         try:
             # Get bug-related commits
             grep_args = []
@@ -1041,7 +1058,9 @@ class BugPredictor(_BaseClass):
     def clear_cache(self) -> None:
         """Clear all caches."""
         self._bug_history_cache = None
+        self._bug_history_cache_time = None
         self._change_freq_cache = None
+        self._change_freq_cache_time = None
         self._author_stats_cache = None
         self._bug_pattern_embeddings = None
 

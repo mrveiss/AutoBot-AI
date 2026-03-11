@@ -10,6 +10,7 @@ discovery. Refactored from god class into focused package (Issue #381).
 
 import asyncio
 import logging
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -196,6 +197,10 @@ def _build_tool_document_content(tool_info: Dict[str, Any], tool_name: str) -> s
     return "\n\n".join(sections)
 
 
+_TOOL_CACHE_TTL = 3600  # 1 hour TTL for tool research results
+_TOOL_CACHE_MAX_SIZE = 100  # Maximum number of tool types to cache
+
+
 class EnhancedKBLibrarian:
     """
     Librarian that can search KB and coordinate with other agents for tool
@@ -209,7 +214,8 @@ class EnhancedKBLibrarian:
         """Initialize discoverer with knowledge base, web assistant, and cache."""
         self.knowledge_base = knowledge_base
         self.web_assistant = WebResearchAssistant()
-        self.tool_cache = {}
+        # Maps tool_type -> (inserted_at: float, data: list); evicted by TTL and maxsize
+        self._tool_cache: Dict[str, tuple] = {}
         self._cache_lock = asyncio.Lock()
 
     async def search_tool_knowledge(self, tool_type: str) -> Dict[str, Any]:
@@ -295,9 +301,13 @@ class EnhancedKBLibrarian:
         logger.info("Requesting web research for tool type: %s", tool_type)
 
         async with self._cache_lock:
-            if tool_type in self.tool_cache:
-                logger.info("Returning cached results for %s", tool_type)
-                return list(self.tool_cache[tool_type])
+            cached = self._tool_cache.get(tool_type)
+            if cached is not None:
+                inserted_at, data = cached
+                if time.monotonic() - inserted_at < _TOOL_CACHE_TTL:
+                    logger.info("Returning cached results for %s", tool_type)
+                    return list(data)
+                del self._tool_cache[tool_type]
 
         research_query = f"best {tool_type} tools linux command line"
         web_results = await self.web_assistant.research_query(research_query)
@@ -311,7 +321,10 @@ class EnhancedKBLibrarian:
         )
 
         async with self._cache_lock:
-            self.tool_cache[tool_type] = detailed_tools
+            if len(self._tool_cache) >= _TOOL_CACHE_MAX_SIZE:
+                oldest_key = next(iter(self._tool_cache))
+                del self._tool_cache[oldest_key]
+            self._tool_cache[tool_type] = (time.monotonic(), detailed_tools)
 
         await self._store_tool_research_results(tool_type, detailed_tools)
         return detailed_tools
