@@ -224,7 +224,6 @@ const {
   lastScanTime,
   machineId,
   totalChanges,
-  hasChanges,
   lastVectorizationResult,
   scanForChanges,
   getChangeIcon,
