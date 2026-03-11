@@ -14,7 +14,7 @@ protobuf>=5.29.6,<6.0.0
 # Provides 3-4x throughput improvement with 98.7% cache efficiency
 # Requires: CUDA-compatible GPU, Python 3.12
 # Enable in config: llm.vllm.enabled = true
-vllm>=0.6.0
+vllm>=0.14.1
 
 # Document parsing libraries for knowledge base
 # Supports PDF, Word, Excel, PowerPoint, OpenDocument formats

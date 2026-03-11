@@ -121,7 +121,7 @@ paramiko>=3.4.0                   # SSH client library for infrastructure provis
 # Requires: CUDA-compatible GPU, Enable in config: llm.vllm.enabled = true
 # Installation: Automatically installed via setup.sh
 # Note: GPU-required - system will fall back to Ollama if GPU unavailable
-vllm>=0.6.0
+vllm>=0.14.1
 
 # ===== GPU-ACCELERATED VECTOR SEARCH (Issue #387) =====
 # FAISS - GPU-Accelerated Vector Similarity Search
