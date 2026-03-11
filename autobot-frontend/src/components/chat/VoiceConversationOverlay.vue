@@ -116,7 +116,7 @@
                 v-if="voiceConversation.currentTranscript.value"
                 class="voice-overlay__live-transcript"
               >
-                <i class="fas fa-ellipsis-h animate-pulse mr-2"></i>
+                <i class="fas fa-ellipsis-h animate-pulse me-2"></i>
                 {{ voiceConversation.currentTranscript.value }}
               </div>
             </Transition>
@@ -128,7 +128,7 @@
               v-if="voiceConversation.errorMessage.value"
               class="voice-overlay__error"
             >
-              <i class="fas fa-exclamation-triangle mr-2"></i>
+              <i class="fas fa-exclamation-triangle me-2"></i>
               {{ voiceConversation.errorMessage.value }}
             </div>
           </Transition>
@@ -141,7 +141,7 @@
               class="voice-overlay__cert-warning"
             >
               <p class="voice-overlay__cert-warning-title">
-                <i class="fas fa-lock-open mr-2"></i>{{ $t('chat.voice.micBlocked') }}
+                <i class="fas fa-lock-open me-2"></i>{{ $t('chat.voice.micBlocked') }}
               </p>
               <p class="voice-overlay__cert-warning-body">
                 {{ $t('chat.voice.certRequired') }}
@@ -155,7 +155,7 @@
                 </li>
               </ol>
               <p class="voice-overlay__cert-warning-fallback">
-                <i class="fas fa-info-circle mr-1"></i>
+                <i class="fas fa-info-circle me-1"></i>
                 {{ $t('chat.voice.walkieTalkieFallback') }}
               </p>
             </div>

@@ -37,7 +37,7 @@
     <div v-if="attachedFiles.length > 0" class="attached-files mb-4">
       <div class="attached-files-header">
         <h4 class="text-sm font-medium text-autobot-text-secondary">
-          <i class="fas fa-paperclip mr-1" aria-hidden="true"></i>
+          <i class="fas fa-paperclip me-1" aria-hidden="true"></i>
           {{ $t('chat.input.filesAttached', { count: attachedFiles.length }) }}
         </h4>
         <BaseButton variant="ghost" size="sm" @click="clearAllFiles" class="text-red-600 hover:text-red-800">

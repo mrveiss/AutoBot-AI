@@ -28,7 +28,7 @@
             class="text-autobot-text-secondary"
             :title="$t('chat.sidebar.selectMultiple')"
           >
-            <i class="fas fa-check-square mr-1"></i>{{ $t('common.select') }}
+            <i class="fas fa-check-square me-1"></i>{{ $t('common.select') }}
           </BaseButton>
           <div v-else class="flex items-center gap-2">
             <span class="text-xs text-autobot-text-secondary">{{ $t('chat.sidebar.nSelected', { count: selectedSessions.size }) }}</span>
@@ -44,7 +44,7 @@
         </div>
 
         <!-- FIXED: Scrollable chat history container -->
-        <div class="flex-1 overflow-y-auto space-y-1.5 pr-1 mb-3" style="scrollbar-width: thin;">
+        <div class="flex-1 overflow-y-auto space-y-1.5 pe-1 mb-3" style="scrollbar-width: thin;">
           <div
             v-for="(session, index) in store.sessions"
             :key="session.id"
@@ -66,7 +66,7 @@
             @focus="focusedIndex = index"
           >
             <!-- Selection checkbox -->
-            <div v-if="selectionMode" class="absolute left-1 top-1">
+            <div v-if="selectionMode" class="absolute start-1 top-1">
               <input
                 type="checkbox"
                 :checked="selectedSessions.has(session.id)"
@@ -75,7 +75,7 @@
               />
             </div>
 
-            <div class="flex items-start justify-between gap-2" :class="{ 'ml-6': selectionMode }">
+            <div class="flex items-start justify-between gap-2" :class="{ 'ms-6': selectionMode }">
               <span class="text-sm text-autobot-text-primary truncate flex-1 leading-tight">
                 {{ session.title || getSessionPreview(session) }}
               </span>
@@ -114,7 +114,7 @@
             </div>
 
             <!-- Session metadata - FIXED: Smaller, more compact -->
-            <div class="text-xs text-autobot-text-secondary mt-1 flex justify-between leading-tight" :class="{ 'ml-6': selectionMode }">
+            <div class="text-xs text-autobot-text-secondary mt-1 flex justify-between leading-tight" :class="{ 'ms-6': selectionMode }">
               <span>{{ $t('chat.sidebar.nMsgs', { count: session.messages.length }) }}</span>
               <span>{{ formatDate(session.updatedAt) }}</span>
             </div>
@@ -137,7 +137,7 @@
             @click="controller.createNewSession()"
             :aria-label="$t('chat.sidebar.createNew')"
           >
-            <i class="fas fa-plus mr-1"></i>
+            <i class="fas fa-plus me-1"></i>
             {{ $t('chat.sidebar.new') }}
           </BaseButton>
           <BaseButton
@@ -148,7 +148,7 @@
             :disabled="!store.currentSessionId"
             :aria-label="$t('chat.sidebar.resetChat')"
           >
-            <i class="fas fa-redo mr-1"></i>
+            <i class="fas fa-redo me-1"></i>
             {{ $t('common.reset') }}
           </BaseButton>
           <BaseButton
@@ -159,7 +159,7 @@
             :disabled="!store.currentSessionId"
             :aria-label="$t('chat.sidebar.deleteChat')"
           >
-            <i class="fas fa-trash mr-1"></i>
+            <i class="fas fa-trash me-1"></i>
             {{ $t('common.delete') }}
           </BaseButton>
           <BaseButton
@@ -169,7 +169,7 @@
             @click="controller.loadChatSessions()"
             :aria-label="$t('chat.sidebar.refreshList')"
           >
-            <i class="fas fa-sync mr-1"></i>
+            <i class="fas fa-sync me-1"></i>
             {{ $t('common.refresh') }}
           </BaseButton>
         </div>
@@ -184,7 +184,7 @@
             :disabled="selectedSessions.size === 0"
             :aria-label="$t('chat.sidebar.deleteSelected')"
           >
-            <i class="fas fa-trash mr-1.5"></i>
+            <i class="fas fa-trash me-1.5"></i>
             {{ $t('chat.sidebar.deleteNSelected', { count: selectedSessions.size }) }}
           </BaseButton>
         </div>
@@ -199,7 +199,7 @@
               type="checkbox"
               :checked="getSetting(setting.key as keyof DisplaySettings)"
               @change="toggleSetting(setting.key as keyof DisplaySettings, ($event.target as HTMLInputElement)?.checked)"
-              class="mr-2 rounded border-autobot-border text-electric-600 focus:ring-electric-500"
+              class="me-2 rounded border-autobot-border text-electric-600 focus:ring-electric-500"
             />
             <span class="text-xs text-autobot-text-secondary">{{ setting.label }}</span>
           </label>
@@ -218,7 +218,7 @@
             :loading="isSystemReloading"
             :aria-label="$t('chat.sidebar.reloadSystem')"
           >
-            <i class="fas fa-sync mr-1.5"></i>
+            <i class="fas fa-sync me-1.5"></i>
             {{ isSystemReloading ? $t('chat.sidebar.reloading') : $t('chat.sidebar.reloadSystem') }}
           </BaseButton>
 
