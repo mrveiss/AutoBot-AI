@@ -431,27 +431,17 @@ class AdvancedRAGOptimizer:
         return diversified
 
     def _ensure_cross_encoder_loaded(self) -> None:
-        """Lazy load cross-encoder model (Issue #398: extracted)."""
+        """Load cross-encoder model via process-wide singleton (Issue #398: extracted).
+
+        Issue #1549: Delegates to get_cross_encoder() from reranking module so
+        all callers within a worker process share one model instance (~100MB).
+        """
         if hasattr(self, "_cross_encoder"):
             return
 
-        try:
-            from sentence_transformers import CrossEncoder
+        from knowledge.search_components.reranking import get_cross_encoder
 
-            model_name = getattr(
-                self, "reranking_model", "cross-encoder/ms-marco-MiniLM-L-6-v2"
-            )
-            logger.info("Loading cross-encoder model: %s", model_name)
-            self._cross_encoder = CrossEncoder(model_name)
-            logger.info("Cross-encoder model loaded successfully")
-        except ImportError:
-            logger.warning(
-                "sentence-transformers not available, using fallback reranking"
-            )
-            self._cross_encoder = None
-        except Exception as e:
-            logger.error("Failed to load cross-encoder model: %s", e)
-            self._cross_encoder = None
+        self._cross_encoder = get_cross_encoder()
 
     async def _apply_cross_encoder_scores(
         self, query: str, results: List[SearchResult]

@@ -31,11 +31,13 @@ class ResultReranker:
         self._cross_encoder = None
 
     async def _ensure_cross_encoder(self):
-        """Ensure cross-encoder model is loaded. Issue #281: Extracted helper."""
-        from sentence_transformers import CrossEncoder
+        """Return process-wide CrossEncoder model. Issue #281: Extracted helper.
 
+        Issue #1549: Delegates to module-level get_cross_encoder() to ensure
+        only one model instance exists per worker process.
+        """
         if self._cross_encoder is None:
-            self._cross_encoder = await asyncio.to_thread(CrossEncoder, self.MODEL_NAME)
+            self._cross_encoder = await asyncio.to_thread(get_cross_encoder)
         return self._cross_encoder
 
     def _apply_rerank_scores(self, results: List[Dict[str, Any]], scores: list) -> None:
@@ -92,6 +94,42 @@ class ResultReranker:
         except Exception as e:
             logger.error("Reranking failed: %s", e)
             return results
+
+
+# Module-level CrossEncoder singleton (Issue #1549: shared per-worker to avoid
+# 400MB+ duplication when multiple instances each load their own copy).
+_cross_encoder_model = None
+_cross_encoder_lock = threading.Lock()
+
+
+def get_cross_encoder():
+    """Return the process-wide CrossEncoder model (thread-safe, lazy-loaded).
+
+    Issue #1549: Loading CrossEncoder once per worker process and sharing it
+    across all callers eliminates per-instance duplication (~100MB each).
+    """
+    global _cross_encoder_model
+    if _cross_encoder_model is None:
+        with _cross_encoder_lock:
+            if _cross_encoder_model is None:
+                try:
+                    from sentence_transformers import CrossEncoder
+
+                    logger.info(
+                        "Loading shared CrossEncoder model: %s",
+                        ResultReranker.MODEL_NAME,
+                    )
+                    _cross_encoder_model = CrossEncoder(ResultReranker.MODEL_NAME)
+                    logger.info("Shared CrossEncoder model loaded successfully")
+                except ImportError:
+                    logger.warning(
+                        "sentence-transformers not available, CrossEncoder disabled"
+                    )
+                    _cross_encoder_model = None
+                except Exception as exc:
+                    logger.error("Failed to load CrossEncoder model: %s", exc)
+                    _cross_encoder_model = None
+    return _cross_encoder_model
 
 
 # Module-level instance for convenience (thread-safe, Issue #613)
