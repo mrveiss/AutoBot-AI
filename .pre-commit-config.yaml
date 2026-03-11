@@ -130,6 +130,22 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
         description: Blocks commits with print() in Python or console.* in TypeScript/Vue production code
+
+  # Warn when untracked source files exist at commit time (Issue #1503)
+  # Runs at prepare-commit-msg stage — AFTER the pre-commit stash/restore cycle —
+  # so it can detect untracked files that survived or were restored by the stash pop.
+  - repo: local
+    hooks:
+      - id: warn-untracked-files
+        name: Warn on Untracked Source Files (Issue #1503)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-warn-untracked
+        language: script
+        pass_filenames: false
+        stages: [prepare-commit-msg]
+        description: >
+          Warns when untracked non-gitignored source files coexist with a commit.
+          pre-commit stash/restore can accidentally stage these files from other branches.
+          Fix: use git worktree add .worktrees/feat-XXXX for parallel branch work.
 # Configuration for specific file types
 default_language_version:
   python: python3
