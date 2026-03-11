@@ -222,6 +222,15 @@ Wait for user confirmation before writing code. Do NOT assume `systemd` vs `dock
 - Bulk operations: commit in batches of 10–15 files max
 - **NEVER** use `git commit --no-verify`
 
+**Pre-commit Stash Risk (Issue #1503):**
+
+pre-commit uses `git stash push --include-untracked` before running hooks and `git stash pop` after. When untracked files from other in-progress branches exist in the working directory, the stash pop can promote them into the staging area — causing them to be accidentally included in unrelated commits.
+
+- **Mitigation**: use `git worktree add .worktrees/feat-XXXX -b feat/XXXX` for ALL parallel branch work — each worktree has its own isolated working directory
+- **Detection**: the `warn-untracked-files` pre-commit hook fires at `prepare-commit-msg` stage and warns when untracked source files coexist with a commit
+- **Before committing**: if the warning fires, run `git diff --cached --name-only` and verify every staged file belongs on the current branch
+- **To unstage accidentally included files**: `git restore --staged <file>`
+
 **Post-commit verification:**
 
 ```bash

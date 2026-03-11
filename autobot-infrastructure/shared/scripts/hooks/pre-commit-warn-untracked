@@ -1,0 +1,77 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-commit Hook: Warn on Untracked Source Files During Commit
+# =============================================================
+#
+# Runs at the prepare-commit-msg stage (AFTER the pre-commit stash/restore cycle).
+# Warns when untracked non-gitignored source files exist alongside the commit,
+# because pre-commit's `git stash push --include-untracked` + `git stash pop`
+# cycle can accidentally promote untracked files from other in-progress branches
+# into the staging area.
+#
+# This is a WARNING only (exit 0) — it never blocks a commit.
+# The user should verify `git diff --cached --name-only` and unstage unexpected
+# files with `git restore --staged <file>` before proceeding.
+#
+# Root cause: pre-commit stashes untracked files; on pop, conflicts between the
+# index and the stash can result in files landing in the staging area.
+#
+# Prevention: use `git worktree add .worktrees/feat-XXXX -b feat/XXXX` for all
+# parallel branch work so each branch has its own isolated working directory.
+#
+# Issue: #1503 - Infra: pre-commit stash/restore stages untracked files from other branches
+#
+# Install: pre-commit install (uses .pre-commit-config.yaml)
+
+set -uo pipefail
+
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+SOURCE_PATTERN='\.py$|\.ts$|\.vue$|\.js$'
+
+main() {
+    # Find untracked, non-gitignored source files
+    untracked=$(git ls-files --others --exclude-standard 2>/dev/null \
+        | grep -E "$SOURCE_PATTERN" || true)
+
+    if [[ -z "$untracked" ]]; then
+        exit 0
+    fi
+
+    untracked_count=$(echo "$untracked" | wc -l | tr -d ' ')
+
+    echo ""
+    echo -e "${BOLD}${YELLOW}⚠  pre-commit stash warning (Issue #1503)${NC}"
+    echo -e "${CYAN}──────────────────────────────────────────────────────${NC}"
+    echo -e "  ${untracked_count} untracked source file(s) found in the working tree."
+    echo ""
+    echo "  pre-commit's stash/restore cycle (--include-untracked) can"
+    echo "  accidentally stage these files from other in-progress branches."
+    echo ""
+    echo "  Untracked files:"
+    echo "$untracked" | while IFS= read -r f; do
+        echo "    - $f"
+    done
+    echo ""
+    echo "  Verify your staging area is clean before this commit proceeds:"
+    echo "    git diff --cached --name-only"
+    echo ""
+    echo "  To unstage an accidentally included file:"
+    echo "    git restore --staged <file>"
+    echo ""
+    echo "  To prevent this in future, isolate parallel branch work:"
+    echo "    git worktree add .worktrees/feat-XXXX -b feat/XXXX"
+    echo -e "${CYAN}──────────────────────────────────────────────────────${NC}"
+    echo ""
+
+    # Exit 0: warn only, never block (severity: low)
+    exit 0
+}
+
+main "$@"
