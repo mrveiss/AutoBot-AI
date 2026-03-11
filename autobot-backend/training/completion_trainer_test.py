@@ -173,7 +173,7 @@ def test_model_save_load():
         torch.save(checkpoint, checkpoint_path)
 
         # Load model
-        loaded = torch.load(checkpoint_path)
+        loaded = torch.load(checkpoint_path, weights_only=True)
         config = loaded["model_config"]
         new_model = CompletionModel.from_config(config)
         new_model.load_state_dict(loaded["model_state_dict"])
