@@ -34,13 +34,13 @@ llama-index>=0.12.41,<0.14.0    # RAG framework (pinned for API compatibility)
 llama-index-llms-ollama>=0.5.0,<1.0.0  # Ollama LLM integration
 llama-index-embeddings-ollama>=0.5.0,<1.0.0  # Ollama embeddings
 llama-index-vector-stores-chroma>=0.5.0,<1.0.0  # ChromaDB vector store
-# LangChain 1.x ecosystem — pinned to 0.3.x minor to prevent drift (#1047)
-langchain>=0.3.0,<0.4.0               # Issue #1043: Upgraded for LangGraph compatibility
-langchain-core>=0.3.81,<0.4.0         # Issue #1043 + SECURITY UPDATE (injection + SSRF)
-langchain-community>=0.3.0,<0.4.0     # Issue #1043: Community integrations
-langchain-ollama>=0.3.0,<0.4.0        # Issue #1047: ChatOllama for QA chain (replaces legacy Ollama)
-langgraph>=1.0.10,<2.0.0              # Issue #1043: StateGraph for chat orchestration
-langgraph-checkpoint-redis>=0.3.0,<1.0.0  # Issue #1043: Redis checkpointer for thread persistence
+# LangChain 1.x ecosystem — migrated from 0.3.x to fix SSRF CVE (#1572)
+langchain>=1.2.0,<2.0.0               # Issue #1572: Migrated to 1.x (was 0.3.x)
+langchain-core>=1.2.11,<2.0.0         # Issue #1572: SSRF CVE fix requires >=1.2.11
+langchain-community>=0.4.0,<0.5.0     # Issue #1572: Compatible with langchain 1.x
+langchain-ollama>=1.0.0,<2.0.0        # Issue #1572: ChatOllama for QA chain
+langgraph>=1.1.1,<2.0.0               # Issue #1043: StateGraph for chat orchestration
+langgraph-checkpoint-redis>=0.4.0,<1.0.0  # Issue #1043: Redis checkpointer for thread persistence
 markdownify>=0.11.0  # HTML to Markdown conversion
 mcp>=1.23.0            # MCP protocol for skill subprocesses (Issue #731)
 PyYAML>=6.0            # SKILL.md frontmatter parsing (Phase 3 sync engine)

@@ -57,11 +57,12 @@ pygetwindow==0.0.9
 
 # ===== LLM INTEGRATIONS =====
 markdownify==1.2.0
-langchain==0.3.26
-langchain-community==0.3.27
-langchain-core==0.3.83
-langchain-text-splitters==0.3.9
-langsmith==0.4.5
+langchain==1.2.12
+langchain-classic==1.0.2
+langchain-community==0.4.1
+langchain-core==1.2.18
+langchain-text-splitters==1.1.1
+langsmith==0.7.16
 llama-index-core==0.13.0
 llama-index-llms-ollama==0.6.2
 llama-index-embeddings-ollama==0.6.0
