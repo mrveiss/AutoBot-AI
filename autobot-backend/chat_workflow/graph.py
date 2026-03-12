@@ -647,13 +647,15 @@ async def get_redis_checkpointer() -> AsyncRedisSaver:
     if _checkpointer is not None:
         return _checkpointer
 
-    # Get Redis URI from SSOT config
+    # Get Redis URI and checkpoint TTL from SSOT config
+    ttl_minutes = 1440  # Default: 24 hours
     try:
         from autobot_shared.ssot_config import config as ssot
 
         redis_host = ssot.redis.host
         redis_port = ssot.redis.port
         _REDIS_URI = f"redis://{redis_host}:{redis_port}"
+        ttl_minutes = ssot.redis.checkpoint_ttl_minutes
     except Exception:
         redis_host = os.environ.get(
             "AUTOBOT_REDIS_HOST", "172.16.168.23"  # noqa: ssot-fallback
@@ -664,10 +666,22 @@ async def get_redis_checkpointer() -> AsyncRedisSaver:
             _REDIS_URI,
         )
 
+    # Issue #1481: TTL config for checkpoint auto-expiration
+    ttl_config = None
+    if ttl_minutes > 0:
+        ttl_config = {
+            "default_ttl": ttl_minutes,
+            "refresh_on_read": True,
+        }
+
     # Issue #1433: from_conn_string() is an async generator, use direct init
-    _checkpointer = AsyncRedisSaver(redis_url=_REDIS_URI)
+    _checkpointer = AsyncRedisSaver(redis_url=_REDIS_URI, ttl=ttl_config)
     await _checkpointer.asetup()
-    logger.info("LangGraph Redis checkpointer initialized: %s", _REDIS_URI)
+    logger.info(
+        "LangGraph Redis checkpointer initialized: %s (TTL: %s min)",
+        _REDIS_URI,
+        ttl_minutes if ttl_minutes > 0 else "disabled",
+    )
     return _checkpointer
 
 
