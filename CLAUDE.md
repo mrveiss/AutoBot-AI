@@ -393,10 +393,17 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 **Prefer direct implementation over subagents** — reserve agents for exploration/research of unfamiliar areas.
 
 **Before spawning parallel subagents:**
-1. Verify worktree: `ls -la ../worktrees/ 2>/dev/null || mkdir -p ../worktrees/`
-2. Test one agent first before dispatching many
-3. If agent hangs >5 minutes, fail fast
-4. Fallback plan: switch to sequential branch-based implementation
+1. Sync local branch: `git fetch origin Dev_new_gui && git pull --rebase`
+2. Verify worktree: `ls -la ../worktrees/ 2>/dev/null || mkdir -p ../worktrees/`
+3. Test one agent first before dispatching many
+4. If agent hangs >5 minutes, fail fast
+5. Fallback plan: switch to sequential branch-based implementation
+
+**Worktree Isolation Warning:**
+Do NOT use `isolation: "worktree"` for agents that create PRs. The auto-created worktree branches from local HEAD, which may diverge from `origin/Dev_new_gui` — causing PRs with unrelated files and merge conflicts. Instead, create manual worktrees:
+```bash
+git worktree add .worktrees/issue-XXXX -b <branch> origin/Dev_new_gui
+```
 
 **If subagent fails:** Switch to direct implementation immediately. Do NOT retry.
 
