@@ -409,6 +409,13 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 - Analysis: `code-skeptic`, `systems-architect`, `performance-engineer`, `security-auditor`, `ai-ml-engineer`
 - Planning: `project-task-planner`, `project-manager`
 
+**Subagent Bash Permission Constraint:**
+Dispatched subagents cannot autonomously acquire Bash tool permission. This means:
+- Bulk operations requiring Python scripts (e.g., i18n batch translation) must run in the main session
+- Git operations (commit, push, PR creation) from subagents require pre-authorized Bash access
+- Workaround: run batch file-manipulation and git work directly in the main session, not via subagents
+- JSON validation, file writes via MCP tools still work — only shell execution is blocked
+
 ### GitHub Workflow
 
 **Commit format:** `<type>(scope): <description> (#issue-number)`
