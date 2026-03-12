@@ -652,8 +652,8 @@ async def get_redis_checkpointer() -> AsyncRedisSaver:
     try:
         from autobot_shared.ssot_config import config as ssot
 
-        redis_host = ssot.redis.host
-        redis_port = ssot.redis.port
+        redis_host = ssot.vm.redis
+        redis_port = ssot.port.redis
         _REDIS_URI = f"redis://{redis_host}:{redis_port}"
         ttl_minutes = ssot.redis.checkpoint_ttl_minutes
     except Exception:
