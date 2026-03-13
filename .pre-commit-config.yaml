@@ -84,6 +84,19 @@ repos:
         exclude: (code_analysis/|_test\.py|\.e2e_test\.py|\.integration_test\.py|\.performance_test\.py|conftest\.py)$
         additional_dependencies: ["bandit[toml]"]
 
+  # Block commits when branch is shared with a worktree (Issue #1654)
+  # Must run BEFORE the stash/restore cycle to prevent branch corruption.
+  - repo: local
+    hooks:
+      - id: worktree-branch-guard
+        name: Worktree Branch Guard (Issue #1654)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-worktree-branch-guard
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks commits when current branch is also checked out in another worktree"
+
   # Hardcoded value detection (Issue #694)
   - repo: local
     hooks:
