@@ -1,87 +1,23 @@
-# CI requirements — pinned to exact production versions (Issue #1211)
+# CI requirements — role-based split for isolated dependency management (#1655)
 # Python version: 3.10 (installed via deadsnakes PPA on self-hosted runner)
+#
+# Each file groups tightly-coupled packages so version conflicts
+# stay contained within their ecosystem. To debug a conflict,
+# install individual files: pip install -r requirements-ci/framework.txt
 #
 # NOTE: The llama-index umbrella package is installed separately with
 # --no-deps in the CI workflow because it constrains llama-index-readers-file<0.6,
 # but we need >=0.6.0 for pypdf 6.x compatibility.
 
-# ===== CORE FRAMEWORK =====
-fastapi==0.115.9
-starlette==0.49.1
-python-multipart==0.0.22
-uvicorn==0.35.0
-requests==2.32.4
-aiohttp==3.13.3
-aiofiles==24.1.0
-aiosqlite==0.21.0
-beautifulsoup4==4.13.4
-pyyaml==6.0.2
-pydantic==2.12.3
-websockets==15.0.1
-
-# ===== LLM & AI FRAMEWORKS =====
-openai==2.6.1
-tiktoken==0.11.0
-transformers==5.3.0
-sentence-transformers==5.3.0
-
-# ===== AGENT COMMUNICATION =====
-celery==5.5.3
-kombu==5.5.4
-
-# ===== STORAGE =====
-redis==5.3.0
-chromadb==1.2.1
-sqlalchemy==2.0.43
-
-# ===== SYSTEM & TOOLS =====
-psutil==6.1.1
-httpx==0.28.1
-playwright==1.54.0
-
-# ===== DOCUMENT PROCESSING =====
-python-docx==1.1.2
-pypdf==6.8.0
-markdown==3.8.2
-nltk==3.9.3
-
-# ===== GUI & AUTOMATION =====
-pyautogui==0.9.54
-mouseinfo==0.1.3
-pillow==12.1.1
-numpy==1.26.4
-opencv-python==4.13.0.92
-pygetwindow==0.0.9
-
-# ===== LLM INTEGRATIONS =====
-markdownify==1.2.0
-langchain==1.2.12
-langchain-classic==1.0.2
-langchain-community==0.4.1
-langchain-core==1.2.18
-langchain-text-splitters==1.1.1
-langsmith==0.7.16
-llama-index-core==0.13.0
-llama-index-llms-ollama==0.7.4
-llama-index-embeddings-ollama==0.9.0
-llama-index-vector-stores-redis==0.7.0
-llama-index-readers-file==0.6.0
-# llama-index==0.13.0 — installed via --no-deps in workflow (constrains readers-file<0.6, see header)
-
-# ===== SECURITY & DEV TOOLS =====
-pre-commit==4.2.0
-detect-secrets==1.5.0
-pycryptodome==3.23.0
-cryptography==46.0.5
-
-# ===== MONITORING =====
-prometheus-client==0.20.0
-structlog==25.4.0
-rich==14.2.0
-tqdm==4.67.1
-
-# ===== UTILITIES =====
-python-dotenv==1.1.0
-click==8.1.8
-jsonschema==4.24.0
-python-json-logger==3.3.0
+-r requirements-ci/framework.txt
+-r requirements-ci/networking.txt
+-r requirements-ci/storage.txt
+-r requirements-ci/ai-ml.txt
+-r requirements-ci/langchain.txt
+-r requirements-ci/llama-index.txt
+-r requirements-ci/agent.txt
+-r requirements-ci/document.txt
+-r requirements-ci/automation.txt
+-r requirements-ci/security.txt
+-r requirements-ci/monitoring.txt
+-r requirements-ci/utilities.txt
