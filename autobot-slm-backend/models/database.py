@@ -118,7 +118,7 @@ class Node(Base):
 
     # Code version tracking (Issue #741)
     code_version = Column(String(64), nullable=True)
-    code_status = Column(String(20), default=CodeStatus.UNKNOWN.value)
+    code_status = Column(String(50), default=CodeStatus.UNKNOWN.value)  # #1622
 
     # Role-based tracking (Issue #779)
     detected_roles = Column(JSON, default=list)
