@@ -650,33 +650,6 @@ def get_current_user(request: Request) -> Dict:
     return user_data
 
 
-def require_file_permission(operation: str):
-    """
-    Decorator factory for file operations requiring specific permissions
-    """
-
-    def decorator(func):
-        """Wrap function with permission check for the specified operation."""
-
-        async def wrapper(request: Request, *args, **kwargs):
-            """Check permission and execute function with user in request state."""
-            has_permission, user_data = auth_middleware.check_file_permissions(
-                request, operation
-            )
-            if not has_permission:
-                raise_auth_error(
-                    "AUTH_0003",
-                    f"Insufficient permissions for file {operation} operation",
-                )
-            # Add user data to request state for use in endpoint
-            request.state.user = user_data
-            return await func(request, *args, **kwargs)
-
-        return wrapper
-
-    return decorator
-
-
 def check_admin_permission(request: Request) -> bool:
     """
     FastAPI dependency to check if user has admin permission.
