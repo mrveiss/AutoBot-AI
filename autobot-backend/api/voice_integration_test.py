@@ -8,7 +8,7 @@ Integration tests for the full voice pipeline (#928):
 These tests verify end-to-end latency and API contract for:
   - POST /api/voice/synthesize  (backend → TTS worker proxy)
   - POST /api/voice/clone-voice (backend → TTS worker proxy)
-  - TTS worker health at 172.16.168.22:8082
+  - TTS worker health check
 """
 
 import io
@@ -17,11 +17,13 @@ import wave
 
 import requests
 
+from autobot_shared.ssot_config import config
+
 # ------------------------------------------------------------------ #
-# Config                                                               #
+# Config (#1618: use SSOT — no hardcoded IPs)                         #
 # ------------------------------------------------------------------ #
-BACKEND_URL = "http://172.16.168.20:8001"
-TTS_WORKER_URL = "http://172.16.168.22:8082"
+BACKEND_URL = f"http://{config.vm.main}:{config.port.backend}"
+TTS_WORKER_URL = f"http://{config.vm.tts}:{config.port.tts}"
 LATENCY_BUDGET_SEC = 5.0  # STT → TTS round-trip target
 
 
