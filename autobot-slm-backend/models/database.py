@@ -248,6 +248,7 @@ class ServiceStatus(str, enum.Enum):
     RUNNING = "running"
     STOPPED = "stopped"
     FAILED = "failed"
+    CRASH_LOOP = "crash-loop"  # Issue #1604: activating/auto-restart
     UNKNOWN = "unknown"
 
 

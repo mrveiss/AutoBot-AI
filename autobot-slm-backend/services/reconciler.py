@@ -16,7 +16,6 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
-from config import settings
 from models.database import (
     Deployment,
     DeploymentStatus,
@@ -33,6 +32,8 @@ from models.database import (
 from services.service_categorizer import categorize_service
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -1233,7 +1234,7 @@ class ReconcilerService:
 
         old_status = node.status
         new_status = self._calculate_node_status(
-            cpu_percent, memory_percent, disk_percent
+            cpu_percent, memory_percent, disk_percent, extra_data
         )
 
         await self._handle_node_status_change(
@@ -1402,15 +1403,35 @@ class ReconcilerService:
         # Note: commit happens in the calling method (update_node_heartbeat)
 
     def _calculate_node_status(
-        self, cpu_percent: float, memory_percent: float, disk_percent: float
+        self,
+        cpu_percent: float,
+        memory_percent: float,
+        disk_percent: float,
+        extra_data: Optional[dict] = None,
     ) -> str:
-        """Calculate node status based on health metrics."""
+        """Calculate node status based on health metrics and services.
+
+        Issue #1604: Also degrade if any autobot service is crash-looping.
+        """
         if cpu_percent > 95 or memory_percent > 95 or disk_percent > 95:
             return NodeStatus.ERROR.value
-        elif cpu_percent > 80 or memory_percent > 80 or disk_percent > 80:
+
+        # Issue #1604: Check for crash-looping services
+        if extra_data:
+            for svc in extra_data.get("discovered_services", []):
+                svc_name = svc.get("name", "")
+                if not svc_name.startswith("autobot"):
+                    continue
+                if svc.get("status") == "crash-loop":
+                    return NodeStatus.DEGRADED.value
+                n_restarts = svc.get("n_restarts", 0)
+                if n_restarts > 3:
+                    return NodeStatus.DEGRADED.value
+
+        if cpu_percent > 80 or memory_percent > 80 or disk_percent > 80:
             return NodeStatus.DEGRADED.value
-        else:
-            return NodeStatus.ONLINE.value
+
+        return NodeStatus.ONLINE.value
 
     # ------------------------------------------------------------------
     # Manifest-driven background tasks (Issue #926 Phase 3)
