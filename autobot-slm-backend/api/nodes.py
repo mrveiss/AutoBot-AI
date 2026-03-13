@@ -1417,11 +1417,15 @@ async def replace_node(
     return NodeResponse.model_validate(new_node)
 
 
-async def _update_heartbeat_code_status(db: AsyncSession, node: Node) -> str | None:
+async def _update_heartbeat_code_status(
+    db: AsyncSession, node: Node, extra_data: dict | None = None
+) -> str | None:
     """Query latest commit setting and update node.code_status.
 
     Returns the latest_version string or None.
     Helper for node_heartbeat (Issue #1102).
+    Issue #1605: Also checks service health — code_current_service_failed
+    when commit matches but autobot services are failed/crash-looping.
     """
     latest_result = await db.execute(
         select(Setting).where(Setting.key == "slm_agent_latest_commit")
@@ -1433,13 +1437,33 @@ async def _update_heartbeat_code_status(db: AsyncSession, node: Node) -> str | N
     # Do NOT use heartbeat.code_version — agents report stale values (Issue #889).
     if latest_version:
         if node.code_version == latest_version:
-            node.code_status = CodeStatus.UP_TO_DATE.value
+            # Issue #1605: check if autobot services are actually healthy
+            if _has_failed_autobot_service(extra_data):
+                node.code_status = CodeStatus.CODE_CURRENT_SERVICE_FAILED.value
+            else:
+                node.code_status = CodeStatus.UP_TO_DATE.value
         elif node.code_version:
             node.code_status = CodeStatus.OUTDATED.value
         else:
             node.code_status = CodeStatus.UNKNOWN.value
 
     return latest_version
+
+
+def _has_failed_autobot_service(extra_data: dict | None) -> bool:
+    """Check if any autobot-* service is failed or crash-looping.
+
+    Issue #1605: Prevents code_status=up_to_date when service is broken.
+    """
+    if not extra_data:
+        return False
+    for svc in extra_data.get("discovered_services", []):
+        name = svc.get("name", "")
+        if not name.startswith("autobot"):
+            continue
+        if svc.get("status") in ("failed", "crash-loop"):
+            return True
+    return False
 
 
 async def _apply_heartbeat_reports(
@@ -1498,7 +1522,9 @@ async def node_heartbeat(
 
         await _apply_heartbeat_reports(db, node_id, heartbeat, node)
 
-        latest_version = await _update_heartbeat_code_status(db, node)
+        latest_version = await _update_heartbeat_code_status(
+            db, node, heartbeat.extra_data
+        )
         await db.commit()
         await db.refresh(node)
 

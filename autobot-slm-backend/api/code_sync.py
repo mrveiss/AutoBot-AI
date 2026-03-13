@@ -136,8 +136,16 @@ async def get_sync_status(
     total_result = await db.execute(select(func.count(Node.id)))
     total_nodes = total_result.scalar() or 0
 
+    # Issue #1605: count outdated + service-failed as needing attention
     outdated_result = await db.execute(
-        select(func.count(Node.id)).where(Node.code_status == CodeStatus.OUTDATED.value)
+        select(func.count(Node.id)).where(
+            Node.code_status.in_(
+                [
+                    CodeStatus.OUTDATED.value,
+                    CodeStatus.CODE_CURRENT_SERVICE_FAILED.value,
+                ]
+            )
+        )
     )
     outdated_nodes = outdated_result.scalar() or 0
 
@@ -226,10 +234,18 @@ async def get_pending_nodes(
     latest_setting = setting_result.scalar_one_or_none()
     latest_version = latest_setting.value if latest_setting else None
 
-    # Get outdated nodes
+    # Get nodes needing attention: outdated or code-current-but-service-failed
+    # Issue #1605: include service-failed nodes so operators see them
     result = await db.execute(
         select(Node)
-        .where(Node.code_status == CodeStatus.OUTDATED.value)
+        .where(
+            Node.code_status.in_(
+                [
+                    CodeStatus.OUTDATED.value,
+                    CodeStatus.CODE_CURRENT_SERVICE_FAILED.value,
+                ]
+            )
+        )
         .order_by(Node.hostname)
     )
     nodes = result.scalars().all()
@@ -348,37 +364,6 @@ async def _rsync_component_local(
         return False, f"local rsync error for {component}: {exc}"
 
 
-async def _install_slm_pip_dependencies() -> None:
-    """Install pip dependencies for SLM backend after code sync.
-
-    Issue #1607: Mirrors what Ansible does — ensures new dependencies
-    are installed before restarting the service.
-    """
-    pip_bin = "/opt/autobot/autobot-slm-backend/venv/bin/pip"
-    req_file = "/opt/autobot/autobot-slm-backend/requirements.txt"
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            pip_bin,
-            "install",
-            "-r",
-            req_file,
-            "--quiet",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
-        if proc.returncode == 0:
-            logger.info("SLM self-sync: pip dependencies installed")
-        else:
-            logger.warning(
-                "SLM self-sync: pip install returned %d: %s",
-                proc.returncode,
-                stdout.decode(errors="replace")[:500],
-            )
-    except Exception as exc:
-        logger.warning("SLM self-sync: pip install failed: %s", exc)
-
-
 async def _build_slm_frontend() -> None:
     """Run npm ci + npm run build for the SLM frontend.
 
@@ -446,6 +431,40 @@ async def _restart_slm_service(service: str) -> None:
         logger.info("Restarted service: %s", service)
     except Exception as exc:
         logger.warning("Failed to restart %s: %s", service, exc)
+
+
+async def _install_slm_pip_dependencies() -> None:
+    """Install Python dependencies from requirements.txt into the SLM venv.
+
+    Runs unconditionally after rsync — pip is fast when nothing changed (#1603).
+    """
+    req_path = "/opt/autobot/autobot-slm-backend/requirements.txt"
+    pip_bin = "/opt/autobot/autobot-slm-backend/venv/bin/pip"
+
+    if not Path(req_path).exists():
+        logger.debug("No requirements.txt at %s — skipping pip install", req_path)
+        return
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            pip_bin,
+            "install",
+            "-r",
+            req_path,
+            "--quiet",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+        if proc.returncode == 0:
+            logger.info("SLM pip install completed successfully")
+        else:
+            output = stdout.decode(errors="replace")[:500] if stdout else ""
+            logger.error("SLM pip install failed (rc=%d): %s", proc.returncode, output)
+    except asyncio.TimeoutError:
+        logger.error("SLM pip install timed out after 300s")
+    except Exception as exc:
+        logger.error("SLM pip install error: %s", exc)
 
 
 async def _fetch_code_source_connection_info(
@@ -575,12 +594,11 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
         logger.error("SLM self-sync had failures; services NOT restarted")
         return
 
-    # --- Phase 2b: install pip dependencies (#1607) ---
+    # --- Phase 2b: install Python dependencies if requirements.txt changed (#1603) ---
     await _install_slm_pip_dependencies()
 
     # --- Phase 2c: rebuild SLM frontend (#1607) ---
     await _build_slm_frontend()
-
     # --- Phase 3: mark up-to-date in DB before restarting (#1209) ---
     await _mark_slm_node_up_to_date(db_service, node_id)
 
