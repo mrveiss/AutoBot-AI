@@ -414,6 +414,28 @@
       register: backend_pip_install
       tags: [backend, deps]
 
+    - name: "[PLAY 2] Backend | Run Alembic migrations (#1608)"
+      command:
+        cmd: /opt/autobot/autobot-backend/venv/bin/python -m alembic upgrade head
+        chdir: /opt/autobot/autobot-backend
+      become: true
+      become_user: autobot
+      environment:
+        PYTHONPATH: /opt/autobot/autobot-backend
+      when: "'01-Backend' in inventory_hostname"
+      register: backend_migration_result
+      failed_when: false
+      tags: [backend, migrate]
+
+    - name: "[PLAY 2] Backend | Warn if migration failed (#1608)"
+      debug:
+        msg: "WARNING: Alembic migration failed: {{ backend_migration_result.stderr | default('') }}"
+      when:
+        - "'01-Backend' in inventory_hostname"
+        - backend_migration_result is defined
+        - backend_migration_result.rc | default(0) != 0
+      tags: [backend, migrate]
+
     - name: "[PLAY 2] Backend | Restart service"
       systemd:
         name: autobot-backend
