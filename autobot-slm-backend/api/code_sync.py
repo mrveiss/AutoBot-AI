@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from config import settings
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from models.database import (
@@ -56,6 +55,8 @@ from services.sync_orchestrator import get_sync_orchestrator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -135,8 +136,16 @@ async def get_sync_status(
     total_result = await db.execute(select(func.count(Node.id)))
     total_nodes = total_result.scalar() or 0
 
+    # Issue #1605: count outdated + service-failed as needing attention
     outdated_result = await db.execute(
-        select(func.count(Node.id)).where(Node.code_status == CodeStatus.OUTDATED.value)
+        select(func.count(Node.id)).where(
+            Node.code_status.in_(
+                [
+                    CodeStatus.OUTDATED.value,
+                    CodeStatus.CODE_CURRENT_SERVICE_FAILED.value,
+                ]
+            )
+        )
     )
     outdated_nodes = outdated_result.scalar() or 0
 
@@ -225,10 +234,18 @@ async def get_pending_nodes(
     latest_setting = setting_result.scalar_one_or_none()
     latest_version = latest_setting.value if latest_setting else None
 
-    # Get outdated nodes
+    # Get nodes needing attention: outdated or code-current-but-service-failed
+    # Issue #1605: include service-failed nodes so operators see them
     result = await db.execute(
         select(Node)
-        .where(Node.code_status == CodeStatus.OUTDATED.value)
+        .where(
+            Node.code_status.in_(
+                [
+                    CodeStatus.OUTDATED.value,
+                    CodeStatus.CODE_CURRENT_SERVICE_FAILED.value,
+                ]
+            )
+        )
         .order_by(Node.hostname)
     )
     nodes = result.scalars().all()
