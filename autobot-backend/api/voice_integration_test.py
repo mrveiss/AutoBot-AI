@@ -22,8 +22,8 @@ from autobot_shared.ssot_config import config
 # ------------------------------------------------------------------ #
 # Config (#1618: use SSOT — no hardcoded IPs)                         #
 # ------------------------------------------------------------------ #
-BACKEND_URL = f"http://{config.vm.main}:{config.port.backend}"
-TTS_WORKER_URL = f"http://{config.vm.tts}:{config.port.tts}"
+BACKEND_URL = config.backend_url
+TTS_WORKER_URL = config.tts_worker_url
 LATENCY_BUDGET_SEC = 5.0  # STT → TTS round-trip target
 
 
