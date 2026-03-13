@@ -1,0 +1,6 @@
+# General-purpose utilities
+pyyaml==6.0.2
+python-dotenv==1.1.0
+click==8.1.8
+jsonschema==4.24.0
+psutil==6.1.1

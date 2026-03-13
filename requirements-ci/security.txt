@@ -1,0 +1,5 @@
+# Security tooling and cryptography
+pre-commit==4.2.0
+detect-secrets==1.5.0
+pycryptodome==3.23.0
+cryptography==46.0.5
