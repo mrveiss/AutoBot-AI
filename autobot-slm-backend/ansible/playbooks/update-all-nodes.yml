@@ -14,6 +14,7 @@
 #
 # Tags:
 #   restart              - all service restart tasks (skip for code-only deploys)
+#   deps                 - pip install / npm ci tasks (skip for code-only deploys) (#1603)
 #   backend              - autobot-backend deploy + restart tasks
 #   frontend             - autobot-frontend deploy + build + nginx restart tasks
 #   npu, npu-worker      - NPU worker deploy + restart tasks
@@ -113,6 +114,44 @@
       debug:
         msg: "7 deploy archives created from {{ deploy_ref }} ({{ deploy_info.stdout }})"
 
+    # --- Dependency change detection (#1603) ---
+    - name: "[PRE-FLIGHT] Get previous commit (before pull)"
+      command: >-
+        git -C {{ git_repo_root }} rev-parse HEAD~1
+      register: prev_commit
+      changed_when: false
+      failed_when: false
+
+    - name: "[PRE-FLIGHT] Check if Python deps changed"
+      shell: >-
+        git -C {{ git_repo_root }} diff --name-only
+        {{ prev_commit.stdout | default('HEAD') }} HEAD
+        -- '*/requirements.txt' 'autobot-shared/setup.py' 'autobot-shared/pyproject.toml'
+      register: python_deps_diff
+      changed_when: false
+      failed_when: false
+
+    - name: "[PRE-FLIGHT] Check if Node.js deps changed"
+      shell: >-
+        git -C {{ git_repo_root }} diff --name-only
+        {{ prev_commit.stdout | default('HEAD') }} HEAD
+        -- '*/package.json' '*/package-lock.json'
+      register: node_deps_diff
+      changed_when: false
+      failed_when: false
+
+    - name: "[PRE-FLIGHT] Set dependency change flags"
+      set_fact:
+        python_deps_changed: "{{ python_deps_diff.stdout | default('') | length > 0 }}"
+        node_deps_changed: "{{ node_deps_diff.stdout | default('') | length > 0 }}"
+
+    - name: "[PRE-FLIGHT] Display dependency change status"
+      debug:
+        msg:
+          - "  Python deps changed: {{ python_deps_changed }}"
+          - "  Node.js deps changed: {{ node_deps_changed }}"
+          - "  Changed files: {{ (python_deps_diff.stdout_lines | default([])) + (node_deps_diff.stdout_lines | default([])) }}"
+
     - name: "[PRE-FLIGHT] Get full commit hash"
       command: git -C {{ git_repo_root }} log -1 --format='%H'
       register: deploy_commit_full
@@ -192,6 +231,28 @@
         - autobot-slm-frontend
         - autobot-shared
       tags: [slm]
+
+    # --- Dependency install (#1603) ---
+    - name: "[PLAY 1] SLM | Install Python dependencies"
+      command:
+        cmd: /opt/autobot/autobot-slm-backend/venv/bin/pip install
+             -r /opt/autobot/autobot-slm-backend/requirements.txt
+             --quiet
+      become: true
+      become_user: autobot
+      when: hostvars['localhost']['python_deps_changed'] | bool
+      register: slm_pip_install
+      tags: [slm, slm-backend, deps]
+
+    - name: "[PLAY 1] SLM | Install Node.js dependencies"
+      command:
+        cmd: npm ci --ignore-scripts
+        chdir: /opt/autobot/autobot-slm-frontend
+      become: true
+      become_user: autobot
+      when: hostvars['localhost']['node_deps_changed'] | bool
+      register: slm_npm_install
+      tags: [slm, slm-frontend, deps]
 
     - name: "[PLAY 1] SLM | Rebuild frontend production build"
       command:
@@ -340,6 +401,19 @@
       when: "'01-Backend' in inventory_hostname"
       tags: [backend]
 
+    - name: "[PLAY 2] Backend | Install Python dependencies"
+      command:
+        cmd: /opt/autobot/autobot-backend/venv/bin/pip install
+             -r /opt/autobot/autobot-backend/requirements.txt
+             --quiet
+      become: true
+      become_user: autobot
+      when:
+        - "'01-Backend' in inventory_hostname"
+        - hostvars['localhost']['python_deps_changed'] | bool
+      register: backend_pip_install
+      tags: [backend, deps]
+
     - name: "[PLAY 2] Backend | Restart service"
       systemd:
         name: autobot-backend
@@ -380,6 +454,18 @@
       become: true
       when: "'02-Frontend' in inventory_hostname"
       tags: [frontend]
+
+    - name: "[PLAY 2] Frontend | Install Node.js dependencies"
+      command:
+        cmd: npm ci --ignore-scripts
+        chdir: /opt/autobot/autobot-frontend
+      become: true
+      become_user: autobot
+      when:
+        - "'02-Frontend' in inventory_hostname"
+        - hostvars['localhost']['node_deps_changed'] | bool
+      register: frontend_npm_install
+      tags: [frontend, deps]
 
     - name: "[PLAY 2] Frontend | Rebuild production dist"
       command:
@@ -432,6 +518,21 @@
         'npu-worker' in inventory_hostname
       tags: [npu, npu-worker]
 
+    - name: "[PLAY 2] NPU | Install Python dependencies"
+      command:
+        cmd: /opt/autobot/autobot-npu-worker/venv/bin/pip install
+             -r /opt/autobot/autobot-npu-worker/requirements.txt
+             --quiet
+      become: true
+      become_user: autobot
+      when:
+        - >-
+          '03-NPU' in inventory_hostname or
+          'npu-worker' in inventory_hostname
+        - hostvars['localhost']['python_deps_changed'] | bool
+      register: npu_pip_install
+      tags: [npu, npu-worker, deps]
+
     - name: "[PLAY 2] NPU | Restart service"
       systemd:
         name: autobot-npu-worker
@@ -473,6 +574,22 @@
         '05-Browser' in inventory_hostname or
         'browser-automation' in inventory_hostname
       tags: [browser, browser-worker]
+
+    - name: "[PLAY 2] Browser | Install Python dependencies"
+      command:
+        cmd: /opt/autobot/autobot-browser-worker/venv/bin/pip install
+             -r /opt/autobot/autobot-browser-worker/requirements.txt
+             --quiet
+      become: true
+      become_user: autobot
+      when:
+        - >-
+          '05-Browser' in inventory_hostname or
+          'browser-automation' in inventory_hostname
+        - hostvars['localhost']['python_deps_changed'] | bool
+      register: browser_pip_install
+      failed_when: false
+      tags: [browser, browser-worker, deps]
 
     - name: "[PLAY 2] Browser | Restart service"
       systemd:

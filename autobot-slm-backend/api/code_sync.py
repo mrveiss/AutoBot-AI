@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from config import settings
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from models.database import (
@@ -56,6 +55,8 @@ from services.sync_orchestrator import get_sync_orchestrator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -367,6 +368,40 @@ async def _restart_slm_service(service: str) -> None:
         logger.warning("Failed to restart %s: %s", service, exc)
 
 
+async def _install_slm_pip_dependencies() -> None:
+    """Install Python dependencies from requirements.txt into the SLM venv.
+
+    Runs unconditionally after rsync — pip is fast when nothing changed (#1603).
+    """
+    req_path = "/opt/autobot/autobot-slm-backend/requirements.txt"
+    pip_bin = "/opt/autobot/autobot-slm-backend/venv/bin/pip"
+
+    if not Path(req_path).exists():
+        logger.debug("No requirements.txt at %s — skipping pip install", req_path)
+        return
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            pip_bin,
+            "install",
+            "-r",
+            req_path,
+            "--quiet",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+        if proc.returncode == 0:
+            logger.info("SLM pip install completed successfully")
+        else:
+            output = stdout.decode(errors="replace")[:500] if stdout else ""
+            logger.error("SLM pip install failed (rc=%d): %s", proc.returncode, output)
+    except asyncio.TimeoutError:
+        logger.error("SLM pip install timed out after 300s")
+    except Exception as exc:
+        logger.error("SLM pip install error: %s", exc)
+
+
 async def _fetch_code_source_connection_info(
     db_service,
 ) -> Optional[Tuple[str, str, str]]:
@@ -493,6 +528,9 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
     if not all_ok:
         logger.error("SLM self-sync had failures; services NOT restarted")
         return
+
+    # --- Phase 2b: install Python dependencies if requirements.txt changed (#1603) ---
+    await _install_slm_pip_dependencies()
 
     # --- Phase 3: mark up-to-date in DB before restarting (#1209) ---
     await _mark_slm_node_up_to_date(db_service, node_id)
