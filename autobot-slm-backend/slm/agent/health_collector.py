@@ -140,8 +140,9 @@ class HealthCollector:
                         service_info.update(
                             self._get_service_details(service_info["name"])
                         )
-                    elif service_info["status"] == "failed":
+                    elif service_info["status"] in ("failed", "crash-loop"):
                         # Issue #1019: Capture error context for failed services
+                        # Issue #1604: Also capture for crash-looping services
                         service_info.update(
                             self._get_service_details(service_info["name"])
                         )
@@ -213,6 +214,8 @@ class HealthCollector:
             return "running"
         elif active_state == "failed" or sub_state == "failed":
             return "failed"
+        elif active_state == "activating" and sub_state == "auto-restart":
+            return "crash-loop"  # Issue #1604
         elif active_state == "inactive":
             return "stopped"
         return "unknown"
@@ -228,7 +231,8 @@ class HealthCollector:
                         "systemctl",
                         "show",
                         service_name,
-                        "--property=MainPID,MemoryCurrent,Description,UnitFileState",
+                        "--property=MainPID,MemoryCurrent,Description,"
+                        "UnitFileState,NRestarts",
                     ],
                     capture_output=True,
                     text=True,
@@ -248,6 +252,8 @@ class HealthCollector:
                             details["description"] = value[:500]
                         elif key == "UnitFileState":
                             details["enabled"] = value == "enabled"
+                        elif key == "NRestarts" and value.isdigit():
+                            details["n_restarts"] = int(value)
 
         except Exception as e:
             logger.debug("Could not get details for %s: %s", service_name, e)
