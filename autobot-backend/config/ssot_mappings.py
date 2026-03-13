@@ -11,8 +11,13 @@ Used by:
 - EnvironmentAnalyzer (codebase analysis)
 - CI/CD coverage reports
 
+All patterns are derived dynamically from ssot_config Pydantic model defaults.
+No hardcoded IPs or ports in this file — they live in ssot_config.py only.
+VM roles are assigned by the SLM machine; IPs vary per deployment.
+
 Issue: #642 - Centralize Environment Variables with SSOT Config Validation
 Related: #599 - SSOT Configuration System Epic
+Refactored: #1653 - Dynamic patterns from ssot_config model defaults
 """
 
 from __future__ import annotations
@@ -22,6 +27,8 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional
+
+from autobot_shared.ssot_config import AutoBotConfig, LLMConfig, PortConfig, VMConfig
 
 
 class SSOTCategory(Enum):
@@ -59,235 +66,124 @@ class SSOTMapping:
 
 
 # =============================================================================
-# SSOT Mappings Registry
+# Helpers — read Pydantic model defaults (immune to env-var overrides)
 # =============================================================================
 
-# VM IP Address Mappings
+
+def _vm_default(field_name: str) -> str:
+    """Get the Pydantic model default for a VM field."""
+    return VMConfig.model_fields[field_name].default
+
+
+def _port_default(field_name: str) -> int:
+    """Get the Pydantic model default for a port field."""
+    return PortConfig.model_fields[field_name].default
+
+
+def _llm_default(field_name: str) -> str:
+    """Get the Pydantic model default for an LLM field."""
+    return LLMConfig.model_fields[field_name].default
+
+
+def _url_default(attr_name: str) -> str:
+    """Get computed URL from a clean SSOTConfig (no env overrides)."""
+    clean = AutoBotConfig.model_construct(
+        vm=VMConfig.model_construct(),
+        port=PortConfig.model_construct(),
+    )
+    return getattr(clean, attr_name)
+
+
+# =============================================================================
+# SSOT Mappings Registry — all patterns from ssot_config model defaults
+# =============================================================================
+
+# VM IP metadata: (field_name, config_path, description, severity)
+_VM_REGISTRY = [
+    ("slm", "vm.slm", "SLM Server VM IP", "high"),
+    ("main", "vm.main", "Main machine IP", "high"),
+    ("frontend", "vm.frontend", "Frontend VM IP", "high"),
+    ("npu", "vm.npu", "NPU Worker VM IP", "high"),
+    ("redis", "vm.redis", "Redis VM IP", "high"),
+    ("aistack", "vm.aistack", "AI Stack VM IP", "high"),
+    ("browser", "vm.browser", "Browser Service VM IP", "high"),
+    ("ollama", "vm.ollama", "Ollama host", "medium"),
+]
+
 VM_IP_MAPPINGS: List[SSOTMapping] = [
     SSOTMapping(
-        pattern="172.16.168.20",
+        pattern=_vm_default(field),
         is_regex=False,
         category=SSOTCategory.VM_IP,
-        python_config="config.vm.main",
-        typescript_config="config.vm.main",
-        env_var="AUTOBOT_BACKEND_HOST",
-        description="Main machine (WSL) IP - Backend API",
-        severity="high",
-    ),
-    SSOTMapping(
-        pattern="172.16.168.21",
-        is_regex=False,
-        category=SSOTCategory.VM_IP,
-        python_config="config.vm.frontend",
-        typescript_config="config.vm.frontend",
-        env_var="AUTOBOT_FRONTEND_HOST",
-        description="Frontend VM IP",
-        severity="high",
-    ),
-    SSOTMapping(
-        pattern="172.16.168.22",
-        is_regex=False,
-        category=SSOTCategory.VM_IP,
-        python_config="config.vm.npu",
-        typescript_config="config.vm.npu",
-        env_var="AUTOBOT_NPU_WORKER_HOST",
-        description="NPU Worker VM IP",
-        severity="high",
-    ),
-    SSOTMapping(
-        pattern="172.16.168.23",
-        is_regex=False,
-        category=SSOTCategory.VM_IP,
-        python_config="config.vm.redis",
-        typescript_config="config.vm.redis",
-        env_var="AUTOBOT_REDIS_HOST",
-        description="Redis VM IP",
-        severity="high",
-    ),
-    SSOTMapping(
-        pattern="172.16.168.24",
-        is_regex=False,
-        category=SSOTCategory.VM_IP,
-        python_config="config.vm.aistack",
-        typescript_config="config.vm.aistack",
-        env_var="AUTOBOT_AI_STACK_HOST",
-        description="AI Stack VM IP",
-        severity="high",
-    ),
-    SSOTMapping(
-        pattern="172.16.168.25",
-        is_regex=False,
-        category=SSOTCategory.VM_IP,
-        python_config="config.vm.browser",
-        typescript_config="config.vm.browser",
-        env_var="AUTOBOT_BROWSER_SERVICE_HOST",
-        description="Browser Service VM IP",
-        severity="high",
-    ),
-    SSOTMapping(
-        pattern="127.0.0.1",
-        is_regex=False,
-        category=SSOTCategory.VM_IP,
-        python_config="config.vm.ollama",
-        typescript_config="config.vm.ollama",
-        env_var="AUTOBOT_OLLAMA_HOST",
-        description="Ollama host (localhost)",
-        severity="medium",
-    ),
+        python_config=f"config.{path}",
+        typescript_config=f"config.{path}",
+        env_var=VMConfig.model_fields[field].alias,
+        description=desc,
+        severity=sev,
+    )
+    for field, path, desc, sev in _VM_REGISTRY
 ]
 
-# Port Mappings
+# Port metadata: (field_name, config_path, description, severity)
+_PORT_REGISTRY = [
+    ("slm", "port.slm", "SLM Server API port", "high"),
+    ("backend", "port.backend", "Backend API port", "high"),
+    ("frontend", "port.frontend", "Frontend port", "medium"),
+    ("redis", "port.redis", "Redis port", "high"),
+    ("ollama", "port.ollama", "Ollama API port", "high"),
+    ("vnc", "port.vnc", "VNC noVNC port", "medium"),
+    ("aistack", "port.aistack", "AI Stack port", "medium"),
+    ("npu", "port.npu", "NPU Worker port", "medium"),
+    ("tts", "port.tts", "TTS Worker port", "medium"),
+]
+
 PORT_MAPPINGS: List[SSOTMapping] = [
     SSOTMapping(
-        pattern=r":8001\b",
+        pattern=rf":{_port_default(field)}\b",
         is_regex=True,
         category=SSOTCategory.PORT,
-        python_config="config.port.backend",
-        typescript_config="config.port.backend",
-        env_var="AUTOBOT_BACKEND_PORT",
-        description="Backend API port",
-        severity="high",
-    ),
-    SSOTMapping(
-        pattern=r":5173\b",
-        is_regex=True,
-        category=SSOTCategory.PORT,
-        python_config="config.port.frontend",
-        typescript_config="config.port.frontend",
-        env_var="AUTOBOT_FRONTEND_PORT",
-        description="Frontend dev server port",
-        severity="medium",
-    ),
-    SSOTMapping(
-        pattern=r":6379\b",
-        is_regex=True,
-        category=SSOTCategory.PORT,
-        python_config="config.port.redis",
-        typescript_config="config.port.redis",
-        env_var="AUTOBOT_REDIS_PORT",
-        description="Redis port",
-        severity="high",
-    ),
-    SSOTMapping(
-        pattern=r":11434\b",
-        is_regex=True,
-        category=SSOTCategory.PORT,
-        python_config="config.port.ollama",
-        typescript_config="config.port.ollama",
-        env_var="AUTOBOT_OLLAMA_PORT",
-        description="Ollama API port",
-        severity="high",
-    ),
-    SSOTMapping(
-        pattern=r":6080\b",
-        is_regex=True,
-        category=SSOTCategory.PORT,
-        python_config="config.port.vnc",
-        typescript_config="config.port.vnc",
-        env_var="AUTOBOT_VNC_PORT",
-        description="VNC noVNC port",
-        severity="medium",
-    ),
-    SSOTMapping(
-        pattern=r":8080\b",
-        is_regex=True,
-        category=SSOTCategory.PORT,
-        python_config="config.port.aistack",
-        typescript_config="config.port.aistack",
-        env_var="AUTOBOT_AI_STACK_PORT",
-        description="AI Stack port",
-        severity="medium",
-    ),
-    SSOTMapping(
-        pattern=r":8081\b",
-        is_regex=True,
-        category=SSOTCategory.PORT,
-        python_config="config.port.npu",
-        typescript_config="config.port.npu",
-        env_var="AUTOBOT_NPU_WORKER_PORT",
-        description="NPU Worker port",
-        severity="medium",
-    ),
-    SSOTMapping(
-        pattern=r":8082\b",
-        is_regex=True,
-        category=SSOTCategory.PORT,
-        python_config="config.port.tts",
-        typescript_config="config.port.tts",
-        env_var="AUTOBOT_TTS_WORKER_PORT",
-        description="TTS Worker port",
-        severity="medium",
+        python_config=f"config.{path}",
+        typescript_config=f"config.{path}",
+        env_var=PortConfig.model_fields[field].alias,
+        description=desc,
+        severity=sev,
+    )
+    for field, path, desc, sev in _PORT_REGISTRY
+]
+
+# URL metadata: (py_attr, ts_attr, env_var, description)
+_URL_REGISTRY = [
+    ("backend_url", "backendUrl", "AUTOBOT_BACKEND_URL", "Backend API URL"),
+    ("frontend_url", "frontendUrl", "AUTOBOT_FRONTEND_URL", "Frontend URL"),
+    ("redis_url", "redisUrl", "AUTOBOT_REDIS_URL", "Redis URL"),
+    ("ollama_url", "ollamaUrl", "AUTOBOT_OLLAMA_URL", "Ollama API URL"),
+    ("websocket_url", "websocketUrl", "AUTOBOT_WS_URL", "WebSocket URL"),
+    (
+        "tts_worker_url",
+        "ttsWorkerUrl",
+        "AUTOBOT_TTS_WORKER_URL",
+        "TTS Worker URL",
     ),
 ]
 
-# URL Mappings
 URL_MAPPINGS: List[SSOTMapping] = [
     SSOTMapping(
-        pattern=r"http://172\.16\.168\.20:8001",
+        pattern=re.escape(_url_default(py_attr)),
         is_regex=True,
         category=SSOTCategory.URL,
-        python_config="config.backend_url",
-        typescript_config="config.backendUrl",
-        env_var="AUTOBOT_BACKEND_URL",
-        description="Backend API URL",
+        python_config=f"config.{py_attr}",
+        typescript_config=f"config.{ts_attr}",
+        env_var=env,
+        description=desc,
         severity="high",
-    ),
-    SSOTMapping(
-        pattern=r"http://172\.16\.168\.21:5173",
-        is_regex=True,
-        category=SSOTCategory.URL,
-        python_config="config.frontend_url",
-        typescript_config="config.frontendUrl",
-        env_var="AUTOBOT_FRONTEND_URL",
-        description="Frontend URL",
-        severity="high",
-    ),
-    SSOTMapping(
-        pattern=r"redis://172\.16\.168\.23:6379",
-        is_regex=True,
-        category=SSOTCategory.URL,
-        python_config="config.redis_url",
-        typescript_config="config.redisUrl",
-        env_var="AUTOBOT_REDIS_URL",
-        description="Redis URL",
-        severity="high",
-    ),
-    SSOTMapping(
-        pattern=r"http://127\.0\.0\.1:11434",
-        is_regex=True,
-        category=SSOTCategory.URL,
-        python_config="config.ollama_url",
-        typescript_config="config.ollamaUrl",
-        env_var="AUTOBOT_OLLAMA_URL",
-        description="Ollama API URL",
-        severity="high",
-    ),
-    SSOTMapping(
-        pattern=r"ws://172\.16\.168\.20:8001/ws",
-        is_regex=True,
-        category=SSOTCategory.URL,
-        python_config="config.websocket_url",
-        typescript_config="config.websocketUrl",
-        env_var="AUTOBOT_WS_URL",
-        description="WebSocket URL",
-        severity="high",
-    ),
-    SSOTMapping(
-        pattern=r"http://172\.16\.168\.24:8082",
-        is_regex=True,
-        category=SSOTCategory.URL,
-        python_config="config.tts_worker_url",
-        typescript_config="config.ttsWorkerUrl",
-        env_var="AUTOBOT_TTS_WORKER_URL",
-        description="TTS Worker URL",
-        severity="high",
-    ),
+    )
+    for py_attr, ts_attr, env, desc in _URL_REGISTRY
 ]
 
 # LLM Model Mappings
 LLM_MODEL_MAPPINGS: List[SSOTMapping] = [
     SSOTMapping(
-        pattern=r"mistral:7b-instruct",
+        pattern=_llm_default("default_model"),
         is_regex=False,
         category=SSOTCategory.LLM_MODEL,
         python_config="config.llm.default_model",
@@ -297,7 +193,7 @@ LLM_MODEL_MAPPINGS: List[SSOTMapping] = [
         severity="high",
     ),
     SSOTMapping(
-        pattern=r"nomic-embed-text:latest",
+        pattern=_llm_default("embedding_model"),
         is_regex=False,
         category=SSOTCategory.LLM_MODEL,
         python_config="config.llm.embedding_model",
@@ -307,7 +203,10 @@ LLM_MODEL_MAPPINGS: List[SSOTMapping] = [
         severity="high",
     ),
     SSOTMapping(
-        pattern=r"(llama3|mistral|dolphin|openchat|gemma|phi|deepseek|qwen).*:[0-9]+(b|B)",
+        pattern=(
+            r"(llama3|mistral|dolphin|openchat|gemma|phi"
+            r"|deepseek|qwen).*:[0-9]+(b|B)"
+        ),
         is_regex=True,
         category=SSOTCategory.LLM_MODEL,
         python_config="config.llm.default_model",
@@ -344,7 +243,9 @@ def get_mapping_for_value(value: str) -> Optional[SSOTMapping]:
     return None
 
 
-def get_mappings_by_category(category: SSOTCategory) -> List[SSOTMapping]:
+def get_mappings_by_category(
+    category: SSOTCategory,
+) -> List[SSOTMapping]:
     """Get all mappings for a specific category."""
     return [m for m in ALL_MAPPINGS if m.category == category]
 
@@ -389,9 +290,8 @@ def get_ssot_suggestion(value: str, file_type: str = "python") -> Optional[str]:
         return None
 
     if file_type == "python":
-        return f"Use {mapping.python_config} from autobot_shared.ssot_config"
-    else:
-        return f"Use {mapping.typescript_config} from @/config/ssot-config"
+        return f"Use {mapping.python_config} " f"from autobot_shared.ssot_config"
+    return f"Use {mapping.typescript_config} from @/config/ssot-config"
 
 
 def validate_against_ssot(
@@ -401,7 +301,8 @@ def validate_against_ssot(
     Validate detected hardcoded values against SSOT mappings.
 
     Args:
-        hardcoded_values: List of detected hardcoded values from EnvironmentAnalyzer
+        hardcoded_values: List of detected hardcoded values
+            from EnvironmentAnalyzer
 
     Returns:
         List of values with SSOT mapping information added
@@ -434,15 +335,11 @@ def validate_against_ssot(
     return results
 
 
-def _group_violations_by_category(violations: List[Dict]) -> Dict[str, List]:
+def _group_violations_by_category(
+    violations: List[Dict],
+) -> Dict[str, List]:
     """
     Group violations by their SSOT category.
-
-    Args:
-        violations: List of validated values with SSOT equivalents.
-
-    Returns:
-        Dictionary mapping category names to lists of violations.
 
     Issue #620.
     """
@@ -455,15 +352,11 @@ def _group_violations_by_category(violations: List[Dict]) -> Dict[str, List]:
     return by_category
 
 
-def _count_violations_by_severity(violations: List[Dict]) -> Dict[str, int]:
+def _count_violations_by_severity(
+    violations: List[Dict],
+) -> Dict[str, int]:
     """
     Count violations by severity level.
-
-    Args:
-        violations: List of validated values with SSOT equivalents.
-
-    Returns:
-        Dictionary with counts for high, medium, and low severity.
 
     Issue #620.
     """
@@ -480,13 +373,6 @@ def _get_high_priority_violations(
     """
     Extract top high-priority violations with fix suggestions.
 
-    Args:
-        violations: List of validated values with SSOT equivalents.
-        limit: Maximum number of violations to return.
-
-    Returns:
-        List of high-priority violation details.
-
     Issue #620.
     """
     return [
@@ -501,7 +387,9 @@ def _get_high_priority_violations(
     ][:limit]
 
 
-def generate_ssot_coverage_report(hardcoded_values: List[Dict]) -> Dict:
+def generate_ssot_coverage_report(
+    hardcoded_values: List[Dict],
+) -> Dict:
     """
     Generate a coverage report showing SSOT usage vs hardcoded values.
 
@@ -526,7 +414,10 @@ def generate_ssot_coverage_report(hardcoded_values: List[Dict]) -> Dict:
         "with_ssot_equivalent": len(with_ssot),
         "without_ssot_equivalent": len(without_ssot),
         "ssot_compliance_pct": (
-            round((1 - len(with_ssot) / len(hardcoded_values)) * 100, 1)
+            round(
+                (1 - len(with_ssot) / len(hardcoded_values)) * 100,
+                1,
+            )
             if hardcoded_values
             else 100
         ),
@@ -537,31 +428,26 @@ def generate_ssot_coverage_report(hardcoded_values: List[Dict]) -> Dict:
 
 
 # =============================================================================
-# Shell Script Helper
+# Shell Script Helper — derived from config model defaults
 # =============================================================================
 
-# Known SSOT values for shell script (exact matches)
 SSOT_VALUES_FOR_SHELL = {
-    # VM IPs
-    "172.16.168.20": "config.vm.main (AUTOBOT_BACKEND_HOST)",
-    "172.16.168.21": "config.vm.frontend (AUTOBOT_FRONTEND_HOST)",
-    "172.16.168.22": "config.vm.npu (AUTOBOT_NPU_WORKER_HOST)",
-    "172.16.168.23": "config.vm.redis (AUTOBOT_REDIS_HOST)",
-    "172.16.168.24": "config.vm.aistack (AUTOBOT_AI_STACK_HOST)",
-    "172.16.168.25": "config.vm.browser (AUTOBOT_BROWSER_SERVICE_HOST)",
-    # Ports (without colon for detection in different contexts)
-    "8001": "config.port.backend (AUTOBOT_BACKEND_PORT)",
-    "5173": "config.port.frontend (AUTOBOT_FRONTEND_PORT)",
-    "6379": "config.port.redis (AUTOBOT_REDIS_PORT)",
-    "11434": "config.port.ollama (AUTOBOT_OLLAMA_PORT)",
-    "6080": "config.port.vnc (AUTOBOT_VNC_PORT)",
-    "8082": "config.port.tts (AUTOBOT_TTS_WORKER_PORT)",
-    # Models
-    "mistral:7b-instruct": "config.llm.default_model (AUTOBOT_DEFAULT_LLM_MODEL)",
-    "nomic-embed-text:latest": "config.llm.embedding_model (AUTOBOT_EMBEDDING_MODEL)",
+    **{
+        _vm_default(f): (f"config.{p} ({VMConfig.model_fields[f].alias})")
+        for f, p, _, _ in _VM_REGISTRY
+    },
+    **{
+        str(_port_default(f)): (f"config.{p} ({PortConfig.model_fields[f].alias})")
+        for f, p, _, _ in _PORT_REGISTRY
+    },
+    _llm_default("default_model"): (
+        "config.llm.default_model (AUTOBOT_DEFAULT_LLM_MODEL)"
+    ),
+    _llm_default("embedding_model"): (
+        "config.llm.embedding_model (AUTOBOT_EMBEDDING_MODEL)"
+    ),
 }
 
 
 if __name__ == "__main__":
-    # Print JSON export for shell script consumption
     print(export_mappings_as_json())  # noqa: print
