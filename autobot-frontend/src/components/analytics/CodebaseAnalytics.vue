@@ -718,7 +718,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
@@ -733,6 +733,7 @@ import { useBackgroundTask } from '@/composables/useBackgroundTask'
 import { useTaskLoader } from '@/composables/useTaskLoader'
 import { useAnalyticsFetch } from '@/composables/useAnalyticsFetch'
 import { useAnalyticsScanRunner } from '@/composables/useAnalyticsScanRunner'
+import { useCodebaseExport, type SectionType } from '@/composables/analytics/useCodebaseExport'
 import { createLogger } from '@/utils/debugUtils'
 // Issue #1133: Code Source Registry Components
 import CodebaseOverviewPanel from '@/components/analytics/CodebaseOverviewPanel.vue'
@@ -2065,89 +2066,70 @@ const stopJobPolling = () => {
 }
 
 // Poll for current job status
+// #1588: Extract Method — update UI state from active job data
+const _updateActiveJobProgress = (data: Record<string, unknown>) => {
+  analyzing.value = true
+  if (data.phases) jobPhases.value = data.phases
+  if (data.batches) jobBatches.value = data.batches
+  if (data.stats) jobStats.value = data.stats
+
+  const progress = data.progress as Record<string, unknown> | undefined
+  if (progress) {
+    progressPercent.value = (progress.percent as number) || 0
+    const operation = (progress.operation as string) || 'Processing'
+    const currentFile = (progress.current_file as string) || ''
+    const current = (progress.current as number) || 0
+    const total = (progress.total as number) || 0
+
+    const statusParts: string[] = []
+    if (currentFile && currentFile !== 'Initializing...') statusParts.push(currentFile)
+    if (total > 0) statusParts.push(`(${current}/${total})`)
+
+    progressStatus.value = statusParts.length > 0
+      ? `${operation}: ${statusParts.join(' ')}`
+      : operation
+  }
+}
+
+// #1588: Extract Method — handle completed/cancelled/failed job
+const _handleJobFinished = async (status: string, error?: string) => {
+  analyzing.value = false
+  stopJobPolling()
+  jobPhases.value = null
+  jobBatches.value = null
+  jobStats.value = null
+
+  if (status === 'completed') {
+    progressStatus.value = t('analytics.codebase.status.indexingCompleted')
+    progressPercent.value = 100
+    notify(t('analytics.codebase.notify.indexingCompleted'), 'success')
+    showKnowledgeBaseOptIn.value = true
+    await runAllAnalysisScans()
+  } else if (status === 'cancelled') {
+    progressStatus.value = t('analytics.codebase.status.indexingCancelled')
+    notify(t('analytics.codebase.notify.indexingCancelled'), 'warning')
+  } else if (status === 'failed' || error) {
+    const errMsg = error || t('analytics.codebase.errors.unknown')
+    progressStatus.value = t('analytics.codebase.status.indexingFailed', { error: errMsg })
+    notify(t('analytics.codebase.notify.indexingFailed', { error: errMsg }), 'error')
+  }
+  currentJobId.value = null
+}
+
 const pollJobStatus = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/index/current`)
-    if (response.ok) {
-      const data = await response.json()
-      currentJobStatus.value = data.status
+    if (!response.ok) return
 
-      if (data.has_active_job) {
-        // Keep analyzing true while job is active
-        analyzing.value = true
+    const data = await response.json()
+    currentJobStatus.value = data.status
 
-        // Update phase tracking first (used in status building)
-        if (data.phases) {
-          jobPhases.value = data.phases
-        }
-
-        // Update batch tracking
-        if (data.batches) {
-          jobBatches.value = data.batches
-        }
-
-        // Update job stats
-        if (data.stats) {
-          jobStats.value = data.stats
-        }
-
-        // Update progress - build informative status message
-        if (data.progress) {
-          progressPercent.value = data.progress.percent || 0
-
-          // Build detailed status from operation, current_file, and progress counts
-          const operation = data.progress.operation || 'Processing'
-          const currentFile = data.progress.current_file || ''
-          const current = data.progress.current || 0
-          const total = data.progress.total || 0
-
-          // Build status with progress counts when available
-          let statusParts: string[] = []
-          if (currentFile && currentFile !== 'Initializing...') {
-            statusParts.push(currentFile)
-          }
-          if (total > 0) {
-            statusParts.push(`(${current}/${total})`)
-          }
-
-          progressStatus.value = statusParts.length > 0
-            ? `${operation}: ${statusParts.join(' ')}`
-            : operation
-        }
-
-        // Also poll for intermediate results (but don't overwrite detailed status)
-        await pollIntermediateResults()
-      } else {
-        // Job finished
-        analyzing.value = false
-        stopJobPolling()
-
-        // Reset enhanced tracking
-        jobPhases.value = null
-        jobBatches.value = null
-        jobStats.value = null
-
-        if (data.status === 'completed') {
-          progressStatus.value = t('analytics.codebase.status.indexingCompleted')
-          progressPercent.value = 100
-          notify(t('analytics.codebase.notify.indexingCompleted'), 'success')
-
-          // Issue #1133: Show knowledge base opt-in after indexing
-          showKnowledgeBaseOptIn.value = true
-
-          // Refresh data — full analysis after manual indexing
-          await runAllAnalysisScans()
-        } else if (data.status === 'cancelled') {
-          progressStatus.value = t('analytics.codebase.status.indexingCancelled')
-          notify(t('analytics.codebase.notify.indexingCancelled'), 'warning')
-        } else if (data.status === 'failed' || data.error) {
-          progressStatus.value = t('analytics.codebase.status.indexingFailed', { error: data.error || t('analytics.codebase.errors.unknown') })
-          notify(t('analytics.codebase.notify.indexingFailed', { error: data.error || t('analytics.codebase.errors.unknown') }), 'error')
-        }
-
-        currentJobId.value = null
-      }
+    if (data.has_active_job) {
+      _updateActiveJobProgress(data)
+      await pollIntermediateResults()
+    } else {
+      await _handleJobFinished(data.status, data.error)
     }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -2849,8 +2831,60 @@ onUnmounted(() => {
 })
 
 // Index codebase first
+// #1588: Extract Method — send index request with retry on 502/503 (#1249)
+const _sendIndexRequest = async (endpoint: string, body: string): Promise<Response> => {
+  const maxRetries = 2
+  let response: Response | null = null
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    response = await fetchWithAuth(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    })
+    if (response.status !== 502 && response.status !== 503) break
+    if (attempt < maxRetries) {
+      const delay = (attempt + 1) * 3
+      progressStatus.value = t('analytics.codebase.status.backendRetrying', { delay })
+      logger.warn(`Index request got ${response.status}, retrying (${attempt + 1}/${maxRetries})`)
+      await new Promise(r => setTimeout(r, delay * 1000))
+    }
+  }
+  if (!response || !response.ok) {
+    const errorText = response ? await response.text() : 'No response'
+    const status = response?.status ?? 0
+    if (status === 502 || status === 503) {
+      throw new Error('Backend is temporarily unavailable. Please try again in a moment.')
+    }
+    throw new Error(`Status ${status}: ${errorText}`)
+  }
+  return response
+}
+
+// #1588: Extract Method — handle index API response status
+const _handleIndexResponseStatus = (data: Record<string, unknown>): boolean => {
+  if (data.status === 'syncing') {
+    progressStatus.value = t('analytics.codebase.status.syncingRepo')
+    notify(t('analytics.codebase.notify.syncStarted'), 'info')
+    startJobPolling()
+    return true // early return — polling handles the rest
+  } else if (data.status === 'already_running') {
+    currentJobId.value = data.task_id as string
+    progressStatus.value = t('analytics.codebase.status.monitoringIndexing')
+    notify(t('analytics.codebase.notify.indexingMonitoring'), 'info')
+  } else if (data.status === 'queued') {
+    progressStatus.value = t('analytics.codebase.status.queued', { position: data.position })
+    notify(t('analytics.codebase.notify.indexingQueued'), 'info')
+    startJobPolling()
+    return true // early return — polling handles the rest
+  } else {
+    currentJobId.value = data.task_id as string
+    progressStatus.value = t('analytics.codebase.status.initializingIndexing')
+    notify(t('analytics.codebase.notify.indexingStarted'), 'success')
+  }
+  return false
+}
+
 const indexCodebase = async () => {
-  // Check if there's already a job running
   if (currentJobId.value) {
     notify(t('analytics.codebase.notify.indexingAlreadyRunning'), 'warning')
     return
@@ -2859,11 +2893,9 @@ const indexCodebase = async () => {
   analyzing.value = true
   progressPercent.value = 10
   progressStatus.value = t('analytics.codebase.status.startingIndexing')
-
-  // Save the path to localStorage for persistence across page refreshes
   localStorage.setItem(STORAGE_KEY_PATH, rootPath.value)
 
-  // Clear previous analysis data before starting new indexing
+  // Clear previous analysis data
   problemsReport.value = []
   codebaseStats.value = null
   declarationAnalysis.value = []
@@ -2873,68 +2905,18 @@ const indexCodebase = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const indexEndpoint = `${backendUrl}/api/analytics/codebase/index`
     const requestBody = JSON.stringify(
       selectedSource.value
         ? { source_id: selectedSource.value.id }
         : { root_path: rootPath.value }
     )
-
-    // Issue #1249: Retry on 502/503 (backend temporarily unavailable)
-    const maxRetries = 2
-    let response: Response | null = null
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      response = await fetchWithAuth(indexEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: requestBody,
-      })
-      if (response.status !== 502 && response.status !== 503) break
-      if (attempt < maxRetries) {
-        const delay = (attempt + 1) * 3
-        progressStatus.value = t('analytics.codebase.status.backendRetrying', { delay })
-        logger.warn(`Index request got ${response.status}, retrying (${attempt + 1}/${maxRetries})`)
-        await new Promise(r => setTimeout(r, delay * 1000))
-      }
-    }
-
-    if (!response || !response.ok) {
-      const errorText = response ? await response.text() : 'No response'
-      const status = response?.status ?? 0
-      if (status === 502 || status === 503) {
-        throw new Error('Backend is temporarily unavailable. Please try again in a moment.')
-      }
-      throw new Error(`Status ${status}: ${errorText}`)
-    }
-
+    const response = await _sendIndexRequest(`${backendUrl}/api/analytics/codebase/index`, requestBody)
     const data = await response.json()
 
-    // Check response status
-    if (data.status === 'syncing') {
-      // Source needs cloning first — sync started, indexing will auto-follow
-      progressStatus.value = t('analytics.codebase.status.syncingRepo')
-      notify(t('analytics.codebase.notify.syncStarted'), 'info')
-      // Poll /index/current until a job appears (sync auto-triggers indexing)
-      startJobPolling()
-      return
-    } else if (data.status === 'already_running') {
-      currentJobId.value = data.task_id
-      progressStatus.value = t('analytics.codebase.status.monitoringIndexing')
-      notify(t('analytics.codebase.notify.indexingMonitoring'), 'info')
-    } else if (data.status === 'queued') {
-      progressStatus.value = t('analytics.codebase.status.queued', { position: data.position })
-      notify(t('analytics.codebase.notify.indexingQueued'), 'info')
-      startJobPolling()
-      return
-    } else {
-      currentJobId.value = data.task_id
-      progressStatus.value = t('analytics.codebase.status.initializingIndexing')
-      notify(t('analytics.codebase.notify.indexingStarted'), 'success')
-    }
+    if (_handleIndexResponseStatus(data)) return
 
-    // Poll immediately to get initial phases/stats, then continue at interval
-    progressPercent.value = 5  // Start lower, let backend report actual progress
-    await pollJobStatus()  // Get initial state immediately (don't wait 2s)
+    progressPercent.value = 5
+    await pollJobStatus()
     startJobPolling()
   } catch (error: unknown) {
     logger.error('Indexing failed:', error)
@@ -3159,6 +3141,30 @@ const getCoverageClass = (percentage: number): string => {
   return 'success'
 }
 
+// Issue #244: Map cross-language summary response to component interface (#1588)
+function _mapCrossLanguageSummary(summary: Record<string, unknown>) {
+  const files = summary.files_analyzed as Record<string, number> | undefined
+  const issues = summary.issues as Record<string, number> | undefined
+  const perf = summary.performance as Record<string, number> | undefined
+  return {
+    analysis_id: summary.analysis_id,
+    scan_timestamp: summary.scan_timestamp,
+    python_files_analyzed: files?.python || 0,
+    typescript_files_analyzed: files?.typescript || 0,
+    vue_files_analyzed: files?.vue || 0,
+    total_patterns: issues?.total || 0,
+    critical_issues: issues?.critical || 0,
+    high_issues: issues?.high || 0,
+    medium_issues: issues?.medium || 0,
+    low_issues: issues?.low || 0,
+    dto_mismatches: [] as unknown[],
+    validation_duplications: [] as unknown[],
+    api_contract_mismatches: [] as unknown[],
+    pattern_matches: [] as unknown[],
+    analysis_time_ms: perf?.analysis_time_ms || 0
+  }
+}
+
 // Issue #244: Get Cross-Language Pattern Analysis
 const getCrossLanguageAnalysis = async () => {
   loadingCrossLanguage.value = true
@@ -3170,10 +3176,7 @@ const getCrossLanguageAnalysis = async () => {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cross-language/summary`, {
       method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }
     })
 
     if (!response.ok) {
@@ -3185,34 +3188,14 @@ const getCrossLanguageAnalysis = async () => {
     const responseTime = Date.now() - startTime
 
     if (data.status === 'success' && data.summary) {
-      // Map the summary format to our expected interface
-      crossLanguageAnalysis.value = {
-        analysis_id: data.summary.analysis_id,
-        scan_timestamp: data.summary.scan_timestamp,
-        python_files_analyzed: data.summary.files_analyzed?.python || 0,
-        typescript_files_analyzed: data.summary.files_analyzed?.typescript || 0,
-        vue_files_analyzed: data.summary.files_analyzed?.vue || 0,
-        total_patterns: data.summary.issues?.total || 0,
-        critical_issues: data.summary.issues?.critical || 0,
-        high_issues: data.summary.issues?.high || 0,
-        medium_issues: data.summary.issues?.medium || 0,
-        low_issues: data.summary.issues?.low || 0,
-        dto_mismatches: [],
-        validation_duplications: [],
-        api_contract_mismatches: [],
-        pattern_matches: [],
-        analysis_time_ms: data.summary.performance?.analysis_time_ms || 0
-      }
-
-      const totalIssues = data.summary.issues?.total || 0
-      const critical = data.summary.issues?.critical || 0
-      const high = data.summary.issues?.high || 0
-      notify(t('analytics.codebase.notify.crossLanguageResult', { total: totalIssues, critical, high, time: responseTime }), 'success')
-
-      // Load detailed data for the groups
+      crossLanguageAnalysis.value = _mapCrossLanguageSummary(data.summary)
+      const issues = data.summary.issues as Record<string, number> | undefined
+      notify(t('analytics.codebase.notify.crossLanguageResult', {
+        total: issues?.total || 0, critical: issues?.critical || 0,
+        high: issues?.high || 0, time: responseTime
+      }), 'success')
       await loadCrossLanguageDetails()
     } else if (data.status === 'empty') {
-      // No cached analysis - show empty state (user needs to click Full Scan)
       crossLanguageAnalysis.value = null
       logger.info('Cross-language analysis: No cached data available')
     } else {
@@ -3448,7 +3431,16 @@ const testNpuConnection = async () => {
   }
 }
 
-// NEW: Test all endpoints functionality
+// Endpoint configs for API health check (#1588)
+const _testEndpointConfigs = [
+  { name: 'Declarations', path: '/api/analytics/codebase/declarations' },
+  { name: 'Duplicates', path: '/api/analytics/codebase/duplicates' },
+  { name: 'Hardcodes', path: '/api/analytics/codebase/hardcodes' },
+  { name: 'NPU', path: '/api/npu/status' },  // Issue #1190
+  { name: 'Stats', path: '/api/analytics/codebase/stats' },
+]
+
+// Test all endpoints functionality
 const testAllEndpoints = async () => {
   progressStatus.value = t('analytics.codebase.status.testingApis')
 
@@ -3456,61 +3448,20 @@ const testAllEndpoints = async () => {
     const backendUrl = await appConfig.getServiceUrl('backend')
     const results: string[] = []
 
-    // Test declarations
-    try {
-      const declarationsEndpoint = `${backendUrl}/api/analytics/codebase/declarations`
-      const response = await fetchWithAuth(declarationsEndpoint)
-      results.push(`Declarations: ${response.ok ? '✅' : '❌'} (${response.status})`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      results.push(`Declarations: ❌ (${msg})`)
-    }
-
-    // Test duplicates
-    try {
-      const duplicatesEndpoint = `${backendUrl}/api/analytics/codebase/duplicates`
-      const response = await fetchWithAuth(duplicatesEndpoint)
-      results.push(`Duplicates: ${response.ok ? '✅' : '❌'} (${response.status})`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      results.push(`Duplicates: ❌ (${msg})`)
-    }
-
-    // Test hardcodes
-    try {
-      const hardcodesEndpoint = `${backendUrl}/api/analytics/codebase/hardcodes`
-      const response = await fetchWithAuth(hardcodesEndpoint)
-      results.push(`Hardcodes: ${response.ok ? '✅' : '❌'} (${response.status})`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      results.push(`Hardcodes: ❌ (${msg})`)
-    }
-
-    // Test NPU (Issue #1190: was /api/monitoring/hardware/npu which returned 404)
-    try {
-      const npuEndpoint = `${backendUrl}/api/npu/status`
-      const response = await fetchWithAuth(npuEndpoint)
-      results.push(`NPU: ${response.ok ? '✅' : '❌'} (${response.status})`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      results.push(`NPU: ❌ (${msg})`)
-    }
-
-    // Test stats
-    try {
-      const statsEndpoint = `${backendUrl}/api/analytics/codebase/stats`
-      const response = await fetchWithAuth(statsEndpoint)
-      results.push(`Stats: ${response.ok ? '✅' : '❌'} (${response.status})`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      results.push(`Stats: ❌ (${msg})`)
+    for (const ep of _testEndpointConfigs) {
+      try {
+        const response = await fetchWithAuth(`${backendUrl}${ep.path}`)
+        results.push(`${ep.name}: ${response.ok ? '✅' : '❌'} (${response.status})`)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        results.push(`${ep.name}: ❌ (${msg})`)
+      }
     }
 
     const passed = results.filter(r => r.includes('✅')).length
     const failed = results.filter(r => r.includes('❌')).length
-    const summary = t('analytics.codebase.notify.apiTestResults', { passed, total: results.length })
-    notify(summary, failed === 0 ? 'success' : 'warning')
-    // Log full results to console for detailed review
+    notify(t('analytics.codebase.notify.apiTestResults', { passed, total: results.length }),
+      failed === 0 ? 'success' : 'warning')
     logger.debug('API Test Results:', results.join('\n'))
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error)
@@ -3628,471 +3579,29 @@ const getCodeHealthScore = async () => {
   }
 }
 
-// Export analysis report as Markdown
-// Use quick=true by default for fast export (skips expensive analyses)
-// Set quick=false for comprehensive report with bug prediction, duplicates, API analysis
-const exportReport = async (quick: boolean = true) => {
-  exportingReport.value = true
-  progressStatus.value = quick ? t('analytics.codebase.status.generatingQuickReport') : t('analytics.codebase.status.generatingFullReport')
-
-  try {
-    const backendUrl = await appConfig.getServiceUrl('backend')
-    // Use quick mode by default for responsive UI - skips expensive analyses
-    const reportEndpoint = `${backendUrl}/api/analytics/codebase/report?format=markdown&quick=${quick}`
-    const response = await fetchWithAuth(reportEndpoint, {
-      method: 'GET',
-      headers: {
-        'Accept': 'text/markdown'
-      }
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Status ${response.status}: ${errorText}`)
-    }
-
-    // Get the markdown content
-    const reportContent = await response.text()
-
-    // Create a blob and download it
-    const blob = new Blob([reportContent], { type: 'text/markdown;charset=utf-8' })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    const reportType = quick ? 'quick' : 'full'
-    link.download = `code-analysis-report-${reportType}-${timestamp}.md`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
-
-    notify(t('analytics.codebase.notify.reportExported'), 'success')
-    progressStatus.value = t('analytics.codebase.status.reportExported')
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    logger.error('Report export failed:', error)
-    notify(t('analytics.codebase.notify.reportExportFailed', { error: errorMessage }), 'error')
-    progressStatus.value = t('analytics.codebase.status.reportExportFailed')
-  } finally {
-    exportingReport.value = false
-  }
-}
-
-// Issue #609: Export individual section data as MD or JSON
-type SectionType = 'bug-prediction' | 'code-smells' | 'problems' | 'duplicates' |
-                   'declarations' | 'api-endpoints' | 'cross-language' | 'config-duplicates' |
-                   'code-intelligence' | 'environment' | 'statistics' | 'ownership'
-
-const exportSection = async (section: SectionType, format: 'md' | 'json' = 'md') => {
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  let data: unknown = null
-  let filename = ''
-  let content = ''
-
-  // Get section data
-  switch (section) {
-    case 'bug-prediction':
-      data = bugPredictionAnalysis.value
-      filename = `bug-prediction-${timestamp}`
-      break
-    case 'code-smells':
-      data = codeSmellsReport.value
-      filename = `code-smells-${timestamp}`
-      break
-    case 'problems':
-      data = problemsReport.value
-      filename = `problems-report-${timestamp}`
-      break
-    case 'duplicates':
-      data = duplicateAnalysis.value
-      filename = `duplicate-analysis-${timestamp}`
-      break
-    case 'declarations':
-      data = declarationAnalysis.value
-      filename = `declarations-${timestamp}`
-      break
-    case 'api-endpoints':
-      data = apiEndpointAnalysis.value
-      filename = `api-endpoints-${timestamp}`
-      break
-    case 'cross-language':
-      data = crossLanguageAnalysis.value
-      filename = `cross-language-${timestamp}`
-      break
-    case 'config-duplicates':
-      data = configDuplicatesAnalysis.value
-      filename = `config-duplicates-${timestamp}`
-      break
-    case 'code-intelligence':
-      data = codeHealthScore.value
-      filename = `code-intelligence-scores-${timestamp}`
-      break
-    case 'environment':
-      // Issue #631: Fetch full data from export endpoint to avoid truncation
-      try {
-        const backendUrl = await appConfig.getServiceUrl('backend')
-        const exportResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/env-analysis/export`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        })
-        if (exportResponse.ok) {
-          data = await exportResponse.json()
-          logger.info('Environment export: fetched full data from export endpoint', {
-            total_in_export: (data as { total_in_export?: number }).total_in_export,
-            total_in_analysis: (data as { total_in_analysis?: number }).total_in_analysis,
-          })
-        } else {
-          // Fallback to cached display data if export fails
-          logger.warn('Environment export: export endpoint failed, using display data')
-          notify(t('analytics.codebase.notify.usingCachedData'), 'warning')
-          data = environmentAnalysis.value
-        }
-      } catch (err) {
-        // Fallback to cached display data
-        logger.warn('Environment export: fetch failed, using display data', err)
-        notify(t('analytics.codebase.notify.exportEndpointUnavailable'), 'warning')
-        data = environmentAnalysis.value
-      }
-      filename = `environment-analysis-${timestamp}`
-      break
-    case 'ownership':
-      data = ownershipAnalysis.value
-      filename = `ownership-analysis-${timestamp}`
-      break
-    case 'statistics':
-      data = codebaseStats.value
-      filename = `codebase-statistics-${timestamp}`
-      break
-    default:
-      notify(t('analytics.codebase.notify.unknownSectionType'), 'error')
-      return
-  }
-
-  if (!data) {
-    notify(t('analytics.codebase.notify.noDataAvailable', { section }), 'warning')
-    return
-  }
-
-  // Format content based on requested format
-  if (format === 'json') {
-    content = JSON.stringify(data, null, 2)
-    filename += '.json'
-  } else {
-    // Generate Markdown
-    content = generateSectionMarkdown(section, data)
-    filename += '.md'
-  }
-
-  // Download file
-  const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/markdown' })
-  const url = window.URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  window.URL.revokeObjectURL(url)
-
-  notify(t('analytics.codebase.notify.sectionExported', { section, format: format.toUpperCase() }), 'success')
-}
-
-// Generate markdown for a section
-const generateSectionMarkdown = (section: SectionType, data: unknown): string => {
-  const now = new Date().toISOString()
-  let md = `# ${section.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')} Report\n\n`
-  md += `**Generated:** ${now}\n\n`
-
-  switch (section) {
-    case 'bug-prediction': {
-      const bp = data as { total_files?: number; high_risk_count?: number; files?: Array<{ file_path: string; risk_score: number; risk_level: string }> }
-      md += `## Summary\n\n`
-      md += `- **Total Files Analyzed:** ${bp.total_files || 0}\n`
-      md += `- **High Risk Files:** ${bp.high_risk_count || 0}\n\n`
-      if (bp.files && bp.files.length > 0) {
-        md += `## Files by Risk\n\n`
-        md += `| File | Risk Score | Risk Level |\n`
-        md += `|------|------------|------------|\n`
-        bp.files.forEach(f => {
-          md += `| ${f.file_path} | ${f.risk_score} | ${f.risk_level} |\n`
-        })
-      }
-      break
-    }
-    case 'code-smells': {
-      const cs = data as { summary?: { total_smells: number }; smells_by_severity?: Record<string, number> }
-      md += `## Summary\n\n`
-      md += `- **Total Code Smells:** ${cs.summary?.total_smells || 0}\n\n`
-      if (cs.smells_by_severity) {
-        md += `## By Severity\n\n`
-        Object.entries(cs.smells_by_severity).forEach(([severity, count]) => {
-          md += `- **${severity}:** ${count}\n`
-        })
-      }
-      break
-    }
-    case 'problems': {
-      // Fix #612: Use correct property names from Problem interface
-      const probs = data as Array<{
-        file_path: string
-        severity: string
-        message?: string
-        description?: string
-        line?: number
-        line_number?: number
-        problem_type?: string
-      }>
-      md += `## Total Problems: ${probs.length}\n\n`
-      if (probs.length > 0) {
-        md += `| File | Severity | Line | Message |\n`
-        md += `|------|----------|------|----------|\n`
-        probs.forEach(p => {
-          const lineNum = p.line || p.line_number || '-'
-          const msg = p.message || p.description || ''
-          md += `| ${p.file_path || 'unknown'} | ${p.severity || 'unknown'} | ${lineNum} | ${msg} |\n`
-        })
-      }
-      break
-    }
-    case 'statistics': {
-      const stats = data as Record<string, unknown>
-      md += `## Codebase Statistics\n\n`
-      const statsObj = stats as { stats?: Record<string, unknown> }
-      const s = statsObj.stats || stats
-      md += `| Metric | Value |\n`
-      md += `|--------|-------|\n`
-      md += `| Total Files | ${(s as Record<string, number>).total_files?.toLocaleString() || 0} |\n`
-      md += `| Python Files | ${(s as Record<string, number>).python_files?.toLocaleString() || 0} |\n`
-      md += `| TypeScript Files | ${(s as Record<string, number>).typescript_files?.toLocaleString() || 0} |\n`
-      md += `| Vue Files | ${(s as Record<string, number>).vue_files?.toLocaleString() || 0} |\n`
-      md += `| Total Lines | ${(s as Record<string, number>).total_lines?.toLocaleString() || 0} |\n`
-      md += `| Total Functions | ${(s as Record<string, number>).total_functions?.toLocaleString() || 0} |\n`
-      md += `| Total Classes | ${(s as Record<string, number>).total_classes?.toLocaleString() || 0} |\n`
-      break
-    }
-    case 'duplicates': {
-      const dups = data as Array<{ file1: string; file2: string; similarity: number; lines: number }>
-      md += `## Duplicate Code Analysis\n\n`
-      md += `**Total Duplicate Pairs Found:** ${dups.length}\n\n`
-      if (dups.length > 0) {
-        md += `| File 1 | File 2 | Similarity | Lines |\n`
-        md += `|--------|--------|------------|-------|\n`
-        dups.forEach(d => {
-          md += `| ${d.file1} | ${d.file2} | ${(d.similarity * 100).toFixed(1)}% | ${d.lines} |\n`
-        })
-      }
-      break
-    }
-    case 'declarations': {
-      const decls = data as Array<{ file: string; name: string; type: string; line: number }>
-      md += `## Code Declarations\n\n`
-      md += `**Total Declarations:** ${decls.length}\n\n`
-      if (decls.length > 0) {
-        md += `| File | Name | Type | Line |\n`
-        md += `|------|------|------|------|\n`
-        decls.forEach(d => {
-          md += `| ${d.file} | ${d.name} | ${d.type} | ${d.line} |\n`
-        })
-      }
-      break
-    }
-    case 'api-endpoints': {
-      const api = data as { total_endpoints?: number; endpoints?: Array<{ path: string; method: string; file: string }> }
-      md += `## API Endpoint Analysis\n\n`
-      md += `**Total Endpoints:** ${api.total_endpoints || api.endpoints?.length || 0}\n\n`
-      if (api.endpoints && api.endpoints.length > 0) {
-        md += `| Method | Path | File |\n`
-        md += `|--------|------|------|\n`
-        api.endpoints.forEach(e => {
-          md += `| ${e.method} | ${e.path} | ${e.file} |\n`
-        })
-      }
-      break
-    }
-    case 'cross-language': {
-      const cl = data as { dto_mismatches?: unknown[]; api_mismatches?: unknown[]; validation_duplications?: unknown[] }
-      md += `## Cross-Language Pattern Analysis\n\n`
-      md += `| Category | Count |\n`
-      md += `|----------|-------|\n`
-      md += `| DTO Mismatches | ${cl.dto_mismatches?.length || 0} |\n`
-      md += `| API Mismatches | ${cl.api_mismatches?.length || 0} |\n`
-      md += `| Validation Duplications | ${cl.validation_duplications?.length || 0} |\n\n`
-      md += `### Details\n\n`
-      md += '```json\n' + JSON.stringify(data, null, 2) + '\n```\n'
-      break
-    }
-    case 'config-duplicates': {
-      const cfg = data as { duplicates?: Array<{ key: string; files: string[]; count: number }> }
-      md += `## Configuration Duplicates\n\n`
-      md += `**Total Duplicates:** ${cfg.duplicates?.length || 0}\n\n`
-      if (cfg.duplicates && cfg.duplicates.length > 0) {
-        md += `| Config Key | Files | Occurrences |\n`
-        md += `|------------|-------|-------------|\n`
-        cfg.duplicates.forEach(d => {
-          md += `| ${d.key} | ${d.files.join(', ')} | ${d.count} |\n`
-        })
-      }
-      break
-    }
-    case 'environment': {
-      // Issue #631: Updated to handle new export format with hardcoded_values
-      // Issue #706: Fixed field names to match backend API response
-      // Backend returns 'file' and 'line', not 'file_path' and 'line_number'
-      interface EnvExportData {
-        total_in_export?: number
-        total_in_analysis?: number
-        total_hardcoded_values?: number
-        high_priority_count?: number
-        categories?: Record<string, number>
-        hardcoded_values?: Array<{
-          type: string
-          severity: string
-          value: string
-          file?: string           // Backend returns 'file', not 'file_path'
-          line?: number           // Backend returns 'line', not 'line_number'
-          variable_name?: string
-          suggested_env_var?: string
-          context?: string
-          current_usage?: string
-        }>
-        recommendations?: Array<{
-          priority?: string
-          description?: string
-          env_var_name?: string
-        }>
-      }
-      const env = data as EnvExportData
-
-      md += `## Environment Analysis Report\n\n`
-
-      // Summary section
-      md += `### Summary\n\n`
-      const totalItems = env.total_in_export ?? env.total_hardcoded_values ?? 0
-      const totalAnalysis = env.total_in_analysis ?? env.total_hardcoded_values ?? 0
-      md += `- **Total Items Exported:** ${totalItems.toLocaleString()}\n`
-      if (env.total_in_analysis && env.total_in_export !== env.total_in_analysis) {
-        md += `- **Total in Analysis:** ${totalAnalysis.toLocaleString()}\n`
-      }
-      if (env.high_priority_count !== undefined) {
-        md += `- **High Priority Items:** ${env.high_priority_count}\n`
-      }
-      md += `\n`
-
-      // Categories breakdown
-      if (env.categories && Object.keys(env.categories).length > 0) {
-        md += `### Categories\n\n`
-        md += `| Category | Count |\n`
-        md += `|----------|-------|\n`
-        Object.entries(env.categories).forEach(([cat, count]) => {
-          md += `| ${cat} | ${count} |\n`
-        })
-        md += `\n`
-      }
-
-      // Hardcoded values - group by severity
-      if (env.hardcoded_values && env.hardcoded_values.length > 0) {
-        const byPriority = { high: [], medium: [], low: [] } as Record<string, typeof env.hardcoded_values>
-        env.hardcoded_values.forEach(v => {
-          const sev = (v.severity || 'low').toLowerCase()
-          if (!byPriority[sev]) byPriority[sev] = []
-          byPriority[sev].push(v)
-        })
-
-        // High priority first
-        if (byPriority.high.length > 0) {
-          md += `### 🔴 High Priority (${byPriority.high.length})\n\n`
-          md += `| Type | Value | File | Line |\n`
-          md += `|------|-------|------|------|\n`
-          byPriority.high.forEach(v => {
-            const val = String(v.value).substring(0, 50) + (String(v.value).length > 50 ? '...' : '')
-            md += `| ${v.type} | \`${val}\` | ${v.file || '-'} | ${v.line || '-'} |\n`
-          })
-          md += `\n`
-        }
-
-        if (byPriority.medium.length > 0) {
-          md += `### 🟡 Medium Priority (${byPriority.medium.length})\n\n`
-          md += `| Type | Value | File | Line |\n`
-          md += `|------|-------|------|------|\n`
-          byPriority.medium.forEach(v => {
-            const val = String(v.value).substring(0, 50) + (String(v.value).length > 50 ? '...' : '')
-            md += `| ${v.type} | \`${val}\` | ${v.file || '-'} | ${v.line || '-'} |\n`
-          })
-          md += `\n`
-        }
-
-        if (byPriority.low.length > 0) {
-          md += `### 🟢 Low Priority (${byPriority.low.length})\n\n`
-          md += `| Type | Value | File | Line |\n`
-          md += `|------|-------|------|------|\n`
-          byPriority.low.forEach(v => {
-            const val = String(v.value).substring(0, 50) + (String(v.value).length > 50 ? '...' : '')
-            md += `| ${v.type} | \`${val}\` | ${v.file || '-'} | ${v.line || '-'} |\n`
-          })
-          md += `\n`
-        }
-      }
-
-      // Recommendations
-      if (env.recommendations && env.recommendations.length > 0) {
-        md += `### Recommendations\n\n`
-        env.recommendations.forEach((rec, i) => {
-          md += `${i + 1}. **[${rec.priority || 'medium'}]** ${rec.description || ''}`
-          if (rec.env_var_name) {
-            md += ` → \`${rec.env_var_name}\``
-          }
-          md += `\n`
-        })
-      }
-      break
-    }
-    case 'code-intelligence': {
-      const ci = data as { security_score?: number; performance_score?: number; maintainability_score?: number }
-      md += `## Code Intelligence Scores\n\n`
-      md += `| Metric | Score |\n`
-      md += `|--------|-------|\n`
-      md += `| Security | ${ci.security_score || 'N/A'} |\n`
-      md += `| Performance | ${ci.performance_score || 'N/A'} |\n`
-      md += `| Maintainability | ${ci.maintainability_score || 'N/A'} |\n`
-      break
-    }
-    case 'ownership': {
-      const own = data as OwnershipAnalysisResult
-      md += `## Code Ownership & Expertise Map\n\n`
-      md += `### Summary\n\n`
-      md += `- **Total Files Analyzed:** ${own.summary.total_files}\n`
-      md += `- **Total Contributors:** ${own.summary.total_contributors}\n`
-      md += `- **Knowledge Gaps:** ${own.summary.knowledge_gaps_count}\n`
-      md += `- **Critical Gaps:** ${own.summary.critical_gaps}\n\n`
-      md += `### Metrics\n\n`
-      md += `- **Bus Factor:** ${own.metrics.overall_bus_factor}\n`
-      md += `- **Ownership Concentration:** ${own.metrics.ownership_concentration}%\n`
-      md += `- **Team Coverage:** ${own.metrics.team_coverage}%\n\n`
-      if (own.expertise_scores.length > 0) {
-        md += `### Top Contributors\n\n`
-        md += `| Rank | Name | Lines | Score |\n`
-        md += `|------|------|-------|-------|\n`
-        own.expertise_scores.slice(0, 10).forEach((e, i) => {
-          md += `| ${i + 1} | ${e.author_name} | ${e.total_lines.toLocaleString()} | ${e.overall_score.toFixed(0)} |\n`
-        })
-        md += `\n`
-      }
-      if (own.knowledge_gaps.length > 0) {
-        md += `### Knowledge Gaps\n\n`
-        own.knowledge_gaps.slice(0, 10).forEach(g => {
-          md += `- **[${g.risk_level.toUpperCase()}]** ${g.area}: ${g.description}\n`
-        })
-      }
-      break
-    }
-    default:
-      // Generic JSON dump for unknown sections
-      md += '```json\n' + JSON.stringify(data, null, 2) + '\n```\n'
-  }
-
-  return md
-}
+// #1588: Export functionality extracted to useCodebaseExport composable
+const { exportReport, exportSection } = useCodebaseExport({
+  sectionData: {
+    'bug-prediction': bugPredictionAnalysis as Ref<unknown>,
+    'code-smells': codeSmellsReport as Ref<unknown>,
+    'problems': problemsReport as Ref<unknown>,
+    'duplicates': duplicateAnalysis as Ref<unknown>,
+    'declarations': declarationAnalysis as Ref<unknown>,
+    'api-endpoints': apiEndpointAnalysis as Ref<unknown>,
+    'cross-language': crossLanguageAnalysis as Ref<unknown>,
+    'config-duplicates': configDuplicatesAnalysis as Ref<unknown>,
+    'code-intelligence': codeHealthScore as Ref<unknown>,
+    'environment': environmentAnalysis as Ref<unknown>,
+    'statistics': codebaseStats as Ref<unknown>,
+    'ownership': ownershipAnalysis as Ref<unknown>,
+  },
+  exportingReport,
+  progressStatus,
+  fetchWithAuth,
+  getBackendUrl: () => appConfig.getServiceUrl('backend'),
+  notify,
+  t,
+})
 
 // Clear analysis cache (both Redis and ChromaDB)
 const clearCache = async () => {
