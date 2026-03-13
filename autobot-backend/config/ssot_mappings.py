@@ -272,6 +272,16 @@ URL_MAPPINGS: List[SSOTMapping] = [
         description="WebSocket URL",
         severity="high",
     ),
+    SSOTMapping(
+        pattern=r"http://172\.16\.168\.24:8082",
+        is_regex=True,
+        category=SSOTCategory.URL,
+        python_config="config.tts_worker_url",
+        typescript_config="config.ttsWorkerUrl",
+        env_var="AUTOBOT_TTS_WORKER_URL",
+        description="TTS Worker URL",
+        severity="high",
+    ),
 ]
 
 # LLM Model Mappings
@@ -545,6 +555,7 @@ SSOT_VALUES_FOR_SHELL = {
     "6379": "config.port.redis (AUTOBOT_REDIS_PORT)",
     "11434": "config.port.ollama (AUTOBOT_OLLAMA_PORT)",
     "6080": "config.port.vnc (AUTOBOT_VNC_PORT)",
+    "8082": "config.port.tts (AUTOBOT_TTS_WORKER_PORT)",
     # Models
     "mistral:7b-instruct": "config.llm.default_model (AUTOBOT_DEFAULT_LLM_MODEL)",
     "nomic-embed-text:latest": "config.llm.embedding_model (AUTOBOT_EMBEDDING_MODEL)",
