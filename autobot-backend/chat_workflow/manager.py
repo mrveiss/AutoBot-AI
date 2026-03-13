@@ -2629,9 +2629,8 @@ before summarizing.
         from chat_history import ChatHistoryManager
 
         slash_handler = get_slash_command_handler()
-        slash_handler.set_chat_context(session_id)  # Issue #1613
         logger.info("[ChatWorkflowManager] Processing slash command: %s", message[:50])
-        result = await slash_handler.execute(message)
+        result = await slash_handler.execute(message, chat_id=session_id)
 
         cmd_msg = WorkflowMessage(
             type="response",
