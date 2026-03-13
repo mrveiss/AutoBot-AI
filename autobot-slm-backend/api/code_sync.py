@@ -369,9 +369,22 @@ async def _build_slm_frontend() -> None:
 
     Issue #1607: The Ansible path builds the frontend; the self-sync
     path was missing this step, serving stale dist/ files.
+    Issue #1624: Fix ownership before build — Ansible deploys as root.
     """
     frontend_dir = "/opt/autobot/autobot-slm-frontend"
     try:
+        # Fix ownership — Ansible may have created root-owned files (#1624)
+        proc = await asyncio.create_subprocess_exec(
+            "sudo",
+            "chown",
+            "-R",
+            "autobot:autobot",
+            frontend_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        await asyncio.wait_for(proc.communicate(), timeout=30.0)
+
         # npm ci — install exact lockfile deps
         proc = await asyncio.create_subprocess_exec(
             "npm",
