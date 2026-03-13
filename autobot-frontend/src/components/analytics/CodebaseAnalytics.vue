@@ -3897,17 +3897,8 @@ const getPriorityClass = (severity: string | undefined): string => {
   }
 }
 
-// Issue #1602: getCssVar moved to shared composable
-import { getCssVar } from '@/composables/useCssVars'
-
-const getSeverityColor = (severity: string | undefined): string => {
-  switch (severity?.toLowerCase()) {
-    case 'critical': return getCssVar('--color-error-hover', '#dc2626')
-    case 'high': return getCssVar('--chart-orange', '#ea580c')
-    case 'medium': return getCssVar('--color-warning-hover', '#d97706')
-    default: return getCssVar('--color-success-hover', '#059669')
-  }
-}
+// Issue #1602/#1606: getCssVar + getSeverityColor moved to shared composable
+import { getCssVar, getSeverityColor } from '@/composables/useCssVars'
 
 const formatProblemType = (type: string | undefined): string => {
   return type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Unknown'

@@ -387,17 +387,10 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
 import { formatTimeAgo } from '@/utils/formatHelpers';
+import { getCssVar } from '@/composables/useCssVars'
 
 // Create scoped logger for BugPredictionDashboard
 const logger = createLogger('BugPredictionDashboard');
-
-/**
- * Helper function to get CSS custom property value
- * Issue #704: Added for dynamic color access in JavaScript
- */
-function getCssVar(varName: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-}
 
 // Types
 interface RiskFile {

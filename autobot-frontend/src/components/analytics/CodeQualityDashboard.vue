@@ -421,14 +421,11 @@
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
 import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
+import { getCssVar } from '@/composables/useCssVars'
 
 const logger = createLogger('CodeQualityDashboard');
 
 // Helper to get CSS variable value for JavaScript usage (SVG, charts, etc.)
-function getCssVar(name: string, fallback: string): string {
-  if (typeof document === 'undefined') return fallback;
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-}
 
 // Reactive chart colors that read from CSS variables
 const chartColors = reactive({

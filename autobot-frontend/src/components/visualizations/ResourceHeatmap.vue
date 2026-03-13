@@ -120,13 +120,6 @@ const chartRef = ref<InstanceType<typeof VueApexCharts> | null>(null)
 // Data
 const heatmapData = ref<Array<{ name: string; data: Array<{ x: string; y: number }> }>>([])
 
-/**
- * Issue #704: Helper to get CSS custom property values from design tokens
- */
-function getCssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-}
-
 // Computed
 const chartSeries = computed(() => heatmapData.value)
 
@@ -436,6 +429,7 @@ watch(() => props.machine, () => {
 
 // Cleanup
 import { onUnmounted } from 'vue'
+import { getCssVar } from '@/composables/useCssVars'
 onUnmounted(() => {
   if (refreshTimer) {
     clearInterval(refreshTimer)

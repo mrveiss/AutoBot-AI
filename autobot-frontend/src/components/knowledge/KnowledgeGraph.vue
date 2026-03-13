@@ -352,6 +352,7 @@ import fcose from 'cytoscape-fcose'
 import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { createLogger } from '@/utils/debugUtils'
+import { getCssVar } from '@/composables/useCssVars'
 import MemoryOrphanManager from '@/components/knowledge/MemoryOrphanManager.vue'
 
 // Register fcose layout
@@ -501,18 +502,6 @@ const relationCount = computed(() => graphEdges.value.length)
 // ============================================================================
 // Node Colors & Icons
 // ============================================================================
-
-/**
- * Gets a CSS variable value from the document root
- * Issue #704: Use design tokens for theming
- * @param name - CSS variable name (e.g., '--chart-blue')
- * @param fallback - Fallback value if variable is not defined
- * @returns The CSS variable value or fallback
- */
-function getCssVar(name: string, fallback: string): string {
-  if (typeof document === 'undefined') return fallback
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
-}
 
 /**
  * Returns the color associated with an entity type for graph visualization
