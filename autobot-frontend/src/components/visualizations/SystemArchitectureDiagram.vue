@@ -515,6 +515,7 @@ import apiClient from '@/utils/ApiClient'
 import { parseApiResponse } from '@/utils/apiResponseHelpers'
 import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()
 
@@ -526,15 +527,6 @@ const config = getConfig()
 // ============================================================================
 // Issue #704: CSS Design System - Helper to get CSS custom property values
 // ============================================================================
-
-/**
- * Get CSS custom property value from document root.
- * Falls back to provided default if property is not defined or SSR context.
- */
-function getCssVar(name: string, fallback: string): string {
-  if (typeof document === 'undefined') return fallback
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
-}
 
 // ============================================================================
 // Types

@@ -345,6 +345,7 @@ import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
 import fcose from 'cytoscape-fcose'
 // Issue #711: Virtual scrolling for large orphaned function lists
 import { useVirtualScrollSimple } from '@/composables/useVirtualScroll'
+import { getCssVar } from '@/composables/useCssVars'
 
 // Register fcose layout
 cytoscape.use(fcose)
@@ -641,15 +642,6 @@ function initCytoscape() {
   cy.on('zoom', () => {
     zoomLevel.value = cy?.zoom() || 1
   })
-}
-
-/**
- * Gets a CSS variable value from the document root
- * Issue #704: Use design tokens for theming
- */
-function getCssVar(name: string, fallback: string): string {
-  if (typeof document === 'undefined') return fallback
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
 }
 
 /**

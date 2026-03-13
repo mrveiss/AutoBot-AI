@@ -183,17 +183,10 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()
 const logger = createLogger('AgentActivityVisualization')
-
-/**
- * Helper to retrieve CSS custom property values from design tokens.
- * Issue #704: Design token migration helper
- */
-function getCssVar(varName: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
-}
 
 // Types
 interface Agent {
