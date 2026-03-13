@@ -69,6 +69,7 @@ class CodeStatus(str, enum.Enum):
 
     UP_TO_DATE = "up_to_date"
     OUTDATED = "outdated"
+    CODE_CURRENT_SERVICE_FAILED = "code_current_service_failed"  # #1605
     UNKNOWN = "unknown"
 
 
