@@ -1139,6 +1139,7 @@ interface CommunicationPatternsData {
   websocket_connections: number
   api_call_frequency: number
   data_transfer_rate: number
+  unique_endpoints: number  // Issue #1602: was extracted but never displayed
 }
 
 interface CodeQualityData {
@@ -3756,7 +3757,8 @@ const loadCommunicationPatterns = async () => {
     communicationPatterns.value = {
       websocket_connections: wsConnections,
       api_call_frequency: apiFrequency,
-      data_transfer_rate: estimatedDataRate
+      data_transfer_rate: estimatedDataRate,
+      unique_endpoints: uniqueEndpoints  // Issue #1602: wire previously unused value
     }
   } catch (error: unknown) {
     logger.error('loadCommunicationPatterns failed:', error)
@@ -3895,15 +3897,8 @@ const getPriorityClass = (severity: string | undefined): string => {
   }
 }
 
-/**
- * Helper to get CSS variable value at runtime.
- * Used for JavaScript color values (charts, Cytoscape, D3, etc.)
- * Falls back to provided default for SSR/testing safety.
- */
-function getCssVar(name: string, fallback: string): string {
-  if (typeof document === 'undefined') return fallback
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
-}
+// Issue #1602: getCssVar moved to shared composable
+import { getCssVar } from '@/composables/useCssVars'
 
 const getSeverityColor = (severity: string | undefined): string => {
   switch (severity?.toLowerCase()) {

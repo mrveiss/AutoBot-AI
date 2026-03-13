@@ -720,6 +720,7 @@
         "websocketConnections": "WebSocket Connections",
         "apiCallFrequency": "API Call Frequency",
         "dataTransferRate": "Data Transfer Rate",
+        "uniqueEndpoints": "Unique Endpoints",
         "noData": "No communication data available."
       },
       "quality": {

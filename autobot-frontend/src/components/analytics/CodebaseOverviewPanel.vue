@@ -68,6 +68,10 @@
             <div class="pattern-label">{{ $t('analytics.codebase.communication.dataTransferRate') }}</div>
             <div class="pattern-value">{{ communicationPatterns.data_transfer_rate || 0 }} KB/s</div>
           </div>
+          <div class="pattern-item">
+            <div class="pattern-label">{{ $t('analytics.codebase.communication.uniqueEndpoints') }}</div>
+            <div class="pattern-value">{{ communicationPatterns.unique_endpoints || 0 }}</div>
+          </div>
         </div>
         <EmptyState
           v-else
@@ -173,6 +177,7 @@ interface CommunicationPatternsData {
   websocket_connections: number
   api_call_frequency: number
   data_transfer_rate: number
+  unique_endpoints: number
 }
 
 interface CodeQualityData {
