@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-from config import settings
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from models.database import (
@@ -56,6 +55,8 @@ from services.sync_orchestrator import get_sync_orchestrator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
+
+from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/code-sync", tags=["code-sync"])
@@ -347,6 +348,86 @@ async def _rsync_component_local(
         return False, f"local rsync error for {component}: {exc}"
 
 
+async def _install_slm_pip_dependencies() -> None:
+    """Install pip dependencies for SLM backend after code sync.
+
+    Issue #1607: Mirrors what Ansible does — ensures new dependencies
+    are installed before restarting the service.
+    """
+    pip_bin = "/opt/autobot/autobot-slm-backend/venv/bin/pip"
+    req_file = "/opt/autobot/autobot-slm-backend/requirements.txt"
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            pip_bin,
+            "install",
+            "-r",
+            req_file,
+            "--quiet",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+        if proc.returncode == 0:
+            logger.info("SLM self-sync: pip dependencies installed")
+        else:
+            logger.warning(
+                "SLM self-sync: pip install returned %d: %s",
+                proc.returncode,
+                stdout.decode(errors="replace")[:500],
+            )
+    except Exception as exc:
+        logger.warning("SLM self-sync: pip install failed: %s", exc)
+
+
+async def _build_slm_frontend() -> None:
+    """Run npm ci + npm run build for the SLM frontend.
+
+    Issue #1607: The Ansible path builds the frontend; the self-sync
+    path was missing this step, serving stale dist/ files.
+    """
+    frontend_dir = "/opt/autobot/autobot-slm-frontend"
+    try:
+        # npm ci — install exact lockfile deps
+        proc = await asyncio.create_subprocess_exec(
+            "npm",
+            "ci",
+            "--prefix",
+            frontend_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+        if proc.returncode != 0:
+            logger.warning(
+                "SLM self-sync: npm ci failed (%d): %s",
+                proc.returncode,
+                stdout.decode(errors="replace")[:500],
+            )
+            return
+
+        # npm run build
+        proc = await asyncio.create_subprocess_exec(
+            "npm",
+            "run",
+            "build",
+            "--prefix",
+            frontend_dir,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+        if proc.returncode == 0:
+            logger.info("SLM self-sync: frontend build complete")
+        else:
+            logger.warning(
+                "SLM self-sync: npm build failed (%d): %s",
+                proc.returncode,
+                stdout.decode(errors="replace")[:500],
+            )
+    except Exception as exc:
+        logger.warning("SLM self-sync: frontend build failed: %s", exc)
+
+
 async def _restart_slm_service(service: str) -> None:
     """Restart a systemd service on the local SLM server.
 
@@ -494,6 +575,12 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
         logger.error("SLM self-sync had failures; services NOT restarted")
         return
 
+    # --- Phase 2b: install pip dependencies (#1607) ---
+    await _install_slm_pip_dependencies()
+
+    # --- Phase 2c: rebuild SLM frontend (#1607) ---
+    await _build_slm_frontend()
+
     # --- Phase 3: mark up-to-date in DB before restarting (#1209) ---
     await _mark_slm_node_up_to_date(db_service, node_id)
 
@@ -501,6 +588,9 @@ async def _sync_slm_from_code_source(node_id: str) -> None:
     await _restart_slm_service("autobot-slm-backend")
     await _restart_slm_service("nginx")
     logger.info("SLM self-sync complete and services restarted")
+    # NOTE: Post-restart health is monitored by heartbeat (#1604/#1605).
+    # The restarted process reports crash-loop/service-failed status
+    # if it fails to come up, so code_status will reflect the true state.
 
 
 async def _execute_node_playbook(
