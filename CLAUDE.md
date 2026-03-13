@@ -430,6 +430,7 @@ Dispatched subagents cannot autonomously acquire Bash tool permission. This mean
 **Always close the issue after implementation:**
 - Run `gh issue close <number>` and verify with `gh issue view <number>`
 - Add closing comment summarizing what was done
+- **Auto-close limitation:** GitHub's `Closes #NNN` keywords only work for the default branch (`main`). PRs targeting `Dev_new_gui` will NOT auto-close issues. The `auto-close-issues.yml` workflow handles this, but always verify with `gh issue view` after merge.
 
 **PR Workflow — Review Mode** (PR link only): read `gh pr view/diff`, do NOT switch branches or change code.
 
