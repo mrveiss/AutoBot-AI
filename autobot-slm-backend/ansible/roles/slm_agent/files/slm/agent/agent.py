@@ -26,13 +26,18 @@ from typing import Optional
 import aiohttp
 from aiohttp import web
 
+from .health_collector import HealthCollector
+from .port_scanner import get_listening_ports
+from .role_detector import RoleDetector
+from .version import get_agent_version
+
 
 def sd_notify(state: str) -> bool:
     """
     Send notification to systemd.
 
     This is a lightweight implementation that doesn't require the sdnotify package.
-    Used for watchdog support (prevents timeout restarts).
+    Used for watchdog support (Issue #xxx - slm-agent watchdog timeout fix).
 
     Args:
         state: Notification state string (e.g., "READY=1", "WATCHDOG=1")
@@ -60,9 +65,6 @@ def sd_notify(state: str) -> bool:
         return False
 
 
-from .health_collector import HealthCollector
-from .version import get_agent_version
-
 logger = logging.getLogger(__name__)
 
 # Local notification server port (for git hooks)
@@ -71,9 +73,25 @@ DEFAULT_NOTIFY_PORT = int(os.getenv("SLM_NOTIFY_PORT", "8000"))
 # Standalone agent defaults - agent runs on remote VMs, not AutoBot main host
 # These are configured via CLI args or environment variables at deployment
 # Issue #694: Use environment variable with fallback
-DEFAULT_ADMIN_URL = os.getenv(
-    "SLM_ADMIN_URL", "https://172.16.168.19"  # noqa: ssot-fallback
-)
+# Issue #768: Use SSOT config when available, fall back to env var
+
+
+def _get_default_admin_url() -> str:
+    """Get default admin URL from env or SSOT config."""
+    env_url = os.getenv("SLM_ADMIN_URL")
+    if env_url:
+        return env_url
+    try:
+        from autobot_shared.ssot_config import get_config
+
+        return get_config().slm_url
+    except Exception:
+        # Fallback for standalone deployments without full AutoBot
+        slm_host = os.getenv("SLM_HOST", "172.16.168.19")  # noqa: ssot-fallback
+        return f"http://{slm_host}:8000"
+
+
+DEFAULT_ADMIN_URL = _get_default_admin_url()
 DEFAULT_HEARTBEAT_INTERVAL = 30  # seconds
 # Buffer database path - use /var/lib/slm-agent for systemd compatibility
 # (systemd service has ProtectHome=read-only and ReadWritePaths=/var/lib/slm-agent)
@@ -105,6 +123,10 @@ class SLMAgent:
 
         self.collector = HealthCollector(services=services or [])
         self._init_buffer_db()
+
+        # Role detection (Issue #779)
+        self.role_detector = RoleDetector()
+        self._role_definitions_loaded = False
 
     def _init_buffer_db(self):
         """Initialize SQLite buffer database."""
@@ -155,22 +177,86 @@ class SLMAgent:
             self._pending_update = True
             self._latest_version = latest
 
-    async def send_heartbeat(self) -> bool:
-        """Send heartbeat with health data to admin."""
-        import platform
+    async def _fetch_role_definitions(self) -> bool:
+        """Fetch role definitions from SLM server (Issue #779)."""
+        try:
+            async with aiohttp.ClientSession() as session:
+                url = f"{self.admin_url}/api/roles/definitions"
+                async with session.get(
+                    url,
+                    timeout=aiohttp.ClientTimeout(total=10),
+                    ssl=False,
+                ) as response:
+                    if response.status == 200:
+                        definitions = await response.json()
+                        self.role_detector.load_definitions(definitions)
+                        self._role_definitions_loaded = True
+                        logger.info("Loaded %d role definitions", len(definitions))
+                        return True
+        except Exception as e:
+            logger.debug("Failed to fetch role definitions: %s", e)
+        return False
 
-        health = self.collector.collect()
-        # Payload matches HeartbeatRequest schema
-        os_info = f"{platform.system()} {platform.release()}"
-        # Issue #741: Get code version for heartbeat
-        code_version = self.version_manager.get_version()
-        payload = {
+    def _build_role_report(self) -> dict:
+        """
+        Build role detection report for heartbeat payload.
+
+        Returns a dictionary mapping role names to their status details.
+        Issue #620.
+        """
+        if not self._role_definitions_loaded:
+            return {}
+
+        role_statuses = self.role_detector.detect_all()
+        return {
+            name: {
+                "path_exists": status.path_exists,
+                "path": status.path,
+                "service_running": status.service_running,
+                "service_name": status.service_name,
+                "ports": status.ports,
+                "version": status.version,
+                "status": status.status,
+            }
+            for name, status in role_statuses.items()
+        }
+
+    def _build_listening_ports_list(self) -> list:
+        """
+        Build list of listening ports for heartbeat payload.
+
+        Returns a list of dictionaries with port, process, and pid info.
+        Issue #620.
+        """
+        return [
+            {"port": p.port, "process": p.process, "pid": p.pid}
+            for p in get_listening_ports()
+        ]
+
+    def _build_heartbeat_payload(
+        self, health: dict, os_info: str, code_version: Optional[str]
+    ) -> dict:
+        """
+        Build the complete heartbeat payload.
+
+        Args:
+            health: Health data from collector.
+            os_info: Operating system information string.
+            code_version: Current code version hash.
+
+        Returns:
+            Dictionary payload matching HeartbeatRequest schema.
+        Issue #620.
+        """
+        return {
             "cpu_percent": health.get("cpu_percent", 0.0),
             "memory_percent": health.get("memory_percent", 0.0),
             "disk_percent": health.get("disk_percent", 0.0),
             "agent_version": "1.0.0",
             "os_info": os_info,
             "code_version": code_version,  # Issue #741: Add code version
+            "role_report": self._build_role_report(),  # Issue #779: Add role detection
+            "listening_ports": self._build_listening_ports_list(),  # Issue #779
             "extra_data": {
                 "services": health.get("services", {}),
                 "discovered_services": health.get("discovered_services", []),
@@ -180,6 +266,17 @@ class SLMAgent:
             },
         }
 
+    async def _send_heartbeat_request(self, payload: dict) -> bool:
+        """
+        Send heartbeat HTTP request to admin server.
+
+        Args:
+            payload: Heartbeat payload dictionary.
+
+        Returns:
+            True if heartbeat was accepted, False otherwise.
+        Issue #620.
+        """
         try:
             async with aiohttp.ClientSession() as session:
                 url = f"{self.admin_url}/api/nodes/{self.node_id}/heartbeat"
@@ -187,7 +284,7 @@ class SLMAgent:
                     url,
                     json=payload,
                     timeout=aiohttp.ClientTimeout(total=10),
-                    ssl=False,
+                    ssl=False,  # mTLS pending PKI setup (Issue #725)
                 ) as response:
                     if response.status == 200:
                         # Issue #741: Process heartbeat response
@@ -206,6 +303,21 @@ class SLMAgent:
             logger.warning("Failed to send heartbeat: %s", e)
             self.buffer_event("heartbeat", payload)
             return False
+
+    async def send_heartbeat(self) -> bool:
+        """Send heartbeat with health data to admin."""
+        import platform
+
+        # Fetch role definitions if not loaded (Issue #779)
+        if not self._role_definitions_loaded:
+            await self._fetch_role_definitions()
+
+        health = self.collector.collect()
+        os_info = f"{platform.system()} {platform.release()}"
+        code_version = self.version_manager.get_version()
+
+        payload = self._build_heartbeat_payload(health, os_info, code_version)
+        return await self._send_heartbeat_request(payload)
 
     async def sync_buffered_events(self):
         """Sync buffered events to admin (#1106)."""
@@ -335,6 +447,32 @@ class SLMAgent:
         """
         return self._pending_update
 
+    def _process_code_change(self, commit: str, branch: str, message: str) -> None:
+        """
+        Update version info and buffer the code change event.
+
+        Issue #620.
+        """
+        self.version_manager.save_version(
+            commit=commit,
+            extra_data={
+                "branch": branch,
+                "message": message[:200],
+                "source": "git-hook",
+            },
+        )
+        self.version_manager.clear_cache()
+
+        self.buffer_event(
+            "code_change",
+            {
+                "commit": commit,
+                "branch": branch,
+                "message": message[:200],
+                "node_id": self.node_id,
+            },
+        )
+
     async def handle_code_change(self, request: web.Request) -> web.Response:
         """
         Handle code change notification from git hook (Issue #741).
@@ -352,35 +490,9 @@ class SLMAgent:
             if not commit:
                 return web.json_response({"error": "commit hash required"}, status=400)
 
-            logger.info(
-                "Code change notification: %s on %s",
-                commit[:12],
-                branch,
-            )
+            logger.info("Code change notification: %s on %s", commit[:12], branch)
 
-            # Update local version info
-            self.version_manager.save_version(
-                commit=commit,
-                extra_data={
-                    "branch": branch,
-                    "message": message[:200],
-                    "source": "git-hook",
-                },
-            )
-            self.version_manager.clear_cache()
-
-            # Buffer the code change event
-            self.buffer_event(
-                "code_change",
-                {
-                    "commit": commit,
-                    "branch": branch,
-                    "message": message[:200],
-                    "node_id": self.node_id,
-                },
-            )
-
-            # Trigger immediate heartbeat to notify SLM server
+            self._process_code_change(commit, branch, message)
             asyncio.create_task(self._notify_code_change(commit))
 
             return web.json_response(
