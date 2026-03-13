@@ -58,7 +58,7 @@ jobs:
         python -m pip install -r requirements-ci.txt --prefer-binary || {
           echo "⚠️ Some dependencies failed to install - continuing with available tools"
         }
-        python -m pip install --no-deps llama-index-readers-file==0.4.11
+        python -m pip install --no-deps llama-index==0.13.0
 
     - name: Python Dependency Audit
       run: |
