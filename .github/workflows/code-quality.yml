@@ -102,10 +102,18 @@ jobs:
           echo "⚠️ Security issues detected - review bandit output"
         }
 
+    - name: Check Ansible agent code drift (#1629)
+      run: |
+        bash pipeline-scripts/detect-agent-code-drift.sh || {
+          echo "Ansible slm_agent role has drifted from canonical source"
+          echo "See Issue #1629 for details"
+          exit 1
+        }
+
     - name: Code quality summary
       if: always()
       run: |
-        echo "📊 Code Quality Check Complete"
+        echo "Code Quality Check Complete"
         echo ""
         echo "Note: Checks are in warn-only mode while Issue #173 is being addressed."
         echo "Once violations are fixed, strict enforcement will be enabled."

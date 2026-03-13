@@ -232,6 +232,29 @@
         - autobot-shared
       tags: [slm]
 
+    # --- SLM custom migrations (#1630) ---
+    - name: "[PLAY 1] SLM | Run database migrations (#1630)"
+      command:
+        cmd: >-
+          /opt/autobot/autobot-slm-backend/venv/bin/python
+          -m migrations.runner
+        chdir: /opt/autobot/autobot-slm-backend
+      become: true
+      become_user: autobot
+      environment:
+        PYTHONPATH: /opt/autobot/autobot-slm-backend
+      register: slm_migration_result
+      failed_when: false
+      tags: [slm, slm-backend, migrate]
+
+    - name: "[PLAY 1] SLM | Warn if migration failed (#1630)"
+      debug:
+        msg: "WARNING: SLM migration failed: {{ slm_migration_result.stderr | default('') }}"
+      when:
+        - slm_migration_result is defined
+        - slm_migration_result.rc | default(0) != 0
+      tags: [slm, slm-backend, migrate]
+
     # --- Dependency install (#1603) ---
     - name: "[PLAY 1] SLM | Install Python dependencies"
       command:
@@ -392,6 +415,16 @@
       when: "'01-Backend' in inventory_hostname"
       changed_when: true
       tags: [backend]
+
+    - name: "[PLAY 2] Backend | Fix shared ownership (#1632)"
+      file:
+        path: /opt/autobot/autobot-shared
+        owner: autobot
+        group: autobot
+        recurse: true
+      become: true
+      when: "'01-Backend' in inventory_hostname"
+      tags: [backend, shared]
 
     - name: "[PLAY 2] Backend | Remove legacy backend symlink"
       file:
@@ -566,12 +599,28 @@
       failed_when: false
       tags: [npu, npu-worker, restart]
 
-    - name: "[PLAY 2] NPU | Wait for service to stabilize"
-      pause:
-        seconds: 10
+    - name: "[PLAY 2] NPU | Wait for service to stabilize (#1633)"
+      command: systemctl is-active autobot-npu-worker
+      become: true
+      register: npu_status
+      retries: 6
+      delay: 5
+      until: npu_status.rc == 0
       when: >-
         '03-NPU' in inventory_hostname or
         'npu-worker' in inventory_hostname
+      failed_when: false
+      tags: [npu, npu-worker, restart]
+
+    - name: "[PLAY 2] NPU | Warn if service not active (#1633)"
+      debug:
+        msg: "WARNING: autobot-npu-worker not active after restart: {{ npu_status.stdout | default('unknown') }}"
+      when:
+        - >-
+          '03-NPU' in inventory_hostname or
+          'npu-worker' in inventory_hostname
+        - npu_status is defined
+        - npu_status.rc | default(0) != 0
       tags: [npu, npu-worker, restart]
 
     # ----- Browser Worker (172.16.168.25) -----
