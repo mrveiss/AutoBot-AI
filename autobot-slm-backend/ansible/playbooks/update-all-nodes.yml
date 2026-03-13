@@ -362,7 +362,7 @@
   pre_tasks:
     - name: "[PLAY 2] Login to SLM API"
       uri:
-        url: "https://172.16.168.19/api/auth/login"
+        url: "https://{{ slm_host }}/api/auth/login"
         method: POST
         body_format: json
         body:
@@ -707,7 +707,7 @@
     # ----- Mark synced -----
     - name: "[PLAY 2] Mark node as synced in SLM DB"
       uri:
-        url: "https://172.16.168.19/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+        url: "https://{{ slm_host }}/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
         method: POST
         headers:
           Authorization: "Bearer {{ slm_token }}"
@@ -738,7 +738,7 @@
 
     - name: Check SLM health
       uri:
-        url: "https://172.16.168.19/api/health"
+        url: "https://{{ slm_host }}/api/health"
         validate_certs: false
       register: slm_health
       ignore_errors: true
@@ -760,6 +760,6 @@
           - "  SLM:     {{ slm_health.json.status | default('Check manually') }}"
           - "  Nodes:   {{ slm_health.json.nodes_online | default('?') }}/{{ slm_health.json.nodes_total | default('9') }}"
           - ""
-          - "  SLM Admin:     https://172.16.168.19/"
-          - "  User Frontend: https://172.16.168.21/"
+          - "  SLM Admin:     https://{{ slm_host }}/"
+          - "  User Frontend: https://{{ frontend_host }}/"
           - ""
