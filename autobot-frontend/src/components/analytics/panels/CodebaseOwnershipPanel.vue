@@ -436,3 +436,586 @@ function formatFactorName(factor: string): string {
   return factor.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 </script>
+
+<style scoped>
+.ownership-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.ownership-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+.ownership-section h3 i {
+  color: var(--chart-purple-light);
+}
+
+.ownership-section .loading-state,
+.ownership-section .error-state,
+.ownership-section .success-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.ownership-section .loading-state {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: var(--color-info-light);
+}
+
+.ownership-section .error-state {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--color-error-light);
+}
+
+.ownership-section .success-state {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: var(--color-success-light);
+}
+
+/* Ownership Tabs */
+.ownership-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+  padding-bottom: 12px;
+}
+
+.ownership-tabs .tab-btn {
+  padding: 8px 16px;
+  background: rgba(71, 85, 105, 0.3);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9em;
+  transition: all 0.2s ease;
+}
+
+.ownership-tabs .tab-btn:hover {
+  background: rgba(71, 85, 105, 0.5);
+  color: var(--text-secondary);
+}
+
+.ownership-tabs .tab-btn.active {
+  background: rgba(167, 139, 250, 0.2);
+  border-color: rgba(167, 139, 250, 0.5);
+  color: var(--chart-purple-light);
+}
+
+.ownership-tabs .gap-badge {
+  background: rgba(239, 68, 68, 0.3);
+  color: var(--color-error-light);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 0.75em;
+}
+
+.ownership-tabs .gap-badge.critical {
+  background: rgba(239, 68, 68, 0.5);
+}
+
+/* Ownership Overview */
+.ownership-overview .ownership-metrics {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ownership-metrics .metric-item {
+  display: grid;
+  grid-template-columns: 180px 80px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.ownership-metrics .metric-label {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.ownership-metrics .metric-value {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.ownership-metrics .metric-value.high-concentration {
+  color: var(--color-warning-light);
+}
+
+.ownership-metrics .metric-bar {
+  height: 8px;
+  background: rgba(71, 85, 105, 0.4);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.ownership-metrics .metric-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.ownership-metrics .metric-bar-fill.ok {
+  background: var(--color-success);
+}
+
+.ownership-metrics .metric-bar-fill.warning {
+  background: var(--color-warning);
+}
+
+.ownership-metrics .metric-bar-fill.critical {
+  background: var(--color-error);
+}
+
+/* Top Contributors Preview */
+.top-contributors-preview {
+  margin-top: 24px;
+}
+
+.top-contributors-preview h4 {
+  color: var(--text-secondary);
+  font-size: 1em;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.top-contributors-preview h4 i {
+  color: var(--color-warning-light);
+}
+
+.contributor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contributor-item {
+  display: grid;
+  grid-template-columns: 40px 1fr 120px 80px;
+  align-items: center;
+  padding: 10px 14px;
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.contributor-item .rank {
+  color: var(--chart-purple-light);
+  font-weight: 600;
+}
+
+.contributor-item .name {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.contributor-item .lines {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  text-align: right;
+}
+
+.contributor-item .score {
+  color: var(--color-success-light);
+  font-weight: 600;
+  text-align: right;
+}
+
+/* Risk Distribution */
+.risk-distribution {
+  margin-top: 24px;
+}
+
+.risk-distribution h4 {
+  color: var(--text-secondary);
+  font-size: 1em;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.risk-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.risk-badge {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+
+.risk-badge.risk-low {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--color-success-light);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.risk-badge.risk-medium {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--color-warning-light);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.risk-badge.risk-high {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--color-error-light);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.risk-badge.risk-critical {
+  background: rgba(239, 68, 68, 0.3);
+  color: var(--color-error-light);
+  border: 1px solid rgba(239, 68, 68, 0.6);
+}
+
+/* Contributors Tab */
+.ownership-contributors {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.expert-card {
+  padding: 16px;
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 10px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.expert-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.expert-rank {
+  color: var(--chart-purple-light);
+  font-weight: 700;
+  font-size: 1.1em;
+}
+
+.expert-name {
+  color: var(--text-secondary);
+  font-weight: 600;
+  flex: 1;
+}
+
+.expert-score {
+  background: var(--chart-purple);
+  color: var(--text-on-primary);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.9em;
+}
+
+.expert-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.expert-stats .stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.expert-stats .stat i {
+  color: var(--text-tertiary);
+}
+
+.expert-scores {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.score-bar {
+  display: grid;
+  grid-template-columns: 60px 1fr 40px;
+  align-items: center;
+  gap: 8px;
+}
+
+.score-label {
+  color: var(--text-muted);
+  font-size: 0.8em;
+}
+
+.score-track {
+  height: 6px;
+  background: rgba(71, 85, 105, 0.4);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.score-fill {
+  height: 100%;
+  border-radius: 3px;
+}
+
+.score-fill.impact {
+  background: var(--color-primary);
+}
+
+.score-fill.recency {
+  background: var(--color-success);
+}
+
+.score-value {
+  color: var(--text-secondary);
+  font-size: 0.8em;
+  text-align: right;
+}
+
+.expertise-areas {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.area-tag {
+  padding: 3px 8px;
+  background: rgba(71, 85, 105, 0.4);
+  border-radius: 4px;
+  font-size: 0.75em;
+  color: var(--text-muted);
+}
+
+/* Files Tab */
+.ownership-files .directories-section,
+.ownership-files .files-section {
+  margin-bottom: 24px;
+}
+
+.ownership-files h4 {
+  color: var(--text-secondary);
+  font-size: 1em;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ownership-files h4 i {
+  color: var(--color-info);
+}
+
+.directory-list,
+.file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.directory-item,
+.file-item {
+  padding: 12px 14px;
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 8px;
+  border-left: 3px solid var(--color-success-light);
+}
+
+.directory-item.risk-medium,
+.file-item.risk-medium {
+  border-left-color: var(--color-warning-light);
+}
+
+.directory-item.risk-high,
+.file-item.risk-high {
+  border-left-color: var(--color-error-light);
+}
+
+.directory-item.risk-critical,
+.file-item.risk-critical {
+  border-left-color: var(--color-error);
+}
+
+.dir-path,
+.file-path {
+  color: var(--text-secondary);
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.9em;
+  margin-bottom: 6px;
+}
+
+.dir-meta,
+.file-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.85em;
+}
+
+.dir-owner,
+.file-owner {
+  color: var(--chart-purple-light);
+  font-weight: 500;
+}
+
+.dir-pct,
+.file-pct {
+  color: var(--text-muted);
+}
+
+.dir-bus-factor,
+.file-bus-factor {
+  color: var(--color-success-light);
+}
+
+.dir-bus-factor.low,
+.file-bus-factor.low {
+  color: var(--color-error-light);
+}
+
+.dir-lines,
+.file-lines {
+  color: var(--text-tertiary);
+}
+
+/* Knowledge Gaps Tab */
+.ownership-gaps .gaps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gap-item {
+  padding: 16px;
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 10px;
+  border-left: 4px solid var(--color-error-light);
+}
+
+.gap-item.risk-medium {
+  border-left-color: var(--color-warning-light);
+}
+
+.gap-item.risk-low {
+  border-left-color: var(--color-success-light);
+}
+
+.gap-item.risk-critical {
+  border-left-color: var(--color-error);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.gap-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.gap-risk-badge {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.gap-risk-badge.critical {
+  background: rgba(239, 68, 68, 0.3);
+  color: var(--color-error-light);
+}
+
+.gap-risk-badge.high {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--color-error-light);
+}
+
+.gap-risk-badge.medium {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--color-warning-light);
+}
+
+.gap-risk-badge.low {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--color-success-light);
+}
+
+.gap-type {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.gap-lines {
+  color: var(--text-tertiary);
+  font-size: 0.85em;
+  margin-left: auto;
+}
+
+.gap-area {
+  color: var(--chart-purple-light);
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.9em;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gap-area i {
+  color: var(--text-tertiary);
+}
+
+.gap-description {
+  color: var(--text-secondary);
+  font-size: 0.9em;
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+
+.gap-recommendation {
+  color: var(--color-success-light);
+  font-size: 0.85em;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px;
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 6px;
+}
+
+.gap-recommendation i {
+  color: var(--color-warning-light);
+  margin-top: 2px;
+}
+
+/* Issue #566: Code Intelligence Section Styles */
+
+</style>

@@ -319,3 +319,465 @@ function getCategoryIcon(categoryId: string): string {
   return iconMap[categoryId] || iconMap.default
 }
 </script>
+
+<style scoped>
+.charts-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.charts-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.charts-section .section-header h3 {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 1.25rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.charts-section .section-header h3 i {
+  color: var(--chart-blue);
+}
+
+.section-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Category Filter Tabs */
+.category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 12px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.category-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(51, 65, 85, 0.5);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.category-tab:hover {
+  background: rgba(71, 85, 105, 0.5);
+  color: var(--text-secondary);
+  border-color: rgba(100, 116, 139, 0.5);
+}
+
+.category-tab.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--text-on-primary);
+}
+
+.category-tab i {
+  font-size: 0.875rem;
+}
+
+.tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.category-tab.active .tab-count {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.charts-loading,
+.charts-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  gap: 12px;
+  color: var(--text-muted);
+}
+
+.charts-loading i {
+  font-size: 32px;
+  color: var(--chart-blue);
+}
+
+.charts-error i {
+  font-size: 32px;
+  color: var(--color-error);
+}
+
+.charts-error {
+  color: var(--color-error-light);
+}
+
+.charts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.chart-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.summary-stat {
+  background: rgba(51, 65, 85, 0.5);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  transition: all 0.2s ease;
+}
+
+.summary-stat:hover {
+  background: rgba(51, 65, 85, 0.7);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.summary-stat.race-highlight {
+  background: rgba(249, 115, 22, 0.2);
+  border-color: rgba(249, 115, 22, 0.5);
+}
+
+.summary-stat.race-highlight:hover {
+  background: rgba(249, 115, 22, 0.3);
+}
+
+.summary-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  line-height: 1;
+}
+
+.summary-stat.race-highlight .summary-value {
+  color: var(--chart-orange);
+}
+
+.summary-label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  display: block;
+}
+
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+/* Chart items (BaseChart components) - minimal layout adjustment */
+.chart-item {
+  min-height: 350px;
+}
+
+/* Empty state placeholder (when chart has no data) */
+.chart-empty-slot {
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  min-height: 350px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Responsive charts */
+@media (max-width: 1200px) {
+  .chart-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .charts-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .chart-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-value {
+    font-size: 1.5rem;
+  }
+}
+
+/* Dependency Section Styles */
+.dependency-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.dependency-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.dependency-section .section-header h3 {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 1.25rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dependency-section .section-header h3 i {
+  color: var(--chart-purple);
+}
+
+.dependency-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Circular Dependencies Warning */
+.circular-deps-warning {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.circular-deps-warning .warning-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--color-error-light);
+  margin-bottom: 12px;
+}
+
+.circular-deps-warning .warning-header i {
+  color: var(--color-error);
+}
+
+.circular-deps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.circular-dep-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.circular-dep-item i {
+  color: var(--color-warning);
+}
+
+/* External Dependencies Table */
+.external-deps-table {
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+}
+
+.external-deps-table h4 {
+  margin: 0 0 16px 0;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.external-deps-table h4 i {
+  color: var(--chart-teal);
+}
+
+.deps-table-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.dep-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(51, 65, 85, 0.4);
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+.dep-row:hover {
+  background: rgba(51, 65, 85, 0.6);
+}
+
+.dep-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.dep-count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: rgba(59, 130, 246, 0.2);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* Import Tree Section */
+.import-tree-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.import-tree-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.import-tree-section .section-header h3 {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.import-tree-section .section-header h3 i {
+  color: var(--chart-teal);
+}
+
+.import-tree-section .section-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: var(--color-error-light);
+}
+
+.import-tree-section .section-error i {
+  color: var(--color-error);
+}
+
+.import-tree-content {
+  margin-top: 16px;
+}
+
+/* Call Graph Section */
+.call-graph-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.call-graph-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.call-graph-section .section-header h3 {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.call-graph-section .section-header h3 i {
+  color: var(--chart-purple);
+}
+
+.call-graph-section .section-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: var(--color-error-light);
+}
+
+.call-graph-section .section-error i {
+  color: var(--color-error);
+}
+
+.call-graph-content {
+  margin-top: 16px;
+}
+
+/* Issue #527: API Endpoint Checker Section */
+
+</style>

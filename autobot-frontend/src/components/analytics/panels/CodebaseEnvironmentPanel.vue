@@ -280,3 +280,267 @@ function formatFactorName(factor: string): string {
   return factor.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 </script>
+
+<style scoped>
+.environment-analysis-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 12px;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+}
+
+.environment-analysis-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+.environment-analysis-section h3 i {
+  color: var(--chart-green);
+}
+
+.environment-analysis-section .loading-state,
+.environment-analysis-section .error-state,
+.environment-analysis-section .success-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+.environment-analysis-section .loading-state {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: var(--color-info-light);
+}
+
+.environment-analysis-section .error-state {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--color-error-light);
+}
+
+.environment-analysis-section .success-state {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: var(--color-success-light);
+}
+
+.environment-analysis-section .success-state i {
+  color: var(--chart-green);
+}
+
+/* Categories Breakdown */
+.environment-analysis-section .categories-breakdown {
+  margin-top: 20px;
+}
+
+.environment-analysis-section .categories-breakdown h4 {
+  color: var(--text-secondary);
+  font-size: 1em;
+  margin-bottom: 12px;
+}
+
+.environment-analysis-section .category-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.environment-analysis-section .category-badge {
+  padding: 4px 10px;
+  background: rgba(71, 85, 105, 0.4);
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+/* Recommendations List */
+.environment-analysis-section .recommendations-list {
+  margin-top: 20px;
+}
+
+.environment-analysis-section .recommendations-list h4 {
+  color: var(--text-secondary);
+  font-size: 1em;
+  margin-bottom: 12px;
+}
+
+.environment-analysis-section .recommendation-item {
+  padding: 14px;
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  border-left: 4px solid var(--text-tertiary);
+}
+
+.environment-analysis-section .recommendation-item.priority-high {
+  border-left-color: var(--color-error);
+}
+
+.environment-analysis-section .recommendation-item.priority-medium {
+  border-left-color: var(--color-warning);
+}
+
+.environment-analysis-section .recommendation-item.priority-low {
+  border-left-color: var(--chart-green);
+}
+
+.environment-analysis-section .rec-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.environment-analysis-section .env-var-name {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--color-success-light);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.environment-analysis-section .priority-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.7em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.environment-analysis-section .priority-badge.high {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--color-error-light);
+}
+
+.environment-analysis-section .priority-badge.medium {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--color-warning-light);
+}
+
+.environment-analysis-section .priority-badge.low {
+  background: rgba(34, 197, 94, 0.2);
+  color: var(--color-success-light);
+}
+
+.environment-analysis-section .rec-description {
+  color: var(--text-secondary);
+  font-size: 0.9em;
+  margin-bottom: 6px;
+}
+
+.environment-analysis-section .rec-default {
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.environment-analysis-section .rec-default code {
+  background: rgba(30, 41, 59, 0.8);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* Hardcoded Values Preview */
+.environment-analysis-section .hardcoded-preview {
+  margin-top: 20px;
+}
+
+.environment-analysis-section .hardcoded-preview h4 {
+  color: var(--text-secondary);
+  font-size: 1em;
+  margin-bottom: 12px;
+}
+
+/* Issue #631: Truncation warning style */
+.environment-analysis-section .truncation-warning {
+  font-size: 0.85em;
+  color: var(--color-warning);
+  font-weight: normal;
+  margin-left: 8px;
+}
+
+.environment-analysis-section .hardcoded-item {
+  padding: 12px;
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  border-left: 3px solid var(--text-tertiary);
+}
+
+.environment-analysis-section .hardcoded-item.severity-high {
+  border-left-color: var(--color-error);
+}
+
+.environment-analysis-section .hardcoded-item.severity-medium {
+  border-left-color: var(--color-warning);
+}
+
+.environment-analysis-section .hardcoded-item.severity-low {
+  border-left-color: var(--chart-green);
+}
+
+.environment-analysis-section .hv-location {
+  margin-bottom: 6px;
+}
+
+.environment-analysis-section .file-path {
+  color: var(--color-info-light);
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.85em;
+}
+
+.environment-analysis-section .line-number {
+  color: var(--text-tertiary);
+  font-size: 0.85em;
+}
+
+.environment-analysis-section .hv-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.environment-analysis-section .hv-value code {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--color-warning-light);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.environment-analysis-section .value-type {
+  color: var(--text-tertiary);
+  font-size: 0.75em;
+  text-transform: uppercase;
+}
+
+.environment-analysis-section .hv-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+.environment-analysis-section .hv-suggestion i {
+  color: var(--color-warning-light);
+}
+
+.environment-analysis-section .hv-suggestion code {
+  color: var(--color-success-light);
+  background: transparent;
+}
+
+/* Issue #248: Code Ownership and Expertise Map Section */
+
+</style>
