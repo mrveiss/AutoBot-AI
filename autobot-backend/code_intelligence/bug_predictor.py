@@ -1120,7 +1120,11 @@ class BugPredictor(_BaseClass):
         if not self.use_semantic_analysis:
             return
 
-        if self._bug_history_cache is None:
+        if self._bug_history_cache is None or (
+            self._bug_history_cache_time is not None
+            and time.monotonic() - self._bug_history_cache_time > _BUG_HISTORY_CACHE_TTL
+        ):
+            self._bug_history_cache = None
             self._build_bug_history_cache()
 
         bug_patterns = self._collect_bug_patterns_from_cache()
