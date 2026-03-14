@@ -2,7 +2,24 @@
 
 **Context**: User has questions about AutoBot's system architecture, design decisions, or technical implementation.
 
-## Architecture Expertise
+## CRITICAL: Read Actual Docs Before Answering
+
+**This is a static context file and may be outdated.** Before providing ANY architecture guidance:
+
+1. Execute commands to find the authoritative documentation:
+   ```
+   find /home/kali/Desktop/AutoBot/docs/architecture -name "*.md" | head -20
+   ```
+2. Read the relevant files:
+   ```
+   cat /home/kali/Desktop/AutoBot/docs/architecture/PHASE_5_DISTRIBUTED_ARCHITECTURE.md
+   cat /home/kali/Desktop/AutoBot/docs/architecture/DISTRIBUTED_6VM_ARCHITECTURE.md
+   cat /home/kali/Desktop/AutoBot/docs/developer/AUTOBOT_REFERENCE.md
+   ```
+3. Base your answer on the **actual file contents**, not the static guidance below.
+4. If file contents contradict this document, **trust the files**.
+
+## Architecture Expertise (Static Reference — Verify Against Actual Docs)
 
 You are explaining AutoBot's distributed VM architecture and technical design. Focus on clarity and technical accuracy.
 
