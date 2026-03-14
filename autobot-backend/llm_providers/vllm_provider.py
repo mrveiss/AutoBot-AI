@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional
 
 try:
     from vllm import LLM, SamplingParams
-    from vllm.model_executor.parallel_utils.parallel_state import destroy_model_parallel
 
     VLLM_AVAILABLE = True
 except ImportError:
@@ -220,13 +219,27 @@ class VLLMProvider:
         }
 
     async def cleanup(self):
-        """Cleanup vLLM resources"""
+        """Cleanup vLLM resources.
+
+        In vLLM 0.8+, destroy_model_parallel() was removed from the public API.
+        The LLM engine now tears down parallel state in its own __del__ handler.
+        Releasing the reference and calling torch.cuda.empty_cache() is the
+        supported replacement pattern. See issue #1571.
+        """
         if self.llm:
             try:
-                # Clean up model parallel state
-                destroy_model_parallel()
+                # Release the LLM instance; vLLM 0.8+ handles parallel-state
+                # teardown internally when the object is garbage-collected.
+                del self.llm
                 self.llm = None
                 self.is_initialized = False
+                try:
+                    import torch
+
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except ImportError:
+                    pass
                 logger.info("vLLM model %s cleaned up", self.model_name)
             except Exception as e:
                 logger.warning("Error during vLLM cleanup: %s", e)
