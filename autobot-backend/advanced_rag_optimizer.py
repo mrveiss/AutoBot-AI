@@ -155,6 +155,33 @@ class AdvancedRAGOptimizer:
         self.query_cache = {}
         self.cache_ttl_seconds = 300  # 5 minutes
 
+    def _make_cache_key(
+        self, query: str, max_results: int, enable_reranking: bool
+    ) -> str:
+        """Build a deterministic cache key from search parameters. Issue #1548."""
+        return f"{query}|{max_results}|{enable_reranking}"
+
+    def _get_cached_result(
+        self, key: str
+    ) -> Optional[Tuple[List[SearchResult], RAGMetrics]]:
+        """Return cached result if present and within TTL, else None. Issue #1548."""
+        entry = self.query_cache.get(key)
+        if entry is None:
+            return None
+        if time.time() - entry["timestamp"] > self.cache_ttl_seconds:
+            del self.query_cache[key]
+            return None
+        logger.debug("Cache hit for key: %s", key[:80])
+        return entry["result"]
+
+    def _set_cached_result(
+        self,
+        key: str,
+        result: Tuple[List[SearchResult], RAGMetrics],
+    ) -> None:
+        """Store result in cache with current timestamp. Issue #1548."""
+        self.query_cache[key] = {"result": result, "timestamp": time.time()}
+
     async def initialize(self):
         """Initialize knowledge base and components."""
         try:
@@ -528,6 +555,12 @@ class AdvancedRAGOptimizer:
         try:
             logger.info("Advanced search: '%s' (max_results=%s)", query, max_results)
 
+            # Cache read — skip all heavy operations on hit (Issue #1548)
+            cache_key = self._make_cache_key(query, max_results, enable_reranking)
+            cached = self._get_cached_result(cache_key)
+            if cached is not None:
+                return cached
+
             # Step 1: Query analysis and context optimization
             query_start = time.time()
             context = self._analyze_query_context(query)
@@ -552,7 +585,10 @@ class AdvancedRAGOptimizer:
 
             self._log_search_completion(metrics, context)
 
-            return optimized_results, metrics
+            # Cache write — store result before returning (Issue #1548)
+            result = (optimized_results, metrics)
+            self._set_cached_result(cache_key, result)
+            return result
 
         except Exception as e:
             logger.error("Advanced search failed: %s", e)
