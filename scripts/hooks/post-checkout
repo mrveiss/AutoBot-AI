@@ -3,16 +3,15 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
-# Post-checkout hook: Fix WSL2 symlink breakage
-# Issue #886: WSL2's core.symlinks=false causes symlinks to become text files
-
-set -e
+# Post-checkout hook:
+#   1. Fix WSL2 symlink breakage (Issue #886)
+#   2. Auto-install prepare-commit-msg hook type (Issue #1679)
+#   3. Auto-install pre-commit branch guard wrapper (Issue #1689)
 
 # Determine git root directory
 if [ -n "$GIT_DIR" ]; then
-    GIT_ROOT="$(cd "$GIT_DIR/.." && pwd)"
+    GIT_ROOT="$(cd "$GIT_DIR/.." 2>/dev/null && pwd)" || exit 0
 else
-    # When run manually, find git root
     GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 fi
 
@@ -20,23 +19,72 @@ fi
 BACKEND_DIR="$GIT_ROOT/autobot-user-backend"
 BACKEND_SYMLINK="$BACKEND_DIR/backend"
 
-if [ ! -L "$BACKEND_SYMLINK" ] || [ ! -e "$BACKEND_SYMLINK" ]; then
-    echo "🔧 Fixing backend symlink..."
-    cd "$BACKEND_DIR"
-    rm -f backend
-    ln -s . backend
-    echo "✅ Backend symlink restored: $BACKEND_SYMLINK -> ."
+if [ -d "$BACKEND_DIR" ] && { [ ! -L "$BACKEND_SYMLINK" ] || [ ! -e "$BACKEND_SYMLINK" ]; }; then
+    if cd "$BACKEND_DIR" 2>/dev/null; then
+        echo "🔧 Fixing backend symlink..."
+        rm -f backend
+        ln -s . backend
+        echo "✅ Backend symlink restored: $BACKEND_SYMLINK -> ."
+    fi
 fi
 
 # Fix autobot_shared symlink (root level)
 SHARED_SYMLINK="$GIT_ROOT/autobot_shared"
 
 if [ ! -L "$SHARED_SYMLINK" ] || [ ! -e "$SHARED_SYMLINK" ]; then
-    echo "🔧 Fixing autobot_shared symlink..."
-    cd "$GIT_ROOT"
-    rm -f autobot_shared
-    ln -s autobot-shared autobot_shared
-    echo "✅ autobot_shared symlink restored: $SHARED_SYMLINK -> autobot-shared"
+    if cd "$GIT_ROOT" 2>/dev/null; then
+        echo "🔧 Fixing autobot_shared symlink..."
+        rm -f autobot_shared
+        ln -s autobot-shared autobot_shared
+        echo "✅ autobot_shared symlink restored: $SHARED_SYMLINK -> autobot-shared"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Auto-install prepare-commit-msg hook if missing (Issue #1679)
+# ---------------------------------------------------------------------------
+HOOKS_DIR="$(git rev-parse --git-dir 2>/dev/null)/hooks"
+if [ -d "$HOOKS_DIR" ] && [ ! -f "$HOOKS_DIR/prepare-commit-msg" ]; then
+    if command -v pre-commit > /dev/null 2>&1; then
+        pre-commit install --hook-type prepare-commit-msg > /dev/null 2>&1 || true
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Auto-install pre-commit branch guard wrapper (Issue #1689)
+# ---------------------------------------------------------------------------
+# The pre-commit framework's stash/pop can silently switch branches.
+# This wraps .git/hooks/pre-commit to detect the switch AFTER the
+# framework returns but BEFORE git proceeds — catching cases where
+# git would abort before prepare-commit-msg even runs.
+#
+# Layout:
+#   .git/hooks/pre-commit                   → branch guard wrapper
+#   .git/hooks/pre-commit.pre-commit-framework → original pre-commit hook
+WRAPPER_SRC="$GIT_ROOT/scripts/hooks/pre-commit-branch-guard-wrapper"
+if [ -d "$HOOKS_DIR" ] && [ -f "$WRAPPER_SRC" ]; then
+    PRECOMMIT_HOOK="$HOOKS_DIR/pre-commit"
+    FRAMEWORK_HOOK="$HOOKS_DIR/pre-commit.pre-commit-framework"
+
+    # Only wrap if the current pre-commit hook is NOT already the wrapper
+    if [ -f "$PRECOMMIT_HOOK" ] && ! grep -q "Issue #1689" "$PRECOMMIT_HOOK" 2>/dev/null; then
+        mv "$PRECOMMIT_HOOK" "$FRAMEWORK_HOOK"
+        cp "$WRAPPER_SRC" "$PRECOMMIT_HOOK"
+        chmod +x "$PRECOMMIT_HOOK" "$FRAMEWORK_HOOK"
+    fi
+
+    # If wrapper exists but framework hook is missing (fresh clone),
+    # install pre-commit first, then wrap it
+    if [ ! -f "$PRECOMMIT_HOOK" ] && [ ! -f "$FRAMEWORK_HOOK" ]; then
+        if command -v pre-commit > /dev/null 2>&1; then
+            pre-commit install > /dev/null 2>&1 || true
+            if [ -f "$PRECOMMIT_HOOK" ]; then
+                mv "$PRECOMMIT_HOOK" "$FRAMEWORK_HOOK"
+                cp "$WRAPPER_SRC" "$PRECOMMIT_HOOK"
+                chmod +x "$PRECOMMIT_HOOK" "$FRAMEWORK_HOOK"
+            fi
+        fi
+    fi
 fi
 
 exit 0
