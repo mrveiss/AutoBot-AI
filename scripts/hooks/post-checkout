@@ -53,7 +53,9 @@ if [ -d "$HOOK_SCRIPTS_DIR" ]; then
         chmod +x "$f"
         FIXED=$((FIXED + 1))
     done < <(find "$HOOK_SCRIPTS_DIR/hooks" "$HOOK_SCRIPTS_DIR/utilities" \
-                  -type f \( -name "pre-commit-*" -o -name "*.sh" \) \
+                  -type f \( -name "pre-commit-*" -o -name "post-commit-*" \
+                             -o -name "inject-*" -o -name "slm-*" \
+                             -o -name "*.sh" \) \
                   -not -perm -u+x -print0 2>/dev/null)
     if [ "$FIXED" -gt 0 ]; then
         echo "✅ Fixed permissions on $FIXED hook script(s)"

@@ -45,8 +45,8 @@ elif grep -q 'INSTALL_PYTHON' "$PRE_COMMIT_HOOK"; then
     # Standard pre-commit format — insert after ARGS line
     ANCHOR='ARGS+=(--hook-dir'
 else
-    # Unknown format — insert after shebang
-    ANCHOR='^#!'
+    # Unknown format — insert after shebang (literal match for index())
+    ANCHOR='#!/'
 fi
 
 # Use awk with index() for reliable fixed-string matching + multi-line insertion
@@ -56,5 +56,16 @@ awk -v block="$FLOCK_BLOCK" -v anchor="$ANCHOR" '
 ' "$PRE_COMMIT_HOOK" > "${PRE_COMMIT_HOOK}.tmp" \
     && mv "${PRE_COMMIT_HOOK}.tmp" "$PRE_COMMIT_HOOK" \
     && chmod +x "$PRE_COMMIT_HOOK"
+
+# Strip flock from framework hook if present — prevents deadlock when
+# the #1689 wrapper holds the lock and calls the framework hook which
+# tries to acquire the same lock (#1699)
+FRAMEWORK_HOOK="$HOOKS_DIR/pre-commit.pre-commit-framework"
+if [ -f "$FRAMEWORK_HOOK" ] && grep -q 'AUTOBOT_FLOCK' "$FRAMEWORK_HOOK"; then
+    sed '/^# --- AUTOBOT_FLOCK/,/^# --- END AUTOBOT_FLOCK/d' \
+        "$FRAMEWORK_HOOK" > "${FRAMEWORK_HOOK}.tmp" \
+        && mv "${FRAMEWORK_HOOK}.tmp" "$FRAMEWORK_HOOK" \
+        && chmod +x "$FRAMEWORK_HOOK"
+fi
 
 echo "✅ Injected flock wrapper into pre-commit hook (Issue #1684)"
