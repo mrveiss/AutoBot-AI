@@ -229,6 +229,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()
 
@@ -308,10 +309,6 @@ const patternFilters = computed(() => [
 
 let realtimeInterval: ReturnType<typeof setInterval> | null = null
 
-// Helper to get CSS variable values for dynamic JS usage
-const getCssVar = (varName: string): string => {
-  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
-}
 
 // Computed
 const filteredPatterns = computed(() => {
@@ -391,9 +388,9 @@ const getTrendIcon = (direction: string): string => {
 
 const getTrendColor = (direction: string): string => {
   switch (direction) {
-    case 'increasing': return getCssVar('--color-error')
-    case 'decreasing': return getCssVar('--color-success')
-    default: return getCssVar('--text-muted')
+    case 'increasing': return getCssVar('--color-error', '')
+    case 'decreasing': return getCssVar('--color-success', '')
+    default: return getCssVar('--text-muted', '')
   }
 }
 

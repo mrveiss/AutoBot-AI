@@ -328,17 +328,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { getCssVar } from '@/composables/useCssVars'
 
 const logger = createLogger('CodeGenerationDashboard')
 
-/**
- * Helper to get CSS variable value from the document root.
- * Used for dynamic color access in JavaScript (e.g., for charts).
- * Issue #704: Design token migration helper
- */
-const getCssVar = (varName: string): string => {
-  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
-}
 
 // Types
 interface GenerateRequest {
