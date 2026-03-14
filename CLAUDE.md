@@ -404,7 +404,10 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 Do NOT use `isolation: "worktree"` for agents that create PRs. The auto-created worktree branches from local HEAD, which may diverge from `origin/Dev_new_gui` — causing PRs with unrelated files and merge conflicts. Instead, create manual worktrees:
 ```bash
 git worktree add .worktrees/issue-XXXX -b <branch> origin/Dev_new_gui
+cd .worktrees/issue-XXXX && git branch --unset-upstream
 ```
+
+The `--unset-upstream` prevents accidental fast-forward merges into `Dev_new_gui` that bypass PRs — all changes must go through a PR.
 
 **If subagent fails:** Switch to direct implementation immediately. Do NOT retry.
 
