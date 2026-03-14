@@ -663,7 +663,9 @@
         "exporting": "Notiek eksportēšana...",
         "exportReport": "Eksporta ziņojums",
         "clearing": "Notīra...",
-        "clearCache": "Notīrīt kešatmiņu"
+        "clearCache": "Notīrīt kešatmiņu",
+        "backToProjects": "Projekti",
+        "indexNow": "Indeksēt tagad"
       },
       "actions": {
         "cancel": "Atcelt",
@@ -677,7 +679,8 @@
         "loading": "Notiek ielāde...",
         "refresh": "Atsvaidzināt",
         "lastScan": "Pēdējā skenēšana",
-        "dismiss": "Atlaist"
+        "dismiss": "Atlaist",
+        "stop": "Apturēt"
       },
       "progress": {
         "indexingInProgress": "Indeksēšana notiek",
@@ -707,7 +710,8 @@
         "websocketConnections": "WebSocket savienojumi",
         "apiCallFrequency": "API zvanu biežums",
         "dataTransferRate": "Datu pārsūtīšanas ātrums",
-        "noData": "Nav pieejami saziņas dati."
+        "noData": "Nav pieejami saziņas dati.",
+        "uniqueEndpoints": "Unikālie galapunkti"
       },
       "quality": {
         "title": "Koda kvalitāte",
@@ -1038,7 +1042,8 @@
         "noDataAvailable": "No data available for {section}. Load the section first.",
         "sectionExported": "{section} exported as {format}",
         "cacheCleared": "Cache cleared: {count} entries removed",
-        "cacheClearFailed": "Cache clear failed: {error}"
+        "cacheClearFailed": "Cache clear failed: {error}",
+        "sourceNotFound": "Avots nav atrasts"
       },
       "charts": {
         "problemsBySeverity": "Problems by Severity",
@@ -1064,6 +1069,16 @@
         "bugHistory": "Bug History",
         "noTestsDetected": "No Tests Detected",
         "noTests": "No Tests"
+      },
+      "empty": {
+        "description": "Šis projekts vēl nav indeksēts. Noklikšķiniet zemāk, lai sāktu indeksēšanu.",
+        "title": "Nav analīzes rezultātu"
+      },
+      "landing": {
+        "addProject": "Pievienot projektu",
+        "indexed": "Indeksēts",
+        "neverIndexed": "Nekad nav indeksēts",
+        "subtitle": "Izvēlieties projektu, lai skatītu analītiku"
       }
     },
     "patterns": {

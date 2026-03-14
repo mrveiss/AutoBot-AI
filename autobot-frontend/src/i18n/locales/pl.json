@@ -663,7 +663,9 @@
         "exporting": "Eksportowanie...",
         "exportReport": "Eksportuj raport",
         "clearing": "Clearing...",
-        "clearCache": "Wyczyść pamięć podręczną"
+        "clearCache": "Wyczyść pamięć podręczną",
+        "backToProjects": "Projekty",
+        "indexNow": "Indeksuj teraz"
       },
       "actions": {
         "cancel": "Anulować",
@@ -677,7 +679,8 @@
         "loading": "Załadunek...",
         "refresh": "Odświeżać",
         "lastScan": "Ostatni skan",
-        "dismiss": "Odrzucać"
+        "dismiss": "Odrzucać",
+        "stop": "Zatrzymaj"
       },
       "progress": {
         "indexingInProgress": "Indeksowanie w toku",
@@ -707,7 +710,8 @@
         "websocketConnections": "Połączenia WebSocket",
         "apiCallFrequency": "Częstotliwość wywołań API",
         "dataTransferRate": "Szybkość przesyłania danych",
-        "noData": "Brak dostępnych danych komunikacyjnych."
+        "noData": "Brak dostępnych danych komunikacyjnych.",
+        "uniqueEndpoints": "Unikalne punkty końcowe"
       },
       "quality": {
         "title": "Jakość kodu",
@@ -1038,7 +1042,8 @@
         "noDataAvailable": "No data available for {section}. Load the section first.",
         "sectionExported": "{section} exported as {format}",
         "cacheCleared": "Cache cleared: {count} entries removed",
-        "cacheClearFailed": "Cache clear failed: {error}"
+        "cacheClearFailed": "Cache clear failed: {error}",
+        "sourceNotFound": "Nie znaleziono źródła"
       },
       "charts": {
         "problemsBySeverity": "Problems by Severity",
@@ -1064,6 +1069,16 @@
         "bugHistory": "Bug History",
         "noTestsDetected": "No Tests Detected",
         "noTests": "No Tests"
+      },
+      "empty": {
+        "description": "Ten projekt nie został jeszcze zindeksowany. Kliknij poniżej, aby rozpocząć indeksowanie.",
+        "title": "Brak wyników analizy"
+      },
+      "landing": {
+        "addProject": "Dodaj projekt",
+        "indexed": "Zindeksowany",
+        "neverIndexed": "Nigdy nie indeksowany",
+        "subtitle": "Wybierz projekt, aby wyświetlić analitykę"
       }
     },
     "patterns": {

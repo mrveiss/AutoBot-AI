@@ -663,7 +663,9 @@
         "exporting": "Exportador...",
         "exportReport": "Relatório de exportação",
         "clearing": "Limpando...",
-        "clearCache": "Limpar Cache"
+        "clearCache": "Limpar Cache",
+        "backToProjects": "Projetos",
+        "indexNow": "Indexar agora"
       },
       "actions": {
         "cancel": "Cancelar",
@@ -677,7 +679,8 @@
         "loading": "Carregando...",
         "refresh": "Atualizar",
         "lastScan": "Última verificação",
-        "dismiss": "Liberar"
+        "dismiss": "Liberar",
+        "stop": "Parar"
       },
       "progress": {
         "indexingInProgress": "Indexação em andamento",
@@ -707,7 +710,8 @@
         "websocketConnections": "Conexões WebSocket",
         "apiCallFrequency": "Frequência de chamadas de API",
         "dataTransferRate": "Taxa de transferência de dados",
-        "noData": "Não há dados de comunicação disponíveis."
+        "noData": "Não há dados de comunicação disponíveis.",
+        "uniqueEndpoints": "Endpoints únicos"
       },
       "quality": {
         "title": "Qualidade do código",
@@ -1038,7 +1042,8 @@
         "noDataAvailable": "No data available for {section}. Load the section first.",
         "sectionExported": "{section} exported as {format}",
         "cacheCleared": "Cache cleared: {count} entries removed",
-        "cacheClearFailed": "Cache clear failed: {error}"
+        "cacheClearFailed": "Cache clear failed: {error}",
+        "sourceNotFound": "Fonte não encontrada"
       },
       "charts": {
         "problemsBySeverity": "Problems by Severity",
@@ -1064,6 +1069,16 @@
         "bugHistory": "Bug History",
         "noTestsDetected": "No Tests Detected",
         "noTests": "No Tests"
+      },
+      "empty": {
+        "description": "Este projeto ainda não foi indexado. Clique abaixo para iniciar a indexação.",
+        "title": "Sem resultados de análise"
+      },
+      "landing": {
+        "addProject": "Adicionar projeto",
+        "indexed": "Indexado",
+        "neverIndexed": "Nunca indexado",
+        "subtitle": "Selecione um projeto para ver as análises"
       }
     },
     "patterns": {
