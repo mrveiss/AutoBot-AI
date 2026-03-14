@@ -1,7 +1,7 @@
 # ===== CORE FRAMEWORK DEPENDENCIES =====
 fastapi>=0.115.0
 starlette>=0.49.1                 # SECURITY UPDATE - CVE fix (GHSA-7f5h-v6xp-fcq8)
-python-multipart>=0.0.9           # Required for FastAPI form data handling
+python-multipart>=0.0.22          # Required for FastAPI form data handling
 uvicorn>=0.30.0
 requests==2.32.4
 aiohttp==3.13.3
@@ -20,7 +20,7 @@ anthropic>=0.7.0                 # Claude API support for future integration
 tiktoken>=0.5.0                  # Token counting for different models
 transformers>=4.55.2             # HuggingFace transformers for model utils - SECURITY UPDATE
 sentence-transformers>=2.2.0     # Embedding models support
-torch>=2.0.0,<2.5.0              # PyTorch for model operations - compatible version
+torch>=2.6.0                     # PyTorch for model operations - compatible version
 torchvision>=0.15.0              # PyTorch vision models for CLIP and image processing
 torchaudio>=2.0.0                # PyTorch audio models for Whisper and audio processing
 accelerate>=0.25.0               # HuggingFace model optimization and GPU acceleration
@@ -53,14 +53,14 @@ python-magic>=0.4.27             # File type detection
 
 # RAG Agent & Knowledge Processing
 python-docx>=1.1.0               # Document processing
-pypdf>=6.4.0                     # PDF processing - SECURITY UPDATE (4 CVE fixes)
+pypdf>=6.8.0                     # PDF processing - SECURITY UPDATE (4 CVE fixes)
 python-pptx>=0.6.23              # PowerPoint processing
 openpyxl>=3.1.0                  # Excel processing
-markdown>=3.5.0                  # Markdown processing
+markdown>=3.8.1                  # Markdown processing
 pytesseract>=0.3.10              # OCR for image text extraction
 
 # Chat Agent & NLP
-nltk>=3.8.0                      # Natural language processing
+nltk>=3.9.3                      # Natural language processing
 spacy>=3.7.0                     # Advanced NLP (optional)
 textstat>=0.7.3                  # Text complexity analysis
 
@@ -73,20 +73,20 @@ scipy>=1.11.0                    # Scientific computing for audio processing
 pyautogui==0.9.54
 mouseinfo==0.1.3
 pillow>=12.1.1
-numpy>=1.21.0,<1.25.0
-opencv-python>=4.8.0             # Computer vision for GUI automation
+numpy>=1.21.0,<2.0.0
+opencv-python>=4.8.1.78          # Computer vision for GUI automation
 pygetwindow>=0.0.9               # Window management
 
 # ===== EXISTING INTEGRATIONS =====
 markdownify>=0.14.1              # SECURITY UPDATE - CVE fix (GHSA-7mpr-5m44-h73r)
-langchain
-langchain-community
-langchain-experimental             # For advanced LangChain features
-llama-index
-llama-index-llms-ollama
-llama-index-embeddings-ollama
-llama-index-vector-stores-redis
-llama-index-readers-file>=0.5.6   # File readers for RAG - Pin to v0.5.6+ for pypdf>=6.1.3 compatibility (Issue #888)
+langchain>=1.2.0
+langchain-community>=0.4.0
+langchain-experimental>=0.4.0      # For advanced LangChain features
+llama-index>=0.13.0
+llama-index-llms-ollama>=0.7.0
+llama-index-embeddings-ollama>=0.7.0
+llama-index-vector-stores-redis>=0.6.0
+llama-index-readers-file>=0.6.0   # File readers for RAG - 0.6.0+ for core 0.13.0 + pypdf 6.x compatibility
 
 # ===== VOICE INTERFACE DEPENDENCIES =====
 # Moved to requirements-voice.txt to avoid CI/CD build failures
@@ -96,7 +96,7 @@ llama-index-readers-file>=0.5.6   # File readers for RAG - Pin to v0.5.6+ for py
 # ===== SECURITY & DEVELOPMENT TOOLS =====
 pre-commit>=3.6.0
 detect-secrets>=1.4.0
-pycryptodome>=3.19.0              # Encryption for secure agent communication
+pycryptodome>=3.19.1              # Encryption for secure agent communication
 cryptography>=46.0.5             # Additional crypto support - SECURITY UPDATE
 pyjwt>=2.8.0                     # JWT token authentication
 bcrypt>=4.0.0                    # Password hashing
@@ -121,7 +121,7 @@ paramiko>=3.4.0                   # SSH client library for infrastructure provis
 # Requires: CUDA-compatible GPU, Enable in config: llm.vllm.enabled = true
 # Installation: Automatically installed via setup.sh
 # Note: GPU-required - system will fall back to Ollama if GPU unavailable
-vllm>=0.6.0
+vllm>=0.14.1
 
 # ===== GPU-ACCELERATED VECTOR SEARCH (Issue #387) =====
 # FAISS - GPU-Accelerated Vector Similarity Search

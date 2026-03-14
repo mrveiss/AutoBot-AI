@@ -148,7 +148,7 @@ __all__ = [
 # Global Connection Manager Instance (Lazy - Issue #803)
 # =============================================================================
 # Lazy initialization prevents Redis connection errors during module imports
-# on dev machines where Redis VM (172.16.168.23) is unreachable.
+# on dev machines where the Redis VM is unreachable.
 
 _connection_manager: Optional[RedisConnectionManager] = None
 

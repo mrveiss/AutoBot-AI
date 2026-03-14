@@ -458,7 +458,7 @@ git commit -m "feat(#749): add terminal history service with Redis storage"
 
 **Files:**
 - Modify: `src/websocket/terminal_handler.py` (or equivalent handler)
-- Reference: `autobot-user-backend/api/base_terminal.py`
+- Reference: `autobot-backend/api/base_terminal.py`
 
 **Step 1: Locate the WebSocket handler**
 
@@ -527,7 +527,7 @@ Test via WebSocket client or frontend.
 
 ```bash
 cd /home/kali/Desktop/AutoBot/.worktrees/terminal-749
-git add src/websocket/ autobot-user-backend/api/
+git add src/websocket/ autobot-backend/api/
 git commit -m "feat(#749): add WebSocket handlers for tab completion and history"
 ```
 
@@ -536,8 +536,8 @@ git commit -m "feat(#749): add WebSocket handlers for tab completion and history
 ## Task 4: Frontend - Tab Completion Integration
 
 **Files:**
-- Modify: `autobot-user-frontend/src/components/terminal/BaseXTerminal.vue`
-- Modify: `autobot-user-frontend/src/services/TerminalService.js`
+- Modify: `autobot-frontend/src/components/terminal/BaseXTerminal.vue`
+- Modify: `autobot-frontend/src/services/TerminalService.js`
 
 **Step 1: Add completion message handling to TerminalService.js**
 
@@ -615,7 +615,7 @@ const applyCompletion = (prefix: string, completion: string) => {
 
 ```bash
 cd /home/kali/Desktop/AutoBot/.worktrees/terminal-749
-git add autobot-user-frontend/src/
+git add autobot-frontend/src/
 git commit -m "feat(#749): add tab completion support to frontend terminal"
 ```
 
@@ -624,13 +624,13 @@ git commit -m "feat(#749): add tab completion support to frontend terminal"
 ## Task 5: Frontend - History Integration
 
 **Files:**
-- Create: `autobot-user-frontend/src/composables/useTerminalHistory.ts`
-- Modify: `autobot-user-frontend/src/components/terminal/BaseXTerminal.vue`
+- Create: `autobot-frontend/src/composables/useTerminalHistory.ts`
+- Modify: `autobot-frontend/src/components/terminal/BaseXTerminal.vue`
 
 **Step 1: Create history composable**
 
 ```typescript
-// autobot-user-frontend/src/composables/useTerminalHistory.ts
+// autobot-frontend/src/composables/useTerminalHistory.ts
 import { ref } from 'vue'
 import terminalService from '@/services/TerminalService.js'
 
@@ -699,7 +699,7 @@ Add history handling for arrow keys in the terminal.
 
 ```bash
 cd /home/kali/Desktop/AutoBot/.worktrees/terminal-749
-git add autobot-user-frontend/src/composables/useTerminalHistory.ts autobot-user-frontend/src/components/terminal/
+git add autobot-frontend/src/composables/useTerminalHistory.ts autobot-frontend/src/components/terminal/
 git commit -m "feat(#749): add history navigation and persistence to frontend"
 ```
 
@@ -708,12 +708,12 @@ git commit -m "feat(#749): add history navigation and persistence to frontend"
 ## Task 6: Terminal Settings Component
 
 **Files:**
-- Create: `autobot-user-frontend/src/components/terminal/TerminalSettings.vue`
+- Create: `autobot-frontend/src/components/terminal/TerminalSettings.vue`
 
 **Step 1: Create settings component**
 
 ```vue
-<!-- autobot-user-frontend/src/components/terminal/TerminalSettings.vue -->
+<!-- autobot-frontend/src/components/terminal/TerminalSettings.vue -->
 <template>
   <div class="terminal-settings p-4 bg-gray-800 rounded-lg">
     <h3 class="text-white text-lg mb-4">Terminal Settings</h3>
@@ -804,7 +804,7 @@ if (stored) {
 
 ```bash
 cd /home/kali/Desktop/AutoBot/.worktrees/terminal-749
-git add autobot-user-frontend/src/components/terminal/TerminalSettings.vue
+git add autobot-frontend/src/components/terminal/TerminalSettings.vue
 git commit -m "feat(#749): add terminal settings component"
 ```
 

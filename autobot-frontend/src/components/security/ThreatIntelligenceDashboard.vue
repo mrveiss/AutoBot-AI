@@ -210,17 +210,10 @@ import { ref, onMounted, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import apiClient from '@/utils/ApiClient'
+import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()
 const logger = createLogger('ThreatIntelligenceDashboard')
-
-/**
- * Helper to get CSS custom property value from the document root.
- * Used for dynamic color access in JavaScript when needed.
- */
-function getCssVar(varName: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
-}
 
 // State
 const loading = ref(false)

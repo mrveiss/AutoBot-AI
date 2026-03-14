@@ -182,9 +182,9 @@ export CODEBASE_INDEX_INCREMENTAL=true
 
 ### Related Files
 
-- `autobot-user-backend/api/codebase_analytics/scanner.py` - Main indexing logic
-- `autobot-user-backend/api/codebase_analytics/storage.py` - ChromaDB/Redis connections
-- `autobot-user-backend/utils/chromadb_client.py` - ChromaDB client utilities
+- `autobot-backend/api/codebase_analytics/scanner.py` - Main indexing logic
+- `autobot-backend/api/codebase_analytics/storage.py` - ChromaDB/Redis connections
+- `autobot-backend/utils/chromadb_client.py` - ChromaDB client utilities
 
 ## Troubleshooting
 

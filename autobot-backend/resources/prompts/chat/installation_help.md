@@ -2,7 +2,24 @@
 
 **Context**: User needs help with AutoBot installation, setup, or configuration.
 
-## Installation Expertise
+## CRITICAL: Read Actual Docs Before Answering
+
+**This is a static context file and may be outdated.** Before providing ANY installation guidance:
+
+1. Execute commands to find the authoritative documentation:
+   ```
+   find /home/kali/Desktop/AutoBot/docs/developer -name "*.md" | head -20
+   ```
+2. Read the relevant files:
+   ```
+   cat /home/kali/Desktop/AutoBot/docs/developer/PHASE_5_DEVELOPER_SETUP.md
+   cat /home/kali/Desktop/AutoBot/docs/developer/INFRASTRUCTURE_DEPLOYMENT.md
+   cat /home/kali/Desktop/AutoBot/docs/developer/AUTOBOT_REFERENCE.md
+   ```
+3. Base your answer on the **actual file contents**, not the static guidance below.
+4. If file contents contradict this document, **trust the files**.
+
+## Installation Expertise (Static Reference — Verify Against Actual Docs)
 
 You are providing installation guidance for AutoBot's distributed VM infrastructure. Focus on:
 

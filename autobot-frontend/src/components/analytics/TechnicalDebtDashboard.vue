@@ -436,6 +436,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
+import { getCssVar } from '@/composables/useCssVars'
 
 // Create scoped logger for TechnicalDebtDashboard
 const logger = createLogger('TechnicalDebtDashboard');
@@ -509,14 +510,6 @@ const sortField = ref('roi_score');
 const sortDirection = ref<'asc' | 'desc'>('desc');
 const currentPage = ref(1);
 const itemsPerPage = 10;
-
-/**
- * Issue #704: Helper to read CSS custom properties from design tokens
- */
-function getCssVar(name: string, fallback: string): string {
-  if (typeof document === 'undefined') return fallback
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
-}
 
 /**
  * Issue #704: Category colors using design tokens

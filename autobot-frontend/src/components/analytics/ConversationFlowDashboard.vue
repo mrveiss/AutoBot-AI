@@ -267,16 +267,6 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ConversationFlowDashboard')
 
-/**
- * Helper to get CSS custom property value for dynamic JS usage.
- * Issue #704: Added for design token integration in JavaScript.
- *
- * @param varName - CSS variable name (e.g., '--color-success')
- * @returns The computed value of the CSS variable
- */
-const getCssVar = (varName: string): string => {
-  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
-}
 
 // Types
 interface IntentPattern {
@@ -387,8 +377,6 @@ onMounted(() => {
   runAnalysis()
 })
 
-// Expose getCssVar for potential external usage (e.g., charts)
-defineExpose({ getCssVar })
 </script>
 
 <style scoped>

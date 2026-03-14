@@ -31,7 +31,7 @@ The AutoBot codebase has undergone comprehensive performance and security optimi
 ### **Database Performance Issues** - STATUS: **COMPLETED** ✅
 - **Issue**: N+1 query problems and lack of connection pooling causing severe performance degradation
 - **Solution**: Implemented comprehensive SQLite connection pooling with `EagerLoader` for N+1 prevention
-- **Files Created**: `autobot-user-backend/utils/database_pool.py`
+- **Files Created**: `autobot-backend/utils/database_pool.py`
 - **Files Modified**: `src/enhanced_memory_manager.py`, `src/memory_manager.py`
 - **Performance Gain**: ~80% reduction in database query overhead
 - **Documentation**: [Performance and Security Optimizations](./Performance_and_Security_Optimizations.md)
@@ -39,15 +39,15 @@ The AutoBot codebase has undergone comprehensive performance and security optimi
 ### **HTTP Resource Management** - STATUS: **COMPLETED** ✅  
 - **Issue**: New `aiohttp.ClientSession` created for each request causing resource exhaustion
 - **Solution**: Singleton pattern with connection pooling (100 total, 30 per-host limits)
-- **Files Created**: `autobot-user-backend/utils/http_client.py`
-- **Files Modified**: `autobot-user-backend/agents/advanced_web_research.py`
+- **Files Created**: `autobot-backend/utils/http_client.py`
+- **Files Modified**: `autobot-backend/agents/advanced_web_research.py`
 - **Performance Gain**: Eliminated session creation overhead, prevented resource exhaustion
 
 ### **Terminal WebSocket Race Conditions** - STATUS: **COMPLETED** ✅
 - **Issue**: WebSocket state synchronization problems and PTY management race conditions
 - **Solution**: Thread-safe terminal manager with proper state transitions and async locks
-- **Files Created**: `autobot-user-backend/utils/terminal_websocket_manager.py`
-- **Files Modified**: `autobot-user-backend/api/base_terminal.py`
+- **Files Created**: `autobot-backend/utils/terminal_websocket_manager.py`
+- **Files Modified**: `autobot-backend/api/base_terminal.py`
 - **Reliability Gain**: 95% reduction in WebSocket errors, eliminated race conditions
 
 ### **Security Vulnerabilities** - STATUS: **COMPLETED** ✅
@@ -167,7 +167,7 @@ class LLMInterface:
 ```
 
 #### 2.3 Agent Communication Protocol
-**Location**: `autobot-user-backend/agents/` directory
+**Location**: `autobot-backend/agents/` directory
 **Issue**: Inconsistent communication patterns between agents
 **Impact**: Difficult debugging, potential message loss
 **Effort**: 3-4 days
@@ -203,7 +203,7 @@ class WorkflowTemplateManager:
 **Effort**: 2-3 days
 
 #### 3.3 API Response Standardization
-**Location**: `autobot-user-backend/api/` directory
+**Location**: `autobot-backend/api/` directory
 **Issue**: Mixed response formats across different API endpoints
 **Impact**: Inconsistent client experience, harder frontend development
 **Effort**: 1-2 days

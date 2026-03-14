@@ -97,7 +97,7 @@
           <h3>Add a Node</h3>
           <div class="form-row">
             <input v-model="newNode.hostname" placeholder="Hostname (e.g. frontend-01)" />
-            <input v-model="newNode.ip_address" placeholder="IP Address (e.g. 172.16.168.21)" />
+            <input v-model="newNode.ip_address" placeholder="IP Address (e.g. 10.0.0.21)" />
           </div>
           <div class="form-row">
             <input v-model="newNode.ssh_user" placeholder="SSH User (default: autobot)" />
@@ -200,7 +200,7 @@
             <span class="section-header">Core Services</span>
             <div class="role-chips">
               <label
-                v-for="role in requiredRoles"
+                v-for="role in rolesForNode(node.node_id, requiredRoles)"
                 :key="role.name"
                 class="role-chip"
                 :class="[
@@ -224,11 +224,11 @@
           </div>
 
           <!-- Optional Services (#1350) -->
-          <div class="role-section" v-if="optionalRoles.length">
+          <div class="role-section" v-if="rolesForNode(node.node_id, optionalRoles).length">
             <span class="section-header optional-header">Optional Services</span>
             <div class="role-chips">
               <label
-                v-for="role in optionalRoles"
+                v-for="role in rolesForNode(node.node_id, optionalRoles)"
                 :key="role.name"
                 class="role-chip optional-chip"
                 :class="[
@@ -253,9 +253,25 @@
             </div>
           </div>
 
+          <!-- SLM services: shown as locked on manager node (#1455) -->
+          <div
+            v-if="node.detected_roles.some(r => SLM_ROLES.includes(r))"
+            class="infra-roles-row"
+          >
+            <span class="infra-label">SLM Services:</span>
+            <span
+              v-for="slm in SLM_ROLES.filter(r => node.detected_roles.includes(r))"
+              :key="slm"
+              class="role-chip infra-chip state-running"
+            >
+              <span class="state-dot"></span>
+              {{ slm }}
+            </span>
+          </div>
+
           <!-- Infra roles: auto-deployed, shown as locked (#1344) -->
           <div
-            v-if="(nodeRoles[node.node_id] || []).some(r => !INFRA_ROLES.includes(r))"
+            v-if="(nodeRoles[node.node_id] || []).some(r => !INFRA_ROLES.includes(r) && !SLM_ROLES.includes(r))"
             class="infra-roles-row"
           >
             <span class="infra-label">Auto-deployed:</span>
@@ -457,6 +473,7 @@ interface RoleInfo {
 }
 
 const INFRA_ROLES = ['autobot-shared', 'slm-agent']
+const SLM_ROLES = ['slm-backend', 'slm-frontend', 'slm-database', 'slm-monitoring']
 
 const availableRoles = ref<RoleInfo[]>([])
 const nodeRoles = ref<Record<string, string[]>>({})
@@ -464,6 +481,16 @@ const savingRoles = ref(false)
 
 const requiredRoles = computed(() => availableRoles.value.filter(r => r.required))
 const optionalRoles = computed(() => availableRoles.value.filter(r => !r.required))
+
+/** Roles visible for a given node: unassigned or assigned to this node (#1455). */
+function rolesForNode(nodeId: string, roles: RoleInfo[]): RoleInfo[] {
+  return roles.filter(r => {
+    const assignedTo = nodes.value.find(
+      n => n.node_id !== nodeId && (nodeRoles.value[n.node_id] || []).includes(r.name)
+    )
+    return !assignedTo
+  })
+}
 
 /** Determine per-chip state for a role on a given node (#1353). */
 function roleState(node: Node, roleName: string): RoleState {
@@ -531,9 +558,9 @@ async function loadNodes() {
 async function loadRoles() {
   try {
     const result = await fetchRoles()
-    // Filter out SLM-internal and infra roles (#1349, #1344)
+    // Filter out infra + SLM roles (SLM already on manager) (#1349, #1344, #1455)
     availableRoles.value = result
-      .filter(r => !r.name.startsWith('slm-') && !INFRA_ROLES.includes(r.name))
+      .filter(r => !INFRA_ROLES.includes(r.name) && !SLM_ROLES.includes(r.name))
       .map(r => ({
         name: r.name,
         display_name: r.description || r.name,

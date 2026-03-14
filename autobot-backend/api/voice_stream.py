@@ -83,35 +83,66 @@ async def _send_json(ws: WebSocket, data: dict) -> bool:
     return False
 
 
-async def _synthesize_and_stream(
+async def _stream_chunks_pipelined(
     ws: WebSocket,
     text: str,
     cancel_event: asyncio.Event,
     voice_id: str = "",
     language: str = "",
 ) -> None:
-    """Synthesize TTS for text and stream audio chunks to client.
+    """Split text and stream TTS audio with one-chunk-ahead pipelining.
 
-    Respects cancel_event for barge-in interruption.
+    Shared by both ``_synthesize_and_stream`` (full-duplex ``speak``)
+    and ``_tts_queue_worker`` (streaming ``speak_sentence``).
+
+    Sends ``tts_start`` before the first chunk and ``tts_end`` after
+    the last, keeping the WS protocol consistent (#1535, #1536).
+    Respects *cancel_event* for barge-in interruption (#1527).
     """
     chunks = _split_text_for_tts(text)
     total = len(chunks)
 
     await _send_json(ws, {"type": "tts_start", "text": text})
 
-    for i, chunk_text in enumerate(chunks):
+    if not chunks:
+        await _send_json(ws, {"type": "tts_end"})
+        return
+
+    tts = get_tts_client()
+    next_task: asyncio.Task | None = None
+    if not cancel_event.is_set():
+        next_task = asyncio.create_task(
+            tts.synthesize(chunks[0], voice_id=voice_id, language=language)
+        )
+
+    for i in range(total):
         if cancel_event.is_set():
-            logger.debug("TTS cancelled by barge-in at chunk %d/%d", i, total)
+            logger.debug("TTS cancelled at chunk %d/%d", i, total)
+            if next_task and not next_task.done():
+                next_task.cancel()
             break
 
         try:
-            tts = get_tts_client()
-            wav_bytes = await tts.synthesize(
-                chunk_text, voice_id=voice_id, language=language
-            )
+            wav_bytes = await next_task if next_task else b""
+            if not wav_bytes:
+                break
+
+            # Pre-fetch next chunk while sending current (#1527)
+            next_task = None
+            if i + 1 < total and not cancel_event.is_set():
+                next_task = asyncio.create_task(
+                    tts.synthesize(
+                        chunks[i + 1],
+                        voice_id=voice_id,
+                        language=language,
+                    )
+                )
+
             audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
 
             if cancel_event.is_set():
+                if next_task and not next_task.done():
+                    next_task.cancel()
                 break
 
             sent = await _send_json(
@@ -124,9 +155,13 @@ async def _synthesize_and_stream(
                 },
             )
             if not sent:
+                if next_task and not next_task.done():
+                    next_task.cancel()
                 break
+        except asyncio.CancelledError:
+            break
         except Exception as e:
-            logger.error("TTS synthesis error for chunk %d: %s", i, e)
+            logger.error("TTS error chunk %d: %s", i, e)
             await _send_json(
                 ws,
                 {
@@ -134,9 +169,24 @@ async def _synthesize_and_stream(
                     "message": f"TTS synthesis failed: {e}",
                 },
             )
+            if next_task and not next_task.done():
+                next_task.cancel()
             break
 
     await _send_json(ws, {"type": "tts_end"})
+
+
+async def _synthesize_and_stream(
+    ws: WebSocket,
+    text: str,
+    cancel_event: asyncio.Event,
+    voice_id: str = "",
+    language: str = "",
+) -> None:
+    """Synthesize TTS for full text and stream to client (#1031)."""
+    await _stream_chunks_pipelined(
+        ws, text, cancel_event, voice_id=voice_id, language=language
+    )
 
 
 async def _tts_queue_worker(
@@ -144,42 +194,25 @@ async def _tts_queue_worker(
     queue: asyncio.Queue,
     cancel_event: asyncio.Event,
 ) -> None:
-    """Drain sentence queue, synthesizing and streaming each sequentially.
+    """Drain sentence queue, streaming each with pipelining (#1319).
 
-    Runs as background task per WS connection. Receives
-    (text, voice_id, language) tuples; None is the flush sentinel
-    that triggers tts_end.
+    Receives (text, voice_id, language) tuples; None is the flush
+    sentinel (no-op since _stream_chunks_pipelined sends tts_end).
     """
     while True:
         item = await queue.get()
         if item is None:
-            await _send_json(ws, {"type": "tts_end"})
             continue
         text, voice_id, language = item
         if cancel_event.is_set():
             continue
-        try:
-            tts = get_tts_client()
-            wav_bytes = await tts.synthesize(text, voice_id=voice_id, language=language)
-            if cancel_event.is_set():
-                continue
-            audio_b64 = base64.b64encode(wav_bytes).decode("ascii")
-            await _send_json(
-                ws,
-                {
-                    "type": "tts_audio",
-                    "data": audio_b64,
-                },
-            )
-        except Exception as e:
-            logger.error("Sentence TTS error: %s", e)
-            await _send_json(
-                ws,
-                {
-                    "type": "error",
-                    "message": f"Sentence TTS failed: {e}",
-                },
-            )
+        await _stream_chunks_pipelined(
+            ws,
+            text,
+            cancel_event,
+            voice_id=voice_id,
+            language=language,
+        )
 
 
 async def _cancel_active_tts(

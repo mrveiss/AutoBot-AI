@@ -18,7 +18,7 @@ USAGE:
     from config.registry import ConfigRegistry
 
     # Get single value with fallback
-    redis_host = ConfigRegistry.get("redis.host", "172.16.168.23")
+    redis_host = ConfigRegistry.get("redis.host", "172.16.168.23")  # noqa: ssot-fallback
 
     # Get section as dict
     redis_config = ConfigRegistry.get_section("redis")

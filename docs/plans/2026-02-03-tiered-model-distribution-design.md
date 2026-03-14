@@ -59,7 +59,7 @@ The scorer uses weighted heuristic factors:
 ### New Files
 
 ```
-src/llm_interface_pkg/tiered_routing/
+autobot-backend/llm_interface_pkg/tiered_routing/
     __init__.py              # Package exports
     complexity_scorer.py     # TaskComplexityScorer class
     tier_router.py           # TieredModelRouter class
@@ -68,7 +68,7 @@ src/llm_interface_pkg/tiered_routing/
 
 ### Modified Files
 
-1. `src/llm_interface_pkg/interface.py` - Add tiered routing in `_determine_provider_and_model()`
+1. `autobot-backend/llm_interface_pkg/interface.py` - Add tiered routing in `_determine_provider_and_model()`
 2. `src/constants/model_constants.py` - Add tier model constants
 3. `config/ssot_config.yaml` - Add tiered routing configuration
 

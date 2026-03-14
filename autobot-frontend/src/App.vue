@@ -217,7 +217,7 @@
                 'bg-autobot-primary text-white': $route.path.startsWith('/chat'),
                 'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/chat')
               }"
-              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+              class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
               <div class="flex items-center space-x-2">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -234,7 +234,7 @@
                 'bg-autobot-primary text-white': $route.path.startsWith('/knowledge'),
                 'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/knowledge')
               }"
-              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+              class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
               <div class="flex items-center space-x-2">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -251,7 +251,7 @@
                 'bg-autobot-primary text-white': $route.path.startsWith('/automation'),
                 'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/automation')
               }"
-              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+              class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
               <div class="flex items-center space-x-2">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -268,7 +268,7 @@
                 'bg-autobot-primary text-white': $route.path.startsWith('/analytics'),
                 'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/analytics')
               }"
-              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+              class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
               <div class="flex items-center space-x-2">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -286,7 +286,7 @@
                 'bg-autobot-primary text-white': $route.path.startsWith('/secrets'),
                 'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/secrets')
               }"
-              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+              class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
               <div class="flex items-center space-x-2">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -305,7 +305,7 @@
                 'bg-autobot-primary text-white': $route.path.startsWith('/plugins'),
                 'text-autobot-text-primary hover:bg-autobot-bg-tertiary': !$route.path.startsWith('/plugins')
               }"
-              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
+              class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 block"
             >
               <div class="flex items-center space-x-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -319,7 +319,7 @@
             <a
               :href="slmAdminUrl"
               @click="closeMobileNav"
-              class="w-full text-left px-3 py-2 rounded text-sm font-medium transition-colors duration-150 block text-autobot-text-primary hover:bg-autobot-bg-tertiary"
+              class="w-full text-start px-3 py-2 rounded text-sm font-medium transition-colors duration-150 block text-autobot-text-primary hover:bg-autobot-bg-tertiary"
             >
               <div class="flex items-center space-x-2">
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
@@ -337,7 +337,7 @@
             <button
               v-if="userStore.isAuthenticated"
               @click="showProfileModal = true; closeMobileNav()"
-              class="w-full text-left px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 text-autobot-text-primary hover:bg-autobot-bg-tertiary"
+              class="w-full text-start px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 text-autobot-text-primary hover:bg-autobot-bg-tertiary"
             >
               <div class="flex items-center space-x-2">
                 <div class="w-4 h-4 rounded-full bg-autobot-primary flex items-center justify-center text-white text-xs font-bold">
@@ -370,12 +370,12 @@
 
           <div
             @click.stop
-            class="relative transform overflow-hidden rounded-lg bg-autobot-bg-card px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6"
+            class="relative transform overflow-hidden rounded-lg bg-autobot-bg-card px-4 pb-4 pt-5 text-start shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6"
           >
             <!-- Header -->
             <div class="flex items-center justify-between border-b border-autobot-border pb-3 mb-4">
               <h3 class="text-lg font-medium text-autobot-text-primary flex items-center">
-                <div class="w-6 h-6 bg-autobot-primary rounded flex items-center justify-center mr-2">
+                <div class="w-6 h-6 bg-autobot-primary rounded flex items-center justify-center me-2">
                   <span class="text-white text-xs font-bold">AB</span>
                 </div>
                 {{ $t('nav.systemStatus') }}
@@ -407,7 +407,7 @@
                     'bg-red-400': systemStatus.hasIssues,
                     'animate-pulse': systemStatus.hasIssues
                   }"
-                  class="w-3 h-3 rounded-full mr-3"
+                  class="w-3 h-3 rounded-full me-3"
                 ></div>
                 <div>
                   <p class="font-medium text-autobot-text-primary">{{ getSystemStatusText() }}</p>
@@ -432,7 +432,7 @@
                         'bg-yellow-400': service.status === 'warning',
                         'bg-red-400': service.status === 'error'
                       }"
-                      class="w-2 h-2 rounded-full mr-2"
+                      class="w-2 h-2 rounded-full me-2"
                     ></div>
                     <span class="text-sm font-medium">{{ service.name }}</span>
                   </div>
@@ -456,7 +456,7 @@
                 @click="refreshSystemStatus"
                 class="inline-flex items-center px-3 py-2 border border-autobot-border shadow-sm text-sm leading-4 font-medium rounded-md text-autobot-text-primary bg-autobot-bg-secondary hover:bg-autobot-bg-tertiary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-autobot-primary"
               >
-                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-4 h-4 me-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                 </svg>
                 {{ $t('common.refresh') }}

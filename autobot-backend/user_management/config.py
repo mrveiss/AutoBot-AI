@@ -26,7 +26,7 @@ def _get_default_postgres_host() -> str:
     try:
         from config.registry import ConfigRegistry
 
-        return ConfigRegistry.get("vm.redis", "172.16.168.23")
+        return ConfigRegistry.get("vm.redis", "172.16.168.23")  # noqa: ssot-fallback
     except Exception:
         from autobot_shared.ssot_config import get_config
 

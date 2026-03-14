@@ -12,13 +12,13 @@
 
 | Status | Priority | Task | Location | Effort | Dependencies |
 |--------|----------|------|----------|--------|--------------|
-| ⏳ **BLOCKED** | P0 | Re-enable strict file permissions | `autobot-user-backend/api/files.py:317` | 3-5 days | Frontend auth |
-| ✅ **COMPLETED** | P0 | Provider availability checking | `autobot-user-backend/api/agent_config.py:372` | 2-3 days | None |
+| ⏳ **BLOCKED** | P0 | Re-enable strict file permissions | `autobot-backend/api/files.py:317` | 3-5 days | Frontend auth |
+| ✅ **COMPLETED** | P0 | Provider availability checking | `autobot-backend/api/agent_config.py:372` | 2-3 days | None |
 | ⏳ **READY** | P0 | Complete MCP manual integration | `src/mcp_manual_integration.py` | 5-7 days | MCP servers |
-| ✅ **COMPLETED** | P0 | Fix Knowledge Manager endpoints | `autobot-user-frontend/src/components/KnowledgeManager.vue` | 3-4 days | Backend API |
+| ✅ **COMPLETED** | P0 | Fix Knowledge Manager endpoints | `autobot-frontend/src/components/KnowledgeManager.vue` | 3-4 days | Backend API |
 | ⏳ **BLOCKED** | P0 | Implement authentication system | Multiple files | 10-14 days | Design decisions |
-| ⏳ **READY** | P0 | Complete WebSocket integration | `autobot-user-frontend/src/services/` | 4-5 days | None |
-| ⏳ **READY** | P0 | Fix terminal integration gaps | `autobot-user-backend/agents/interactive_terminal_agent.py` | 3-4 days | None |
+| ⏳ **READY** | P0 | Complete WebSocket integration | `autobot-frontend/src/services/` | 4-5 days | None |
+| ⏳ **READY** | P0 | Fix terminal integration gaps | `autobot-backend/agents/interactive_terminal_agent.py` | 3-4 days | None |
 | ⏳ **READY** | P0 | Implement automated testing framework | `tests/` | 7-10 days | None |
 
 ---
@@ -72,8 +72,8 @@
 - **September 5, 2025**: Active task tracker established
 
 ### **P0 Critical Tasks** 🚨
-- **September 5, 2025**: ✅ **Provider availability checking** - Implemented real provider health checks in `autobot-user-backend/api/agent_config.py`
-- **September 5, 2025**: ✅ **Knowledge Manager endpoints** - Implemented all 12 TODOs with full functionality in `autobot-user-frontend/src/components/KnowledgeManager.vue`
+- **September 5, 2025**: ✅ **Provider availability checking** - Implemented real provider health checks in `autobot-backend/api/agent_config.py`
+- **September 5, 2025**: ✅ **Knowledge Manager endpoints** - Implemented all 12 TODOs with full functionality in `autobot-frontend/src/components/KnowledgeManager.vue`
 
 ---
 

@@ -162,7 +162,7 @@ DELETE /api/workflow/workflow/{workflow_id}
 
 #### Vue.js Service Layer
 ```javascript
-// autobot-user-frontend/src/services/api.js
+// autobot-frontend/src/services/api.js
 export const workflowAPI = {
   async executeWorkflow(userMessage, autoApprove = false) {
     return await apiClient.post('/api/workflow/execute', {
@@ -223,7 +223,7 @@ const handleWorkflowEvent = (eventData) => {
 
 #### Custom Agent Implementation
 ```python
-# autobot-user-backend/api/workflow.py - Adding new agent type
+# autobot-backend/api/workflow.py - Adding new agent type
 async def execute_single_step(workflow_id: str, step: Dict[str, Any], orchestrator):
     agent_type = step["agent_type"]
 

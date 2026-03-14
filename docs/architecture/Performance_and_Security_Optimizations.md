@@ -35,7 +35,7 @@ This document details the comprehensive performance and security optimizations i
 
 #### 2. **Prompt Injection Vulnerability**
 - **Issue**: LLM-based command extraction in chat system was exploitable
-- **Location**: `autobot-user-backend/api/chat.py` - `_check_if_command_needed` function
+- **Location**: `autobot-backend/api/chat.py` - `_check_if_command_needed` function
 - **Status**: ✅ **Already Secured** - Found existing protection using command validator
 - **Protection**: Safelist-based validation prevents arbitrary command execution
 
@@ -54,7 +54,7 @@ command_info = validator.validate_command_request(message)
 #### 3. **Database Performance Optimization**
 - **Issue**: N+1 query problems and lack of connection pooling
 - **Solution**: Implemented comprehensive SQLite connection pooling with N+1 prevention
-- **Files Created**: `autobot-user-backend/utils/database_pool.py`
+- **Files Created**: `autobot-backend/utils/database_pool.py`
 - **Files Modified**: `src/enhanced_memory_manager.py`, `src/memory_manager.py`
 
 **Key Features:**
@@ -88,8 +88,8 @@ conn.execute("PRAGMA mmap_size=268435456")     # 256MB memory-mapped I/O
 #### 4. **HTTP Client Resource Management**
 - **Issue**: New `aiohttp.ClientSession` created for each request causing resource exhaustion
 - **Solution**: Singleton pattern with connection pooling
-- **Files Created**: `autobot-user-backend/utils/http_client.py`
-- **Files Modified**: `autobot-user-backend/agents/advanced_web_research.py`
+- **Files Created**: `autobot-backend/utils/http_client.py`
+- **Files Modified**: `autobot-backend/agents/advanced_web_research.py`
 
 **Key Features:**
 - **Singleton ClientSession**: Single shared session across all HTTP requests
@@ -123,8 +123,8 @@ class HTTPClientManager:
 #### 5. **Terminal WebSocket Race Condition Fixes**
 - **Issue**: WebSocket state synchronization problems and PTY management race conditions
 - **Solution**: Thread-safe terminal WebSocket manager with proper state synchronization
-- **Files Created**: `autobot-user-backend/utils/terminal_websocket_manager.py`
-- **Files Modified**: `autobot-user-backend/api/base_terminal.py`
+- **Files Created**: `autobot-backend/utils/terminal_websocket_manager.py`
+- **Files Modified**: `autobot-backend/api/base_terminal.py`
 
 **Key Features:**
 - **State Management**: Thread-safe state transitions with async locks

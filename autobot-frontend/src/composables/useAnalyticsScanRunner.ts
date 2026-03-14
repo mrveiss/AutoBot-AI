@@ -44,6 +44,7 @@ export interface ScanRunnerReturn {
   running: Ref<boolean>
   results: Ref<ScanResult[]>
   currentScanId: Ref<string | null>
+  cancelled: Ref<boolean>
   completedCount: ComputedRef<number>
   failedCount: ComputedRef<number>
   skippedCount: ComputedRef<number>
@@ -51,6 +52,7 @@ export interface ScanRunnerReturn {
   progress: ComputedRef<number>
   runAll: (scans: ScanDefinition[]) => Promise<void>
   reset: () => void
+  cancel: () => void
 }
 
 /** Execute a single scan, updating the result entry in-place. */
@@ -98,6 +100,7 @@ export function useAnalyticsScanRunner(): ScanRunnerReturn {
   const running: Ref<boolean> = ref(false)
   const results: Ref<ScanResult[]> = ref([])
   const currentScanId: Ref<string | null> = ref(null)
+  const cancelled: Ref<boolean> = ref(false)
 
   const completedCount = computed(
     () => results.value.filter((r) => r.status === 'completed').length,
@@ -123,7 +126,12 @@ export function useAnalyticsScanRunner(): ScanRunnerReturn {
    * @param scans  Array of scan definitions to execute in order.
    */
   const runAll = async (scans: ScanDefinition[]): Promise<void> => {
+    if (running.value) {
+      logger.info('runAll already in progress, skipping')
+      return
+    }
     running.value = true
+    cancelled.value = false
     results.value = scans.map((s) => ({
       id: s.id,
       label: s.label,
@@ -133,6 +141,14 @@ export function useAnalyticsScanRunner(): ScanRunnerReturn {
     logger.info(`Starting ${scans.length} scans sequentially`)
 
     for (let i = 0; i < scans.length; i++) {
+      if (cancelled.value) {
+        for (let j = i; j < scans.length; j++) {
+          results.value[j].status = 'skipped'
+          results.value[j].durationMs = 0
+        }
+        logger.info('Scan runner cancelled, skipped remaining scans')
+        break
+      }
       await executeScan(scans[i], results, currentScanId, i)
     }
 
@@ -152,12 +168,19 @@ export function useAnalyticsScanRunner(): ScanRunnerReturn {
     running.value = false
     results.value = []
     currentScanId.value = null
+    cancelled.value = false
+  }
+
+  const cancel = (): void => {
+    cancelled.value = true
+    logger.info('Scan runner cancellation requested')
   }
 
   return {
     running,
     results,
     currentScanId,
+    cancelled,
     completedCount,
     failedCount,
     skippedCount,
@@ -165,6 +188,7 @@ export function useAnalyticsScanRunner(): ScanRunnerReturn {
     progress,
     runAll,
     reset,
+    cancel,
   }
 }
 

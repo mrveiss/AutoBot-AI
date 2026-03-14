@@ -5,7 +5,7 @@
 **Goal:** Eliminate duplicate files with forbidden naming patterns (`_unified`, `_optimized`, `_consolidated`) by migrating tests to canonical modules and deleting orphaned files.
 
 **Architecture:** The codebase already has canonical implementations:
-- `src/llm_interface.py` → facade delegating to `src/llm_interface_pkg/`
+- `src/llm_interface.py` → facade delegating to `autobot-backend/llm_interface_pkg/`
 - `src/multimodal_processor.py` → facade delegating to `src/unified_multimodal_processor.py`
 
 The orphaned files (`llm_interface_unified.py`, `unified_llm_interface.py`) duplicate functionality. Tests must be migrated to use canonical imports before deletion.
@@ -21,7 +21,7 @@ The orphaned files (`llm_interface_unified.py`, `unified_llm_interface.py`) dupl
 | File | Lines | Status | Action |
 |------|-------|--------|--------|
 | `src/llm_interface.py` | 134 | ✅ Canonical facade | Keep |
-| `src/llm_interface_pkg/` | ~1000 | ✅ Canonical implementation | Keep |
+| `autobot-backend/llm_interface_pkg/` | ~1000 | ✅ Canonical implementation | Keep |
 | `src/llm_interface_unified.py` | 767 | ❌ Orphaned | Delete after test migration |
 | `src/unified_llm_interface.py` | 1170 | ❌ Orphaned | Delete after test migration |
 
@@ -50,7 +50,7 @@ The orphaned files (`llm_interface_unified.py`, `unified_llm_interface.py`) dupl
 
 **Files:**
 - Read: `src/llm_interface.py`
-- Read: `src/llm_interface_pkg/__init__.py`
+- Read: `autobot-backend/llm_interface_pkg/__init__.py`
 - Read: `src/llm_interface_unified.py` (check what it exports)
 
 **Step 1: Compare exports between canonical and orphaned files**
@@ -77,7 +77,7 @@ No code changes - analysis only.
 
 **Files:**
 - Modify: `src/llm_interface.py` (if missing exports found)
-- Modify: `src/llm_interface_pkg/__init__.py` (if missing exports found)
+- Modify: `autobot-backend/llm_interface_pkg/__init__.py` (if missing exports found)
 
 **Step 1: Add any missing re-exports**
 
@@ -95,7 +95,7 @@ Expected: `OK`
 **Step 3: Commit if changes made**
 
 ```bash
-git add src/llm_interface.py src/llm_interface_pkg/__init__.py
+git add src/llm_interface.py autobot-backend/llm_interface_pkg/__init__.py
 git commit -m "feat(llm): add missing exports to canonical interface (#738)"
 ```
 

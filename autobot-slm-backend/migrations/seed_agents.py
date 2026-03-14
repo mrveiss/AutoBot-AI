@@ -9,7 +9,7 @@ Seeds the SLM agents table with DEFAULT_AGENT_CONFIGS from the backend.
 Run this once to populate SLM with existing agent configurations.
 
 Usage:
-    cd /home/kali/Desktop/AutoBot
+    cd <autobot-root>
     python slm-server/migrations/seed_agents.py
 """
 
@@ -32,11 +32,10 @@ DEFAULT_OLLAMA_ENDPOINT = "http://127.0.0.1:11434"
 async def seed_agents():
     """Seed agents from backend DEFAULT_AGENT_CONFIGS."""
     # Import here to avoid circular imports
-    from sqlalchemy import select
-
     from config import settings  # noqa: F401
     from models.database import Agent
     from services.database import db_service
+    from sqlalchemy import select
 
     # Initialize database
     await db_service.initialize()

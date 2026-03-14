@@ -44,7 +44,7 @@ async with aiofiles.open(filepath, 'w', encoding='utf-8') as f:
 
 ### 2. Async File Streaming in Research Browser API
 
-**File**: `autobot-user-backend/api/research_browser.py`
+**File**: `autobot-backend/api/research_browser.py`
 
 **Before** (Blocking):
 ```python

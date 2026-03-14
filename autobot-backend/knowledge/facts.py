@@ -227,7 +227,7 @@ async def _generate_embedding_with_npu_fallback(text: str) -> List[float]:
     """
     Generate embedding using NPU worker with fallback to LlamaIndex.
 
-    Issue #165: Uses NPU worker (172.16.168.20:8082) for hardware-accelerated
+    Issue #165: Uses NPU worker for hardware-accelerated
     embedding generation. Falls back to LlamaIndex's embed_model if NPU
     is unavailable.
 

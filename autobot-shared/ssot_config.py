@@ -483,6 +483,16 @@ class RedisConfig(BaseSettings):
     db_backup: int = Field(default=10, alias="AUTOBOT_REDIS_DB_BACKUP")
     db_testing: int = Field(default=15, alias="AUTOBOT_REDIS_DB_TESTING")
 
+    # LangGraph checkpoint TTL (#1481)
+    checkpoint_ttl_minutes: int = Field(
+        default=1440,
+        alias="AUTOBOT_REDIS_CHECKPOINT_TTL_MINUTES",
+        description=(
+            "TTL in minutes for LangGraph checkpoint keys. "
+            "Active sessions refresh on read. 0 = no expiry."
+        ),
+    )
+
     # Security
     password: Optional[str] = Field(default=None, alias="AUTOBOT_REDIS_PASSWORD")
 

@@ -3,6 +3,19 @@
 # Install: pip install pre-commit && pre-commit install
 
 repos:
+  # Record branch name BEFORE stash cycle for post-stash verification (Issue #1670)
+  # Must be the FIRST hook so the branch is captured before any stash/pop occurs.
+  - repo: local
+    hooks:
+      - id: record-branch
+        name: Record Branch for Branch Guard (Issue #1670)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-record-branch
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Records current branch to detect silent branch switches from stash/pop"
+
   # Python code formatting with Black
   - repo: https://github.com/psf/black
     rev: 23.12.1
@@ -84,6 +97,19 @@ repos:
         exclude: (code_analysis/|_test\.py|\.e2e_test\.py|\.integration_test\.py|\.performance_test\.py|conftest\.py)$
         additional_dependencies: ["bandit[toml]"]
 
+  # Block commits when branch is shared with a worktree (Issue #1654)
+  # Must run BEFORE the stash/restore cycle to prevent branch corruption.
+  - repo: local
+    hooks:
+      - id: worktree-branch-guard
+        name: Worktree Branch Guard (Issue #1654)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-worktree-branch-guard
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Blocks commits when current branch is also checked out in another worktree"
+
   # Hardcoded value detection (Issue #694)
   - repo: local
     hooks:
@@ -130,6 +156,53 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
         description: Blocks commits with print() in Python or console.* in TypeScript/Vue production code
+
+  # Branch guard — abort commit if stash/pop silently switched branches (Issue #1670)
+  # Runs at prepare-commit-msg stage (AFTER stash/pop) to compare the current
+  # branch against the branch recorded by record-branch (BEFORE stash/pop).
+  # Exits non-zero to ABORT the commit if they differ.
+  - repo: local
+    hooks:
+      - id: branch-guard
+        name: Branch Guard — Abort on Silent Branch Switch (Issue #1670)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-branch-guard
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [prepare-commit-msg]
+        description: "Aborts commit if pre-commit stash/pop silently switched the active branch"
+
+  # Warn when untracked source files exist at commit time (Issue #1503)
+  # Runs at prepare-commit-msg stage — AFTER the pre-commit stash/restore cycle —
+  # so it can detect untracked files that survived or were restored by the stash pop.
+  - repo: local
+    hooks:
+      - id: warn-untracked-files
+        name: Warn on Untracked Source Files (Issue #1503)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-warn-untracked
+        language: script
+        pass_filenames: false
+        stages: [prepare-commit-msg]
+        description: >
+          Warns when untracked non-gitignored source files coexist with a commit.
+          pre-commit stash/restore can accidentally stage these files from other branches.
+          Fix: use git worktree add .worktrees/feat-XXXX for parallel branch work.
+
+  # Bootstrap: install post-checkout hook from tracked source (Issue #1692)
+  # The post-checkout hook cannot bootstrap itself (chicken-and-egg).
+  # This pre-commit hook copies the canonical source into .git/hooks/
+  # on every commit, ensuring new clones and worktrees get the hook.
+  - repo: local
+    hooks:
+      - id: install-post-checkout
+        name: Install post-checkout hook (Issue #1692)
+        entry: bash -c 'SRC="scripts/hooks/post-checkout"; DST="$(git rev-parse --git-common-dir)/hooks/post-checkout"; [ -f "$SRC" ] && { [ ! -f "$DST" ] || ! diff -q "$SRC" "$DST" >/dev/null 2>&1; } && cp "$SRC" "$DST" && chmod +x "$DST" && echo "post-checkout hook installed" || true'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Copies tracked post-checkout hook into .git/hooks/ so it runs on checkout and worktree creation"
+
 # Configuration for specific file types
 default_language_version:
   python: python3

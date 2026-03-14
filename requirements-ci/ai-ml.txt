@@ -1,0 +1,7 @@
+# AI/ML frameworks — heavy native deps, numpy-sensitive
+openai==2.6.1
+tiktoken==0.11.0
+transformers==5.3.0
+sentence-transformers==5.3.0
+numpy==1.26.4
+pillow==12.1.1

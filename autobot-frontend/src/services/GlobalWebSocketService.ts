@@ -83,6 +83,7 @@ class GlobalWebSocketService {
   heartbeatTimeout: number
   listeners: Map<string, Set<EventCallback>>
   state: WebSocketReactiveState
+  private _backendWaitTimer: ReturnType<typeof setInterval> | null = null
 
   constructor() {
     this.ws = null
@@ -417,8 +418,12 @@ class GlobalWebSocketService {
     }
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      logger.debug('Max reconnection attempts reached')
-      this.state.lastError = `Connection failed after ${this.reconnectAttempts} attempts`
+      logger.debug(
+        'Max reconnection attempts reached, waiting for backend'
+      )
+      this.state.lastError =
+        'Connection failed. Waiting for backend to become available...'
+      this._startBackendWait()
       return
     }
 
@@ -444,6 +449,52 @@ class GlobalWebSocketService {
         })
       }
     }, delay)
+  }
+
+  // -----------------------------------------------------------------------
+  // Backend-Wait Mode (#1463)
+  // -----------------------------------------------------------------------
+
+  /**
+   * Poll /api/health until backend is available, then reconnect.
+   * Activates when normal reconnect attempts are exhausted — handles
+   * the ~6-minute backend restart window without giving up.
+   */
+  private _startBackendWait(): void {
+    if (this._backendWaitTimer) return
+    const pollInterval = 30_000
+
+    logger.debug(
+      'Entering backend-wait mode, polling health every 30s'
+    )
+
+    this._backendWaitTimer = setInterval(() => {
+      this.quickHealthCheck()
+        .then((healthy) => {
+          if (healthy) {
+            logger.debug('Backend is healthy, reconnecting')
+            this._stopBackendWait()
+            this.reconnectAttempts = 0
+            this.state.reconnectCount = 0
+            this.connect().catch((error: unknown) => {
+              logger.error('Post-wait reconnection failed:', error)
+            })
+          } else {
+            logger.debug('Backend still unavailable')
+          }
+        })
+        .catch(() => {
+          logger.debug('Backend health check failed, still waiting')
+        })
+    }, pollInterval)
+  }
+
+  /** Stop backend-wait polling */
+  private _stopBackendWait(): void {
+    if (this._backendWaitTimer) {
+      clearInterval(this._backendWaitTimer)
+      this._backendWaitTimer = null
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -502,6 +553,7 @@ class GlobalWebSocketService {
   /** Clean up WebSocket connection */
   cleanup(): void {
     this.stopHeartbeat()
+    this._stopBackendWait()
 
     if (this.ws) {
       this.ws.onopen = null

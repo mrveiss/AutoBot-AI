@@ -1,0 +1,5 @@
+# Databases, caches, and ORMs
+redis==5.3.0
+chromadb==1.2.1
+sqlalchemy==2.0.43
+aiosqlite==0.21.0

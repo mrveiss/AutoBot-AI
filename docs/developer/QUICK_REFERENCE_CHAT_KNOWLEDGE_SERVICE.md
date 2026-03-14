@@ -21,7 +21,7 @@ knowledge_service = ChatKnowledgeService(rag_service)
 context, citations = await knowledge_service.retrieve_relevant_knowledge(
     query="How to configure Redis?",
     top_k=5,              # Max 5 facts
-    score_threshold=0.7   # Min score 0.7
+    score_threshold=0.3   # Min score 0.3
 )
 
 # Use in prompt
@@ -30,7 +30,7 @@ prompt = system_prompt + "\n\n" + context + "\n\n" + user_message
 
 ## Key Methods
 
-### `retrieve_relevant_knowledge(query, top_k=5, score_threshold=0.7)`
+### `retrieve_relevant_knowledge(query, top_k=5, score_threshold=0.3)`
 Returns: `(context_string, citations_list)`
 - `context_string`: Formatted text for LLM prompt
 - `citations_list`: List of dicts with metadata
@@ -88,7 +88,7 @@ top_k=3, score_threshold=0.85
 
 **Balanced** (default):
 ```python
-top_k=5, score_threshold=0.7
+top_k=5, score_threshold=0.3
 ```
 
 **High Recall** (more facts):

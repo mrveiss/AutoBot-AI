@@ -221,7 +221,7 @@ NEVER teach commands - ALWAYS execute them."""
                 query=message,
                 conversation_history=session.conversation_history or [],
                 top_k=5,
-                score_threshold=0.7,
+                score_threshold=0.3,  # Issue #1526: lowered from 0.7
                 force_retrieval=False,
             )
             if knowledge_context:

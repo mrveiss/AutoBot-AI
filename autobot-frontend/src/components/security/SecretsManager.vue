@@ -796,20 +796,10 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import EmptyState from '@/components/ui/EmptyState.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
 import BaseModal from '@/components/ui/BaseModal.vue';
+import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n();
 const logger = createLogger('SecretsManager');
-
-/**
- * Helper to get CSS custom property value at runtime.
- * Used for dynamic styles that need design token colors (e.g., inline styles).
- * @param name - CSS custom property name (e.g., '--color-primary')
- * @param fallback - Fallback value for SSR/testing
- */
-function getCssVar(name: string, fallback: string): string {
-  if (typeof document === 'undefined') return fallback;
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-}
 
 // Credential type categories with icons and colors (using design tokens)
 const credentialCategories = computed(() => [

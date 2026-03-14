@@ -157,7 +157,7 @@ class RedisConfigLoader:
         1. Provided yaml_path
         2. /app/config/redis-databases.yaml (container)
         3. ./config/redis-databases.yaml (host relative)
-        4. /home/kali/Desktop/AutoBot/config/redis-databases.yaml (host absolute)
+        4. $AUTOBOT_BASE_DIR/config/redis-databases.yaml (host absolute)
 
         Args:
             yaml_path: Optional explicit path to YAML config file

@@ -11,6 +11,7 @@ on the browser VM (.25).  Mirrors the pattern from
 
 import hashlib
 import logging
+import os
 from datetime import datetime
 from typing import List, Optional
 from urllib.parse import urlparse
@@ -159,7 +160,7 @@ class WebCrawlerConnector(AbstractConnector):
 
             return get_service_url("playwright-vnc")
         except Exception:
-            return "http://172.16.168.25:3000"
+            return f"http://{os.environ.get('AUTOBOT_BROWSER_SERVICE_HOST', '172.16.168.25')}:3000"  # noqa: ssot-fallback
 
     def _find_url_for_source_id(self, source_id: str) -> Optional[str]:
         """Return the URL that corresponds to *source_id* from seed list."""

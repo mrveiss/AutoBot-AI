@@ -5,6 +5,14 @@
       <span v-if="declarations && declarations.length > 0" class="total-count">
         ({{ declarations.length.toLocaleString() }} {{ $t('analytics.declarations.total') }})
       </span>
+      <div v-if="declarations && declarations.length > 0" class="section-export-buttons">
+        <button @click="emit('export', 'md')" class="export-btn" :title="$t('analytics.codebase.actions.exportMarkdown')">
+          <i class="fas fa-file-alt"></i> MD
+        </button>
+        <button @click="emit('export', 'json')" class="export-btn" :title="$t('analytics.codebase.actions.exportJson')">
+          <i class="fas fa-file-code"></i> JSON
+        </button>
+      </div>
     </h3>
     <div v-if="declarations && declarations.length > 0" class="section-content">
       <!-- Type Summary Cards -->
@@ -109,6 +117,9 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{
+  export: [format: 'md' | 'json']
+}>()
 
 const expandedDeclarationTypes = ref<Record<string, boolean>>({})
 
@@ -161,6 +172,7 @@ const getDeclarationTypeClass = (type: string): string => {
   display: flex;
   align-items: center;
   gap: var(--spacing-2-5);
+  flex-wrap: wrap;
 }
 
 .total-count {
@@ -318,5 +330,31 @@ const getDeclarationTypeClass = (type: string): string => {
 .accordion-leave-to {
   opacity: 0;
   max-height: 0;
+}
+
+.section-export-buttons {
+  display: flex;
+  gap: var(--spacing-2);
+  margin-left: auto;
+}
+
+.export-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 0.8em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.export-btn:hover {
+  background: var(--bg-card);
+  border-color: var(--color-info-dark);
+  color: var(--text-primary);
 }
 </style>

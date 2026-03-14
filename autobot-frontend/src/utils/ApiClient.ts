@@ -493,7 +493,7 @@ export class ApiClient {
 
   async getChatList(options: RequestOptions = {}): Promise<any> {
     const timeout = options.timeout || appConfig.getTimeout('short');
-    return await this.get('/api/chats', { ...options, timeout });
+    return await this.get('/api/chat/sessions', { ...options, timeout });
   }
 
   async getChatMessages(chatId: string): Promise<any> {

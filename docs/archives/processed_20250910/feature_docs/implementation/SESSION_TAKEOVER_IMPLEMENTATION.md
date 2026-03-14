@@ -260,7 +260,7 @@ User clicks "👤 Take Manual Control"
 ### ✅ Implementation Complete
 
 **Files Modified:**
-- `/autobot-user-frontend/src/components/TerminalWindow.vue` - Complete session takeover implementation
+- `/autobot-frontend/src/components/TerminalWindow.vue` - Complete session takeover implementation
 
 **Features Delivered:**
 - ✅ Automation pause/resume button with visual states

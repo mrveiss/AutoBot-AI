@@ -17,7 +17,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from agents.web_research_integration import ResearchType
+from agents.web_researcher import ResearchType
 from security.secure_web_research import SecureWebResearch
 
 # Set up logging

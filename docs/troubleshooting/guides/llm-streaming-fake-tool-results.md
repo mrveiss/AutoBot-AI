@@ -204,5 +204,5 @@ tail -f logs/autobot.log | grep "Filtered hallucinated"
 
 - PR #727: Add tool execution validation
 - Commit: `8c3d4f1e`
-- File: `autobot-user-backend/services/llm/streaming.py`
-- File: `autobot-user-frontend/src/composables/useChatStream.ts`
+- File: `autobot-backend/services/llm/streaming.py`
+- File: `autobot-frontend/src/composables/useChatStream.ts`

@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Dict, List, Optional
 
-from auth_middleware import auth_middleware
+from auth_middleware import auth_middleware, get_current_user
 from autobot_memory_graph import AutoBotMemoryGraph
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
@@ -404,10 +404,13 @@ async def get_session_messages(
 @router.get("/chat/sessions")
 async def list_sessions(
     request: Request,
+    current_user: dict = Depends(get_current_user),
     scope: Optional[str] = None,
     team_id: Optional[str] = None,
 ):
     """List chat sessions with optional org/team/shared scope filtering (#684, #689).
+
+    Issue #1543: Requires authentication.
 
     Query params:
         scope: "user" (default) | "org" | "team" | "shared"
@@ -442,10 +445,10 @@ async def list_sessions(
     # Default: list all sessions (fast mode, no decryption)
     sessions = await chat_history_manager.list_sessions_fast()
 
-    # Issue #684: Filter to user's own sessions when authenticated
-    user_data = auth_middleware.get_user_from_request(request)
-    if user_data and user_data.get("username"):
-        sessions = await _filter_user_sessions(sessions, user_data["username"])
+    # Filter to authenticated user's own sessions
+    username = current_user.get("username")
+    if username:
+        sessions = await _filter_user_sessions(sessions, username)
 
     return create_success_response(
         data={"sessions": sessions, "count": len(sessions)},

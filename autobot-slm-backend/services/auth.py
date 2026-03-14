@@ -11,16 +11,16 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
+import jwt
+from config import settings
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from jwt.exceptions import InvalidTokenError
 from models.database import User
 from models.schemas import TokenResponse, UserCreate, UserResponse
 from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class AuthService:
                 token, settings.secret_key, algorithms=[self.algorithm]
             )
             return payload
-        except JWTError as e:
+        except InvalidTokenError as e:
             logger.warning("JWT decode error: %s", e)
             return None
 

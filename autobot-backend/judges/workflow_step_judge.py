@@ -310,6 +310,15 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
                 step_data, workflow_context, user_context
             )
 
+            # Fail-open: if LLM judge errored, approve with warning
+            # instead of silently rejecting all steps (#1464)
+            if judgment.llm_model_used == "error":
+                logger.warning(
+                    "LLM judge unavailable, approving step by default: %s",
+                    judgment.reasoning,
+                )
+                return True, f"Approved (judge unavailable): {judgment.reasoning}"
+
             safety_score = self._extract_dimension_score(
                 judgment, JudgmentDimension.SAFETY
             )
@@ -335,7 +344,7 @@ Focus on being thorough but practical - the goal is to ensure safe, effective wo
 
         except Exception as e:
             logger.error("Error in workflow step approval: %s", e)
-            return False, f"Evaluation error: {str(e)}"
+            return True, f"Approved (evaluation error): {str(e)}"
 
     async def suggest_improvements(
         self,

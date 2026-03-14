@@ -216,6 +216,7 @@ import { useI18n } from 'vue-i18n'
 import cytoscape, { type Core, type NodeSingular } from 'cytoscape'
 // @ts-expect-error - cytoscape-fcose has no type declarations
 import fcose from 'cytoscape-fcose'
+import { getCssVar } from '@/composables/useCssVars'
 
 // Register fcose layout
 cytoscape.use(fcose)
@@ -455,15 +456,6 @@ function initCytoscape() {
   cy.on('zoom', () => {
     zoomLevel.value = cy?.zoom() || 1
   })
-}
-
-/**
- * Get CSS variable value from the document
- * Issue #704: Use design tokens for theming
- */
-function getCssVar(name: string, fallback: string): string {
-  if (typeof document === 'undefined') return fallback
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
 }
 
 function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {

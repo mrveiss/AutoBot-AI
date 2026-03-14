@@ -70,7 +70,7 @@ class TestTaskRetryStrategy:
     @pytest.mark.asyncio
     async def test_generate_retry_uses_llm(self, strategy):
         mock_llm = AsyncMock()
-        mock_llm.chat_completion_async = AsyncMock(
+        mock_llm.chat_completion = AsyncMock(
             return_value=json.dumps(
                 {
                     "suggested_prompt": "new prompt",
@@ -91,14 +91,12 @@ class TestTaskRetryStrategy:
         )
         assert result.suggested_prompt == "new prompt"
         assert result.confidence == 0.7
-        mock_llm.chat_completion_async.assert_awaited_once()
+        mock_llm.chat_completion.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_generate_retry_falls_back_on_llm_error(self, strategy):
         mock_llm = AsyncMock()
-        mock_llm.chat_completion_async = AsyncMock(
-            side_effect=Exception("LLM unavailable")
-        )
+        mock_llm.chat_completion = AsyncMock(side_effect=Exception("LLM unavailable"))
         strategy._llm = mock_llm
         result = await strategy.generate_retry("t", "g", "old", "reason", 0.2)
         assert isinstance(result, RetryApproach)

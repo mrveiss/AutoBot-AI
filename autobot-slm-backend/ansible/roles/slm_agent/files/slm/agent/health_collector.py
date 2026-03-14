@@ -118,86 +118,38 @@ class HealthCollector:
         except Exception:
             return False
 
-    def _parse_service_line(self, line: str) -> Optional[Dict]:
-        """Parse a single systemctl output line into service info.
-
-        Helper for discover_all_services (#825).
-        """
-        parts = line.split(None, 4)
-        if len(parts) < 4:
-            return None
-
-        unit_name = parts[0]
-        if "@" in unit_name or not unit_name.endswith(".service"):
-            return None
-
-        load_state = parts[1]
-        if load_state in ("not-found", "masked"):
-            return None
-
-        service_name = unit_name.replace(".service", "")
-        active_state = parts[2]
-        sub_state = parts[3]
-
-        if active_state == "active" and sub_state == "running":
-            status = "running"
-        elif active_state == "failed" or sub_state == "failed":
-            status = "failed"
-        elif active_state == "inactive":
-            status = "stopped"
-        else:
-            status = "unknown"
-
-        service_info = {
-            "name": service_name,
-            "status": status,
-            "active_state": active_state,
-            "sub_state": sub_state,
-            "load_state": load_state,
-        }
-
-        if status == "running":
-            details = self._get_service_details(service_name)
-            service_info.update(details)
-
-        return service_info
-
     def discover_all_services(self) -> List[Dict]:
         """
         Discover all systemd services on the node.
 
+        Issue #620: Refactored to use helper functions.
+        Issue #728: Related implementation.
+
         Returns list of service info dicts with status, enabled state, etc.
-        Related to Issue #728.
         """
         services = []
         try:
-            result = (
-                subprocess.run(  # nosec B607 - systemctl is a trusted system binary
-                    [
-                        "systemctl",
-                        "list-units",
-                        "--type=service",
-                        "--all",
-                        "--no-pager",
-                        "--no-legend",
-                        "--plain",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
-            )
-
-            if result.returncode != 0:
-                logger.warning("Failed to list services: %s", result.stderr)
+            output = self._run_systemctl_list_units()
+            if output is None:
                 return services
 
-            for line in result.stdout.strip().split("\n"):
-                if not line.strip():
-                    continue
-                info = self._parse_service_line(line)
-                if info:
-                    services.append(info)
+            for line in output.strip().split("\n"):
+                service_info = self._parse_service_line(line)
+                if service_info:
+                    if service_info["status"] == "running":
+                        service_info.update(
+                            self._get_service_details(service_info["name"])
+                        )
+                    elif service_info["status"] in ("failed", "crash-loop"):
+                        # Issue #1019: Capture error context for failed services
+                        # Issue #1604: Also capture for crash-looping services
+                        service_info.update(
+                            self._get_service_details(service_info["name"])
+                        )
+                        error_ctx = self._get_error_context(service_info["name"])
+                        if error_ctx:
+                            service_info["error_message"] = error_ctx
+                    services.append(service_info)
 
         except subprocess.TimeoutExpired:
             logger.warning("Timeout discovering services")
@@ -207,6 +159,66 @@ class HealthCollector:
             logger.warning("Error discovering services: %s", e)
 
         return services
+
+    def _run_systemctl_list_units(self) -> Optional[str]:
+        """Run systemctl list-units command. Issue #620."""
+        result = subprocess.run(  # nosec B607 - systemctl is trusted
+            [
+                "systemctl",
+                "list-units",
+                "--type=service",
+                "--all",
+                "--no-pager",
+                "--no-legend",
+                "--plain",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            logger.warning("Failed to list services: %s", result.stderr)
+            return None
+        return result.stdout
+
+    def _parse_service_line(self, line: str) -> Optional[Dict]:
+        """Parse a single line of systemctl output. Issue #620."""
+        if not line.strip():
+            return None
+        parts = line.split(None, 4)
+        if len(parts) < 4:
+            return None
+        unit_name = parts[0]
+        if "@" in unit_name or not unit_name.endswith(".service"):
+            return None
+
+        service_name = unit_name.replace(".service", "")
+        load_state = parts[1]
+        # Skip phantom entries with no unit file (not-found/masked)
+        if load_state in ("not-found", "masked"):
+            return None
+        active_state, sub_state = parts[2], parts[3]
+        status = self._map_status_from_states(active_state, sub_state)
+
+        return {
+            "name": service_name,
+            "status": status,
+            "active_state": active_state,
+            "sub_state": sub_state,
+            "load_state": load_state,
+        }
+
+    def _map_status_from_states(self, active_state: str, sub_state: str) -> str:
+        """Map systemd active/sub states to our status enum. Issue #620."""
+        if active_state == "active" and sub_state == "running":
+            return "running"
+        elif active_state == "failed" or sub_state == "failed":
+            return "failed"
+        elif active_state == "activating" and sub_state == "auto-restart":
+            return "crash-loop"  # Issue #1604
+        elif active_state == "inactive":
+            return "stopped"
+        return "unknown"
 
     def _get_service_details(self, service_name: str) -> Dict:
         """Get detailed info for a specific service."""
@@ -219,7 +231,8 @@ class HealthCollector:
                         "systemctl",
                         "show",
                         service_name,
-                        "--property=MainPID,MemoryCurrent,Description,UnitFileState",
+                        "--property=MainPID,MemoryCurrent,Description,"
+                        "UnitFileState,NRestarts",
                     ],
                     capture_output=True,
                     text=True,
@@ -239,11 +252,40 @@ class HealthCollector:
                             details["description"] = value[:500]
                         elif key == "UnitFileState":
                             details["enabled"] = value == "enabled"
+                        elif key == "NRestarts" and value.isdigit():
+                            details["n_restarts"] = int(value)
 
         except Exception as e:
             logger.debug("Could not get details for %s: %s", service_name, e)
 
         return details
+
+    def _get_error_context(self, service_name: str, lines: int = 5) -> str:
+        """Get last N lines of journalctl for a failed service.
+
+        Issue #1019: Capture error context so the SLM dashboard
+        can display why a service failed without requiring SSH.
+        """
+        try:
+            result = subprocess.run(  # nosec B607 - journalctl is trusted
+                [
+                    "journalctl",
+                    "-u",
+                    service_name,
+                    "-n",
+                    str(lines),
+                    "--no-pager",
+                    "-q",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except Exception as e:
+            logger.debug("Could not get error context for %s: %s", service_name, e)
+        return ""
 
     def is_healthy(self, thresholds: Optional[Dict] = None) -> bool:
         """Quick health check against thresholds."""

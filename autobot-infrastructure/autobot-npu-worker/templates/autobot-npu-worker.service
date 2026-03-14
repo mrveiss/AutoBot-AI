@@ -25,8 +25,7 @@ Environment="PYTHONUNBUFFERED=1"
 Environment="PYTHONDONTWRITEBYTECODE=1"
 Environment="NPU_DEVICE=AUTO"
 Environment="NPU_LOG_LEVEL=INFO"
-Environment="REDIS_HOST=172.16.168.23"
-Environment="REDIS_PORT=6379"
+# Redis config provided by EnvironmentFile (.env)
 EnvironmentFile=-/opt/autobot/autobot-npu-worker/.env
 
 # Start uvicorn server

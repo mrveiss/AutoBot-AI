@@ -28,7 +28,7 @@ mcp.filesystem.search_files({
 mcp.filesystem.read_multiple_files({
   paths: [
     "src/components/ChatInterface.vue",
-    "autobot-user-backend/utils/ApiClient.js",
+    "autobot-backend/utils/ApiClient.js",
     "src/services/ChatService.js"
   ]
 })
@@ -247,8 +247,8 @@ const project = await mcp.autobot.autobot_analyze_project();
 const files = await mcp.filesystem.read_multiple_files({
   paths: [
     "src/components/NewFeature.vue",
-    "autobot-user-backend/api/new_feature.py",
-    "autobot-user-backend/agents/feature_agent.py"
+    "autobot-backend/api/new_feature.py",
+    "autobot-backend/agents/feature_agent.py"
   ]
 });
 

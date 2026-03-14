@@ -49,7 +49,7 @@ def get_url() -> str:
         return deployment_config.postgres_sync_url
     except Exception:
         # Default fallback for development
-        db_host = os.getenv("AUTOBOT_DB_HOST", "172.16.168.23")
+        db_host = os.getenv("AUTOBOT_DB_HOST", "172.16.168.23")  # noqa: ssot-fallback
         return f"postgresql://autobot:autobot@{db_host}:5432/autobot"
 
 

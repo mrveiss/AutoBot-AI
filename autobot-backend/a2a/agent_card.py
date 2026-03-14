@@ -135,7 +135,7 @@ def build_agent_card(base_url: str) -> AgentCard:
     the full backend stack is not initialised.
 
     Args:
-        base_url: Server base URL (e.g. "https://172.16.168.20:8443")
+        base_url: Server base URL (e.g. "https://backend-host:8443")
 
     Returns:
         AgentCard ready to be serialized as /.well-known/agent.json

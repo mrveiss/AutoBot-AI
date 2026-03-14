@@ -1557,9 +1557,6 @@ class SlashCommandHandler:
         self.docs_base_path = Path(docs_base_path)
         self._command_pattern = re.compile(r"^/(\w+)(?:\s+(.*))?$", re.IGNORECASE)
 
-        # Current chat context for secrets (Issue #211)
-        self.current_chat_id: Optional[str] = None
-
         # Documentation category mappings
         self.doc_categories = {
             "api": "api/",
@@ -1577,14 +1574,6 @@ class SlashCommandHandler:
         logger.info(
             "SlashCommandHandler initialized with docs path: %s", docs_base_path
         )
-
-    def set_chat_context(self, chat_id: Optional[str]) -> None:
-        """Set the current chat context for chat-scoped commands (Issue #211).
-
-        Args:
-            chat_id: Current chat ID or None for general context
-        """
-        self.current_chat_id = chat_id
 
     def is_slash_command(self, message: str) -> bool:
         """
@@ -1638,12 +1627,17 @@ class SlashCommandHandler:
 
         return command_map.get(cmd, CommandType.UNKNOWN), args
 
-    async def execute(self, message: str) -> SlashCommandResult:
+    async def execute(
+        self,
+        message: str,
+        chat_id: Optional[str] = None,
+    ) -> SlashCommandResult:
         """
         Execute a slash command and return the result.
 
         Args:
             message: Slash command message
+            chat_id: Chat context for scoped commands (#1641)
 
         Returns:
             SlashCommandResult with execution outcome
@@ -1651,11 +1645,14 @@ class SlashCommandHandler:
         cmd_type, args = self.parse_command(message)
 
         # Create appropriate command object - Tell, Don't Ask
-        command = self._create_command(cmd_type, args)
+        command = self._create_command(cmd_type, args, chat_id)
         return await command.execute()
 
-    def _get_command_factories(self) -> Dict[CommandType, callable]:
-        """Get command type to factory mapping (Issue #315 - dispatch table)."""
+    def _get_command_factories(
+        self,
+        chat_id: Optional[str] = None,
+    ) -> Dict[CommandType, callable]:
+        """Get command type to factory mapping (Issue #315)."""
         return {
             CommandType.DOCS: lambda args: DocsCommand(
                 args, self.docs_base_path, self.doc_categories
@@ -1664,19 +1661,22 @@ class SlashCommandHandler:
             CommandType.STATUS: lambda args: StatusCommand(),
             CommandType.SCAN: lambda args: ScanCommand(args),
             CommandType.SECURITY: lambda args: SecurityCommand(args),
-            # Issue #211 - Secrets management
-            CommandType.SECRETS: lambda args: SecretsCommand(
-                args, self.current_chat_id
-            ),
+            CommandType.SECRETS: lambda args: SecretsCommand(args, chat_id),
         }
 
-    def _create_command(self, cmd_type: CommandType, args: Optional[str]) -> Command:
+    def _create_command(
+        self,
+        cmd_type: CommandType,
+        args: Optional[str],
+        chat_id: Optional[str] = None,
+    ) -> Command:
         """
-        Create the appropriate command object (Issue #315 - refactored depth 5 to 2).
+        Create the appropriate command object (#315, #1641).
 
         Factory method that encapsulates command creation logic.
+        Chat_id is passed as parameter to avoid singleton race (#1641).
         """
-        factories = self._get_command_factories()
+        factories = self._get_command_factories(chat_id)
         if cmd_type in factories:
             return factories[cmd_type](args)
         return UnknownCommand()

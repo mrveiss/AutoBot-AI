@@ -41,9 +41,8 @@
     npu_worker_port: 8081
     npu_worker_service_name: autobot-npu-worker
 
-    # Backend connection
-    backend_host: "172.16.168.20"
-    backend_port: 8001
+    # Backend connection — resolved from inventory (production.yml)
+    # backend_host and backend_port inherited from all.vars
 
     # Migration flag
     migrate_from_old_structure: true

@@ -13,7 +13,8 @@ import time
 from datetime import datetime
 from typing import Any, Dict, FrozenSet, Optional
 
-from ..agents.web_research_integration import ResearchType, WebResearchIntegration
+from ..agents.web_researcher import ResearchType
+from ..agents.web_researcher import WebResearcher as WebResearchIntegration
 from .domain_security import DomainSecurityConfig, DomainSecurityManager
 from .input_validator import WebResearchInputValidator
 
@@ -548,7 +549,7 @@ async def validate_research_safety(
 ) -> Dict[str, Any]:
     """Validate research query and optional URL for safety"""
     async with SecureWebResearch() as secure_research:
-        results = {
+        results: Dict[str, Any] = {
             "query_validation": await secure_research.validate_research_query(query)
         }
 

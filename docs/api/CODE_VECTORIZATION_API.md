@@ -167,7 +167,7 @@ Find duplicate or near-duplicate code.
                 "total_lines": 145,
                 "instances": [
                     {
-                        "file": "autobot-user-backend/api/chat.py",
+                        "file": "autobot-backend/api/chat.py",
                         "function": "get_redis_connection",
                         "class": null,
                         "lines": "45-67",
@@ -180,7 +180,7 @@ Find duplicate or near-duplicate code.
                         "last_modified": "2025-10-20T14:30:00Z"
                     },
                     {
-                        "file": "autobot-user-backend/api/files.py",
+                        "file": "autobot-backend/api/files.py",
                         "function": "init_redis",
                         "class": "FileManager",
                         "lines": "123-145",
@@ -215,7 +215,7 @@ Find duplicate or near-duplicate code.
             "total_duplicate_lines": 1456,
             "potential_loc_reduction": 890,
             "duplication_percentage": 12.5,
-            "highest_duplication_file": "autobot-user-backend/api/chat.py",
+            "highest_duplication_file": "autobot-backend/api/chat.py",
             "most_common_patterns": [
                 "error_handling",
                 "redis_connection",
@@ -330,9 +330,9 @@ Identify code that could be refactored for reuse.
                 "occurrences": 12,
                 "confidence": 0.95,
                 "files_affected": [
-                    "autobot-user-backend/api/chat.py",
-                    "autobot-user-backend/api/files.py",
-                    "autobot-user-backend/api/terminal.py"
+                    "autobot-backend/api/chat.py",
+                    "autobot-backend/api/files.py",
+                    "autobot-backend/api/terminal.py"
                 ],
                 "current_metrics": {
                     "total_loc": 340,
@@ -401,7 +401,7 @@ Get code quality metrics and insights.
                 "max_cyclomatic_complexity": 25,
                 "complexity_hotspots": [
                     {
-                        "file": "autobot-user-backend/api/chat.py",
+                        "file": "autobot-backend/api/chat.py",
                         "function": "process_complex_request",
                         "complexity": 25,
                         "recommendation": "Break into 3-4 smaller functions",
@@ -490,7 +490,7 @@ Vectorize a single file (useful for real-time updates).
 **Request Body:**
 ```json
 {
-    "file_path": "autobot-user-backend/api/new_feature.py",
+    "file_path": "autobot-backend/api/new_feature.py",
     "force": false
 }
 ```
@@ -500,7 +500,7 @@ Vectorize a single file (useful for real-time updates).
 {
     "status": "success",
     "data": {
-        "file": "autobot-user-backend/api/new_feature.py",
+        "file": "autobot-backend/api/new_feature.py",
         "embeddings_created": 12,
         "functions_processed": 8,
         "classes_processed": 2,
@@ -572,7 +572,7 @@ Get cache statistics.
 {
     "type": "progress",
     "data": {
-        "current_file": "autobot-user-backend/api/chat.py",
+        "current_file": "autobot-backend/api/chat.py",
         "files_processed": 123,
         "total_files": 450,
         "percentage": 27.3,

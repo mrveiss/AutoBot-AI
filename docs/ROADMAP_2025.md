@@ -17,12 +17,12 @@ AutoBot has evolved into a **comprehensive autonomous AI platform** through inte
 
 | Metric | Verified Count | Source |
 |--------|----------------|--------|
-| **Specialized Agents** | 31 agents | `autobot-user-backend/agents/` directory |
-| **API Endpoints** | 1,092 routes | 145 modules in `autobot-user-backend/api/` |
-| **Vue Components** | 187 components | `autobot-user-frontend/src/components/` |
-| **MCP Bridges** | 6 bridges | `mcp-tools/` directory |
-| **Redis Databases** | 12 databases | `config/redis-databases.yaml` |
-| **LLM Providers** | 8 provider types | `src/llm_interface_pkg/` |
+| **Specialized Agents** | 40+ agents | `autobot-backend/agents/` directory |
+| **API Endpoints** | 1,092 routes | 257 modules in `autobot-backend/api/` |
+| **Vue Components** | 260 components | `autobot-frontend/src/components/` |
+| **MCP Bridges** | 16 bridges (6 external + 10 backend) | `autobot-backend/api/*_mcp.py` |
+| **Redis Databases** | 12 databases | `autobot-infrastructure/shared/config/redis-databases.yaml` |
+| **LLM Providers** | 8 provider types + adapter registry | `autobot-backend/llm_interface_pkg/providers/` |
 
 ---
 
@@ -64,7 +64,7 @@ This section documents key architectural decisions where the original plan was r
 
 | Aspect | Original Plan | Current Implementation |
 |--------|---------------|------------------------|
-| **Deployment** | Single server | 5-VM distributed cluster |
+| **Deployment** | Single server | Multi-VM distributed fleet |
 | **Status** | Evolved | ✅ Production |
 
 **Why We Changed**:
@@ -163,7 +163,7 @@ AUTOBOT_REASONING_MODEL=mistral:7b-instruct
 
 - ❌ LangChain → Custom LLM interface (performance + control)
 - ❌ LlamaIndex → Custom RAG with ChromaDB (flexibility + accuracy)
-- ❌ Single server → 5-VM cluster (scalability + isolation)
+- ❌ Single server → Multi-VM distributed fleet (scalability + isolation)
 - ❌ TinyLLaMA/Phi-2 → Mistral 7B for all tasks (quality + consistency, pending optimization)
 - ❌ Multiple frontends → Single VM1 frontend (stability)
 
@@ -180,7 +180,7 @@ AUTOBOT_REASONING_MODEL=mistral:7b-instruct
 | Task | Planned | Actual | Status |
 |------|---------|--------|--------|
 | WSL2/Linux detection | ✓ | Implemented in `setup.sh` | ✅ |
-| Python 3.10+ with pyenv | ✓ | Python 3.11 active | ✅ |
+| Python 3.10+ with pyenv | ✓ | Python 3.12 (conda, backend), 3.10 (dev) | ✅ |
 | Virtual environment | ✓ | venv configured | ✅ |
 | Core dependencies | ✓ | 90+ packages | ✅ |
 | Project directories | ✓ | All created | ✅ |
@@ -456,7 +456,7 @@ AUTOBOT_REASONING_MODEL=mistral:7b-instruct
 | LLM usage logging | ✓ | Comprehensive | ✅ |
 | Providers | 1-2 planned | 8 provider types | ✅ Exceeded |
 
-**8 LLM Provider Types** (verified from `src/llm_interface_pkg/`):
+**8 LLM Provider Types** (verified from `autobot-backend/llm_interface_pkg/providers/`):
 
 1. OLLAMA - Local models (primary)
 2. OPENAI - GPT models
@@ -607,7 +607,9 @@ AUTOBOT_REASONING_MODEL=mistral:7b-instruct
 
 ### ✅ PHASE 20: MCP Integration (COMPLETE)
 
-**6 MCP Bridges** (verified from `mcp-tools/`):
+**6 External MCP Bridges** + **10 Backend MCP Bridges**:
+
+External (standalone MCP servers):
 
 1. **context7** - Code documentation/reference
 2. **mcp-structured-thinking** - Structured reasoning
@@ -615,6 +617,19 @@ AUTOBOT_REASONING_MODEL=mistral:7b-instruct
 4. **mcp-task-manager-server** - Task management
 5. **mcp-autobot-tracker** - AutoBot tracking
 6. **code-index-mcp** - Code indexing
+
+Backend bridges (verified from `autobot-backend/api/*_mcp.py`):
+
+1. **browser_mcp** - Playwright browser automation
+2. **database_mcp** - Database operations
+3. **filesystem_mcp** - File system access
+4. **git_mcp** - Git operations
+5. **http_client_mcp** - HTTP client
+6. **knowledge_mcp** - Knowledge base
+7. **prometheus_mcp** - Monitoring metrics
+8. **sequential_thinking_mcp** - Sequential reasoning
+9. **structured_thinking_mcp** - Structured reasoning
+10. **vnc_mcp** - VNC desktop access
 
 ---
 
@@ -624,9 +639,9 @@ These phases from the archived roadmap were **replaced** with custom implementat
 
 | Original Phase | Original Plan | What Happened |
 |----------------|---------------|---------------|
-| Phase 18 | LangChain Agent Orchestrator | → Custom 31-agent system |
+| Phase 18 | LangChain Agent Orchestrator | → Custom 40+ agent system |
 | Phase 19 | LlamaIndex Knowledge Base | → Custom RAG with ChromaDB |
-| Phase 20 | LangChain LLM Integration | → Custom 8-provider interface |
+| Phase 20 | LangChain LLM Integration | → Custom 8-provider interface + adapter registry |
 | Phase 21 | LangChain Autonomous Agent | → Custom orchestrator with fallbacks |
 
 **Rationale**: Custom implementations provided better performance, flexibility, and maintainability compared to framework-based approach.
@@ -677,9 +692,72 @@ These phases from the archived roadmap were **replaced** with custom implementat
 - Service + API exist (`442fb300`, Nov 2025)
 - CPU usage optimization for always-on detection not yet done
 
-#### 🔴 TTS / Voice Output — No issue yet
-- Kani-TTS-2 (400M params, 3GB VRAM, RTF 0.2, zero-shot cloning) identified as candidate
-- Would complete STT → Agent → TTS voice loop with existing wake word service
+#### ✅ TTS / Voice Output — Complete
+
+- TTS voice-per-language mapping (#1333, `e152541a`)
+- Speech replay/interrupt/hallucination guard (#1420, `cb05d782`)
+- TTS volume control (#1394, `e36774ce`)
+- Voice language awareness (#1334, `d52f6983`)
+- TTS worker deployed on AI Stack VM (.24, port 8082)
+
+### COMPLETED (Beyond Original Roadmap — Feb-Mar 2026)
+
+These features were not in the original 20-phase roadmap but were implemented based on evolving requirements.
+
+#### ✅ Internationalization (i18n) — Epic #1317
+
+- Vue i18n plugin integration, language switcher (#1330, `4d02153e`)
+- Locale persistence across sessions (#1331, `e18e4a54`)
+- Translated locale files for 6 languages (#1335, `2c5325ba`)
+- Residual hardcoded string cleanup (#1410, `8d85a4ff`)
+- TTS voice-per-language mapping (#1333, `e152541a`)
+- Voice language awareness (#1334, `d52f6983`)
+
+#### ✅ Approval Gates for Agent Workflows — #1402, `6a8474df`
+
+- Approval/ApprovalComment/TaskApprovalLink models, migration 20260307_006
+- ApprovalGateService lifecycle, REST API, WebSocket notifications
+- AWAITING_APPROVAL phase in workflow state machine
+- ApprovalGatePanel.vue + useApprovalGates composable
+
+#### ✅ Formal Adapter Registry for LLM Backends — #1403, `d069d3a6`
+
+- AdapterBase ABC, AdapterRegistry singleton
+- 5 adapters: Ollama, AI Stack, OpenAI, Anthropic, Process
+- REST API at `/api/adapters/*`
+
+#### ✅ Per-Agent Cost Tracking — #1401, `264acf64`
+
+- Token usage and cost attribution per agent invocation
+
+#### ✅ Workflow Templates & Gallery — #1415, `0236eb68`
+
+- Community template descriptions, secrets metadata, gallery UI
+
+#### ✅ Interactive Browser Control — #1416, `37d04fb7`
+
+- Live browser interaction from frontend via Playwright
+
+#### ✅ System Secrets Management — #1417, `58b2ef86`
+
+- Encrypted secrets store with Fernet, CRUD API, SecretsView
+
+#### ✅ Codebase Analytics Improvements — #1418, #1430
+
+- Analytics scan runner refactor (#1418)
+- Bug prediction display fix, Load More pagination (#1430, `b1d2e1e6`)
+
+#### 🔄 In Progress
+
+#### ⏳ AutoResearch Integration — #1440
+
+- Self-improving experiment loop with web search
+- Plan: `docs/plans/2026-03-08-autoresearch-integration.md`
+- 11 tasks across 3 milestones (standalone runner, orchestrated loop, self-improvement)
+
+#### ⏳ Web Research Consolidation — #1443
+
+- Consolidate 4 duplicate web research files into single `web_researcher.py`
 
 ---
 
@@ -688,12 +766,12 @@ These phases from the archived roadmap were **replaced** with custom implementat
 | Metric | project-roadmap.md (Jan) | REALISTIC_ROADMAP (Sep) | ROADMAP_2025.md (Dec) | Actual (Verified) |
 |--------|--------------------------|-------------------------|------------------------|-------------------|
 | **Status Claim** | "Phase 6 COMPLETED" | "35% Complete" | "95%+ Core Features" | ~90% Production Ready |
-| **Agents** | 6 agents | Not specified | 30 agents | 31 agents ✅ |
+| **Agents** | 6 agents | Not specified | 30 agents | 40+ agents ✅ |
 | **API Endpoints** | "6/6 endpoints" | "518+ documented" | "787 endpoints" | 1,092 routes ✅ |
-| **Vue Components** | Not specified | Not specified | "127 components" | 187 components ✅ |
+| **Vue Components** | Not specified | Not specified | "127 components" | 260 components ✅ |
 | **Redis DBs** | 1 | Not specified | 12 | 12 ✅ |
-| **LLM Providers** | 1B/3B local | Not specified | 6+ providers | 8 provider types ✅ |
-| **MCP Bridges** | 0 | "MCP Integration" | 5 bridges | 6 bridges ✅ |
+| **LLM Providers** | 1B/3B local | Not specified | 6+ providers | 8 providers + adapter registry ✅ |
+| **MCP Bridges** | 0 | "MCP Integration" | 5 bridges | 16 bridges (6 external + 10 backend) ✅ |
 | **Accuracy** | Overstated | Understated | Accurate | Verified ✅ |
 
 ---
@@ -734,12 +812,12 @@ These phases from the archived roadmap were **replaced** with custom implementat
 ### Production Readiness
 
 - ✅ 1,092 API routes operational
-- ✅ 31 specialized agents deployed
-- ✅ 187 Vue components implemented
+- ✅ 40+ specialized agents deployed
+- ✅ 260 Vue components implemented
 - ✅ 12 Redis databases configured
-- ✅ 8 LLM provider types supported
-- ✅ 6 MCP bridges active
-- ✅ 5-VM distributed infrastructure
+- ✅ 8 LLM provider types + adapter registry
+- ✅ 16 MCP bridges active (6 external + 10 backend)
+- ✅ Multi-VM distributed infrastructure
 
 ### Feature Completeness
 
@@ -756,9 +834,9 @@ These phases from the archived roadmap were **replaced** with custom implementat
 
 ### Backend
 
-- **Language**: Python 3.11
+- **Language**: Python 3.12 (conda, backend), 3.10 (dev)
 - **Framework**: FastAPI (async)
-- **LLM Interface**: Custom (8 providers)
+- **LLM Interface**: Custom (8 providers + adapter registry)
 - **Vector Store**: ChromaDB
 - **Cache/Memory**: Redis Stack (12 DBs)
 - **Database**: SQLite
@@ -768,14 +846,14 @@ These phases from the archived roadmap were **replaced** with custom implementat
 
 - **Framework**: Vue 3 + TypeScript
 - **Build Tool**: Vite
-- **Components**: 187 custom
+- **Components**: 260 custom
 - **Terminal**: XTerm.js
 - **VNC**: noVNC
 - **State**: Pinia
 
 ### Infrastructure
 
-- **Architecture**: 5-VM distributed
+- **Architecture**: Multi-VM distributed fleet
 - **Automation**: Playwright
 - **Desktop**: VNC/noVNC
 - **SSH**: Paramiko
@@ -784,13 +862,13 @@ These phases from the archived roadmap were **replaced** with custom implementat
 
 ## 🏁 Conclusion
 
-AutoBot has achieved **~99% production readiness** with a 9-VM distributed fleet, 31+ specialized agents, 1,092+ API routes, complete knowledge graph pipeline, OpenTelemetry tracing, NPU acceleration, and enterprise security. The original 20-phase roadmap is complete. Remaining work is polish (wake word CPU opt) and deferred infrastructure (Docker Compose).
+AutoBot has achieved **~99% production readiness** with a multi-VM distributed fleet, 40+ specialized agents, 1,092+ API routes, complete knowledge graph pipeline, OpenTelemetry tracing, NPU acceleration, TTS voice output, i18n support, and enterprise security. The original 20-phase roadmap is complete. Remaining work is polish (wake word CPU opt) and deferred infrastructure (Docker Compose).
 
 **Current Status**: ✅ **FUNCTIONAL**
 
 **Feature Completeness**: ✅ **~99% Core Features**
 
-**Next Milestone**: Role-based deployment architecture (#926), TTS / voice output loop
+**Next Milestone**: Role-based deployment architecture (#926), i18n completion (#1317), AutoResearch integration (#1440)
 
 ---
 

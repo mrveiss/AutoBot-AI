@@ -331,14 +331,6 @@ import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('CodeGenerationDashboard')
 
-/**
- * Helper to get CSS variable value from the document root.
- * Used for dynamic color access in JavaScript (e.g., for charts).
- * Issue #704: Design token migration helper
- */
-const getCssVar = (varName: string): string => {
-  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
-}
 
 // Types
 interface GenerateRequest {
@@ -591,8 +583,6 @@ onMounted(() => {
   fetchRefactoringTypes()
 })
 
-// Export getCssVar for potential external use (e.g., chart libraries)
-defineExpose({ getCssVar })
 </script>
 
 <style scoped>

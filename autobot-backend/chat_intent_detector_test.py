@@ -434,7 +434,7 @@ class TestSelectContextPrompt:
     # Context Prompt Loading and Combination
     # =============================================================================
 
-    @patch("src.chat_intent_detector.get_prompt")
+    @patch("chat_intent_detector.get_prompt")
     def test_installation_intent_loads_context(self, mock_get_prompt, base_prompt):
         """Installation intent should load and combine context prompt"""
         mock_get_prompt.return_value = "Installation help content"
@@ -447,7 +447,7 @@ class TestSelectContextPrompt:
         assert "CONTEXT-SPECIFIC GUIDANCE" in result
         assert "installation conversation" in result
 
-    @patch("src.chat_intent_detector.get_prompt")
+    @patch("chat_intent_detector.get_prompt")
     def test_architecture_intent_loads_context(self, mock_get_prompt, base_prompt):
         """Architecture intent should load and combine context prompt"""
         mock_get_prompt.return_value = "Architecture explanation content"
@@ -459,7 +459,7 @@ class TestSelectContextPrompt:
         assert "Architecture explanation content" in result
         assert "architecture conversation" in result
 
-    @patch("src.chat_intent_detector.get_prompt")
+    @patch("chat_intent_detector.get_prompt")
     def test_troubleshooting_intent_loads_context(self, mock_get_prompt, base_prompt):
         """Troubleshooting intent should load and combine context prompt"""
         mock_get_prompt.return_value = "Troubleshooting guide content"
@@ -471,7 +471,7 @@ class TestSelectContextPrompt:
         assert "Troubleshooting guide content" in result
         assert "troubleshooting conversation" in result
 
-    @patch("src.chat_intent_detector.get_prompt")
+    @patch("chat_intent_detector.get_prompt")
     def test_api_intent_loads_context(self, mock_get_prompt, base_prompt):
         """API intent should load and combine context prompt"""
         mock_get_prompt.return_value = "API documentation content"
@@ -487,7 +487,7 @@ class TestSelectContextPrompt:
     # Error Handling
     # =============================================================================
 
-    @patch("src.chat_intent_detector.get_prompt")
+    @patch("chat_intent_detector.get_prompt")
     def test_prompt_load_failure_returns_base(self, mock_get_prompt, base_prompt):
         """If context prompt fails to load, should return base prompt"""
         mock_get_prompt.side_effect = FileNotFoundError("Prompt not found")
@@ -496,7 +496,7 @@ class TestSelectContextPrompt:
 
         assert result == base_prompt
 
-    @patch("src.chat_intent_detector.get_prompt")
+    @patch("chat_intent_detector.get_prompt")
     def test_prompt_load_exception_returns_base(self, mock_get_prompt, base_prompt):
         """Any exception during prompt load should return base prompt"""
         mock_get_prompt.side_effect = Exception("Unexpected error")
@@ -509,7 +509,7 @@ class TestSelectContextPrompt:
     # Combined Prompt Structure
     # =============================================================================
 
-    @patch("src.chat_intent_detector.get_prompt")
+    @patch("chat_intent_detector.get_prompt")
     def test_combined_prompt_structure(self, mock_get_prompt, base_prompt):
         """Combined prompt should have proper structure"""
         mock_get_prompt.return_value = "Context content here"

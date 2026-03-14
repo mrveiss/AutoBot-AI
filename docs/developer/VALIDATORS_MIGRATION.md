@@ -42,7 +42,7 @@ We've created a comprehensive validators utility (`validators.py`) that eliminat
 
 ### Example 1: Username Validation (Pydantic)
 
-**BEFORE** (`autobot-user-backend/api/auth.py:26-36` - 11 lines):
+**BEFORE** (`autobot-backend/api/auth.py:26-36` - 11 lines):
 ```python
 @validator("username")
 def validate_username(cls, v):
@@ -70,7 +70,7 @@ def validate_username(cls, v):
 
 ### Example 2: Password Validation
 
-**BEFORE** (autobot-user-backend/api/auth.py:38-44 - 7 lines):
+**BEFORE** (autobot-backend/api/auth.py:38-44 - 7 lines):
 ```python
 @validator("password")
 def validate_password(cls, v):
@@ -94,7 +94,7 @@ def validate_password(cls, v):
 
 ### Example 3: Entity Type Validation
 
-**BEFORE** (`autobot-user-backend/api/memory.py:71-79` - 9 lines):
+**BEFORE** (`autobot-backend/api/memory.py:71-79` - 9 lines):
 ```python
 @validator("entity_type")
 def validate_entity_type(cls, v):
@@ -147,7 +147,7 @@ def check_file_extension(filename: str) -> bool:
 
 ### Example 5: File Size Validation
 
-**BEFORE** (autobot-user-backend/api/files.py:444-448 - 5 lines):
+**BEFORE** (autobot-backend/api/files.py:444-448 - 5 lines):
 ```python
 if len(content) > MAX_FILE_SIZE:
     raise HTTPException(
@@ -287,14 +287,14 @@ password = validate_password(value, min_length=8, max_length=128)
 
 | File | Validators | Est. Lines Saved |
 |------|-----------|------------------|
-| `autobot-user-backend/api/auth.py` | 2 validators | ~15 lines |
-| `autobot-user-backend/api/memory.py` | 2 validators | ~15 lines |
-| `autobot-user-backend/api/conversation_files.py` | 1 validator | ~5 lines |
+| `autobot-backend/api/auth.py` | 2 validators | ~15 lines |
+| `autobot-backend/api/memory.py` | 2 validators | ~15 lines |
+| `autobot-backend/api/conversation_files.py` | 1 validator | ~5 lines |
 
 ### Priority 2 - File Operations
 
-- `autobot-user-backend/api/files.py` - File validation (extension, size, filename)
-- `autobot-user-backend/api/conversation_files.py` - File uploads
+- `autobot-backend/api/files.py` - File validation (extension, size, filename)
+- `autobot-backend/api/conversation_files.py` - File uploads
 
 ### Priority 3 - String Operations
 

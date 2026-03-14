@@ -52,6 +52,9 @@ SUPPORTED_LANGUAGES = {
     "it": "Italian",
     "nl": "Dutch",
     "hi": "Hindi",
+    "he": "Hebrew",
+    "fa": "Persian",
+    "ur": "Urdu",
 }
 
 

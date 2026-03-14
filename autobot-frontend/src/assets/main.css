@@ -45,3 +45,17 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* RTL layout support (#1337) */
+[dir="rtl"] .chat-sidebar {
+  border-right: none;
+  border-left: 1px solid var(--border-color);
+}
+
+[dir="rtl"] pre,
+[dir="rtl"] code,
+[dir="rtl"] .code-block {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: left;
+}

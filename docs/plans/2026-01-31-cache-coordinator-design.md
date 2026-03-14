@@ -323,7 +323,7 @@ git commit -m "feat(cache): implement CacheCoordinator (#ISSUE)"
 **Files:**
 - Modify: `src/memory/cache.py` (LRUCacheManager)
 - Modify: `src/knowledge/embedding_cache.py`
-- Modify: `src/llm_interface_pkg/cache.py`
+- Modify: `autobot-backend/llm_interface_pkg/cache.py`
 - Modify: `src/code_intelligence/shared/ast_cache.py`
 - Modify: `src/code_intelligence/shared/file_cache.py`
 - Modify: `src/chat_history/cache.py`

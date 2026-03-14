@@ -153,7 +153,7 @@ class EncryptionService:
     def rotate_keys(self) -> None
 ```
 
-#### 3. API Endpoints (`autobot-user-backend/api/secrets.py`)
+#### 3. API Endpoints (`autobot-backend/api/secrets.py`)
 ```python
 @router.post("/secrets")
 async def create_secret(request: CreateSecretRequest) -> SecretResponse
@@ -179,7 +179,7 @@ async def get_secret_audit_log(secret_id: str) -> List[AuditLogEntry]
 
 ### Frontend Components
 
-#### 1. Secrets Management Tab (`autobot-user-frontend/src/components/SecretsManager.vue`)
+#### 1. Secrets Management Tab (`autobot-frontend/src/components/SecretsManager.vue`)
 ```vue
 <template>
   <div class="secrets-manager">
@@ -233,7 +233,7 @@ async function handleAddSecretCommand(command, args) {
 }
 ```
 
-#### 3. Secret Picker Component (`autobot-user-frontend/src/components/SecretPicker.vue`)
+#### 3. Secret Picker Component (`autobot-frontend/src/components/SecretPicker.vue`)
 ```vue
 <template>
   <div class="secret-picker">

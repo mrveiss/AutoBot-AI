@@ -66,7 +66,7 @@
         v-if="voiceConversation.currentTranscript.value"
         class="voice-panel__transcript"
       >
-        <i class="fas fa-ellipsis-h animate-pulse mr-1 text-xs"></i>
+        <i class="fas fa-ellipsis-h animate-pulse me-1 text-xs"></i>
         {{ voiceConversation.currentTranscript.value }}
       </div>
     </div>
@@ -76,7 +76,7 @@
       v-if="voiceConversation.errorMessage.value"
       class="voice-panel__error"
     >
-      <i class="fas fa-exclamation-triangle mr-1"></i>
+      <i class="fas fa-exclamation-triangle me-1"></i>
       {{ voiceConversation.errorMessage.value }}
     </div>
 
@@ -86,7 +86,7 @@
       class="voice-panel__cert-warning"
     >
       <p class="font-semibold text-xs">
-        <i class="fas fa-lock-open mr-1"></i>{{ $t('chat.voice.micBlocked') }}
+        <i class="fas fa-lock-open me-1"></i>{{ $t('chat.voice.micBlocked') }}
       </p>
       <p class="text-xs opacity-80">
         {{ $t('chat.voice.certRequiredShort') }}
@@ -115,7 +115,7 @@
           @input="voiceConversation.silenceThreshold.value = Number(($event.target as HTMLInputElement).value)"
           class="voice-panel__slider flex-1"
         />
-        <span class="text-xs text-autobot-text-secondary tabular-nums min-w-[2rem] text-right">
+        <span class="text-xs text-autobot-text-secondary tabular-nums min-w-[2rem] text-end">
           {{ (voiceConversation.silenceThreshold.value / 1000).toFixed(1) }}s
         </span>
       </div>
@@ -142,8 +142,7 @@
             'voice-panel__mic-btn--speaking': voiceConversation.state.value === 'speaking',
           }"
           :disabled="
-            voiceConversation.state.value === 'processing' ||
-            (voiceConversation.state.value === 'speaking' && !isFullDuplex)
+            voiceConversation.state.value === 'processing'
           "
           :aria-label="voiceConversation.stateLabel.value"
         >
@@ -215,7 +214,7 @@ const micIcon = computed(() => {
       return isAutoMode.value ? 'fas fa-microphone' : 'fas fa-stop'
     case 'processing': return 'fas fa-spinner fa-spin'
     case 'speaking':
-      return isFullDuplex.value ? 'fas fa-hand-paper' : 'fas fa-volume-up'
+      return 'fas fa-stop'
     default: return 'fas fa-microphone'
   }
 })
@@ -231,9 +230,7 @@ const micHint = computed(() => {
         ? t('chat.voice.hintTranscribing')
         : t('chat.voice.hintProcessing')
     case 'speaking':
-      return isFullDuplex.value
-        ? t('chat.voice.hintInterrupt')
-        : t('chat.voice.hintRespondingShort')
+      return t('chat.voice.hintInterrupt')
     default:
       return isAutoMode.value
         ? t('chat.voice.hintAutoStart')

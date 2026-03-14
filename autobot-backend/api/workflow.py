@@ -51,9 +51,9 @@ async def _handle_librarian_step(ctx: WorkflowStepContext) -> None:
 
 async def _handle_research_step(ctx: WorkflowStepContext) -> None:
     """Handle research agent step (Issue #336 - extracted handler, Issue #322 - context)."""
-    from agents.research_agent import ResearchAgent, ResearchRequest
+    from agents.web_researcher import ResearchRequest, WebResearcher
 
-    research_agent = ResearchAgent()
+    research_agent = WebResearcher()
     action_lower = ctx.action.lower()
 
     if "research tools" in action_lower:

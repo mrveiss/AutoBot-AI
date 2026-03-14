@@ -108,7 +108,7 @@ ssh autobot-redis
 ./infrastructure/shared/scripts/sync-to-vm.sh all scripts/setup.sh /home/autobot/scripts/
 
 # Sync directory to all VMs
-./infrastructure/shared/scripts/sync-to-vm.sh all autobot-user-backend/utils/ /home/autobot/autobot-user-backend/utils/
+./infrastructure/shared/scripts/sync-to-vm.sh all autobot-backend/utils/ /home/autobot/autobot-backend/utils/
 ```
 
 ### Common Sync Patterns
@@ -137,13 +137,13 @@ ssh autobot-redis
 ```bash
 # Single API file
 ./infrastructure/shared/scripts/sync-to-vm.sh all \
-    autobot-user-autobot-user-backend/api/chat.py \
-    /home/autobot/autobot-user-autobot-user-backend/api/chat.py
+    autobot-user-autobot-backend/api/chat.py \
+    /home/autobot/autobot-user-autobot-backend/api/chat.py
 
 # Entire backend directory
 ./infrastructure/shared/scripts/sync-to-vm.sh all \
-    autobot-user-backend/ \
-    /home/autobot/autobot-user-backend/
+    autobot-backend/ \
+    /home/autobot/autobot-backend/
 ```
 
 **Sync configuration**:
@@ -201,13 +201,13 @@ ssh autobot-redis
 
 ```bash
 # Step 1: Edit locally
-vim /home/kali/Desktop/AutoBot/autobot-user-autobot-user-backend/api/chat.py
+vim /home/kali/Desktop/AutoBot/autobot-user-autobot-backend/api/chat.py
 
 # Step 2: Sync immediately
-./infrastructure/shared/scripts/sync-to-vm.sh all autobot-user-autobot-user-backend/api/chat.py /home/autobot/autobot-user-autobot-user-backend/api/chat.py
+./infrastructure/shared/scripts/sync-to-vm.sh all autobot-user-autobot-backend/api/chat.py /home/autobot/autobot-user-autobot-backend/api/chat.py
 
 # Step 3: Commit changes (version control)
-git add autobot-user-autobot-user-backend/api/chat.py
+git add autobot-user-autobot-backend/api/chat.py
 git commit -m "Update chat API"
 ```
 
@@ -216,7 +216,7 @@ git commit -m "Update chat API"
 ```bash
 # NEVER DO THIS - Direct editing on VM
 ssh autobot@172.16.168.21
-vim /home/autobot/autobot-user-autobot-user-backend/api/chat.py  # PERMANENT WORK LOSS RISK!
+vim /home/autobot/autobot-user-autobot-backend/api/chat.py  # PERMANENT WORK LOSS RISK!
 ```
 
 ### Enforcement
@@ -594,10 +594,10 @@ scripts/start-services.sh start
 # Or: sudo systemctl start autobot-backend
 
 # 2. Make code changes locally
-vim /home/kali/Desktop/AutoBot/autobot-user-backend/api/chat.py
+vim /home/kali/Desktop/AutoBot/autobot-backend/api/chat.py
 
 # 3. Sync changes to VMs (if needed)
-./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/ /opt/autobot/autobot-user-backend/
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/ /opt/autobot/autobot-backend/
 
 # 4. Restart affected services
 scripts/start-services.sh restart backend
@@ -730,8 +730,8 @@ The infrastructure folder uses a per-role organization:
 
 ```text
 infrastructure/
-├── autobot-user-backend/       # User backend infra (docker, tests, config, scripts, templates)
-├── autobot-user-frontend/      # User frontend infra
+├── autobot-backend/       # User backend infra (docker, tests, config, scripts, templates)
+├── autobot-frontend/      # User frontend infra
 ├── autobot-slm-backend/        # SLM backend infra
 ├── autobot-slm-frontend/       # SLM frontend infra
 ├── autobot-npu-worker/         # NPU worker infra
@@ -798,12 +798,12 @@ cd autobot-slm-backend/ansible
 ansible-playbook playbooks/deploy-native-services.yml
 
 # Or manual re-sync (not recommended)
-./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/ /opt/autobot/autobot-user-backend/
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/ /opt/autobot/autobot-backend/
 sudo systemctl restart autobot-backend
 
 # Verify sync
-ssh autobot@172.16.168.20 "md5sum /opt/autobot/autobot-user-backend/api/chat.py"
-md5sum /home/kali/Desktop/AutoBot/autobot-user-backend/api/chat.py
+ssh autobot@172.16.168.20 "md5sum /opt/autobot/autobot-backend/api/chat.py"
+md5sum /home/kali/Desktop/AutoBot/autobot-backend/api/chat.py
 # Hashes should match
 ```
 

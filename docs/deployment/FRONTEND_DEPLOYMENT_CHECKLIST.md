@@ -37,7 +37,7 @@
 
 - [ ] **Build Succeeds Locally**
   ```bash
-  cd autobot-user-frontend
+  cd autobot-frontend
   npm run build
   # Should complete without errors
   ```
@@ -120,7 +120,7 @@
 
 ```bash
 # 1. Build & commit
-cd autobot-user-frontend && npm run build && cd ..
+cd autobot-frontend && npm run build && cd ..
 git add <files> && git commit -m "feat: change" && git push
 
 # 2. Deploy via SLM
@@ -173,10 +173,10 @@ ssh autobot@172.16.168.21 "stat /var/www/autobot-frontend/index.html"
 ssh autobot@172.16.168.21 "node --version"
 
 # Check npm install errors
-ssh autobot@172.16.168.21 "cd /opt/autobot/autobot-user-frontend && npm install"
+ssh autobot@172.16.168.21 "cd /opt/autobot/autobot-frontend && npm install"
 
 # Check build errors
-ssh autobot@172.16.168.21 "cd /opt/autobot/autobot-user-frontend && npm run build"
+ssh autobot@172.16.168.21 "cd /opt/autobot/autobot-frontend && npm run build"
 ```
 
 ### Rollback to Previous Version

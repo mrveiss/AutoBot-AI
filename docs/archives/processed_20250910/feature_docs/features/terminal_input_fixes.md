@@ -14,7 +14,7 @@ Previously, the terminal input was not consistently working during automated tes
 
 ### 1. Enhanced Focus Management
 
-**File**: `autobot-user-frontend/src/components/TerminalWindow.vue`
+**File**: `autobot-frontend/src/components/TerminalWindow.vue`
 
 #### focusInput() Enhancement
 ```javascript
@@ -138,7 +138,7 @@ const focusRestored = await page.evaluate(() => {
 
 ## Files Modified
 
-1. **autobot-user-frontend/src/components/TerminalWindow.vue**
+1. **autobot-frontend/src/components/TerminalWindow.vue**
    - Enhanced `focusInput()` method
    - Improved `handleStatusChange()` for connection events
    - Added testing utility methods

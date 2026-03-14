@@ -385,7 +385,7 @@ setup_slm_backend() {
             aiosqlite \
             pydantic \
             pydantic-settings \
-            python-jose[cryptography] \
+            PyJWT[crypto] \
             passlib[bcrypt] \
             aiofiles \
             ansible-runner \

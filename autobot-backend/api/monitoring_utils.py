@@ -167,45 +167,6 @@ def _analyze_resource_utilization(dashboard: Metadata) -> Dict[str, float]:
     return utilization
 
 
-def _calculate_gpu_efficiency(gpu_metrics) -> float:
-    """Calculate GPU efficiency score"""
-    try:
-        utilization = gpu_metrics.utilization_percent
-        memory_util = gpu_metrics.memory_utilization_percent
-
-        # Efficiency based on balanced utilization
-        efficiency = (utilization + memory_util) / 2
-
-        # Penalize for throttling
-        if gpu_metrics.thermal_throttling:
-            efficiency *= 0.7
-        if gpu_metrics.power_throttling:
-            efficiency *= 0.8
-
-        return round(efficiency, 1)
-
-    except Exception:
-        return 0.0
-
-
-def _calculate_npu_efficiency(npu_metrics) -> float:
-    """Calculate NPU efficiency score"""
-    try:
-        # Base efficiency on acceleration ratio
-        efficiency = min(100, npu_metrics.acceleration_ratio * 20)  # 5x = 100%
-
-        # Adjust for thermal state
-        if npu_metrics.thermal_state == "throttling":
-            efficiency *= 0.7
-        elif npu_metrics.thermal_state == "critical":
-            efficiency *= 0.5
-
-        return round(efficiency, 1)
-
-    except Exception:
-        return 0.0
-
-
 def _convert_metrics_to_csv(data: Metadata) -> str:
     """Convert metrics data to CSV format"""
     try:

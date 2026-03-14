@@ -47,15 +47,15 @@ If this fails, you'll see the exact ImportError with module path.
 ### Step 4: Check for broken symlinks
 
 ```bash
-ls -la /opt/autobot/autobot-user-backend/backend
-ls -la /opt/autobot/autobot-user-backend/autobot_shared
+ls -la /opt/autobot/autobot-backend/backend
+ls -la /opt/autobot/autobot-backend/autobot_shared
 ```
 
 Both should be symlinks pointing to valid targets. If they're plain text files containing a path (WSL2 `core.symlinks=false`), recreate them manually:
 
 ```bash
-cd /opt/autobot/autobot-user-backend
-rm backend && ln -s autobot-user-backend backend 2>/dev/null || ln -s ../autobot-user-backend backend
+cd /opt/autobot/autobot-backend
+rm backend && ln -s autobot-backend backend 2>/dev/null || ln -s ../autobot-backend backend
 rm autobot_shared && ln -s ../autobot-shared autobot_shared
 ```
 
@@ -231,7 +231,7 @@ rm -rf /opt/autobot/venv
 python3 -m venv /opt/autobot/venv
 source /opt/autobot/venv/bin/activate
 pip install --upgrade pip
-pip install -r /opt/autobot/autobot-user-backend/requirements.txt
+pip install -r /opt/autobot/autobot-backend/requirements.txt
 ```
 
 ---
@@ -338,16 +338,16 @@ WSL2 with `core.symlinks=false` stores symlinks as text files containing the tar
 ### Detection
 
 ```bash
-file autobot-user-backend/backend
-# Should show: "symbolic link to ../autobot-user-backend"
+file autobot-backend/backend
+# Should show: "symbolic link to ../autobot-backend"
 # BAD: "ASCII text" (contains path as text)
 ```
 
 ### Fix
 
 ```bash
-cd /home/kali/Desktop/AutoBot/autobot-user-backend
-rm backend && ln -s ../autobot-user-backend backend
+cd /home/kali/Desktop/AutoBot/autobot-backend
+rm backend && ln -s ../autobot-backend backend
 rm autobot_shared && ln -s ../autobot-shared autobot_shared
 ```
 

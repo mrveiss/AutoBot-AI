@@ -92,7 +92,7 @@ wsOn('error', (data) => {
 
 ### Project Structure
 ```
-autobot-user-frontend/
+autobot-frontend/
 ├── src/
 │   ├── components/         # Vue components
 │   ├── composables/        # Composition API logic

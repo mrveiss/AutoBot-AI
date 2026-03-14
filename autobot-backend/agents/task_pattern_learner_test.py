@@ -56,7 +56,7 @@ class TestTaskPatternLearner:
         self, learner, sample_outcomes
     ):
         mock_llm = AsyncMock()
-        mock_llm.chat_completion_async = AsyncMock(
+        mock_llm.chat_completion = AsyncMock(
             return_value=json.dumps(
                 {
                     "best_approach": "use step-by-step",
@@ -83,7 +83,7 @@ class TestTaskPatternLearner:
         self, learner, sample_outcomes
     ):
         mock_llm = AsyncMock()
-        mock_llm.chat_completion_async = AsyncMock(side_effect=Exception("LLM down"))
+        mock_llm.chat_completion = AsyncMock(side_effect=Exception("LLM down"))
         learner._llm = mock_llm
 
         mock_redis = AsyncMock()

@@ -70,7 +70,7 @@ Key packages:
 - asyncpg (0.29+)
 - redis (5.0+)
 - pydantic (2.5+)
-- python-jose[cryptography]
+- PyJWT[crypto]
 - passlib[bcrypt]
 - python-multipart
 - aiohttp
@@ -116,7 +116,7 @@ git
 - Target node for Ansible must support ansible-core 2.17+ modules
 
 ### Python Packages (requirements.txt)
-See `autobot-user-backend/requirements.txt`
+See `autobot-backend/requirements.txt`
 
 Key packages:
 - fastapi (0.104+)
@@ -150,7 +150,7 @@ nodejs (20.x from NodeSource)
 ```
 
 ### Frontend Packages (package.json)
-See `autobot-user-frontend/package.json`
+See `autobot-frontend/package.json`
 
 Key packages:
 - vue (3.4+)
@@ -329,13 +329,13 @@ python3 -m playwright install webkit
 # See autobot-shared/requirements.txt
 redis>=5.0.0
 pydantic>=2.5.0
-python-jose[cryptography]>=3.3.0
+PyJWT[crypto]>=2.8.0
 passlib[bcrypt]>=1.7.4
 ```
 
 ### User Backend
 ```python
-# See autobot-user-backend/requirements.txt
+# See autobot-backend/requirements.txt
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 sqlalchemy>=2.0.0
@@ -361,7 +361,7 @@ sqlalchemy>=2.0.0
 asyncpg>=0.29.0
 redis>=5.0.0
 pydantic>=2.5.0
-python-jose[cryptography]>=3.3.0
+PyJWT[crypto]>=2.8.0
 passlib[bcrypt]>=1.7.4
 python-multipart>=0.0.6
 aiohttp>=3.9.0

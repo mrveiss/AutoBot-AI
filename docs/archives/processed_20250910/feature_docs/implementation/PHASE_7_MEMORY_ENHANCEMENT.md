@@ -105,7 +105,7 @@ markdown_sections (
 )
 ```
 
-### 4. Enhanced Memory API (`autobot-user-backend/api/enhanced_memory.py`)
+### 4. Enhanced Memory API (`autobot-backend/api/enhanced_memory.py`)
 
 **Purpose**: RESTful API endpoints for memory system interaction and management.
 

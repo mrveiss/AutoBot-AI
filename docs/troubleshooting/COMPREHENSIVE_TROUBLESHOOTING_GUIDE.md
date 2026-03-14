@@ -454,7 +454,7 @@ curl -X POST http://127.0.0.1:8001/api/terminal/execute \
   -d '{"command": "echo test", "timeout": 10}'
 
 # 2. Check command whitelist
-grep -A 20 "COMMAND_WHITELIST" autobot-user-backend/utils/command_security.py
+grep -A 20 "COMMAND_WHITELIST" autobot-backend/utils/command_security.py
 
 # 3. Verify sandbox configuration
 ls -la /tmp/autobot/sandbox/
@@ -468,7 +468,7 @@ ls -la /tmp/autobot/sandbox/
 echo "your_command" >> config/allowed_commands.txt
 
 # Or update command security configuration
-# Edit autobot-user-backend/utils/command_security.py and add to COMMAND_WHITELIST
+# Edit autobot-backend/utils/command_security.py and add to COMMAND_WHITELIST
 ```
 
 #### B. Sandbox Permission Issues

@@ -27,14 +27,14 @@ After folder reorganization (#781), many files still used old `from src.*` impor
 
 ```bash
 # Find all stale imports
-grep -r "from src\." autobot-user-backend/ --include="*.py" | wc -l
+grep -r "from src\." autobot-backend/ --include="*.py" | wc -l
 
 # Auto-fix common patterns (backup first!)
-find autobot-user-backend -name "*.py" -type f -exec sed -i 's/from src\./from /g' {} \;
-find autobot-user-backend -name "*.py" -type f -exec sed -i 's/import src\./import /g' {} \;
+find autobot-backend -name "*.py" -type f -exec sed -i 's/from src\./from /g' {} \;
+find autobot-backend -name "*.py" -type f -exec sed -i 's/import src\./import /g' {} \;
 
 # Run tests to verify
-pytest autobot-user-backend/
+pytest autobot-backend/
 ```
 
 ## Detailed Resolution Steps
@@ -43,10 +43,10 @@ pytest autobot-user-backend/
 
 ```bash
 # Search for src. imports
-grep -r "from src\." autobot-user-backend/ --include="*.py" | head -20
+grep -r "from src\." autobot-backend/ --include="*.py" | head -20
 
 # Get file list
-grep -rl "from src\." autobot-user-backend/ --include="*.py" > /tmp/files_to_fix.txt
+grep -rl "from src\." autobot-backend/ --include="*.py" > /tmp/files_to_fix.txt
 
 # Count affected files
 wc -l /tmp/files_to_fix.txt
@@ -76,18 +76,18 @@ Common stale patterns:
 git stash push -m "Before import path fix"
 
 # Fix production code
-find autobot-user-backend/api -name "*.py" -type f -exec sed -i 's/from src\./from /g' {} \;
-find autobot-user-backend/services -name "*.py" -type f -exec sed -i 's/from src\./from /g' {} \;
-find autobot-user-backend/agents -name "*.py" -type f -exec sed -i 's/from src\./from /g' {} \;
+find autobot-backend/api -name "*.py" -type f -exec sed -i 's/from src\./from /g' {} \;
+find autobot-backend/services -name "*.py" -type f -exec sed -i 's/from src\./from /g' {} \;
+find autobot-backend/agents -name "*.py" -type f -exec sed -i 's/from src\./from /g' {} \;
 
 # Fix tests (colocated)
-find autobot-user-backend -name "*_test.py" -type f -exec sed -i 's/from src\./from /g' {} \;
+find autobot-backend -name "*_test.py" -type f -exec sed -i 's/from src\./from /g' {} \;
 
 # Fix shared imports
-find autobot-user-backend -name "*.py" -type f -exec sed -i 's/from src\.utils\./from autobot_shared./g' {} \;
+find autobot-backend -name "*.py" -type f -exec sed -i 's/from src\.utils\./from autobot_shared./g' {} \;
 
 # Verify no stale imports remain
-grep -r "from src\." autobot-user-backend/ --include="*.py" | wc -l
+grep -r "from src\." autobot-backend/ --include="*.py" | wc -l
 # Should be 0
 ```
 
@@ -101,9 +101,9 @@ Some files need manual fixes:
 from src.api import xxx
 
 # Fix depends on context:
-# Option A: Add autobot-user-backend to path
+# Option A: Add autobot-backend to path
 import sys
-sys.path.insert(0, '/opt/autobot/autobot-user-backend')
+sys.path.insert(0, '/opt/autobot/autobot-backend')
 from api import xxx
 
 # Option B: Use absolute imports
@@ -122,14 +122,14 @@ pre-commit run --files $(git diff --name-only --cached)
 # - I001 (import order) - run isort
 
 # Auto-fix import order
-isort autobot-user-backend/
+isort autobot-backend/
 ```
 
 ### Step 6: Run Tests
 
 ```bash
 # Run pytest on all tests
-pytest autobot-user-backend/ -v
+pytest autobot-backend/ -v
 
 # If specific tests fail, check:
 # 1. Colocated test imports
@@ -141,14 +141,14 @@ pytest autobot-user-backend/ -v
 
 ```bash
 # 1. No stale imports remain
-grep -r "from src\." autobot-user-backend/ --include="*.py"
+grep -r "from src\." autobot-backend/ --include="*.py"
 # Expected: (empty)
 
 # 2. All tests pass
-pytest autobot-user-backend/ --tb=short
+pytest autobot-backend/ --tb=short
 
 # 3. Backend starts without import errors
-cd autobot-user-backend
+cd autobot-backend
 python -m uvicorn main:app --reload
 # Should start without ModuleNotFoundError
 
@@ -198,7 +198,7 @@ pre-commit run --all-files
 
 4. **Run import checker** before major refactoring:
    ```bash
-   pylint --disable=all --enable=import-error autobot-user-backend/
+   pylint --disable=all --enable=import-error autobot-backend/
    ```
 
 ## Related Issues

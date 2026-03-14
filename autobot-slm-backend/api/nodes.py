@@ -25,6 +25,8 @@ from models.database import (
     EventType,
     Node,
     NodeCodeVersion,
+    NodeConfig,
+    NodeCredential,
     NodeEvent,
     NodeRole,
     NodeStatus,
@@ -1111,6 +1113,11 @@ async def _cleanup_decommissioned_node(
     await db.execute(
         delete(NodeCodeVersion).where(NodeCodeVersion.node_id == node.node_id)
     )
+    await db.execute(delete(Service).where(Service.node_id == node.node_id))
+    await db.execute(
+        delete(NodeCredential).where(NodeCredential.node_id == node.node_id)
+    )
+    await db.execute(delete(NodeConfig).where(NodeConfig.node_id == node.node_id))
     node.status = NodeStatus.DECOMMISSIONED.value
     node.updated_at = datetime.utcnow()
 
@@ -1180,12 +1187,20 @@ async def decommission_node(
 
     node = await _verify_node_not_manager(db, node_id)
 
-    preflight = await decommission_preflight(node_id, db, current_user)
-    if not preflight["can_proceed"]:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Required roles must be migrated first",
-        )
+    if request.force:
+        preflight: dict = {
+            "can_proceed": True,
+            "must_migrate": [],
+            "should_migrate": [],
+            "safe_to_remove": [],
+        }
+    else:
+        preflight = await decommission_preflight(node_id, db, current_user)
+        if not preflight["can_proceed"]:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Required roles must be migrated first",
+            )
 
     deployment = _create_decommission_deployment(
         node_id,
@@ -1196,19 +1211,24 @@ async def decommission_node(
     db.add(deployment)
     await db.commit()
 
-    ansible_result = await _execute_decommission(
-        db,
-        deployment,
-        node_id,
-        request.backup,
-    )
+    if request.force:
+        ansible_result = {
+            "output": "Force decommission: Ansible playbook skipped (node already removed)"
+        }
+    else:
+        ansible_result = await _execute_decommission(
+            db,
+            deployment,
+            node_id,
+            request.backup,
+        )
     await _cleanup_decommissioned_node(
         db,
         node,
         deployment,
         ansible_result,
     )
-    logger.info("Node decommissioned: %s", node_id)
+    logger.info("Node decommissioned: %s (force=%s)", node_id, request.force)
     await _broadcast_lifecycle_event(
         node_id,
         "node_decommissioned",
@@ -1397,11 +1417,15 @@ async def replace_node(
     return NodeResponse.model_validate(new_node)
 
 
-async def _update_heartbeat_code_status(db: AsyncSession, node: Node) -> str | None:
+async def _update_heartbeat_code_status(
+    db: AsyncSession, node: Node, extra_data: dict | None = None
+) -> str | None:
     """Query latest commit setting and update node.code_status.
 
     Returns the latest_version string or None.
     Helper for node_heartbeat (Issue #1102).
+    Issue #1605: Also checks service health — code_current_service_failed
+    when commit matches but autobot services are failed/crash-looping.
     """
     latest_result = await db.execute(
         select(Setting).where(Setting.key == "slm_agent_latest_commit")
@@ -1413,13 +1437,33 @@ async def _update_heartbeat_code_status(db: AsyncSession, node: Node) -> str | N
     # Do NOT use heartbeat.code_version — agents report stale values (Issue #889).
     if latest_version:
         if node.code_version == latest_version:
-            node.code_status = CodeStatus.UP_TO_DATE.value
+            # Issue #1605: check if autobot services are actually healthy
+            if _has_failed_autobot_service(extra_data):
+                node.code_status = CodeStatus.CODE_CURRENT_SERVICE_FAILED.value
+            else:
+                node.code_status = CodeStatus.UP_TO_DATE.value
         elif node.code_version:
             node.code_status = CodeStatus.OUTDATED.value
         else:
             node.code_status = CodeStatus.UNKNOWN.value
 
     return latest_version
+
+
+def _has_failed_autobot_service(extra_data: dict | None) -> bool:
+    """Check if any autobot-* service is failed or crash-looping.
+
+    Issue #1605: Prevents code_status=up_to_date when service is broken.
+    """
+    if not extra_data:
+        return False
+    for svc in extra_data.get("discovered_services", []):
+        name = svc.get("name", "")
+        if not name.startswith("autobot"):
+            continue
+        if svc.get("status") in ("failed", "crash-loop"):
+            return True
+    return False
 
 
 async def _apply_heartbeat_reports(
@@ -1478,7 +1522,9 @@ async def node_heartbeat(
 
         await _apply_heartbeat_reports(db, node_id, heartbeat, node)
 
-        latest_version = await _update_heartbeat_code_status(db, node)
+        latest_version = await _update_heartbeat_code_status(
+            db, node, heartbeat.extra_data
+        )
         await db.commit()
         await db.refresh(node)
 
@@ -2382,7 +2428,9 @@ async def get_node_service_order(
 # Node SSH Exec endpoint (Issue #933)
 # =============================================================================
 
-_DEFAULT_SSH_KEY = os.environ.get("SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key")
+_DEFAULT_SSH_KEY = os.environ.get(
+    "SLM_SSH_KEY", "/home/autobot/.ssh/autobot_key"  # noqa: ssot-path
+)
 _DEFAULT_SSH_USER = os.environ.get("SLM_SSH_USER", "autobot")
 
 

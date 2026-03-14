@@ -41,10 +41,6 @@ class APIRegistry:
         """Get list of registered router names."""
         return list(self.routers.keys())
 
-    def get_router_count(self) -> int:
-        """Get total number of registered routers."""
-        return len(self.routers)
-
     def get_total_routes(self) -> int:
         """Get total number of routes across all routers."""
         return sum(

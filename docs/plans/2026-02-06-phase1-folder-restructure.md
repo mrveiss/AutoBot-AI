@@ -22,8 +22,8 @@
 
 ```text
 infrastructure/
-├── autobot-user-backend/       # User backend: docker, tests, config, scripts, templates
-├── autobot-user-frontend/      # User frontend infra
+├── autobot-backend/       # User backend: docker, tests, config, scripts, templates
+├── autobot-frontend/      # User frontend infra
 ├── autobot-slm-backend/        # SLM backend infra
 ├── autobot-slm-frontend/       # SLM frontend infra
 ├── autobot-npu-worker/         # NPU worker infra
@@ -45,8 +45,8 @@ infrastructure/
 
 **Files:**
 
-- Create: `autobot-user-backend/`
-- Create: `autobot-user-frontend/`
+- Create: `autobot-backend/`
+- Create: `autobot-frontend/`
 - Create: `autobot-slm-backend/`
 - Create: `autobot-slm-frontend/`
 - Create: `autobot-npu-worker/`
@@ -57,8 +57,8 @@ infrastructure/
 **Step 1: Create all top-level directories**
 
 ```bash
-mkdir -p autobot-user-backend/{api,services,models,migrations,agents,tools,resources/{prompts,templates,content,knowledge},monitoring}
-mkdir -p autobot-user-frontend/{src,public}
+mkdir -p autobot-backend/{api,services,models,migrations,agents,tools,resources/{prompts,templates,content,knowledge},monitoring}
+mkdir -p autobot-frontend/{src,public}
 mkdir -p autobot-slm-backend/{api,services,models,migrations,ansible}
 mkdir -p autobot-slm-frontend/{src,public}
 mkdir -p autobot-npu-worker/{workers,models}
@@ -82,8 +82,8 @@ git add autobot-* infrastructure/
 git commit -m "chore(structure): create new folder structure (#781)
 
 Phase 1, Task 1: Create base directories for reorganization.
-- autobot-user-backend/ for main backend (→ .20)
-- autobot-user-frontend/ for main frontend (→ .20)
+- autobot-backend/ for main backend (→ .20)
+- autobot-frontend/ for main frontend (→ .20)
 - autobot-slm-backend/ for SLM backend (→ .19)
 - autobot-slm-frontend/ for SLM frontend (→ .21)
 - autobot-npu-worker/ for NPU worker (→ .22)
@@ -98,10 +98,10 @@ Phase 1, Task 1: Create base directories for reorganization.
 
 **Files:**
 
-- Copy: `autobot-user-backend/utils/redis_client.py` to `autobot-shared/redis_client.py`
-- Copy: `autobot-user-backend/utils/http_client.py` to `autobot-shared/http_client.py`
-- Copy: `autobot-user-backend/utils/logging_manager.py` to `autobot-shared/logging_manager.py`
-- Copy: `autobot-user-backend/utils/error_boundaries.py` to `autobot-shared/error_boundaries.py`
+- Copy: `autobot-backend/utils/redis_client.py` to `autobot-shared/redis_client.py`
+- Copy: `autobot-backend/utils/http_client.py` to `autobot-shared/http_client.py`
+- Copy: `autobot-backend/utils/logging_manager.py` to `autobot-shared/logging_manager.py`
+- Copy: `autobot-backend/utils/error_boundaries.py` to `autobot-shared/error_boundaries.py`
 - Copy: `src/config/ssot_config.py` to `autobot-shared/ssot_config.py`
 - Create: `autobot-shared/__init__.py`
 - Create: `autobot-shared/requirements.txt`
@@ -110,10 +110,10 @@ Phase 1, Task 1: Create base directories for reorganization.
 **Step 1: Copy shared utility files**
 
 ```bash
-cp autobot-user-backend/utils/redis_client.py autobot-shared/
-cp autobot-user-backend/utils/http_client.py autobot-shared/
-cp autobot-user-backend/utils/logging_manager.py autobot-shared/
-cp autobot-user-backend/utils/error_boundaries.py autobot-shared/
+cp autobot-backend/utils/redis_client.py autobot-shared/
+cp autobot-backend/utils/http_client.py autobot-shared/
+cp autobot-backend/utils/logging_manager.py autobot-shared/
+cp autobot-backend/utils/error_boundaries.py autobot-shared/
 cp src/config/ssot_config.py autobot-shared/
 ```
 
@@ -157,7 +157,7 @@ Shared utilities deployed with each backend component.
 
 This module is included in each backend's deployment:
 
-- autobot-user-backend
+- autobot-backend
 - autobot-slm-backend
 - autobot-npu-worker
 - autobot-browser-worker
@@ -275,21 +275,21 @@ Phase 1, Task 4: Populate autobot-slm-frontend.
 
 ---
 
-## Task 5: Copy User Frontend to autobot-user-frontend/
+## Task 5: Copy User Frontend to autobot-frontend/
 
 **Files:**
 
-- Copy: `autobot-user-frontend/*` to `autobot-user-frontend/`
+- Copy: `autobot-frontend/*` to `autobot-frontend/`
 
 **Step 1: Copy autobot-vue contents**
 
 ```bash
-rsync -av --exclude='node_modules' --exclude='dist' --exclude='.env' --exclude='logs/' --exclude='test-results/' autobot-user-frontend/ autobot-user-frontend/
+rsync -av --exclude='node_modules' --exclude='dist' --exclude='.env' --exclude='logs/' --exclude='test-results/' autobot-frontend/ autobot-frontend/
 ```
 
 **Step 2: Update README with deployment target**
 
-Create/update `autobot-user-frontend/README.md`:
+Create/update `autobot-frontend/README.md`:
 
 ```markdown
 # AutoBot User Frontend
@@ -307,76 +307,76 @@ npm run dev
 
 Synced to main server via:
 
-./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-frontend/
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-frontend/
 ```
 
 **Step 3: Commit**
 
 ```bash
-git add autobot-user-frontend/
-git commit -m "chore(user-frontend): copy user frontend to autobot-user-frontend/ (#781)
+git add autobot-frontend/
+git commit -m "chore(user-frontend): copy user frontend to autobot-frontend/ (#781)
 
-Phase 1, Task 5: Populate autobot-user-frontend.
-- Copied autobot-user-frontend/ contents
+Phase 1, Task 5: Populate autobot-frontend.
+- Copied autobot-frontend/ contents
 - Updated README with deployment target"
 ```
 
 ---
 
-## Task 6: Copy User Backend to autobot-user-backend/
+## Task 6: Copy User Backend to autobot-backend/
 
 **Files:**
 
-- Copy: `src/*` to `autobot-user-backend/` (reorganized)
-- Copy: `backend/*` to `autobot-user-backend/` (merged)
-- Copy: `prompts/` to `autobot-user-backend/resources/prompts/`
-- Copy: `templates/` to `autobot-user-backend/resources/templates/`
-- Copy: `content/` to `autobot-user-backend/resources/content/`
-- Copy: `system_knowledge/` to `autobot-user-backend/resources/knowledge/`
-- Copy: `migrations/` to `autobot-user-backend/migrations/`
-- Copy: `monitoring/` to `autobot-user-backend/monitoring/`
+- Copy: `src/*` to `autobot-backend/` (reorganized)
+- Copy: `backend/*` to `autobot-backend/` (merged)
+- Copy: `prompts/` to `autobot-backend/resources/prompts/`
+- Copy: `templates/` to `autobot-backend/resources/templates/`
+- Copy: `content/` to `autobot-backend/resources/content/`
+- Copy: `system_knowledge/` to `autobot-backend/resources/knowledge/`
+- Copy: `migrations/` to `autobot-backend/migrations/`
+- Copy: `monitoring/` to `autobot-backend/monitoring/`
 
 **Step 1: Copy src/ contents (main code)**
 
 ```bash
-rsync -av --exclude='__pycache__' --exclude='*.pyc' --exclude='config/ssot_config.py' --exclude='utils/redis_client.py' --exclude='utils/http_client.py' --exclude='utils/logging_manager.py' --exclude='utils/error_boundaries.py' src/ autobot-user-backend/
+rsync -av --exclude='__pycache__' --exclude='*.pyc' --exclude='config/ssot_config.py' --exclude='utils/redis_client.py' --exclude='utils/http_client.py' --exclude='utils/logging_manager.py' --exclude='utils/error_boundaries.py' src/ autobot-backend/
 ```
 
 **Step 2: Copy backend/ contents (API layer)**
 
 ```bash
-rsync -av --exclude='__pycache__' --exclude='*.pyc' --exclude='tests/' autobot-user-backend/api/ autobot-user-autobot-user-backend/api/
-rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/services/ autobot-user-backend/services/
-rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/models/ autobot-user-backend/models/
-rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/middleware/ autobot-user-backend/middleware/
-rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/schemas/ autobot-user-backend/schemas/
-rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/security/ autobot-user-backend/security/
-rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/initialization/ autobot-user-backend/initialization/
-cp backend/main.py autobot-user-backend/
-cp backend/app_factory.py autobot-user-backend/
-cp backend/dependencies.py autobot-user-backend/
-cp backend/*.py autobot-user-backend/ 2>/dev/null || true
+rsync -av --exclude='__pycache__' --exclude='*.pyc' --exclude='tests/' autobot-backend/api/ autobot-user-autobot-backend/api/
+rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/services/ autobot-backend/services/
+rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/models/ autobot-backend/models/
+rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/middleware/ autobot-backend/middleware/
+rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/schemas/ autobot-backend/schemas/
+rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/security/ autobot-backend/security/
+rsync -av --exclude='__pycache__' --exclude='*.pyc' backend/initialization/ autobot-backend/initialization/
+cp backend/main.py autobot-backend/
+cp backend/app_factory.py autobot-backend/
+cp backend/dependencies.py autobot-backend/
+cp backend/*.py autobot-backend/ 2>/dev/null || true
 ```
 
 **Step 3: Copy resources**
 
 ```bash
-rsync -av prompts/ autobot-user-backend/resources/prompts/
-rsync -av templates/ autobot-user-backend/resources/templates/
-rsync -av content/ autobot-user-backend/resources/content/
-rsync -av system_knowledge/ autobot-user-backend/resources/knowledge/
+rsync -av prompts/ autobot-backend/resources/prompts/
+rsync -av templates/ autobot-backend/resources/templates/
+rsync -av content/ autobot-backend/resources/content/
+rsync -av system_knowledge/ autobot-backend/resources/knowledge/
 ```
 
 **Step 4: Copy migrations and monitoring**
 
 ```bash
-rsync -av --exclude='__pycache__' migrations/ autobot-user-backend/migrations/
-rsync -av monitoring/ autobot-user-backend/monitoring/
+rsync -av --exclude='__pycache__' migrations/ autobot-backend/migrations/
+rsync -av monitoring/ autobot-backend/monitoring/
 ```
 
 **Step 5: Create requirements.txt**
 
-Create `autobot-user-backend/requirements.txt`:
+Create `autobot-backend/requirements.txt`:
 
 ```text
 -e ../autobot-shared
@@ -403,7 +403,7 @@ sentence-transformers>=2.2.0
 
 **Step 6: Create README.md**
 
-Create `autobot-user-backend/README.md`:
+Create `autobot-backend/README.md`:
 
 ```markdown
 # AutoBot User Backend
@@ -431,16 +431,16 @@ uvicorn main:app --reload --port 8001
 
 ## Deployment
 
-./infrastructure/shared/scripts/sync-to-vm.sh main autobot-user-backend/
+./infrastructure/shared/scripts/sync-to-vm.sh main autobot-backend/
 ```
 
 **Step 7: Commit**
 
 ```bash
-git add autobot-user-backend/
-git commit -m "chore(user-backend): copy user backend to autobot-user-backend/ (#781)
+git add autobot-backend/
+git commit -m "chore(user-backend): copy user backend to autobot-backend/ (#781)
 
-Phase 1, Task 6: Populate autobot-user-backend.
+Phase 1, Task 6: Populate autobot-backend.
 - Merged src/ and backend/ into unified structure
 - Moved prompts/, templates/, content/ to resources/
 - Added requirements.txt and README.md"
@@ -461,7 +461,7 @@ Phase 1, Task 6: Populate autobot-user-backend.
 - Copy: `certs/` to `infrastructure/certs/`
 - Copy: `tests/` to `infrastructure/tests/`
 - Copy: `mcp-servers/` to `infrastructure/mcp/servers/`
-- Copy: `mcp-tools/` to `infrastructure/mcp/tools/`
+- Copy: `autobot-backend/api/*_mcp.py` to `infrastructure/mcp/tools/`
 - Copy: `novnc/` to `infrastructure/novnc/`
 - Copy: `analysis/`, `code-analysis-suite/`, `reports/` to `infrastructure/analysis/`
 - Move: `Dockerfile`, `docker-compose.yml` to `infrastructure/docker/`
@@ -470,8 +470,8 @@ Phase 1, Task 6: Populate autobot-user-backend.
 
 ```text
 infrastructure/
-├── autobot-user-backend/
-├── autobot-user-frontend/
+├── autobot-backend/
+├── autobot-frontend/
 ├── autobot-slm-backend/
 ├── autobot-slm-frontend/
 ├── autobot-npu-worker/
@@ -513,7 +513,7 @@ Create `autobot-npu-worker/main.py`:
 Deploys to: 172.16.168.22 (NPU VM)
 
 This is a stub for Phase 1. NPU-specific code will be extracted
-from autobot-user-backend in a future phase.
+from autobot-backend in a future phase.
 """
 
 import logging
@@ -573,7 +573,7 @@ Create `autobot-browser-worker/main.py`:
 Deploys to: 172.16.168.25 (Browser VM)
 
 This is a stub for Phase 1. Browser-specific code will be extracted
-from autobot-user-backend in a future phase.
+from autobot-backend in a future phase.
 """
 
 import logging
@@ -646,8 +646,8 @@ Expected: All 8 directories with contents.
 
 ```bash
 echo "=== File counts ==="
-echo "autobot-user-backend: $(find autobot-user-backend -type f | wc -l) files"
-echo "autobot-user-frontend: $(find autobot-user-frontend -type f | wc -l) files"
+echo "autobot-backend: $(find autobot-backend -type f | wc -l) files"
+echo "autobot-frontend: $(find autobot-frontend -type f | wc -l) files"
 echo "autobot-slm-backend: $(find autobot-slm-backend -type f | wc -l) files"
 echo "autobot-slm-frontend: $(find autobot-slm-frontend -type f | wc -l) files"
 echo "autobot-npu-worker: $(find autobot-npu-worker -type f | wc -l) files"
@@ -660,7 +660,7 @@ echo "infrastructure: $(find infrastructure -type f | wc -l) files"
 
 ```bash
 echo "=== Original directories still exist ==="
-ls -d src/ backend/ slm-server/ slm-admin/ autobot-user-frontend/ scripts/ docker/ tests/ 2>/dev/null && echo "All original directories intact"
+ls -d src/ backend/ slm-server/ slm-admin/ autobot-frontend/ scripts/ docker/ tests/ 2>/dev/null && echo "All original directories intact"
 ```
 
 **Step 4: Update GitHub issue with progress**
@@ -672,8 +672,8 @@ Add comment to issue #781:
 
 Created new folder structure:
 
-- [x] `autobot-user-backend/` - Main backend code
-- [x] `autobot-user-frontend/` - Main Vue frontend
+- [x] `autobot-backend/` - Main backend code
+- [x] `autobot-frontend/` - Main Vue frontend
 - [x] `autobot-slm-backend/` - SLM backend + ansible
 - [x] `autobot-slm-frontend/` - SLM admin dashboard
 - [x] `autobot-npu-worker/` - NPU worker stub

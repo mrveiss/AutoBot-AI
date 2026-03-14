@@ -76,7 +76,7 @@ class TaskRetryStrategy:
             prompt = self._build_retry_prompt(
                 task_type, goal, original_strategy, failure_reason, previous_score
             )
-            response = await llm.chat_completion_async(
+            response = await llm.chat_completion(
                 messages=[
                     {"role": "system", "content": self._system_prompt()},
                     {"role": "user", "content": prompt},

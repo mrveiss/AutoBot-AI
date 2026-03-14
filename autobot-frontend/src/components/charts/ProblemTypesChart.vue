@@ -23,6 +23,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
 import type { ApexOptions } from 'apexcharts'
+import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()
 
@@ -91,15 +92,6 @@ const chartOptions = computed<ApexOptions>(() => ({
     }
   ]
 }))
-
-/**
- * Get CSS variable value from the document
- * Issue #704: Use design tokens for theming
- */
-function getCssVar(name: string, fallback: string): string {
-  if (typeof document === 'undefined') return fallback
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
-}
 
 // Get colors based on problem types
 // Issue #704: Using design tokens with fallbacks for SSR compatibility

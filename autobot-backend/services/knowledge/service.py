@@ -171,7 +171,7 @@ class ChatKnowledgeService:
         self,
         query: str,
         top_k: int = 5,
-        score_threshold: float = 0.7,
+        score_threshold: float = 0.3,
         categories: Optional[List[str]] = None,
     ) -> Tuple[str, List[Dict]]:
         """
@@ -195,7 +195,7 @@ class ChatKnowledgeService:
             context, citations = await service.retrieve_relevant_knowledge(
                 "How do I configure Redis?",
                 top_k=5,
-                score_threshold=0.7,
+                score_threshold=0.3,
                 categories=["system_knowledge"]
             )
         """
@@ -447,7 +447,7 @@ class ChatKnowledgeService:
         self,
         query: str,
         top_k: int = 5,
-        score_threshold: float = 0.7,
+        score_threshold: float = 0.3,
         force_retrieval: bool = False,
         categories: Optional[List[str]] = None,
         enable_smart_categories: bool = True,
@@ -597,7 +597,7 @@ class ChatKnowledgeService:
         query: str,
         conversation_history: List[Dict[str, str]],
         top_k: int = 5,
-        score_threshold: float = 0.7,
+        score_threshold: float = 0.3,
         force_retrieval: bool = False,
         categories: Optional[List[str]] = None,
         enable_smart_categories: bool = True,
@@ -772,7 +772,7 @@ class ChatKnowledgeService:
         query: str,
         top_k: int = 5,
         doc_results: int = 3,
-        score_threshold: float = 0.7,
+        score_threshold: float = 0.3,
         doc_threshold: float = 0.6,
         categories: Optional[List[str]] = None,
     ) -> Tuple[str, List[Dict], List[Dict[str, Any]]]:

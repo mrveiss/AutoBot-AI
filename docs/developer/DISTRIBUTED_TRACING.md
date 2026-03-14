@@ -84,8 +84,8 @@ The sampling strategy uses `ParentBasedTraceIdRatio`:
 
 | Component | Module | Span Names | Attributes |
 |-----------|--------|------------|------------|
-| Ollama LLM | `src/llm_interface_pkg/providers/ollama.py` | `llm.inference` | `llm.model`, `llm.provider`, `llm.duration_ms` |
-| OpenAI LLM | `src/llm_interface_pkg/providers/openai_provider.py` | `llm.inference` | `llm.model`, `llm.prompt_tokens`, `llm.total_tokens` |
+| Ollama LLM | `autobot-backend/llm_interface_pkg/providers/ollama.py` | `llm.inference` | `llm.model`, `llm.provider`, `llm.duration_ms` |
+| OpenAI LLM | `autobot-backend/llm_interface_pkg/providers/openai_provider.py` | `llm.inference` | `llm.model`, `llm.prompt_tokens`, `llm.total_tokens` |
 | SSH/PKI | `src/pki/distributor.py` | `ssh.distribute_certificates` | `ssh.target_vm`, `ssh.files_copied` |
 
 ## Span Conventions
@@ -301,7 +301,7 @@ opentelemetry-propagator-b3>=1.34.0
 - `backend/middleware/tracing_middleware.py` - Request tracing middleware
 - `backend/initialization/background_tasks.py` - Tracing initialization
 - `src/utils/traced_http_client.py` - HTTP client with trace propagation
-- `src/llm_interface_pkg/providers/ollama.py` - LLM tracing spans
+- `autobot-backend/llm_interface_pkg/providers/ollama.py` - LLM tracing spans
 - `src/pki/distributor.py` - SSH/PKI tracing spans
 
 ## References

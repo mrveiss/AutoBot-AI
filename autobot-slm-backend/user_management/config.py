@@ -4,7 +4,7 @@
 """
 Dual Database Configuration for SLM User Management
 
-Two PostgreSQL databases, both colocated on the SLM server (172.16.168.19):
+Two PostgreSQL databases, both colocated on the SLM server:
 1. slm_users - SLM admin users
 2. autobot_users - AutoBot application users
 

@@ -116,7 +116,7 @@
                 v-if="voiceConversation.currentTranscript.value"
                 class="voice-overlay__live-transcript"
               >
-                <i class="fas fa-ellipsis-h animate-pulse mr-2"></i>
+                <i class="fas fa-ellipsis-h animate-pulse me-2"></i>
                 {{ voiceConversation.currentTranscript.value }}
               </div>
             </Transition>
@@ -128,7 +128,7 @@
               v-if="voiceConversation.errorMessage.value"
               class="voice-overlay__error"
             >
-              <i class="fas fa-exclamation-triangle mr-2"></i>
+              <i class="fas fa-exclamation-triangle me-2"></i>
               {{ voiceConversation.errorMessage.value }}
             </div>
           </Transition>
@@ -141,7 +141,7 @@
               class="voice-overlay__cert-warning"
             >
               <p class="voice-overlay__cert-warning-title">
-                <i class="fas fa-lock-open mr-2"></i>{{ $t('chat.voice.micBlocked') }}
+                <i class="fas fa-lock-open me-2"></i>{{ $t('chat.voice.micBlocked') }}
               </p>
               <p class="voice-overlay__cert-warning-body">
                 {{ $t('chat.voice.certRequired') }}
@@ -155,7 +155,7 @@
                 </li>
               </ol>
               <p class="voice-overlay__cert-warning-fallback">
-                <i class="fas fa-info-circle mr-1"></i>
+                <i class="fas fa-info-circle me-1"></i>
                 {{ $t('chat.voice.walkieTalkieFallback') }}
               </p>
             </div>
@@ -219,9 +219,7 @@
                     voiceConversation.state.value === 'speaking',
                 }"
                 :disabled="
-                  voiceConversation.state.value === 'processing' ||
-                  (voiceConversation.state.value === 'speaking'
-                    && !isFullDuplex)
+                  voiceConversation.state.value === 'processing'
                 "
                 :aria-label="voiceConversation.stateLabel.value"
               >
@@ -265,7 +263,7 @@ const micIcon = computed(() => {
       return isAutoMode.value ? 'fas fa-microphone' : 'fas fa-stop'
     case 'processing': return 'fas fa-spinner fa-spin'
     case 'speaking':
-      return isFullDuplex.value ? 'fas fa-hand-paper' : 'fas fa-volume-up'
+      return 'fas fa-stop'
     default: return 'fas fa-microphone'
   }
 })
@@ -298,9 +296,7 @@ const micHint = computed(() => {
         ? t('chat.voice.hintTranscribing')
         : t('chat.voice.hintWaitingResponse')
     case 'speaking':
-      return isFullDuplex.value
-        ? t('chat.voice.hintInterrupt')
-        : t('chat.voice.hintResponding')
+      return t('chat.voice.hintInterrupt')
     default:
       return isAutoMode.value
         ? t('chat.voice.hintAutoStart')

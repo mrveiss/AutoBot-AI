@@ -1,0 +1,6 @@
+# Observability, logging, and CLI utilities
+prometheus-client==0.20.0
+structlog==25.4.0
+rich==14.2.0
+tqdm==4.67.1
+python-json-logger==3.3.0

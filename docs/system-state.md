@@ -157,9 +157,9 @@ API Base:  http://172.16.168.19:8000/api
 **Files Created/Modified:**
 - `src/monitoring/metrics/performance.py` - New PerformanceMetricsRecorder
 - `src/monitoring/prometheus_metrics.py` - Added performance delegation methods
-- `autobot-user-backend/utils/performance_monitoring/monitor.py` - Added Prometheus integration
+- `autobot-backend/utils/performance_monitoring/monitor.py` - Added Prometheus integration
 - `config/grafana/dashboards/autobot-performance.json` - New dashboard
-- `autobot-user-frontend/src/composables/usePrometheusMetrics.ts` - Extended types
+- `autobot-frontend/src/composables/usePrometheusMetrics.ts` - Extended types
 
 **Legacy Code Deprecated:**
 - `/monitoring/` directory - Scheduled for removal in v3.0
@@ -231,7 +231,7 @@ Navigate: AutoBot UI → Monitoring → Dashboards
 
 **Files Fixed:**
 
-1. **ConsolidatedTerminalManager** (`autobot-user-backend/api/terminal.py:1155-1355`)
+1. **ConsolidatedTerminalManager** (`autobot-backend/api/terminal.py:1155-1355`)
    - Added `asyncio.Lock()` for `session_configs`, `active_connections`, `session_stats`
    - Protected: `send_input()`, `get_terminal_stats()`, dictionary operations
    ```python
@@ -273,7 +273,7 @@ Navigate: AutoBot UI → Monitoring → Dashboards
    - Protected: session creation, cleanup, retrieval
    - Prevents session state inconsistencies
 
-6. **CommandApprovalManager** (`autobot-user-backend/api/terminal.py:1-152`)
+6. **CommandApprovalManager** (`autobot-backend/api/terminal.py:1-152`)
    - Added per-session locks for approval operations
    - Prevents duplicate command execution on concurrent approval requests
    ```python
@@ -371,17 +371,17 @@ Navigate: AutoBot UI → Monitoring → Dashboards
    - Violated user requirement: "commands run once"
    - Impact: Resource waste, dangerous side effects for destructive commands
 
-2. **Session Auto-Recreation Failure** (`autobot-user-backend/tools/terminal_tool.py`)
+2. **Session Auto-Recreation Failure** (`autobot-backend/tools/terminal_tool.py`)
    - Sessions not checking if PTY is alive before reuse
    - Dead sessions from backend restart caused "No active terminal session" errors
    - No database fallback for session mapping restoration
 
-3. **Terminal Mounting Race** (`autobot-user-frontend/src/components/chat/ChatTabContent.vue`)
+3. **Terminal Mounting Race** (`autobot-frontend/src/components/chat/ChatTabContent.vue`)
    - Terminal only mounted when switching to terminal tab
    - Commands executed before WebSocket connected
    - Result: Command output lost permanently
 
-4. **Terminal Sizing Issue** (`autobot-user-frontend/src/components/terminal/BaseXTerminal.vue`)
+4. **Terminal Sizing Issue** (`autobot-frontend/src/components/terminal/BaseXTerminal.vue`)
    - Terminal rendered as 87x87 when tab not visible
    - No resize detection on tab switch
 
@@ -406,7 +406,7 @@ Navigate: AutoBot UI → Monitoring → Dashboards
 - **Benefits:** Commands execute exactly once, output still displays properly
 
 **2. Session Auto-Recreation** (Commits: `08c39b2`)
-- **Files:** `autobot-user-backend/tools/terminal_tool.py`
+- **Files:** `autobot-backend/tools/terminal_tool.py`
 - **Reusable Functions Added:**
   - `_restore_session_mapping_from_db()` - Restore session from database
   - `_restore_terminal_history()` - Replay command history to terminal
@@ -414,7 +414,7 @@ Navigate: AutoBot UI → Monitoring → Dashboards
 - **Benefits:** Sessions survive restarts, seamless recovery
 
 **3. Terminal Mounting Fix** (Commits: `ed85a8c`)
-- **Files:** `autobot-user-frontend/src/components/chat/ChatTabContent.vue`
+- **Files:** `autobot-frontend/src/components/chat/ChatTabContent.vue`
 - **Changes:**
   ```typescript
   // Mount terminal immediately when session exists
@@ -427,7 +427,7 @@ Navigate: AutoBot UI → Monitoring → Dashboards
 - **Benefits:** Terminal WebSocket ready before commands execute
 
 **4. Terminal Sizing Fix** (Commits: `ed85a8c`)
-- **Files:** `autobot-user-frontend/src/components/terminal/BaseXTerminal.vue`
+- **Files:** `autobot-frontend/src/components/terminal/BaseXTerminal.vue`
 - **Changes:** IntersectionObserver to detect visibility and refit
 - **Benefits:** Proper terminal dimensions on all tab switches
 
@@ -454,7 +454,7 @@ Navigate: AutoBot UI → Monitoring → Dashboards
 - Ensures reusable function extraction (no inline/embedded code)
 
 **9. UTF-8 Enforcement** (Commits: `8ac50ac`)
-- **New Utilities:** `autobot-user-backend/utils/encoding_utils.py`
+- **New Utilities:** `autobot-backend/utils/encoding_utils.py`
   - `async_read_utf8_file()`, `async_write_utf8_file()`
   - `json_dumps_utf8()`, `strip_ansi_codes()`
 - **Documentation:** `docs/developer/UTF8_ENFORCEMENT.md`
@@ -558,7 +558,7 @@ async def search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
 
 **Problem:**
 - Multiple files calling non-existent `get_distributed_services_config()` method
-- Errors in: `backend/services/ai_stack_client.py`, `autobot-user-backend/api/services.py`
+- Errors in: `backend/services/ai_stack_client.py`, `autobot-backend/api/services.py`
 - Warning: `'UnifiedConfigManager' object has no attribute 'get_distributed_services_config'`
 
 **Fix Applied:** `/home/kali/Desktop/AutoBot/src/unified_config_manager.py` (Lines 652-677)
@@ -584,7 +584,7 @@ def get_distributed_services_config(self) -> Dict[str, Any]:
 
 **3. VM Status Endpoint**
 
-**Fix Applied:** `/home/kali/Desktop/AutoBot/autobot-user-backend/api/services.py` (Lines 239-298)
+**Fix Applied:** `/home/kali/Desktop/AutoBot/autobot-backend/api/services.py` (Lines 239-298)
 - Replaced config method calls with NetworkConstants
 - Returns VM status for all 5 infrastructure VMs (frontend, npu-worker, redis, ai-stack, browser)
 
@@ -637,7 +637,7 @@ def get_distributed_services_config(self) -> Dict[str, Any]:
 - Errors: `TypeError: response.json is not a function` throughout frontend
 - Every API call failing with this error
 
-**Root Cause:** `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/services/api.ts:21-38`
+**Root Cause:** `/home/kali/Desktop/AutoBot/autobot-frontend/src/services/api.ts:21-38`
 - `ApiClient.get/post/put/delete()` already return parsed JSON (confirmed in `ApiClient.js:243`)
 - api.ts was calling `.json()` again on already-parsed JSON objects
 - Can't call `.json()` method on plain JavaScript objects
@@ -657,7 +657,7 @@ async get<T>(endpoint: string): Promise<T> {
 ```
 
 **Files Fixed:**
-- `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/services/api.ts` (Lines 21-38)
+- `/home/kali/Desktop/AutoBot/autobot-frontend/src/services/api.ts` (Lines 21-38)
 
 ---
 
@@ -669,8 +669,8 @@ async get<T>(endpoint: string): Promise<T> {
 - Components falling back to stub methods
 
 **Root Cause:** **Vue 3 composable lifecycle violation**
-- `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/models/controllers/KnowledgeController.ts:8-9`
-- `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/models/controllers/ChatController.ts:8`
+- `/home/kali/Desktop/AutoBot/autobot-frontend/src/models/controllers/KnowledgeController.ts:8-9`
+- `/home/kali/Desktop/AutoBot/autobot-frontend/src/models/controllers/ChatController.ts:8`
 - Controllers called `useKnowledgeStore()` and `useAppStore()` during class construction
 - Singletons created at module load: `const knowledgeController = reactive(new KnowledgeController())`
 - **Vue composables can ONLY be called inside setup() or component lifecycle**
@@ -706,8 +706,8 @@ export class KnowledgeController {
 ```
 
 **Files Fixed:**
-- `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/models/controllers/KnowledgeController.ts` (Lines 8-25)
-- `/home/kali/Desktop/AutoBot/autobot-user-frontend/src/models/controllers/ChatController.ts` (Lines 8-37)
+- `/home/kali/Desktop/AutoBot/autobot-frontend/src/models/controllers/KnowledgeController.ts` (Lines 8-25)
+- `/home/kali/Desktop/AutoBot/autobot-frontend/src/models/controllers/ChatController.ts` (Lines 8-37)
 
 **Synced to Frontend VM:**
 - `api.ts`
@@ -729,7 +729,7 @@ export class KnowledgeController {
 
 **Implementation:**
 
-1. **Created OS Detection Module** (`autobot-user-backend/utils/system_context.py`):
+1. **Created OS Detection Module** (`autobot-backend/utils/system_context.py`):
    - `get_system_context()` - Detects machine ID, IP, OS name/version, architecture
    - `generate_unique_key()` - Creates deduplication keys: `machine_id:os_name:command:section`
    - `get_compatible_os_list()` - Maps OS families (Kali → Debian, Ubuntu)
@@ -802,7 +802,7 @@ export class KnowledgeController {
 
 **Problem:** Frontend showing "Error: Vectorization failed: undefined" for 37+ documents
 
-**Root Cause:** API contract mismatch in `autobot-user-frontend/src/composables/useKnowledgeVectorization.ts`:
+**Root Cause:** API contract mismatch in `autobot-frontend/src/composables/useKnowledgeVectorization.ts`:
 - Code expected Fetch Response object with `.ok` property
 - `ApiClient.js` returns parsed JSON: `{status: "success", job_id: "..."}`
 - Accessing `.ok` and `.statusText` on JSON → `undefined`
@@ -832,7 +832,7 @@ if (data.status !== 'success') {
 
 **Problem:** Redis `scan()` returning keys as bytes, causing "a bytes-like object is required, not 'str'" error
 
-**Fix:** Added byte-to-string decoding in `/autobot-user-backend/api/knowledge.py`:
+**Fix:** Added byte-to-string decoding in `/autobot-backend/api/knowledge.py`:
 - `/api/knowledge_base/deduplicate` endpoint (line 3235)
 - `/api/knowledge_base/orphans` endpoint (line 3356)
 
@@ -880,10 +880,10 @@ if isinstance(fact_key, bytes):
 **Solution**: Integrated `distributed_service_discovery.py` into 4 backend modules with fallback mechanisms:
 
 **Files Modified**:
-1. `autobot-user-backend/utils/distributed_service_discovery.py` - Added synchronous helper functions
-2. `autobot-user-backend/api/cache.py` - Service discovery with config fallback
-3. `autobot-user-backend/api/infrastructure_monitor.py` - Direct IP addressing
-4. `autobot-user-backend/api/codebase_analytics.py` - Multi-host fallback (Redis VM → localhost)
+1. `autobot-backend/utils/distributed_service_discovery.py` - Added synchronous helper functions
+2. `autobot-backend/api/cache.py` - Service discovery with config fallback
+3. `autobot-backend/api/infrastructure_monitor.py` - Direct IP addressing
+4. `autobot-backend/api/codebase_analytics.py` - Multi-host fallback (Redis VM → localhost)
 5. `src/redis_pool_manager.py` - Core connection pool integration
 
 **Performance Results**:
@@ -1116,7 +1116,7 @@ sudo systemctl start autobot-celery
 **Solution**: Added tf-keras compatibility environment variables across all execution contexts:
 
 **Files Updated**:
-- `autobot-user-backend/utils/semantic_chunker.py` - Added env vars at module level
+- `autobot-backend/utils/semantic_chunker.py` - Added env vars at module level
 - `setup.sh` - Added to standardized setup script
 - `.env` and `.env.localhost` - Added to environment files
 - Backend systemd service - Loads environment variables
@@ -1141,7 +1141,7 @@ KERAS_BACKEND=tensorflow
 **Root Cause**: `/api/knowledge_base/stats/basic` endpoint was hardcoded to return placeholder data instead of querying actual knowledge base.
 
 **Solution**:
-- Updated endpoint in `autobot-user-backend/api/knowledge.py` to call `knowledge_base.get_stats()`
+- Updated endpoint in `autobot-backend/api/knowledge.py` to call `knowledge_base.get_stats()`
 - Mapped backend field names to frontend expected format
 - Added proper error handling with fallback responses
 
@@ -1162,7 +1162,7 @@ KERAS_BACKEND=tensorflow
 4. **Backend Support** - `GET /api/knowledge_base/category/{category_path}/documents` endpoint
 5. **Document Content API** - `POST /api/knowledge_base/document/content` for full text
 
-**Frontend Updates** (`autobot-user-frontend/src/components/knowledge/KnowledgeCategories.vue`):
+**Frontend Updates** (`autobot-frontend/src/components/knowledge/KnowledgeCategories.vue`):
 - Added category document browsing functionality
 - Fixed duplicate variable declaration error
 - Implemented responsive modal design with document cards
@@ -1230,7 +1230,7 @@ Implemented complete chat workflow redesign per user specifications:
    - Help documentation retrieval
    - Command extraction from natural language
 
-3. **Chat Endpoint Integration** (`autobot-user-backend/api/chat.py`)
+3. **Chat Endpoint Integration** (`autobot-backend/api/chat.py`)
    - Updated `/chats/{chat_id}/message` to use new workflow
    - Added aggressive timeouts to prevent hanging
    - Proper error handling and fallbacks
@@ -1422,7 +1422,7 @@ journalctl -u autobot-backend -f
 **Development Mode (Daily Use):**
 ```bash
 # Start backend in foreground for debugging
-cd autobot-user-backend
+cd autobot-backend
 source venv/bin/activate
 python backend/main.py
 
@@ -1486,7 +1486,7 @@ Desktop access is **enabled by default** on all modes:
 - **NO** multiple frontend instances permitted
 
 ### **Development Workflow:**
-1. **Edit Code Locally**: Make all changes in `/home/kali/Desktop/AutoBot/autobot-user-frontend/`
+1. **Edit Code Locally**: Make all changes in `/home/kali/Desktop/AutoBot/autobot-frontend/`
 2. **Sync to Frontend VM**: Use `./sync-frontend.sh` or `./scripts/utilities/sync-to-vm.sh frontend`
 3. **Frontend VM Runs**: Either dev or production mode via `run_autobot.sh`
 
@@ -1564,7 +1564,7 @@ The application is now fully functional with:
 ### Critical Errors Fixed
 
 1. **Redis Connection Timeout**: Backend was hanging on 30-second Redis timeout
-   - Root cause: `autobot-user-backend/utils/redis_database_manager.py` using blocking connection
+   - Root cause: `autobot-backend/utils/redis_database_manager.py` using blocking connection
    - Solution: Created `backend/fast_app_factory_fix.py` with 2-second timeout
    - Result: Backend startup reduced from 30+ seconds to 2 seconds
 
@@ -1759,10 +1759,10 @@ ssh -i ~/.ssh/autobot_key autobot@172.16.168.21 "hostname"
 #### Sync Files to Remote VMs:
 ```bash
 # Sync specific file to specific VM
-./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/components/App.vue /home/autobot/autobot-user-frontend/src/components/
+./scripts/utilities/sync-to-vm.sh frontend autobot-frontend/src/components/App.vue /home/autobot/autobot-frontend/src/components/
 
 # Sync directory to specific VM
-./scripts/utilities/sync-to-vm.sh frontend autobot-user-frontend/src/components/ /home/autobot/autobot-user-frontend/src/components/
+./scripts/utilities/sync-to-vm.sh frontend autobot-frontend/src/components/ /home/autobot/autobot-frontend/src/components/
 
 # Sync to ALL VMs
 ./scripts/utilities/sync-to-vm.sh all scripts/setup.sh /home/autobot/scripts/
@@ -1842,7 +1842,7 @@ Direct editing on remote machines (172.16.168.21-25) **GUARANTEES WORK LOSS** wh
 - Corrected from `local.providers.ollama` to `unified.local.providers.ollama`
 
 ### 3. Terminal Package Persistence
-- Added @xterm packages to `autobot-user-frontend/package.json` dependencies
+- Added @xterm packages to `autobot-frontend/package.json` dependencies
 - Rebuilt frontend service with --no-cache to ensure persistence
 - Packages now survive service restarts and rebuilds
 
@@ -1856,7 +1856,7 @@ Direct editing on remote machines (172.16.168.21-25) **GUARANTEES WORK LOSS** wh
 - **Startup**: Moved LLM config sync to background task
 
 ### 5. Frontend-Backend Connectivity
-- Updated `autobot-user-frontend/src/config/environment.js` to use Vite proxy
+- Updated `autobot-frontend/src/config/environment.js` to use Vite proxy
 - Fixed proxy configuration in `vite.config.ts`
 - Added WebSocket proxy support
 
@@ -1933,7 +1933,7 @@ class LLMInterface:
         return True
 ```
 
-##### 4. **Ollama Connection Pool** (`autobot-user-backend/utils/ollama_connection_pool.py`)
+##### 4. **Ollama Connection Pool** (`autobot-backend/utils/ollama_connection_pool.py`)
 - **Concurrent Limit**: Maximum 3 simultaneous connections to prevent resource exhaustion
 - **Request Queuing**: Up to 50 queued requests with 60-second queue timeout
 - **Health Monitoring**: Automatic health checks every 5 minutes
@@ -2047,7 +2047,7 @@ Implemented the proper chat workflow as specified:
 **Files Created/Modified**:
 - `src/chat_workflow_manager.py` - Main workflow orchestration
 - `src/mcp_manual_integration.py` - System manual and help lookups
-- `autobot-user-backend/api/chat.py` - Fixed endpoint to use new workflow
+- `autobot-backend/api/chat.py` - Fixed endpoint to use new workflow
 - `test_new_chat_workflow.py` - Comprehensive testing suite
 
 #### **Workflow Steps Implemented**:
@@ -2199,7 +2199,7 @@ The AutoBot system is now architecturally sound and functional with:
 - **Verified analytics router**: Analytics router already mounted at `/api` with dashboard endpoints available
 
 **Files Updated**:
-- `autobot-user-backend/api/chat_consolidated.py` - Added `/chat/health` endpoint
+- `autobot-backend/api/chat_consolidated.py` - Added `/chat/health` endpoint
 - `backend/fast_app_factory_fix.py` - Added LLM router registration
 
 **Results**:

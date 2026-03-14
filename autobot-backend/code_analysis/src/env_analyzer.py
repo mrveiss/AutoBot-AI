@@ -27,8 +27,9 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 try:
-    from autobot_shared.redis_client import get_redis_client
     from config import UnifiedConfig
+
+    from autobot_shared.redis_client import get_redis_client
 
     _REDIS_AVAILABLE = True
     _CONFIG_AVAILABLE = True
@@ -1471,7 +1472,7 @@ class EnvironmentAnalyzer:
             "hardcoded value (should be an env var) "
             "or a FALSE positive.\n\n"
             "TRUE examples (real issues):\n"
-            '- IP addresses: "172.16.168.23"\n'
+            '- IP addresses: "10.0.0.1"\n'
             '- Hostnames: "localhost", "redis-server.local"\n'
             "- Ports: 6379, 8080, 5432 - service ports\n"
             '- URLs: "http://api.example.com/v1"\n'

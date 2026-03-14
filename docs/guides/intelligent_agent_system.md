@@ -1281,7 +1281,7 @@ class IntelligentAgent:
 ### Step 6: API Integration for Chat Interface
 
 ```python
-# autobot-user-backend/api/intelligent_agent.py
+# autobot-backend/api/intelligent_agent.py
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import StreamingResponse
 import json
@@ -1389,7 +1389,7 @@ async def get_system_info():
 ### Step 7: Frontend Integration - Enhanced Chat Interface
 
 ```vue
-<!-- autobot-user-frontend/src/components/IntelligentChat.vue -->
+<!-- autobot-frontend/src/components/IntelligentChat.vue -->
 <template>
   <div class="intelligent-chat">
     <div class="system-info-bar">

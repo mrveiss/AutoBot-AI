@@ -43,6 +43,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import VueApexCharts from 'vue3-apexcharts'
 import type { ApexOptions } from 'apexcharts'
+import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()
 
@@ -99,14 +100,6 @@ const hasData = computed(() => {
   })
 })
 
-/**
- * Get CSS variable value from the document
- * Issue #704: Use design tokens for theming
- */
-const getCssVar = (name: string, fallback: string): string => {
-  if (typeof document === 'undefined') return fallback
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
-}
 
 /**
  * AutoBot theme colors using CSS custom properties (Issue #704)

@@ -15,7 +15,7 @@ Phase 2 implemented automatic entity extraction and graph population from conver
 
 ### 1. Core Implementation
 
-#### `autobot-user-backend/agents/graph_entity_extractor.py` (600+ lines)
+#### `autobot-backend/agents/graph_entity_extractor.py` (600+ lines)
 
 **Purpose**: Automatically extract entities and relationships from conversation messages and populate knowledge graph.
 
@@ -152,7 +152,7 @@ def entity_extractor(mock_extraction_agent, mock_memory_graph):
 
 ### 3. REST API Endpoints
 
-#### `autobot-user-backend/api/entity_extraction.py` (350+ lines)
+#### `autobot-backend/api/entity_extraction.py` (350+ lines)
 
 **Endpoints**:
 
@@ -441,14 +441,14 @@ curl https://172.16.168.20:8443/api/entities/extract/health
 ## Next Steps (Phase 3: Vue.js Visualization)
 
 **Remaining Work**:
-1. Create `autobot-user-frontend/src/components/graph/GraphCanvas.vue` - Main graph visualization
+1. Create `autobot-frontend/src/components/graph/GraphCanvas.vue` - Main graph visualization
 2. Create modular subcomponents:
    - `GraphNode.vue` - Individual node rendering
    - `GraphEdge.vue` - Relationship rendering
    - `GraphLegend.vue` - Entity type legend
    - `GraphFilters.vue` - Filter controls
    - `GraphSearch.vue` - Entity search
-3. Create `autobot-user-frontend/src/composables/useGraphState.ts` - State management
+3. Create `autobot-frontend/src/composables/useGraphState.ts` - State management
 4. Connect to API endpoints: `/api/graph-rag/search`, `/api/entities/extract`, `/api/memory/entities`
 
 **Estimated Effort**: 4-6 hours (Vue components + state management)

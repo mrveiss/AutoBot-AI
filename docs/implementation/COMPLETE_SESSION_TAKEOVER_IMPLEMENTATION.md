@@ -10,7 +10,7 @@ The session takeover and workflow automation system is now fully implemented acr
 
 ## 🎯 **Frontend Implementation (Vue.js)**
 
-### **File: `/autobot-user-frontend/src/components/TerminalWindow.vue`**
+### **File: `/autobot-frontend/src/components/TerminalWindow.vue`**
 
 **Key Features Implemented:**
 
@@ -61,7 +61,7 @@ const waitingForUserConfirmation = ref(false);
 
 ## 🔧 **Backend Implementation (FastAPI)**
 
-### **File: `/autobot-user-backend/api/workflow_automation.py`**
+### **File: `/autobot-backend/api/workflow_automation.py`**
 
 **Complete Workflow Management System:**
 
@@ -101,7 +101,7 @@ const waitingForUserConfirmation = ref(false);
    - `POST /create_from_chat` - Create workflow from natural language
    - `WebSocket /workflow_ws/{session_id}` - Real-time communication
 
-### **File: `/autobot-user-backend/api/simple_terminal_websocket.py`**
+### **File: `/autobot-backend/api/simple_terminal_websocket.py`**
 
 **Enhanced Terminal Integration:**
 
@@ -121,7 +121,7 @@ const waitingForUserConfirmation = ref(false);
    - `workflow_message` - Step confirmation and execution
    - `step_confirmation_required` - User approval requests
 
-### **File: `/autobot-user-backend/api/chat.py`**
+### **File: `/autobot-backend/api/chat.py`**
 
 **Chat Integration for Workflow Triggering:**
 

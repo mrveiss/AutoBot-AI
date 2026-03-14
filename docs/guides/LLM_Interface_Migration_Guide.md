@@ -2,14 +2,14 @@
 
 > **Note (2026-01-31):** This guide has been updated after the Issue #738 code consolidation.
 > The files `llm_interface_unified.py` and `unified_llm_interface.py` have been **deleted** as orphaned code.
-> The canonical LLM interface is now `src/llm_interface.py` (facade) + `src/llm_interface_pkg/` (implementation).
+> The canonical LLM interface is now `src/llm_interface.py` (facade) + `autobot-backend/llm_interface_pkg/` (implementation).
 
 ## Overview
 
 The AutoBot LLM interface provides consistent API access to all LLM providers through a facade pattern:
 
 - **`src/llm_interface.py`** - Public facade (import from here)
-- **`src/llm_interface_pkg/`** - Implementation package (internal)
+- **`autobot-backend/llm_interface_pkg/`** - Implementation package (internal)
 
 ## Current Architecture
 
@@ -187,7 +187,7 @@ LLMType.RAG: [OLLAMA, OPENAI, MOCK]
 ### Current (After Issue #738 Consolidation)
 
 - `src/llm_interface.py` - Public facade (61 lines)
-- `src/llm_interface_pkg/` - Implementation package (~1000 lines)
+- `autobot-backend/llm_interface_pkg/` - Implementation package (~1000 lines)
   - `__init__.py` - Package exports
   - `providers/` - Provider implementations
   - `types.py` - Type definitions

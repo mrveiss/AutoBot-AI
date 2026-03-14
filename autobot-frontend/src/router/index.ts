@@ -295,6 +295,15 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'codebase',
         name: 'analytics-codebase',
+        component: () => import('@/components/analytics/CodebaseAnalyticsLanding.vue'),
+        meta: {
+          title: 'Codebase Analytics',
+          parent: 'analytics'
+        }
+      },
+      {
+        path: 'codebase/:sourceId',
+        name: 'analytics-codebase-project',
         component: () => import('@/components/analytics/CodebaseAnalytics.vue'),
         meta: {
           title: 'Codebase Analytics',
@@ -350,6 +359,105 @@ const routes: RouteRecordRaw[] = [
           icon: 'fas fa-chart-line',
           description: 'Git history analysis and pattern evolution tracking (Issue #243)',
           requiresAuth: true
+        }
+      },
+      {
+        path: 'bug-prediction',
+        name: 'analytics-bug-prediction',
+        component: () => import('@/components/analytics/BugPredictionDashboard.vue'),
+        meta: {
+          title: 'Bug Prediction',
+          parent: 'analytics'
+        }
+      },
+      {
+        path: 'code-generation',
+        name: 'analytics-code-generation',
+        component: () => import('@/components/analytics/CodeGenerationDashboard.vue'),
+        meta: {
+          title: 'Code Generation',
+          parent: 'analytics'
+        }
+      },
+      {
+        path: 'code-intelligence',
+        name: 'analytics-code-intelligence',
+        component: () => import('@/components/analytics/CodeIntelligenceDashboard.vue'),
+        meta: {
+          title: 'Code Intelligence',
+          parent: 'analytics'
+        }
+      },
+      {
+        path: 'code-quality',
+        name: 'analytics-code-quality',
+        component: () => import('@/components/analytics/CodeQualityDashboard.vue'),
+        meta: {
+          title: 'Code Quality',
+          parent: 'analytics'
+        }
+      },
+      {
+        path: 'code-review',
+        name: 'analytics-code-review',
+        component: () => import('@/components/analytics/CodeReviewDashboard.vue'),
+        meta: {
+          title: 'Code Review',
+          parent: 'analytics'
+        }
+      },
+      {
+        path: 'conversation-flow',
+        name: 'analytics-conversation-flow',
+        component: () => import('@/components/analytics/ConversationFlowDashboard.vue'),
+        meta: {
+          title: 'Conversation Flow',
+          parent: 'analytics'
+        }
+      },
+      {
+        path: 'llm-patterns',
+        name: 'analytics-llm-patterns',
+        component: () => import('@/components/analytics/LLMPatternDashboard.vue'),
+        meta: {
+          title: 'LLM Patterns',
+          parent: 'analytics'
+        }
+      },
+      {
+        path: 'log-patterns',
+        name: 'analytics-log-patterns',
+        component: () => import('@/components/analytics/LogPatternDashboard.vue'),
+        meta: {
+          title: 'Log Patterns',
+          parent: 'analytics'
+        }
+      },
+      {
+        path: 'performance',
+        name: 'analytics-performance',
+        component: () => import('@/components/analytics/PerformanceAnalysisDashboard.vue'),
+        meta: {
+          title: 'Performance Analysis',
+          parent: 'analytics'
+        }
+      },
+      {
+        path: 'precommit-hooks',
+        name: 'analytics-precommit-hooks',
+        component: () => import('@/components/analytics/PrecommitHookDashboard.vue'),
+        meta: {
+          title: 'Pre-commit Hooks',
+          parent: 'analytics'
+        }
+      },
+      {
+        path: 'technical-debt',
+        name: 'analytics-technical-debt',
+        component: () => import('@/components/analytics/TechnicalDebtDashboard.vue'),
+        meta: {
+          title: 'Technical Debt',
+          parent: 'analytics'
         }
       },
     ]

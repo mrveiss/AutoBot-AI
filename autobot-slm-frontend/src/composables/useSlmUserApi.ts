@@ -111,7 +111,7 @@ export function useSlmUserApi() {
   )
 
   // ===========================================================================
-  // SLM Admin Users (local DB on 172.16.168.19)
+  // SLM Admin Users (local SLM database)
   // ===========================================================================
 
   async function getSlmUsers(skip = 0, limit = 100): Promise<SlmUserListResponse> {
@@ -131,7 +131,7 @@ export function useSlmUserApi() {
   }
 
   // ===========================================================================
-  // AutoBot Application Users (remote DB on 172.16.168.23)
+  // AutoBot Application Users (remote AutoBot database)
   // ===========================================================================
 
   async function getAutobotUsers(skip = 0, limit = 100): Promise<SlmUserListResponse> {

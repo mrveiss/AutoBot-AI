@@ -93,12 +93,12 @@ async def test_research_agent():
 
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
-        from agents.research_agent import ResearchAgent
+        from agents.web_researcher import WebResearcher
 
-        agent = ResearchAgent()
+        agent = WebResearcher()
 
         # Test tool-specific research
-        from agents.research_agent import ResearchRequest
+        from agents.web_researcher import ResearchRequest
 
         request = ResearchRequest(
             query="network scanning tools", focus="installation_usage", max_results=3

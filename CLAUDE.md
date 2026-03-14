@@ -222,6 +222,15 @@ Wait for user confirmation before writing code. Do NOT assume `systemd` vs `dock
 - Bulk operations: commit in batches of 10–15 files max
 - **NEVER** use `git commit --no-verify`
 
+**Pre-commit Stash Risk (Issue #1503):**
+
+pre-commit uses `git stash push --include-untracked` before running hooks and `git stash pop` after. When untracked files from other in-progress branches exist in the working directory, the stash pop can promote them into the staging area — causing them to be accidentally included in unrelated commits.
+
+- **Mitigation**: use `git worktree add .worktrees/feat-XXXX -b feat/XXXX` for ALL parallel branch work — each worktree has its own isolated working directory
+- **Detection**: the `warn-untracked-files` pre-commit hook fires at `prepare-commit-msg` stage and warns when untracked source files coexist with a commit
+- **Before committing**: if the warning fires, run `git diff --cached --name-only` and verify every staged file belongs on the current branch
+- **To unstage accidentally included files**: `git restore --staged <file>`
+
 **Post-commit verification:**
 
 ```bash
@@ -354,10 +363,11 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 - CLAUDE.md owns stable patterns. MEMORY.md owns recent state only.
 
 **End-of-session ritual:**
-1. Close any issues? → Move to Recent Completed (1 line each)
+1. Close any issues? → Verify with `gh issue view <number> --json state -q '.state'` → only move to Recent Completed after confirming CLOSED on GitHub
 2. Any gotcha resolved? → Delete it
-3. Recent Completed >30? → Archive oldest batch
+3. Recent Completed >30? → Archive oldest batch (verify each issue is CLOSED before archiving)
 4. MEMORY.md >150 lines? → Trim with `/memory-cleanup`
+5. Never use range notation (`#1534-#1545`) in archive refs — enumerate individual issue numbers
 
 ### Multi-Agent Safety
 
@@ -384,10 +394,20 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 **Prefer direct implementation over subagents** — reserve agents for exploration/research of unfamiliar areas.
 
 **Before spawning parallel subagents:**
-1. Verify worktree: `ls -la ../worktrees/ 2>/dev/null || mkdir -p ../worktrees/`
-2. Test one agent first before dispatching many
-3. If agent hangs >5 minutes, fail fast
-4. Fallback plan: switch to sequential branch-based implementation
+1. Sync local branch: `git fetch origin Dev_new_gui && git pull --rebase`
+2. Verify worktree: `ls -la ../worktrees/ 2>/dev/null || mkdir -p ../worktrees/`
+3. Test one agent first before dispatching many
+4. If agent hangs >5 minutes, fail fast
+5. Fallback plan: switch to sequential branch-based implementation
+
+**Worktree Isolation Warning:**
+Do NOT use `isolation: "worktree"` for agents that create PRs. The auto-created worktree branches from local HEAD, which may diverge from `origin/Dev_new_gui` — causing PRs with unrelated files and merge conflicts. Instead, create manual worktrees:
+```bash
+git worktree add .worktrees/issue-XXXX -b <branch> origin/Dev_new_gui
+cd .worktrees/issue-XXXX && git branch --unset-upstream
+```
+
+The `--unset-upstream` prevents accidental fast-forward merges into `Dev_new_gui` that bypass PRs — all changes must go through a PR.
 
 **If subagent fails:** Switch to direct implementation immediately. Do NOT retry.
 
@@ -400,6 +420,13 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 - Analysis: `code-skeptic`, `systems-architect`, `performance-engineer`, `security-auditor`, `ai-ml-engineer`
 - Planning: `project-task-planner`, `project-manager`
 
+**Subagent Bash Permission Constraint:**
+Dispatched subagents cannot autonomously acquire Bash tool permission. This means:
+- Bulk operations requiring Python scripts (e.g., i18n batch translation) must run in the main session
+- Git operations (commit, push, PR creation) from subagents require pre-authorized Bash access
+- Workaround: run batch file-manipulation and git work directly in the main session, not via subagents
+- JSON validation, file writes via MCP tools still work — only shell execution is blocked
+
 ### GitHub Workflow
 
 **Commit format:** `<type>(scope): <description> (#issue-number)`
@@ -407,6 +434,7 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 **Always close the issue after implementation:**
 - Run `gh issue close <number>` and verify with `gh issue view <number>`
 - Add closing comment summarizing what was done
+- **Auto-close limitation:** GitHub's `Closes #NNN` keywords only work for the default branch (`main`). PRs targeting `Dev_new_gui` will NOT auto-close issues. The `auto-close-issues.yml` workflow handles this, but always verify with `gh issue view` after merge.
 
 **PR Workflow — Review Mode** (PR link only): read `gh pr view/diff`, do NOT switch branches or change code.
 

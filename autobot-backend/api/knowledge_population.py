@@ -885,7 +885,7 @@ Network Layout:
 
 Key Commands:
 - Setup: bash setup.sh [--full|--minimal|--distributed]
-- Run: SLM GUI (https://172.16.168.19/orchestration) or scripts/start-services.sh
+- Run: SLM GUI (https://172.16.168.19/orchestration) or scripts/start-services.sh  # noqa
 
 Critical Rules:
 - NEVER edit code directly on remote VMs (VM1-VM5)
@@ -997,27 +997,6 @@ async def _process_all_doc_files(
         await asyncio.sleep(TimingConstants.MICRO_DELAY)
 
     return items_added, items_skipped, items_failed
-
-
-def _build_population_response(
-    items_added: int,
-    items_skipped: int,
-    items_failed: int,
-    doc_count: int,
-    force_reindex: bool,
-) -> dict:
-    """Build response dict for populate_autobot_docs. Issue #398: Extracted helper."""
-    mode = "Force reindex" if force_reindex else "Incremental update"
-    return {
-        "status": "success",
-        "message": f"{mode}: Successfully imported {items_added} AutoBot documents "
-        f"({items_skipped} skipped, {items_failed} failed)",
-        "items_added": items_added,
-        "items_skipped": items_skipped,
-        "items_failed": items_failed,
-        "total_files": doc_count + 1,
-        "force_reindex": force_reindex,
-    }
 
 
 @with_error_handling(

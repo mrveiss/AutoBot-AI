@@ -182,15 +182,6 @@ class SecureCommandExecutor:
         # Return descriptions of matched patterns for backward compatibility
         return [match[0] for match in matches]
 
-    def _check_path_access(self, command: str) -> bool:
-        """Check if file operations are within allowed paths"""
-        # This is a simplified check - in production, parse command properly
-        # to extract all file paths
-        for allowed_path in self.policy.allowed_paths:
-            if str(allowed_path) in command:
-                return True
-        return False
-
     def _get_permission_matcher(self) -> Optional["PermissionMatcher"]:
         """
         Get or create the permission matcher (lazy initialization).

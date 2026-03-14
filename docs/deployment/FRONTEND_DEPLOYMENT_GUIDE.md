@@ -283,7 +283,7 @@ SLM_SSH_KEY=/home/autobot/.ssh/autobot_key
 - [ ] Committed to correct branch (`Dev_new_gui` or `main`)
 - [ ] Code pushed to remote (`git push`) if using remote git
 - [ ] Post-commit hook executed successfully (check SLM logs)
-- [ ] Frontend build succeeds locally (`npm run build` in `autobot-user-frontend/`)
+- [ ] Frontend build succeeds locally (`npm run build` in `autobot-frontend/`)
 - [ ] No TypeScript compilation errors (`npm run type-check`)
 - [ ] Code changes don't require database migrations (or migrations ready)
 

@@ -19,7 +19,7 @@
 │
 ├── # DEPLOYABLE COMPONENTS
 │
-├── autobot-user-backend/           # Deploys to 172.16.168.20 (Main)
+├── autobot-backend/           # Deploys to 172.16.168.20 (Main)
 │   ├── api/                        # FastAPI endpoints
 │   ├── services/                   # Business logic
 │   ├── models/                     # SQLAlchemy models
@@ -31,7 +31,7 @@
 │   ├── requirements.txt            # Python dependencies
 │   └── README.md                   # Deployment instructions
 │
-├── autobot-user-frontend/          # Deploys to 172.16.168.20 (Main)
+├── autobot-frontend/          # Deploys to 172.16.168.20 (Main)
 │   ├── src/                        # Vue source
 │   ├── public/                     # Static assets
 │   ├── package.json                # Node dependencies
@@ -78,8 +78,8 @@
 ├── # INFRASTRUCTURE (Dev/Ops tooling - not deployed as code)
 │
 ├── infrastructure/                 # Per-role organization (CURRENT)
-│   ├── autobot-user-backend/       # User backend infra
-│   ├── autobot-user-frontend/      # User frontend infra
+│   ├── autobot-backend/       # User backend infra
+│   ├── autobot-frontend/      # User frontend infra
 │   ├── autobot-slm-backend/        # SLM backend infra
 │   ├── autobot-slm-frontend/       # SLM frontend infra
 │   ├── autobot-npu-worker/         # NPU worker infra
@@ -117,9 +117,9 @@
 
 | Current | New | Action |
 |---------|-----|--------|
-| `src/` | `autobot-user-backend/` | Rename + reorganize |
-| `backend/` | `autobot-user-backend/` | Merge into user-backend |
-| `autobot-user-frontend/` | `autobot-user-frontend/` | Rename |
+| `src/` | `autobot-backend/` | Rename + reorganize |
+| `backend/` | `autobot-backend/` | Merge into user-backend |
+| `autobot-frontend/` | `autobot-frontend/` | Rename |
 | `slm-server/` | `autobot-slm-backend/` | Rename |
 | `slm-admin/` | `autobot-slm-frontend/` | Rename |
 | `ansible/` | `autobot-slm-backend/ansible/` | Move into SLM |
@@ -130,10 +130,10 @@
 
 | Current | New |
 |---------|-----|
-| `autobot-user-backend/utils/redis_client.py` | `autobot-shared/redis_client.py` |
-| `autobot-user-backend/utils/http_client.py` | `autobot-shared/http_client.py` |
-| `autobot-user-backend/utils/logging_manager.py` | `autobot-shared/logging_manager.py` |
-| `autobot-user-backend/utils/error_boundaries.py` | `autobot-shared/error_boundaries.py` |
+| `autobot-backend/utils/redis_client.py` | `autobot-shared/redis_client.py` |
+| `autobot-backend/utils/http_client.py` | `autobot-shared/http_client.py` |
+| `autobot-backend/utils/logging_manager.py` | `autobot-shared/logging_manager.py` |
+| `autobot-backend/utils/error_boundaries.py` | `autobot-shared/error_boundaries.py` |
 | `src/config/ssot_config.py` | `autobot-shared/ssot_config.py` |
 
 ### Infrastructure (Current Per-Role Structure)
@@ -145,7 +145,7 @@
 | `config/` | `infrastructure/shared/config/` |
 | `certs/` | `infrastructure/shared/certs/` |
 | `tests/` | `infrastructure/<role>/tests/` or `infrastructure/shared/tests/` |
-| `mcp-servers/`, `mcp-tools/` | `infrastructure/shared/mcp/` |
+| `mcp-servers/`, `autobot-backend/api/*_mcp.py` | `infrastructure/shared/mcp/` |
 | `novnc/` | `infrastructure/shared/novnc/` |
 | `analysis/`, `code-analysis-suite/`, `reports/` | `infrastructure/shared/analysis/` |
 
@@ -153,13 +153,13 @@
 
 | Current | New |
 |---------|-----|
-| `prompts/` | `autobot-user-backend/resources/prompts/` |
-| `templates/` | `autobot-user-backend/resources/templates/` |
-| `content/` | `autobot-user-backend/resources/content/` |
-| `system_knowledge/` | `autobot-user-backend/resources/knowledge/` |
-| `models/` | `autobot-user-backend/models/` |
-| `migrations/` | `autobot-user-backend/migrations/` |
-| `monitoring/` | `autobot-user-backend/monitoring/` |
+| `prompts/` | `autobot-backend/resources/prompts/` |
+| `templates/` | `autobot-backend/resources/templates/` |
+| `content/` | `autobot-backend/resources/content/` |
+| `system_knowledge/` | `autobot-backend/resources/knowledge/` |
+| `models/` | `autobot-backend/models/` |
+| `migrations/` | `autobot-backend/migrations/` |
+| `monitoring/` | `autobot-backend/monitoring/` |
 
 ### Into Docs
 
@@ -186,7 +186,7 @@ Each component has its own data directory (gitignored):
 
 | Component | Data Location | Contents |
 |-----------|---------------|----------|
-| `autobot-user-backend/data/` | Main (.20) | `autobot.db`, `chroma_db/`, user data |
+| `autobot-backend/data/` | Main (.20) | `autobot.db`, `chroma_db/`, user data |
 | `autobot-slm-backend/data/` | SLM (.19) | `slm.db`, fleet state |
 | `autobot-npu-worker/data/` | NPU (.22) | Model cache, inference data |
 | `autobot-browser-worker/data/` | Browser (.25) | Screenshots, session data |
@@ -207,8 +207,8 @@ Root-level data folders to migrate:
 
 | Current | New |
 |---------|-----|
-| `data/` | `autobot-user-backend/data/` |
-| `chroma_db/` | `autobot-user-backend/data/chroma_db/` |
+| `data/` | `autobot-backend/data/` |
+| `chroma_db/` | `autobot-backend/data/chroma_db/` |
 | `logs/` | Per-component `logs/` |
 | `backups/` | `autobot-slm-backend/data/backups/` (SLM manages backups) |
 | `temp/`, `debug/`, `outputs/` | Per-component as needed |
@@ -219,8 +219,8 @@ Root-level data folders to migrate:
 
 | Component | Machine | IP | Command |
 |-----------|---------|-----|---------|
-| `autobot-user-backend/` | Main | 172.16.168.20 | `sync-to-vm.sh main autobot-user-backend/` |
-| `autobot-user-frontend/` | Main | 172.16.168.20 | `sync-to-vm.sh main autobot-user-frontend/` |
+| `autobot-backend/` | Main | 172.16.168.20 | `sync-to-vm.sh main autobot-backend/` |
+| `autobot-frontend/` | Main | 172.16.168.20 | `sync-to-vm.sh main autobot-frontend/` |
 | `autobot-slm-backend/` | SLM | 172.16.168.19 | `sync-to-vm.sh slm autobot-slm-backend/` |
 | `autobot-slm-frontend/` | Frontend VM | 172.16.168.21 | `sync-to-vm.sh frontend autobot-slm-frontend/` |
 | `autobot-npu-worker/` | NPU | 172.16.168.22 | `sync-to-vm.sh npu autobot-npu-worker/` |

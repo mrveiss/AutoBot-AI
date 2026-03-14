@@ -42,6 +42,9 @@ from starlette.types import ASGIApp
 
 logger = logging.getLogger(__name__)
 
+# Module-level set to hold references to fire-and-forget background tasks (#1556)
+_audit_background_tasks: set = set()
+
 # Issue #380: Module-level frozensets for audit checks
 _MODIFYING_HTTP_METHODS = frozenset({"POST", "PUT", "DELETE", "PATCH"})
 _SENSITIVE_PATH_PREFIXES = (
@@ -100,6 +103,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         """
         super().__init__(app)
         self.audit_all = audit_all
+        self._background_tasks: set = set()
         self.exclude_paths = exclude_paths or [
             "/docs",
             "/openapi.json",
@@ -197,7 +201,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
         finally:
             performance_ms = (time.time() - start_time) * 1000
-            asyncio.create_task(
+            task = asyncio.create_task(
                 self._log_audit(
                     operation=operation,
                     result=result,
@@ -211,6 +215,8 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     ),
                 )
             )
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
 
     def _get_user_from_request(self, request: Request) -> Optional[str]:
         """Extract user ID from request"""
@@ -355,7 +361,7 @@ def _schedule_audit_log(
         performance_ms: Execution time in milliseconds
         error_details: Error message if any
     """
-    asyncio.create_task(
+    task = asyncio.create_task(
         _log_audit_async(
             operation=operation,
             result=result,
@@ -367,6 +373,8 @@ def _schedule_audit_log(
             details={"error": error_details} if error_details else {},
         )
     )
+    _audit_background_tasks.add(task)
+    task.add_done_callback(_audit_background_tasks.discard)
 
 
 def _create_async_audit_wrapper(

@@ -86,7 +86,7 @@ AutoBot has achieved **Phase 9 completion** with revolutionary multi-modal AI ca
    - Expected Impact: 25-40% better knowledge retrieval accuracy
 
 2. **Atomic Facts Extraction Agent** (Week 2-4)
-   - Create `autobot-user-backend/agents/knowledge_extraction_agent.py`
+   - Create `autobot-backend/agents/knowledge_extraction_agent.py`
    - Implement temporal fact labeling (STATIC, DYNAMIC, ATEMPORAL)
    - Add fact categorization (FACT, OPINION, PREDICTION)
    - Integration with existing LLM interfaces

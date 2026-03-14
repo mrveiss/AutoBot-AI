@@ -34,7 +34,7 @@
          │
          ▼
 ┌─────────────────────────────────────┐
-│  autobot-user-backend/api/terminal.py            │
+│  autobot-backend/api/terminal.py            │
 │  ConsolidatedTerminalManager        │
 │                                     │
 │  • Creates session ID               │
@@ -47,7 +47,7 @@
              │
              ▼
 ┌─────────────────────────────────────┐
-│  autobot-user-backend/api/terminal.py            │
+│  autobot-backend/api/terminal.py            │
 │  ConsolidatedTerminalWebSocket      │
 │                                     │
 │  • Accepts WebSocket                │
@@ -134,7 +134,7 @@ Output Flow:
          │ }
          ▼
 ┌─────────────────────────────────────────────┐
-│  autobot-user-backend/api/agent_terminal.py              │
+│  autobot-backend/api/agent_terminal.py              │
 │  create_agent_terminal_session()            │
 │                                             │
 │  • Validates agent_role                     │
@@ -162,7 +162,7 @@ Output Flow:
              │                    └─ Use PTY session ID!
              ▼
 ┌─────────────────────────────────────────────┐
-│  autobot-user-backend/api/terminal.py                    │
+│  autobot-backend/api/terminal.py                    │
 │  ConsolidatedTerminalWebSocket              │
 │  (SAME as Tools Terminal)                   │
 │                                             │
@@ -558,7 +558,7 @@ Command Submitted (Agent or User):
 
 ```
 AutoBot/
-├── autobot-user-frontend/src/components/
+├── autobot-frontend/src/components/
 │   ├── ToolsTerminal.vue           ← Tools Terminal UI
 │   ├── ChatTerminal.vue            ← Chat Terminal UI
 │   └── terminal/
@@ -568,10 +568,10 @@ AutoBot/
 │       ├── TerminalHeader.vue
 │       └── HostSelector.vue
 │
-├── autobot-user-frontend/src/services/
+├── autobot-frontend/src/services/
 │   └── TerminalService.js          ← WebSocket client
 │
-├── autobot-user-backend/api/
+├── autobot-backend/api/
 │   ├── terminal.py                 ← Tools Terminal API (REST + WebSocket)
 │   └── agent_terminal.py           ← Chat Terminal API (REST)
 │

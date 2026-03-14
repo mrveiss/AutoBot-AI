@@ -1293,7 +1293,7 @@ async def get_file_stats(request: Request):
 
 _ADMIN_ALLOWED_DIRS = (
     "/opt/autobot",
-    "/home/autobot",
+    "/home/autobot",  # noqa: ssot-path
     "/var/log/autobot",
     "/etc/autobot",
 )
@@ -1346,7 +1346,7 @@ def _entry_to_file_item(entry: Path) -> dict:
 
 
 @router.get("", summary="List directory for SLM admin file browser")
-async def admin_list_directory(path: str = "/home/autobot") -> dict:
+async def admin_list_directory(path: str = "/home/autobot") -> dict:  # noqa: ssot-path
     """List directory contents at an absolute path.
 
     No auth required — accessible via /autobot-api/ nginx proxy (Issue #984).

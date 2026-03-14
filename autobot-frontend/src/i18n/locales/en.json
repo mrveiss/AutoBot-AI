@@ -60,6 +60,12 @@
       "goToHome": "Go to Home",
       "contactAdmin": "If you believe you should have access, please contact your administrator."
     },
+    "justNow": "just now",
+    "timeAgo": {
+      "minutes": "{n}m ago",
+      "hours": "{n}h ago",
+      "days": "{n}d ago"
+    },
     "welcome": {
       "message": "Welcome to AutoBot."
     },
@@ -657,10 +663,23 @@
         "exporting": "Exporting...",
         "exportReport": "Export Report",
         "clearing": "Clearing...",
-        "clearCache": "Clear Cache"
+        "clearCache": "Clear Cache",
+        "backToProjects": "Projects",
+        "indexNow": "Index Now"
+      },
+      "landing": {
+        "subtitle": "Select a project to view analytics",
+        "addProject": "Add Project",
+        "neverIndexed": "Never indexed",
+        "indexed": "Indexed"
+      },
+      "empty": {
+        "title": "No Analysis Results",
+        "description": "This project hasn't been indexed yet. Click below to start indexing."
       },
       "actions": {
         "cancel": "Cancel",
+        "stop": "Stop",
         "loadMetrics": "Load Metrics",
         "retry": "Retry",
         "realTimeUpdates": "Real-time Updates",
@@ -701,6 +720,7 @@
         "websocketConnections": "WebSocket Connections",
         "apiCallFrequency": "API Call Frequency",
         "dataTransferRate": "Data Transfer Rate",
+        "uniqueEndpoints": "Unique Endpoints",
         "noData": "No communication data available."
       },
       "quality": {
@@ -998,6 +1018,7 @@
         "indexingMonitoring": "Indexing job already running, now monitoring",
         "indexingQueued": "Indexing queued behind current job",
         "indexingStarted": "Codebase indexing started",
+        "sourceNotFound": "Source not found",
         "declarationsFound": "Found {count} declarations ({time}ms)",
         "declarationsFailed": "Declarations failed: {error} ({time}ms)",
         "duplicatesFound": "Found {count} duplicates ({time}ms)",
@@ -2208,7 +2229,19 @@
       "scanForChanges": "Scan for Changes",
       "clearHistory": "Clear History",
       "exportChanges": "Export Changes",
-      "confirmClearHistory": "Clear all change history? This cannot be undone."
+      "confirmClearHistory": "Clear all change history? This cannot be undone.",
+      "changeTypeAdded": "Added",
+      "changeTypeUpdated": "Updated",
+      "changeTypeRemoved": "Removed",
+      "changeTypeChanged": "Changed",
+      "timeJustNow": "just now",
+      "timeMinutesAgo": "{count}m ago",
+      "timeHoursAgo": "{count}h ago",
+      "timeDaysAgo": "{count}d ago",
+      "filterAll": "All",
+      "filterAdded": "Added",
+      "filterUpdated": "Updated",
+      "filterRemoved": "Removed"
     },
     "entityExtractor": {
       "title": "Entity Extraction",
@@ -3511,6 +3544,7 @@
     "closeAria": "Close profile",
     "tabGeneral": "General",
     "tabAppearance": "Appearance & Voice",
+    "tabLanguage": "Language",
     "tabSecurity": "Security",
     "accountInfo": "Account Information",
     "username": "Username:",

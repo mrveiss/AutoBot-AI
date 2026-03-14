@@ -862,6 +862,11 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
     // Close file panel when switching sessions
     showFilePanel.value = false
     showVoicePanel.value = false
+
+    // Prime TTS cursor to end of new session's last speakable message (#1488).
+    // Without this the TTS watcher fires, sees current.id !== _lastStreamingMsgId,
+    // resets _lastSpokenIdx = 0, and re-speaks the full existing message.
+    _primeTtsCursor()
   }
 })
 
@@ -871,6 +876,26 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
 const _SPEAKABLE_TYPES = new Set(['response', 'message'])
 let _lastSpokenIdx = 0
 let _lastStreamingMsgId: string | null = null
+
+/** Prime TTS cursor to end of current last message. Used on voice-enable and session switch. */
+function _primeTtsCursor(): void {
+  const session = store.sessions.find(s => s.id === store.currentSessionId)
+  const msgs = session?.messages ?? []
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i]
+    if (m.sender !== 'assistant' || !m.content) continue
+    if (m.type && !_SPEAKABLE_TYPES.has(m.type)) continue
+    _lastStreamingMsgId = m.id
+    _lastSpokenIdx = m.content.length
+    break
+  }
+}
+
+// When voice output is enabled mid-stream, prime cursor to current content end
+// so already-accumulated text is not re-spoken (#1491).
+watch(voiceOutputEnabled, (enabled) => {
+  if (enabled) _primeTtsCursor()
+})
 
 watch(
   () => {
@@ -888,10 +913,14 @@ watch(
     if (!voiceOutputEnabled.value || voiceConversation.isActive.value) return
     if (!current) return
 
-    // Reset index when message changes
+    // Reset index when message changes.
+    // If not actively streaming, treat the incoming message as already-spoken (#1490):
+    // it is a historical message (session switch with unloaded messages, page reload,
+    // etc.) and should not be re-spoken. Only reset to 0 when isTyping so newly
+    // generated content is picked up from the start.
     if (current.id !== _lastStreamingMsgId) {
-      _lastSpokenIdx = 0
       _lastStreamingMsgId = current.id
+      _lastSpokenIdx = store.isTyping ? 0 : current.content.length
     }
 
     if (store.isTyping && current.content) {
@@ -907,11 +936,20 @@ watch(
       const remainder = current.content.slice(_lastSpokenIdx).trim()
       if (remainder) speakStreaming(remainder)
       flushStreaming()
-      _lastSpokenIdx = 0
-      _lastStreamingMsgId = null
+      // Mark all content as spoken — do NOT reset to 0/null here.
+      // Resetting _lastStreamingMsgId to null would cause any subsequent reactive
+      // trigger (e.g. updateMessage({status:'sent'}) in the finalization loop) to
+      // see current.id !== null, reset _lastSpokenIdx to 0, and re-speak the full
+      // accumulated content. Keep current.id so spurious re-triggers are no-ops.
+      _lastSpokenIdx = current.content.length
     }
   }
 )
+
+// Minimum chars a candidate sentence must have before it is dispatched to TTS (#1485).
+// Short fragments like "Hello there! " (13 chars) sound choppy when spoken alone —
+// buffer them until they combine with the next sentence or flush as a remainder.
+const _MIN_TTS_SENTENCE_CHARS = 20
 
 /** Extract sentences terminated by ". ", "! ", or "? " — remainder stays buffered. */
 function _extractCompleteSentences(text: string): string[] {
@@ -920,8 +958,11 @@ function _extractCompleteSentences(text: string): string[] {
   let lastEnd = 0
   let match
   while ((match = terminators.exec(text)) !== null) {
-    sentences.push(text.slice(lastEnd, match.index + 1))
-    lastEnd = match.index + match[0].length
+    const candidate = text.slice(lastEnd, match.index + 1)
+    if (candidate.length >= _MIN_TTS_SENTENCE_CHARS) {
+      sentences.push(candidate)
+      lastEnd = match.index + match[0].length
+    }
   }
   return sentences
 }

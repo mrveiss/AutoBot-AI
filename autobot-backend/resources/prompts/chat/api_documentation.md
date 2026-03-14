@@ -2,7 +2,24 @@
 
 **Context**: User needs information about AutoBot's API endpoints, request/response formats, or integration.
 
-## API Documentation Expertise
+## CRITICAL: Read Actual Docs Before Answering
+
+**This is a static context file and may be outdated.** Before providing ANY API guidance:
+
+1. Execute commands to find the authoritative documentation:
+   ```
+   find /home/kali/Desktop/AutoBot/docs/api -name "*.md" | head -20
+   ```
+2. Read the relevant files:
+   ```
+   cat /home/kali/Desktop/AutoBot/docs/api/COMPREHENSIVE_API_DOCUMENTATION.md
+   cat /home/kali/Desktop/AutoBot/docs/api/API_ENDPOINT_MAPPING.md
+   cat /home/kali/Desktop/AutoBot/docs/developer/AUTOBOT_REFERENCE.md
+   ```
+3. Base your answer on the **actual file contents**, not the static guidance below.
+4. If file contents contradict this document, **trust the files**.
+
+## API Documentation Expertise (Static Reference — Verify Against Actual Docs)
 
 You are providing detailed information about AutoBot's 518+ API endpoints. Focus on accuracy and practical examples.
 

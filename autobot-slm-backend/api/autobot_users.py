@@ -4,7 +4,7 @@
 """
 AutoBot Application User Management API
 
-Manages users in the remote AutoBot database (172.16.168.23:5432/autobot_users).
+Manages users in the remote AutoBot database (AUTOBOT_DB_HOST:5432/autobot_users).
 These are application users who access AutoBot features (chat, workflows, etc.).
 """
 

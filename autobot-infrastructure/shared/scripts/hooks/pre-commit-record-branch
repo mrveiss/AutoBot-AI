@@ -1,0 +1,34 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-commit Hook: Record Branch Name Before Stash/Pop Cycle
+# ===========================================================
+#
+# Runs at the pre-commit stage (INSIDE the pre-commit framework's
+# stash/restore cycle) where the branch is still correct.
+# Saves the current branch to $GIT_DIR/.autobot-pre-commit-branch
+# so the prepare-commit-msg stage branch-guard hook can verify
+# the branch hasn't changed after stash pop.
+#
+# Issue: #1670 - pre-commit stash/pop silently switches active branch
+# Related: #1503 - pre-commit stash/restore stages untracked files
+#
+# Install: pre-commit install (uses .pre-commit-config.yaml)
+
+set -uo pipefail
+
+GIT_DIR_PATH=$(git rev-parse --git-dir 2>/dev/null)
+if [ -z "$GIT_DIR_PATH" ]; then
+    exit 0
+fi
+
+BRANCH=$(git branch --show-current 2>/dev/null)
+if [ -z "$BRANCH" ]; then
+    # Detached HEAD — nothing to guard
+    exit 0
+fi
+
+echo "$BRANCH" > "${GIT_DIR_PATH}/.autobot-pre-commit-branch"
+exit 0

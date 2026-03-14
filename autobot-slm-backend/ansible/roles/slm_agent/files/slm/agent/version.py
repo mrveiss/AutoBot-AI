@@ -15,9 +15,9 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Default paths (#1121/#1129: role-centric layout)
+# Default paths
 VERSION_FILE_PATH = Path("/var/lib/slm-agent/version.json")
-AGENT_CODE_PATH = Path("/opt/autobot/autobot-slm-agent")
+AGENT_CODE_PATH = Path("/opt/autobot/autobot-slm-agent")  # #1121/#1129
 
 
 class AgentVersion:

@@ -191,7 +191,7 @@ bash run_autobot.sh --restart
 
 ### 5. **Debug Logging Infrastructure** ✅
 
-**File**: `autobot-user-backend/api/terminal.py:787-812`
+**File**: `autobot-backend/api/terminal.py:787-812`
 
 **Added**: Comprehensive debug logging for terminal routing (used during diagnosis).
 
@@ -284,7 +284,7 @@ User Request
     ↓
 Chat Workflow Manager
     ↓
-Terminal Tool (autobot-user-backend/tools/terminal_tool.py)
+Terminal Tool (autobot-backend/tools/terminal_tool.py)
     ↓
 Agent Terminal Service (create_session if needed)
     ↓
@@ -317,7 +317,7 @@ Execute Command
 
 ### Files Modified:
 - `backend/services/agent_terminal_service.py` (session persistence, chat helper, duplication fix)
-- `autobot-user-backend/api/terminal.py` (debug logging, cleaned up)
+- `autobot-backend/api/terminal.py` (debug logging, cleaned up)
 
 ### Analysis Created:
 - `analysis/CODE_DUPLICATION_ANALYSIS.md` (refactoring opportunities)

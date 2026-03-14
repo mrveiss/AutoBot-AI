@@ -10,6 +10,17 @@
 #   ansible-playbook playbooks/update-all-nodes.yml
 #   ansible-playbook playbooks/update-all-nodes.yml -e deploy_ref=main
 #   ansible-playbook playbooks/update-all-nodes.yml -e skip_branch_check=true
+#   ansible-playbook playbooks/update-all-nodes.yml --skip-tags restart   # code-only, no restarts
+#
+# Tags:
+#   restart              - all service restart tasks (skip for code-only deploys)
+#   deps                 - pip install / npm ci tasks (skip for code-only deploys) (#1603)
+#   backend              - autobot-backend deploy + restart tasks
+#   frontend             - autobot-frontend deploy + build + nginx restart tasks
+#   npu, npu-worker      - NPU worker deploy + restart tasks
+#   browser, browser-worker - browser worker deploy + restart tasks
+#   slm, slm-backend, slm-frontend - SLM node deploy + build + restart tasks
+#   shared               - autobot-shared deploy tasks (all nodes)
 
 # =============================================================================
 # PLAY 0: Pre-flight Git Safety Check & Create Deploy Archives
@@ -103,6 +114,44 @@
       debug:
         msg: "7 deploy archives created from {{ deploy_ref }} ({{ deploy_info.stdout }})"
 
+    # --- Dependency change detection (#1603) ---
+    - name: "[PRE-FLIGHT] Get previous commit (before pull)"
+      command: >-
+        git -C {{ git_repo_root }} rev-parse HEAD~1
+      register: prev_commit
+      changed_when: false
+      failed_when: false
+
+    - name: "[PRE-FLIGHT] Check if Python deps changed"
+      shell: >-
+        git -C {{ git_repo_root }} diff --name-only
+        {{ prev_commit.stdout | default('HEAD') }} HEAD
+        -- '*/requirements.txt' 'autobot-shared/setup.py' 'autobot-shared/pyproject.toml'
+      register: python_deps_diff
+      changed_when: false
+      failed_when: false
+
+    - name: "[PRE-FLIGHT] Check if Node.js deps changed"
+      shell: >-
+        git -C {{ git_repo_root }} diff --name-only
+        {{ prev_commit.stdout | default('HEAD') }} HEAD
+        -- '*/package.json' '*/package-lock.json'
+      register: node_deps_diff
+      changed_when: false
+      failed_when: false
+
+    - name: "[PRE-FLIGHT] Set dependency change flags"
+      set_fact:
+        python_deps_changed: "{{ python_deps_diff.stdout | default('') | length > 0 }}"
+        node_deps_changed: "{{ node_deps_diff.stdout | default('') | length > 0 }}"
+
+    - name: "[PRE-FLIGHT] Display dependency change status"
+      debug:
+        msg:
+          - "  Python deps changed: {{ python_deps_changed }}"
+          - "  Node.js deps changed: {{ node_deps_changed }}"
+          - "  Changed files: {{ (python_deps_diff.stdout_lines | default([])) + (node_deps_diff.stdout_lines | default([])) }}"
+
     - name: "[PRE-FLIGHT] Get full commit hash"
       command: git -C {{ git_repo_root }} log -1 --format='%H'
       register: deploy_commit_full
@@ -154,18 +203,21 @@
         src: "{{ deploy_tmp }}/slm-backend.tar.gz"
         dest: /opt/autobot/
       become: true
+      tags: [slm, slm-backend]
 
     - name: "[PLAY 1] SLM | Deploy autobot-slm-frontend"
       unarchive:
         src: "{{ deploy_tmp }}/slm-frontend.tar.gz"
         dest: /opt/autobot/
       become: true
+      tags: [slm, slm-frontend]
 
     - name: "[PLAY 1] SLM | Deploy autobot-shared"
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
         dest: /opt/autobot/
       become: true
+      tags: [slm, shared]
 
     - name: "[PLAY 1] SLM | Fix ownership (unarchive runs as root)"
       file:
@@ -178,12 +230,59 @@
         - autobot-slm-backend
         - autobot-slm-frontend
         - autobot-shared
+      tags: [slm]
+
+    # --- SLM custom migrations (#1630) ---
+    - name: "[PLAY 1] SLM | Run database migrations (#1630)"
+      command:
+        cmd: >-
+          /opt/autobot/autobot-slm-backend/venv/bin/python
+          -m migrations.runner
+        chdir: /opt/autobot/autobot-slm-backend
+      become: true
+      become_user: autobot
+      environment:
+        PYTHONPATH: /opt/autobot/autobot-slm-backend
+      register: slm_migration_result
+      failed_when: false
+      tags: [slm, slm-backend, migrate]
+
+    - name: "[PLAY 1] SLM | Warn if migration failed (#1630)"
+      debug:
+        msg: "WARNING: SLM migration failed: {{ slm_migration_result.stderr | default('') }}"
+      when:
+        - slm_migration_result is defined
+        - slm_migration_result.rc | default(0) != 0
+      tags: [slm, slm-backend, migrate]
+
+    # --- Dependency install (#1603) ---
+    - name: "[PLAY 1] SLM | Install Python dependencies"
+      command:
+        cmd: /opt/autobot/autobot-slm-backend/venv/bin/pip install
+             -r /opt/autobot/autobot-slm-backend/requirements.txt
+             --quiet
+      become: true
+      become_user: autobot
+      when: hostvars['localhost']['python_deps_changed'] | bool
+      register: slm_pip_install
+      tags: [slm, slm-backend, deps]
+
+    - name: "[PLAY 1] SLM | Install Node.js dependencies"
+      command:
+        cmd: npm ci --ignore-scripts
+        chdir: /opt/autobot/autobot-slm-frontend
+      become: true
+      become_user: autobot
+      when: hostvars['localhost']['node_deps_changed'] | bool
+      register: slm_npm_install
+      tags: [slm, slm-frontend, deps]
 
     - name: "[PLAY 1] SLM | Rebuild frontend production build"
       command:
         cmd: npm run build
         chdir: /opt/autobot/autobot-slm-frontend
       register: slm_build
+      tags: [slm, slm-frontend]
 
     - name: "[PLAY 1] SLM | Restart backend service"
       systemd:
@@ -191,20 +290,26 @@
         state: restarted
         daemon_reload: true
       become: true
+      tags: [slm, slm-backend, restart]
 
     - name: "[PLAY 1] SLM | Restart nginx"
       systemd:
         name: nginx
         state: restarted
       become: true
+      tags: [slm, slm-frontend, restart]
 
-    - name: "[PLAY 1] SLM | Wait for backend to be ready"
-      wait_for:
-        host: "{{ ansible_host }}"
-        port: 443
-        timeout: 60
-        delay: 5
+    - name: "[PLAY 1] SLM | Wait for API to be ready"
+      uri:
+        url: "https://{{ ansible_host }}/api/health"
+        validate_certs: false
+        status_code: 200
+      register: slm_health_check
+      until: slm_health_check.status == 200
+      retries: 12
+      delay: 10
       delegate_to: localhost
+      tags: [always]
 
     - name: "[PLAY 1] SLM | Login to get auth token"
       uri:
@@ -219,6 +324,7 @@
       register: slm_login_play1
       delegate_to: localhost
       no_log: true
+      tags: [always]
 
     - name: "[PLAY 1] SLM | Mark node as synced in DB"
       uri:
@@ -233,6 +339,7 @@
         status_code: [200, 404]
       delegate_to: localhost
       ignore_errors: true
+      tags: [always]
 
     - name: "[PLAY 1] SLM Update Complete"
       debug:
@@ -255,7 +362,7 @@
   pre_tasks:
     - name: "[PLAY 2] Login to SLM API"
       uri:
-        url: "https://172.16.168.19/api/auth/login"
+        url: "https://{{ slm_host }}/api/auth/login"
         method: POST
         body_format: json
         body:
@@ -267,12 +374,14 @@
       delegate_to: localhost
       run_once: true
       no_log: true
+      tags: [always]
 
     - name: "[PLAY 2] Set SLM auth token"
       set_fact:
         slm_token: "{{ slm_login.json.access_token }}"
       delegate_to: localhost
       run_once: true
+      tags: [always]
 
   tasks:
     - name: "[PLAY 2] Starting Node Update"
@@ -290,6 +399,7 @@
         dest: /opt/autobot/
       become: true
       when: "'01-Backend' in inventory_hostname"
+      tags: [backend]
 
     - name: "[PLAY 2] Backend | Deploy autobot-shared"
       unarchive:
@@ -297,12 +407,24 @@
         dest: /opt/autobot/
       become: true
       when: "'01-Backend' in inventory_hostname"
+      tags: [backend, shared]
 
     - name: "[PLAY 2] Backend | Fix ownership"
       command: chown --no-dereference -R autobot:autobot /opt/autobot/autobot-backend
       become: true
       when: "'01-Backend' in inventory_hostname"
       changed_when: true
+      tags: [backend]
+
+    - name: "[PLAY 2] Backend | Fix shared ownership (#1632)"
+      file:
+        path: /opt/autobot/autobot-shared
+        owner: autobot
+        group: autobot
+        recurse: true
+      become: true
+      when: "'01-Backend' in inventory_hostname"
+      tags: [backend, shared]
 
     - name: "[PLAY 2] Backend | Remove legacy backend symlink"
       file:
@@ -310,6 +432,42 @@
         state: absent
       become: true
       when: "'01-Backend' in inventory_hostname"
+      tags: [backend]
+
+    - name: "[PLAY 2] Backend | Install Python dependencies"
+      command:
+        cmd: /opt/autobot/autobot-backend/venv/bin/pip install
+             -r /opt/autobot/autobot-backend/requirements.txt
+             --quiet
+      become: true
+      become_user: autobot
+      when:
+        - "'01-Backend' in inventory_hostname"
+        - hostvars['localhost']['python_deps_changed'] | bool
+      register: backend_pip_install
+      tags: [backend, deps]
+
+    - name: "[PLAY 2] Backend | Run Alembic migrations (#1608)"
+      command:
+        cmd: /opt/autobot/autobot-backend/venv/bin/python -m alembic upgrade head
+        chdir: /opt/autobot/autobot-backend
+      become: true
+      become_user: autobot
+      environment:
+        PYTHONPATH: /opt/autobot/autobot-backend
+      when: "'01-Backend' in inventory_hostname"
+      register: backend_migration_result
+      failed_when: false
+      tags: [backend, migrate]
+
+    - name: "[PLAY 2] Backend | Warn if migration failed (#1608)"
+      debug:
+        msg: "WARNING: Alembic migration failed: {{ backend_migration_result.stderr | default('') }}"
+      when:
+        - "'01-Backend' in inventory_hostname"
+        - backend_migration_result is defined
+        - backend_migration_result.rc | default(0) != 0
+      tags: [backend, migrate]
 
     - name: "[PLAY 2] Backend | Restart service"
       systemd:
@@ -318,6 +476,20 @@
         daemon_reload: true
       become: true
       when: "'01-Backend' in inventory_hostname"
+      tags: [backend, restart]
+
+    - name: "[PLAY 2] Backend | Wait for API to be ready"
+      uri:
+        url: "https://{{ ansible_host }}:8443/api/health"
+        validate_certs: false
+        status_code: 200
+      register: backend_health_check
+      until: backend_health_check.status == 200
+      retries: 42
+      delay: 10
+      delegate_to: localhost
+      when: "'01-Backend' in inventory_hostname"
+      tags: [backend, restart]
 
     # ----- Frontend (172.16.168.21) -----
     - name: "[PLAY 2] Frontend | Deploy autobot-frontend"
@@ -326,6 +498,7 @@
         dest: /opt/autobot/
       become: true
       when: "'02-Frontend' in inventory_hostname"
+      tags: [frontend]
 
     - name: "[PLAY 2] Frontend | Fix ownership"
       file:
@@ -335,6 +508,19 @@
         recurse: true
       become: true
       when: "'02-Frontend' in inventory_hostname"
+      tags: [frontend]
+
+    - name: "[PLAY 2] Frontend | Install Node.js dependencies"
+      command:
+        cmd: npm ci --ignore-scripts
+        chdir: /opt/autobot/autobot-frontend
+      become: true
+      become_user: autobot
+      when:
+        - "'02-Frontend' in inventory_hostname"
+        - hostvars['localhost']['node_deps_changed'] | bool
+      register: frontend_npm_install
+      tags: [frontend, deps]
 
     - name: "[PLAY 2] Frontend | Rebuild production dist"
       command:
@@ -344,6 +530,7 @@
       become: true
       when: "'02-Frontend' in inventory_hostname"
       register: frontend_build
+      tags: [frontend]
 
     - name: "[PLAY 2] Frontend | Restart nginx"
       systemd:
@@ -351,6 +538,17 @@
         state: restarted
       become: true
       when: "'02-Frontend' in inventory_hostname"
+      tags: [frontend, restart]
+
+    - name: "[PLAY 2] Frontend | Wait for nginx to be ready"
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: 443
+        timeout: 60
+        delay: 5
+      delegate_to: localhost
+      when: "'02-Frontend' in inventory_hostname"
+      tags: [frontend, restart]
 
     # ----- NPU Worker (172.16.168.22) -----
     - name: "[PLAY 2] NPU | Deploy autobot-npu-worker"
@@ -361,6 +559,7 @@
       when: >-
         '03-NPU' in inventory_hostname or
         'npu-worker' in inventory_hostname
+      tags: [npu, npu-worker]
 
     - name: "[PLAY 2] NPU | Fix ownership"
       file:
@@ -372,6 +571,57 @@
       when: >-
         '03-NPU' in inventory_hostname or
         'npu-worker' in inventory_hostname
+      tags: [npu, npu-worker]
+
+    - name: "[PLAY 2] NPU | Install Python dependencies"
+      command:
+        cmd: /opt/autobot/autobot-npu-worker/venv/bin/pip install
+             -r /opt/autobot/autobot-npu-worker/requirements.txt
+             --quiet
+      become: true
+      become_user: autobot
+      when:
+        - >-
+          '03-NPU' in inventory_hostname or
+          'npu-worker' in inventory_hostname
+        - hostvars['localhost']['python_deps_changed'] | bool
+      register: npu_pip_install
+      tags: [npu, npu-worker, deps]
+
+    - name: "[PLAY 2] NPU | Restart service"
+      systemd:
+        name: autobot-npu-worker
+        state: restarted
+      become: true
+      when: >-
+        '03-NPU' in inventory_hostname or
+        'npu-worker' in inventory_hostname
+      failed_when: false
+      tags: [npu, npu-worker, restart]
+
+    - name: "[PLAY 2] NPU | Wait for service to stabilize (#1633)"
+      command: systemctl is-active autobot-npu-worker
+      become: true
+      register: npu_status
+      retries: 6
+      delay: 5
+      until: npu_status.rc == 0
+      when: >-
+        '03-NPU' in inventory_hostname or
+        'npu-worker' in inventory_hostname
+      failed_when: false
+      tags: [npu, npu-worker, restart]
+
+    - name: "[PLAY 2] NPU | Warn if service not active (#1633)"
+      debug:
+        msg: "WARNING: autobot-npu-worker not active after restart: {{ npu_status.stdout | default('unknown') }}"
+      when:
+        - >-
+          '03-NPU' in inventory_hostname or
+          'npu-worker' in inventory_hostname
+        - npu_status is defined
+        - npu_status.rc | default(0) != 0
+      tags: [npu, npu-worker, restart]
 
     # ----- Browser Worker (172.16.168.25) -----
     - name: "[PLAY 2] Browser | Deploy autobot-browser-worker"
@@ -382,6 +632,7 @@
       when: >-
         '05-Browser' in inventory_hostname or
         'browser-automation' in inventory_hostname
+      tags: [browser, browser-worker]
 
     - name: "[PLAY 2] Browser | Fix ownership"
       file:
@@ -393,6 +644,46 @@
       when: >-
         '05-Browser' in inventory_hostname or
         'browser-automation' in inventory_hostname
+      tags: [browser, browser-worker]
+
+    - name: "[PLAY 2] Browser | Install Python dependencies"
+      command:
+        cmd: /opt/autobot/autobot-browser-worker/venv/bin/pip install
+             -r /opt/autobot/autobot-browser-worker/requirements.txt
+             --quiet
+      become: true
+      become_user: autobot
+      when:
+        - >-
+          '05-Browser' in inventory_hostname or
+          'browser-automation' in inventory_hostname
+        - hostvars['localhost']['python_deps_changed'] | bool
+      register: browser_pip_install
+      failed_when: false
+      tags: [browser, browser-worker, deps]
+
+    - name: "[PLAY 2] Browser | Restart service"
+      systemd:
+        name: autobot-playwright
+        state: restarted
+      become: true
+      when: >-
+        '05-Browser' in inventory_hostname or
+        'browser-automation' in inventory_hostname
+      failed_when: false
+      tags: [browser, browser-worker, restart]
+
+    - name: "[PLAY 2] Browser | Wait for service to be ready"
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: 3000
+        timeout: 60
+        delay: 5
+      delegate_to: localhost
+      when: >-
+        '05-Browser' in inventory_hostname or
+        'browser-automation' in inventory_hostname
+      tags: [browser, browser-worker, restart]
 
     # ----- Shared (non-backend nodes) -----
     - name: "[PLAY 2] Shared | Deploy autobot-shared"
@@ -401,6 +692,7 @@
         dest: /opt/autobot/
       become: true
       when: "'01-Backend' not in inventory_hostname"
+      tags: [shared]
 
     - name: "[PLAY 2] Shared | Fix ownership"
       file:
@@ -410,11 +702,12 @@
         recurse: true
       become: true
       when: "'01-Backend' not in inventory_hostname"
+      tags: [shared]
 
     # ----- Mark synced -----
     - name: "[PLAY 2] Mark node as synced in SLM DB"
       uri:
-        url: "https://172.16.168.19/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
+        url: "https://{{ slm_host }}/api/code-sync/nodes/{{ inventory_hostname }}/mark-synced"
         method: POST
         headers:
           Authorization: "Bearer {{ slm_token }}"
@@ -425,6 +718,7 @@
         status_code: [200, 404]
       delegate_to: localhost
       ignore_errors: true
+      tags: [always]
 
     - name: "[PLAY 2] Node Update Complete"
       debug:
@@ -444,7 +738,7 @@
 
     - name: Check SLM health
       uri:
-        url: "https://172.16.168.19/api/health"
+        url: "https://{{ slm_host }}/api/health"
         validate_certs: false
       register: slm_health
       ignore_errors: true
@@ -466,6 +760,6 @@
           - "  SLM:     {{ slm_health.json.status | default('Check manually') }}"
           - "  Nodes:   {{ slm_health.json.nodes_online | default('?') }}/{{ slm_health.json.nodes_total | default('9') }}"
           - ""
-          - "  SLM Admin:     https://172.16.168.19/"
-          - "  User Frontend: https://172.16.168.21/"
+          - "  SLM Admin:     https://{{ slm_host }}/"
+          - "  User Frontend: https://{{ frontend_host }}/"
           - ""

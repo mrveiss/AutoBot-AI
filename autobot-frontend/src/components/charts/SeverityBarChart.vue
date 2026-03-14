@@ -22,18 +22,10 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseChart from './BaseChart.vue'
+import { getCssVar, getSeverityColors } from '@/composables/useCssVars'
 import type { ApexOptions } from 'apexcharts'
 
 const { t } = useI18n()
-
-/**
- * Get CSS variable value from the document
- * Issue #704: Use design tokens for theming
- */
-function getCssVar(name: string, fallback: string): string {
-  if (typeof document === 'undefined') return fallback
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
-}
 
 interface SeverityData {
   severity?: string
@@ -120,27 +112,6 @@ const chartOptions = computed<ApexOptions>(() => ({
   }
 }))
 
-// Get colors based on severity
-// Issue #704: Using design tokens with fallbacks for SSR compatibility
-function getSeverityColors(severities: string[]): string[] {
-  const severityColors: Record<string, string> = {
-    critical: getCssVar('--color-error-hover', '#dc2626'),
-    high: getCssVar('--color-error', '#ef4444'),
-    error: getCssVar('--color-error', '#ef4444'),
-    medium: getCssVar('--color-warning', '#f59e0b'),
-    warning: getCssVar('--color-warning', '#f59e0b'),
-    low: getCssVar('--color-info', '#3b82f6'),
-    info: getCssVar('--color-info', '#3b82f6'),
-    hint: getCssVar('--color-success', '#10b981'),
-    suggestion: getCssVar('--color-success', '#10b981'),
-    trivial: getCssVar('--text-tertiary', '#64748b')
-  }
-
-  return severities.map((severity) => {
-    const key = severity.toLowerCase()
-    return severityColors[key] || getCssVar('--chart-indigo', '#6366f1')
-  })
-}
 
 // Format severity label for display
 function formatSeverityLabel(severity: string): string {

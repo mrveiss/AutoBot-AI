@@ -265,6 +265,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
+import { getCssVar } from '@/composables/useCssVars'
 
 const { t } = useI18n()
 
@@ -331,15 +332,6 @@ const nodeWidth = 140
 const nodeHeight = 60
 const nodeSpacingX = 180
 const nodeSpacingY = 100
-
-/**
- * Get CSS variable value from document root.
- * Issue #704: Helper for design token access in JavaScript
- */
-function getCssVar(name: string, fallback: string): string {
-  if (typeof document === 'undefined') return fallback
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
-}
 
 // Computed
 const nodes = computed(() => {

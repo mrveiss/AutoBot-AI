@@ -562,7 +562,7 @@ async def _run_ssh_cmd(node: Node, remote_cmd: str) -> tuple:
     """Run a command on a node via SSH. Returns (success, output)."""
     ssh_user = node.ssh_user or "autobot"
     ssh_port = node.ssh_port or 22
-    ssh_key = "/home/autobot/.ssh/id_rsa"
+    ssh_key = "/home/autobot/.ssh/id_rsa"  # noqa: ssot-path
     ssh_cmd = [
         "/usr/bin/ssh",
         "-o",

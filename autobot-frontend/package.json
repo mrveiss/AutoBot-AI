@@ -56,6 +56,9 @@
     "vue-router": "^4.5.1",
     "vue3-apexcharts": "^1.10.0"
   },
+  "overrides": {
+    "minimatch": ">=9.0.7"
+  },
   "devDependencies": {
     "@pinia/testing": "^0.1.7",
     "@playwright/test": "^1.54.2",

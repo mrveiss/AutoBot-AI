@@ -376,6 +376,9 @@ class WorkflowScheduler:
         if self._running:
             return
 
+        if not self._workflow_executor:
+            self._workflow_executor = _default_template_executor
+
         self._running = True
         self._scheduler_task = asyncio.create_task(self._scheduler_loop())
 
@@ -886,6 +889,32 @@ class WorkflowScheduler:
                 pass  # No existing data, start fresh
             except Exception as e:
                 logger.error("Failed to load workflows: %s", e)
+
+
+async def _default_template_executor(
+    workflow: ScheduledWorkflow,
+) -> Dict[str, Any]:
+    """Execute a scheduled workflow via template execution (#1614).
+
+    Adapts ScheduledWorkflow to the template execution interface.
+    Requires template_id to be set on the workflow.
+    """
+    if not workflow.template_id:
+        logger.warning(
+            "Scheduled workflow %s has no template_id, skipping",
+            workflow.id,
+        )
+        return {"success": False, "error": "No template_id"}
+
+    from api.templates import TemplateExecutionRequest, execute_template_workflow
+
+    request = TemplateExecutionRequest(
+        template_id=workflow.template_id,
+        variables=workflow.variables or {},
+        auto_approve=workflow.auto_approve,
+    )
+    result = await execute_template_workflow(workflow.template_id, request)
+    return result
 
 
 # Global scheduler instance

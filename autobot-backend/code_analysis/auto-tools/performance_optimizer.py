@@ -492,7 +492,9 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 1:
         # Default to AutoBot frontend directory
-        project_root = "/home/kali/Desktop/AutoBot"
+        project_root = os.environ.get(
+            "AUTOBOT_BASE_DIR", "/opt/autobot"
+        )  # noqa: ssot-path
         target_dir = "autobot-vue/src"
 
         print("🚀 AutoBot Console.log Performance Fix Agent")  # noqa: print

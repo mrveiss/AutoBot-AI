@@ -26,6 +26,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
@@ -36,6 +37,7 @@ logger = logging.getLogger(__name__)
 # Redis connection for checkpointer
 _REDIS_URI = None  # Set lazily from SSOT config
 _checkpointer = None
+_compiled_graph = None
 
 
 class ChatState(TypedDict, total=False):
@@ -95,7 +97,7 @@ class ChatState(TypedDict, total=False):
 # ---------------------------------------------------------------------------
 
 
-async def initialize_session(state: ChatState, config: dict) -> dict:
+async def initialize_session(state: ChatState, config: RunnableConfig) -> dict:
     """Initialize chat session, load history, detect exit intent."""
     manager = config["configurable"]["manager"]
     stream_cb = config["configurable"].get("stream_callback")
@@ -135,7 +137,7 @@ async def initialize_session(state: ChatState, config: dict) -> dict:
         return {"error": str(exc), "workflow_messages": [error_msg]}
 
 
-async def detect_intent(state: ChatState, config: dict) -> dict:
+async def detect_intent(state: ChatState, config: RunnableConfig) -> dict:
     """Check for exit intent and slash commands."""
     if state.get("error"):
         return {}
@@ -170,7 +172,7 @@ async def detect_intent(state: ChatState, config: dict) -> dict:
     }
 
 
-async def prepare_llm(state: ChatState, config: dict) -> dict:
+async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
     """Prepare LLM parameters and create iteration context."""
     if state.get("error"):
         return {}
@@ -273,7 +275,7 @@ async def _run_llm_iteration(manager, ctx, iteration, messages, stream_cb):
     return messages, llm_response, should_continue
 
 
-async def generate_response(state: ChatState, config: dict) -> dict:
+async def generate_response(state: ChatState, config: RunnableConfig) -> dict:
     """Run one LLM iteration: call LLM, stream response, parse tool calls.
 
     Delegates to the manager's continuation loop logic for one iteration.
@@ -317,7 +319,7 @@ async def generate_response(state: ChatState, config: dict) -> dict:
     }
 
 
-async def reflect_on_response(state: ChatState, config: dict) -> dict:
+async def reflect_on_response(state: ChatState, config: RunnableConfig) -> dict:
     """RLM self-reflection: evaluate LLM response quality (#1373).
 
     Uses ResponseQualityEvaluator to score the latest LLM response.
@@ -364,7 +366,7 @@ async def reflect_on_response(state: ChatState, config: dict) -> dict:
     }
 
 
-async def request_approval(state: ChatState, config: dict) -> dict:
+async def request_approval(state: ChatState, config: RunnableConfig) -> dict:
     """Interrupt execution to request command approval from the user.
 
     Uses LangGraph's interrupt() to pause the graph. The frontend receives
@@ -411,7 +413,7 @@ async def request_approval(state: ChatState, config: dict) -> dict:
     }
 
 
-async def execute_tools(state: ChatState, config: dict) -> dict:
+async def execute_tools(state: ChatState, config: RunnableConfig) -> dict:
     """Execute approved tool calls."""
     if state.get("error"):
         return {}
@@ -474,7 +476,7 @@ async def execute_tools(state: ChatState, config: dict) -> dict:
     }
 
 
-async def persist_conversation(state: ChatState, config: dict) -> dict:
+async def persist_conversation(state: ChatState, config: RunnableConfig) -> dict:
     """Persist conversation to Redis and file storage."""
     if state.get("error"):
         return {}
@@ -645,30 +647,67 @@ async def get_redis_checkpointer() -> AsyncRedisSaver:
     if _checkpointer is not None:
         return _checkpointer
 
-    # Get Redis URI from SSOT config
+    # Get Redis URI and checkpoint TTL from SSOT config
+    ttl_minutes = 1440  # Default: 24 hours
     try:
         from autobot_shared.ssot_config import config as ssot
 
-        redis_host = ssot.redis.host
-        redis_port = ssot.redis.port
+        redis_host = ssot.vm.redis
+        redis_port = ssot.port.redis
         _REDIS_URI = f"redis://{redis_host}:{redis_port}"
+        ttl_minutes = ssot.redis.checkpoint_ttl_minutes
     except Exception:
-        redis_host = os.environ.get("AUTOBOT_REDIS_HOST", "172.16.168.23")
+        redis_host = os.environ.get(
+            "AUTOBOT_REDIS_HOST", "172.16.168.23"  # noqa: ssot-fallback
+        )
         _REDIS_URI = f"redis://{redis_host}:6379"
         logger.warning(
             "SSOT config unavailable, using fallback Redis URI: %s",
             _REDIS_URI,
         )
 
+    # Issue #1481: TTL config for checkpoint auto-expiration
+    ttl_config = None
+    if ttl_minutes > 0:
+        ttl_config = {
+            "default_ttl": ttl_minutes,
+            "refresh_on_read": True,
+        }
+
     # Issue #1433: from_conn_string() is an async generator, use direct init
-    _checkpointer = AsyncRedisSaver(redis_url=_REDIS_URI)
+    _checkpointer = AsyncRedisSaver(redis_url=_REDIS_URI, ttl=ttl_config)
     await _checkpointer.asetup()
-    logger.info("LangGraph Redis checkpointer initialized: %s", _REDIS_URI)
+    logger.info(
+        "LangGraph Redis checkpointer initialized: %s (TTL: %s min)",
+        _REDIS_URI,
+        ttl_minutes if ttl_minutes > 0 else "disabled",
+    )
     return _checkpointer
+
+
+async def delete_thread_checkpoints(thread_id: str) -> None:
+    """Delete all LangGraph checkpoints for a session thread.
+
+    Issue #1475: Called after unrecoverable graph errors to prevent corrupted
+    checkpoints from blocking future invocations on the same chat session.
+
+    Args:
+        thread_id: The session ID whose checkpoints should be deleted.
+    """
+    try:
+        checkpointer = await get_redis_checkpointer()
+        await checkpointer.adelete_thread(thread_id)
+        logger.info("Cleared LangGraph checkpoints for thread: %s", thread_id)
+    except Exception as exc:
+        logger.warning("Failed to clear checkpoints for thread %s: %s", thread_id, exc)
 
 
 async def get_compiled_graph(manager):
     """Get a compiled graph instance with Redis checkpointer.
+
+    The compiled graph is cached as a module-level singleton since the graph
+    structure is static — only per-invocation config (thread_id, manager,
+    stream_callback) varies.
 
     Args:
         manager: ChatWorkflowManager instance (passed to nodes via config)
@@ -676,6 +715,12 @@ async def get_compiled_graph(manager):
     Returns:
         Compiled StateGraph ready for invocation
     """
+    global _compiled_graph
+
+    if _compiled_graph is not None:
+        return _compiled_graph
+
     checkpointer = await get_redis_checkpointer()
     builder = build_chat_graph()
-    return builder.compile(checkpointer=checkpointer)
+    _compiled_graph = builder.compile(checkpointer=checkpointer)
+    return _compiled_graph

@@ -151,6 +151,11 @@
           </div>
         </div>
 
+        <!-- Language Tab -->
+        <div v-if="activeTab === 'language'" id="panel-language" role="tabpanel">
+          <LanguageSettingsPanel />
+        </div>
+
         <!-- Security Tab -->
         <div v-if="activeTab === 'security'" id="panel-security" role="tabpanel">
           <div class="profile-section">
@@ -209,6 +214,7 @@ import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/stores/useUserStore'
 import PreferencesPanel from '@/components/ui/PreferencesPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
+import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.vue'
 import { usePreferences } from '@/composables/usePreferences'
 
 defineProps<{
@@ -219,11 +225,12 @@ const emit = defineEmits<{
   close: []
 }>()
 
-type TabKey = 'general' | 'appearance' | 'security'
+type TabKey = 'general' | 'appearance' | 'language' | 'security'
 
 const tabs = computed<{ key: TabKey; label: string; icon: string }[]>(() => [
   { key: 'general', label: t('profile.tabGeneral'), icon: 'fas fa-user' },
   { key: 'appearance', label: t('profile.tabAppearance'), icon: 'fas fa-palette' },
+  { key: 'language', label: t('profile.tabLanguage'), icon: 'fas fa-globe' },
   { key: 'security', label: t('profile.tabSecurity'), icon: 'fas fa-shield-alt' }
 ])
 

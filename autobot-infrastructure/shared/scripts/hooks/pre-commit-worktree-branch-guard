@@ -1,0 +1,93 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Pre-commit Hook: Block Commits on Branches Shared with Worktrees
+# =================================================================
+#
+# Runs at the pre-commit stage (BEFORE the stash/restore cycle).
+# Blocks the commit when the current branch is also checked out in
+# another git worktree, because pre-commit's stash push/pop cycle
+# corrupts the branch state in this scenario:
+#
+#   1. pre-commit runs `git stash push --include-untracked`
+#   2. The stash interacts with the worktree's branch ref
+#   3. On `git stash pop`, the active branch silently switches
+#   4. The commit lands on the correct SHA but the local branch
+#      ref is orphaned — recoverable only via `git reflog`
+#
+# Fix: either remove the conflicting worktree first, or work
+# inside the worktree itself (not the main working directory).
+#
+# Issue: #1654 - pre-commit stash pop can switch active branch
+# Related: #1503 - pre-commit stash/restore stages untracked files
+
+set -uo pipefail
+
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+main() {
+    current_branch=$(git branch --show-current 2>/dev/null)
+
+    # Detached HEAD or no branch — nothing to guard
+    if [[ -z "$current_branch" ]]; then
+        exit 0
+    fi
+
+    # Check if any other worktree has this branch checked out
+    conflict=""
+    while IFS= read -r line; do
+        # git worktree list --porcelain outputs:
+        #   worktree /path/to/worktree
+        #   HEAD <sha>
+        #   branch refs/heads/<branch>
+        #   (blank line)
+        if [[ "$line" == worktree\ * ]]; then
+            wt_path="${line#worktree }"
+        fi
+        if [[ "$line" == branch\ * ]]; then
+            wt_branch="${line#branch refs/heads/}"
+            # Skip the main working directory (current worktree)
+            main_wt=$(git rev-parse --show-toplevel 2>/dev/null)
+            if [[ "$wt_branch" == "$current_branch" && "$wt_path" != "$main_wt" ]]; then
+                conflict="$wt_path"
+                break
+            fi
+        fi
+    done < <(git worktree list --porcelain 2>/dev/null)
+
+    if [[ -z "$conflict" ]]; then
+        exit 0
+    fi
+
+    echo ""
+    echo -e "${BOLD}${RED}BLOCKED: branch also checked out in worktree (Issue #1654)${NC}"
+    echo -e "${CYAN}──────────────────────────────────────────────────────${NC}"
+    echo ""
+    echo -e "  Branch:    ${BOLD}${current_branch}${NC}"
+    echo -e "  Worktree:  ${conflict}"
+    echo ""
+    echo "  pre-commit's stash push/pop cycle will corrupt the branch"
+    echo "  state when the same branch is checked out in two places."
+    echo ""
+    echo -e "  ${YELLOW}Fix options:${NC}"
+    echo "    1. Remove the worktree first:"
+    echo "       git worktree remove ${conflict}"
+    echo ""
+    echo "    2. Work inside the worktree instead:"
+    echo "       cd ${conflict}"
+    echo ""
+    echo "    3. Checkout a different branch in the main directory:"
+    echo "       git checkout Dev_new_gui"
+    echo -e "${CYAN}──────────────────────────────────────────────────────${NC}"
+    echo ""
+
+    exit 1
+}
+
+main "$@"
