@@ -264,19 +264,10 @@
 import { ref, onMounted, computed } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
+import { getCssVar } from '@/composables/useCssVars'
 
 const logger = createLogger('ConversationFlowDashboard')
 
-/**
- * Helper to get CSS custom property value for dynamic JS usage.
- * Issue #704: Added for design token integration in JavaScript.
- *
- * @param varName - CSS variable name (e.g., '--color-success')
- * @returns The computed value of the CSS variable
- */
-const getCssVar = (varName: string): string => {
-  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim()
-}
 
 // Types
 interface IntentPattern {
