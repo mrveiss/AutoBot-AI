@@ -29,7 +29,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Install Python 3.10 via deadsnakes PPA
       run: |
@@ -75,7 +75,7 @@ jobs:
         safety check || true
 
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: '20'
 
@@ -92,7 +92,7 @@ jobs:
         npm audit --audit-level=moderate || true
 
     - name: Upload Security Reports
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: dependency-security-reports
@@ -113,7 +113,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Install Python 3.10 via deadsnakes PPA
       run: |
@@ -199,7 +199,7 @@ jobs:
         fi
 
     - name: Upload SAST Reports
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: sast-security-reports
@@ -220,7 +220,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Check for Security Files
       run: |
@@ -270,7 +270,7 @@ jobs:
 
     steps:
     - name: Download all security reports
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
 
     - name: Generate Security Summary
       run: |
@@ -303,7 +303,7 @@ jobs:
         echo "3. Address any SAST findings in critical code paths" >> security-summary.md
 
     - name: Upload Security Summary
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: security-summary
         path: security-summary.md

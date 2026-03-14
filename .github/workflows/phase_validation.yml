@@ -31,7 +31,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Install Python 3.10 via deadsnakes PPA
       run: |
@@ -137,7 +137,7 @@ jobs:
         fi
 
     - name: Upload Validation Reports
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always()
       with:
         name: phase-validation-reports
@@ -148,7 +148,7 @@ jobs:
 
     - name: Comment Phase Status on PR
       if: github.event_name == 'pull_request' && always()
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         script: |
           const fs = require('fs');
@@ -206,10 +206,10 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Download validation results
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: phase-validation-reports
 
