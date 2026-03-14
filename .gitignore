@@ -203,7 +203,9 @@ ollama/
 *.pid.lock
 *.sock
 *.dmp
-core.*
+# Core dumps (Linux)
+/core
+core.[0-9]*
 
 # === SETUP ARTIFACTS ===
 setup.log
