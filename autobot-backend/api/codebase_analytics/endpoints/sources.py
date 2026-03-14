@@ -115,10 +115,13 @@ async def _do_sync(source: CodeSource) -> None:
         err = ""
         if source.source_type == "github" and source.repo:
             url = _build_clone_url(source.repo, token)
-            if Path(clone_path).is_dir():
+            clone_dir = Path(clone_path)
+            if clone_dir.is_dir() and (clone_dir / ".git").is_dir():
                 err = await _run_git_pull(clone_path)
             else:
-                Path(clone_path).mkdir(parents=True, exist_ok=True)
+                if clone_dir.is_dir():
+                    shutil.rmtree(clone_path, ignore_errors=True)
+                clone_dir.mkdir(parents=True, exist_ok=True)
                 err = await _run_git_clone(url, clone_path, source.branch)
 
         if err:
@@ -231,8 +234,21 @@ async def create_code_source(request: CodeSourceCreateRequest):
     )
     if source.source_type == "github" and source.repo:
         source.clone_path = _make_clone_path(source.id)
+    elif source.source_type == "local" and source.repo:
+        source.clone_path = source.repo
     await save_source(source)
     logger.info("Created code source %s (%s)", source.id, source.name)
+
+    # Auto-sync GitHub sources on creation (#1715)
+    if source.source_type == "github" and source.repo:
+        from ..scanner import _active_tasks
+
+        sync_task_id = str(uuid.uuid4())
+        task = asyncio.create_task(_do_sync(source))
+        _active_tasks[sync_task_id] = task
+        task.add_done_callback(_create_sync_cleanup(sync_task_id))
+        logger.info("Auto-sync started for new source %s", source.id)
+
     return JSONResponse(source.model_dump(), status_code=201)
 
 
@@ -285,7 +301,10 @@ async def delete_code_source(source_id: str):
     if source is None:
         raise HTTPException(status_code=404, detail=f"Source {source_id} not found")
     if source.clone_path and Path(source.clone_path).exists():
-        shutil.rmtree(source.clone_path, ignore_errors=True)
+        # Only remove clone directories we created (under _CODE_SOURCES_BASE)
+        clone = Path(source.clone_path).resolve()
+        if clone.is_relative_to(_CODE_SOURCES_BASE):
+            shutil.rmtree(source.clone_path, ignore_errors=True)
     ok = await delete_source(source_id)
     logger.info("Deleted code source %s", source_id)
     return JSONResponse({"success": ok, "source_id": source_id})
@@ -303,9 +322,24 @@ async def sync_code_source(source_id: str):
     if source is None:
         raise HTTPException(status_code=404, detail=f"Source {source_id} not found")
     if source.source_type == "local":
-        raise HTTPException(
-            status_code=400, detail="Local sources do not require syncing"
+        # Local sources skip git ops — validate path and trigger indexing
+        if not source.clone_path or not Path(source.clone_path).is_dir():
+            raise HTTPException(
+                status_code=400,
+                detail=f"Local path not found: {source.clone_path}",
+            )
+        source.status = SourceStatus.READY
+        source.last_synced = datetime.now().isoformat()
+        await save_source(source)
+        await _trigger_indexing(source)
+        resp = SourceSyncResponse(
+            source_id=source_id,
+            task_id="local",
+            status="started",
+            message="Indexing triggered for local source.",
         )
+        return JSONResponse(resp.model_dump())
+
     if not source.clone_path:
         source.clone_path = _make_clone_path(source.id)
         await save_source(source)
