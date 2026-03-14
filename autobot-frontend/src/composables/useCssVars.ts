@@ -16,6 +16,10 @@ export function getCssVar(name: string, fallback = ''): string {
  * Map a single severity level to a theme-aware CSS color.
  * Issue #704: Design token colors for severity indicators.
  * Issue #1606: Restored as shared utility (removed in #1587).
+ * Issue #1667: Retained for canvas-based rendering contexts (Cytoscape node colors,
+ * Chart.js inline dataset colors, D3 inline styles) where CSS class binding is not
+ * available. Components that use HTML elements should prefer `:class="'severity-' + level"`
+ * with scoped CSS tokens instead.
  */
 export function getSeverityColor(severity: string | undefined): string {
   switch (severity?.toLowerCase()) {

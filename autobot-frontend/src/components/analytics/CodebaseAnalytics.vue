@@ -3897,9 +3897,6 @@ const getPriorityClass = (severity: string | undefined): string => {
   }
 }
 
-// Issue #1602/#1606: getCssVar + getSeverityColor moved to shared composable
-import { getCssVar, getSeverityColor } from '@/composables/useCssVars'
-
 const formatProblemType = (type: string | undefined): string => {
   return type?.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) || 'Unknown'
 }
