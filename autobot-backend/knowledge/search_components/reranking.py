@@ -98,6 +98,11 @@ class ResultReranker:
 
 # Module-level CrossEncoder singleton (Issue #1549: shared per-worker to avoid
 # 400MB+ duplication when multiple instances each load their own copy).
+#
+# Issue #1562: sentinel distinguishes "not yet loaded" (None) from "load failed"
+# (_LOAD_FAILED) so that a non-ImportError load failure does not cause
+# get_cross_encoder() to retry the expensive model load on every subsequent call.
+_LOAD_FAILED = object()
 _cross_encoder_model = None
 _cross_encoder_lock = threading.Lock()
 
@@ -107,8 +112,14 @@ def get_cross_encoder():
 
     Issue #1549: Loading CrossEncoder once per worker process and sharing it
     across all callers eliminates per-instance duplication (~100MB each).
+
+    Issue #1562: Returns None for both the ImportError case (library absent)
+    and the permanent-failure case (_LOAD_FAILED sentinel). The sentinel
+    prevents retrying a failed load on every subsequent call.
     """
     global _cross_encoder_model
+    if _cross_encoder_model is _LOAD_FAILED:
+        return None
     if _cross_encoder_model is None:
         with _cross_encoder_lock:
             if _cross_encoder_model is None:
@@ -128,7 +139,9 @@ def get_cross_encoder():
                     _cross_encoder_model = None
                 except Exception as exc:
                     logger.error("Failed to load CrossEncoder model: %s", exc)
-                    _cross_encoder_model = None
+                    _cross_encoder_model = _LOAD_FAILED
+    if _cross_encoder_model is _LOAD_FAILED:
+        return None
     return _cross_encoder_model
 
 
