@@ -650,7 +650,7 @@ class ChatKnowledgeService:
         return context_string, citations, intent_result, enhanced_query
 
     def _retrieve_documentation_context(
-        self, query: str, n_results: int = 3, score_threshold: float = 0.5
+        self, query: str, n_results: int = 3, score_threshold: float = 0.3
     ) -> str:
         """Retrieve documentation context if query matches doc patterns.
 
@@ -729,7 +729,7 @@ class ChatKnowledgeService:
         self,
         query: str,
         n_results: int = 3,
-        score_threshold: float = 0.6,
+        score_threshold: float = 0.3,
     ) -> Tuple[str, List[Dict[str, Any]]]:
         """
         Retrieve relevant AutoBot documentation for a query.

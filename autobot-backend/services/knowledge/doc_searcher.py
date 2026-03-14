@@ -182,7 +182,7 @@ class DocumentationSearcher:
         }
 
     def search(
-        self, query: str, n_results: int = 3, score_threshold: float = 0.6
+        self, query: str, n_results: int = 3, score_threshold: float = 0.3
     ) -> List[Dict[str, Any]]:
         """Search documentation for relevant content.
 

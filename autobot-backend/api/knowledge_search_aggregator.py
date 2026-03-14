@@ -186,7 +186,7 @@ def _process_documentation_context(
     if not doc_searcher or not doc_searcher.is_documentation_query(query):
         return total_length
 
-    doc_results = doc_searcher.search(query=query, n_results=2, score_threshold=0.6)
+    doc_results = doc_searcher.search(query=query, n_results=2, score_threshold=0.3)
     if not doc_results:
         return total_length
 
@@ -252,7 +252,7 @@ class UnifiedSearchRequest(BaseModel):
     doc_results: int = Field(3, ge=0, le=10, description="Max documentation results")
     expand_relations: bool = Field(True, description="Include related facts via graph")
     score_threshold: float = Field(
-        0.6, ge=0.0, le=1.0, description="Minimum relevance score"
+        0.3, ge=0.0, le=1.0, description="Minimum relevance score"
     )
     include_sources: List[str] = Field(
         default=["facts", "relations", "documentation"],
@@ -554,7 +554,7 @@ async def get_llm_context(req: Request, body: ContextRequest):
 async def search_documentation(
     query: str,
     n_results: int = 5,
-    score_threshold: float = 0.5,
+    score_threshold: float = 0.3,
 ):
     """
     Search indexed AutoBot documentation.
