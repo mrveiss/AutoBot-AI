@@ -1133,12 +1133,7 @@
         "businessIntelligence": "Business Intelligence",
         "businessIntelligenceAria": "Business intelligence analytics",
         "security": "Security",
-        "securityAria": "Security analytics",
-        "patterns": "Muster",
-        "evolution": "Entwicklung",
-        "intelligence": "Intelligenz",
-        "advanced": "Erweitert",
-        "bi": "BI"
+        "securityAria": "Security analytics"
       }
     },
     "header": {
@@ -1168,21 +1163,7 @@
         "exporting": "Exporting...",
         "exportReport": "Export Report",
         "clearing": "Clearing...",
-        "clearCache": "Clear Cache",
-        "isAnalyzing": "Analysiert",
-        "currentPath": "Aktueller Pfad",
-        "hasProblems": "Hat Probleme",
-        "problemCount": "Problemanzahl",
-        "isClearingCache": "Cache wird gelöscht",
-        "isExporting": "Exportiert",
-        "currentSource": "Aktuelle Quelle",
-        "sourcesList": "Quellenliste",
-        "registeredSources": "Registrierte Quellen",
-        "indexingState": "Indexierungsstatus",
-        "activeJobId": "Aktive Job-ID",
-        "batchProgress": "Stapelfortschritt",
-        "filesProcessed": "Verarbeitete Dateien",
-        "totalFiles": "Dateien gesamt"
+        "clearCache": "Clear Cache"
       }
     },
     "codeIntelligence": {
@@ -1195,9 +1176,7 @@
         "analysis": "Analysis",
         "qualityScore": "Quality Score",
         "suggestions": "Vorschläge",
-        "history": "Historie",
-        "quality": "Qualität",
-        "analyze": "Analysieren"
+        "history": "Historie"
       },
       "codeAnalysis": "Code-Analyse",
       "language": "Sprache",
@@ -1220,8 +1199,7 @@
         "qualityScore": "Quality Score",
         "issues": "Probleme",
         "date": "Datum",
-        "actions": "Aktionen",
-        "quality": "Qualität"
+        "actions": "Aktionen"
       },
       "untitled": "Ohne Titel",
       "delete": "Löschen",
@@ -1265,22 +1243,7 @@
         "days90": "90 days",
         "days180": "180 days",
         "year1": "1 year",
-        "metrics": "Metrics",
-        "dateRange": "Zeitraum",
-        "author": "Autor",
-        "branch": "Branch",
-        "fileType": "Dateityp",
-        "allAuthors": "Alle Autoren",
-        "allBranches": "Alle Branches",
-        "allTypes": "Alle Typen",
-        "from": "Von",
-        "to": "Bis",
-        "last7days": "Letzte 7 Tage",
-        "last30days": "Letzte 30 Tage",
-        "last90days": "Letzte 90 Tage",
-        "lastYear": "Letztes Jahr",
-        "custom": "Benutzerdefiniert",
-        "allFiles": "Alle Dateien"
+        "metrics": "Metrics"
       },
       "metrics": {
         "overall": "Overall",
@@ -1289,23 +1252,14 @@
         "testability": "Testability",
         "documentation": "Documentation",
         "security": "Sicherheit",
-        "performance": "Performance",
-        "codeChurn": "Code-Fluktuation",
-        "coverage": "Abdeckung",
-        "techDebt": "Technische Schulden",
-        "duplicates": "Duplikate",
-        "dependencies": "Abhängigkeiten"
+        "performance": "Performance"
       },
       "table": {
         "patternType": "Pattern Type",
         "count": "Count",
         "firstSeen": "First Seen",
         "lastSeen": "Last Seen",
-        "trend": "Trend",
-        "pattern": "Muster",
-        "type": "Typ",
-        "occurrences": "Vorkommen",
-        "details": "Details"
+        "trend": "Trend"
       },
       "modal": {
         "repoPath": "Repository Path",
@@ -1315,16 +1269,7 @@
         "commitLimitHelp": "Maximum number of commits to analyze (1-1000)",
         "cancel": "Cancel",
         "analyzing": "Analyzing...",
-        "startAnalysis": "Start Analysis",
-        "title": "Musterdetails",
-        "type": "Typ",
-        "firstSeen": "Zuerst gesehen",
-        "lastSeen": "Zuletzt gesehen",
-        "occurrences": "Vorkommen",
-        "trend": "Trend",
-        "affectedFiles": "Betroffene Dateien",
-        "noFiles": "Keine Dateien",
-        "close": "Schließen"
+        "startAnalysis": "Start Analysis"
       }
     },
     "bi": {
@@ -1364,11 +1309,7 @@
         "optimization": "Optimization",
         "insights": "Erkenntnisse",
         "reports": "Berichte",
-        "agentCosts": "Agent Costs",
-        "overview": "Übersicht",
-        "agents": "Agenten",
-        "costs": "Kosten",
-        "usage": "Nutzung"
+        "agentCosts": "Agent Costs"
       },
       "reports": {
         "executiveSummary": "Executive Summary",
@@ -1378,17 +1319,7 @@
         "costReport": "Cost Report",
         "costDesc": "Cost breakdown, trends, and optimization opportunities",
         "performanceReport": "Performance Report",
-        "performanceDesc": "Agent and system performance metrics",
-        "title": "Benutzerdefinierte Berichte",
-        "generate": "Generieren",
-        "generating": "Generiere...",
-        "download": "Herunterladen",
-        "schedule": "Planen",
-        "delete": "Löschen",
-        "noReports": "Keine Berichte",
-        "name": "Name",
-        "type": "Typ",
-        "created": "Erstellt"
+        "performanceDesc": "Agent and system performance metrics"
       },
       "agentCosts": {
         "title": "Per-Agent Cost Tracking",
@@ -1409,24 +1340,7 @@
         "monthlyBudget": "Monthly Budget",
         "cancel": "Cancel",
         "save": "Save",
-        "noData": "Keine Agentenkostendaten",
-        "agentName": "Agentenname",
-        "taskCount": "Aufgabenanzahl",
-        "successRate": "Erfolgsrate",
-        "totalCost": "Gesamtkosten",
-        "avgCostPerTask": "Durchschn. Kosten/Aufgabe",
-        "totalTokens": "Token gesamt",
-        "avgDuration": "Durchschn. Dauer",
-        "errorRate": "Fehlerrate",
-        "costByAgent": "Kosten nach Agent",
-        "costTrend": "Kostentrend",
-        "tokenUsage": "Token-Nutzung",
-        "efficiency": "Effizienz",
-        "topExpensive": "Teuerste Agenten",
-        "costPerSuccess": "Kosten pro Erfolg",
-        "last7d": "Letzte 7 Tage",
-        "last30d": "Letzte 30 Tage",
-        "last90d": "Letzte 90 Tage"
+        "noData": "Keine Agentenkostendaten"
       }
     },
     "sources": {
@@ -1448,13 +1362,7 @@
         "userIdsHint": "one per line or comma-separated",
         "userIdsHelp": "Enter user IDs separated by commas or new lines.",
         "currentlySharedWith": "Currently shared with",
-        "updateAccess": "Update Access",
-        "title": "Quelle teilen",
-        "copyLink": "Link kopieren",
-        "copied": "Kopiert",
-        "permissions": "Berechtigungen",
-        "addUser": "Benutzer hinzufügen",
-        "remove": "Entfernen"
+        "updateAccess": "Update Access"
       },
       "deleteTitle": "Quelle löschen",
       "indexingRunning": "Indexierung läuft",
@@ -1472,21 +1380,12 @@
         "publicDesc": "All users can view",
         "onlyYou": "Only you",
         "specificUsers": "Specific users",
-        "allUsers": "All users",
-        "team": "Team",
-        "readOnly": "Nur lesen",
-        "readWrite": "Lesen/Schreiben",
-        "admin": "Administrator",
-        "owner": "Eigentümer",
-        "viewer": "Betrachter",
-        "editor": "Bearbeiter"
+        "allUsers": "All users"
       },
       "validation": {
         "nameRequired": "Name ist erforderlich",
         "repoRequired": "Repository (owner/repo) is required.",
-        "localPathRequired": "Local path is required.",
-        "pathRequired": "Pfad ist erforderlich",
-        "urlRequired": "URL ist erforderlich"
+        "localPathRequired": "Local path is required."
       },
       "form": {
         "name": "Name",
@@ -1507,23 +1406,7 @@
         "namePlaceholder": "Quellname eingeben",
         "repoPlaceholder": "owner/repository",
         "branchPlaceholder": "Branch eingeben",
-        "localPathPlaceholder": "/home/user/projects/myapp",
-        "path": "Pfad",
-        "pathPlaceholder": "Quellpfad eingeben",
-        "type": "Typ",
-        "local": "Lokal",
-        "git": "Git",
-        "url": "URL",
-        "urlPlaceholder": "Repository-URL eingeben",
-        "description": "Beschreibung",
-        "descriptionPlaceholder": "Beschreibung eingeben",
-        "save": "Speichern",
-        "updating": "Aktualisiere...",
-        "create": "Erstellen",
-        "update": "Aktualisieren",
-        "language": "Sprache",
-        "tags": "Tags",
-        "tagsPlaceholder": "Tags eingeben"
+        "localPathPlaceholder": "/home/user/projects/myapp"
       }
     },
     "codeGeneration": {
@@ -1861,9 +1744,7 @@
         "constant": "Konstante",
         "interface": "Schnittstelle",
         "type": "Typ",
-        "unknown": "Unknown",
-        "enum": "Aufzählung",
-        "module": "Modul"
+        "unknown": "Unknown"
       }
     },
     "duplicates": {
@@ -1975,10 +1856,7 @@
         "cost": "Cost Analysis",
         "agents": "Agenten",
         "behavior": "User Behavior",
-        "export": "Export & Reports",
-        "costs": "Kosten",
-        "usage": "Nutzung",
-        "recommendations": "Empfehlungen"
+        "export": "Export & Reports"
       }
     },
     "codeEvolution": {
@@ -2070,10 +1948,7 @@
         "error_surge": "Error Surge",
         "new_pattern": "New Pattern",
         "gap": "Log Gap",
-        "spike": "Spitze",
-        "drop": "Abfall",
-        "pattern": "Muster",
-        "frequency": "Frequenz"
+        "spike": "Spitze"
       }
     },
     "precommit": {
@@ -2117,11 +1992,7 @@
         "quality": "Quality",
         "style": "Style",
         "debug": "Debug",
-        "docs": "Documentation",
-        "formatting": "Formatierung",
-        "linting": "Linting",
-        "testing": "Tests",
-        "custom": "Benutzerdefiniert"
+        "docs": "Documentation"
       },
       "justNow": "Gerade eben",
       "minutesAgo": "vor {count} Minuten",
@@ -2149,36 +2020,19 @@
         "owasp": "OWASP Category",
         "copyPathAriaLabel": "Copy file path to clipboard",
         "copyPath": "Copy Path",
-        "noRecommendation": "No recommendation available",
-        "file": "Datei",
-        "line": "Zeile",
-        "actions": "Aktionen",
-        "noFindings": "Keine Funde",
-        "showMore": "Mehr anzeigen",
-        "showLess": "Weniger anzeigen",
-        "export": "Exportieren",
-        "filter": "Filtern",
-        "sort": "Sortieren",
-        "search": "Suchen",
-        "total": "Gesamt"
+        "noRecommendation": "No recommendation available"
       },
       "security": {
         "title": "Security Vulnerabilities",
-        "emptyMessage": "No security vulnerabilities found",
-        "vulnerabilities": "Schwachstellen",
-        "exposure": "Exposition"
+        "emptyMessage": "No security vulnerabilities found"
       },
       "performance": {
         "title": "Performance Issues",
-        "emptyMessage": "No performance issues found",
-        "bottlenecks": "Engpässe",
-        "optimization": "Optimierung"
+        "emptyMessage": "No performance issues found"
       },
       "redis": {
         "title": "Redis Optimizations",
-        "emptyMessage": "No Redis optimization suggestions",
-        "connections": "Verbindungen",
-        "memory": "Speicher"
+        "emptyMessage": "No Redis optimization suggestions"
       },
       "fileScan": {
         "title": "Dateiscan",
@@ -2192,18 +2046,7 @@
         "pythonOnlyError": "Only Python (.py) files are supported",
         "cancel": "Cancel",
         "scanning": "Scanne...",
-        "scanFile": "Scan File",
-        "scan": "Scannen",
-        "noResults": "Keine Ergebnisse",
-        "filesScanned": "Gescannte Dateien",
-        "issuesFound": "Gefundene Probleme",
-        "critical": "Kritisch",
-        "high": "Hoch",
-        "medium": "Mittel",
-        "low": "Niedrig",
-        "info": "Info",
-        "allSeverities": "Alle Schweregrade",
-        "pathPlaceholder": "Dateipfad eingeben"
+        "scanFile": "Scan File"
       }
     }
   },
@@ -3127,7 +2970,6 @@
         "reset": "Zurücksetzen",
         "search": "Suchen"
       },
-      "timeline": {},
       "causalChain": {
         "title": "Kausalkette",
         "description": "Die Kette kausal verknüpfter Ereignisse nachverfolgen",
@@ -5063,7 +4905,6 @@
       "showLabel": "Anzeigen",
       "clear": "Löschen"
     },
-    "progress": {},
     "list": {
       "noOperations": "Keine Vorgänge",
       "defaultEmptyMessage": "Keine Vorgänge gefunden. Vorgänge werden hier angezeigt, wenn Hintergrundaufgaben ausgeführt werden.",
