@@ -264,7 +264,6 @@
 import { ref, onMounted, computed } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
-import { getCssVar } from '@/composables/useCssVars'
 
 const logger = createLogger('ConversationFlowDashboard')
 
@@ -378,8 +377,6 @@ onMounted(() => {
   runAnalysis()
 })
 
-// Expose getCssVar for potential external usage (e.g., charts)
-defineExpose({ getCssVar })
 </script>
 
 <style scoped>

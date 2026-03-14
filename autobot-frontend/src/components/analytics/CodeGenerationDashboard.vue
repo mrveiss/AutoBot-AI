@@ -328,7 +328,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { createLogger } from '@/utils/debugUtils'
-import { getCssVar } from '@/composables/useCssVars'
 
 const logger = createLogger('CodeGenerationDashboard')
 
@@ -584,8 +583,6 @@ onMounted(() => {
   fetchRefactoringTypes()
 })
 
-// Export getCssVar for potential external use (e.g., chart libraries)
-defineExpose({ getCssVar })
 </script>
 
 <style scoped>
