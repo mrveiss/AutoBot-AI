@@ -3,6 +3,19 @@
 # Install: pip install pre-commit && pre-commit install
 
 repos:
+  # Record branch name BEFORE stash cycle for post-stash verification (Issue #1670)
+  # Must be the FIRST hook so the branch is captured before any stash/pop occurs.
+  - repo: local
+    hooks:
+      - id: record-branch
+        name: Record Branch for Branch Guard (Issue #1670)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-record-branch
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Records current branch to detect silent branch switches from stash/pop"
+
   # Python code formatting with Black
   - repo: https://github.com/psf/black
     rev: 23.12.1
@@ -143,6 +156,21 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
         description: Blocks commits with print() in Python or console.* in TypeScript/Vue production code
+
+  # Branch guard — abort commit if stash/pop silently switched branches (Issue #1670)
+  # Runs at prepare-commit-msg stage (AFTER stash/pop) to compare the current
+  # branch against the branch recorded by record-branch (BEFORE stash/pop).
+  # Exits non-zero to ABORT the commit if they differ.
+  - repo: local
+    hooks:
+      - id: branch-guard
+        name: Branch Guard — Abort on Silent Branch Switch (Issue #1670)
+        entry: autobot-infrastructure/shared/scripts/hooks/pre-commit-branch-guard
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [prepare-commit-msg]
+        description: "Aborts commit if pre-commit stash/pop silently switched the active branch"
 
   # Warn when untracked source files exist at commit time (Issue #1503)
   # Runs at prepare-commit-msg stage — AFTER the pre-commit stash/restore cycle —
