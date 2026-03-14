@@ -1,0 +1,60 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Inject flock serialization into .git/hooks/pre-commit (Issue #1684)
+#
+# Git worktrees share .git/refs/stash. When multiple worktrees run
+# pre-commit hooks in parallel, the stash push/pop operations collide
+# and commits leak across branches. This script injects an exclusive
+# flock that serializes pre-commit across all worktrees.
+#
+# Called by post-checkout hook after every checkout/worktree creation.
+# Idempotent — skips injection if AUTOBOT_FLOCK marker already present.
+
+HOOKS_DIR="$(git rev-parse --git-dir 2>/dev/null)/hooks"
+PRE_COMMIT_HOOK="$HOOKS_DIR/pre-commit"
+
+# Skip if no pre-commit hook or already injected
+if [ ! -f "$PRE_COMMIT_HOOK" ]; then
+    exit 0
+fi
+
+if grep -q 'AUTOBOT_FLOCK' "$PRE_COMMIT_HOOK"; then
+    exit 0
+fi
+
+# Create a temp file with the flock block
+FLOCK_BLOCK=$(cat <<'FLOCK_EOF'
+
+# --- AUTOBOT_FLOCK: serialize pre-commit across worktrees (Issue #1684) ---
+# Prevents stash cross-contamination when multiple worktrees commit in parallel.
+_COMMON_DIR="$(git rev-parse --git-common-dir 2>/dev/null || git rev-parse --git-dir)"
+exec 200>"${_COMMON_DIR}/pre-commit.lock"
+flock -x 200
+# --- END AUTOBOT_FLOCK ---
+FLOCK_EOF
+)
+
+# Find the right insertion point based on hook format
+if grep -q 'set -uo pipefail' "$PRE_COMMIT_HOOK"; then
+    # #1689 wrapper format — insert after 'set -uo pipefail'
+    ANCHOR='set -uo pipefail'
+elif grep -q 'INSTALL_PYTHON' "$PRE_COMMIT_HOOK"; then
+    # Standard pre-commit format — insert after ARGS line
+    ANCHOR='ARGS+=(--hook-dir'
+else
+    # Unknown format — insert after shebang
+    ANCHOR='^#!'
+fi
+
+# Use awk with index() for reliable fixed-string matching + multi-line insertion
+awk -v block="$FLOCK_BLOCK" -v anchor="$ANCHOR" '
+    index($0, anchor) && !done { print; print block; done=1; next }
+    { print }
+' "$PRE_COMMIT_HOOK" > "${PRE_COMMIT_HOOK}.tmp" \
+    && mv "${PRE_COMMIT_HOOK}.tmp" "$PRE_COMMIT_HOOK" \
+    && chmod +x "$PRE_COMMIT_HOOK"
+
+echo "✅ Injected flock wrapper into pre-commit hook (Issue #1684)"
