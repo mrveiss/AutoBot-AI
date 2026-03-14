@@ -5,8 +5,10 @@
 #
 # Post-checkout hook:
 #   1. Fix WSL2 symlink breakage (Issue #886)
-#   2. Auto-install prepare-commit-msg hook type (Issue #1679)
-#   3. Auto-install pre-commit branch guard wrapper (Issue #1689)
+#   2. Fix pre-commit hook script permissions (Issue #1683)
+#   3. Auto-install prepare-commit-msg hook type (Issue #1679)
+#   4. Auto-install pre-commit branch guard wrapper (Issue #1689)
+#   5. Inject flock wrapper into pre-commit hook (Issue #1684)
 
 # Determine git root directory
 if [ -n "$GIT_DIR" ]; then
@@ -15,7 +17,9 @@ else
     GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 fi
 
-# Fix backend symlink (self-referencing in autobot-user-backend/)
+# ---------------------------------------------------------------------------
+# 1. Fix WSL2 symlinks (Issue #886)
+# ---------------------------------------------------------------------------
 BACKEND_DIR="$GIT_ROOT/autobot-user-backend"
 BACKEND_SYMLINK="$BACKEND_DIR/backend"
 
@@ -28,7 +32,6 @@ if [ -d "$BACKEND_DIR" ] && { [ ! -L "$BACKEND_SYMLINK" ] || [ ! -e "$BACKEND_SY
     fi
 fi
 
-# Fix autobot_shared symlink (root level)
 SHARED_SYMLINK="$GIT_ROOT/autobot_shared"
 
 if [ ! -L "$SHARED_SYMLINK" ] || [ ! -e "$SHARED_SYMLINK" ]; then
@@ -41,7 +44,24 @@ if [ ! -L "$SHARED_SYMLINK" ] || [ ! -e "$SHARED_SYMLINK" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Auto-install prepare-commit-msg hook if missing (Issue #1679)
+# 2. Fix hook script permissions (Issue #1683)
+# ---------------------------------------------------------------------------
+HOOK_SCRIPTS_DIR="$GIT_ROOT/autobot-infrastructure/shared/scripts"
+FIXED=0
+if [ -d "$HOOK_SCRIPTS_DIR" ]; then
+    while IFS= read -r -d '' f; do
+        chmod +x "$f"
+        FIXED=$((FIXED + 1))
+    done < <(find "$HOOK_SCRIPTS_DIR/hooks" "$HOOK_SCRIPTS_DIR/utilities" \
+                  -type f \( -name "pre-commit-*" -o -name "*.sh" \) \
+                  -not -perm -u+x -print0 2>/dev/null)
+    if [ "$FIXED" -gt 0 ]; then
+        echo "✅ Fixed permissions on $FIXED hook script(s)"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Auto-install prepare-commit-msg hook if missing (Issue #1679)
 # ---------------------------------------------------------------------------
 HOOKS_DIR="$(git rev-parse --git-dir 2>/dev/null)/hooks"
 if [ -d "$HOOKS_DIR" ] && [ ! -f "$HOOKS_DIR/prepare-commit-msg" ]; then
@@ -51,7 +71,7 @@ if [ -d "$HOOKS_DIR" ] && [ ! -f "$HOOKS_DIR/prepare-commit-msg" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Auto-install pre-commit branch guard wrapper (Issue #1689)
+# 4. Auto-install pre-commit branch guard wrapper (Issue #1689)
 # ---------------------------------------------------------------------------
 # The pre-commit framework's stash/pop can silently switch branches.
 # This wraps .git/hooks/pre-commit to detect the switch AFTER the
@@ -85,6 +105,24 @@ if [ -d "$HOOKS_DIR" ] && [ -f "$WRAPPER_SRC" ]; then
             fi
         fi
     fi
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Inject flock wrapper into pre-commit hook (Issue #1684)
+# ---------------------------------------------------------------------------
+# Git worktrees share .git/refs/stash. When multiple worktrees run
+# pre-commit hooks in parallel, the stash push/pop operations collide
+# and commits leak across branches. This injects an exclusive flock
+# that serializes pre-commit across all worktrees.
+#
+# The lock file lives in git-common-dir (shared across worktrees).
+# The fd (200) is inherited by the exec'd pre-commit process and
+# auto-released when pre-commit exits.
+INJECT_SCRIPT="$GIT_ROOT/autobot-infrastructure/shared/scripts/hooks/inject-flock-wrapper"
+if [ -x "$INJECT_SCRIPT" ]; then
+    "$INJECT_SCRIPT"
+elif [ -f "$INJECT_SCRIPT" ]; then
+    bash "$INJECT_SCRIPT"
 fi
 
 exit 0
