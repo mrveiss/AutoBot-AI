@@ -1,12 +1,15 @@
-# Auto-close issues referenced in PRs merged to non-default branches
+# Notify issues referenced in PRs merged to non-default branches
 #
 # GitHub's built-in auto-close keywords (Closes #NNN, Fixes #NNN) only
 # trigger when merging to the default branch (main). Since AutoBot PRs
-# target Dev_new_gui, this workflow fills the gap.
+# target Dev_new_gui, this workflow posts a notification comment on
+# referenced issues instead of auto-closing them — preventing premature
+# closure of partially-resolved or multi-phase issues.
 #
 # See: https://github.com/mrveiss/AutoBot-AI/issues/1601
+# Changed to comment-only: https://github.com/mrveiss/AutoBot-AI/issues/1659
 
-name: Auto-close referenced issues
+name: Notify referenced issues on merge
 
 on:
   pull_request:
@@ -14,19 +17,20 @@ on:
     branches: [Dev_new_gui]
 
 jobs:
-  close-issues:
+  notify-issues:
     if: github.event.pull_request.merged == true
     runs-on: self-hosted
     permissions:
       issues: write
 
     steps:
-      - name: Close referenced issues
+      - name: Notify referenced issues
         uses: actions/github-script@v8
         with:
           script: |
             const prBody = context.payload.pull_request.body || '';
             const prNumber = context.payload.pull_request.number;
+            const prTitle = context.payload.pull_request.title;
 
             // Match GitHub auto-close keywords:
             // close, closes, closed, fix, fixes, fixed, resolve, resolves, resolved
@@ -54,7 +58,7 @@ jobs:
                 });
 
                 if (issue.data.state === 'closed') {
-                  console.log(`Issue #${issueNumber} is already closed.`);
+                  console.log(`Issue #${issueNumber} is already closed — skipping.`);
                   continue;
                 }
 
@@ -62,19 +66,17 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: issueNumber,
-                  body: `Closed by #${prNumber} (merged to Dev_new_gui).`,
+                  body: [
+                    `PR #${prNumber} (merged to \`Dev_new_gui\`) references this issue with a close keyword.`,
+                    '',
+                    `> **${prTitle}**`,
+                    '',
+                    'If this issue is fully resolved, close it manually. If work remains, no action is needed.',
+                  ].join('\n'),
                 });
 
-                await github.rest.issues.update({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issueNumber,
-                  state: 'closed',
-                  state_reason: 'completed',
-                });
-
-                console.log(`Closed issue #${issueNumber}.`);
+                console.log(`Commented on issue #${issueNumber} (not auto-closed).`);
               } catch (error) {
-                console.log(`Failed to close issue #${issueNumber}: ${error.message}`);
+                console.log(`Failed to comment on issue #${issueNumber}: ${error.message}`);
               }
             }

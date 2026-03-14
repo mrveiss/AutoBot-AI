@@ -363,10 +363,11 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 - CLAUDE.md owns stable patterns. MEMORY.md owns recent state only.
 
 **End-of-session ritual:**
-1. Close any issues? → Move to Recent Completed (1 line each)
+1. Close any issues? → Verify with `gh issue view <number> --json state -q '.state'` → only move to Recent Completed after confirming CLOSED on GitHub
 2. Any gotcha resolved? → Delete it
-3. Recent Completed >30? → Archive oldest batch
+3. Recent Completed >30? → Archive oldest batch (verify each issue is CLOSED before archiving)
 4. MEMORY.md >150 lines? → Trim with `/memory-cleanup`
+5. Never use range notation (`#1534-#1545`) in archive refs — enumerate individual issue numbers
 
 ### Multi-Agent Safety
 
