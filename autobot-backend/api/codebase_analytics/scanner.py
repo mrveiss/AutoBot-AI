@@ -964,25 +964,28 @@ def _create_initial_task_state() -> Dict:
     }
 
 
-async def _clear_redis_codebase_cache(task_id: str) -> None:
+async def _clear_redis_codebase_cache(
+    task_id: str, source_id: Optional[str] = None
+) -> None:
     """
     Clear Redis cache entries for codebase data.
 
-    Issue #398: Extracted from _initialize_chromadb_collection to reduce method length.
-    Issue #XXX: Fixed thread pool exhaustion by using native async Redis client.
-               Previous implementation used sync client + asyncio.to_thread() which
-               blocked indefinitely when the default ThreadPoolExecutor was saturated
-               by concurrent analytics operations. No errors were logged because the
-               code blocked BEFORE reaching any logging statements.
+    Issue #398: Extracted from _initialize_chromadb_collection.
+    Issue #1710: When source_id is provided, only clear keys for that source.
     """
     try:
         redis_client = await get_redis_connection_async()
         if redis_client:
+            # Scope key pattern to source_id when provided (#1710)
+            if source_id:
+                pattern = f"codebase:{source_id}:*"
+            else:
+                pattern = "codebase:*"
             keys_to_delete = []
             cursor = 0
             while True:
                 cursor, keys = await redis_client.scan(
-                    cursor=cursor, match="codebase:*", count=100
+                    cursor=cursor, match=pattern, count=100
                 )
                 keys_to_delete.extend(keys)
                 if cursor == 0:
@@ -1017,16 +1020,54 @@ async def _clear_redis_codebase_cache(task_id: str) -> None:
         )
 
 
-async def _recreate_chromadb_collection(task_id: str):
-    """
-    Drop and recreate the ChromaDB collection for a clean re-index.
+async def _delete_source_documents(collection, task_id: str, source_id: str):
+    """Delete all ChromaDB documents belonging to a source (#1710).
 
-    Issue #1213: Replaces paginated get+delete which caused SIGSEGV on
-    large collections (>32k entries) due to SQLite C-extension limits.
-    Dropping the collection entirely avoids touching SQLite data rows.
+    Helper for _recreate_chromadb_collection.
+    Deletes in batches to avoid SQLite C-extension limits.
+    """
+    try:
+        existing = await asyncio.to_thread(
+            collection.get,
+            where={"source_id": source_id},
+            include=[],
+        )
+        if existing and existing.get("ids"):
+            ids_to_delete = existing["ids"]
+            batch_size = 5000
+            for i in range(0, len(ids_to_delete), batch_size):
+                batch = ids_to_delete[i : i + batch_size]
+                await asyncio.to_thread(collection.delete, ids=batch)
+            logger.info(
+                "[Task %s] Deleted %d documents for source %s",
+                task_id,
+                len(ids_to_delete),
+                source_id,
+            )
+        else:
+            logger.info(
+                "[Task %s] No existing documents for source %s",
+                task_id,
+                source_id,
+            )
+    except Exception as del_exc:
+        logger.warning(
+            "[Task %s] Could not delete source %s docs: %s",
+            task_id,
+            source_id,
+            del_exc,
+        )
+
+
+async def _recreate_chromadb_collection(task_id: str, source_id: Optional[str] = None):
+    """
+    Prepare the ChromaDB collection for re-indexing.
+
+    Issue #1213: Drops and recreates when no source_id (global).
+    Issue #1710: Per-source deletion via _delete_source_documents.
 
     Returns:
-        The freshly created AsyncChromaCollection, or None on failure.
+        The AsyncChromaCollection, or None on failure.
     """
     from utils.chromadb_client import get_async_chromadb_client
 
@@ -1045,7 +1086,15 @@ async def _recreate_chromadb_collection(task_id: str):
             anonymized_telemetry=False,
         )
 
-        # Drop existing collection (ignore if it doesn't exist)
+        if source_id:
+            collection = await async_client.get_or_create_collection(
+                name=collection_name,
+                metadata=collection_meta,
+            )
+            await _delete_source_documents(collection, task_id, source_id)
+            return collection
+
+        # Global re-index: drop and recreate entire collection
         try:
             await async_client.delete_collection(collection_name)
             logger.info(
@@ -1060,7 +1109,6 @@ async def _recreate_chromadb_collection(task_id: str):
                 collection_name,
             )
 
-        # Recreate fresh collection
         new_collection = await async_client.get_or_create_collection(
             name=collection_name,
             metadata=collection_meta,
@@ -1082,12 +1130,17 @@ async def _recreate_chromadb_collection(task_id: str):
         return None
 
 
-async def _initialize_chromadb_collection(task_id: str, update_progress, update_phase):
+async def _initialize_chromadb_collection(
+    task_id: str,
+    update_progress,
+    update_phase,
+    source_id: Optional[str] = None,
+):
     """Initialize ChromaDB collection and Redis cache.
 
     Issue #281, #398: refactored.
-    Issue #1220: In incremental mode, preserves existing collection
-    and file hash keys so unchanged files can be skipped.
+    Issue #1220: In incremental mode, preserves existing collection.
+    Issue #1710: When source_id is provided, scopes cleanup to that source.
     """
     update_phase("init", "running")
     await update_progress(
@@ -1098,7 +1151,7 @@ async def _initialize_chromadb_collection(task_id: str, update_progress, update_
         phase="init",
     )
 
-    await _clear_redis_codebase_cache(task_id)
+    await _clear_redis_codebase_cache(task_id, source_id=source_id)
 
     if INCREMENTAL_INDEXING_ENABLED:
         # Keep existing collection — upsert will update changed files
@@ -1122,14 +1175,18 @@ async def _initialize_chromadb_collection(task_id: str, update_progress, update_
             current_file="Dropping and recreating collection...",
             phase="init",
         )
-        code_collection = await _recreate_chromadb_collection(task_id)
+        code_collection = await _recreate_chromadb_collection(
+            task_id, source_id=source_id
+        )
         if not code_collection:
             code_collection = await get_code_collection_async()
 
     return code_collection
 
 
-def _prepare_function_document(func: Dict, idx: int) -> tuple:
+def _prepare_function_document(
+    func: Dict, idx: int, source_id: Optional[str] = None
+) -> tuple:
     """Prepare a function document for ChromaDB storage (Issue #281: extracted)."""
     doc_text = f"""
 Function: {func['name']}
@@ -1149,11 +1206,16 @@ Docstring: {func.get('docstring', 'No documentation')}
             "python" if func.get("file_path", "").endswith(".py") else "javascript"
         ),
     }
+    if source_id:
+        metadata["source_id"] = source_id
 
-    return f"function_{idx}_{func['name']}", doc_text, metadata
+    prefix = f"{source_id}_" if source_id else ""
+    return f"{prefix}function_{idx}_{func['name']}", doc_text, metadata
 
 
-def _prepare_class_document(cls: Dict, idx: int) -> tuple:
+def _prepare_class_document(
+    cls: Dict, idx: int, source_id: Optional[str] = None
+) -> tuple:
     """Prepare a class document for ChromaDB storage (Issue #281: extracted)."""
     doc_text = f"""
 Class: {cls['name']}
@@ -1171,11 +1233,16 @@ Docstring: {cls.get('docstring', 'No documentation')}
         "methods": ",".join(cls.get("methods", [])),
         "language": "python",
     }
+    if source_id:
+        metadata["source_id"] = source_id
 
-    return f"class_{idx}_{cls['name']}", doc_text, metadata
+    prefix = f"{source_id}_" if source_id else ""
+    return f"{prefix}class_{idx}_{cls['name']}", doc_text, metadata
 
 
-def _prepare_stats_document(analysis_results: Dict) -> tuple:
+def _prepare_stats_document(
+    analysis_results: Dict, source_id: Optional[str] = None
+) -> tuple:
     """Prepare stats document for ChromaDB storage (Issue #281: extracted)."""
     stats = analysis_results["stats"]
 
@@ -1204,8 +1271,11 @@ Last Indexed: {stats['last_indexed']}
             metadata[k] = json.dumps(v)
         else:
             metadata[k] = str(v)
+    if source_id:
+        metadata["source_id"] = source_id
 
-    return "codebase_stats", stats_doc, metadata
+    stats_id = f"codebase_stats_{source_id}" if source_id else "codebase_stats"
+    return stats_id, stats_doc, metadata
 
 
 async def _prepare_functions_batch(
@@ -1215,6 +1285,7 @@ async def _prepare_functions_batch(
     batch_metadatas: list,
     update_progress,
     total_items: int,
+    source_id: Optional[str] = None,
 ) -> int:
     """
     Prepare function documents for batch storage.
@@ -1226,7 +1297,9 @@ async def _prepare_functions_batch(
     """
     items_prepared = 0
     for idx, func in enumerate(functions):
-        doc_id, doc_text, metadata = _prepare_function_document(func, idx)
+        doc_id, doc_text, metadata = _prepare_function_document(
+            func, idx, source_id=source_id
+        )
         batch_ids.append(doc_id)
         batch_documents.append(doc_text)
         batch_metadatas.append(metadata)
@@ -1250,6 +1323,7 @@ async def _prepare_classes_batch(
     update_progress,
     total_items: int,
     items_offset: int,
+    source_id: Optional[str] = None,
 ) -> int:
     """
     Prepare class documents for batch storage.
@@ -1261,7 +1335,9 @@ async def _prepare_classes_batch(
     """
     items_prepared = items_offset
     for idx, cls in enumerate(classes):
-        doc_id, doc_text, metadata = _prepare_class_document(cls, idx)
+        doc_id, doc_text, metadata = _prepare_class_document(
+            cls, idx, source_id=source_id
+        )
         batch_ids.append(doc_id)
         batch_documents.append(doc_text)
         batch_metadatas.append(metadata)
@@ -1282,6 +1358,7 @@ async def _prepare_batch_data(
     task_id: str,
     update_progress,
     update_phase,
+    source_id: Optional[str] = None,
 ) -> tuple:
     """Prepare all batch data for ChromaDB storage (Issue #281, #398: refactored)."""
     update_phase("prepare", "running")
@@ -1311,6 +1388,7 @@ async def _prepare_batch_data(
         batch_metadatas,
         update_progress,
         total_items,
+        source_id=source_id,
     )
 
     await update_progress(
@@ -1329,9 +1407,12 @@ async def _prepare_batch_data(
         update_progress,
         total_items,
         items_prepared,
+        source_id=source_id,
     )
 
-    stats_id, stats_doc, stats_meta = _prepare_stats_document(analysis_results)
+    stats_id, stats_doc, stats_meta = _prepare_stats_document(
+        analysis_results, source_id=source_id
+    )
     batch_ids.append(stats_id)
     batch_documents.append(stats_doc)
     batch_metadatas.append(stats_meta)
@@ -1769,16 +1850,19 @@ async def _store_batches_to_chromadb(
 async def _store_hardcodes_to_redis(
     hardcodes: List[Dict],
     task_id: str,
+    source_id: Optional[str] = None,
 ) -> int:
     """
     Store detected hardcoded values to Redis for retrieval by the /hardcodes endpoint.
 
     Hardcodes are stored grouped by type (ip, url, port, api_key, config, etc.)
-    using keys like: codebase:hardcodes:ip, codebase:hardcodes:url, etc.
+    using keys like: codebase:{source_id}:hardcodes:ip, etc.
+    Falls back to codebase:hardcodes:ip when no source_id (#1710).
 
     Args:
         hardcodes: List of hardcode dictionaries with type, value, line, file_path
         task_id: Current indexing task ID for logging
+        source_id: Optional source ID for per-project scoping
 
     Returns:
         Number of hardcodes stored
@@ -1804,11 +1888,11 @@ async def _store_hardcodes_to_redis(
             grouped[htype] = []
         grouped[htype].append(hardcode)
 
-    # Store each type group to Redis
-    # Issue #666: Use asyncio.to_thread to wrap blocking Redis calls
+    # Store each type group to Redis (#1710: source-scoped keys)
     stored_count = 0
+    key_prefix = f"codebase:{source_id}" if source_id else "codebase"
     for htype, items in grouped.items():
-        key = f"codebase:hardcodes:{htype}"
+        key = f"{key_prefix}:hardcodes:{htype}"
         try:
             await asyncio.to_thread(redis_client.set, key, json.dumps(items))
             stored_count += len(items)
@@ -2956,15 +3040,17 @@ async def _run_indexing_phases(
     update_phase,
     update_batch_info,
     update_stats,
+    source_id: Optional[str] = None,
 ):
     """
     Execute the core indexing phases.
 
     Issue #398: Extracted from do_indexing_with_progress.
     Issue #1249: Retry ChromaDB init once on failure.
+    Issue #1710: source_id scopes cleanup and metadata to one project.
     """
     code_collection = await _initialize_chromadb_collection(
-        task_id, update_progress, update_phase
+        task_id, update_progress, update_phase, source_id=source_id
     )
     if not code_collection:
         logger.warning(
@@ -2973,7 +3059,7 @@ async def _run_indexing_phases(
         )
         await asyncio.sleep(2)
         code_collection = await _initialize_chromadb_collection(
-            task_id, update_progress, update_phase
+            task_id, update_progress, update_phase, source_id=source_id
         )
     if not code_collection:
         raise Exception("ChromaDB connection failed after retry")
@@ -2996,7 +3082,11 @@ async def _run_indexing_phases(
     update_phase("scan", "completed")
 
     batch_ids, batch_documents, batch_metadatas = await _prepare_batch_data(
-        analysis_results, task_id, update_progress, update_phase
+        analysis_results,
+        task_id,
+        update_progress,
+        update_phase,
+        source_id=source_id,
     )
     if batch_ids:
         await _store_batches_to_chromadb(
@@ -3012,7 +3102,9 @@ async def _run_indexing_phases(
         )
 
     hardcodes_stored = await _store_hardcodes_to_redis(
-        analysis_results.get("all_hardcodes", []), task_id
+        analysis_results.get("all_hardcodes", []),
+        task_id,
+        source_id=source_id,
     )
     return analysis_results, hardcodes_stored
 
@@ -3087,7 +3179,9 @@ async def _wait_with_watchdog(
                 return -9
 
 
-async def _run_indexing_subprocess(task_id: str, root_path: str) -> None:
+async def _run_indexing_subprocess(
+    task_id: str, root_path: str, source_id: Optional[str] = None
+) -> None:
     """Launch isolated indexing subprocess to prevent ChromaDB SIGSEGV (#1180).
 
     The subprocess runs do_indexing_with_progress in its own process so its
@@ -3096,6 +3190,7 @@ async def _run_indexing_subprocess(task_id: str, root_path: str) -> None:
     non-zero exit code and marks the task failed in Redis.
 
     Issue #1341: Added 30-minute hard timeout and 5-minute progress watchdog.
+    Issue #1710: source_id scopes indexing to one project.
 
     Designed as a drop-in async replacement for asyncio.create_task usage of
     do_indexing_with_progress — wrap in asyncio.create_task() as before.
@@ -3108,13 +3203,12 @@ async def _run_indexing_subprocess(task_id: str, root_path: str) -> None:
         indexing_tasks[task_id] = _create_initial_task_state()
         await _save_task_to_redis(task_id)
 
+    cmd = [sys.executable, str(worker_script), task_id, root_path]
+    if source_id:
+        cmd.append(source_id)
+
     logger.info("[Task %s] Launching isolated indexing subprocess (#1180)", task_id)
-    proc = await asyncio.create_subprocess_exec(
-        sys.executable,
-        str(worker_script),
-        task_id,
-        root_path,
-    )
+    proc = await asyncio.create_subprocess_exec(*cmd)
 
     # Issue #1341: Wait with watchdog + hard timeout
     try:
@@ -3138,11 +3232,14 @@ async def _run_indexing_subprocess(task_id: str, root_path: str) -> None:
         logger.info("[Task %s] Subprocess completed successfully (rc=0)", task_id)
 
 
-async def do_indexing_with_progress(task_id: str, root_path: str):
+async def do_indexing_with_progress(
+    task_id: str, root_path: str, source_id: Optional[str] = None
+):
     """
     Background task: Index codebase with real-time progress updates.
 
     Issue #281, #398: Refactored with extracted helpers for reduced complexity.
+    Issue #1710: source_id scopes all storage to one project.
     """
     try:
         logger.info(
@@ -3177,6 +3274,7 @@ async def do_indexing_with_progress(task_id: str, root_path: str):
             update_phase,
             update_batch_info,
             update_stats,
+            source_id=source_id,
         )
 
         update_phase("finalize", "running")

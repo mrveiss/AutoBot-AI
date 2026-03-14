@@ -320,9 +320,9 @@ async def _run_import_analysis(task_id: str) -> None:
 
 
 @router.get("/analytics/import-tree/cached")
-async def get_cached_import_tree_result():
-    """Return the latest completed import tree analysis result (#1540)."""
-    cached = await _manager.get_latest_result()
+async def get_cached_import_tree_result(source_id: str = ""):
+    """Return the latest completed import tree analysis result (#1540, #1757)."""
+    cached = await _manager.get_latest_result(source_id=source_id)
     if cached and cached.get("result"):
         return {
             "status": "success",

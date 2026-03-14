@@ -162,9 +162,12 @@ def _start_next_queued_job() -> None:
     loop = asyncio.get_event_loop()
     loop.create_task(_pop_queue_entry_redis())
     next_path = next_job.get("root_path", str(PATH.PROJECT_ROOT))
+    next_source_id = next_job.get("source_id")
     next_task_id = str(uuid.uuid4())
     _current_indexing_task_id = next_task_id
-    task = loop.create_task(_run_indexing_subprocess(next_task_id, next_path))
+    task = loop.create_task(
+        _run_indexing_subprocess(next_task_id, next_path, source_id=next_source_id)
+    )
     _active_tasks[next_task_id] = task
     task.add_done_callback(_create_cleanup_callback(next_task_id))
     logger.info("Auto-started queued job %s for %s", next_task_id, next_path)
@@ -232,7 +235,9 @@ async def index_codebase(request: Optional[IndexCodebaseRequest] = None):
 
         task_id = str(uuid.uuid4())
         _current_indexing_task_id = task_id
-        task = asyncio.create_task(_run_indexing_subprocess(task_id, root_path))
+        task = asyncio.create_task(
+            _run_indexing_subprocess(task_id, root_path, source_id=source_id)
+        )
         _active_tasks[task_id] = task
 
     task.add_done_callback(_create_cleanup_callback(task_id))

@@ -183,7 +183,9 @@ async def _trigger_indexing(source: CodeSource) -> None:
 
                 _scanner._current_indexing_task_id = task_id
                 task = asyncio.create_task(
-                    _run_indexing_subprocess(task_id, source.clone_path)
+                    _run_indexing_subprocess(
+                        task_id, source.clone_path, source_id=source.id
+                    )
                 )
                 _active_tasks[task_id] = task
                 task.add_done_callback(_create_cleanup_callback(task_id))
