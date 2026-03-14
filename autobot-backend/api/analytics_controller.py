@@ -16,6 +16,7 @@ Related Issues: #185 (Split), #212 (Analytics split)
 import asyncio
 import json
 import logging
+import re
 import time
 from collections import defaultdict
 from datetime import datetime
@@ -48,6 +49,24 @@ _analytics_state_lock = asyncio.Lock()
 # Performance optimization: O(1) lookup for analysis type routing (Issue #326)
 COMMUNICATION_CHAIN_ANALYSIS_TYPES = {"full", "communication_chains"}
 CODE_INDEXING_ANALYSIS_TYPES = {"full", "incremental"}
+
+# Bounded-dict limits for per-endpoint tracking dicts (Issue #1554).
+# After normalization these should stay well under the cap, but it acts as a
+# last-resort safety net against truly novel path shapes.
+MAX_API_FREQUENCY_ENTRIES = 2000
+
+# Patterns matched left-to-right; first match wins per path segment.
+_DYNAMIC_SEGMENT_PATTERNS = [
+    # UUID v4: 8-4-4-4-12 hex groups
+    re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I),
+    # Long hex strings (SHA-like, ≥16 chars)
+    re.compile(r"[0-9a-f]{16,}", re.I),
+    # Pure numeric IDs (one or more digits)
+    re.compile(r"^\d+$"),
+    # Alphanumeric slugs that look generated: starts with alpha/digit, contains
+    # both letters and digits, length ≥ 8.  Avoids collapsing short word slugs.
+    re.compile(r"^(?=.*[a-z])(?=.*\d)[a-z0-9_-]{8,}$", re.I),
+]
 
 
 # Simple service address function using configuration
@@ -91,6 +110,66 @@ class AnalyticsController:
         self.response_times = defaultdict(list)
         self.error_counts = defaultdict(int)
 
+    @staticmethod
+    def _normalize_endpoint(endpoint: str) -> str:
+        """Replace dynamic path segments with ``{id}`` to collapse per-resource URLs.
+
+        Normalizing before keying into the tracking dicts prevents unbounded key
+        growth caused by UUIDs, numeric IDs, and generated slugs in path parameters
+        (Issue #1554).
+
+        Examples::
+
+            "GET /sessions/abc-1234-def/messages" -> "GET /sessions/{id}/messages"
+            "GET /jobs/42/status"                 -> "GET /jobs/{id}/status"
+        """
+        parts = endpoint.split(" ", 1)
+        if len(parts) != 2:
+            return endpoint
+        method, path = parts
+        segments = path.split("/")
+        normalized = []
+        for segment in segments:
+            if not segment:
+                normalized.append(segment)
+                continue
+            # Strip query string from the last segment before pattern-matching.
+            clean = segment.split("?")[0]
+            replaced = False
+            for pattern in _DYNAMIC_SEGMENT_PATTERNS:
+                if pattern.search(clean):
+                    normalized.append("{id}")
+                    replaced = True
+                    break
+            if not replaced:
+                normalized.append(segment)
+        return f"{method} {'/'.join(normalized)}"
+
+    def _prune_api_dicts(self) -> None:
+        """Drop the least-frequent entries when ``api_frequencies`` exceeds the cap.
+
+        Keeps the top ``MAX_API_FREQUENCY_ENTRIES`` endpoints by call count and
+        removes stale entries from the correlated ``response_times`` and
+        ``error_counts`` dicts so all three stay consistent (Issue #1554).
+        """
+        if len(self.api_frequencies) <= MAX_API_FREQUENCY_ENTRIES:
+            return
+        keep_count = MAX_API_FREQUENCY_ENTRIES // 2
+        top_entries = sorted(
+            self.api_frequencies.items(), key=lambda kv: kv[1], reverse=True
+        )
+        keep_keys = {k for k, _ in top_entries[:keep_count]}
+        drop_keys = set(self.api_frequencies) - keep_keys
+        for key in drop_keys:
+            del self.api_frequencies[key]
+            self.response_times.pop(key, None)
+            self.error_counts.pop(key, None)
+        logger.warning(
+            "api_frequencies pruned: removed %d low-frequency endpoints, %d retained",
+            len(drop_keys),
+            len(self.api_frequencies),
+        )
+
     async def get_redis_connection(self, database: RedisDatabase) -> redis.Redis:
         """Get Redis connection for specific database"""
         try:
@@ -110,17 +189,26 @@ class AnalyticsController:
         """Track API call for pattern analysis"""
         timestamp = datetime.now().isoformat()
 
+        # Normalize dynamic path segments (UUIDs, numeric IDs, etc.) so that
+        # per-resource URLs collapse into a single route-pattern key instead of
+        # creating one entry per resource ID (Issue #1554).
+        normalized = self._normalize_endpoint(endpoint)
+
         # Update frequency tracking
-        self.api_frequencies[endpoint] += 1
+        self.api_frequencies[normalized] += 1
+
+        # Prune if the dict has grown past the safety cap.
+        if len(self.api_frequencies) > MAX_API_FREQUENCY_ENTRIES:
+            self._prune_api_dicts()
 
         # Track response times
-        self.response_times[endpoint].append(response_time)
-        if len(self.response_times[endpoint]) > 100:
-            self.response_times[endpoint] = self.response_times[endpoint][-100:]
+        self.response_times[normalized].append(response_time)
+        if len(self.response_times[normalized]) > 100:
+            self.response_times[normalized] = self.response_times[normalized][-100:]
 
         # Track errors
         if status_code >= 400:
-            self.error_counts[endpoint] += 1
+            self.error_counts[normalized] += 1
 
         # Store in analytics state (thread-safe)
         async with _analytics_state_lock:
