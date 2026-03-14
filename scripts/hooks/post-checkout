@@ -11,6 +11,12 @@
 #   5. Inject flock wrapper into pre-commit hook (Issue #1684)
 #   6. Self-sync: keep .git/hooks/post-checkout in sync (Issue #1692)
 
+# Skip file checkouts (e.g. stash pop) — only run on branch checkouts (#1705)
+# $3 = 1 for branch checkout, 0 for file checkout
+if [ "${3:-1}" = "0" ]; then
+    exit 0
+fi
+
 # Determine git root directory
 if [ -n "$GIT_DIR" ]; then
     GIT_ROOT="$(cd "$GIT_DIR/.." 2>/dev/null && pwd)" || exit 0
