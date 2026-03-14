@@ -1,0 +1,84 @@
+#!/bin/bash
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Prepare-Commit-Msg Hook: Branch Guard — Abort on Silent Branch Switch
+# ======================================================================
+#
+# Runs at the prepare-commit-msg stage (AFTER the pre-commit framework's
+# stash/restore cycle). Compares the current branch to the branch recorded
+# by pre-commit-record-branch (which runs INSIDE the stash cycle).
+#
+# If the branch has changed — the stash pop silently switched branches —
+# this hook exits non-zero to ABORT the commit before it lands on the
+# wrong branch.
+#
+# Root cause: pre-commit's `git stash push --include-untracked` followed
+# by `git stash pop` can, under certain conditions with multiple local
+# branches and dirty working trees, restore state onto a different branch.
+#
+# Issue: #1670 - pre-commit stash/pop silently switches active branch
+# Related: #1503 - pre-commit stash/restore stages untracked files
+#
+# Install: pre-commit install --hook-type prepare-commit-msg
+
+set -uo pipefail
+
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+GIT_DIR_PATH=$(git rev-parse --git-dir 2>/dev/null)
+if [ -z "$GIT_DIR_PATH" ]; then
+    exit 0
+fi
+
+RECORD_FILE="${GIT_DIR_PATH}/.autobot-pre-commit-branch"
+
+if [ ! -f "$RECORD_FILE" ]; then
+    # No record file — pre-commit-record-branch didn't run (first install?)
+    # Skip silently to avoid blocking commits during setup
+    exit 0
+fi
+
+EXPECTED_BRANCH=$(cat "$RECORD_FILE" 2>/dev/null)
+ACTUAL_BRANCH=$(git branch --show-current 2>/dev/null)
+
+# Clean up the record file regardless of outcome
+rm -f "$RECORD_FILE"
+
+if [ -z "$EXPECTED_BRANCH" ] || [ -z "$ACTUAL_BRANCH" ]; then
+    # Detached HEAD or empty — nothing to guard
+    exit 0
+fi
+
+if [ "$EXPECTED_BRANCH" != "$ACTUAL_BRANCH" ]; then
+    echo ""
+    echo -e "${BOLD}${RED}COMMIT ABORTED: Branch switch detected (Issue #1670)${NC}"
+    echo -e "${CYAN}──────────────────────────────────────────────────────${NC}"
+    echo -e "  Expected branch: ${BOLD}${EXPECTED_BRANCH}${NC}"
+    echo -e "  Actual branch:   ${BOLD}${RED}${ACTUAL_BRANCH}${NC}"
+    echo ""
+    echo "  The pre-commit stash/pop cycle silently switched your branch."
+    echo "  Your commit would have landed on the WRONG branch."
+    echo ""
+    echo -e "  ${BOLD}To fix:${NC}"
+    echo "    1. Switch back to your intended branch:"
+    echo "       git checkout ${EXPECTED_BRANCH}"
+    echo ""
+    echo "    2. Re-stage your files and commit again:"
+    echo "       git add <files>"
+    echo "       git commit"
+    echo ""
+    echo -e "  ${BOLD}To prevent this:${NC}"
+    echo "    Use worktrees for parallel branch work:"
+    echo "    git worktree add .worktrees/feat-XXXX -b feat/XXXX origin/Dev_new_gui"
+    echo -e "${CYAN}──────────────────────────────────────────────────────${NC}"
+    echo ""
+    exit 1
+fi
+
+exit 0
