@@ -3,8 +3,12 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 #
-# Post-checkout hook: Fix WSL2 symlink breakage
-# Issue #886: WSL2's core.symlinks=false causes symlinks to become text files
+# Post-checkout hook:
+#   1. Fix WSL2 symlink breakage (Issue #886)
+#   2. Fix pre-commit hook script permissions (Issue #1683)
+#   3. Auto-install prepare-commit-msg hook type (Issue #1679)
+#
+# Install: cp scripts/hooks/post-checkout .git/hooks/post-checkout
 
 set -e
 
@@ -20,7 +24,7 @@ fi
 BACKEND_DIR="$GIT_ROOT/autobot-user-backend"
 BACKEND_SYMLINK="$BACKEND_DIR/backend"
 
-if [ ! -L "$BACKEND_SYMLINK" ] || [ ! -e "$BACKEND_SYMLINK" ]; then
+if [ -d "$BACKEND_DIR" ] && { [ ! -L "$BACKEND_SYMLINK" ] || [ ! -e "$BACKEND_SYMLINK" ]; }; then
     echo "🔧 Fixing backend symlink..."
     cd "$BACKEND_DIR"
     rm -f backend
@@ -37,6 +41,34 @@ if [ ! -L "$SHARED_SYMLINK" ] || [ ! -e "$SHARED_SYMLINK" ]; then
     rm -f autobot_shared
     ln -s autobot-shared autobot_shared
     echo "✅ autobot_shared symlink restored: $SHARED_SYMLINK -> autobot-shared"
+fi
+
+# ---------------------------------------------------------------------------
+# Fix pre-commit hook script permissions (Issue #1683)
+# ---------------------------------------------------------------------------
+# WSL2 with core.filemode=false loses executable bits on checkout/worktree.
+# Rather than maintaining a fragile per-file list, fix all scripts at once.
+HOOKS_SCRIPTS="$GIT_ROOT/autobot-infrastructure/shared/scripts/hooks"
+UTILS_SCRIPTS="$GIT_ROOT/autobot-infrastructure/shared/scripts/utilities"
+if [ -d "$HOOKS_SCRIPTS" ] || [ -d "$UTILS_SCRIPTS" ]; then
+    FIXED=0
+    for f in "$HOOKS_SCRIPTS"/pre-commit-* "$UTILS_SCRIPTS"/*.sh; do
+        [ -f "$f" ] && [ ! -x "$f" ] && chmod +x "$f" && FIXED=$((FIXED + 1))
+    done
+    [ "$FIXED" -gt 0 ] && echo "✅ Fixed permissions on $FIXED hook script(s)"
+fi
+
+# ---------------------------------------------------------------------------
+# Auto-install prepare-commit-msg hook if missing (Issue #1679)
+# ---------------------------------------------------------------------------
+# The branch-guard (#1670) and warn-untracked (#1503) hooks run at the
+# prepare-commit-msg stage, but pre-commit only installs the pre-commit
+# hook type by default. This ensures the dispatcher exists.
+HOOKS_DIR="$(git rev-parse --git-dir 2>/dev/null)/hooks"
+if [ -d "$HOOKS_DIR" ] && [ ! -f "$HOOKS_DIR/prepare-commit-msg" ]; then
+    if command -v pre-commit > /dev/null 2>&1; then
+        pre-commit install --hook-type prepare-commit-msg > /dev/null 2>&1 || true
+    fi
 fi
 
 exit 0
