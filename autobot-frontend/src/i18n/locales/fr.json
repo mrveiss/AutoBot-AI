@@ -1133,12 +1133,7 @@
         "businessIntelligence": "Business Intelligence",
         "businessIntelligenceAria": "Business intelligence analytics",
         "security": "Security",
-        "securityAria": "Security analytics",
-        "patterns": "Modèles",
-        "evolution": "Évolution",
-        "intelligence": "Intelligence",
-        "advanced": "Avancé",
-        "bi": "BI"
+        "securityAria": "Security analytics"
       }
     },
     "header": {
@@ -1168,21 +1163,7 @@
         "exporting": "Exporting...",
         "exportReport": "Export Report",
         "clearing": "Clearing...",
-        "clearCache": "Clear Cache",
-        "isAnalyzing": "En cours d'analyse",
-        "currentPath": "Chemin actuel",
-        "hasProblems": "A des problèmes",
-        "problemCount": "Nombre de problèmes",
-        "isClearingCache": "Vidage du cache",
-        "isExporting": "Export en cours",
-        "currentSource": "Source actuelle",
-        "sourcesList": "Liste des sources",
-        "registeredSources": "Sources enregistrées",
-        "indexingState": "État d'indexation",
-        "activeJobId": "ID de travail actif",
-        "batchProgress": "Progression du lot",
-        "filesProcessed": "Fichiers traités",
-        "totalFiles": "Fichiers totaux"
+        "clearCache": "Clear Cache"
       }
     },
     "codeIntelligence": {
@@ -1195,9 +1176,7 @@
         "analysis": "Analysis",
         "qualityScore": "Quality Score",
         "suggestions": "Suggestions",
-        "history": "Historique",
-        "quality": "Qualité",
-        "analyze": "Analyser"
+        "history": "Historique"
       },
       "codeAnalysis": "Analyse de code",
       "language": "Langue",
@@ -1220,8 +1199,7 @@
         "qualityScore": "Quality Score",
         "issues": "Problèmes",
         "date": "Date",
-        "actions": "Actions",
-        "quality": "Qualité"
+        "actions": "Actions"
       },
       "untitled": "Sans titre",
       "delete": "Supprimer",
@@ -1265,22 +1243,7 @@
         "days90": "90 days",
         "days180": "180 days",
         "year1": "1 year",
-        "metrics": "Metrics",
-        "dateRange": "Période",
-        "author": "Auteur",
-        "branch": "Branche",
-        "fileType": "Type de fichier",
-        "allAuthors": "Tous les auteurs",
-        "allBranches": "Toutes les branches",
-        "allTypes": "Tous les types",
-        "from": "De",
-        "to": "À",
-        "last7days": "7 derniers jours",
-        "last30days": "30 derniers jours",
-        "last90days": "90 derniers jours",
-        "lastYear": "Dernière année",
-        "custom": "Personnalisé",
-        "allFiles": "Tous les fichiers"
+        "metrics": "Metrics"
       },
       "metrics": {
         "overall": "Overall",
@@ -1289,23 +1252,14 @@
         "testability": "Testability",
         "documentation": "Documentation",
         "security": "Sécurité",
-        "performance": "Performance",
-        "codeChurn": "Churn de code",
-        "coverage": "Couverture",
-        "techDebt": "Dette technique",
-        "duplicates": "Doublons",
-        "dependencies": "Dépendances"
+        "performance": "Performance"
       },
       "table": {
         "patternType": "Pattern Type",
         "count": "Count",
         "firstSeen": "First Seen",
         "lastSeen": "Last Seen",
-        "trend": "Tendance",
-        "pattern": "Modèle",
-        "type": "Type",
-        "occurrences": "Occurrences",
-        "details": "Détails"
+        "trend": "Tendance"
       },
       "modal": {
         "repoPath": "Repository Path",
@@ -1315,16 +1269,7 @@
         "commitLimitHelp": "Maximum number of commits to analyze (1-1000)",
         "cancel": "Cancel",
         "analyzing": "Analyzing...",
-        "startAnalysis": "Start Analysis",
-        "title": "Détails du modèle",
-        "type": "Type",
-        "firstSeen": "Première apparition",
-        "lastSeen": "Dernière apparition",
-        "occurrences": "Occurrences",
-        "trend": "Tendance",
-        "affectedFiles": "Fichiers affectés",
-        "noFiles": "Aucun fichier",
-        "close": "Fermer"
+        "startAnalysis": "Start Analysis"
       }
     },
     "bi": {
@@ -1364,11 +1309,7 @@
         "optimization": "Optimization",
         "insights": "Insights",
         "reports": "Rapports",
-        "agentCosts": "Agent Costs",
-        "overview": "Vue d'ensemble",
-        "agents": "Agents",
-        "costs": "Coûts",
-        "usage": "Utilisation"
+        "agentCosts": "Agent Costs"
       },
       "reports": {
         "executiveSummary": "Executive Summary",
@@ -1378,17 +1319,7 @@
         "costReport": "Cost Report",
         "costDesc": "Cost breakdown, trends, and optimization opportunities",
         "performanceReport": "Performance Report",
-        "performanceDesc": "Agent and system performance metrics",
-        "title": "Rapports personnalisés",
-        "generate": "Générer",
-        "generating": "Génération...",
-        "download": "Télécharger",
-        "schedule": "Planifier",
-        "delete": "Supprimer",
-        "noReports": "Aucun rapport",
-        "name": "Nom",
-        "type": "Type",
-        "created": "Créé"
+        "performanceDesc": "Agent and system performance metrics"
       },
       "agentCosts": {
         "title": "Per-Agent Cost Tracking",
@@ -1409,24 +1340,7 @@
         "monthlyBudget": "Monthly Budget",
         "cancel": "Cancel",
         "save": "Save",
-        "noData": "Pas de données de coûts d'agents",
-        "agentName": "Nom de l'agent",
-        "taskCount": "Nombre de tâches",
-        "successRate": "Taux de réussite",
-        "totalCost": "Coût total",
-        "avgCostPerTask": "Coût moyen/tâche",
-        "totalTokens": "Tokens totaux",
-        "avgDuration": "Durée moyenne",
-        "errorRate": "Taux d'erreur",
-        "costByAgent": "Coût par agent",
-        "costTrend": "Tendance des coûts",
-        "tokenUsage": "Utilisation des tokens",
-        "efficiency": "Efficacité",
-        "topExpensive": "Agents les plus coûteux",
-        "costPerSuccess": "Coût par réussite",
-        "last7d": "7 derniers jours",
-        "last30d": "30 derniers jours",
-        "last90d": "90 derniers jours"
+        "noData": "Pas de données de coûts d'agents"
       }
     },
     "sources": {
@@ -1448,13 +1362,7 @@
         "userIdsHint": "one per line or comma-separated",
         "userIdsHelp": "Enter user IDs separated by commas or new lines.",
         "currentlySharedWith": "Currently shared with",
-        "updateAccess": "Update Access",
-        "title": "Partager la source",
-        "copyLink": "Copier le lien",
-        "copied": "Copié",
-        "permissions": "Permissions",
-        "addUser": "Ajouter un utilisateur",
-        "remove": "Supprimer"
+        "updateAccess": "Update Access"
       },
       "deleteTitle": "Supprimer la source",
       "indexingRunning": "Indexation en cours",
@@ -1472,21 +1380,12 @@
         "publicDesc": "All users can view",
         "onlyYou": "Only you",
         "specificUsers": "Specific users",
-        "allUsers": "All users",
-        "team": "Équipe",
-        "readOnly": "Lecture seule",
-        "readWrite": "Lecture/Écriture",
-        "admin": "Administrateur",
-        "owner": "Propriétaire",
-        "viewer": "Visualiseur",
-        "editor": "Éditeur"
+        "allUsers": "All users"
       },
       "validation": {
         "nameRequired": "Le nom est requis",
         "repoRequired": "Repository (owner/repo) is required.",
-        "localPathRequired": "Local path is required.",
-        "pathRequired": "Le chemin est requis",
-        "urlRequired": "L'URL est requise"
+        "localPathRequired": "Local path is required."
       },
       "form": {
         "name": "Nom",
@@ -1507,23 +1406,7 @@
         "namePlaceholder": "Saisir le nom de la source",
         "repoPlaceholder": "owner/repository",
         "branchPlaceholder": "Saisir la branche",
-        "localPathPlaceholder": "/home/user/projects/myapp",
-        "path": "Chemin",
-        "pathPlaceholder": "Saisir le chemin de la source",
-        "type": "Type",
-        "local": "Local",
-        "git": "Git",
-        "url": "URL",
-        "urlPlaceholder": "Saisir l'URL du dépôt",
-        "description": "Description",
-        "descriptionPlaceholder": "Saisir la description",
-        "save": "Enregistrer",
-        "updating": "Mise à jour...",
-        "create": "Créer",
-        "update": "Mettre à jour",
-        "language": "Langue",
-        "tags": "Tags",
-        "tagsPlaceholder": "Saisir les tags"
+        "localPathPlaceholder": "/home/user/projects/myapp"
       }
     },
     "codeGeneration": {
@@ -1861,9 +1744,7 @@
         "constant": "Constante",
         "interface": "Interface",
         "type": "Type",
-        "unknown": "Unknown",
-        "enum": "Énumération",
-        "module": "Module"
+        "unknown": "Unknown"
       }
     },
     "duplicates": {
@@ -2139,36 +2020,19 @@
         "owasp": "OWASP Category",
         "copyPathAriaLabel": "Copy file path to clipboard",
         "copyPath": "Copy Path",
-        "noRecommendation": "No recommendation available",
-        "file": "Fichier",
-        "line": "Ligne",
-        "actions": "Actions",
-        "noFindings": "Aucun résultat",
-        "showMore": "Voir plus",
-        "showLess": "Voir moins",
-        "export": "Exporter",
-        "filter": "Filtrer",
-        "sort": "Trier",
-        "search": "Rechercher",
-        "total": "Total"
+        "noRecommendation": "No recommendation available"
       },
       "security": {
         "title": "Security Vulnerabilities",
-        "emptyMessage": "No security vulnerabilities found",
-        "vulnerabilities": "Vulnérabilités",
-        "exposure": "Exposition"
+        "emptyMessage": "No security vulnerabilities found"
       },
       "performance": {
         "title": "Performance Issues",
-        "emptyMessage": "No performance issues found",
-        "bottlenecks": "Goulots d'étranglement",
-        "optimization": "Optimisation"
+        "emptyMessage": "No performance issues found"
       },
       "redis": {
         "title": "Redis Optimizations",
-        "emptyMessage": "No Redis optimization suggestions",
-        "connections": "Connexions",
-        "memory": "Mémoire"
+        "emptyMessage": "No Redis optimization suggestions"
       },
       "fileScan": {
         "title": "Scan de fichiers",
@@ -2182,18 +2046,7 @@
         "pythonOnlyError": "Only Python (.py) files are supported",
         "cancel": "Cancel",
         "scanning": "Scan en cours...",
-        "scanFile": "Scan File",
-        "scan": "Scanner",
-        "noResults": "Aucun résultat",
-        "filesScanned": "Fichiers scannés",
-        "issuesFound": "Problèmes trouvés",
-        "critical": "Critique",
-        "high": "Élevé",
-        "medium": "Moyen",
-        "low": "Faible",
-        "info": "Info",
-        "allSeverities": "Toutes les sévérités",
-        "pathPlaceholder": "Saisir le chemin du fichier"
+        "scanFile": "Scan File"
       }
     }
   },
@@ -3117,7 +2970,6 @@
         "reset": "Réinitialiser",
         "search": "Rechercher"
       },
-      "timeline": {},
       "causalChain": {
         "title": "Chaîne causale",
         "description": "Tracer la chaîne d'événements liés par causalité",
@@ -5053,7 +4905,6 @@
       "showLabel": "Afficher",
       "clear": "Effacer"
     },
-    "progress": {},
     "list": {
       "noOperations": "Aucune opération",
       "defaultEmptyMessage": "Aucune opération trouvée. Les opérations apparaîtront ici lors de l'exécution de tâches en arrière-plan.",

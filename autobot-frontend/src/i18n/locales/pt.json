@@ -2970,7 +2970,6 @@
         "reset": "Redefinir",
         "search": "Pesquisar"
       },
-      "timeline": {},
       "causalChain": {
         "title": "Cadeia causal",
         "description": "Rastrear a cadeia de eventos causalmente ligados",
@@ -4906,7 +4905,6 @@
       "showLabel": "Mostrar",
       "clear": "Limpar"
     },
-    "progress": {},
     "list": {
       "noOperations": "Sem operações",
       "defaultEmptyMessage": "Nenhuma operação encontrada. As operações aparecerão aqui quando houver tarefas em segundo plano.",

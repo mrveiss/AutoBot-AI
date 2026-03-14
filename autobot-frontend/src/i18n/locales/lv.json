@@ -2970,7 +2970,6 @@
         "reset": "Atiestatīt",
         "search": "Meklēt"
       },
-      "timeline": {},
       "causalChain": {
         "title": "Cēloņu ķēde",
         "description": "Izsekot cēloņsakarīgi saistītu notikumu ķēdi",
@@ -4906,7 +4905,6 @@
       "showLabel": "Rādīt",
       "clear": "Notīrīt"
     },
-    "progress": {},
     "list": {
       "noOperations": "Nav operāciju",
       "defaultEmptyMessage": "Nav atrasta neviena operācija. Operācijas parādīsies šeit, kad darbosies fona uzdevumi.",

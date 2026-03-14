@@ -2970,7 +2970,6 @@
         "reset": "Resetuj",
         "search": "Szukaj"
       },
-      "timeline": {},
       "causalChain": {
         "title": "Łańcuch przyczynowy",
         "description": "Śledzić łańcuch przyczynowo powiązanych zdarzeń",
@@ -4906,7 +4905,6 @@
       "showLabel": "Pokaż",
       "clear": "Wyczyść"
     },
-    "progress": {},
     "list": {
       "noOperations": "Brak operacji",
       "defaultEmptyMessage": "Nie znaleziono operacji. Operacje pojawią się tutaj, gdy będą działać zadania w tle.",
