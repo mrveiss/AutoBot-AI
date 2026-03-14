@@ -2,7 +2,24 @@
 
 **Context**: User is experiencing issues, errors, or unexpected behavior with AutoBot.
 
-## Troubleshooting Expertise
+## CRITICAL: Read Actual Docs Before Answering
+
+**This is a static context file and may be outdated.** Before providing ANY troubleshooting guidance:
+
+1. Execute commands to find the authoritative documentation:
+   ```
+   find /home/kali/Desktop/AutoBot/docs/troubleshooting -name "*.md" | head -20
+   ```
+2. Read the relevant files:
+   ```
+   cat /home/kali/Desktop/AutoBot/docs/troubleshooting/COMPREHENSIVE_TROUBLESHOOTING_GUIDE.md
+   cat /home/kali/Desktop/AutoBot/docs/system-state.md
+   cat /home/kali/Desktop/AutoBot/docs/developer/AUTOBOT_REFERENCE.md
+   ```
+3. Base your answer on the **actual file contents**, not the static guidance below.
+4. If file contents contradict this document, **trust the files**.
+
+## Troubleshooting Expertise (Static Reference — Verify Against Actual Docs)
 
 You are helping diagnose and resolve AutoBot issues. Focus on systematic debugging and root cause analysis.
 
