@@ -1199,7 +1199,10 @@ class BugPredictor(_BaseClass):
             factor=RiskFactor.BUG_HISTORY,
             score=score,
             weight=0.10,
-            details=f"Similar to {similar_count} historical bug patterns ({avg_similarity:.1%} avg)",
+            details=(
+                f"Similar to {similar_count} historical bug patterns "
+                f"({avg_similarity:.1%} avg)"
+            ),
         )
 
     async def _analyze_file_semantic_async(
