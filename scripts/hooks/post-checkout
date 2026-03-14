@@ -9,6 +9,7 @@
 #   3. Auto-install prepare-commit-msg hook type (Issue #1679)
 #   4. Auto-install pre-commit branch guard wrapper (Issue #1689)
 #   5. Inject flock wrapper into pre-commit hook (Issue #1684)
+#   6. Self-sync: keep .git/hooks/post-checkout in sync (Issue #1692)
 
 # Determine git root directory
 if [ -n "$GIT_DIR" ]; then
@@ -125,6 +126,23 @@ if [ -x "$INJECT_SCRIPT" ]; then
     "$INJECT_SCRIPT"
 elif [ -f "$INJECT_SCRIPT" ]; then
     bash "$INJECT_SCRIPT"
+fi
+
+# ---------------------------------------------------------------------------
+# 6. Self-sync: keep .git/hooks/post-checkout in sync (Issue #1692)
+# ---------------------------------------------------------------------------
+# The canonical post-checkout hook lives in the tracked tree at
+# scripts/hooks/post-checkout. This section copies it into .git/hooks/
+# whenever the installed version differs, so developers always run the
+# latest version after checkout — even in worktrees.
+CANONICAL="$GIT_ROOT/scripts/hooks/post-checkout"
+COMMON_HOOKS="$(git rev-parse --git-common-dir 2>/dev/null)/hooks"
+INSTALLED="${COMMON_HOOKS}/post-checkout"
+if [ -f "$CANONICAL" ] && [ -d "$COMMON_HOOKS" ]; then
+    if [ ! -f "$INSTALLED" ] || ! diff -q "$CANONICAL" "$INSTALLED" > /dev/null 2>&1; then
+        cp "$CANONICAL" "$INSTALLED"
+        chmod +x "$INSTALLED"
+    fi
 fi
 
 exit 0

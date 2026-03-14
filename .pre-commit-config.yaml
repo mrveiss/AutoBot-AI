@@ -187,6 +187,22 @@ repos:
           Warns when untracked non-gitignored source files coexist with a commit.
           pre-commit stash/restore can accidentally stage these files from other branches.
           Fix: use git worktree add .worktrees/feat-XXXX for parallel branch work.
+
+  # Bootstrap: install post-checkout hook from tracked source (Issue #1692)
+  # The post-checkout hook cannot bootstrap itself (chicken-and-egg).
+  # This pre-commit hook copies the canonical source into .git/hooks/
+  # on every commit, ensuring new clones and worktrees get the hook.
+  - repo: local
+    hooks:
+      - id: install-post-checkout
+        name: Install post-checkout hook (Issue #1692)
+        entry: bash -c 'SRC="scripts/hooks/post-checkout"; DST="$(git rev-parse --git-common-dir)/hooks/post-checkout"; [ -f "$SRC" ] && { [ ! -f "$DST" ] || ! diff -q "$SRC" "$DST" >/dev/null 2>&1; } && cp "$SRC" "$DST" && chmod +x "$DST" && echo "post-checkout hook installed" || true'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: "Copies tracked post-checkout hook into .git/hooks/ so it runs on checkout and worktree creation"
+
 # Configuration for specific file types
 default_language_version:
   python: python3
