@@ -15,33 +15,17 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Mock loadLocaleMessages so tests never try to load real locale JSON files.
-// setLocale() calls loadLocaleMessages internally; we short-circuit it here so
-// only the DOM-mutation side-effects are exercised.
+// Mock only loadLocaleMessages so tests exercise the real setLocale(). (#1598)
+// The real setLocale() calls loadLocaleMessages() via an internal reference that
+// vitest cannot intercept (same-module binding), so loadLocaleMessages() runs for
+// real — loading locale JSON from disk and calling i18n.global.setLocaleMessage().
+// The mock below only affects code that imports loadLocaleMessages directly.
 vi.mock('@/i18n', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/i18n')>()
-
-  // Replace loadLocaleMessages with a no-op that always succeeds
-  const loadLocaleMessages = vi.fn().mockResolvedValue(true)
-
-  // Re-export setLocale pointing to our patched loadLocaleMessages.
-  // We rebuild setLocale inline so we can control the loadLocaleMessages dep
-  // without duplicating the RTL logic (which lives in the real module).
-  const setLocale = async (locale: string): Promise<void> => {
-    await loadLocaleMessages(locale)
-    // Mirror the real implementation from index.ts (worktree branch).
-    // RTL locales as defined in the i18n/rtl-reland cherry-pick.
-    const RTL_LOCALES = new Set(['ar', 'he', 'fa', 'ur'])
-    const dir = RTL_LOCALES.has(locale) ? 'rtl' : 'ltr'
-    document.documentElement.setAttribute('dir', dir)
-    document.documentElement.setAttribute('lang', locale)
-    localStorage.setItem('autobot-language', locale)
-  }
-
   return {
     ...actual,
-    loadLocaleMessages,
-    setLocale,
+    // Only mock the export; the real setLocale is preserved. (#1598)
+    loadLocaleMessages: vi.fn().mockResolvedValue(true),
   }
 })
 
