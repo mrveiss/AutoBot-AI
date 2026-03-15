@@ -51,6 +51,7 @@ from api.llm_providers import router as llm_providers_router
 from api.mcp_registry import router as mcp_registry_router
 from api.memory import router as memory_router
 from api.overseer_handlers import router as overseer_router
+from api.process_management import router as process_management_router  # Issue #1406
 from api.prometheus_mcp import router as prometheus_mcp_router
 from api.prompts import router as prompts_router
 from api.redis import router as redis_router
@@ -286,6 +287,12 @@ def _get_agent_routers() -> list:
         (files_router, "/files", ["files"], "files"),
         (developer_router, "/developer", ["developer"], "developer"),
         (memory_router, "/memory", ["memory"], "memory"),
+        (
+            process_management_router,
+            "",
+            ["process-management"],
+            "process_management",
+        ),
     ]
 
 

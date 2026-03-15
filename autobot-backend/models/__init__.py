@@ -34,6 +34,9 @@ from models.completion_feedback import CompletionFeedback
 # Config revision model (#1404)
 from models.config_revision import ConfigRevision
 from models.ml_model import MLModel
+
+# Process adapter models (#1406)
+from models.process_run import AgentSession, ProcessRun, TaskDecomposition
 from models.secret import Secret
 from models.session_collaboration import SessionCollaboration
 
@@ -58,4 +61,8 @@ __all__ = [
     "TaskApprovalLink",
     # Config revision model (#1404)
     "ConfigRevision",
+    # Process adapter models (#1406)
+    "ProcessRun",
+    "TaskDecomposition",
+    "AgentSession",
 ]
