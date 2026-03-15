@@ -37,8 +37,10 @@
 
     # Emergency admin user for fallback access when SSH keys fail
     emergency_admin_user: "autobot_admin"
-    # Password hash generated with: python3 -c "from passlib.hash import sha512_crypt; print(sha512_crypt.hash('password'))"
-    emergency_admin_password_hash: "$6$rounds=656000$VqQZbIggJvVNjHfl$hunhLQdMKj/TCyE.ftDknskbz4SCnGz5e6Yo4YJzHeIIhdRAp/oIDKdwd54oktyBwmb2nP09MWRyXNu0mLg1L1"
+    # Password hash must be provided via Ansible Vault or --extra-vars.
+    # Generate with: python3 -c "from passlib.hash import sha512_crypt; print(sha512_crypt.hash('YOUR_PASSWORD'))"
+    # See: inventory/group_vars/vault.yml
+    emergency_admin_password_hash: "{{ vault_emergency_admin_password_hash | default(omit) }}"
 
     # Role-specific defaults
     role_configs:
@@ -168,6 +170,7 @@
             append: yes
             password: "{{ emergency_admin_password_hash }}"
             state: present
+          when: vault_emergency_admin_password_hash is defined
 
         - name: "Configure passwordless sudo for emergency admin"
           copy:
@@ -177,6 +180,7 @@
             group: root
             mode: '0440'
             validate: 'visudo -cf %s'
+          when: vault_emergency_admin_password_hash is defined
 
         - name: "Configure passwordless sudo for autobot user"
           copy:
