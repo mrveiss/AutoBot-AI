@@ -28,6 +28,9 @@ from models.approval import Approval, ApprovalComment, TaskApprovalLink
 from models.code_pattern import CodePattern
 from models.completion_feedback import CompletionFeedback
 from models.ml_model import MLModel
+
+# Process adapter models (#1406)
+from models.process_run import AgentSession, ProcessRun, TaskDecomposition
 from models.secret import Secret
 from models.session_collaboration import SessionCollaboration
 
@@ -48,4 +51,8 @@ __all__ = [
     "Approval",
     "ApprovalComment",
     "TaskApprovalLink",
+    # Process adapter models (#1406)
+    "ProcessRun",
+    "TaskDecomposition",
+    "AgentSession",
 ]
