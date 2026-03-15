@@ -12,9 +12,10 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from api.user_management.dependencies import get_db_session
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from services.agent_org_service import AgentOrgService
+from services.delegation_service import DelegationService
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -224,3 +225,161 @@ async def get_role_defaults(
     """Return default permission set for the given org role (#1405)."""
     svc = AgentOrgService(session)
     return svc.get_role_defaults(role)
+
+
+# -- Delegation schemas (#1753) -------------------------------------------
+
+
+class DelegateRequest(BaseModel):
+    """Request body for POST /{manager_id}/delegate (#1753)."""
+
+    assignee_id: str = Field(..., description="Direct report to assign to")
+    task_description: str = Field(..., description="What the assignee should do")
+    context: Optional[Dict[str, Any]] = Field(
+        default=None, description="Extra context for the task"
+    )
+
+
+class DelegationResponse(BaseModel):
+    """Response for a task delegation (#1753)."""
+
+    id: str
+    delegator_id: str
+    assignee_id: str
+    task_description: str
+    status: str
+    escalated_to: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class DelegationStatusUpdate(BaseModel):
+    """Request body for PATCH /delegations/{id}/status (#1753)."""
+
+    status: str = Field(..., description="New status value")
+    result: Optional[Dict[str, Any]] = None
+
+
+def _delegation_to_response(d) -> DelegationResponse:
+    """Convert TaskDelegation ORM row to response (#1753)."""
+    return DelegationResponse(
+        id=str(d.id),
+        delegator_id=d.delegator_id,
+        assignee_id=d.assignee_id,
+        task_description=d.task_description,
+        status=d.status,
+        escalated_to=d.escalated_to,
+        created_at=d.created_at.isoformat() if d.created_at else None,
+    )
+
+
+# -- Delegation endpoints (#1753) ----------------------------------------
+
+
+@router.post(
+    "/{manager_id}/delegate",
+    response_model=DelegationResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["agent-delegation"],
+)
+async def delegate_task(
+    manager_id: str,
+    body: DelegateRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> DelegationResponse:
+    """
+    Assign a task from a manager to one of its direct reports (#1753).
+
+    Validates reporting relationship and delegation permission.
+    """
+    svc = DelegationService(session)
+    try:
+        delegation = await svc.delegate_task(
+            delegator_id=manager_id,
+            assignee_id=body.assignee_id,
+            task_description=body.task_description,
+            context=body.context,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return _delegation_to_response(delegation)
+
+
+@router.post(
+    "/delegations/{delegation_id}/escalate",
+    response_model=DelegationResponse,
+    tags=["agent-delegation"],
+)
+async def escalate_delegation(
+    delegation_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> DelegationResponse:
+    """
+    Escalate a stuck/failed delegation up the chain of command (#1753).
+    """
+    svc = DelegationService(session)
+    try:
+        delegation = await svc.escalate_task(delegation_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return _delegation_to_response(delegation)
+
+
+@router.patch(
+    "/delegations/{delegation_id}/status",
+    response_model=DelegationResponse,
+    tags=["agent-delegation"],
+)
+async def update_delegation_status(
+    delegation_id: str,
+    body: DelegationStatusUpdate,
+    session: AsyncSession = Depends(get_db_session),
+) -> DelegationResponse:
+    """Update the status of a delegated task (#1753)."""
+    svc = DelegationService(session)
+    try:
+        delegation = await svc.update_status(delegation_id, body.status, body.result)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    return _delegation_to_response(delegation)
+
+
+@router.get(
+    "/{agent_id}/activity",
+    response_model=Dict[str, Any],
+    tags=["agent-delegation"],
+)
+async def get_delegation_activity(
+    agent_id: str,
+    session: AsyncSession = Depends(get_db_session),
+) -> Dict[str, Any]:
+    """Aggregate delegation activity for a manager (#1753)."""
+    svc = DelegationService(session)
+    return await svc.get_activity_summary(agent_id)
+
+
+@router.get(
+    "/{agent_id}/delegations",
+    response_model=List[DelegationResponse],
+    tags=["agent-delegation"],
+)
+async def list_agent_delegations(
+    agent_id: str,
+    role: str = Query(
+        default="delegator",
+        description="Filter by 'delegator' or 'assignee'",
+    ),
+    delegation_status: Optional[str] = Query(
+        default=None, alias="status", description="Filter by status"
+    ),
+    limit: int = Query(default=50, ge=1, le=200),
+    session: AsyncSession = Depends(get_db_session),
+) -> List[DelegationResponse]:
+    """List delegations for an agent as delegator or assignee (#1753)."""
+    svc = DelegationService(session)
+    delegations = await svc.list_delegations(
+        agent_id=agent_id,
+        role=role,
+        status_filter=delegation_status,
+        limit=limit,
+    )
+    return [_delegation_to_response(d) for d in delegations]
