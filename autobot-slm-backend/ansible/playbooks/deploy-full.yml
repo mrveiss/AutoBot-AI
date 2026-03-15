@@ -51,6 +51,16 @@
     deployment_phase: "database"
     phase_description: "Redis Stack, data persistence, model storage"
 
+# Phase 2.5: Service Authentication Keys (#1734)
+# Must run after database (Redis needed for key storage) and before backend
+# (backend reads keys on startup). Generates keys, stores in Redis, deploys
+# .env key files to each VM via the service_auth role.
+- name: "Phase 2.5: Service Authentication"
+  import_playbook: deploy-service-auth.yml
+  vars:
+    deployment_phase: "service-auth"
+    phase_description: "Generate and deploy service-to-service auth keys"
+
 # Phase 3: Backend Services
 - name: "Phase 3: Backend Services"
   import_playbook: deploy-backend.yml

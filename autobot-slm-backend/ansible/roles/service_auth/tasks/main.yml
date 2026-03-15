@@ -27,3 +27,11 @@
   ansible.builtin.include_tasks: configure-monitoring.yml
   when: service_auth_enabled | bool
   tags: ['service_auth', 'monitoring']
+
+- name: "ServiceAuth | Configure rotation timer"
+  ansible.builtin.include_tasks: configure-rotation-timer.yml
+  when:
+    - service_auth_enabled | bool
+    - service_auth_rotation_timer_enabled | bool
+    - inventory_hostname in groups.get('slm_manager', groups.get('backend', []))
+  tags: ['service_auth', 'rotation']
