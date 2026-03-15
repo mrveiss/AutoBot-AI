@@ -1647,7 +1647,7 @@ async def reindex_with_context(
     has_context metadata. Guarded by CONTEXT_ENABLED env var.
     Issue #1513.
     """
-    if not ContextGeneratorCognifier._is_enabled():
+    if not ContextGeneratorCognifier.is_enabled():
         raise HTTPException(
             status_code=400,
             detail=(
