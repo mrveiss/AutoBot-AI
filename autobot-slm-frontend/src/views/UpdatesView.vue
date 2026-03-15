@@ -28,6 +28,7 @@ const systemUpdates = useSystemUpdates()
 
 onMounted(() => {
   systemUpdates.fetchSummary()
+  codeSync.fetchStatus()
 })
 
 // Tab definitions
@@ -67,7 +68,7 @@ function navigateToTab(tab: UpdatesTab): void {
           :key="tab.id"
           @click="navigateToTab(tab.id)"
           :class="[
-            'py-4 px-1 border-b-2 font-medium text-sm',
+            'py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2',
             activeTab === tab.id
               ? 'border-primary-500 text-primary-600'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
@@ -77,14 +78,16 @@ function navigateToTab(tab: UpdatesTab): void {
           <!-- System updates badge (orange) -->
           <span
             v-if="tab.id === 'system' && systemUpdates.updateCount.value > 0"
-            class="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1 text-xs font-bold text-white bg-orange-500 rounded-full"
+            class="tab-badge"
+            style="background: rgb(249, 115, 22)"
           >
             {{ systemUpdates.updateCount.value }}
           </span>
           <!-- Code sync outdated badge (amber) -->
           <span
             v-if="tab.id === 'code-sync' && codeSync.outdatedCount.value > 0"
-            class="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-yellow-500 rounded-full"
+            class="tab-badge"
+            style="background: rgb(234, 179, 8)"
           >
             {{ codeSync.outdatedCount.value }}
           </span>
@@ -97,3 +100,19 @@ function navigateToTab(tab: UpdatesTab): void {
     <CodeSyncView v-else-if="activeTab === 'code-sync'" />
   </div>
 </template>
+
+<style scoped>
+.tab-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  color: white;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+</style>
