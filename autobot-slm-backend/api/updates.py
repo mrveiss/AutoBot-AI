@@ -13,6 +13,7 @@ import logging
 import uuid
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -156,7 +157,7 @@ async def _execute_update_playbook(
     executor = get_playbook_executor()
     package_names = [u.package_name for u in updates]
 
-    limit = [node.ip_address]
+    limit = _resolve_ips_to_inventory_names([node.ip_address])
     extra_vars = {
         "update_type": "specific",
         "specific_packages": ",".join(package_names),
@@ -375,6 +376,66 @@ async def _upsert_update_info(
         db.add(new_record)
 
 
+def _build_ip_to_inventory_map() -> Dict[str, str]:
+    """Parse Ansible inventory to map IP addresses to inventory hostnames.
+
+    DB hostnames are display names (e.g. '00-SLM-Manager') which don't
+    match Ansible inventory hostnames (e.g. 'autobot-slm'). Ansible's
+    --limit only matches inventory hostnames, so we need this mapping
+    to target specific nodes (#1789).
+    """
+    import yaml
+
+    executor = get_playbook_executor()
+    inv_path = executor.inventory_path
+    if not inv_path or not Path(inv_path).exists():
+        return {}
+
+    try:
+        with open(inv_path, encoding="utf-8") as f:
+            inv = yaml.safe_load(f)
+    except Exception:
+        logger.warning("Failed to parse inventory: %s", inv_path)
+        return {}
+
+    mapping: Dict[str, str] = {}
+
+    def _walk(node: dict) -> None:
+        if not isinstance(node, dict):
+            return
+        for key, val in node.items():
+            if key == "hosts" and isinstance(val, dict):
+                for hostname, hvars in val.items():
+                    if not isinstance(hvars, dict):
+                        continue
+                    ip = hvars.get("ansible_host", "")
+                    if ip and ip not in ("127.0.0.1", "localhost"):
+                        mapping[ip] = hostname
+                    net = hvars.get("network_address", "")
+                    if net:
+                        mapping[net] = hostname
+            elif key not in ("vars",):
+                if isinstance(val, dict):
+                    _walk(val)
+
+    _walk(inv.get("all", inv))
+    return mapping
+
+
+def _resolve_ips_to_inventory_names(ips: List[str]) -> List[str]:
+    """Convert IP addresses to Ansible inventory hostnames (#1789)."""
+    ip_map = _build_ip_to_inventory_map()
+    names = []
+    for ip in ips:
+        name = ip_map.get(ip)
+        if name:
+            names.append(name)
+        else:
+            logger.warning("No inventory hostname for IP: %s", ip)
+            names.append(ip)
+    return names
+
+
 async def _resolve_target_nodes(
     db: AsyncSession,
     node_ids: Optional[List[str]],
@@ -382,15 +443,15 @@ async def _resolve_target_nodes(
 ) -> tuple:
     """Resolve target nodes for discovery. Returns (limit, extra_vars, count).
 
-    Uses ip_address for --limit since DB hostnames (display names)
-    don't match Ansible inventory hostnames (#1789).
+    Maps DB node IPs to Ansible inventory hostnames for --limit (#1789).
     """
     extra_vars: dict = {}
     limit = None
     if node_ids:
         result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
         nodes = result.scalars().all()
-        limit = [n.ip_address for n in nodes]
+        ips = [n.ip_address for n in nodes]
+        limit = _resolve_ips_to_inventory_names(ips)
         return limit, extra_vars, len(limit)
     if role:
         extra_vars["target_hosts"] = role
@@ -812,9 +873,10 @@ async def _execute_upgrade_playbook(
 ) -> None:
     """Execute apply-system-updates.yml and update job state."""
     executor = get_playbook_executor()
+    limit = _resolve_ips_to_inventory_names([ip_address])
     r = await executor.execute_playbook(
         playbook_name="apply-system-updates.yml",
-        limit=[ip_address],
+        limit=limit,
         extra_vars={
             "update_type": "all",
             "dry_run": "false",
