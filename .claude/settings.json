@@ -13,7 +13,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd $(git rev-parse --show-toplevel 2>/dev/null || pwd) && FILE=$(echo \"$TOOL_ARGS\" | grep -o '\"file_path\":\"[^\"]*' | cut -d'\"' -f4) && if [[ -n \"$FILE\" ]]; then if [[ \"$FILE\" == *.py ]]; then echo \"🐍 Linting $FILE...\"; ruff check \"$FILE\" 2>&1 | head -20 || echo \"✅ Python linting passed\"; elif [[ \"$FILE\" == *.ts || \"$FILE\" == *.tsx ]]; then echo \"📘 Type checking $FILE...\"; if [[ \"$FILE\" == *\"autobot-user-frontend\"* ]]; then cd autobot-user-frontend && npx tsc --noEmit 2>&1 | grep -E \"(error TS|✓)\" | head -15 || echo \"✅ TypeScript checks passed\"; elif [[ \"$FILE\" == *\"autobot-slm-frontend\"* ]]; then cd autobot-slm-frontend && npx tsc --noEmit 2>&1 | grep -E \"(error TS|✓)\" | head -15 || echo \"✅ TypeScript checks passed\"; fi; elif [[ \"$FILE\" == *.vue ]]; then echo \"🖼️  Linting Vue component...\"; if [[ \"$FILE\" == *\"autobot-user-frontend\"* ]]; then cd autobot-user-frontend && npm run lint -- \"$FILE\" 2>&1 | head -15 || echo \"✅ Vue linting passed\"; elif [[ \"$FILE\" == *\"autobot-slm-frontend\"* ]]; then cd autobot-slm-frontend && npm run lint -- \"$FILE\" 2>&1 | head -15 || echo \"✅ Vue linting passed\"; fi; else echo \"✓ File type not configured for linting\"; fi; fi",
+            "command": "cd $(git rev-parse --show-toplevel 2>/dev/null || pwd) && FILE=$(echo \"$TOOL_ARGS\" | grep -o '\"file_path\":\"[^\"]*' | cut -d'\"' -f4) && if [[ -n \"$FILE\" ]]; then if [[ \"$FILE\" == *.py ]]; then echo \"\ud83d\udc0d Auto-formatting $FILE...\"; /home/kali/.cache/pre-commit/repoefsi1klb/py_env-python3/bin/black --line-length=88 \"$FILE\" 2>&1 | tail -1; isort --profile=black --line-length=88 \"$FILE\" 2>&1 | tail -1; git add \"$FILE\" 2>/dev/null; ruff check \"$FILE\" 2>&1 | head -10 || echo \"\u2705 Clean\"; elif [[ \"$FILE\" == *.ts || \"$FILE\" == *.tsx ]]; then echo \"\ud83d\udcd8 Type checking $FILE...\"; if [[ \"$FILE\" == *\"autobot-user-frontend\"* ]]; then cd autobot-user-frontend && npx tsc --noEmit 2>&1 | grep -E \"(error TS|\u2713)\" | head -15 || echo \"\u2705 TypeScript checks passed\"; elif [[ \"$FILE\" == *\"autobot-slm-frontend\"* ]]; then cd autobot-slm-frontend && npx tsc --noEmit 2>&1 | grep -E \"(error TS|\u2713)\" | head -15 || echo \"\u2705 TypeScript checks passed\"; fi; elif [[ \"$FILE\" == *.vue ]]; then echo \"\ud83d\uddbc\ufe0f  Linting Vue component...\"; if [[ \"$FILE\" == *\"autobot-user-frontend\"* ]]; then cd autobot-user-frontend && npm run lint -- \"$FILE\" 2>&1 | head -15 || echo \"\u2705 Vue linting passed\"; elif [[ \"$FILE\" == *\"autobot-slm-frontend\"* ]]; then cd autobot-slm-frontend && npm run lint -- \"$FILE\" 2>&1 | head -15 || echo \"\u2705 Vue linting passed\"; fi; else echo \"\u2713 File type not configured for linting\"; fi; fi",
             "statusMessage": "Running linting checks...",
             "timeout": 10
           }
@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd $(git rev-parse --show-toplevel 2>/dev/null || pwd) && FILE=$(echo \"$TOOL_ARGS\" | grep -o '\"file_path\":\"[^\"]*' | cut -d'\"' -f4) && if [[ -n \"$FILE\" ]]; then if [[ \"$FILE\" == *.py ]]; then echo \"🐍 Linting new Python file...\"; ruff check \"$FILE\" 2>&1 | head -20 || echo \"✅ Python linting passed\"; elif [[ \"$FILE\" == *.ts || \"$FILE\" == *.tsx ]]; then echo \"📘 Type checking new TypeScript file...\"; if [[ \"$FILE\" == *\"autobot-user-frontend\"* ]]; then cd autobot-user-frontend && npx tsc --noEmit 2>&1 | grep -E \"(error TS|✓)\" | head -15 || echo \"✅ TypeScript checks passed\"; elif [[ \"$FILE\" == *\"autobot-slm-frontend\"* ]]; then cd autobot-slm-frontend && npx tsc --noEmit 2>&1 | grep -E \"(error TS|✓)\" | head -15 || echo \"✅ TypeScript checks passed\"; fi; fi; fi",
+            "command": "cd $(git rev-parse --show-toplevel 2>/dev/null || pwd) && FILE=$(echo \"$TOOL_ARGS\" | grep -o '\"file_path\":\"[^\"]*' | cut -d'\"' -f4) && if [[ -n \"$FILE\" ]]; then if [[ \"$FILE\" == *.py ]]; then echo \"\ud83d\udc0d Auto-formatting new Python file...\"; /home/kali/.cache/pre-commit/repoefsi1klb/py_env-python3/bin/black --line-length=88 \"$FILE\" 2>&1 | tail -1; isort --profile=black --line-length=88 \"$FILE\" 2>&1 | tail -1; git add \"$FILE\" 2>/dev/null; ruff check \"$FILE\" 2>&1 | head -10 || echo \"\u2705 Clean\"; elif [[ \"$FILE\" == *.ts || \"$FILE\" == *.tsx ]]; then echo \"\ud83d\udcd8 Type checking new TypeScript file...\"; if [[ \"$FILE\" == *\"autobot-user-frontend\"* ]]; then cd autobot-user-frontend && npx tsc --noEmit 2>&1 | grep -E \"(error TS|\u2713)\" | head -15 || echo \"\u2705 TypeScript checks passed\"; elif [[ \"$FILE\" == *\"autobot-slm-frontend\"* ]]; then cd autobot-slm-frontend && npx tsc --noEmit 2>&1 | grep -E \"(error TS|\u2713)\" | head -15 || echo \"\u2705 TypeScript checks passed\"; fi; fi; fi",
             "statusMessage": "Running linting checks on new file...",
             "timeout": 10
           }
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [[ \"$TOOL_ARGS\" == *\"git commit\"* ]]; then cd $(git rev-parse --show-toplevel 2>/dev/null || pwd) && echo '📋 Staged files:' && git diff --staged --name-only 2>/dev/null | head -20 && echo '' && echo '🌿 Branch:' $(git branch --show-current 2>/dev/null) '→ Dev_new_gui' && echo ''; fi",
+            "command": "if [[ \"$TOOL_ARGS\" == *\"git commit\"* ]]; then cd $(git rev-parse --show-toplevel 2>/dev/null || pwd) && echo '\ud83d\udccb Staged files:' && git diff --staged --name-only 2>/dev/null | head -20 && echo '' && echo '\ud83c\udf3f Branch:' $(git branch --show-current 2>/dev/null) '\u2192 Dev_new_gui' && echo ''; fi",
             "statusMessage": "Verifying git state...",
             "timeout": 3
           }
@@ -61,7 +61,7 @@
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "GITHUB ISSUE CHECK: Is this edit linked to a GitHub issue? If you have not yet confirmed an active issue for this session's work, you MUST: 1) Search for an existing issue with `gh issue list`, or 2) Create one with `gh issue create` — include a clear title and description of the work. State the issue number (e.g. 'Working on #1234') before proceeding. Do NOT write code without a linked issue."
+            "prompt": "GITHUB ISSUE CHECK: Is this edit linked to a GitHub issue? If you have not yet confirmed an active issue for this session's work, you MUST: 1) Search for an existing issue with `gh issue list`, or 2) Create one with `gh issue create` \u2014 include a clear title and description of the work. State the issue number (e.g. 'Working on #1234') before proceeding. Do NOT write code without a linked issue."
           }
         ]
       }

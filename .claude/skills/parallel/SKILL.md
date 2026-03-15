@@ -27,8 +27,10 @@ Before dispatching ANY agents:
 ### 1. Verify Worktree Base Directory
 
 ```bash
-# Check if worktree base exists
-WORKTREE_BASE="../worktrees"
+# Always use absolute paths — NEVER relative paths for worktrees
+REPO_ROOT=$(git rev-parse --show-toplevel)
+WORKTREE_BASE="${REPO_ROOT}/.worktrees"
+
 if [[ ! -d "$WORKTREE_BASE" ]]; then
     echo "Creating worktree base directory: $WORKTREE_BASE"
     mkdir -p "$WORKTREE_BASE"
@@ -90,8 +92,9 @@ If unsure, I'll test with a single agent first."
 ### 5. Create Test Worktree
 
 ```bash
+REPO_ROOT=$(git rev-parse --show-toplevel)
 TEST_ISSUE="123"  # First issue from the list
-WORKTREE_PATH="../worktrees/issue-${TEST_ISSUE}"
+WORKTREE_PATH="${REPO_ROOT}/.worktrees/issue-${TEST_ISSUE}"
 
 # Remove if exists from previous failed attempt
 if [[ -d "$WORKTREE_PATH" ]]; then
@@ -184,19 +187,26 @@ done
 
 ```python
 # Use multiple Task() calls in one response
+# CRITICAL: Always pass absolute WORKTREE_PATH, never relative paths
 Task(
     subagent_type="senior-backend-engineer",
     description="Implement issue #123",
     prompt="""
-    WORKTREE: ../worktrees/issue-123
+    WORKTREE ABSOLUTE PATH: /home/kali/Desktop/AutoBot/.worktrees/issue-123
 
-    Implement GitHub issue #123 in isolation:
-    1. cd ../worktrees/issue-123
-    2. Create feature branch: git checkout -b fix/issue-123
-    3. Implement the full issue following /implement skill workflow
+    MANDATORY PATH DISCIPLINE — verify before ANY file operation:
+    1. Run `pwd` — must match the absolute path above
+    2. If it doesn't, cd to the absolute path first
+    3. Use absolute paths for ALL Read/Edit/Write/Bash tool calls
+    4. NEVER write files outside /home/kali/Desktop/AutoBot/.worktrees/issue-123
+
+    Implement GitHub issue #123:
+    1. cd /home/kali/Desktop/AutoBot/.worktrees/issue-123 && pwd
+    2. git checkout -b fix/issue-123
+    3. Implement the full issue
     4. Run tests and verify
-    5. Commit with: git commit -m "feat: description (#123)"
-    6. Push branch: git push -u origin fix/issue-123
+    5. Commit: git commit -m "feat: description (#123)"
+    6. Push: git push -u origin fix/issue-123
     7. Report: files changed, tests status, branch name
 
     Timeout: 30 minutes. If blocked, report and exit.
