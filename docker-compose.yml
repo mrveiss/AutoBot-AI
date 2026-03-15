@@ -1,34 +1,139 @@
-# AutoBot Production Docker Compose Configuration
-# Comprehensive production-ready deployment with monitoring and security
-
-version: '3.8'
+# AutoBot Docker Compose — Single-Node Deployment
+# All core services on one machine. Frontend at /, SLM at /slm.
+#
+# Usage:
+#   docker compose up -d                    # Start all core services
+#   docker compose --profile monitoring up -d  # Include Prometheus + Grafana
+#   docker compose --profile ollama up -d      # Include local Ollama LLM
+#
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
 
 services:
-  # Redis Cache and Message Broker
+  # ---- Data Layer ----
+
   redis:
-    image: redis:7-alpine
+    image: redis/redis-stack:7.4.0-v1
     container_name: autobot-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${AUTOBOT_REDIS_PORT:-6379}:6379"
+      - "8001:8001"  # RedisInsight UI
     volumes:
       - redis_data:/data
-      - ./config/redis.conf:/usr/local/etc/redis/redis.conf
-    command: redis-server /usr/local/etc/redis/redis.conf
+    environment:
+      - REDIS_ARGS=--appendonly yes --save 60 1 --maxmemory 512mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
+      retries: 5
+    networks:
+      - autobot
+
+  chromadb:
+    image: chromadb/chroma:0.5.23
+    container_name: autobot-chromadb
+    restart: unless-stopped
+    ports:
+      - "8100:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=False
+      - IS_PERSISTENT=TRUE
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
+      interval: 15s
+      timeout: 5s
       retries: 3
     networks:
-      - autobot-network
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
+      - autobot
 
-  # Ollama LLM Service
+  # ---- Application Layer ----
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: autobot-backend
+    restart: unless-stopped
+    volumes:
+      - backend_data:/app/data
+      - backend_logs:/app/logs
+    environment:
+      - AUTOBOT_ENVIRONMENT=production
+      - AUTOBOT_DEPLOYMENT_MODE=local
+      - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
+      - AUTOBOT_REDIS_HOST=redis
+      - AUTOBOT_REDIS_PORT=6379
+      - AUTOBOT_OLLAMA_HOST=${AUTOBOT_OLLAMA_HOST:-http://ollama:11434}
+      - AUTOBOT_BACKEND_HOST=0.0.0.0
+      - AUTOBOT_BACKEND_PORT=8000
+      - AUTOBOT_LLM_PROVIDER=${AUTOBOT_LLM_PROVIDER:-ollama}
+      - AUTOBOT_DEFAULT_LLM_MODEL=${AUTOBOT_DEFAULT_LLM_MODEL:-mistral:7b-instruct}
+      - AUTOBOT_EMBEDDING_MODEL=${AUTOBOT_EMBEDDING_MODEL:-nomic-embed-text:latest}
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/system/health"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - autobot
+
+  slm:
+    build:
+      context: .
+      dockerfile: docker/slm/Dockerfile
+    container_name: autobot-slm
+    restart: unless-stopped
+    volumes:
+      - slm_data:/app/data
+      - slm_logs:/app/logs
+    environment:
+      - AUTOBOT_ENVIRONMENT=production
+      - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
+      - AUTOBOT_REDIS_HOST=redis
+      - AUTOBOT_REDIS_PORT=6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 20s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - autobot
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: autobot-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - backend
+      - slm
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - autobot
+
+  # ---- Optional: Local LLM ----
+
   ollama:
     image: ollama/ollama:latest
     container_name: autobot-ollama
@@ -38,155 +143,62 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     environment:
-      - OLLAMA_ORIGINS=http://localhost:*,http://127.0.0.1:*,http://autobot-backend:*
+      - OLLAMA_ORIGINS=*
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
       interval: 30s
       timeout: 10s
       retries: 3
-    networks:
-      - autobot-network
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-          cpus: '2.0'
-
-  # AutoBot Backend Application
-  autobot-backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
-    container_name: autobot-backend
-    restart: unless-stopped
-    ports:
-      - "8001:8001"
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./reports:/app/reports
-      - ./config:/app/config
-    environment:
-      - AUTOBOT_ENVIRONMENT=production
-      - AUTOBOT_REDIS_HOST=redis
-      - AUTOBOT_REDIS_PORT=6379
-      - AUTOBOT_OLLAMA_HOST=http://ollama:11434
-      - AUTOBOT_LOG_LEVEL=INFO
-      - AUTOBOT_SECURITY_ENABLED=true
-      - AUTOBOT_MONITORING_ENABLED=true
-    depends_on:
-      redis:
-        condition: service_healthy
-      ollama:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/api/system/health"]
-      interval: 20s
-      timeout: 10s
-      retries: 3
       start_period: 30s
     networks:
-      - autobot-network
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1.5'
+      - autobot
+    profiles:
+      - ollama
 
-  # Frontend Reverse Proxy (Nginx)
-  autobot-frontend:
-    image: nginx:alpine
-    container_name: autobot-frontend
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./static:/usr/share/nginx/html
-      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./docker/nginx/ssl:/etc/nginx/ssl
-    depends_on:
-      - autobot-backend
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    networks:
-      - autobot-network
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-          cpus: '0.25'
+  # ---- Optional: Monitoring ----
 
-  # Monitoring with Prometheus (Optional)
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.53.0
     container_name: autobot-prometheus
     restart: unless-stopped
     ports:
       - "9090:9090"
     volumes:
-      - ./docker/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--web.enable-lifecycle'
     networks:
-      - autobot-network
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
+      - autobot
     profiles:
       - monitoring
 
-  # Grafana Dashboard (Optional)
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.1.0
     container_name: autobot-grafana
     restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./docker/monitoring/grafana/provisioning:/etc/grafana/provisioning
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=autobot123
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-autobot}
       - GF_USERS_ALLOW_SIGN_UP=false
     depends_on:
       - prometheus
     networks:
-      - autobot-network
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
+      - autobot
     profiles:
       - monitoring
 
-# Volumes for persistent data
 volumes:
   redis_data:
-    driver: local
+  chroma_data:
+  backend_data:
+  backend_logs:
+  slm_data:
+  slm_logs:
   ollama_data:
-    driver: local
   prometheus_data:
-    driver: local
   grafana_data:
-    driver: local
 
-# Network configuration
 networks:
-  autobot-network:
+  autobot:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
