@@ -14,13 +14,16 @@ import os
 from datetime import datetime
 from typing import Optional
 
+from api.user_management.dependencies import get_db_session
 from auth_middleware import check_admin_permission
 from constants.model_constants import ModelConstants
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from services.config_revision_service import ConfigRevisionService
 from services.config_service import ConfigService
 from services.slm_client import get_slm_client
+from sqlalchemy.ext.asyncio import AsyncSession
 from utils.connection_utils import ModelManager
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -770,11 +773,13 @@ async def update_agent_model(
     agent_id: str,
     update: AgentModelUpdate,
     admin_check: bool = Depends(check_admin_permission),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """
     Update the LLM model for a specific agent
 
     Issue #744: Requires admin authentication.
+    Issue #1747: Records config revision for audit trail.
     """
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
@@ -788,6 +793,17 @@ async def update_agent_model(
             detail="Agent ID in URL must match agent ID in request body",
         )
 
+    # Issue #1747: Snapshot before config
+    base = DEFAULT_AGENT_CONFIGS[agent_id]
+    before_config = {
+        "model": unified_config_manager.get_nested(
+            f"agents.{agent_id}.model", base["default_model"]
+        ),
+        "provider": unified_config_manager.get_nested(
+            f"agents.{agent_id}.provider", base["provider"]
+        ),
+    }
+
     # Update the configuration
     unified_config_manager.set_nested(f"agents.{agent_id}.model", update.model)
     if update.provider:
@@ -799,9 +815,22 @@ async def update_agent_model(
     unified_config_manager.save_settings()
     ConfigService.clear_cache()
 
+    # Issue #1747: Record audit revision
+    after_config = {"model": update.model, "provider": update.provider}
+    await ConfigRevisionService(session).create_revision(
+        entity_type="agent",
+        entity_id=agent_id,
+        before_config=before_config,
+        after_config=after_config,
+        source="api",
+        created_by="admin",
+    )
+
     logger.info(
-        f"Updated agent {agent_id} model to {update.model} "
-        f"(provider: {update.provider})"
+        "Updated agent %s model to %s (provider: %s)",
+        agent_id,
+        update.model,
+        update.provider,
     )
 
     # Return updated configuration
@@ -831,21 +860,37 @@ async def update_agent_model(
 )
 @router.post("/agents/{agent_id}/enable")
 async def enable_agent(
-    agent_id: str, admin_check: bool = Depends(check_admin_permission)
+    agent_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """
     Enable a specific agent
 
     Issue #744: Requires admin authentication.
+    Issue #1747: Records config revision for audit trail.
     """
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
     from config import unified_config_manager
 
+    before_enabled = unified_config_manager.get_nested(
+        f"agents.{agent_id}.enabled", True
+    )
     unified_config_manager.set_nested(f"agents.{agent_id}.enabled", True)
     unified_config_manager.save_settings()
     ConfigService.clear_cache()
+
+    # Issue #1747: Record audit revision
+    await ConfigRevisionService(session).create_revision(
+        entity_type="agent",
+        entity_id=agent_id,
+        before_config={"enabled": before_enabled},
+        after_config={"enabled": True},
+        source="api",
+        created_by="admin",
+    )
 
     logger.info("Enabled agent %s", agent_id)
 
@@ -866,21 +911,37 @@ async def enable_agent(
 )
 @router.post("/agents/{agent_id}/disable")
 async def disable_agent(
-    agent_id: str, admin_check: bool = Depends(check_admin_permission)
+    agent_id: str,
+    admin_check: bool = Depends(check_admin_permission),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """
     Disable a specific agent
 
     Issue #744: Requires admin authentication.
+    Issue #1747: Records config revision for audit trail.
     """
     if agent_id not in DEFAULT_AGENT_CONFIGS:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
 
     from config import unified_config_manager
 
+    before_enabled = unified_config_manager.get_nested(
+        f"agents.{agent_id}.enabled", True
+    )
     unified_config_manager.set_nested(f"agents.{agent_id}.enabled", False)
     unified_config_manager.save_settings()
     ConfigService.clear_cache()
+
+    # Issue #1747: Record audit revision
+    await ConfigRevisionService(session).create_revision(
+        entity_type="agent",
+        entity_id=agent_id,
+        before_config={"enabled": before_enabled},
+        after_config={"enabled": False},
+        source="api",
+        created_by="admin",
+    )
 
     logger.info("Disabled agent %s", agent_id)
 
