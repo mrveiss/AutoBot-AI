@@ -309,11 +309,30 @@ def _parse_discover_output(output: str) -> List[dict]:
     return results
 
 
-async def _resolve_hostname_to_node(db: AsyncSession, hostname: str) -> Optional[str]:
-    """Map an Ansible hostname back to a node_id."""
+async def _resolve_host_to_node(
+    db: AsyncSession,
+    hostname: str,
+    ip_address: Optional[str] = None,
+) -> Optional[str]:
+    """Map an Ansible host back to a node_id (#1789).
+
+    Tries hostname match first, then falls back to ip_address.
+    Ansible's ansible_hostname (OS hostname) often differs from
+    the display name stored in nodes.hostname, so IP is the
+    reliable fallback.
+    """
     result = await db.execute(select(Node).where(Node.hostname == hostname))
     node = result.scalar_one_or_none()
-    return node.node_id if node else None
+    if node:
+        return node.node_id
+
+    if ip_address:
+        result = await db.execute(select(Node).where(Node.ip_address == ip_address))
+        node = result.scalar_one_or_none()
+        if node:
+            return node.node_id
+
+    return None
 
 
 def _classify_severity(pkg_name: str, security_packages: List[str]) -> str:
@@ -383,9 +402,10 @@ async def _store_host_packages(
 ) -> int:
     """Store discovered packages for one host. Returns package count."""
     hostname = host_data.get("hostname", "")
-    node_id = await _resolve_hostname_to_node(db, hostname)
+    ip_address = host_data.get("ip_address", "")
+    node_id = await _resolve_host_to_node(db, hostname, ip_address)
     if not node_id:
-        logger.warning("Unknown hostname: %s", hostname)
+        logger.warning("Unknown host: %s / %s", hostname, ip_address)
         return 0
 
     await db.execute(
