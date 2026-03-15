@@ -213,6 +213,20 @@
   gather_facts: false
   vars:
     deployment_end_time: "{{ ansible_date_time.epoch }}"
+    # Short aliases for inventory-derived IPs (no hardcoded addresses)
+    _frontend_ip: "{{ frontend_host }}"
+    _backend_ip: "{{ backend_host }}"
+    _redis_ip: "{{ redis_host }}"
+    _aiml_ip: "{{ ai_stack_host }}"
+    _npu_ip: "{{ npu_worker_host }}"
+    _browser_ip: "{{ browser_host }}"
+    _backend_port: "{{ backend_port }}"
+    _redis_port: "{{ redis_port }}"
+    _redis_insight_port: "{{ hostvars['autobot-database']['redis_insight_port'] }}"
+    _ai_stack_port: "{{ ai_stack_port }}"
+    _npu_worker_port: "{{ npu_worker_port }}"
+    _browser_port: "{{ browser_port }}"
+    _vnc_port: "{{ hostvars['autobot-browser']['vnc_port'] }}"
 
   tasks:
     - name: Calculate deployment duration
@@ -230,21 +244,21 @@
           - "📅 Completed: {{ ansible_date_time.iso8601 }}"
           - ""
           - "🌐 Service Endpoints:"
-          - "   Frontend:     http://172.16.168.21"
-          - "   Backend API:  https://172.16.168.20:8443/api"
-          - "   Redis Stack:  redis://172.16.168.23:6379"
-          - "   RedisInsight:  http://172.16.168.23:8002"
-          - "   AI Stack:     http://172.16.168.24:8080"
-          - "   NPU Worker:   http://172.16.168.22:8081"
-          - "   Browser API:  http://172.16.168.25:3000"
-          - "   VNC Access:   vnc://172.16.168.25:5901"
+          - "   Frontend:     http://{{ _frontend_ip }}"
+          - "   Backend API:  https://{{ _backend_ip }}:{{ _backend_port }}/api"
+          - "   Redis Stack:  redis://{{ _redis_ip }}:{{ _redis_port }}"
+          - "   RedisInsight:  http://{{ _redis_ip }}:{{ _redis_insight_port }}"
+          - "   AI Stack:     http://{{ _aiml_ip }}:{{ _ai_stack_port }}"
+          - "   NPU Worker:   http://{{ _npu_ip }}:{{ _npu_worker_port }}"
+          - "   Browser API:  http://{{ _browser_ip }}:{{ _browser_port }}"
+          - "   VNC Access:   vnc://{{ _browser_ip }}:{{ _vnc_port }}"
           - ""
           - "🖥️  SSH Access:"
-          - "   Frontend:     ssh autobot@172.16.168.21"
-          - "   Backend:      ssh autobot@172.16.168.20"
-          - "   Database:     ssh autobot@172.16.168.23"
-          - "   AI/ML:        ssh autobot@172.16.168.24"
-          - "   Browser:      ssh autobot@172.16.168.25"
+          - "   Frontend:     ssh autobot@{{ _frontend_ip }}"
+          - "   Backend:      ssh autobot@{{ _backend_ip }}"
+          - "   Database:     ssh autobot@{{ _redis_ip }}"
+          - "   AI/ML:        ssh autobot@{{ _aiml_ip }}"
+          - "   Browser:      ssh autobot@{{ _browser_ip }}"
           - ""
           - "✅ Migration Status: Docker Containers → Hyper-V VMs Complete"
           - "📊 Performance: Dedicated resources, native VM performance"
@@ -252,7 +266,7 @@
           - "📈 Scalability: Independent VM scaling and resource allocation"
           - ""
           - "🔧 Next Steps:"
-          - "   1. Access AutoBot UI at http://172.16.168.21"
+          - "   1. Access AutoBot UI at http://{{ _frontend_ip }}"
           - "   2. Verify all services: ./deploy.sh --health-check"
           - "   3. Setup monitoring dashboards"
           - "   4. Configure automated backups"
@@ -268,13 +282,13 @@
           Status: SUCCESS
 
           Service Endpoints:
-          - Frontend: http://172.16.168.21
-          - Backend: https://172.16.168.20:8443
-          - Redis: redis://172.16.168.23:6379
-          - AI Stack: http://172.16.168.24:8080
-          - NPU Worker: http://172.16.168.22:8081
-          - Browser: http://172.16.168.25:3000
-          - VNC: vnc://172.16.168.25:5901
+          - Frontend: http://{{ _frontend_ip }}
+          - Backend: https://{{ _backend_ip }}:{{ _backend_port }}
+          - Redis: redis://{{ _redis_ip }}:{{ _redis_port }}
+          - AI Stack: http://{{ _aiml_ip }}:{{ _ai_stack_port }}
+          - NPU Worker: http://{{ _npu_ip }}:{{ _npu_worker_port }}
+          - Browser: http://{{ _browser_ip }}:{{ _browser_port }}
+          - VNC: vnc://{{ _browser_ip }}:{{ _vnc_port }}
 
           Migration: Docker Containers → 5 Hyper-V VMs
           Infrastructure: Production-ready with monitoring and backups
@@ -293,6 +307,12 @@
 - name: "Final Deployment Notes"
   hosts: localhost
   gather_facts: false
+  vars:
+    # Short aliases for inventory-derived IPs (no hardcoded addresses)
+    _frontend_ip: "{{ frontend_host }}"
+    _redis_ip: "{{ redis_host }}"
+    _aiml_ip: "{{ ai_stack_host }}"
+    _ai_stack_port: "{{ ai_stack_port }}"
 
   tasks:
     - name: Display important post-deployment information
@@ -303,7 +323,7 @@
           - "============================================"
           - ""
           - "1. 🌐 Web Access:"
-          - "   - Open http://172.16.168.21 in your browser"
+          - "   - Open http://{{ _frontend_ip }} in your browser"
           - "   - Verify frontend loads correctly"
           - "   - Test API connectivity through UI"
           - ""
@@ -313,7 +333,7 @@
           - "   - Check system resources: htop on each VM"
           - ""
           - "3. 💾 Data Verification:"
-          - "   - Verify Redis data: redis-cli -h 172.16.168.23"
+          - "   - Verify Redis data: redis-cli -h {{ _redis_ip }}"
           - "   - Check model files: ls -la /var/lib/autobot/models"
           - "   - Validate knowledge base: API call to /api/knowledge"
           - ""
@@ -323,8 +343,8 @@
           - "   - Review service permissions and file ownership"
           - ""
           - "5. 📊 Performance Testing:"
-          - "   - Load test frontend: ab -n 100 -c 10 http://172.16.168.21/"
-          - "   - Test AI inference: curl http://172.16.168.24:8080/health"
+          - "   - Load test frontend: ab -n 100 -c 10 http://{{ _frontend_ip }}/"
+          - "   - Test AI inference: curl http://{{ _aiml_ip }}:{{ _ai_stack_port }}/health"
           - "   - Monitor resource usage during load"
           - ""
           - "6. 🚨 Backup Configuration:"
