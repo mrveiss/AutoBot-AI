@@ -21,12 +21,18 @@ from models.activities import (
     TerminalActivityModel,
 )
 
+# Agent org hierarchy models (#1405)
+from models.agent_org import AgentOrgNode
+
 # Approval gate models (#1402)
 from models.approval import Approval, ApprovalComment, TaskApprovalLink
 
 # Other backend models (SQLAlchemy models only)
 from models.code_pattern import CodePattern
 from models.completion_feedback import CompletionFeedback
+
+# Config revision model (#1404)
+from models.config_revision import ConfigRevision
 from models.ml_model import MLModel
 
 # Process adapter models (#1406)
@@ -47,10 +53,14 @@ __all__ = [
     "MLModel",
     "Secret",
     "SessionCollaboration",
+    # Agent org hierarchy (#1405)
+    "AgentOrgNode",
     # Approval gate models (#1402)
     "Approval",
     "ApprovalComment",
     "TaskApprovalLink",
+    # Config revision model (#1404)
+    "ConfigRevision",
     # Process adapter models (#1406)
     "ProcessRun",
     "TaskDecomposition",

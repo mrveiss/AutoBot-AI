@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
+from config import ConfigManager
 from fastapi import FastAPI
 from knowledge_factory import get_or_create_knowledge_base
 from security_layer import SecurityLayer
@@ -31,7 +32,6 @@ from autobot_shared.tracing import (
     instrument_redis,
     shutdown_tracing,
 )
-from config import ConfigManager
 
 # Bounded thread pool to prevent unbounded thread creation
 # Default asyncio executor creates min(32, cpu_count + 4) threads per invocation
@@ -786,6 +786,23 @@ async def _init_background_llm_sync(app: FastAPI):
         logger.warning("Background LLM sync initialization failed: %s", sync_error)
 
 
+async def _recover_index_queue():
+    """Restore queued indexing jobs from Redis after restart (#1717)."""
+    try:
+        from api.codebase_analytics.scanner import recover_index_queue
+
+        count = await recover_index_queue()
+        if count:
+            logger.info(
+                "[ 95%%] Index Queue: Recovered %d jobs from Redis",
+                count,
+            )
+        else:
+            logger.info("[ 95%%] Index Queue: No pending jobs to recover")
+    except Exception as e:
+        logger.warning("Index queue recovery failed (non-fatal): %s", e)
+
+
 async def initialize_background_services(app: FastAPI):
     """
     Phase 2: Initialize background services (NON-BLOCKING).
@@ -819,6 +836,7 @@ async def initialize_background_services(app: FastAPI):
         await _init_heartbeat_scheduler(app)
         await _init_slm_reconciler(app)
         await _init_metrics_collection()
+        await _recover_index_queue()
 
         await update_app_state_multi(
             initialization_status="ready",

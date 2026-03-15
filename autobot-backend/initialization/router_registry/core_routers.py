@@ -13,12 +13,14 @@ and are imported at module level to fail fast if missing.
 from api.adapters import router as adapters_router  # Issue #1403
 from api.agent import router as agent_router
 from api.agent_config import router as agent_config_router
+from api.agent_org import router as agent_org_router  # #1405
 from api.approval_gates import router as approval_gates_router  # #1402
 from api.audit import router as audit_router
 from api.auth import router as auth_router
 from api.browser_mcp import router as browser_mcp_router
 from api.chat import router as chat_router
 from api.collaboration import router as collaboration_router
+from api.config_revisions import router as config_revisions_router  # #1404
 from api.data_storage import router as data_storage_router
 from api.database_mcp import router as database_mcp_router
 from api.developer import router as developer_router
@@ -272,6 +274,7 @@ def _get_agent_routers() -> list:
     return [
         (agent_router, "/agent", ["agent"], "agent"),
         (approval_gates_router, "", ["approval-gates"], "approval_gates"),
+        (config_revisions_router, "", ["config-revisions"], "config_revisions"),
         (agent_config_router, "/agent_config", ["agent_config"], "agent_config"),
         (
             intelligent_agent_router,
@@ -280,6 +283,7 @@ def _get_agent_routers() -> list:
             "intelligent_agent",
         ),
         (overseer_router, "/overseer", ["overseer", "agent"], "overseer"),
+        (agent_org_router, "/agents", ["agent-org"], "agent_org"),
         (files_router, "/files", ["files"], "files"),
         (developer_router, "/developer", ["developer"], "developer"),
         (memory_router, "/memory", ["memory"], "memory"),
