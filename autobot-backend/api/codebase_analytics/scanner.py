@@ -573,6 +573,9 @@ _index_queue: deque = deque()
 _TASK_REDIS_PREFIX = "indexing_task:"
 _TASK_REDIS_TTL = 86400  # 24 hours
 
+# Redis key for persistent index queue (#1717: survive restarts)
+_QUEUE_REDIS_KEY = "codebase:index_queue"
+
 
 async def _save_task_to_redis(task_id: str) -> None:
     """Persist task state to Redis so all uvicorn workers can read it (#1179)."""
@@ -605,6 +608,83 @@ async def _load_task_from_redis(task_id: str) -> Optional[Dict]:
             "[Task %s] Redis task state load failed (non-fatal): %s", task_id, e
         )
     return None
+
+
+# =============================================================================
+# Redis-backed index queue persistence (#1717)
+# =============================================================================
+
+
+async def _persist_queue_entry(entry: Dict) -> None:
+    """Append a queue entry to Redis list (#1717)."""
+    try:
+        redis = await get_redis_connection_async()
+        if redis:
+            await redis.rpush(_QUEUE_REDIS_KEY, json.dumps(entry, default=str))
+    except Exception as e:
+        logger.debug("Redis queue persist failed (non-fatal): %s", e)
+
+
+async def _pop_queue_entry_redis() -> None:
+    """Remove the front entry from the Redis queue (#1717)."""
+    try:
+        redis = await get_redis_connection_async()
+        if redis:
+            await redis.lpop(_QUEUE_REDIS_KEY)
+    except Exception as e:
+        logger.debug("Redis queue pop failed (non-fatal): %s", e)
+
+
+async def _remove_queue_entries_redis(source_id: str) -> None:
+    """Remove all Redis queue entries matching *source_id* (#1717)."""
+    try:
+        redis = await get_redis_connection_async()
+        if not redis:
+            return
+        raw_items = await redis.lrange(_QUEUE_REDIS_KEY, 0, -1)
+        keep = [
+            item for item in raw_items if json.loads(item).get("source_id") != source_id
+        ]
+        pipe = redis.pipeline()
+        pipe.delete(_QUEUE_REDIS_KEY)
+        for item in keep:
+            pipe.rpush(_QUEUE_REDIS_KEY, item)
+        await pipe.execute()
+    except Exception as e:
+        logger.debug("Redis queue remove failed (non-fatal): %s", e)
+
+
+async def _load_queue_from_redis() -> List[Dict]:
+    """Load all queued entries from Redis (#1717: startup recovery)."""
+    try:
+        redis = await get_redis_connection_async()
+        if not redis:
+            return []
+        raw_items = await redis.lrange(_QUEUE_REDIS_KEY, 0, -1)
+        return [json.loads(item) for item in raw_items]
+    except Exception as e:
+        logger.debug("Redis queue load failed (non-fatal): %s", e)
+        return []
+
+
+async def recover_index_queue() -> int:
+    """Restore in-memory queue from Redis on startup (#1717).
+
+    Returns the number of recovered entries.
+    """
+    entries = await _load_queue_from_redis()
+    if not entries:
+        return 0
+    async with _tasks_lock:
+        for entry in entries:
+            if not any(
+                e.get("source_id") == entry.get("source_id")
+                and e.get("root_path") == entry.get("root_path")
+                for e in _index_queue
+            ):
+                _index_queue.append(entry)
+    logger.info("Recovered %d queued indexing jobs from Redis (#1717)", len(entries))
+    return len(entries)
 
 
 # =============================================================================
