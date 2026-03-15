@@ -953,6 +953,19 @@ const shareTargetSource = ref<CodeSource | null>(null)
 const showKnowledgeBaseOptIn = ref(false)
 const knowledgeBaseAdding = ref(false)
 
+// Issue #1710: source_id query param for per-project API calls
+const sourceIdParam = computed(() => {
+  const sid = selectedSource.value?.id || (route.params.sourceId as string)
+  return sid ? `source_id=${encodeURIComponent(sid)}` : ''
+})
+
+/** Append ?source_id= to a URL when a source is selected (#1710). */
+function withSourceId(url: string): string {
+  if (!sourceIdParam.value) return url
+  const sep = url.includes('?') ? '&' : '?'
+  return `${url}${sep}${sourceIdParam.value}`
+}
+
 const analyzing = ref(false)
 const progressPercent = ref(0)
 const progressStatus = ref('Ready')
@@ -2144,16 +2157,15 @@ const pollIntermediateResults = async () => {
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
 
-    // Poll for problems found so far
-    const problemsResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/problems`)
+    // Poll for problems found so far (#1710: per-source)
+    const problemsResponse = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/problems`))
     if (problemsResponse.ok) {
       const problemsData = await problemsResponse.json()
-      // Always update problems (even if empty) to reflect current state
       problemsReport.value = problemsData.problems || []
     }
 
-    // Poll for stats - update codebaseStats but don't overwrite progressStatus
-    const statsResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/stats`)
+    // Poll for stats (#1710: per-source)
+    const statsResponse = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/stats`))
     if (statsResponse.ok) {
       const statsData = await statsResponse.json()
       if (statsData.stats) {
@@ -2577,7 +2589,7 @@ const loadDeclarations = async () => {
   loadingProgress.declarations = true
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const declarationsEndpoint = `${backendUrl}/api/analytics/codebase/declarations`
+    const declarationsEndpoint = withSourceId(`${backendUrl}/api/analytics/codebase/declarations`)
     const response = await fetchWithAuth(declarationsEndpoint, {
       method: 'GET',
       headers: {
@@ -2620,7 +2632,7 @@ const loadHardcodes = async () => {
   loadingProgress.hardcodes = true
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const hardcodesEndpoint = `${backendUrl}/api/analytics/codebase/hardcodes`
+    const hardcodesEndpoint = withSourceId(`${backendUrl}/api/analytics/codebase/hardcodes`)
     const response = await fetchWithAuth(hardcodesEndpoint, {
       method: 'GET',
       headers: {
@@ -2986,7 +2998,7 @@ const getDeclarationsData = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const declarationsEndpoint = `${backendUrl}/api/analytics/codebase/declarations`
+    const declarationsEndpoint = withSourceId(`${backendUrl}/api/analytics/codebase/declarations`)
     const response = await fetchWithAuth(declarationsEndpoint, {
       method: 'GET',
       headers: {
@@ -3056,7 +3068,7 @@ const getHardcodesData = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const hardcodesEndpoint = `${backendUrl}/api/analytics/codebase/hardcodes`
+    const hardcodesEndpoint = withSourceId(`${backendUrl}/api/analytics/codebase/hardcodes`)
     const response = await fetchWithAuth(hardcodesEndpoint, {
       method: 'GET',
       headers: {

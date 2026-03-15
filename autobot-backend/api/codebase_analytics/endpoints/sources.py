@@ -385,21 +385,26 @@ async def _get_last_indexed(source_id: str) -> Optional[str]:
     """Read last_indexed timestamp from ChromaDB stats metadata.
 
     Helper for get_source_summary (#1458).
-
-    Note: currently reads the global ``codebase_stats`` document, so
-    the timestamp reflects the most recent indexing run across *all*
-    sources.  Per-source tracking requires a schema change (#1458).
+    Issue #1716: Reads per-source stats doc first, falls back to global.
     """
     try:
         from ..storage import get_code_collection
 
         collection = await get_code_collection()
         if collection:
+            # Try per-source stats first (#1716), fall back to global
+            stats_id = f"codebase_stats_{source_id}"
             results = await asyncio.to_thread(
                 collection.get,
-                ids=["codebase_stats"],
+                ids=[stats_id],
                 include=["metadatas"],
             )
+            if not results or not results.get("metadatas"):
+                results = await asyncio.to_thread(
+                    collection.get,
+                    ids=["codebase_stats"],
+                    include=["metadatas"],
+                )
             if results and results.get("metadatas"):
                 return results["metadatas"][0].get("last_indexed")
     except Exception as exc:
