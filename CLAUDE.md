@@ -330,6 +330,12 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 
 ### General Workflow
 
+**Approach Guidelines — enforce before taking action:**
+- **No browsers for CLI tasks:** Never use Playwright/Puppeteer when `gh`, `curl`, or API calls will do
+- **3-command exploration limit:** If 3 bash/grep commands haven't converged on a solution, stop and write a hypothesis before continuing
+- **No raw templates to production:** Always render/validate Jinja2 or template files before deploying
+- **Propose before implementing:** For any ambiguous task, state approach in 3 bullet points and wait for confirmation
+
 **Implementation First:**
 - Prefer direct implementation over extended brainstorming/design phases
 - When the user says "work on issue #X", brief plan (max 10 lines) then implement
@@ -343,6 +349,16 @@ Each session stays in its issue scope. If Session A discovers a bug in Session B
 - If approaching context limit: stop at phase boundary, commit, add GitHub comment with next steps
 
 ### Git Workflow
+
+**Pre-commit Self-Healing:**
+- After ANY edit to a `.py` file, the PostToolUse hook auto-runs Black + isort + `git add` — files arrive at commit already formatted
+- If a pre-commit hook still fails: read the error, fix it, re-stage, and retry (max 3 attempts) — never skip with `--no-verify`
+- If Black and isort conflict: run Black first, then isort, then `git add -u` before committing
+
+**CI/Production Parity:**
+- CI runs Python 3.10 (deadsnakes PPA) — never use 3.11+ features or 3.13-only packages
+- Match production dependency versions exactly — never upgrade major versions without explicit approval
+- Backend: conda env (Python 3.12 on `.20`), SLM/fleet: venv Python 3.10 on `/opt/autobot/venv`
 
 **Branch Strategy:**
 - Always target `Dev_new_gui` for PRs and merges unless explicitly told otherwise
@@ -428,6 +444,19 @@ Dispatched subagents cannot autonomously acquire Bash tool permission. This mean
 - JSON validation, file writes via MCP tools still work — only shell execution is blocked
 
 ### GitHub Workflow
+
+**Issue Labels — always apply when creating issues:**
+
+```bash
+gh issue create --title "..." --body "..." --label "bug,backend,priority: high"
+```
+
+Required labels for every issue:
+- **Type:** `bug`, `enhancement`, `technical-debt`, `refactoring`, `security`, `performance`, `testing`, `documentation`
+- **Area:** `backend`, `frontend`, `devops`, `database`, `mcp`, `rag`, `deployment`
+- **Priority:** `priority: critical`, `priority: high`, `priority: medium`, `priority: low`
+
+Use `gh label list` to see all available labels. Never create an issue without at least one type and one priority label.
 
 **Commit format:** `<type>(scope): <description> (#issue-number)`
 
