@@ -420,10 +420,11 @@ class GlobalWebSocketService {
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       logger.debug(
-        'Max reconnection attempts reached, waiting for backend'
+        'Max reconnection attempts reached, entering backend-wait mode'
       )
       this.state.lastError =
         'Connection failed. Waiting for backend to become available...'
+      this._startBackendWait()
       return
     }
 
@@ -449,6 +450,40 @@ class GlobalWebSocketService {
         })
       }
     }, delay)
+  }
+
+  // -----------------------------------------------------------------------
+  // Backend-Wait Mode (#1463, restored #1795)
+  // -----------------------------------------------------------------------
+
+  /**
+   * Poll /api/health every 30s until backend is available, then reconnect.
+   * Activates when normal reconnect attempts are exhausted — handles the
+   * ~6-minute backend restart window without giving up.
+   */
+  private _startBackendWait(): void {
+    if (this._backendWaitTimer) return
+
+    this._backendWaitTimer = setInterval(() => {
+      this.quickHealthCheck()
+        .then((healthy) => {
+          if (healthy) {
+            logger.debug('Backend healthy, reconnecting from wait mode')
+            if (this._backendWaitTimer) {
+              clearInterval(this._backendWaitTimer)
+              this._backendWaitTimer = null
+            }
+            this.reconnectAttempts = 0
+            this.state.reconnectCount = 0
+            this.connect().catch((err: unknown) => {
+              logger.error('Post-wait reconnect failed:', err)
+            })
+          }
+        })
+        .catch(() => {
+          /* backend still down, keep polling */
+        })
+    }, 30_000)
   }
 
   // -----------------------------------------------------------------------
