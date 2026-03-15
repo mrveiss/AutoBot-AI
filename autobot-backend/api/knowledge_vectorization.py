@@ -568,7 +568,10 @@ def _build_vectorization_response(
     """
     return {
         "status": "success",
-        "message": f"Vectorization complete: {success} successful, {failed} failed, {skipped} skipped",
+        "message": (
+            f"Vectorization complete: {success} successful, "
+            f"{failed} failed, {skipped} skipped"
+        ),
         "processed": fact_count,
         "success": success,
         "failed": failed,
