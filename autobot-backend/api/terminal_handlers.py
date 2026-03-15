@@ -876,8 +876,7 @@ class ConsolidatedTerminalWebSocket:
             return False
 
         logger.info(
-            f"[STDIN] Successfully sent {len(content)} bytes to PTY "
-            f"(password: {is_password}, command_id: {command_id})"
+            f"[STDIN] Sent {len(content)} bytes to PTY (command_id: {command_id})"
         )
 
         # Re-enable echo after password (if it was disabled)

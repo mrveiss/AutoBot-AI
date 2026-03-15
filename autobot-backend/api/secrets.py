@@ -479,7 +479,7 @@ class SecretsManager:
         secrets[secret_id] = secret_data
         self._save_secrets(secrets)
 
-        logger.info("Updated secret '%s' (ID: %s)", secret_data["name"], secret_id)
+        logger.info("Updated secret (ID: %s)", secret_id[:8])
 
         # Return updated secret model
         safe_data = secret_data.copy()
@@ -505,7 +505,7 @@ class SecretsManager:
         del secrets[secret_id]
         self._save_secrets(secrets)
 
-        logger.info("Deleted secret '%s' (ID: %s)", secret_data["name"], secret_id)
+        logger.info("Deleted secret (ID: %s)", secret_id[:8])
         return True
 
     def transfer_secrets(

@@ -341,7 +341,4 @@ async def _track_secret_usage(
     db.add(usage)
     await db.commit()
 
-    logger.info(
-        f"Tracked secret usage: secret={secret_id}, "
-        f"user={user_id}, activity={activity_type}"
-    )
+    logger.info(f"Tracked secret usage: activity={activity_type}")

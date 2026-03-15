@@ -89,7 +89,7 @@ class SecretsManager:
         self.secrets_index = self._load_secrets_index()
 
         logger.info("🔐 AutoBot Secrets Manager initialized")
-        logger.info(f"   Secrets Directory: {self.secrets_dir}")
+        logger.info("   Secrets Directory: [configured]")
         logger.info(f"   Indexed Secrets: {len(self.secrets_index)}")
 
     def print_header(self, title: str):
