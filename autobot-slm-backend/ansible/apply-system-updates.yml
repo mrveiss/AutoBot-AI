@@ -256,4 +256,3 @@
         content: "{{ update_report | to_json }}"
         dest: "/tmp/update-report-{{ ansible_hostname }}.json"
         mode: '0644'
-      delegate_to: localhost
