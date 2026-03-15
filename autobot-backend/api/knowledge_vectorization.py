@@ -1426,8 +1426,15 @@ _REINDEX_DEFAULT_COLLECTION = "knowledge_vectors"
 _REINDEX_DEFAULT_BATCH_SIZE = 20
 _REINDEX_COLLECTION_PATTERN = r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,61}[a-zA-Z0-9]$"
 
-# Concurrency guard for reindex task (#1513)
-_reindex_running = False
+# Reindex task state (#1513, #1761)
+_reindex_state: dict = {
+    "is_running": False,
+    "enriched_count": 0,
+    "total_count": 0,
+    "started_at": None,
+    "completed_at": None,
+    "error": None,
+}
 
 
 class ReindexWithContextRequest(BaseModel):
@@ -1577,17 +1584,21 @@ async def _reindex_with_context_task(
     collection_name: str,
     batch_size: int,
 ) -> None:
-    """Background task: enrich unenriched chunks with context.
-
-    Collects unenriched IDs up front via where filter, then
-    processes in batches to avoid ordering issues. (#1513)
-    """
-    global _reindex_running  # noqa: PLW0603
+    """Background task wrapper with state tracking (#1513, #1761)."""
+    _reindex_state["is_running"] = True
+    _reindex_state["enriched_count"] = 0
+    _reindex_state["total_count"] = 0
+    _reindex_state["started_at"] = datetime.utcnow().isoformat()
+    _reindex_state["completed_at"] = None
+    _reindex_state["error"] = None
     try:
-        _reindex_running = True
         await _run_reindex(collection_name, batch_size)
+    except Exception as exc:
+        _reindex_state["error"] = str(exc)
+        logger.exception("Reindex task failed")
     finally:
-        _reindex_running = False
+        _reindex_state["is_running"] = False
+        _reindex_state["completed_at"] = datetime.utcnow().isoformat()
 
 
 async def _run_reindex(collection_name: str, batch_size: int) -> None:
@@ -1611,11 +1622,14 @@ async def _run_reindex(collection_name: str, batch_size: int) -> None:
         logger.info("No unenriched chunks in '%s'", collection_name)
         return
 
+    _reindex_state["total_count"] = len(all_ids)
     enriched_total = 0
     for i in range(0, len(all_ids), batch_size):
         batch_ids = all_ids[i : i + batch_size]
         try:
-            enriched_total += await _process_id_batch(collection, cognifier, batch_ids)
+            count = await _process_id_batch(collection, cognifier, batch_ids)
+            enriched_total += count
+            _reindex_state["enriched_count"] = enriched_total
         except Exception:
             logger.exception("Failed batch at index %d", i)
 
@@ -1656,7 +1670,7 @@ async def reindex_with_context(
             ),
         )
 
-    if _reindex_running:
+    if _reindex_state["is_running"]:
         raise HTTPException(
             status_code=409,
             detail="A reindex task is already running.",
@@ -1677,3 +1691,19 @@ async def reindex_with_context(
             f"with batch_size={request.batch_size}"
         ),
     )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="get_reindex_with_context_status",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.get("/reindex_with_context/status")
+async def get_reindex_with_context_status(
+    _user: dict = Depends(get_current_user),
+) -> dict:
+    """Get status of the reindex_with_context background task.
+
+    Issue #1761.
+    """
+    return dict(_reindex_state)
