@@ -21,6 +21,9 @@ from models.activities import (
     TerminalActivityModel,
 )
 
+# Agent org hierarchy models (#1405)
+from models.agent_org import AgentOrgNode
+
 # Approval gate models (#1402)
 from models.approval import Approval, ApprovalComment, TaskApprovalLink
 
@@ -44,6 +47,8 @@ __all__ = [
     "MLModel",
     "Secret",
     "SessionCollaboration",
+    # Agent org hierarchy (#1405)
+    "AgentOrgNode",
     # Approval gate models (#1402)
     "Approval",
     "ApprovalComment",
