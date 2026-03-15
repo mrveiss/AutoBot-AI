@@ -7,8 +7,9 @@ Cache management endpoints
 
 import asyncio
 import logging
+from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -27,16 +28,25 @@ router = APIRouter()
     operation="clear_codebase_cache",
     error_code_prefix="CODEBASE",
 )
-async def clear_codebase_cache():
-    """Clear codebase analysis cache from storage"""
+async def clear_codebase_cache(
+    source_id: Optional[str] = Query(
+        None, description="#1772: clear only this source's cache"
+    ),
+):
+    """Clear codebase analysis cache from storage.
+
+    Issue #1772: source_id scopes deletion to per-project keys.
+    """
     redis_client = await get_redis_connection()
+    # Issue #1772: scope pattern to source_id when provided
+    match_pattern = f"codebase:{source_id}:*" if source_id else "codebase:*"
 
     if redis_client:
         # Get all codebase keys
         # Issue #361 - avoid blocking
         def _collect_and_delete():
             keys_to_delete = []
-            for key in redis_client.scan_iter(match="codebase:*"):
+            for key in redis_client.scan_iter(match=match_pattern):
                 keys_to_delete.append(key)
             if keys_to_delete:
                 redis_client.delete(*keys_to_delete)
@@ -48,7 +58,7 @@ async def clear_codebase_cache():
         # Clear in-memory storage
         if _in_memory_storage:
             keys_to_delete = []
-            for key in _in_memory_storage.scan_iter("codebase:*"):
+            for key in _in_memory_storage.scan_iter(match_pattern):
                 keys_to_delete.append(key)
 
             _in_memory_storage.delete(*keys_to_delete)

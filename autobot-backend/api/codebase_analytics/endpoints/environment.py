@@ -394,6 +394,9 @@ async def get_environment_analysis(
         "high",
         description="Priority level to filter: 'high', 'medium', 'low', or 'all'",
     ),
+    source_id: Optional[str] = Query(
+        None, description="#1772: source_id for API consistency"
+    ),
 ):
     """
     Analyze codebase for hardcoded values and environment variable opportunities (Issue #538).
@@ -440,6 +443,9 @@ async def get_environment_analysis(
 async def get_env_recommendations(
     path: str = Query(
         None, description="Root path to analyze (defaults to project root)"
+    ),
+    source_id: Optional[str] = Query(
+        None, description="#1772: source_id for API consistency"
     ),
 ):
     """
@@ -614,6 +620,9 @@ async def export_env_analysis(
     limit: int = Query(None, description="Limit number of results (default: all)"),
     include_recommendations: bool = Query(
         True, description="Include recommendations in export"
+    ),
+    source_id: Optional[str] = Query(
+        None, description="#1772: source_id for API consistency"
     ),
 ):
     """

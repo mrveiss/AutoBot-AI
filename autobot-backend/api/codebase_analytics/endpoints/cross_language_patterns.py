@@ -50,6 +50,7 @@ def _get_detector() -> CrossLanguagePatternDetector:
 async def run_cross_language_analysis(
     use_llm: bool = True,
     use_cache: bool = True,
+    source_id: Optional[str] = None,
 ) -> JSONResponse:
     """
     Run full cross-language pattern analysis.

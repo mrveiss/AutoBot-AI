@@ -146,12 +146,17 @@ def _convert_analysis_to_result(analysis, project_root: str) -> dict:
     }
 
 
-def _get_chromadb_fallback(error_msg: str) -> Optional[dict]:
+def _get_chromadb_fallback(
+    error_msg: str, source_id: Optional[str] = None
+) -> Optional[dict]:
     """
     Get cached duplicates from ChromaDB as fallback.
 
+    Issue #1772: source_id filters to per-project data.
+
     Args:
         error_msg: Error message to include in warning
+        source_id: Optional source ID for per-project scoping
 
     Returns:
         Fallback result dict or None if unavailable
@@ -161,8 +166,17 @@ def _get_chromadb_fallback(error_msg: str) -> Optional[dict]:
         return None
 
     try:
+        if source_id:
+            where_filter = {
+                "$and": [
+                    {"type": "duplicate"},
+                    {"source_id": source_id},
+                ]
+            }
+        else:
+            where_filter = {"type": "duplicate"}
         results = get_all_paginated(
-            code_collection, where={"type": "duplicate"}, include=["metadatas"]
+            code_collection, where=where_filter, include=["metadatas"]
         )
 
         all_duplicates = []
@@ -306,21 +320,25 @@ def _check_duplicate_cache(refresh: bool) -> Optional[JSONResponse]:
     return None
 
 
-async def _handle_detection_failure(error: Exception) -> JSONResponse:
+async def _handle_detection_failure(
+    error: Exception, source_id: Optional[str] = None
+) -> JSONResponse:
     """
     Handle duplicate detection failure with fallback.
 
     Issue #620: Extracted from get_duplicate_code to reduce function length.
+    Issue #1772: source_id scopes fallback to per-project data.
 
     Args:
         error: Exception that occurred
+        source_id: Optional source ID for per-project scoping
 
     Returns:
         JSONResponse with fallback data or error response
     """
     logger.error("Duplicate detection failed: %s", error, exc_info=True)
 
-    fallback = await asyncio.to_thread(_get_chromadb_fallback, str(error))
+    fallback = await asyncio.to_thread(_get_chromadb_fallback, str(error), source_id)
     if fallback:
         return JSONResponse(fallback)
 
@@ -340,6 +358,9 @@ async def get_duplicate_code(
     ),
     use_semantic: bool = Query(
         False, description="Enable LLM-based semantic analysis (Issue #554)"
+    ),
+    source_id: Optional[str] = Query(
+        None, description="#1772: source_id for per-project scoping"
     ),
 ):
     """
@@ -381,7 +402,7 @@ async def get_duplicate_code(
 
     except Exception as e:
         # Issue #620: Use helper for error handling
-        return await _handle_detection_failure(e)
+        return await _handle_detection_failure(e, source_id=source_id)
 
 
 def _make_relative_path(path: str, project_root: str) -> str:

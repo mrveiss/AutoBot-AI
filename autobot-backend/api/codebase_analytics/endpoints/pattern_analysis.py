@@ -40,6 +40,10 @@ class PatternAnalysisRequest(BaseModel):
         default=str(PATH.PROJECT_ROOT),
         description="Path to analyze (defaults to project root)",
     )
+    source_id: Optional[str] = Field(
+        default=None,
+        description="#1772: source_id for API consistency",
+    )
     enable_clone_detection: bool = Field(
         default=True, description="Enable clone/duplicate detection"
     )

@@ -317,6 +317,9 @@ async def get_ownership_analysis(
     refresh: bool = Query(False, description="Force fresh analysis"),
     patterns: str = Query("**/*.py,**/*.ts,**/*.vue", description="Glob patterns"),
     days: int = Query(90, description="Days for recency scoring"),
+    source_id: Optional[str] = Query(
+        None, description="#1772: source_id for API consistency"
+    ),
 ):
     """Analyze code ownership (Issue #248). Issue #665: Refactored with helpers."""
     cached = await _check_ownership_cache(refresh)
@@ -379,6 +382,9 @@ async def get_ownership_analysis(
 )
 async def get_expertise_scores(
     path: str = Query(None, description="Root path to analyze"),
+    source_id: Optional[str] = Query(
+        None, description="#1772: source_id for API consistency"
+    ),
 ):
     """
     Get contributor expertise scores for a codebase (Issue #248).
@@ -439,6 +445,9 @@ async def get_knowledge_gaps(
     path: str = Query(None, description="Root path to analyze"),
     risk_level: str = Query(
         None, description="Filter by risk level (critical, high, medium, low)"
+    ),
+    source_id: Optional[str] = Query(
+        None, description="#1772: source_id for API consistency"
     ),
 ):
     """
