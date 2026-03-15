@@ -10,10 +10,11 @@ export type MessageSchema = typeof en
 // Locales that use right-to-left text direction (#1337)
 const RTL_LOCALES = new Set(['ar', 'he', 'fa', 'ur'])
 
-// All locales with available translation files (#1336, #1508)
-export const SUPPORTED_LOCALES = [
-  'ar', 'de', 'en', 'es', 'fa', 'fr', 'he', 'lv', 'pl', 'pt', 'ur',
-] as const
+// Derive supported locales from locale files on disk — no manual sync needed (#1675)
+const localeModules = import.meta.glob('./locales/*.json')
+export const SUPPORTED_LOCALES = Object.keys(localeModules)
+  .map(path => path.replace('./locales/', '').replace('.json', ''))
+  .sort()
 
 /**
  * Detect the user's preferred locale from browser settings.
@@ -24,11 +25,11 @@ export function detectBrowserLocale(): string {
   const browserLocales = navigator.languages ?? [navigator.language]
   for (const browserLocale of browserLocales) {
     const exact = browserLocale.toLowerCase()
-    if ((SUPPORTED_LOCALES as readonly string[]).includes(exact)) {
+    if (SUPPORTED_LOCALES.includes(exact)) {
       return exact
     }
     const base = exact.split('-')[0]
-    if ((SUPPORTED_LOCALES as readonly string[]).includes(base)) {
+    if (SUPPORTED_LOCALES.includes(base)) {
       return base
     }
   }
