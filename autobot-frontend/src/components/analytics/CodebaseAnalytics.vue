@@ -990,6 +990,12 @@ function withSourceId(url: string): string {
   return `${url}${sep}${sourceIdParam.value}`
 }
 
+/** Return source_id as query record for useAnalyticsFetch calls (#1772). */
+const sourceIdQuery = computed((): Record<string, string> => {
+  const sid = selectedSource.value?.id || (route.params.sourceId as string)
+  return sid ? { source_id: sid } : {}
+})
+
 const analyzing = ref(false)
 const progressPercent = ref(0)
 const progressStatus = ref('Ready')
@@ -2291,7 +2297,7 @@ const loadProjectRoot = async () => {
 // These fetch from GET /cached endpoints (no new analysis triggered).
 const loadCachedDuplicates = async () => {
   const backendUrl = await appConfig.getServiceUrl('backend')
-  const resp = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/duplicates/cached`)
+  const resp = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/duplicates/cached`))
   if (!resp.ok) return
   const data = await resp.json()
   if (data.status === 'success' && Array.isArray(data.duplicates)) {
@@ -2434,7 +2440,7 @@ const loadChartData = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/analytics/charts`, {
+    const response = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/analytics/charts`), {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -2562,7 +2568,7 @@ const loadCallGraphData = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/analytics/call-graph`, {
+    const response = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/analytics/call-graph`), {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -2677,14 +2683,14 @@ const loadHardcodes = async () => {
 }
 
 // Issue #538/#1321: Config duplicates (useAnalyticsFetch)
-const loadConfigDuplicates = () => _loadConfigDuplicates()
+const loadConfigDuplicates = () => _loadConfigDuplicates(sourceIdQuery.value)
 
 // Issue #538/#1321: Bug prediction (useAnalyticsFetch)
 // Issue #1430: removed hardcoded limit=1000 — backend default handles it
 const loadBugPrediction = () => bugPredictionTask.start()
 
 // Issue #538/#1321: API endpoint analysis (useAnalyticsFetch)
-const loadApiEndpointAnalysis = () => _loadApiEndpoints()
+const loadApiEndpointAnalysis = () => _loadApiEndpoints(sourceIdQuery.value)
 
 // Issue #538/#1321: Load security score (useTaskLoader)
 const loadSecurityScore = async () => {
@@ -2813,6 +2819,7 @@ const loadEnvironmentAnalysis = async () => {
       url += `&llm_model=${encodeURIComponent(aiFilteringModel.value)}`
       url += `&filter_priority=${encodeURIComponent(aiFilteringPriority.value)}`
     }
+    url = withSourceId(url)
     const response = await fetchWithAuth(url, {
       method: 'GET',
       headers: {
@@ -2856,7 +2863,7 @@ const loadEnvironmentAnalysis = async () => {
 // Issue #248/#1321: Ownership analysis (useAnalyticsFetch)
 const loadOwnershipAnalysis = async () => {
   if (!rootPath.value) return
-  await _loadOwnership({ path: rootPath.value })
+  await _loadOwnership({ path: rootPath.value, ...sourceIdQuery.value })
 }
 
 onUnmounted(() => {
@@ -3057,7 +3064,7 @@ const getDuplicatesData = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const duplicatesEndpoint = `${backendUrl}/api/analytics/codebase/duplicates`
+    const duplicatesEndpoint = withSourceId(`${backendUrl}/api/analytics/codebase/duplicates`)
     const response = await fetchWithAuth(duplicatesEndpoint, {
       method: 'GET',
       headers: {
@@ -3133,7 +3140,7 @@ const getApiEndpointCoverage = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/endpoint-analysis`, {
+    const response = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/endpoint-analysis`), {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -3211,7 +3218,7 @@ const getCrossLanguageAnalysis = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cross-language/summary`, {
+    const response = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/cross-language/summary`), {
       method: 'GET',
       headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' }
     })
@@ -3258,7 +3265,7 @@ const loadCrossLanguageDetails = async () => {
     const backendUrl = await appConfig.getServiceUrl('backend')
 
     // Load DTO mismatches
-    const dtoResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cross-language/dto-mismatches`)
+    const dtoResponse = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/cross-language/dto-mismatches`))
     if (dtoResponse.ok) {
       const dtoData = await dtoResponse.json()
       if (dtoData.status === 'success' && crossLanguageAnalysis.value) {
@@ -3267,7 +3274,7 @@ const loadCrossLanguageDetails = async () => {
     }
 
     // Load API mismatches
-    const apiResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cross-language/api-mismatches`)
+    const apiResponse = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/cross-language/api-mismatches`))
     if (apiResponse.ok) {
       const apiData = await apiResponse.json()
       if (apiData.status === 'success' && crossLanguageAnalysis.value) {
@@ -3279,7 +3286,7 @@ const loadCrossLanguageDetails = async () => {
     }
 
     // Load validation duplications
-    const valResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cross-language/validation-duplications`)
+    const valResponse = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/cross-language/validation-duplications`))
     if (valResponse.ok) {
       const valData = await valResponse.json()
       if (valData.status === 'success' && crossLanguageAnalysis.value) {
@@ -3288,7 +3295,7 @@ const loadCrossLanguageDetails = async () => {
     }
 
     // Load semantic matches
-    const matchResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cross-language/semantic-matches?min_similarity=0.7&limit=20`)
+    const matchResponse = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/cross-language/semantic-matches?min_similarity=0.7&limit=20`))
     if (matchResponse.ok) {
       const matchData = await matchResponse.json()
       if (matchData.status === 'success' && crossLanguageAnalysis.value) {
@@ -3309,7 +3316,7 @@ const runCrossLanguageAnalysis = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cross-language/analyze`, {
+    const response = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/cross-language/analyze`), {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -3647,7 +3654,7 @@ const clearCache = async () => {
 
   try {
     const backendUrl = await appConfig.getServiceUrl('backend')
-    const response = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/cache`, {
+    const response = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/cache`), {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json'
@@ -3812,7 +3819,7 @@ const loadCodeQuality = async () => {
     const healthData = healthResponse.ok ? await healthResponse.json() : null
 
     // Fetch duplicates count
-    const duplicatesResponse = await fetchWithAuth(`${backendUrl}/api/analytics/codebase/duplicates`)
+    const duplicatesResponse = await fetchWithAuth(withSourceId(`${backendUrl}/api/analytics/codebase/duplicates`))
     const duplicatesData = duplicatesResponse.ok ? await duplicatesResponse.json() : null
 
     // Fetch technical debt summary
