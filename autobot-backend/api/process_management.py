@@ -13,7 +13,7 @@ import os
 from typing import List, Optional
 
 from auth_middleware import get_current_user
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 from services.process_adapter_service import ProcessAdapterService
@@ -160,6 +160,54 @@ async def list_agent_processes(
         status_code=200,
         content={"agent_id": agent_id, "processes": processes, "total": len(processes)},
     )
+
+
+@router.websocket("/processes/{process_id}/stream")
+async def stream_process_logs(
+    websocket: WebSocket,
+    process_id: str,
+) -> None:
+    """Stream log output for a running process via WebSocket (#1777).
+
+    Tails the log file and pushes new lines to the client every 500ms.
+    Closes when the process completes or the client disconnects.
+    """
+    import asyncio
+
+    await websocket.accept()
+    svc = _get_service()
+    offset = 0
+    try:
+        while True:
+            data = await svc.get_process_status(process_id)
+            if data is None:
+                await websocket.send_json({"error": "Process not found"})
+                break
+            log_path = data.get("log_path")
+            if log_path and os.path.isfile(log_path):
+                content = _read_log_file(log_path)
+                if len(content) > offset:
+                    await websocket.send_text(content[offset:])
+                    offset = len(content)
+            elif data.get("log_excerpt") and offset == 0:
+                await websocket.send_text(data["log_excerpt"])
+                offset = len(data["log_excerpt"])
+            if data.get("status") in (
+                "completed",
+                "failed",
+                "timed_out",
+                "cancelled",
+            ):
+                await websocket.send_json({"done": True, "status": data["status"]})
+                break
+            await asyncio.sleep(0.5)
+    except Exception:
+        pass
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 # -- Internal helpers ------------------------------------------------------
