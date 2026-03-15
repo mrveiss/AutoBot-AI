@@ -272,9 +272,12 @@ class SSOService(BaseService):
         self, conn: Any, provider: SSOProvider, username: str
     ) -> Optional[dict[str, Any]]:
         """Search for user in LDAP directory."""
+        from autobot_shared.security.input_sanitizer import sanitize_ldap_filter
+
         base_dn = provider.config.get("base_dn", "dc=example,dc=com")
+        safe_username = sanitize_ldap_filter(username)
         search_filter = provider.config.get("search_filter", "(uid={})").format(
-            username
+            safe_username
         )
         conn.search(base_dn, search_filter, search_scope=SUBTREE)
         if conn.entries:

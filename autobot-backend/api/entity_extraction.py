@@ -286,13 +286,11 @@ async def extract_entities(
 
     except ValueError as e:
         logger.warning("[%s] Validation error: %s", request_id, e)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Internal server error")
 
     except Exception as e:
         logger.error("[%s] Entity extraction failed: %s", request_id, e, exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Entity extraction failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Entity extraction failed")
 
 
 def _build_extraction_tasks(
@@ -445,9 +443,7 @@ async def extract_entities_batch(
 
     except Exception as e:
         logger.error("[%s] Batch extraction failed: %s", request_id, e, exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Batch extraction failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Batch extraction failed")
 
 
 @with_error_handling(
@@ -507,7 +503,7 @@ async def entity_extraction_health(
                 "status": "unhealthy",
                 "components": {},
                 "timestamp": datetime.utcnow().isoformat(),
-                "error": str(e),
+                "error": "Internal server error",
             },
             media_type="application/json; charset=utf-8",
         )

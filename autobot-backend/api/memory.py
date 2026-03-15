@@ -507,12 +507,10 @@ async def create_entity(
 
     except ValueError as e:
         logger.warning("[%s] Validation error creating entity: %s", request_id, e)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Internal server error")
     except Exception as e:
         logger.error("[%s] Error creating entity: %s", request_id, e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to create entity: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to create entity")
 
 
 @with_error_handling(
@@ -551,9 +549,7 @@ async def list_all_entities(
 
     except Exception as e:
         logger.error("[%s] Error listing entities: %s", request_id, e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to list entities: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to list entities")
 
 
 # ====================================================================
@@ -614,9 +610,7 @@ async def find_orphaned_conversation_entities(
         raise
     except Exception as e:
         logger.error("[%s] Error finding orphaned entities: %s", request_id, e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to find orphaned entities: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to find orphaned entities")
 
 
 # =============================================================================
@@ -804,7 +798,11 @@ async def _delete_entities(
                 "[%s] Failed to delete entity %s: %s", request_id, entity_name, e
             )
             failed_deletions.append(
-                {"id": entity.get("id"), "name": entity_name, "reason": str(e)}
+                {
+                    "id": entity.get("id"),
+                    "name": entity_name,
+                    "reason": "Operation failed",
+                }
             )
 
     logger.info(
@@ -923,7 +921,7 @@ async def cleanup_orphaned_conversation_entities(
     except Exception as e:
         logger.error("[%s] Error cleaning up orphaned entities: %s", request_id, e)
         raise HTTPException(
-            status_code=500, detail=f"Failed to cleanup orphaned entities: {str(e)}"
+            status_code=500, detail="Failed to cleanup orphaned entities"
         )
 
 
@@ -982,9 +980,7 @@ async def get_entity_by_id(
         raise
     except Exception as e:
         logger.error("[%s] Error retrieving entity: %s", request_id, e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve entity: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to retrieve entity")
 
 
 @with_error_handling(
@@ -1040,9 +1036,7 @@ async def get_entity_by_name(
         raise
     except Exception as e:
         logger.error("[%s] Error searching entity: %s", request_id, e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to search entity: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to search entity")
 
 
 @with_error_handling(
@@ -1102,12 +1096,10 @@ async def add_observations(
         raise
     except ValueError as e:
         logger.warning("[%s] Validation error adding observations: %s", request_id, e)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Internal server error")
     except Exception as e:
         logger.error("[%s] Error adding observations: %s", request_id, e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to add observations: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to add observations")
 
 
 @with_error_handling(
@@ -1165,9 +1157,7 @@ async def delete_entity(
         raise
     except Exception as e:
         logger.error("[%s] Error deleting entity: %s", request_id, e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to delete entity: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to delete entity")
 
 
 # ====================================================================
@@ -1238,12 +1228,10 @@ async def create_relation(
 
     except ValueError as e:
         logger.warning("[%s] Validation error creating relation: %s", request_id, e)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Internal server error")
     except Exception as e:
         logger.error("[%s] Error creating relation: %s", request_id, e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to create relation: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to create relation")
 
 
 @with_error_handling(
@@ -1298,9 +1286,7 @@ async def get_related_entities(
         raise
     except Exception as e:
         logger.error("[%s] Error getting related entities: %s", request_id, e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get related entities: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get related entities")
 
 
 @with_error_handling(
@@ -1365,9 +1351,7 @@ async def delete_relation(
         raise
     except Exception as e:
         logger.error("[%s] Error deleting relation: %s", request_id, e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to delete relation: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to delete relation")
 
 
 # ====================================================================
@@ -1445,7 +1429,7 @@ async def search_entities(
 
     except Exception as e:
         logger.error("[%s] Error searching entities: %s", request_id, e)
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Search failed")
 
 
 @with_error_handling(
@@ -1503,7 +1487,7 @@ async def get_entity_graph(
         raise
     except Exception as e:
         logger.error("[%s] Error building graph: %s", request_id, e)
-        raise HTTPException(status_code=500, detail=f"Failed to build graph: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to build graph")
 
 
 # ====================================================================
@@ -1567,7 +1551,7 @@ async def memory_health_check(
             status_code=503,
             content={
                 "status": "unhealthy",
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.utcnow().isoformat(),
             },
         )

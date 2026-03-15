@@ -96,7 +96,7 @@ async def resolve_captcha(
         logger.error("Error resolving CAPTCHA %s: %s", captcha_id, e, exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to resolve CAPTCHA: {str(e)}",
+            detail="Failed to resolve CAPTCHA",
         )
 
 
@@ -150,7 +150,7 @@ async def skip_captcha(
         logger.error("Error skipping CAPTCHA %s: %s", captcha_id, e)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to skip CAPTCHA: {str(e)}",
+            detail="Failed to skip CAPTCHA",
         )
 
 
@@ -180,7 +180,7 @@ async def get_pending_captchas() -> JSONResponse:
         logger.error("Error getting pending CAPTCHAs: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get pending CAPTCHAs: {str(e)}",
+            detail="Failed to get pending CAPTCHAs",
         )
 
 
@@ -214,7 +214,7 @@ async def captcha_health() -> JSONResponse:
             content={
                 "status": "unhealthy",
                 "service": "captcha_human_loop",
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.utcnow().isoformat(),
             },
         )

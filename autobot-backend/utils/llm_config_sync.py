@@ -204,7 +204,7 @@ class LLMConfigurationSynchronizer:
 
         except Exception as e:
             logger.error("❌ Failed to synchronize LLM configuration: %s", e)
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
     @staticmethod
     async def ensure_models_populated() -> Metadata:
@@ -251,7 +251,7 @@ class LLMConfigurationSynchronizer:
 
         except Exception as e:
             logger.error("❌ Failed to populate models list: %s", e)
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
     @staticmethod
     async def full_synchronization() -> Metadata:

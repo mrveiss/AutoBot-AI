@@ -93,7 +93,7 @@ class ConnectionTester:
                 "backend": "connected",
                 "ollama": "unknown",
                 "redis_status": "unknown",
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.now().isoformat(),
                 "fast_check": True,
             }
@@ -224,7 +224,7 @@ class ConnectionTester:
             logger.error("Ollama connection test failed: %s", str(e))
             return {
                 "status": "disconnected",
-                "message": f"Failed to test Ollama connection: {str(e)}",
+                "message": "Failed to test Ollama connection",
             }
 
     @staticmethod
@@ -317,7 +317,7 @@ class ConnectionTester:
             logger.error("Redis connection test failed: %s", str(e))
             return {
                 "status": "disconnected",
-                "message": f"Failed to connect to Redis: {str(e)}",
+                "message": "Failed to connect to Redis",
             }
 
     @staticmethod
@@ -400,7 +400,7 @@ class ConnectionTester:
             return {
                 "connected": False,
                 "current_model": None,
-                "message": f"Error checking embedding status: {str(e)}",
+                "message": "Error checking embedding status",
             }
 
     @staticmethod
@@ -444,7 +444,7 @@ class ConnectionTester:
                 "ollama": "unknown",
                 "redis_status": "unknown",
                 "redis_search_module_loaded": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.now().isoformat(),
             }
 
@@ -487,7 +487,12 @@ class ModelManager:
             return {"status": "success", "models": models, "total_count": len(models)}
         except Exception as e:
             logger.error("Error getting available models: %s", str(e))
-            return {"status": "error", "error": str(e), "models": [], "total_count": 0}
+            return {
+                "status": "error",
+                "error": "Internal server error",
+                "models": [],
+                "total_count": 0,
+            }
 
     @staticmethod
     def _parse_ollama_model(model: dict) -> dict:

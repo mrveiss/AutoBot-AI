@@ -60,7 +60,7 @@ class BaseTerminalWebSocket(ABC):
             await self.send_message(
                 {
                     "type": "error",
-                    "message": f"Failed to start {self.terminal_type}: {str(e)}",
+                    "message": "Failed to start {self.terminal_type}",
                 }
             )
 
@@ -276,7 +276,7 @@ class BaseTerminalWebSocket(ABC):
         except Exception as e:
             logger.error(f"{self.terminal_type} command error: {e}")
             await self.send_message(
-                {"type": "error", "message": f"{self.terminal_type} error: {str(e)}"}
+                {"type": "error", "message": "{self.terminal_type} error"}
             )
             return False
 
@@ -290,4 +290,4 @@ class BaseTerminalWebSocket(ABC):
             return self.terminal_adapter.get_stats()
         except Exception as e:
             logger.error(f"Error getting terminal stats: {e}")
-            return {"error": str(e)}
+            return {"error": "Internal server error"}

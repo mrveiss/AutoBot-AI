@@ -95,7 +95,7 @@ async def get_playwright_status():
         return {
             "service": "playwright",
             "status": "error",
-            "error": str(e),
+            "error": "Internal server error",
             "ready": False,
             "integration_type": "embedded_docker",
         }
@@ -125,9 +125,7 @@ async def health_check():
         }
     except Exception as e:
         logger.error("Playwright health check failed: %s", e)
-        raise HTTPException(
-            status_code=503, detail=f"Playwright service unavailable: {str(e)}"
-        )
+        raise HTTPException(status_code=503, detail="Playwright service unavailable")
 
 
 @with_error_handling(
@@ -168,7 +166,7 @@ async def web_search(request: SearchRequest):
         raise
     except Exception as e:
         logger.error("Web search error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Web search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Web search failed")
 
 
 @with_error_handling(
@@ -202,7 +200,7 @@ async def test_frontend(request: FrontendTestRequest):
         raise
     except Exception as e:
         logger.error("Frontend test error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Frontend test failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Frontend test failed")
 
 
 @with_error_handling(
@@ -240,7 +238,7 @@ async def send_test_message(request: TestMessageRequest):
         raise
     except Exception as e:
         logger.error("Test message error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Test message failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Test message failed")
 
 
 @with_error_handling(
@@ -279,7 +277,7 @@ async def capture_screenshot(request: ScreenshotRequest):
         raise
     except Exception as e:
         logger.error("Screenshot error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Screenshot failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Screenshot failed")
 
 
 @with_error_handling(
@@ -384,10 +382,10 @@ async def navigate_to_url(request: NavigateRequest):
 
     except aiohttp.ClientError as e:
         logger.error("Browser VM connection error: %s", e)
-        raise HTTPException(status_code=503, detail=f"Browser VM unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail="Browser VM unavailable")
     except Exception as e:
         logger.error("Navigation error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Navigation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Navigation failed")
 
 
 @with_error_handling(
@@ -425,10 +423,10 @@ async def reload_page(request: ReloadRequest):
 
     except aiohttp.ClientError as e:
         logger.error("Browser VM connection error: %s", e)
-        raise HTTPException(status_code=503, detail=f"Browser VM unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail="Browser VM unavailable")
     except Exception as e:
         logger.error("Reload error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Reload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Reload failed")
 
 
 @with_error_handling(
@@ -467,10 +465,10 @@ async def go_back():
 
     except aiohttp.ClientError as e:
         logger.error("Browser VM connection error: %s", e)
-        raise HTTPException(status_code=503, detail=f"Browser VM unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail="Browser VM unavailable")
     except Exception as e:
         logger.error("Back navigation error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Back navigation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Back navigation failed")
 
 
 @with_error_handling(
@@ -511,12 +509,10 @@ async def go_forward():
 
     except aiohttp.ClientError as e:
         logger.error("Browser VM connection error: %s", e)
-        raise HTTPException(status_code=503, detail=f"Browser VM unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail="Browser VM unavailable")
     except Exception as e:
         logger.error("Forward navigation error: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Forward navigation failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Forward navigation failed")
 
 
 @with_error_handling(
@@ -584,10 +580,10 @@ async def take_worker_screenshot():
                 )
     except aiohttp.ClientError as e:
         logger.error("Browser VM connection error: %s", e)
-        raise HTTPException(status_code=503, detail=f"Browser VM unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail="Browser VM unavailable")
     except Exception as e:
         logger.error("Worker screenshot error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Screenshot failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Screenshot failed")
 
 
 @with_error_handling(
@@ -635,10 +631,10 @@ async def interact_with_page(request: InteractRequest):
         raise
     except aiohttp.ClientError as e:
         logger.error("Browser VM connection error: %s", e)
-        raise HTTPException(status_code=503, detail=f"Browser VM unavailable: {str(e)}")
+        raise HTTPException(status_code=503, detail="Browser VM unavailable")
     except Exception as e:
         logger.error("Interact error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Interaction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Interaction failed")
 
 
 @with_error_handling(

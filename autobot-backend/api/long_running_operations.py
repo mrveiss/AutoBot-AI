@@ -207,9 +207,7 @@ async def start_codebase_indexing(
 
     except Exception as e:
         logger.error("Failed to start codebase indexing: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start operation: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
 @with_error_handling(
@@ -278,9 +276,7 @@ async def start_comprehensive_testing(
 
     except Exception as e:
         logger.error("Failed to start comprehensive testing: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start operation: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
 @with_error_handling(
@@ -335,9 +331,7 @@ async def start_knowledge_base_population(
 
     except Exception as e:
         logger.error("Failed to start knowledge base population: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start operation: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
 @with_error_handling(
@@ -389,9 +383,7 @@ async def start_security_scan(
 
     except Exception as e:
         logger.error("Failed to start security scan: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start operation: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to start operation")
 
 
 # Legacy operation migration endpoints
@@ -436,7 +428,7 @@ async def migrate_existing_operation(
 
     except Exception as e:
         logger.error("Failed to migrate operation: %s", e)
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Migration failed")
 
 
 # Operation status and control endpoints (proxy to integration manager)
@@ -458,7 +450,7 @@ async def get_operation_status(
         return manager._convert_operation_to_response(operation)
     except Exception as e:
         logger.error("Failed to get operation status: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -512,7 +504,7 @@ async def list_operations(
 
     except Exception as e:
         logger.error("Failed to list operations: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -534,7 +526,7 @@ async def cancel_operation(operation_id: str, manager=Depends(get_operation_mana
 
     except Exception as e:
         logger.error("Failed to cancel operation: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -568,7 +560,7 @@ async def resume_operation(operation_id: str, manager=Depends(get_operation_mana
 
     except Exception as e:
         logger.error("Failed to resume operation: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.websocket("/{operation_id}/progress")
@@ -662,9 +654,14 @@ async def operations_health():
             ),
         }
 
-    except Exception as e:
+    except Exception:
+        logger.exception("Unexpected error")
         return JSONResponse(
-            status_code=500, content={"status": "error", "message": str(e)}
+            status_code=500,
+            content={
+                "status": "error",
+                "message": "Internal server error",
+            },
         )
 
 

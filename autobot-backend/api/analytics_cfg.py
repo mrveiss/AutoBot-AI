@@ -1180,11 +1180,12 @@ async def analyze_control_flow(
         )
 
     except SyntaxError as e:
+        logger.exception("Unexpected error: %s", e)
         return JSONResponse(
             status_code=400,
             content={
                 "success": False,
-                "error": f"Syntax error in source code: {e}",
+                "error": "Syntax error in source code",
                 "graphs": [],
                 "summary": {},
                 "issues": [],
@@ -1222,8 +1223,8 @@ async def analyze_file_control_flow(
     try:
         # Issue #358 - avoid blocking
         source_code = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error reading file: {e}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error reading file")
 
     analyze_request = AnalyzeRequest(source_code=source_code, file_path=str(file_path))
     return await analyze_control_flow(analyze_request)

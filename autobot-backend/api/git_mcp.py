@@ -347,7 +347,7 @@ async def execute_git_command(
         raise
     except Exception as e:
         logger.error("Git command execution error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Git command failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Git command failed")
 
 
 # Pydantic Models

@@ -406,7 +406,7 @@ async def voice_stream_ws(websocket: WebSocket) -> None:
         logger.info("Voice stream WebSocket disconnected")
     except Exception as e:
         logger.error("Voice stream WebSocket error: %s", e)
-        await _send_json(websocket, {"type": "error", "message": str(e)})
+        await _send_json(websocket, {"type": "error", "message": "Operation failed"})
     finally:
         await _cleanup_ws_tasks(ctx.get("queue_worker_task"), cancel_tts, tts_task)
         logger.info("Voice stream WebSocket closed")

@@ -93,7 +93,7 @@ async def receive_alertmanager_webhook(payload: AlertManagerWebhook, request: Re
         logger.error("Failed to process AlertManager webhook: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process webhook: {str(e)}",
+            detail="Failed to process webhook",
         )
 
 

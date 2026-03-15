@@ -769,9 +769,9 @@ def _handle_get_command(secrets_manager: SecretsManager, args) -> int:
 
     if value:
         if args.json:
-            logger.info(json.dumps({"value": value}))
+            print(json.dumps({"value": value}))  # noqa: T201
         else:
-            logger.info(f"🔐 Secret value: {value}")
+            print(f"🔐 Secret value: {value}")  # noqa: T201
         return 0
     else:
         logger.error("❌ Secret not found or access denied")

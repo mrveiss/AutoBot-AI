@@ -877,7 +877,7 @@ class ClaudeAPIOptimizationSuite:
             logger.error("Error during forced optimization analysis: %s", e)
             return {
                 "status": "error",
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.now().isoformat(),
             }
 

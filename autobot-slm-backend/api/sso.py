@@ -85,7 +85,7 @@ async def create_provider(
         logger.error("Failed to create SSO provider: %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         ) from e
 
 
@@ -105,7 +105,7 @@ async def get_provider(
     except SSOProviderNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Internal server error",
         ) from e
 
 
@@ -127,13 +127,13 @@ async def update_provider(
     except SSOProviderNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Internal server error",
         ) from e
     except Exception as e:
         logger.error("Failed to update SSO provider: %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         ) from e
 
 
@@ -153,7 +153,7 @@ async def delete_provider(
     except SSOProviderNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Internal server error",
         ) from e
 
 
@@ -174,11 +174,11 @@ async def test_provider(
     except SSOProviderNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Internal server error",
         ) from e
     except SSOServiceError as e:
         logger.error("SSO provider test failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         ) from e

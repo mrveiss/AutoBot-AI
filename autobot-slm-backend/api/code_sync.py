@@ -405,7 +405,7 @@ async def refresh_version(
         logger.error("Failed to refresh version: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to refresh version: {e}",
+            detail="Failed to refresh version",
         )
 
 
@@ -1127,7 +1127,7 @@ async def _sync_single_node(
 
     except Exception as e:
         node_state.status = "failed"
-        node_state.message = str(e)
+        node_state.message = "Operation failed"
         node_state.completed_at = datetime.utcnow()
         logger.error("Node sync failed for %s: %s", node_state.node_id, e)
 

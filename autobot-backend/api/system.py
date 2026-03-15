@@ -212,8 +212,8 @@ async def get_system_health(
         try:
             config.get_service_url("ollama")
             health_status["components"]["config"] = "healthy"
-        except Exception as e:
-            health_status["components"]["config"] = f"error: {str(e)}"
+        except Exception:
+            health_status["components"]["config"] = "error"
             health_status["status"] = "degraded"
 
         # Check conversation files database if request is available (Issue #315 - use helper)
@@ -222,12 +222,12 @@ async def get_system_health(
 
         return health_status
 
-    except Exception as e:
-        logger.error("Health check failed: %s", str(e))
+    except Exception:
+        logger.error("Health check failed: %s", "Internal server error")
         return {
             "status": "unhealthy",
             "timestamp": datetime.now().isoformat(),
-            "error": str(e),
+            "error": "Internal server error",
         }
 
 
@@ -320,7 +320,8 @@ async def reload_prompts(admin_check: bool = Depends(check_admin_permission)):
     except ImportError:
         message = "Prompt manager not available"
     except Exception as e:
-        message = f"Prompt reload error: {str(e)}"
+        logger.exception("Unexpected error: %s", e)
+        message = "Prompt reload error"
 
     return {
         "status": "success",
@@ -379,9 +380,7 @@ async def dynamic_import(
         imported_module = importlib.import_module(module_name)
     except ImportError as e:
         logger.error("Import failed for %s: %s", module_name, str(e))
-        raise HTTPException(
-            status_code=400, detail=f"Failed to import module: {str(e)}"
-        )
+        raise HTTPException(status_code=400, detail="Failed to import module")
 
     return {
         "status": "success",
@@ -430,12 +429,12 @@ async def get_detailed_health(
 
         return health_status
 
-    except Exception as e:
-        logger.error("Detailed health check failed: %s", str(e))
+    except Exception:
+        logger.error("Detailed health check failed: %s", "Internal server error")
         return {
             "status": "unhealthy",
             "timestamp": datetime.now().isoformat(),
-            "error": str(e),
+            "error": "Internal server error",
             "detailed": True,
         }
 
@@ -448,8 +447,8 @@ async def _check_redis_health(components: dict) -> None:
             components["redis"] = "healthy"
         else:
             components["redis"] = "unavailable"
-    except Exception as e:
-        components["redis"] = f"error: {str(e)}"
+    except Exception:
+        components["redis"] = "error"
 
 
 def _check_llm_availability(components: dict) -> None:
@@ -457,8 +456,8 @@ def _check_llm_availability(components: dict) -> None:
     try:
         pass  # Import check placeholder
         components["llm"] = "available"
-    except Exception as e:
-        components["llm"] = f"import_error: {str(e)}"
+    except Exception:
+        components["llm"] = "import_error"
 
 
 def _check_knowledge_base_availability(components: dict) -> None:
@@ -466,8 +465,8 @@ def _check_knowledge_base_availability(components: dict) -> None:
     try:
         pass  # Import check placeholder
         components["knowledge_base"] = "available"
-    except Exception as e:
-        components["knowledge_base"] = f"import_error: {str(e)}"
+    except Exception:
+        components["knowledge_base"] = "import_error"
 
 
 def _check_system_resources(components: dict) -> None:
@@ -482,8 +481,8 @@ def _check_system_resources(components: dict) -> None:
         components["disk_usage"] = f"{(disk.used / disk.total) * 100:.1f}%"
     except ImportError:
         components["system_monitoring"] = "psutil_unavailable"
-    except Exception as e:
-        components["system_monitoring"] = f"error: {str(e)}"
+    except Exception:
+        components["system_monitoring"] = "error"
 
 
 def _add_resource_metrics(components: dict, health_status: dict) -> None:
@@ -582,15 +581,16 @@ async def get_cache_stats(admin_check: bool = Depends(check_admin_permission)):
                 stats_response["performance"]["hit_rate"] = f"{hit_rate:.2f}%"
 
             except Exception as e:
-                stats_response["redis_info"] = {"error": str(e)}
+                logger.exception("Unexpected error: %s", e)
+                stats_response["redis_info"] = {"error": "Internal server error"}
 
         return stats_response
 
-    except Exception as e:
-        logger.error("Failed to get cache stats: %s", str(e))
+    except Exception:
+        logger.error("Failed to get cache stats: %s", "Internal server error")
         return {
             "timestamp": datetime.now().isoformat(),
-            "error": str(e),
+            "error": "Internal server error",
             "cache": {"status": "error"},
         }
 
@@ -688,16 +688,16 @@ async def get_cache_activity(admin_check: bool = Depends(check_admin_permission)
                 cache_keys, cache_manager.cache_prefix
             )
 
-        except Exception as e:
-            activity_response["activity"]["error"] = str(e)
+        except Exception:
+            activity_response["activity"]["error"] = "Failed to get activity"
 
         return activity_response
 
-    except Exception as e:
-        logger.error("Failed to get cache activity: %s", str(e))
+    except Exception:
+        logger.error("Failed to get cache activity: %s", "Internal server error")
         return {
             "timestamp": datetime.now().isoformat(),
-            "error": str(e),
+            "error": "Internal server error",
             "activity": {"error": "Failed to retrieve activity"},
         }
 
@@ -799,7 +799,7 @@ async def get_cache_coordinator_stats(
     except Exception as e:
         logger.error("Error getting cache coordinator stats: %s", str(e))
         raise HTTPException(
-            status_code=500, detail=f"Error getting cache coordinator stats: {str(e)}"
+            status_code=500, detail="Error getting cache coordinator stats"
         )
 
 
@@ -830,9 +830,7 @@ async def trigger_cache_eviction(admin_check: bool = Depends(check_admin_permiss
         }
     except Exception as e:
         logger.error("Error triggering cache eviction: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Error triggering cache eviction: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error triggering cache eviction")
 
 
 @with_error_handling(
@@ -869,4 +867,4 @@ async def clear_cache(
         raise
     except Exception as e:
         logger.error("Error clearing cache %s: %s", cache_name, str(e))
-        raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error clearing cache")

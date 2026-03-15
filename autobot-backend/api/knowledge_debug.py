@@ -82,13 +82,13 @@ async def get_fresh_knowledge_stats(request: Request = None):
         traceback.print_exc()
         return {
             "source": "completely_fresh_instance",
-            "error": str(e),
+            "error": "Internal server error",
             "total_documents": 0,
             "total_chunks": 0,
             "total_facts": 0,
             "categories": [],
             "status": "error",
-            "message": f"Fresh instance failed: {str(e)}",
+            "message": "Fresh instance failed",
         }
 
 
@@ -156,8 +156,10 @@ async def debug_redis_connection():
             ),
         }
 
-    except Exception as e:
-        return {"redis_connection": "failed", "error": str(e)}
+    except Exception:
+        logger.exception("Unexpected error")
+
+        return {"redis_connection": "failed", "error": "Internal server error"}
 
 
 @with_error_handling(
@@ -190,4 +192,8 @@ async def rebuild_search_index():
 
     except Exception as e:
         logger.error("Error rebuilding index: %s", e)
-        return {"operation": "rebuild_search_index", "error": str(e), "success": False}
+        return {
+            "operation": "rebuild_search_index",
+            "error": "Internal server error",
+            "success": False,
+        }

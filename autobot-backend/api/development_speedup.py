@@ -153,7 +153,7 @@ async def analyze_codebase_endpoint(request: AnalysisRequest):
 
     except Exception as e:
         logger.error("Analysis endpoint error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Analysis failed")
 
 
 @with_error_handling(
@@ -222,9 +222,7 @@ async def find_duplicates_endpoint(
 
     except Exception as e:
         logger.error("Duplicate detection error: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Duplicate detection failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Duplicate detection failed")
 
 
 @with_error_handling(
@@ -272,9 +270,7 @@ async def analyze_patterns_endpoint(
 
     except Exception as e:
         logger.error("Pattern analysis error: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Pattern analysis failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Pattern analysis failed")
 
 
 @with_error_handling(
@@ -314,7 +310,7 @@ async def analyze_imports_endpoint(
 
     except Exception as e:
         logger.error("Import analysis error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Import analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Import analysis failed")
 
 
 @with_error_handling(
@@ -348,9 +344,7 @@ async def detect_dead_code_endpoint(
 
     except Exception as e:
         logger.error("Dead code detection error: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Dead code detection failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Dead code detection failed")
 
 
 @with_error_handling(
@@ -399,9 +393,7 @@ async def find_refactoring_opportunities_endpoint(
 
     except Exception as e:
         logger.error("Refactoring analysis error: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Refactoring analysis failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Refactoring analysis failed")
 
 
 @with_error_handling(
@@ -457,9 +449,7 @@ async def analyze_quality_endpoint(
 
     except Exception as e:
         logger.error("Quality analysis error: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Quality analysis failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Quality analysis failed")
 
 
 def _build_recommendation_metrics(result: dict) -> dict:
@@ -534,7 +524,7 @@ async def get_recommendations_endpoint(
 
     except Exception as e:
         logger.error("Recommendations error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Recommendations failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Recommendations failed")
 
 
 @with_error_handling(
@@ -601,7 +591,7 @@ async def get_development_speedup_status():
 
     except Exception as e:
         logger.error("Status endpoint error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Status check failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Status check failed")
 
 
 @with_error_handling(

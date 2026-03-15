@@ -111,7 +111,8 @@ async def get_optimization_health(admin_check: bool = Depends(check_admin_permis
     except Exception as e:
         logger.error("Error checking optimization health: %s", e)
         return JSONResponse(
-            content={"status": "unhealthy", "error": str(e)}, status_code=500
+            content={"status": "unhealthy", "error": "Internal server error"},
+            status_code=500,
         )
 
 
@@ -143,9 +144,7 @@ async def get_available_models(admin_check: bool = Depends(check_admin_permissio
 
     except Exception as e:
         logger.error("Error getting available models: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get available models: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get available models")
 
 
 @with_error_handling(
@@ -208,9 +207,7 @@ async def select_optimal_model(
 
     except Exception as e:
         logger.error("Error selecting optimal model: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to select optimal model: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to select optimal model")
 
 
 @with_error_handling(
@@ -249,9 +246,7 @@ async def track_model_performance(
 
     except Exception as e:
         logger.error("Error tracking model performance: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to track performance: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to track performance")
 
 
 @with_error_handling(
@@ -286,9 +281,7 @@ async def get_model_performance_history(
         raise
     except Exception as e:
         logger.error("Error getting model performance history: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get performance history: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get performance history")
 
 
 @with_error_handling(
@@ -316,7 +309,7 @@ async def get_optimization_suggestions(
     except Exception as e:
         logger.error("Error getting optimization suggestions: %s", e)
         raise HTTPException(
-            status_code=500, detail=f"Failed to get optimization suggestions: {str(e)}"
+            status_code=500, detail="Failed to get optimization suggestions"
         )
 
 
@@ -374,9 +367,7 @@ async def compare_models(admin_check: bool = Depends(check_admin_permission)):
 
     except Exception as e:
         logger.error("Error comparing models: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to compare models: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to compare models")
 
 
 @with_error_handling(
@@ -441,9 +432,7 @@ async def benchmark_model(
         raise
     except Exception as e:
         logger.error("Error benchmarking model: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to benchmark model: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to benchmark model")
 
 
 @with_error_handling(
@@ -503,9 +492,7 @@ async def get_system_resources(admin_check: bool = Depends(check_admin_permissio
 
     except Exception as e:
         logger.error("Error getting system resources: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get system resources: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get system resources")
 
 
 @with_error_handling(
@@ -544,9 +531,7 @@ async def get_optimization_config(admin_check: bool = Depends(check_admin_permis
 
     except Exception as e:
         logger.error("Error getting optimization config: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get optimization config: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get optimization config")
 
 
 # ============================================================================
@@ -661,7 +646,7 @@ async def get_inference_optimization_settings(
         logger.error("Error getting inference optimization settings: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get inference optimization settings: {str(e)}",
+            detail="Failed to get inference optimization settings",
         )
 
 
@@ -733,7 +718,7 @@ async def update_inference_optimization_settings(
         logger.error("Error updating inference optimization settings: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to update inference optimization settings: {str(e)}",
+            detail="Failed to update inference optimization settings",
         )
 
 
@@ -768,7 +753,7 @@ async def get_inference_metrics(admin_check: bool = Depends(check_admin_permissi
         logger.error("Error getting inference metrics: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get inference metrics: {str(e)}",
+            detail="Failed to get inference metrics",
         )
 
 
@@ -829,5 +814,5 @@ async def get_provider_optimization_summary(
         logger.error("Error getting provider optimization summary: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get provider optimization summary: {str(e)}",
+            detail="Failed to get provider optimization summary",
         )

@@ -113,7 +113,7 @@ async def execute_command(
     except Exception as e:
         logger.error("Sandbox execution error: %s", e)
         return error_response(
-            error=f"Sandbox execution failed: {str(e)}",
+            error="Sandbox execution failed",
             status_code=500,
             error_code="SANDBOX_ERROR",
         )
@@ -174,7 +174,7 @@ async def execute_script(
     except Exception as e:
         logger.error("Script execution error: %s", e)
         return error_response(
-            error=f"Script execution failed: {str(e)}",
+            error="Script execution failed",
             status_code=500,
             error_code="SANDBOX_ERROR",
         )
@@ -238,7 +238,7 @@ async def execute_batch(
     except Exception as e:
         logger.error("Batch execution error: %s", e)
         return error_response(
-            error=f"Batch execution failed: {str(e)}",
+            error="Batch execution failed",
             status_code=500,
             error_code="SANDBOX_ERROR",
         )
@@ -359,7 +359,7 @@ async def get_sandbox_stats(
     except Exception as e:
         logger.error("Stats retrieval error: %s", e)
         return error_response(
-            error=f"Failed to get stats: {str(e)}",
+            error="Failed to get stats",
             status_code=500,
             error_code="STATS_ERROR",
         )

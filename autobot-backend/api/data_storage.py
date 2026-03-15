@@ -563,7 +563,8 @@ async def delete_conversation(
                     chat_file.unlink()
                     files_deleted.append(str(chat_file.name))
                 except (OSError, PermissionError) as e:
-                    errors.append(f"Error deleting chat file: {str(e)}")
+                    logger.exception("Unexpected error: %s", e)
+                    errors.append("Error deleting chat file")
 
         if not files_deleted and not errors:
             raise HTTPException(

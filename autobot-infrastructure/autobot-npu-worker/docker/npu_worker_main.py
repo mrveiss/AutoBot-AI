@@ -71,11 +71,11 @@ def check_environment():
     # Check environment variables
     required_env = ["NPU_WORKER_HOST", "NPU_WORKER_PORT"]
     for env_var in required_env:
-        value = os.getenv(env_var)
-        if value:
-            logger.info(f"Environment: {env_var}={value}")
+        env_val = os.getenv(env_var)
+        if env_val:
+            logger.info("Environment: %s=%s", env_var, env_val)
         else:
-            logger.warning(f"Environment variable {env_var} not set")
+            logger.warning("Environment variable %s not set", env_var)
 
     # Check directories
     directories = ["/app/models", "/app/data", "/app/logs"]

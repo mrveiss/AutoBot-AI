@@ -84,9 +84,7 @@ async def reload_chat_workflow():
 
     except Exception as e:
         logger.error("Chat workflow reload failed: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to reload chat workflow: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to reload chat workflow")
 
 
 @with_error_handling(
@@ -131,9 +129,7 @@ async def reload_module(request: ReloadRequest):
 
     except Exception as e:
         logger.error("Module reload failed: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to reload module: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to reload module")
 
 
 @with_error_handling(
@@ -154,7 +150,7 @@ async def get_reload_status():
 
     except Exception as e:
         logger.error("Failed to get reload status: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get status")
 
 
 @with_error_handling(
@@ -184,9 +180,7 @@ async def start_hot_reload():
 
     except Exception as e:
         logger.error("Failed to start hot reload: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to start hot reload: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to start hot reload")
 
 
 @with_error_handling(
@@ -208,9 +202,7 @@ async def stop_hot_reload():
 
     except Exception as e:
         logger.error("Failed to stop hot reload: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to stop hot reload: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to stop hot reload")
 
 
 @with_error_handling(
@@ -240,4 +232,8 @@ async def hot_reload_health():
 
     except Exception as e:
         logger.error("Hot reload health check failed: %s", e)
-        return {"status": "unhealthy", "error": str(e), "service": "hot_reload"}
+        return {
+            "status": "unhealthy",
+            "error": "Internal server error",
+            "service": "hot_reload",
+        }

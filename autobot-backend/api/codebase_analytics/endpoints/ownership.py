@@ -110,7 +110,7 @@ def _validate_path_security(path: str, project_root: str) -> Optional[JSONRespon
         return JSONResponse(
             {
                 "status": "error",
-                "message": f"Invalid path: {str(e)}",
+                "message": "Invalid path",
                 "summary": {},
             },
             status_code=400,
@@ -366,7 +366,7 @@ async def get_ownership_analysis(
         logger.error("Ownership analysis failed: %s", e, exc_info=True)
         return JSONResponse(
             _build_ownership_error_response(
-                f"Ownership analysis failed: {str(e)}", include_lists=False
+                "Ownership analysis failed", include_lists=False
             )
         )
 
@@ -426,7 +426,7 @@ async def get_expertise_scores(
 
     except Exception as e:
         logger.error("Failed to get expertise scores: %s", e, exc_info=True)
-        return JSONResponse(_build_expertise_error(str(e)))
+        return JSONResponse(_build_expertise_error("Internal server error"))
 
 
 @router.get("/knowledge-gaps")
@@ -491,4 +491,4 @@ async def get_knowledge_gaps(
 
     except Exception as e:
         logger.error("Failed to get knowledge gaps: %s", e, exc_info=True)
-        return JSONResponse(_build_knowledge_gaps_error(str(e)))
+        return JSONResponse(_build_knowledge_gaps_error("Internal server error"))

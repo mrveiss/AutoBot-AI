@@ -1041,7 +1041,7 @@ async def _stream_chat_workflow_messages(
 
     except Exception as e:
         logger.error("[%s] Streaming error: %s", request_id, e, exc_info=True)
-        evt = {"type": "error", "content": f"Error: {e}", "request_id": request_id}
+        evt = {"type": "error", "content": "Error", "request_id": request_id}
         yield f"data: {json.dumps(evt)}\n\n"
 
 
@@ -1727,7 +1727,7 @@ async def process_enhanced_chat_message(
     except Exception as e:
         logger.error("Error processing enhanced chat message: %s", e)
         raise HTTPException(
-            status_code=500, detail=f"Failed to process enhanced chat message: {str(e)}"
+            status_code=500, detail="Failed to process enhanced chat message"
         )
 
 
@@ -1911,7 +1911,7 @@ async def enhanced_chat(
         logger.error("[%s] Enhanced chat error: %s", request_id, e)
         return create_error_response(
             error_code="INTERNAL_ERROR",
-            message=str(e),
+            message="Operation failed",
             request_id=request_id,
             status_code=500,
         )
@@ -1996,7 +1996,7 @@ async def enhanced_chat_health_check(
             status_code=503,
             content={
                 "status": "unhealthy",
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.utcnow().isoformat(),
             },
         )

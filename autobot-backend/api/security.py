@@ -89,7 +89,7 @@ async def get_security_status(request: Request):
             )
     except Exception as e:
         logger.error("Error getting security status: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -118,7 +118,7 @@ async def approve_command(request: Request, approval: CommandApprovalRequest):
         return CommandApprovalResponse(success=True, message=message)
     except Exception as e:
         logger.error("Error approving command: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -140,7 +140,7 @@ async def get_pending_approvals(request: Request):
         return {"success": True, "pending_approvals": pending, "count": len(pending)}
     except Exception as e:
         logger.error("Error getting pending approvals: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -162,7 +162,7 @@ async def get_command_history(request: Request, user: str = None, limit: int = 5
         return {"success": True, "command_history": history, "count": len(history)}
     except Exception as e:
         logger.error("Error getting command history: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _parse_audit_log_lines(lines: list, limit: int) -> list:
@@ -217,7 +217,7 @@ async def get_audit_log(request: Request, limit: int = 100):
         }
     except Exception as e:
         logger.error("Error getting audit log: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ============================================================================
@@ -286,7 +286,7 @@ async def get_threat_intel_status(request: Request):
         )
     except Exception as e:
         logger.error("Error getting threat intel status: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -332,7 +332,7 @@ async def check_url_reputation(request: Request, url_request: URLCheckRequest):
         )
     except Exception as e:
         logger.error("Error checking URL reputation: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -377,4 +377,4 @@ async def get_domain_security_stats(request: Request):
         return DomainSecurityStatsResponse(success=True, stats=stats)
     except Exception as e:
         logger.error("Error getting domain security stats: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

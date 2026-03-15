@@ -594,7 +594,7 @@ async def search_documentation(
         logger.error("Documentation search failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"Documentation search failed: {str(e)}",
+            detail="Documentation search failed",
         )
 
 
@@ -634,7 +634,7 @@ async def documentation_stats():
         logger.error("Documentation stats failed: %s", e)
         return {
             "success": False,
-            "message": str(e),
+            "message": "Internal server error",
         }
 
 

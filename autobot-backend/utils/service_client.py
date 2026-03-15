@@ -117,12 +117,12 @@ class ServiceHTTPClient:
 
         try:
             return await self.http_client.get(url, **kwargs)
-        except aiohttp.ClientError as e:
+        except aiohttp.ClientError:
             logger.error(
                 "Service GET request failed",
                 service_id=self.service_id,
                 url=url,
-                error=str(e),
+                error="Internal server error",
             )
             raise
         except asyncio.TimeoutError:
@@ -164,12 +164,12 @@ class ServiceHTTPClient:
 
         try:
             return await self.http_client.post(url, **kwargs)
-        except aiohttp.ClientError as e:
+        except aiohttp.ClientError:
             logger.error(
                 "Service POST request failed",
                 service_id=self.service_id,
                 url=url,
-                error=str(e),
+                error="Internal server error",
             )
             raise
         except asyncio.TimeoutError:
@@ -209,12 +209,12 @@ class ServiceHTTPClient:
 
         try:
             return await self.http_client.put(url, **kwargs)
-        except aiohttp.ClientError as e:
+        except aiohttp.ClientError:
             logger.error(
                 "Service PUT request failed",
                 service_id=self.service_id,
                 url=url,
-                error=str(e),
+                error="Internal server error",
             )
             raise
         except asyncio.TimeoutError:
@@ -254,12 +254,12 @@ class ServiceHTTPClient:
 
         try:
             return await self.http_client.delete(url, **kwargs)
-        except aiohttp.ClientError as e:
+        except aiohttp.ClientError:
             logger.error(
                 "Service DELETE request failed",
                 service_id=self.service_id,
                 url=url,
-                error=str(e),
+                error="Internal server error",
             )
             raise
         except asyncio.TimeoutError:
@@ -299,12 +299,12 @@ class ServiceHTTPClient:
 
         try:
             return await self.http_client.patch(url, **kwargs)
-        except aiohttp.ClientError as e:
+        except aiohttp.ClientError:
             logger.error(
                 "Service PATCH request failed",
                 service_id=self.service_id,
                 url=url,
-                error=str(e),
+                error="Internal server error",
             )
             raise
         except asyncio.TimeoutError:
@@ -452,6 +452,6 @@ async def create_service_client(
         logger.error(
             "Failed to create service client",
             service_id=service_id,
-            error=str(e),
+            error="Internal server error",
         )
         raise RuntimeError(f"Failed to create service client for {service_id}: {e}")

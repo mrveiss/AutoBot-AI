@@ -95,7 +95,7 @@ async def create_team(
     except Exception as e:
         logger.error("Failed to create AutoBot team: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error"
         ) from e
 
 
@@ -164,7 +164,9 @@ async def update_team(
         return TeamResponse.model_validate(team)
     except Exception as e:
         logger.error("Failed to update AutoBot team: %s", e)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
+        ) from e
 
 
 @router.delete("/{team_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -182,7 +184,9 @@ async def delete_team(
         await team_service.delete_team(team_id)
     except Exception as e:
         logger.error("Failed to delete AutoBot team: %s", e)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
+        ) from e
 
 
 @router.post("/{team_id}/members", status_code=status.HTTP_201_CREATED)
@@ -207,7 +211,7 @@ async def add_team_member(
     except Exception as e:
         logger.error("Failed to add team member: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error"
         ) from e
 
 
@@ -227,4 +231,6 @@ async def remove_team_member(
         await team_service.remove_member(team_id=team_id, user_id=user_id)
     except Exception as e:
         logger.error("Failed to remove team member: %s", e)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
+        ) from e

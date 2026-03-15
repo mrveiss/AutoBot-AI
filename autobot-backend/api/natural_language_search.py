@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Issue #380: Pre-compiled regex patterns for query parsing and code analysis
 _NON_WORD_CHARS_RE = re.compile(r"[^\w\s\-_]")
-_CAMEL_CASE_RE = re.compile(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b", re.IGNORECASE)
+_CAMEL_CASE_RE = re.compile(r"\b[A-Z][a-z]{1,30}(?:[A-Z][a-z]{1,30}){1,10}\b")
 _SNAKE_CASE_RE = re.compile(r"\b[a-z]+(?:_[a-z]+)+\b")
 _QUOTED_STRING_RE = re.compile(r'"([^"]+)"|\'([^\']+)\'')
 _FUNC_DEF_RE = re.compile(r"def\s+(\w+)")
@@ -1153,7 +1153,7 @@ async def natural_language_search(request: NLSearchRequest):
 
     except Exception as e:
         logger.error("Natural language search error: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/parse", response_model=ParsedQueryResponse)
@@ -1179,7 +1179,7 @@ async def parse_query(query: str):
         )
     except Exception as e:
         logger.error("Query parsing error: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/suggestions")
@@ -1208,7 +1208,7 @@ async def get_query_suggestions(query: str):
         }
     except Exception as e:
         logger.error("Suggestion generation error: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/explain")
@@ -1235,7 +1235,7 @@ async def explain_code_snippet(
         }
     except Exception as e:
         logger.error("Code explanation error: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/intents")

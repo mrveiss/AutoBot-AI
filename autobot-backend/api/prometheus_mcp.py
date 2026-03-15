@@ -437,4 +437,4 @@ async def execute_prometheus_tool(tool_name: str, request: Metadata) -> Metadata
         logger.error(
             "Error executing Prometheus tool %s: %s", tool_name, e, exc_info=True
         )
-        return {"status": "error", "error": str(e)}
+        return {"status": "error", "error": "Internal server error"}

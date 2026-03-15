@@ -733,11 +733,14 @@ Suggestion: {problem.get('suggestion', '')}
         logger.debug("Failed to store problem immediately: %s", e)
 
 
-def _prepare_problem_document(problem: Dict, problem_idx: int) -> tuple:
+def _prepare_problem_document(
+    problem: Dict, problem_idx: int, source_id: Optional[str] = None
+) -> tuple:
     """
     Prepare a problem document for ChromaDB storage.
 
     Issue #398: Extracted from _store_problems_batch_to_chromadb.
+    Issue #1710: source_id for per-project scoping.
     Returns tuple of (id, document, metadata).
     """
     file_category = problem.get("file_category", FILE_CATEGORY_CODE)
@@ -761,15 +764,21 @@ Suggestion: {problem.get('suggestion', '')}
         "description": problem.get("description", ""),
         "suggestion": problem.get("suggestion", ""),
     }
+    if source_id:
+        metadata["source_id"] = source_id
 
-    doc_id = f"problem_{problem_idx}_{problem.get('type', 'unknown')}"
+    prefix = f"{source_id}_" if source_id else ""
+    doc_id = f"{prefix}problem_{problem_idx}_{problem.get('type', 'unknown')}"
     return doc_id, problem_doc, metadata
 
 
 async def _store_problems_batch_to_chromadb(
-    collection, problems: list, start_idx: int
+    collection,
+    problems: list,
+    start_idx: int,
+    source_id: Optional[str] = None,
 ) -> None:
-    """Store multiple problems to ChromaDB collection in batch (Issue #398: refactored)."""
+    """Store multiple problems to ChromaDB in batch (#398, #1710: source_id)."""
     if not collection or not problems:
         return
 
@@ -777,7 +786,7 @@ async def _store_problems_batch_to_chromadb(
         ids, documents, metadatas = [], [], []
         for i, problem in enumerate(problems):
             doc_id, problem_doc, metadata = _prepare_problem_document(
-                problem, start_idx + i
+                problem, start_idx + i, source_id=source_id
             )
             ids.append(doc_id)
             documents.append(problem_doc)
@@ -868,6 +877,7 @@ async def _process_file_problems(
     analysis_results: Dict,
     immediate_store_collection,
     file_category: str = FILE_CATEGORY_CODE,
+    source_id: Optional[str] = None,
 ) -> None:
     """
     Process problems from file analysis and store to ChromaDB.
@@ -901,7 +911,10 @@ async def _process_file_problems(
 
     # Batch store all problems from this file in a single operation
     await _store_problems_batch_to_chromadb(
-        immediate_store_collection, file_problems, start_idx
+        immediate_store_collection,
+        file_problems,
+        start_idx,
+        source_id=source_id,
     )
 
 
@@ -2588,20 +2601,13 @@ async def _iterate_and_process_files_parallel(
     progress_callback,
     total_files: int,
     redis_client=None,
+    source_id: Optional[str] = None,
 ) -> Tuple[Dict, int, int]:
     """
     Process files in parallel and return aggregated results.
 
-    Issue #711: New parallel processing implementation that returns
-    aggregated results instead of mutating shared state.
-
-    Args:
-        all_files: List of file paths to process
-        root_path_obj: Root path for relative path computation
-        immediate_store_collection: ChromaDB collection for problem storage
-        progress_callback: Callback for progress updates
-        total_files: Total file count for progress
-        redis_client: Optional Redis client for incremental indexing
+    Issue #711: New parallel processing implementation.
+    Issue #1710: source_id for per-project problem storage.
 
     Returns:
         Tuple of (analysis_results dict, files_processed, files_skipped)
@@ -2626,10 +2632,13 @@ async def _iterate_and_process_files_parallel(
 
     analysis_results = _aggregate_all_results(all_results)
 
-    # Store all problems to ChromaDB in batch
+    # Store all problems to ChromaDB in batch (#1710: source_id)
     if immediate_store_collection and analysis_results["all_problems"]:
         await _store_problems_batch_to_chromadb(
-            immediate_store_collection, analysis_results["all_problems"], 0
+            immediate_store_collection,
+            analysis_results["all_problems"],
+            0,
+            source_id=source_id,
         )
 
     # Calculate statistics
@@ -2659,6 +2668,7 @@ async def _process_single_file(
     analysis_results: Dict,
     immediate_store_collection,
     redis_client=None,
+    source_id: Optional[str] = None,
 ) -> Tuple[bool, bool]:
     """
     Process a single file during codebase scan.
@@ -2706,6 +2716,7 @@ async def _process_single_file(
         analysis_results,
         immediate_store_collection,
         file_category,
+        source_id=source_id,
     )
 
     # Issue #539: Store file hash after successful processing
@@ -2723,6 +2734,7 @@ async def _iterate_files_sequential(
     progress_callback,
     total_files: int,
     redis_client=None,
+    source_id: Optional[str] = None,
 ) -> Tuple[int, int]:
     """
     Process files sequentially (fallback when parallel mode disabled).
@@ -2741,6 +2753,7 @@ async def _iterate_files_sequential(
             analysis_results,
             immediate_store_collection,
             redis_client,
+            source_id=source_id,
         )
         if skipped:
             files_skipped += 1
@@ -2768,12 +2781,14 @@ async def _iterate_and_process_files(
     progress_callback,
     total_files: int,
     redis_client=None,
+    source_id: Optional[str] = None,
 ) -> Tuple[int, int]:
     """
     Iterate through files and process each one.
 
     Issue #398: Extracted from scan_codebase to reduce method length.
     Issue #620: Refactored with helper functions. Issue #620.
+    Issue #1710: source_id for per-project problem storage.
     """
     if PARALLEL_MODE_ENABLED:
         logger.info(
@@ -2791,6 +2806,7 @@ async def _iterate_and_process_files(
             progress_callback,
             total_files,
             redis_client,
+            source_id=source_id,
         )
         analysis_results.update(parallel_results)
         return files_processed, files_skipped
@@ -2803,6 +2819,7 @@ async def _iterate_and_process_files(
         progress_callback,
         total_files,
         redis_client,
+        source_id=source_id,
     )
 
 
@@ -2865,6 +2882,7 @@ async def scan_codebase(
     progress_callback: Optional[callable] = None,
     immediate_store_collection=None,
     redis_client=None,
+    source_id: Optional[str] = None,
 ) -> Metadata:
     """
     Scan the entire codebase using MCP-like file operations.
@@ -2899,6 +2917,7 @@ async def scan_codebase(
             progress_callback,
             total_files,
             redis_client,
+            source_id=source_id,
         )
 
         # Issue #620: Use helper for stats logging
@@ -2911,7 +2930,7 @@ async def scan_codebase(
 
     except Exception as e:
         logger.error("Error scanning codebase: %s", e)
-        raise HTTPException(status_code=500, detail=f"Codebase scan failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Codebase scan failed")
 
 
 def _update_task_phase(task_id: str, phase_id: str, status: str) -> None:
@@ -3071,6 +3090,7 @@ async def _run_indexing_phases(
         root_path,
         progress_callback=update_progress,
         immediate_store_collection=code_collection,
+        source_id=source_id,
     )
 
     update_stats(

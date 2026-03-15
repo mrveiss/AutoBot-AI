@@ -218,7 +218,7 @@ async def index_codebase(request: IndexRequest):
 
     except Exception as e:
         logger.error("Indexing endpoint error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Indexing failed")
 
 
 @with_error_handling(
@@ -290,7 +290,7 @@ async def search_code(request: SearchRequest):
 
     except Exception as e:
         logger.error("Search endpoint error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Search failed")
 
 
 @with_error_handling(
@@ -372,7 +372,7 @@ async def get_search_status():
 
     except Exception as e:
         logger.error("Status endpoint error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Status check failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Status check failed")
 
 
 @with_error_handling(
@@ -410,7 +410,7 @@ async def clear_search_cache():
 
     except Exception as e:
         logger.error("Cache clear endpoint error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Cache clear failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Cache clear failed")
 
 
 @with_error_handling(
@@ -826,7 +826,7 @@ async def analyze_declarations(request: AnalyticsRequest):
 
     except Exception as e:
         logger.error("Declaration analysis error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Analysis failed")
 
 
 @with_error_handling(
@@ -873,9 +873,7 @@ async def find_code_duplicates(request: AnalyticsRequest):
 
     except Exception as e:
         logger.error("Duplicate detection error: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Duplicate detection failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Duplicate detection failed")
 
 
 @with_error_handling(
@@ -941,7 +939,7 @@ async def get_codebase_statistics():
 
     except Exception as e:
         logger.error("Statistics error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Statistics failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Statistics failed")
 
 
 def _build_refactor_response(root_path: str, suggestions: list) -> dict:
@@ -1005,4 +1003,4 @@ async def get_refactor_suggestions(request: AnalyticsRequest):
 
     except Exception as e:
         logger.error("Refactor suggestions error: %s", e)
-        raise HTTPException(status_code=500, detail=f"Suggestions failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Suggestions failed")

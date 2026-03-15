@@ -518,7 +518,7 @@ class HybridSearchEngine:
 
         except Exception as e:
             self.logger.error("Error in search explanation: %s", e)
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
 
 # Global instance (thread-safe)

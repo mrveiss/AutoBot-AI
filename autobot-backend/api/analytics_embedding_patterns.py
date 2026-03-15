@@ -267,7 +267,7 @@ class EmbeddingPatternAnalyzer:
 
         except Exception as e:
             logger.error("Failed to record embedding usage: %s", e)
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
     async def _update_stats(self, request: EmbeddingUsageRequest, cost: float):
         """Update aggregated statistics.
@@ -387,7 +387,7 @@ class EmbeddingPatternAnalyzer:
 
         except Exception as e:
             logger.error("Failed to get embedding stats: %s", e)
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
     def _parse_model_stats(self, key: bytes, stats: dict) -> Optional[dict]:
         """Parse model stats from Redis hash. (Issue #315 - extracted)"""
@@ -445,7 +445,7 @@ class EmbeddingPatternAnalyzer:
 
         except Exception as e:
             logger.error("Failed to get model comparison: %s", e)
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
     def _build_batch_recommendations(
         self, avg_batch_size: float, tokens_per_second: float
@@ -516,7 +516,7 @@ class EmbeddingPatternAnalyzer:
 
         except Exception as e:
             logger.error("Failed to get optimization recommendations: %s", e)
-            return {"status": "error", "error": str(e)}
+            return {"status": "error", "error": "Internal server error"}
 
 
 # =============================================================================
@@ -650,12 +650,13 @@ async def embedding_analytics_health(
             },
         )
     except Exception as e:
+        logger.exception("Unexpected error: %s", e)
         return JSONResponse(
             status_code=503,
             content={
                 "status": "unhealthy",
                 "service": "embedding_analytics",
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.now().isoformat(),
             },
         )

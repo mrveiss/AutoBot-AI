@@ -892,7 +892,7 @@ async def mine_log_patterns(
 
     except Exception as e:
         logger.error("Error mining log patterns: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _analyze_pattern_lines(
@@ -962,7 +962,7 @@ async def get_pattern_details(
         raise
     except Exception as e:
         logger.error("Error getting pattern details: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -1018,7 +1018,7 @@ async def get_error_hotspots(
 
     except Exception as e:
         logger.error("Error getting error hotspots: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _aggregate_log_stats(
@@ -1084,7 +1084,7 @@ async def get_log_stats(
 
     except Exception as e:
         logger.error("Error getting log stats: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -1129,4 +1129,4 @@ async def get_realtime_summary(
 
     except Exception as e:
         logger.error("Error getting realtime summary: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

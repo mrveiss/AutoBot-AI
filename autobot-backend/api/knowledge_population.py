@@ -1153,7 +1153,7 @@ async def _scan_and_store_man_pages(
         logger.error("Man page scan failed: %s", e)
         return {
             "status": "error",
-            "message": str(e),
+            "message": "Operation failed",
             "items_added": 0,
             "items_failed": 0,
         }

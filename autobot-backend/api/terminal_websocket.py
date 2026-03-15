@@ -65,7 +65,7 @@ class TerminalWebSocketHandler:
                 websocket,
                 {
                     "type": "error",
-                    "message": f"Failed to initialize terminal session: {str(e)}",
+                    "message": "Failed to initialize terminal session",
                     "details": str(e),
                 },
             )
@@ -220,7 +220,12 @@ class TerminalWebSocketHandler:
         except Exception as e:
             logger.error("Tab completion error: %s", e)
             await self._send_message_to_chat(
-                chat_id, {"type": "tab_completion", "completions": [], "error": str(e)}
+                chat_id,
+                {
+                    "type": "tab_completion",
+                    "completions": [],
+                    "error": "Internal server error",
+                },
             )
 
     async def _handle_history_get(self, chat_id: str, data: Dict[str, Any]) -> None:
@@ -236,7 +241,8 @@ class TerminalWebSocketHandler:
         except Exception as e:
             logger.error("History get error: %s", e)
             await self._send_message_to_chat(
-                chat_id, {"type": "history", "commands": [], "error": str(e)}
+                chat_id,
+                {"type": "history", "commands": [], "error": "Internal server error"},
             )
 
     async def _handle_history_search(self, chat_id: str, data: Dict[str, Any]) -> None:
@@ -253,7 +259,12 @@ class TerminalWebSocketHandler:
         except Exception as e:
             logger.error("History search error: %s", e)
             await self._send_message_to_chat(
-                chat_id, {"type": "history_search", "matches": [], "error": str(e)}
+                chat_id,
+                {
+                    "type": "history_search",
+                    "matches": [],
+                    "error": "Internal server error",
+                },
             )
 
     async def _process_client_message(self, chat_id: str, data: Dict[str, Any]):

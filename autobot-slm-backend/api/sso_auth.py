@@ -96,13 +96,13 @@ async def initiate_sso_login(
     except SSOProviderNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Internal server error",
         ) from e
     except SSOServiceError as e:
         logger.error("Failed to initiate SSO login: %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         ) from e
 
 
@@ -189,12 +189,12 @@ async def ldap_login(
         logger.error("LDAP login failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
+            detail="Internal server error",
         ) from e
     except SSOProviderNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Internal server error",
         ) from e
 
 

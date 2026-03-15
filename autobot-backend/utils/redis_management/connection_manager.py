@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import redis
 import redis.asyncio as async_redis
+from config import config as config_manager
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import RetryConfig, TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
@@ -45,8 +46,6 @@ from utils.redis_management.statistics import (
     RedisStats,
 )
 from utils.redis_management.types import DATABASE_MAPPING, ConnectionState
-
-from config import config as config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -863,7 +862,9 @@ class RedisConnectionManager:
                 f"Failed to get async Redis client for database '{database_name}': {e}"
             )
             self._record_failure(database_name, e)
-            self._update_stats(database_name, success=False, error=str(e))
+            self._update_stats(
+                database_name, success=False, error="Internal server error"
+            )
             self._states[database_name] = ConnectionState.FAILED
             return None
 

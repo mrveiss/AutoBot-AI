@@ -56,7 +56,7 @@ async def create_autobot_user(
     except Exception as e:
         logger.error("Failed to create AutoBot user: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error"
         ) from e
 
 
@@ -129,7 +129,9 @@ async def update_autobot_user(
         return UserResponse.model_validate(user)
     except Exception as e:
         logger.error("Failed to update AutoBot user: %s", e)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
+        ) from e
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -147,4 +149,6 @@ async def delete_autobot_user(
         await user_service.delete_user(user_id)
     except Exception as e:
         logger.error("Failed to delete AutoBot user: %s", e)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
+        ) from e

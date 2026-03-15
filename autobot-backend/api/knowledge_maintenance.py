@@ -563,7 +563,9 @@ async def _vectorize_single_document(
     except Exception as e:
         logger.error("Vectorization failed for %s: %s", command, e)
         results["failed"] += 1
-        _add_vectorization_detail(results, doc_id, command, "error", reason=str(e))
+        _add_vectorization_detail(
+            results, doc_id, command, "error", reason="Internal server error"
+        )
 
 
 async def _process_vectorization(kb, scanner, result: dict, machine_id: str) -> dict:

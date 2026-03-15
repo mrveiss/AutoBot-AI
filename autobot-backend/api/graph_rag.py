@@ -239,13 +239,11 @@ async def graph_rag_search(
 
     except ValueError as e:
         logger.warning("[%s] Validation error: %s", request_id, e)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Internal server error")
 
     except Exception as e:
         logger.error("[%s] Graph-RAG search failed: %s", request_id, e, exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Graph-RAG search failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Graph-RAG search failed")
 
 
 @with_error_handling(
@@ -309,7 +307,7 @@ async def graph_rag_health(
                 "status": "unhealthy",
                 "components": {},
                 "timestamp": datetime.utcnow().isoformat(),
-                "error": str(e),
+                "error": "Internal server error",
             },
             media_type="application/json; charset=utf-8",
         )
@@ -360,6 +358,4 @@ async def graph_rag_metrics(
 
     except Exception as e:
         logger.error("Metrics retrieval failed: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve metrics: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to retrieve metrics")

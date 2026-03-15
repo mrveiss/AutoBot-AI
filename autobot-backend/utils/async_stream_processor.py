@@ -475,6 +475,6 @@ async def process_stream_with_cancellation(
             completion_signal=StreamCompletionSignal.ERROR_CONDITION,
             total_chunks=0,
             processing_time=processing_time,
-            metadata={"provider": provider, "error": str(e)},
+            metadata={"provider": provider, "error": "Internal server error"},
             error_message=str(e),
         )

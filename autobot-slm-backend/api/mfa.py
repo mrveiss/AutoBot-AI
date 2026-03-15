@@ -62,7 +62,7 @@ async def setup_mfa(
         return MFASetupResponse(**result)
     except MFAServiceError as e:
         logger.warning("MFA setup error for %s: %s", username, e)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Internal server error")
 
 
 @router.post("/verify-setup")
@@ -84,11 +84,11 @@ async def verify_mfa_setup(
         await mfa_service.verify_setup(user.id, request.code)
         logger.info("MFA enabled for user: %s", username)
         return {"success": True, "message": "MFA enabled"}
-    except InvalidTOTPError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except InvalidTOTPError:
+        raise HTTPException(status_code=400, detail="Internal server error")
     except MFAServiceError as e:
         logger.warning("MFA verification error for %s: %s", username, e)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Internal server error")
 
 
 @router.post("/verify-login")
@@ -129,8 +129,8 @@ async def verify_mfa_login(
         logger.info("MFA login verified for user: %s", user.username)
         return await auth_service.create_token_response(user)
 
-    except MFANotEnabledError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except MFANotEnabledError:
+        raise HTTPException(status_code=400, detail="Internal server error")
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid user ID")
 
@@ -156,7 +156,7 @@ async def disable_mfa(
         return {"success": True, "message": "MFA disabled"}
     except MFAServiceError as e:
         logger.warning("MFA disable error for %s: %s", username, e)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Internal server error")
 
 
 @router.get("/status", response_model=MFAStatusResponse)
@@ -198,7 +198,7 @@ async def regenerate_backup_codes(
         return BackupCodesResponse(backup_codes=codes)
     except MFAServiceError as e:
         logger.warning("Backup code regeneration error for %s: %s", username, e)
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Internal server error")
 
 
 async def _get_user_by_username(db: AsyncSession, username: str) -> User:

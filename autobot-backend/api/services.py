@@ -217,7 +217,7 @@ async def get_services(admin_check: bool = Depends(check_admin_permission)):
 
     except Exception as e:
         logger.error("Failed to get services: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to get services: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get services")
 
 
 @with_error_handling(
@@ -285,9 +285,7 @@ async def get_services_health(admin_check: bool = Depends(check_admin_permission
 
     except Exception as e:
         logger.error("Failed to get services health: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get services health: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get services health")
 
 
 def _build_vm_definitions() -> list:
@@ -365,9 +363,7 @@ async def get_vms_status(admin_check: bool = Depends(check_admin_permission)):
 
     except Exception as e:
         logger.error("Failed to get VM status: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get VM status: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get VM status")
 
 
 @with_error_handling(
@@ -409,9 +405,7 @@ async def get_version(admin_check: bool = Depends(check_admin_permission)):
 
     except Exception as e:
         logger.error("Failed to get version info: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get version info: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get version info")
 
 
 # Note: Monitoring endpoints are handled by the separate monitoring router

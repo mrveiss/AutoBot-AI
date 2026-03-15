@@ -249,10 +249,10 @@ async def approve_takeover(
         logger.info("Takeover approved: %s -> %s", request_id, session_id)
         return {"success": True, "session_id": session_id}
 
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Internal server error")
+    except RuntimeError:
+        raise HTTPException(status_code=409, detail="Internal server error")
 
 
 @with_error_handling(
@@ -283,8 +283,8 @@ async def execute_takeover_action(
         )
         return {"success": True, "result": result}
 
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Internal server error")
 
 
 @with_error_handling(
@@ -527,7 +527,7 @@ async def get_system_health(
 
     except Exception as e:
         logger.error("Health check failed: %s", e)
-        return {"status": "unhealthy", "error": str(e)}
+        return {"status": "unhealthy", "error": "Internal server error"}
 
 
 # WebSocket endpoint for real-time monitoring
@@ -558,7 +558,9 @@ async def monitoring_websocket(websocket: WebSocket):
                 break
             except Exception as e:
                 logger.error("Error in monitoring WebSocket: %s", e)
-                await websocket.send_json({"type": "error", "message": str(e)})
+                await websocket.send_json(
+                    {"type": "error", "message": "Operation failed"}
+                )
                 break
 
     except WebSocketDisconnect:

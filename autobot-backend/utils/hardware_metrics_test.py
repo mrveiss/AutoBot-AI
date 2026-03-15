@@ -125,7 +125,7 @@ class Phase9MonitoringSystemTest:
             logger.error(f"   ❌ Hardware detection test failed: {e}")
             self.test_results["hardware_detection"] = {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
             }
 
     async def test_performance_monitor_initialization(self):
@@ -163,7 +163,7 @@ class Phase9MonitoringSystemTest:
             logger.error(f"   ❌ Performance monitor initialization test failed: {e}")
             self.test_results["monitor_initialization"] = {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
             }
 
     async def test_gpu_capabilities_and_optimization(self):
@@ -207,7 +207,10 @@ class Phase9MonitoringSystemTest:
 
         except Exception as e:
             logger.error(f"   ❌ GPU capabilities test failed: {e}")
-            self.test_results["gpu_capabilities"] = {"success": False, "error": str(e)}
+            self.test_results["gpu_capabilities"] = {
+                "success": False,
+                "error": "Internal server error",
+            }
 
     async def test_metrics_collection(self):
         """Test metrics collection functionality"""
@@ -269,7 +272,7 @@ class Phase9MonitoringSystemTest:
             logger.error(f"   ❌ Metrics collection test failed: {e}")
             self.test_results["metrics_collection"] = {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
             }
 
     async def test_realtime_monitoring(self):
@@ -316,7 +319,7 @@ class Phase9MonitoringSystemTest:
             logger.error(f"   ❌ Real-time monitoring test failed: {e}")
             self.test_results["realtime_monitoring"] = {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
             }
 
     async def test_performance_dashboard(self):
@@ -367,7 +370,7 @@ class Phase9MonitoringSystemTest:
             logger.error(f"   ❌ Performance dashboard test failed: {e}")
             self.test_results["performance_dashboard"] = {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
             }
 
     async def test_alert_system(self):
@@ -428,7 +431,10 @@ class Phase9MonitoringSystemTest:
 
         except Exception as e:
             logger.error(f"   ❌ Alert system test failed: {e}")
-            self.test_results["alert_system"] = {"success": False, "error": str(e)}
+            self.test_results["alert_system"] = {
+                "success": False,
+                "error": "Internal server error",
+            }
 
     async def test_optimization_engine(self):
         """Test optimization engine functionality"""
@@ -504,7 +510,7 @@ class Phase9MonitoringSystemTest:
             logger.error(f"   ❌ Optimization engine test failed: {e}")
             self.test_results["optimization_engine"] = {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
             }
 
     async def test_benchmark_suite(self):
@@ -564,7 +570,10 @@ class Phase9MonitoringSystemTest:
 
         except Exception as e:
             logger.error(f"   ❌ Benchmark suite test failed: {e}")
-            self.test_results["benchmark_suite"] = {"success": False, "error": str(e)}
+            self.test_results["benchmark_suite"] = {
+                "success": False,
+                "error": "Internal server error",
+            }
 
     async def test_configuration_management(self):
         """Test configuration management functionality"""
@@ -638,7 +647,7 @@ class Phase9MonitoringSystemTest:
             logger.error(f"   ❌ Configuration management test failed: {e}")
             self.test_results["configuration_management"] = {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
             }
 
     async def generate_test_report(self):

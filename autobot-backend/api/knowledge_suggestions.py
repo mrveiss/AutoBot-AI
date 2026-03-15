@@ -92,7 +92,7 @@ async def suggest_tags(request: SuggestTagsRequest):
         raise
     except Exception as e:
         logger.error("Tag suggestion failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/suggestions/categories")
@@ -155,7 +155,7 @@ async def suggest_categories(request: SuggestCategoriesRequest):
         raise
     except Exception as e:
         logger.error("Category suggestion failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 async def _call_kb_suggest_all(request: "SuggestAllRequest") -> dict:
@@ -197,7 +197,7 @@ async def suggest_all(request: SuggestAllRequest):
         raise
     except Exception as e:
         logger.error("Combined suggestion failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _validate_fact_id(fact_id: str) -> None:
@@ -287,4 +287,4 @@ async def auto_apply_suggestions(fact_id: str, request: AutoApplySuggestionsRequ
         raise
     except Exception as e:
         logger.error("Auto-apply suggestions failed for %s: %s", fact_id, e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

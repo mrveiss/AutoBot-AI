@@ -133,10 +133,10 @@ async def _validate_and_get_path(
         try:
             path_exists = target_path.exists()
             path_is_dir = target_path.is_dir() if path_exists else False
-        except OSError as e:
+        except OSError:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot access path '{request.root_path}': {e}",
+                detail="Cannot access path '{request.root_path}'",
             )
         if not path_exists:
             raise HTTPException(
@@ -404,7 +404,7 @@ def _cancel_active_task(task_id: str, existing_task) -> JSONResponse:
             {
                 "success": False,
                 "task_id": task_id,
-                "message": f"Failed to cancel job: {str(e)}",
+                "message": "Failed to cancel job",
             }
         )
 

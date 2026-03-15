@@ -78,9 +78,9 @@ async def test_connection(request: ConnectionTestRequest) -> Dict[str, Any]:
             "message": health.message,
             "details": health.details,
         }
-    except Exception as e:
+    except Exception:
         logger.exception("Connection test failed for %s", request.provider)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/providers")
@@ -148,9 +148,9 @@ async def list_pipelines(
         if provider == "jenkins":
             return await integration.execute_action("list_jobs", params)
         return await integration.execute_action("list_pipelines", params)
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to list pipelines for %s", provider)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{provider}/pipelines/{pipeline_id}/status")
@@ -186,11 +186,11 @@ async def get_pipeline_status(
         params = _build_status_params(provider, pipeline_id, job_name, project_id)
         action = _get_status_action(provider)
         return await integration.execute_action(action, params)
-    except Exception as e:
+    except Exception:
         logger.exception(
             "Failed to get status for %s pipeline %s", provider, pipeline_id
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{provider}/pipelines/{pipeline_id}/trigger")
@@ -231,9 +231,9 @@ async def trigger_pipeline(
             provider, pipeline_id, project_id, request.parameters
         )
         return await integration.execute_action("trigger_pipeline", params)
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to trigger %s pipeline %s", provider, pipeline_id)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/{provider}/pipelines/{pipeline_id}/logs")
@@ -275,9 +275,9 @@ async def get_pipeline_logs(
         return await integration.execute_action("get_build_log", params)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid build number")
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to get logs for %s build %s", provider, pipeline_id)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _create_integration(

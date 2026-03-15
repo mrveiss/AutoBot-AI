@@ -14,6 +14,7 @@ Consolidated from agent.py and agent_enhanced.py per Issue #708.
 import asyncio
 import json
 import logging
+import shlex
 import time
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -276,8 +277,9 @@ async def _run_subprocess(command: str, security_layer, user_role: str) -> tuple
     """
     process: Optional[asyncio.subprocess.Process] = None
     try:
-        process = await asyncio.create_subprocess_shell(
-            command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        cmd_parts = shlex.split(command)
+        process = await asyncio.create_subprocess_exec(
+            *cmd_parts, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await asyncio.wait_for(
             process.communicate(),
@@ -309,7 +311,7 @@ async def _run_subprocess(command: str, security_layer, user_role: str) -> tuple
             {
                 "command": command,
                 "reason": "subprocess_creation_failed",
-                "error": str(e),
+                "error": "Internal server error",
             },
         )
         raise SubprocessError(
@@ -457,7 +459,11 @@ async def _publish_approval_to_redis(
             "command_approval",
             user_role,
             "failure",
-            {"task_id": task_id, "approved": approved, "error": str(e)},
+            {
+                "task_id": task_id,
+                "approved": approved,
+                "error": "Internal server error",
+            },
         )
         raise InternalError(
             message="Failed to forward command approval. Please try again.",
@@ -732,13 +738,13 @@ async def _execute_goal_with_error_handling(
         _record_goal_metrics(task_start_time, "network_error")
         raise InternalError(
             message="Network error during goal execution. Please try again.",
-            details={"error_type": "network", "error": str(e)},
+            details={"error_type": "network", "error": "Internal server error"},
         ) from e
     except Exception as e:
         logger.error("Failed to execute goal: %s", e, exc_info=True)
         _record_goal_metrics(task_start_time, "error")
         raise InternalError(
-            message=f"Goal execution failed: {str(e)}",
+            message="Goal execution failed",
             details={"goal": goal[:100], "error_type": type(e).__name__},
         ) from e
 
@@ -842,9 +848,11 @@ async def pause_agent_api(
         await orchestrator.pause_agent()
     except Exception as e:
         logger.error("Failed to pause agent: %s", e, exc_info=True)
-        security_layer.audit_log("agent_pause", user_role, "failure", {"error": str(e)})
+        security_layer.audit_log(
+            "agent_pause", user_role, "failure", {"error": "Internal server error"}
+        )
         raise InternalError(
-            message=f"Failed to pause agent: {str(e)}",
+            message="Failed to pause agent",
             details={"error_type": type(e).__name__},
         ) from e
 
@@ -893,10 +901,10 @@ async def resume_agent_api(
     except Exception as e:
         logger.error("Failed to resume agent: %s", e, exc_info=True)
         security_layer.audit_log(
-            "agent_resume", user_role, "failure", {"error": str(e)}
+            "agent_resume", user_role, "failure", {"error": "Internal server error"}
         )
         raise InternalError(
-            message=f"Failed to resume agent: {str(e)}",
+            message="Failed to resume agent",
             details={"error_type": type(e).__name__},
         ) from e
 
@@ -1482,12 +1490,12 @@ async def enhanced_agent_health():
             "timestamp": datetime.utcnow().isoformat(),
         }
 
-    except Exception as e:
+    except Exception:
         return {
             "status": "degraded",
             "ai_stack_available": False,
             "multi_agent_coordination": False,
             "enhanced_capabilities": False,
-            "error": str(e),
+            "error": "Internal server error",
             "timestamp": datetime.utcnow().isoformat(),
         }

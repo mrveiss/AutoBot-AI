@@ -199,7 +199,7 @@ async def query_audit_logs(
         raise
     except Exception as e:
         logger.error("Audit log query failed: %s", e)
-        raise_server_error("API_0003", f"Audit log query error: {str(e)}")
+        raise_server_error("API_0003", "Audit log query error")
 
 
 @with_error_handling(
@@ -231,7 +231,7 @@ async def get_audit_statistics(
 
     except Exception as e:
         logger.error("Failed to get audit statistics: %s", e)
-        raise_server_error("API_0003", f"Statistics error: {str(e)}")
+        raise_server_error("API_0003", "Statistics error")
 
 
 @with_error_handling(
@@ -275,7 +275,7 @@ async def get_session_audit_trail(
 
     except Exception as e:
         logger.error("Session audit trail query failed: %s", e)
-        raise_server_error("API_0003", f"Session audit query error: {str(e)}")
+        raise_server_error("API_0003", "Session audit query error")
 
 
 @with_error_handling(
@@ -319,7 +319,7 @@ async def get_user_audit_trail(
 
     except Exception as e:
         logger.error("User audit trail query failed: %s", e)
-        raise_server_error("API_0003", f"User audit query error: {str(e)}")
+        raise_server_error("API_0003", "User audit query error")
 
 
 @with_error_handling(
@@ -368,7 +368,7 @@ async def get_failed_operations(
 
     except Exception as e:
         logger.error("Failed operations query error: %s", e)
-        raise_server_error("API_0003", f"Failed operations query error: {str(e)}")
+        raise_server_error("API_0003", "Failed operations query error")
 
 
 @with_error_handling(
@@ -413,7 +413,7 @@ async def cleanup_old_logs(
         raise
     except Exception as e:
         logger.error("Audit log cleanup failed: %s", e)
-        raise_server_error("API_0003", f"Cleanup error: {str(e)}")
+        raise_server_error("API_0003", "Cleanup error")
 
 
 @with_error_handling(
@@ -449,4 +449,4 @@ async def list_operation_types(
 
     except Exception as e:
         logger.error("Failed to list operations: %s", e)
-        raise_server_error("API_0003", f"Operation listing error: {str(e)}")
+        raise_server_error("API_0003", "Operation listing error")

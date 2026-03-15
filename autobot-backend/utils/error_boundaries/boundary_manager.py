@@ -415,7 +415,7 @@ class ErrorBoundaryManager:
 
         except Exception as e:
             logger.error("Failed to get error statistics: %s", e)
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     @contextmanager
     def error_boundary(self, component: str, function: str, **context_kwargs):

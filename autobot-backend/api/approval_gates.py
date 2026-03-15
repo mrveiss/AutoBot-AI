@@ -265,10 +265,10 @@ async def approve(
             username,
             body.comment,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         )
     return _to_response(approval)
 
@@ -292,10 +292,10 @@ async def reject(
             username,
             body.comment,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         )
     return _to_response(approval)
 
@@ -319,10 +319,10 @@ async def request_revision(
             username,
             body.comment,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         )
     return _to_response(approval)
 
@@ -345,10 +345,10 @@ async def resubmit(
             body.description,
             body.context,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         )
     return _to_response(approval)
 
@@ -374,10 +374,10 @@ async def add_comment(
             body.body,
             body.author_type.value,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Internal server error",
         )
     return CommentResponse(
         id=str(comment.id),
@@ -408,10 +408,10 @@ async def link_task(
             body.task_id,
             body.task_type,
         )
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Internal server error",
         )
     return TaskApprovalLinkResponse(
         id=str(link.id),

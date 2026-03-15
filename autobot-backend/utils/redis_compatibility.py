@@ -427,7 +427,7 @@ async def test_async_migration(database: str = "main") -> dict:
             "tests": {},
             "overall_success": False,
             "migration_ready": False,
-            "error": str(e),
+            "error": "Internal server error",
         }
 
 

@@ -131,8 +131,11 @@ async def health_check():
                         "status": "healthy",
                         "agent_type": agent_type,
                     }
-            except Exception as e:
-                health_status[agent_type] = {"status": "unhealthy", "error": str(e)}
+            except Exception:
+                health_status[agent_type] = {
+                    "status": "unhealthy",
+                    "error": "Internal server error",
+                }
                 overall_healthy = False
 
         status_code = 200 if overall_healthy else 503
@@ -146,10 +149,11 @@ async def health_check():
             },
         )
 
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
+    except Exception:
+        logger.error("Health check failed")
         return JSONResponse(
-            status_code=503, content={"status": "unhealthy", "error": str(e)}
+            status_code=503,
+            content={"status": "unhealthy", "error": "Internal server error"},
         )
 
 
@@ -216,13 +220,17 @@ async def process_agent_request(agent_type: str, request: Request):
         logger.error("Error processing request for %s: %s", agent_type, e)
         logger.error(traceback.format_exc())
 
-        req_id = getattr(agent_request, "request_id", "unknown") if agent_request else "unknown"
+        req_id = (
+            getattr(agent_request, "request_id", "unknown")
+            if agent_request
+            else "unknown"
+        )
         error_response = AgentResponse(
             request_id=req_id,
             agent_type=agent_type,
             status="error",
             result=None,
-            error=f"Processing error: {str(e)}",
+            error="Processing error",
         )
 
         return JSONResponse(status_code=500, content=error_response.to_dict())
@@ -249,11 +257,15 @@ async def agent_health(agent_type: str):
                 "message": "Basic health check passed",
             }
 
-    except Exception as e:
-        logger.error(f"Health check failed for {agent_type}: {e}")
+    except Exception:
+        logger.error("Health check failed for {agent_type}")
         return JSONResponse(
             status_code=503,
-            content={"agent_type": agent_type, "status": "unhealthy", "error": str(e)},
+            content={
+                "agent_type": agent_type,
+                "status": "unhealthy",
+                "error": "Internal server error",
+            },
         )
 
 
@@ -276,10 +288,11 @@ async def agent_capabilities(agent_type: str):
 
         return {"agent_type": agent_type, "capabilities": capabilities}
 
-    except Exception as e:
-        logger.error(f"Error getting capabilities for {agent_type}: {e}")
+    except Exception:
+        logger.error("Error getting capabilities for {agent_type}")
         return JSONResponse(
-            status_code=500, content={"agent_type": agent_type, "error": str(e)}
+            status_code=500,
+            content={"agent_type": agent_type, "error": "Internal server error"},
         )
 
 
@@ -300,8 +313,11 @@ async def get_statistics():
                     "agent_type": agent_type,
                     "status": "active",
                 }
-        except Exception as e:
-            stats["agents"][agent_type] = {"agent_type": agent_type, "error": str(e)}
+        except Exception:
+            stats["agents"][agent_type] = {
+                "agent_type": agent_type,
+                "error": "Internal server error",
+            }
 
     return stats
 

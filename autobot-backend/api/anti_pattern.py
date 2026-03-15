@@ -261,7 +261,7 @@ async def analyze_anti_patterns(request: AnalysisRequest):
 
     except Exception as e:
         logger.error("Anti-pattern analysis failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Analysis failed")
 
 
 @with_error_handling(
@@ -295,9 +295,7 @@ async def get_cached_analysis():
 
     except Exception as e:
         logger.error("Failed to retrieve cached analysis: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to retrieve cache: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to retrieve cache")
 
 
 @with_error_handling(
@@ -347,7 +345,7 @@ async def detect_god_classes(request: AnalysisRequest):
 
     except Exception as e:
         logger.error("God class detection failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -392,7 +390,7 @@ async def detect_circular_dependencies(request: AnalysisRequest):
 
     except Exception as e:
         logger.error("Circular dependency detection failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -438,7 +436,7 @@ async def detect_feature_envy(request: AnalysisRequest):
 
     except Exception as e:
         logger.error("Feature envy detection failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -495,7 +493,7 @@ async def detect_code_smells(request: AnalysisRequest):
 
     except Exception as e:
         logger.error("Code smell detection failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -540,7 +538,7 @@ async def detect_dead_code(request: AnalysisRequest):
 
     except Exception as e:
         logger.error("Dead code detection failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -592,7 +590,7 @@ async def get_health_score(request: AnalysisRequest):
 
     except Exception as e:
         logger.error("Health score calculation failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/types")

@@ -528,9 +528,9 @@ def _check_celery_worker_available() -> tuple[bool, str]:
             )
 
         return True, ""
-    except Exception as e:
-        logger.warning("Celery worker check failed: %s", str(e))
-        return False, f"Cannot verify worker status: {str(e)}"
+    except Exception:
+        logger.warning("Celery worker check failed: %s", "Internal server error")
+        return False, "Cannot verify worker status"
 
 
 @with_error_handling(

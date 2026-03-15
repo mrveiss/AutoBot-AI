@@ -84,8 +84,8 @@ async def _get_realtime_metrics() -> Dict[str, Any]:
             }
             for name, metric in current_metrics.items()
         }
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        return {"error": "Internal server error"}
 
 
 async def _get_code_analysis_status() -> Dict[str, Any]:
@@ -168,8 +168,8 @@ async def _check_service(
             "response_time": response_time,
             "status_code": response.status_code,
         }
-    except Exception as e:
-        return service_name, {"status": "unreachable", "error": str(e)}
+    except Exception:
+        return service_name, {"status": "unreachable", "error": "Internal server error"}
 
 
 def _check_resource_alerts(system_resources: Dict) -> List[Dict[str, Any]]:

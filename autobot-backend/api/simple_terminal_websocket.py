@@ -144,7 +144,7 @@ class SimpleTerminalSession(BaseTerminalWebSocket):
         except Exception as e:
             logger.error(f"Workflow control error: {e}")
             await self.send_message(
-                {"type": "error", "message": f"Workflow message error: {str(e)}"}
+                {"type": "error", "message": "Workflow message error"}
             )
 
     async def disconnect(self):

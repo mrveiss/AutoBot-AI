@@ -69,7 +69,7 @@ async def get_phase_management_status():
         }
     except Exception as e:
         logger.error("Error getting phase management status: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -91,7 +91,7 @@ async def run_full_phase_validation():
         }
     except Exception as e:
         logger.error("Error running phase validation: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -121,7 +121,7 @@ async def run_custom_phase_validation(request: ValidationRequest):
         }
     except Exception as e:
         logger.error("Error running custom validation: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -143,7 +143,7 @@ async def check_progression_eligibility():
         }
     except Exception as e:
         logger.error("Error checking progression eligibility: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -178,7 +178,7 @@ async def execute_automated_progression(background_tasks: BackgroundTasks):
         }
     except Exception as e:
         logger.error("Error executing automated progression: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -215,7 +215,7 @@ async def trigger_manual_progression(request: PhaseProgressionRequest):
             )
     except Exception as e:
         logger.error("Error triggering manual progression: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -260,7 +260,7 @@ async def get_available_phases():
         }
     except Exception as e:
         logger.error("Error getting available phases: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -282,7 +282,7 @@ async def get_current_capabilities():
         }
     except Exception as e:
         logger.error("Error getting capabilities: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -310,7 +310,7 @@ async def get_progression_history(limit: int = Query(10, ge=1, le=100)):
         }
     except Exception as e:
         logger.error("Error getting progression history: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -347,7 +347,7 @@ async def phase_management_health():
         }
     except Exception as e:
         logger.error("Phase management health check failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Health check failed")
 
 
 @with_error_handling(
@@ -377,7 +377,7 @@ async def update_progression_config(config_update: dict):
         }
     except Exception as e:
         logger.error("Error updating progression config: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -422,4 +422,4 @@ async def get_progression_summary_report():
         }
     except Exception as e:
         logger.error("Error generating summary report: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

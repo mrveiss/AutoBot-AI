@@ -1301,7 +1301,7 @@ class Phase9PerformanceMonitor:
 
         except Exception as e:
             self.logger.error(f"Error generating performance dashboard: {e}")
-            return {"error": str(e), "timestamp": time.time()}
+            return {"error": "Internal server error", "timestamp": time.time()}
 
     def _determine_trend_direction(self, values: List[float]) -> str:
         """Determine trend direction from a list of values.

@@ -64,7 +64,7 @@ async def get_awareness_status():
         }
     except Exception as e:
         logger.error("Error getting awareness status: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -134,7 +134,7 @@ async def get_system_context(
         }
     except Exception as e:
         logger.error("Error getting system context: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -174,7 +174,7 @@ async def get_capabilities_summary():
         }
     except Exception as e:
         logger.error("Error getting capabilities summary: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -213,7 +213,7 @@ async def inject_awareness_context(request: PromptInjectionRequest):
         }
     except Exception as e:
         logger.error("Error injecting context: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -237,7 +237,7 @@ async def analyze_query_with_awareness(request: QueryAnalysisRequest):
         }
     except Exception as e:
         logger.error("Error analyzing query: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -260,7 +260,7 @@ async def get_capability_summary_text():
         }
     except Exception as e:
         logger.error("Error creating summary: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -291,7 +291,7 @@ async def get_phase_information():
         }
     except Exception as e:
         logger.error("Error getting phase information: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -331,7 +331,7 @@ async def get_awareness_metrics():
         }
     except Exception as e:
         logger.error("Error getting awareness metrics: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -360,7 +360,7 @@ async def export_awareness_data(
         }
     except Exception as e:
         logger.error("Error exporting awareness data: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -399,4 +399,4 @@ async def llm_awareness_health():
         }
     except Exception as e:
         logger.error("LLM awareness health check failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Health check failed")

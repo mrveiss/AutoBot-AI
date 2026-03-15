@@ -80,10 +80,10 @@ async def create_tls_credential(
         credential = await service.create_credential(db, node_id, data)
         return _to_response(credential)
 
-    except ValueError as e:
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         )
     except Exception as e:
         logger.error("Failed to create TLS credential: %s", e)
@@ -445,7 +445,7 @@ async def renew_tls_certificate(
         logger.error("Failed to renew TLS certificate %s: %s", credential_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to renew certificate: {str(e)}",
+            detail="Failed to renew certificate",
         )
 
 
@@ -580,7 +580,7 @@ async def rotate_tls_certificate(
         logger.error("Failed to rotate TLS certificate %s: %s", credential_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to rotate certificate: {str(e)}",
+            detail="Failed to rotate certificate",
         )
 
 
@@ -631,12 +631,12 @@ async def _renew_single_certificate(db, service, cred, deploy: bool):
                 "error": "Renewal failed",
             }
 
-    except Exception as e:
+    except Exception:
         return {
             "old_credential_id": cred.credential_id,
             "node_id": cred.node_id,
             "success": False,
-            "error": str(e),
+            "error": "Internal server error",
         }
 
 
@@ -969,7 +969,7 @@ async def enable_tls_on_services(
         logger.exception("TLS enablement failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"TLS enablement failed: {str(e)}",
+            detail="TLS enablement failed",
         )
 
 
@@ -1045,5 +1045,5 @@ async def _deploy_certificate_to_node(node, credential, db) -> dict:
             cert_path, key_path, chain_path = _write_cert_files(tmpdir, certs)
             return await _execute_cert_deployment(node, cert_path, key_path, chain_path)
 
-    except Exception as e:
-        return {"success": False, "message": f"Deployment error: {str(e)}"}
+    except Exception:
+        return {"success": False, "message": "Deployment error"}

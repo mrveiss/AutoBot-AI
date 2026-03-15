@@ -57,7 +57,8 @@ async def get_system_error_statistics():
     except Exception as e:
         logger.error("Failed to get error statistics: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )
 
 
@@ -111,7 +112,8 @@ async def get_recent_errors(limit: int = 20):
     except Exception as e:
         logger.error("Failed to get recent errors: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )
 
 
@@ -145,7 +147,8 @@ async def get_error_categories():
     except Exception as e:
         logger.error("Failed to get error categories: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )
 
 
@@ -174,7 +177,8 @@ async def get_error_by_component():
     except Exception as e:
         logger.error("Failed to get component errors: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )
 
 
@@ -230,7 +234,8 @@ async def get_error_system_health():
     except Exception as e:
         logger.error("Failed to get error system health: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )
 
 
@@ -273,7 +278,8 @@ async def clear_error_history(authorization: Optional[str] = Header(None)):
     except Exception as e:
         logger.error("Failed to clear error history: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )
 
 
@@ -316,7 +322,7 @@ async def test_error_system(request: TestErrorRequest):
         return {
             "status": "success",
             "message": "Error boundary system triggered successfully",
-            "error_caught": str(e),
+            "error_caught": "Internal server error",
             "error_type": type(e).__name__,
         }
 
@@ -400,7 +406,8 @@ async def get_metrics_summary():
     except Exception as e:
         logger.error("Failed to get metrics summary: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )
 
 
@@ -438,7 +445,8 @@ async def get_error_timeline_endpoint(hours: int = 24, component: Optional[str] 
     except Exception as e:
         logger.error("Failed to get error timeline: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )
 
 
@@ -468,7 +476,8 @@ async def get_top_errors_endpoint(limit: int = 10):
     except Exception as e:
         logger.error("Failed to get top errors: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )
 
 
@@ -502,7 +511,8 @@ async def mark_error_resolved_endpoint(trace_id: str):
     except Exception as e:
         logger.error("Failed to mark error resolved: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )
 
 
@@ -544,7 +554,8 @@ async def set_alert_threshold_endpoint(request: AlertThresholdRequest):
     except Exception as e:
         logger.error("Failed to set alert threshold: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )
 
 
@@ -572,5 +583,6 @@ async def cleanup_metrics_endpoint():
     except Exception as e:
         logger.error("Failed to cleanup metrics: %s", e)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error",
         )

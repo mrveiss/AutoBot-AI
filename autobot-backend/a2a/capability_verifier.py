@@ -139,6 +139,16 @@ async def _fetch_and_verify(remote_url: str) -> CapabilityReport:
     """Perform the actual HTTP fetch and verification."""
     import aiohttp
 
+    from autobot_shared.security.input_sanitizer import validate_url
+
+    try:
+        validate_url(remote_url, allow_private=False)
+    except ValueError as exc:
+        return CapabilityReport(
+            verified=False,
+            warnings=[f"Invalid agent URL: {exc}"],
+        )
+
     well_known = remote_url.rstrip("/") + "/.well-known/agent.json"
     try:
         async with aiohttp.ClientSession() as session:

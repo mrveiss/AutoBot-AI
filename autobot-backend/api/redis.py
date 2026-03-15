@@ -26,9 +26,7 @@ async def get_redis_config():
         return ConfigService.get_redis_config()
     except Exception as e:
         logger.error("Error getting Redis config: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Error getting Redis config: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Error getting Redis config")
 
 
 @with_error_handling(
@@ -42,11 +40,9 @@ async def update_redis_config(config_data: dict):
     try:
         result = ConfigService.update_redis_config(config_data)
         return result
-    except Exception as e:
-        logger.error("Error updating Redis config: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Error updating Redis config: {str(e)}"
-        )
+    except Exception:
+        logger.error("Error updating Redis config: %s", "Internal server error")
+        raise HTTPException(status_code=500, detail="Error updating Redis config")
 
 
 @with_error_handling(
@@ -60,11 +56,11 @@ async def get_redis_status():
     try:
         result = ConnectionTester.test_redis_connection()
         return result
-    except Exception as e:
-        logger.error("Redis status check failed: %s", str(e))
+    except Exception:
+        logger.error("Redis status check failed: %s", "Internal server error")
         return {
             "status": "disconnected",
-            "message": f"Failed to connect to Redis: {str(e)}",
+            "message": "Failed to connect to Redis",
         }
 
 
@@ -79,11 +75,11 @@ async def test_redis_connection():
     try:
         result = ConnectionTester.test_redis_connection()
         return result
-    except Exception as e:
-        logger.error("Redis connection test failed: %s", str(e))
+    except Exception:
+        logger.error("Redis connection test failed: %s", "Internal server error")
         return {
             "status": "disconnected",
-            "message": f"Failed to connect to Redis: {str(e)}",
+            "message": "Failed to connect to Redis",
         }
 
 
@@ -107,10 +103,10 @@ async def get_redis_health():
                 "redis_search_module_loaded", False
             ),
         }
-    except Exception as e:
-        logger.error("Redis health check failed: %s", str(e))
+    except Exception:
+        logger.error("Redis health check failed: %s", "Internal server error")
         return {
             "status": "unhealthy",
             "redis_status": "disconnected",
-            "message": f"Failed to check Redis health: {str(e)}",
+            "message": "Failed to check Redis health",
         }

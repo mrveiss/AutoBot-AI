@@ -819,12 +819,19 @@ async def add_url_to_knowledge(
     """
     import aiohttp
 
+    from autobot_shared.security.input_sanitizer import validate_url
+
     kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
 
     if kb_to_use is None:
         raise InternalError("Knowledge base not initialized")
 
-    logger.info(f"Fetching content from URL: {request.url}")
+    try:
+        validate_url(request.url, allow_private=False)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    logger.info("Fetching content from URL: %s", request.url)
 
     try:
         async with aiohttp.ClientSession() as session:
@@ -841,8 +848,8 @@ async def add_url_to_knowledge(
                 content, extracted_title = _sanitize_html_content(html_content)
                 title = request.title or extracted_title or request.url
 
-    except aiohttp.ClientError as e:
-        raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {str(e)}")
+    except aiohttp.ClientError:
+        raise HTTPException(status_code=400, detail="Failed to fetch URL")
 
     fact_id = await _store_fact_in_kb(
         kb_to_use,
@@ -1100,8 +1107,8 @@ async def get_knowledge_health(
                 rag_status = "healthy"
             else:
                 rag_status = "unhealthy: missing required methods"
-        except Exception as e:
-            rag_status = f"error: {str(e)}"
+        except Exception:
+            rag_status = "error"
 
     return {
         "status": "healthy",
@@ -1586,7 +1593,7 @@ async def clear_all_knowledge(
             items_removed = await _clear_kb_via_redis(kb)
         except Exception as e:
             logger.error("Error during knowledge base clearing: %s", e)
-            raise HTTPException(status_code=500, detail=f"Failed to clear: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to clear")
 
     logger.warning("Knowledge base cleared. Removed %s entries.", items_removed)
     return {
@@ -1835,7 +1842,7 @@ async def get_facts_by_category(
         categories_dict = _build_categories_dict(all_fact_keys, fact_results)
     except Exception as e:
         logger.error("Error in indexed fact retrieval: %s", e)
-        return {"categories": {}, "total_facts": 0, "error": str(e)}
+        return {"categories": {}, "total_facts": 0, "error": "Internal server error"}
 
     result = {
         "categories": categories_dict,

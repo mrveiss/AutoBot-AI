@@ -188,7 +188,7 @@ class MultiModalPerformanceMonitor:
 
         except Exception as e:
             logger.error("GPU memory optimization failed: %s", e)
-            return {"status": "optimization_failed", "error": str(e)}
+            return {"status": "optimization_failed", "error": "Internal server error"}
 
     def enable_mixed_precision(self, enable: bool = True) -> bool:
         """Enable automatic mixed precision for RTX 4070 Tensor cores"""
@@ -307,7 +307,7 @@ class MultiModalPerformanceMonitor:
 
         except Exception as e:
             logger.error("Performance monitoring failed: %s", e)
-            return {"error": str(e), "timestamp": time.time()}
+            return {"error": "Internal server error", "timestamp": time.time()}
 
     def _get_gpu_stats(self) -> Dict[str, Any]:
         """Get detailed GPU statistics"""
@@ -333,7 +333,7 @@ class MultiModalPerformanceMonitor:
             }
         except Exception as e:
             logger.error("Failed to get GPU stats: %s", e)
-            return {"error": str(e)}
+            return {"error": "Internal server error"}
 
     def _get_processing_time_stats(self) -> Dict[str, Any]:
         """Get processing time statistics for each modality (thread-safe)"""

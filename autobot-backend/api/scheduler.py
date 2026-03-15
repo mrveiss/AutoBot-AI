@@ -6,6 +6,10 @@ Workflow Scheduler API endpoints
 Provides workflow scheduling and queue management capabilities
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from datetime import datetime
 from typing import List, Optional, Union
 
@@ -558,7 +562,8 @@ async def batch_schedule_workflows(workflows: List[ScheduleWorkflowRequest]):
             scheduled_workflows.append(workflow_id)
 
         except Exception as e:
-            errors.append(f"Workflow {i}: {str(e)}")
+            logger.exception("Unexpected error: %s", e)
+            errors.append("Workflow {i}")
 
     return {
         "success": True,

@@ -32,9 +32,9 @@ try:
     result = do_something()
     return {"success": True, "data": result, "message": "Success"}
 except ValueError as e:
-    raise HTTPException(status_code=400, detail=str(e))
+    raise HTTPException(status_code=400, detail="Internal server error")
 except Exception as e:
-    raise HTTPException(status_code=500, detail=f"Failed: {str(e)}")
+    raise HTTPException(status_code=500, detail="Failed")
 
 # New pattern (1 line for success, 1 line for errors)
 result = do_something()

@@ -33,7 +33,8 @@ Usage:
                 return error_response("Item not found", status_code=404, error_code="ITEM_NOT_FOUND")
             return success_response(data=item)
         except Exception as e:
-            return error_response(str(e), status_code=500)
+            logger.exception("Failed to get item")
+            return error_response("Internal server error", status_code=500)
 """
 
 from datetime import datetime, timezone

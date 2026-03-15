@@ -627,9 +627,7 @@ async def execute_workflow(
 
         logger = logging.getLogger(__name__)
         logger.error("Workflow execution error: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Workflow execution failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Workflow execution failed")
 
     # =========================================================================
     # NOTE: The following code is unreachable (currently disabled to prevent
@@ -1043,7 +1041,7 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
 
         # End step timing with failure
         workflow_metrics.end_step_timing(
-            workflow_id, step_id, success=False, error=str(e)
+            workflow_id, step_id, success=False, error="Internal server error"
         )
 
         # Record Prometheus workflow step metric (failed)

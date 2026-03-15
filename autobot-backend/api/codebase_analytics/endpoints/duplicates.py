@@ -542,9 +542,9 @@ async def _run_dup_analysis(task_id: str) -> None:
 
 
 @router.get("/duplicates/cached")
-async def get_cached_duplicate_result():
-    """Return the latest completed duplicate analysis result (#1540)."""
-    cached = await _manager.get_latest_result()
+async def get_cached_duplicate_result(source_id: str = ""):
+    """Return the latest completed duplicate analysis result (#1540, #1757)."""
+    cached = await _manager.get_latest_result(source_id=source_id)
     if cached and cached.get("result"):
         return {
             "status": "success",

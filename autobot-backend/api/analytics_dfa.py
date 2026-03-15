@@ -27,6 +27,8 @@ from auth_middleware import check_admin_permission
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from autobot_shared.security.path_validator import validate_path
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/dfa", tags=["data-flow-analysis", "analytics"])
@@ -1138,11 +1140,11 @@ async def analyze_code(
         graphs = analyzer.analyze()
         return _build_analysis_response(graphs, request.file_path)
 
-    except SyntaxError as e:
-        raise HTTPException(status_code=400, detail=f"Syntax error in code: {str(e)}")
+    except SyntaxError:
+        raise HTTPException(status_code=400, detail="Syntax error in code")
     except Exception as e:
         logger.error("Analysis error: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/analyze-file", response_model=AnalysisResponse)
@@ -1157,24 +1159,25 @@ async def analyze_file(
     import aiofiles
 
     try:
-        async with aiofiles.open(request.file_path, "r", encoding="utf-8") as f:
+        safe_path = str(validate_path(request.file_path))
+        async with aiofiles.open(safe_path, "r", encoding="utf-8") as f:
             source_code = await f.read()
 
-        analyzer = DataFlowAnalyzer(source_code, request.file_path)
+        analyzer = DataFlowAnalyzer(source_code, safe_path)
         graphs = analyzer.analyze()
-        return _build_analysis_response(graphs, request.file_path)
+        return _build_analysis_response(graphs, safe_path)
 
     except FileNotFoundError:
         raise HTTPException(
             status_code=404, detail=f"File not found: {request.file_path}"
         )
-    except OSError as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
-    except SyntaxError as e:
-        raise HTTPException(status_code=400, detail=f"Syntax error in file: {str(e)}")
+    except OSError:
+        raise HTTPException(status_code=500, detail="Failed to read file")
+    except SyntaxError:
+        raise HTTPException(status_code=400, detail="Syntax error in file")
     except Exception as e:
         logger.error("File analysis error: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/vulnerabilities")
@@ -1219,7 +1222,7 @@ async def get_vulnerabilities(
 
     except Exception as e:
         logger.error("Vulnerability analysis error: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _aggregate_graph_taint_stats(
@@ -1278,7 +1281,7 @@ async def get_taint_summary(
 
     except Exception as e:
         logger.error("Taint summary error: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/sources")

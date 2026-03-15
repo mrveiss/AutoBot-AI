@@ -95,9 +95,7 @@ async def get_embedding_settings(
 
     except Exception as e:
         logger.error("Failed to get embedding settings: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get embedding settings: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get embedding settings")
 
 
 @with_error_handling(
@@ -155,7 +153,7 @@ async def update_embedding_settings(
     except Exception as e:
         logger.error("Failed to update embedding settings: %s", e)
         raise HTTPException(
-            status_code=500, detail=f"Failed to update embedding settings: {str(e)}"
+            status_code=500, detail="Failed to update embedding settings"
         )
 
 
@@ -204,9 +202,7 @@ async def get_available_embedding_models(
 
     except Exception as e:
         logger.error("Failed to get embedding models: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get embedding models: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get embedding models")
 
 
 @with_error_handling(
@@ -266,7 +262,7 @@ async def refresh_embedding_models(
     except Exception as e:
         logger.error("Failed to refresh embedding models for %s: %s", provider_name, e)
         raise HTTPException(
-            status_code=500, detail=f"Failed to refresh embedding models: {str(e)}"
+            status_code=500, detail="Failed to refresh embedding models"
         )
 
 
@@ -315,6 +311,4 @@ async def get_embedding_status(
 
     except Exception as e:
         logger.error("Failed to get embedding status: %s", e)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get embedding status: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get embedding status")

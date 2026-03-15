@@ -101,7 +101,7 @@ async def get_agent() -> "IntelligentAgent":
             logger.error("Failed to initialize intelligent agent: %s", e)
             raise HTTPException(
                 status_code=503,
-                detail=f"Intelligent agent initialization failed: {str(e)}",
+                detail="Intelligent agent initialization failed",
             )
 
 
@@ -275,7 +275,9 @@ async def health_check(
     except Exception as e:
         logger.error("Health check failed: %s", e)
         return HealthResponse(
-            status="unhealthy", components={"error": str(e)}, uptime=0.0
+            status="unhealthy",
+            components={"error": "Internal server error"},
+            uptime=0.0,
         )
 
 

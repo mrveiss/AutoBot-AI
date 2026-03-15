@@ -85,7 +85,7 @@ async def list_workers(admin_check: bool = Depends(check_admin_permission)):
         logger.error("Failed to list workers: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve workers: {str(e)}",
+            detail="Failed to retrieve workers",
         )
 
 
@@ -127,12 +127,14 @@ async def add_worker(
 
     except ValueError as e:
         logger.warning("Worker registration failed: %s", e)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error"
+        )
     except Exception as e:
         logger.error("Failed to add worker: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to register worker: {str(e)}",
+            detail="Failed to register worker",
         )
 
 
@@ -179,7 +181,7 @@ async def get_worker(
         logger.error("Failed to get worker %s: %s", worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve worker: {str(e)}",
+            detail="Failed to retrieve worker",
         )
 
 
@@ -229,14 +231,16 @@ async def update_worker(
 
     except ValueError as e:
         logger.warning("Worker update failed: %s", e)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error"
+        )
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to update worker %s: %s", worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update worker: {str(e)}",
+            detail="Failed to update worker",
         )
 
 
@@ -271,12 +275,14 @@ async def remove_worker(
 
     except ValueError as e:
         logger.warning("Worker removal failed: %s", e)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error"
+        )
     except Exception as e:
         logger.error("Failed to remove worker %s: %s", worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to remove worker: {str(e)}",
+            detail="Failed to remove worker",
         )
 
 
@@ -329,7 +335,7 @@ async def test_worker(
         logger.error("Failed to test worker %s: %s", worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to test worker: {str(e)}",
+            detail="Failed to test worker",
         )
 
 
@@ -379,7 +385,7 @@ async def get_worker_metrics(
         logger.error("Failed to get metrics for worker %s: %s", worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve metrics: {str(e)}",
+            detail="Failed to retrieve metrics",
         )
 
 
@@ -442,7 +448,7 @@ async def get_worker_log_level(
         logger.error("Failed to get log level for worker %s: %s", worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get log level: {str(e)}",
+            detail="Failed to get log level",
         )
 
 
@@ -521,7 +527,7 @@ async def set_worker_log_level(
         logger.error("Failed to set log level for worker %s: %s", worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to set log level: {str(e)}",
+            detail="Failed to set log level",
         )
 
 
@@ -556,7 +562,7 @@ async def get_load_balancing_config(
         logger.error("Failed to get load balancing config: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve load balancing configuration: {str(e)}",
+            detail="Failed to retrieve load balancing configuration",
         )
 
 
@@ -594,12 +600,14 @@ async def update_load_balancing_config(
 
     except ValueError as e:
         logger.warning("Load balancing config update failed: %s", e)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Internal server error"
+        )
     except Exception as e:
         logger.error("Failed to update load balancing config: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update load balancing configuration: {str(e)}",
+            detail="Failed to update load balancing configuration",
         )
 
 
@@ -652,7 +660,7 @@ async def get_npu_status(admin_check: bool = Depends(check_admin_permission)):
         logger.error("Failed to get NPU status: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve NPU status: {str(e)}",
+            detail="Failed to retrieve NPU status",
         )
 
 
@@ -697,7 +705,7 @@ async def proxy_npu_health():
         logger.error("NPU health proxy failed: %s", e)
         return JSONResponse(
             status_code=502,
-            content={"status": "error", "detail": str(e)},
+            content={"status": "error", "detail": "Internal server error"},
         )
 
 
@@ -760,7 +768,7 @@ async def unpair_worker(
         logger.error("Failed to unpair worker %s: %s", worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to unpair worker: {str(e)}",
+            detail="Failed to unpair worker",
         )
 
 
@@ -917,7 +925,7 @@ async def repair_worker(
         logger.error("Failed to re-pair worker %s: %s", worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to re-pair worker: {str(e)}",
+            detail="Failed to re-pair worker",
         )
 
 
@@ -981,10 +989,10 @@ async def _check_worker_health(
         )
         return info
 
-    except httpx.RequestError as e:
+    except httpx.RequestError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot reach worker at {worker_url}: {str(e)}",
+            detail="Cannot reach worker at {worker_url}",
         )
 
 
@@ -1063,10 +1071,10 @@ async def _send_pairing_request(
         pair_result = pair_response.json()
         return pair_result.get("device_info", {})
 
-    except httpx.RequestError as e:
+    except httpx.RequestError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to send pair request to worker: {str(e)}",
+            detail="Failed to send pair request to worker",
         )
 
 
@@ -1200,7 +1208,7 @@ async def pair_worker(
         logger.error("Failed to pair with worker: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to pair with worker: {str(e)}",
+            detail="Failed to pair with worker",
         )
 
 
@@ -1306,7 +1314,7 @@ async def worker_heartbeat(heartbeat: WorkerHeartbeat):
         logger.error("Failed to process heartbeat from %s: %s", heartbeat.worker_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process heartbeat: {str(e)}",
+            detail="Failed to process heartbeat",
         )
 
 
@@ -1470,7 +1478,7 @@ async def worker_bootstrap(request: dict):
         logger.error("Failed to bootstrap worker: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to bootstrap worker: {str(e)}",
+            detail="Failed to bootstrap worker",
         )
 
 
@@ -1511,7 +1519,7 @@ async def get_pool_stats(admin_check: bool = Depends(check_admin_permission)):
         logger.error("Failed to get pool stats: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve pool stats: {str(e)}",
+            detail="Failed to retrieve pool stats",
         )
 
 
@@ -1566,7 +1574,7 @@ async def get_pool_workers(admin_check: bool = Depends(check_admin_permission)):
         logger.error("Failed to get pool workers: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve pool workers: {str(e)}",
+            detail="Failed to retrieve pool workers",
         )
 
 
@@ -1610,5 +1618,5 @@ async def reload_pool_config(admin_check: bool = Depends(check_admin_permission)
         logger.error("Failed to reload pool config: %s", e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to reload pool configuration: {str(e)}",
+            detail="Failed to reload pool configuration",
         )

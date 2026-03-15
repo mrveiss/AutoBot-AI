@@ -390,11 +390,11 @@ class ExistingOperationMigrator:
                 )
                 # Build result using helper (Issue #665)
                 return _build_indexing_result(indexed_files, context.should_resume())
-            except Exception as e:
+            except Exception:
                 await context.save_checkpoint(
                     {
                         "processed_files": processed_files + indexed_files,
-                        "error": str(e),
+                        "error": "Internal server error",
                     },
                     "error_recovery",
                 )
@@ -762,10 +762,10 @@ class ExistingOperationMigrator:
                 "indexed_at": datetime.now().isoformat(),
                 "content_hash": hash(content) % 1000000,  # Simple hash for example
             }
-        except Exception as e:
+        except Exception:
             return {
                 "path": str(file_path),
-                "error": str(e),
+                "error": "Internal server error",
                 "indexed_at": datetime.now().isoformat(),
             }
 
@@ -806,12 +806,12 @@ class ExistingOperationMigrator:
                 "error": "Test timed out after 5 minutes",
                 "timestamp": datetime.now().isoformat(),
             }
-        except Exception as e:
+        except Exception:
             return {
                 "file": str(test_file),
                 "status": "ERROR",
                 "duration": time.time() - start_time,
-                "error": str(e),
+                "error": "Internal server error",
                 "timestamp": datetime.now().isoformat(),
             }
 
@@ -876,10 +876,10 @@ class ExistingOperationMigrator:
                 "scanned_at": datetime.now().isoformat(),
             }
 
-        except Exception as e:
+        except Exception:
             return {
                 "file": str(file_path),
-                "error": str(e),
+                "error": "Internal server error",
                 "scanned_at": datetime.now().isoformat(),
             }
 

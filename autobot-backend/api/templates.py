@@ -136,10 +136,8 @@ async def list_workflow_templates(
 
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to list templates: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to list templates")
 
 
 # --- Static paths MUST be registered before /templates/{template_id} ---
@@ -169,10 +167,10 @@ async def get_secrets_usage():
                     }
                 )
         return {"success": True, "secrets_usage": usage_map}
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get secrets usage: {str(e)}",
+            detail="Failed to get secrets usage",
         )
 
 
@@ -201,10 +199,8 @@ async def search_templates(
             "total": len(search_results),
         }
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to search templates: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to search templates")
 
 
 @with_error_handling(
@@ -232,10 +228,8 @@ async def list_template_categories():
 
         return {"success": True, "categories": categories}
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to list categories: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to list categories")
 
 
 @with_error_handling(
@@ -288,10 +282,8 @@ async def get_template_statistics():
             },
         }
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get template statistics: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to get template statistics")
 
 
 # --- Parameterized paths below (after all static paths) ---
@@ -321,8 +313,8 @@ async def get_template_details(template_id: str):
 
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get template: {str(e)}")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to get template")
 
 
 @with_error_handling(
@@ -385,10 +377,8 @@ async def preview_template_workflow(
 
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to preview template: {str(e)}"
-        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to preview template")
 
 
 @with_error_handling(
@@ -412,10 +402,10 @@ async def validate_template_variables(
             "validation": validation_result,
         }
 
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to validate template variables: {str(e)}",
+            detail="Failed to validate template variables",
         )
 
 
@@ -466,10 +456,10 @@ async def create_workflow_from_template(
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to create workflow from template: {str(e)}",
+            detail="Failed to create workflow from template",
         )
 
 
@@ -539,7 +529,7 @@ async def execute_template_workflow(
         )
         raise HTTPException(
             status_code=500,
-            detail=("Failed to execute template workflow: " f"{str(e)}"),
+            detail="Failed to execute template workflow",
         )
 
 

@@ -76,7 +76,7 @@ async def get_state_tracking_status():
         raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error("Error getting state tracking status: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -101,7 +101,7 @@ async def get_state_summary():
         raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error("Error getting state summary: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -133,7 +133,7 @@ async def capture_state_snapshot(background_tasks: BackgroundTasks):
         raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error("Error capturing snapshot: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -184,7 +184,7 @@ async def record_state_change(request: StateChangeRequest):
         raise HTTPException(status_code=400, detail="Invalid state change data")
     except Exception as e:
         logger.error("Error recording state change: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -213,7 +213,7 @@ async def get_milestones():
         raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error("Error getting milestones: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -272,7 +272,7 @@ async def get_metric_trends(metric: str, days: int = Query(7, ge=1, le=90)):
         raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error("Error getting metric trends: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -329,7 +329,7 @@ async def get_recent_changes(
         raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error("Error getting recent changes: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -360,7 +360,7 @@ async def generate_state_report():
         )
     except Exception as e:
         logger.error("Error generating report: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -410,7 +410,7 @@ async def export_state_data(request: ExportRequest):
         raise HTTPException(status_code=500, detail="File system error during export")
     except Exception as e:
         logger.error("Error exporting state data: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Health check moved to consolidated health service
@@ -443,7 +443,7 @@ async def get_all_metrics():
         raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error("Error getting all metrics: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -488,4 +488,4 @@ async def get_phase_history(phase_name: str, days: int = Query(30, ge=1, le=365)
         raise HTTPException(status_code=503, detail="State tracker not available")
     except Exception as e:
         logger.error("Error getting phase history: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

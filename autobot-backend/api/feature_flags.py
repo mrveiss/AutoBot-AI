@@ -117,7 +117,7 @@ async def get_feature_flags_status(
 
     except Exception as e:
         logger.error("Failed to get feature flags status: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get status")
 
 
 @with_error_handling(
@@ -185,7 +185,7 @@ async def update_enforcement_mode(
         raise
     except Exception as e:
         logger.error("Failed to update enforcement mode: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to update mode: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update mode")
 
 
 @with_error_handling(
@@ -239,7 +239,7 @@ async def set_endpoint_enforcement(
         raise
     except Exception as e:
         logger.error("Failed to set endpoint enforcement: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -282,7 +282,7 @@ async def remove_endpoint_enforcement(
         raise
     except Exception as e:
         logger.error("Failed to remove endpoint enforcement: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -328,7 +328,7 @@ async def get_access_control_metrics(
 
     except Exception as e:
         logger.error("Failed to get access control metrics: %s", e)
-        raise HTTPException(status_code=500, detail=f"Failed to get metrics: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get metrics")
 
 
 @with_error_handling(
@@ -360,7 +360,7 @@ async def get_endpoint_metrics(
 
     except Exception as e:
         logger.error("Failed to get endpoint metrics: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -392,7 +392,7 @@ async def get_user_metrics(
 
     except Exception as e:
         logger.error("Failed to get user metrics: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @with_error_handling(
@@ -420,4 +420,4 @@ async def cleanup_old_metrics(
 
     except Exception as e:
         logger.error("Failed to cleanup metrics: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

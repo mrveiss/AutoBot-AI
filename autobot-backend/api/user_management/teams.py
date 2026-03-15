@@ -198,10 +198,10 @@ async def create_team(
             team=_team_to_response(team),
         )
 
-    except DuplicateTeamError as e:
+    except DuplicateTeamError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
+            detail="Internal server error",
         )
 
 
@@ -255,10 +255,10 @@ async def update_team(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Team {team_id} not found",
         )
-    except DuplicateTeamError as e:
+    except DuplicateTeamError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
+            detail="Internal server error",
         )
 
 
@@ -337,10 +337,10 @@ async def add_team_member(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Team {team_id} not found",
         )
-    except MembershipError as e:
+    except MembershipError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(e),
+            detail="Internal server error",
         )
 
 
@@ -363,10 +363,10 @@ async def remove_team_member(
             message="Member removed from team",
         )
 
-    except MembershipError as e:
+    except MembershipError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         )
 
 
@@ -390,10 +390,10 @@ async def update_member_role(
         )
         return _membership_to_response(membership)
 
-    except MembershipError as e:
+    except MembershipError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail="Internal server error",
         )
 
 

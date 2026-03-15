@@ -278,7 +278,7 @@ async def _run_update_job(job_id: str, node_id: str, update_ids: List[str]) -> N
         except Exception as e:
             logger.error("Update job failed: %s - %s", job_id, e)
             job.status = UpdateJobStatus.FAILED.value
-            job.error = str(e)
+            job.error = "Internal server error"
             job.completed_at = datetime.utcnow()
             await db.commit()
             await _broadcast_job_update(job_id, "failed", job.progress, str(e))
@@ -847,10 +847,10 @@ async def _run_upgrade_all(jid: str, nid: str) -> None:
 
         try:
             await _execute_upgrade_playbook(sess, j, nid, n.hostname, jid)
-        except Exception as e:
+        except Exception:
             logger.exception("Upgrade all failed: %s", jid)
             j.status = UpdateJobStatus.FAILED.value
-            j.error = str(e)
+            j.error = "Internal server error"
             j.completed_at = datetime.utcnow()
             await sess.commit()
 

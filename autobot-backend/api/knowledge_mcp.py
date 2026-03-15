@@ -17,6 +17,7 @@ import threading
 from typing import List, Optional
 
 from auth_middleware import get_current_user
+from config import config as global_config_manager
 from constants.model_constants import ModelConstants
 from fastapi import APIRouter, Depends
 from knowledge_base import KnowledgeBase
@@ -26,7 +27,6 @@ from utils.service_registry import get_service_url
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
-from config import config as global_config_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])
@@ -394,7 +394,7 @@ async def mcp_search_knowledge_base(
 
     except Exception as e:
         logger.error("Error searching knowledge base: %s", e)
-        return {"success": False, "error": str(e), "results": []}
+        return {"success": False, "error": "Internal server error", "results": []}
 
 
 @with_error_handling(
@@ -429,7 +429,7 @@ async def mcp_add_to_knowledge_base(
 
     except Exception as e:
         logger.error("Error adding to knowledge base: %s", e)
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @with_error_handling(
@@ -472,7 +472,7 @@ async def mcp_get_knowledge_stats(
 
     except Exception as e:
         logger.error("Error getting knowledge stats: %s", e)
-        return {"success": False, "error": str(e), "stats": {}}
+        return {"success": False, "error": "Internal server error", "stats": {}}
 
 
 @with_error_handling(
@@ -536,7 +536,7 @@ async def mcp_summarize_knowledge_topic(
 
     except Exception as e:
         logger.error("Error summarizing topic: %s", e)
-        return {"success": False, "error": str(e), "summary": ""}
+        return {"success": False, "error": "Internal server error", "summary": ""}
 
 
 @with_error_handling(
@@ -585,7 +585,7 @@ async def mcp_vector_similarity_search(
 
     except Exception as e:
         logger.error("Error in vector similarity search: %s", e)
-        return {"success": False, "error": str(e), "results": []}
+        return {"success": False, "error": "Internal server error", "results": []}
 
 
 @with_error_handling(
@@ -649,7 +649,7 @@ async def mcp_langchain_qa_chain(
 
     except Exception as e:
         logger.error("Error in LangChain QA chain: %s", e)
-        return {"success": False, "error": str(e), "answer": ""}
+        return {"success": False, "error": "Internal server error", "answer": ""}
 
 
 async def _vector_op_info(kb, redis_mgr, params: dict) -> dict:
@@ -744,7 +744,7 @@ async def mcp_redis_vector_operations(
 
     except Exception as e:
         logger.error("Error in Redis vector operations: %s", e)
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @with_error_handling(
@@ -791,5 +791,7 @@ async def mcp_health():
             "knowledge_base_initialized": kb is not None,
             "vector_store_connected": kb.vector_store is not None if kb else False,
         }
-    except Exception as e:
-        return {"status": "unhealthy", "error": str(e)}
+    except Exception:
+        logger.exception("Unexpected error")
+
+        return {"status": "unhealthy", "error": "Internal server error"}

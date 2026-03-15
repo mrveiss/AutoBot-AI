@@ -335,7 +335,7 @@ async def get_pattern_summary(
 
     except Exception as e:
         logger.error("Pattern summary failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Background task manager for pattern summary (#1304)
@@ -454,7 +454,7 @@ async def get_duplicate_patterns(
 
     except Exception as e:
         logger.error("Duplicate detection failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/patterns/regex-opportunities")
@@ -483,7 +483,7 @@ async def get_regex_opportunities(
 
     except Exception as e:
         logger.error("Regex detection failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/patterns/complexity-hotspots")
@@ -525,7 +525,7 @@ async def get_complexity_hotspots(
 
     except Exception as e:
         logger.error("Complexity analysis failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/patterns/refactoring-suggestions")
@@ -559,7 +559,7 @@ async def get_refactoring_suggestions(
 
     except Exception as e:
         logger.error("Refactoring suggestions failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/patterns/report")
@@ -589,7 +589,7 @@ async def get_pattern_report(
 
     except Exception as e:
         logger.error("Report generation failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/patterns/storage/stats")
@@ -605,7 +605,7 @@ async def get_pattern_storage_stats() -> Dict[str, Any]:
 
     except Exception as e:
         logger.error("Storage stats failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _build_empty_pattern_summary() -> Dict[str, Any]:
@@ -716,7 +716,7 @@ async def get_cached_pattern_summary() -> Dict[str, Any]:
 
     except Exception as e:
         logger.error("Cached summary failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def _build_empty_patterns_response() -> Dict[str, Any]:
@@ -855,7 +855,7 @@ async def get_cached_patterns(
 
     except Exception as e:
         logger.error("Cached patterns fetch failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/patterns/storage/clear")
@@ -876,7 +876,7 @@ async def clear_pattern_storage() -> Dict[str, str]:
 
     except Exception as e:
         logger.error("Storage clear failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/patterns/similar")
@@ -914,4 +914,4 @@ async def search_similar_patterns_endpoint(
 
     except Exception as e:
         logger.error("Similar pattern search failed: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")

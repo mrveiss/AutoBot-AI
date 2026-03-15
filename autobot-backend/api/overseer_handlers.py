@@ -370,7 +370,7 @@ class OverseerWebSocketHandler:
             await self.send_json(
                 {
                     "type": "error",
-                    "error": str(e),
+                    "error": "Internal server error",
                     "message": "Failed to process query.",
                 }
             )
@@ -511,7 +511,7 @@ async def submit_query(
 
     except Exception as e:
         logger.error("[OverseerAPI] Query failed: %s", e)
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Internal server error"}
 
 
 @router.get("/status/{session_id}")

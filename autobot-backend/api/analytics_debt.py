@@ -566,7 +566,8 @@ async def calculate_technical_debt(
     except Exception as e:
         logger.error("Debt calculation failed: %s", e)
         return JSONResponse(
-            status_code=500, content={"status": "error", "message": str(e)}
+            status_code=500,
+            content={"status": "error", "message": "Internal server error"},
         )
 
 

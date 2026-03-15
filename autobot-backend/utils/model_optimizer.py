@@ -460,7 +460,7 @@ class ModelOptimizer:
 
         except Exception as e:
             self.logger.error("Error generating optimization suggestions: %s", e)
-            return [{"type": "error", "message": str(e)}]
+            return [{"type": "error", "message": "Operation failed"}]
 
     def _build_no_history_suggestion(self) -> Dict[str, Any]:
         """Build suggestion for no usage history."""
