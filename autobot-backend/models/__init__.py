@@ -27,6 +27,9 @@ from models.approval import Approval, ApprovalComment, TaskApprovalLink
 # Other backend models (SQLAlchemy models only)
 from models.code_pattern import CodePattern
 from models.completion_feedback import CompletionFeedback
+
+# Config revision model (#1404)
+from models.config_revision import ConfigRevision
 from models.ml_model import MLModel
 from models.secret import Secret
 from models.session_collaboration import SessionCollaboration
@@ -48,4 +51,6 @@ __all__ = [
     "Approval",
     "ApprovalComment",
     "TaskApprovalLink",
+    # Config revision model (#1404)
+    "ConfigRevision",
 ]
