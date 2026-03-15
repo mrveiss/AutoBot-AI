@@ -416,15 +416,19 @@ async def _get_last_indexed(source_id: str) -> Optional[str]:
     return None
 
 
-async def _get_last_commit(clone_path: str, repo: Optional[str]) -> Optional[dict]:
+async def _get_last_commit(
+    clone_path: str, repo: Optional[str], is_local: bool = False
+) -> Optional[dict]:
     """Read latest git commit info from a clone directory.
 
     Helper for get_source_summary (#1458).
+    Issue #1756: Allow local source paths outside _CODE_SOURCES_BASE.
     """
     clone = Path(clone_path)
     if not clone.is_dir():
         return None
-    if not clone.resolve().is_relative_to(_CODE_SOURCES_BASE):
+    # Only enforce base-dir check for managed clones, not local sources
+    if not is_local and not clone.resolve().is_relative_to(_CODE_SOURCES_BASE):
         logger.warning("Clone path %s outside base directory", clone_path)
         return None
     try:
@@ -469,7 +473,11 @@ async def _build_summary(source: CodeSource) -> dict:
     last_commit = None
     if source.clone_path:
         last_indexed = await _get_last_indexed(source.id)
-        last_commit = await _get_last_commit(source.clone_path, source.repo)
+        last_commit = await _get_last_commit(
+            source.clone_path,
+            source.repo,
+            is_local=(source.source_type == "local"),
+        )
     return {
         "source_id": source.id,
         "last_indexed": last_indexed,
@@ -516,7 +524,11 @@ async def get_source_summary(source_id: str):
     last_commit = None
     if source.clone_path:
         last_indexed = await _get_last_indexed(source_id)
-        last_commit = await _get_last_commit(source.clone_path, source.repo)
+        last_commit = await _get_last_commit(
+            source.clone_path,
+            source.repo,
+            is_local=(source.source_type == "local"),
+        )
 
     return JSONResponse(
         {
