@@ -11,6 +11,7 @@
 
 import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import OrgTreeNode from './OrgTreeNode.vue'
 
 interface OrgNode {
   agent_id: string
@@ -157,35 +158,14 @@ onMounted(fetchTree)
           No agents registered in org hierarchy yet.
         </div>
         <ul v-else class="tree-list">
-          <template v-for="node in tree" :key="node.agent_id">
-            <li
-              :class="{ selected: selectedNode?.agent_id === node.agent_id }"
-              @click="selectNode(node)"
-            >
-              <span :class="['role-badge', roleBadgeClass(node.org_role)]">{{
-                node.org_role
-              }}</span>
-              <span class="node-name">{{ node.name }}</span>
-              <span v-if="node.direct_reports_count" class="reports-count"
-                >{{ node.direct_reports_count }} reports</span
-              >
-            </li>
-            <li
-              v-for="child in node.children"
-              :key="child.agent_id"
-              class="indent-1"
-              :class="{ selected: selectedNode?.agent_id === child.agent_id }"
-              @click="selectNode(child)"
-            >
-              <span :class="['role-badge', roleBadgeClass(child.org_role)]">{{
-                child.org_role
-              }}</span>
-              <span class="node-name">{{ child.name }}</span>
-              <span v-if="child.direct_reports_count" class="reports-count"
-                >{{ child.direct_reports_count }} reports</span
-              >
-            </li>
-          </template>
+          <OrgTreeNode
+            v-for="node in tree"
+            :key="node.agent_id"
+            :node="node"
+            :depth="0"
+            :selected-id="selectedNode?.agent_id ?? null"
+            @select="selectNode($event)"
+          />
         </ul>
       </div>
 

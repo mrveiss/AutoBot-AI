@@ -40,6 +40,8 @@ const fullLog = ref<string | null>(null)
 const fullLogLoading = ref(false)
 const showSpawnForm = ref(false)
 const showKillConfirm = ref<string | null>(null)
+const streamSocket = ref<WebSocket | null>(null)
+const isStreaming = ref(false)
 
 const spawnForm = ref({
   agent_id: '',
@@ -85,6 +87,43 @@ async function fetchFullLog(processId: string) {
     fullLog.value = 'Failed to load log'
   } finally {
     fullLogLoading.value = false
+  }
+}
+
+function stopStream() {
+  if (streamSocket.value) {
+    streamSocket.value.close()
+    streamSocket.value = null
+  }
+  isStreaming.value = false
+}
+
+function streamLogs(processId: string) {
+  stopStream()
+  fullLog.value = ''
+  isStreaming.value = true
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const ws = new WebSocket(
+    `${proto}//${location.host}/autobot-api/processes/${processId}/stream`,
+  )
+  streamSocket.value = ws
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      if (data.done) {
+        isStreaming.value = false
+        fetchProcesses()
+      }
+    } catch {
+      fullLog.value = (fullLog.value || '') + event.data
+    }
+  }
+  ws.onclose = () => {
+    isStreaming.value = false
+  }
+  ws.onerror = () => {
+    isStreaming.value = false
+    if (!fullLog.value) fetchFullLog(processId)
   }
 }
 
@@ -135,8 +174,17 @@ async function spawnProcess() {
 }
 
 function selectProcess(proc: ProcessRun) {
-  selectedProcess.value = selectedProcess.value?.id === proc.id ? null : proc
+  stopStream()
+  if (selectedProcess.value?.id === proc.id) {
+    selectedProcess.value = null
+    fullLog.value = null
+    return
+  }
+  selectedProcess.value = proc
   fullLog.value = null
+  if (proc.status === 'running') {
+    streamLogs(proc.id)
+  }
 }
 
 function statusBadgeClass(status: string): string {
@@ -292,15 +340,34 @@ function formatTime(iso: string | null): string {
     <!-- Log viewer -->
     <div v-if="selectedProcess" class="log-panel">
       <div class="log-header">
-        <h4>Process {{ selectedProcess.id.slice(0, 8) }}... Logs</h4>
-        <button
-          v-if="!fullLog"
-          class="btn-secondary"
-          :disabled="fullLogLoading"
-          @click="fetchFullLog(selectedProcess.id)"
-        >
-          {{ fullLogLoading ? 'Loading...' : 'View Full Log' }}
-        </button>
+        <h4>
+          Process {{ selectedProcess.id.slice(0, 8) }}... Logs
+          <span v-if="isStreaming" class="streaming-badge">LIVE</span>
+        </h4>
+        <div class="log-actions">
+          <button
+            v-if="selectedProcess.status === 'running' && !isStreaming"
+            class="btn-secondary"
+            @click="streamLogs(selectedProcess.id)"
+          >
+            Stream Live
+          </button>
+          <button
+            v-if="isStreaming"
+            class="btn-cancel"
+            @click="stopStream"
+          >
+            Stop Stream
+          </button>
+          <button
+            v-if="!isStreaming && !fullLog"
+            class="btn-secondary"
+            :disabled="fullLogLoading"
+            @click="fetchFullLog(selectedProcess.id)"
+          >
+            {{ fullLogLoading ? 'Loading...' : 'View Full Log' }}
+          </button>
+        </div>
       </div>
       <pre class="log-content">{{ fullLog || selectedProcess.log_excerpt || 'No log output' }}</pre>
     </div>
@@ -347,7 +414,9 @@ function formatTime(iso: string | null): string {
 .btn-cancel-sm { background: #e5e7eb; color: #374151; border: none; padding: 2px 6px; border-radius: 4px; font-size: 11px; cursor: pointer; }
 .log-panel { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 20px; margin-top: 20px; }
 .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.log-header h4 { font-size: 16px; font-weight: 600; margin: 0; color: var(--text-primary, #1a1a2e); }
+.log-header h4 { font-size: 16px; font-weight: 600; margin: 0; color: var(--text-primary, #1a1a2e); display: flex; align-items: center; gap: 8px; }
+.log-actions { display: flex; gap: 8px; }
+.streaming-badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 600; background: #dc2626; color: white; animation: pulse 1.5s ease-in-out infinite; }
 .log-content { background: #1e293b; color: #e2e8f0; border-radius: 8px; padding: 16px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; line-height: 1.6; overflow-x: auto; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
 .error-banner { background: #fee2e2; border: 1px solid #ef4444; color: #b91c1c; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
 .loading { text-align: center; color: var(--text-secondary, #6b7280); padding: 60px; }
