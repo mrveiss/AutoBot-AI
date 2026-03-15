@@ -14,6 +14,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import ExternalAgentsView from '@/views/ExternalAgentsView.vue'
+import OrgChartTab from '@/components/agents/OrgChartTab.vue'
+import ConfigHistoryTab from '@/components/agents/ConfigHistoryTab.vue'
+import ProcessMonitorTab from '@/components/agents/ProcessMonitorTab.vue'
 
 interface Agent {
   agent_id: string
@@ -43,10 +46,11 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-// Active tab — route-based
-type AgentTab = 'local-agents' | 'external-agents'
+// Active tab — route-based (#1404, #1405, #1406: added admin tabs)
+type AgentTab = 'local-agents' | 'external-agents' | 'org-chart' | 'config-history' | 'processes'
+const validTabs: AgentTab[] = ['local-agents', 'external-agents', 'org-chart', 'config-history', 'processes']
 function resolveAgentTab(param: unknown): AgentTab {
-  return param === 'external-agents' ? 'external-agents' : 'local-agents'
+  return validTabs.includes(param as AgentTab) ? (param as AgentTab) : 'local-agents'
 }
 const activeTab = computed(() => resolveAgentTab(route.params.tab))
 function navigateToTab(tab: AgentTab): void {
@@ -228,6 +232,33 @@ onMounted(() => {
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
           ]"
         >External Agents</button>
+        <button
+          @click="navigateToTab('org-chart')"
+          :class="[
+            'py-4 px-1 border-b-2 font-medium text-sm',
+            activeTab === 'org-chart'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+          ]"
+        >Org Chart</button>
+        <button
+          @click="navigateToTab('config-history')"
+          :class="[
+            'py-4 px-1 border-b-2 font-medium text-sm',
+            activeTab === 'config-history'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+          ]"
+        >Config History</button>
+        <button
+          @click="navigateToTab('processes')"
+          :class="[
+            'py-4 px-1 border-b-2 font-medium text-sm',
+            activeTab === 'processes'
+              ? 'border-primary-500 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+          ]"
+        >Processes</button>
       </nav>
     </div>
 
@@ -402,6 +433,21 @@ onMounted(() => {
     <!-- External Agents -->
     <div v-else-if="activeTab === 'external-agents'">
       <ExternalAgentsView />
+    </div>
+
+    <!-- Org Chart (#1405) -->
+    <div v-else-if="activeTab === 'org-chart'">
+      <OrgChartTab />
+    </div>
+
+    <!-- Config History (#1404) -->
+    <div v-else-if="activeTab === 'config-history'">
+      <ConfigHistoryTab />
+    </div>
+
+    <!-- Processes (#1406) -->
+    <div v-else-if="activeTab === 'processes'">
+      <ProcessMonitorTab />
     </div>
 
   </div>
