@@ -21,6 +21,9 @@ from models.activities import (
     TerminalActivityModel,
 )
 
+# Central agent registry (#1754)
+from models.agent import Agent
+
 # Agent org hierarchy models (#1405)
 from models.agent_org import AgentOrgNode
 
@@ -40,6 +43,9 @@ from models.process_run import AgentSession, ProcessRun, TaskDecomposition
 from models.secret import Secret
 from models.session_collaboration import SessionCollaboration
 
+# Task delegation model (#1753)
+from models.task_delegation import TaskDelegation
+
 __all__ = [
     # Activity models (referenced by User model)
     "TerminalActivityModel",
@@ -53,6 +59,8 @@ __all__ = [
     "MLModel",
     "Secret",
     "SessionCollaboration",
+    # Central agent registry (#1754)
+    "Agent",
     # Agent org hierarchy (#1405)
     "AgentOrgNode",
     # Approval gate models (#1402)
@@ -61,6 +69,8 @@ __all__ = [
     "TaskApprovalLink",
     # Config revision model (#1404)
     "ConfigRevision",
+    # Task delegation model (#1753)
+    "TaskDelegation",
     # Process adapter models (#1406)
     "ProcessRun",
     "TaskDecomposition",
