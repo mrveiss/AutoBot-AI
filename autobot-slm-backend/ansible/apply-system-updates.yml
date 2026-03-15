@@ -13,12 +13,13 @@
   serial: "{{ update_batch_size | default(3) }}"  # Rolling updates
 
   vars:
-    update_type: "{{ update_type | default('all') }}"  # all, security, specific
-    auto_reboot: "{{ auto_reboot | default(false) }}"
-    reboot_timeout: "{{ reboot_timeout | default(300) }}"
-    backup_before_update: "{{ backup_before_update | default(true) }}"
-    specific_packages: "{{ specific_packages | default([]) }}"
-    dry_run: "{{ dry_run | default(false) }}"
+    # Defaults — extra_vars from the API override these automatically
+    update_type: "all"          # all, security, specific
+    auto_reboot: false
+    reboot_timeout: 300
+    backup_before_update: true
+    specific_packages: []
+    dry_run: false
 
   pre_tasks:
     # =========================================================================

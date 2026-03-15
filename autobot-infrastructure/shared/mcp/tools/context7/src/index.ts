@@ -348,7 +348,7 @@ async function main() {
           const sseTransport = sseTransports[sessionId];
           if (!sseTransport) {
             res.writeHead(400);
-            res.end("No transport found for the given sessionId");
+            res.end("No transport found");
             return;
           }
 

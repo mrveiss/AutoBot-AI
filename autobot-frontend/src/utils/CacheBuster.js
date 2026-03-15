@@ -21,7 +21,7 @@ class CacheBuster {
     }
 
     generateSessionId() {
-        return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        return `${Date.now()}-${Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('')}`;
     }
 
     /**
