@@ -463,7 +463,7 @@
           - "🔧 Next Steps:"
           - "  1. Start services: ./deploy.sh --start"
           - "  2. Health check: ./deploy.sh --health-check"
-          - "  3. Access AutoBot: http://172.16.168.21"
+          - "  3. Access AutoBot: http://{{ hostvars[groups['frontend'][0]]['ansible_host'] | default('127.0.0.1') }}"
           - ""
           - "⚠️  Keep backup data until system is validated!"
           - "   Backup location: {{ migration_backup_dir }}"
