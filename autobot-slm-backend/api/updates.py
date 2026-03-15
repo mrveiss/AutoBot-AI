@@ -156,7 +156,7 @@ async def _execute_update_playbook(
     executor = get_playbook_executor()
     package_names = [u.package_name for u in updates]
 
-    limit = [node.hostname]
+    limit = [node.ip_address]
     extra_vars = {
         "update_type": "specific",
         "specific_packages": ",".join(package_names),
@@ -380,13 +380,17 @@ async def _resolve_target_nodes(
     node_ids: Optional[List[str]],
     role: Optional[str],
 ) -> tuple:
-    """Resolve target nodes for discovery. Returns (limit, extra_vars, count)."""
+    """Resolve target nodes for discovery. Returns (limit, extra_vars, count).
+
+    Uses ip_address for --limit since DB hostnames (display names)
+    don't match Ansible inventory hostnames (#1789).
+    """
     extra_vars: dict = {}
     limit = None
     if node_ids:
         result = await db.execute(select(Node).where(Node.node_id.in_(node_ids)))
         nodes = result.scalars().all()
-        limit = [n.hostname for n in nodes]
+        limit = [n.ip_address for n in nodes]
         return limit, extra_vars, len(limit)
     if role:
         extra_vars["target_hosts"] = role
@@ -803,14 +807,14 @@ async def _execute_upgrade_playbook(
     sess: AsyncSession,
     j: UpdateJob,
     node_id: str,
-    hostname: str,
+    ip_address: str,
     job_id: str,
 ) -> None:
     """Execute apply-system-updates.yml and update job state."""
     executor = get_playbook_executor()
     r = await executor.execute_playbook(
         playbook_name="apply-system-updates.yml",
-        limit=[hostname],
+        limit=[ip_address],
         extra_vars={
             "update_type": "all",
             "dry_run": "false",
@@ -866,7 +870,7 @@ async def _run_upgrade_all(jid: str, nid: str) -> None:
         await _broadcast_job_update(jid, "running", 10, j.current_step)
 
         try:
-            await _execute_upgrade_playbook(sess, j, nid, n.hostname, jid)
+            await _execute_upgrade_playbook(sess, j, nid, n.ip_address, jid)
         except Exception:
             logger.exception("Upgrade all failed: %s", jid)
             j.status = UpdateJobStatus.FAILED.value
