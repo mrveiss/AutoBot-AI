@@ -45,6 +45,29 @@ logger = logging.getLogger(__name__)
 # Module-level set to hold references to fire-and-forget background tasks (#1556)
 _audit_background_tasks: set = set()
 
+# Reference to the main event loop, set at startup via set_main_event_loop().
+# Required so _schedule_audit_log() can submit work from thread-pool contexts
+# (sync FastAPI endpoints) where asyncio.get_running_loop() raises RuntimeError.
+# See: issue #1568.  The broader asyncio.get_event_loop() deprecation is
+# tracked in issue #1752 — this reference avoids calling that deprecated API
+# at runtime and instead relies on an explicitly stored loop.
+_main_event_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def set_main_event_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """Store the main event loop for use in thread-pool audit scheduling.
+
+    Must be called once during application startup (inside the async lifespan
+    context), before the app begins serving requests.  Issue #1568.
+
+    Args:
+        loop: The running event loop returned by asyncio.get_running_loop().
+    """
+    global _main_event_loop
+    _main_event_loop = loop
+    logger.debug("Audit middleware: main event loop registered")
+
+
 # Issue #380: Module-level frozensets for audit checks
 _MODIFYING_HTTP_METHODS = frozenset({"POST", "PUT", "DELETE", "PATCH"})
 _SENSITIVE_PATH_PREFIXES = (
@@ -346,8 +369,14 @@ def _schedule_audit_log(
     performance_ms: float,
     error_details: Optional[str],
 ) -> None:
-    """
-    Schedule audit log entry as non-blocking task.
+    """Schedule audit log entry as a non-blocking background task.
+
+    Handles two calling contexts (issue #1568):
+    - Async context (async endpoints / AuditMiddleware.dispatch): uses
+      asyncio.create_task() so the task runs on the current loop.
+    - Thread-pool context (sync endpoints wrapped by _create_sync_audit_wrapper):
+      no running event loop exists in the worker thread, so the coroutine is
+      submitted to the main event loop via asyncio.run_coroutine_threadsafe().
 
     Issue #281: Extracted helper for audit log scheduling.
 
@@ -361,20 +390,32 @@ def _schedule_audit_log(
         performance_ms: Execution time in milliseconds
         error_details: Error message if any
     """
-    task = asyncio.create_task(
-        _log_audit_async(
-            operation=operation,
-            result=result,
-            user_id=user_id,
-            session_id=session_id,
-            ip_address=ip_address,
-            resource=resource,
-            performance_ms=performance_ms,
-            details={"error": error_details} if error_details else {},
-        )
+    coro = _log_audit_async(
+        operation=operation,
+        result=result,
+        user_id=user_id,
+        session_id=session_id,
+        ip_address=ip_address,
+        resource=resource,
+        performance_ms=performance_ms,
+        details={"error": error_details} if error_details else {},
     )
-    _audit_background_tasks.add(task)
-    task.add_done_callback(_audit_background_tasks.discard)
+
+    try:
+        loop = asyncio.get_running_loop()
+        # We are inside an async context — schedule as a tracked task.
+        task = loop.create_task(coro)
+        _audit_background_tasks.add(task)
+        task.add_done_callback(_audit_background_tasks.discard)
+    except RuntimeError:
+        # No running event loop: called from a thread-pool (sync endpoint).
+        # Submit the coroutine to the main event loop stored at startup.
+        if _main_event_loop is None or _main_event_loop.is_closed():
+            logger.warning(
+                "Audit log dropped for %s: main event loop unavailable", operation
+            )
+            return
+        asyncio.run_coroutine_threadsafe(coro, _main_event_loop)
 
 
 def _create_async_audit_wrapper(
