@@ -1178,6 +1178,8 @@ async def _cleanup_conversation_transcript(session_id: str) -> dict:
     result = {"transcript_deleted": False, "error": None}
 
     try:
+        if "/" in session_id or "\\" in session_id or ".." in session_id:
+            raise ValueError("Invalid session ID")
         transcript_path = Path("data/conversation_transcripts") / f"{session_id}.json"
 
         if transcript_path.exists():

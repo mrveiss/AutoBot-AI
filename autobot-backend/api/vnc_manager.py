@@ -28,7 +28,7 @@ from api.vnc_humanization import (
 from auth_middleware import check_admin_permission
 from constants.network_constants import NetworkConstants
 from constants.threshold_constants import TimingConstants
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from autobot_shared.error_boundaries import with_error_handling
@@ -1633,6 +1633,8 @@ async def save_session_screenshot(
             "message": "..."
         }
     """
+    if "/" in session_id or ".." in session_id:
+        raise HTTPException(status_code=400, detail="Invalid session ID")
     # Capture screenshot
     screenshot_result = await vnc_screenshot()
     if screenshot_result["status"] != "success":

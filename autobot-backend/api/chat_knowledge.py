@@ -602,7 +602,8 @@ async def upload_file_to_chat(
     try:
         # Save uploaded file
         file_path = os.path.join(
-            chat_knowledge_manager.storage_dir, f"{chat_id}_{file.filename}"
+            chat_knowledge_manager.storage_dir,
+            f"{chat_id}_{os.path.basename(file.filename)}",
         )
 
         content = await file.read()

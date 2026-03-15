@@ -15,6 +15,14 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
 router = APIRouter()
 
+
+def _validate_prompt_id(prompt_id: str) -> str:
+    """Ensure prompt_id has no path traversal (#1733)."""
+    if ".." in prompt_id or prompt_id.startswith("/"):
+        raise HTTPException(status_code=400, detail="Invalid prompt ID")
+    return prompt_id
+
+
 logger = logging.getLogger(__name__)
 
 # Cache for prompts to avoid re-reading files on every request

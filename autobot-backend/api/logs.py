@@ -41,6 +41,15 @@ _PROTECTED_LOG_FILES = frozenset({"system.log", "backend.log", "frontend.log"})
 # Log directory
 LOG_DIR = Path(__file__).parent.parent.parent / "logs"
 
+
+def _validate_log_path(file_path) -> Path:
+    """Ensure file_path is under LOG_DIR (#1733)."""
+    resolved = Path(file_path).resolve()
+    if not str(resolved).startswith(str(LOG_DIR.resolve())):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return resolved
+
+
 # Issue #514: Per-file locking to prevent concurrent write corruption
 from typing import Dict
 
