@@ -22,7 +22,7 @@ def temp_codebase():
         base = Path(tmpdir)
 
         # Create directory structure
-        backend = base / "autobot-user-backend"
+        backend = base / "autobot-backend"
         backend.mkdir()
 
         # Create sample Python file
@@ -67,7 +67,7 @@ class UserService:
         )
 
         # Create sample TypeScript file
-        frontend = base / "autobot-user-frontend" / "src"
+        frontend = base / "autobot-frontend" / "src"
         frontend.mkdir(parents=True)
 
         sample_ts = frontend / "composable.ts"
@@ -259,7 +259,7 @@ def test_skip_test_files():
     """Test that test files are skipped during extraction."""
     with tempfile.TemporaryDirectory() as tmpdir:
         base = Path(tmpdir)
-        backend = base / "autobot-user-backend"
+        backend = base / "autobot-backend"
         backend.mkdir()
 
         # Create test file
@@ -281,7 +281,7 @@ def test_skip_long_functions():
     """Test that very long functions are skipped."""
     with tempfile.TemporaryDirectory() as tmpdir:
         base = Path(tmpdir)
-        backend = base / "autobot-user-backend"
+        backend = base / "autobot-backend"
         backend.mkdir()
 
         # Create file with long function
