@@ -163,12 +163,12 @@ test_redis_service_keys() {
     for sid in "${SERVICE_IDS[@]}"; do
         local key_exists
         key_exists=$(redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" \
-            exists "service:auth:key:${sid}" 2>/dev/null || echo "0")
+            exists "service:key:${sid}" 2>/dev/null || echo "0")
 
         if [[ "${key_exists}" == "1" ]] || [[ "${key_exists}" == *"1"* ]]; then
-            record_pass "Key present: service:auth:key:${sid}"
+            record_pass "Key present: service:key:${sid}"
         else
-            record_fail "Key missing: service:auth:key:${sid}"
+            record_fail "Key missing: service:key:${sid}"
         fi
     done
 }
