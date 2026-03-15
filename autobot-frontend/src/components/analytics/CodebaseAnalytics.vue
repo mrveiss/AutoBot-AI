@@ -62,6 +62,30 @@
       </div>
     </div>
 
+    <!-- Project Header Card (#1713) -->
+    <div v-if="selectedSource" class="project-header-card">
+      <div class="project-header-info">
+        <div class="project-header-name">
+          <i :class="selectedSource.source_type === 'github' ? 'fab fa-github' : 'fas fa-folder'"></i>
+          {{ selectedSource.name }}
+        </div>
+        <div class="project-header-meta">
+          <span v-if="selectedSource.repo" class="project-meta-item">
+            <i class="fas fa-code-branch"></i>
+            {{ selectedSource.repo }}
+          </span>
+          <span v-if="selectedSource.branch" class="project-meta-item">
+            <i class="fas fa-tag"></i>
+            {{ selectedSource.branch }}
+          </span>
+          <span class="project-meta-item" :class="'status-' + (selectedSource.status || 'unknown')">
+            <i class="fas fa-circle" style="font-size: 0.5em; vertical-align: middle;"></i>
+            {{ selectedSource.status || 'unknown' }}
+          </span>
+        </div>
+      </div>
+    </div>
+
     <!-- Unified Operation Progress — Issues #1190, #1365, #1366 -->
     <!-- Single status bar covering indexing and code-smell operations; shows all available detail -->
     <div
@@ -4066,6 +4090,44 @@ const getItemSeverityClass = (severity: string | undefined): string => {
   margin-bottom: var(--spacing-6);
   box-shadow: var(--shadow-lg);
 }
+
+/* Project Header Card (#1713) */
+.project-header-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4) var(--spacing-5);
+  margin-bottom: var(--spacing-4);
+  border-left: 4px solid var(--accent-primary, #3b82f6);
+  box-shadow: var(--shadow-sm);
+}
+
+.project-header-name {
+  font-size: 1.15em;
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.project-header-meta {
+  display: flex;
+  gap: var(--spacing-4);
+  margin-top: var(--spacing-2);
+  flex-wrap: wrap;
+}
+
+.project-meta-item {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.project-meta-item.status-ready { color: var(--color-success, #22c55e); }
+.project-meta-item.status-syncing { color: var(--color-warning, #f59e0b); }
+.project-meta-item.status-error { color: var(--color-error, #ef4444); }
 
 .header-content h2 {
   margin: 0 0 16px 0;
