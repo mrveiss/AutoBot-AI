@@ -9,15 +9,22 @@ import json
 import logging
 import time
 import uuid
+from collections import defaultdict
 from datetime import datetime
-from typing import List
+from typing import List, Optional
+from uuid import UUID
 
 from background_vectorization import get_background_vectorizer
 from exceptions import InternalError
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from knowledge.pipeline.base import PipelineContext
+from knowledge.pipeline.cognifiers.context_generator import ContextGeneratorCognifier
+from knowledge.pipeline.models.chunk import ProcessedChunk
 from knowledge_factory import get_or_create_knowledge_base
+from pydantic import BaseModel, Field
 from redis.exceptions import RedisError
 from type_defs.common import Metadata
+from utils.async_chromadb_client import get_async_chromadb_client
 
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 
@@ -1384,3 +1391,261 @@ async def get_vectorization_status(req: Request):
         "check_interval": vectorizer.check_interval,
         "batch_size": vectorizer.batch_size,
     }
+
+
+# ===== CONTEXTUAL RETRIEVAL REINDEX (Issue #1513) =====
+
+_REINDEX_DEFAULT_COLLECTION = "knowledge_vectors"
+_REINDEX_DEFAULT_BATCH_SIZE = 20
+_REINDEX_COLLECTION_PATTERN = r"^[a-zA-Z0-9][a-zA-Z0-9_-]{1,61}[a-zA-Z0-9]$"
+
+# Concurrency guard for reindex task (#1513)
+_reindex_running = False
+
+
+class ReindexWithContextRequest(BaseModel):
+    """Request model for retroactive context enrichment (#1513)."""
+
+    collection_name: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        pattern=_REINDEX_COLLECTION_PATTERN,
+        description="ChromaDB collection (defaults to knowledge_vectors)",
+    )
+    batch_size: int = Field(
+        default=_REINDEX_DEFAULT_BATCH_SIZE,
+        ge=1,
+        le=500,
+        description="Chunks to process per batch",
+    )
+
+
+class ReindexWithContextResponse(BaseModel):
+    """Response model for reindex_with_context (#1513)."""
+
+    status: str
+    message: str
+
+
+async def _fetch_unenriched_ids(collection, batch_size: int) -> list:
+    """Fetch IDs of chunks without context using where filter.
+
+    Returns list of all unenriched chunk IDs. (#1513)
+    """
+    all_ids = []
+    offset = 0
+    while True:
+        results = await collection.get(
+            where={"has_context": {"$ne": True}},
+            limit=batch_size,
+            offset=offset,
+            include=["metadatas"],
+        )
+        ids = results.get("ids", [])
+        if not ids:
+            break
+        all_ids.extend(ids)
+        offset += len(ids)
+    return all_ids
+
+
+async def _fetch_chunks_by_ids(collection, chunk_ids: list) -> list:
+    """Fetch full chunk data for a list of IDs.
+
+    Returns list of (id, document, metadata) tuples. (#1513)
+    """
+    results = await collection.get(
+        ids=chunk_ids,
+        include=["documents", "metadatas"],
+    )
+    ids = results.get("ids", [])
+    documents = results.get("documents", [])
+    metadatas = results.get("metadatas", [])
+
+    chunks = []
+    for i, chunk_id in enumerate(ids):
+        meta = metadatas[i] if i < len(metadatas) else {}
+        doc = documents[i] if i < len(documents) else ""
+        chunks.append((chunk_id, doc, meta))
+    return chunks
+
+
+async def _enrich_document_group(
+    collection,
+    cognifier: ContextGeneratorCognifier,
+    doc_id: str,
+    chunks: list,
+) -> int:
+    """Enrich chunks for a single document and upsert back.
+
+    Returns number of chunks enriched. (#1513)
+    """
+    context = _build_pipeline_context(doc_id, chunks)
+    context = await cognifier.process(context)
+    return await _upsert_enriched_chunks(collection, chunks, context)
+
+
+def _build_pipeline_context(doc_id: str, chunks: list) -> PipelineContext:
+    """Build PipelineContext from raw chunk tuples (#1513)."""
+    context = PipelineContext()
+    try:
+        context.document_id = UUID(doc_id)
+    except (ValueError, TypeError):
+        context.document_id = None
+
+    for idx, (_, doc_text, meta) in enumerate(chunks):
+        processed = ProcessedChunk(
+            content=doc_text or "",
+            document_id=context.document_id or UUID(int=0),
+            chunk_index=meta.get("chunk_index", idx),
+            metadata=dict(meta),
+            document_type=meta.get("document_type", "unknown"),
+        )
+        context.chunks.append(processed)
+    return context
+
+
+async def _upsert_enriched_chunks(
+    collection, original_chunks: list, context: PipelineContext
+) -> int:
+    """Upsert enriched chunks back to ChromaDB (#1513)."""
+    update_ids = []
+    update_docs = []
+    update_metas = []
+    for i, (chunk_id, _, original_meta) in enumerate(original_chunks):
+        if i < len(context.chunks):
+            enriched = context.chunks[i]
+            updated_meta = {**original_meta, **enriched.metadata}
+            update_ids.append(chunk_id)
+            update_docs.append(enriched.content)
+            update_metas.append(updated_meta)
+
+    if update_ids:
+        await collection.upsert(
+            ids=update_ids,
+            documents=update_docs,
+            metadatas=update_metas,
+        )
+    return len(update_ids)
+
+
+async def _process_id_batch(collection, cognifier, chunk_ids: list) -> int:
+    """Process a batch of chunk IDs: fetch, group, enrich (#1513)."""
+    chunks = await _fetch_chunks_by_ids(collection, chunk_ids)
+    doc_groups = defaultdict(list)
+    for chunk_id, doc_text, meta in chunks:
+        did = meta.get("document_id", "unknown")
+        doc_groups[did].append((chunk_id, doc_text, meta))
+
+    enriched = 0
+    for did, group in doc_groups.items():
+        try:
+            enriched += await _enrich_document_group(collection, cognifier, did, group)
+        except Exception:
+            logger.exception("Failed to enrich doc '%s'", did)
+    return enriched
+
+
+async def _reindex_with_context_task(
+    collection_name: str,
+    batch_size: int,
+) -> None:
+    """Background task: enrich unenriched chunks with context.
+
+    Collects unenriched IDs up front via where filter, then
+    processes in batches to avoid ordering issues. (#1513)
+    """
+    global _reindex_running  # noqa: PLW0603
+    try:
+        _reindex_running = True
+        await _run_reindex(collection_name, batch_size)
+    finally:
+        _reindex_running = False
+
+
+async def _run_reindex(collection_name: str, batch_size: int) -> None:
+    """Core reindex logic, separated for testability (#1513)."""
+    cognifier = ContextGeneratorCognifier()
+    client = await get_async_chromadb_client()
+
+    try:
+        collection = await client.get_or_create_collection(name=collection_name)
+    except Exception:
+        logger.exception("Failed to get collection '%s'", collection_name)
+        return
+
+    try:
+        all_ids = await _fetch_unenriched_ids(collection, batch_size)
+    except Exception:
+        logger.exception("Failed to fetch unenriched chunk IDs")
+        return
+
+    if not all_ids:
+        logger.info("No unenriched chunks in '%s'", collection_name)
+        return
+
+    enriched_total = 0
+    for i in range(0, len(all_ids), batch_size):
+        batch_ids = all_ids[i : i + batch_size]
+        try:
+            enriched_total += await _process_id_batch(collection, cognifier, batch_ids)
+        except Exception:
+            logger.exception("Failed batch at index %d", i)
+
+    logger.info(
+        "Reindex complete: enriched %d/%d chunks in '%s'",
+        enriched_total,
+        len(all_ids),
+        collection_name,
+    )
+
+
+@with_error_handling(
+    category=ErrorCategory.SERVER_ERROR,
+    operation="reindex_with_context",
+    error_code_prefix="KNOWLEDGE",
+)
+@router.post(
+    "/reindex_with_context",
+    response_model=ReindexWithContextResponse,
+)
+async def reindex_with_context(
+    request: ReindexWithContextRequest,
+    background_tasks: BackgroundTasks,
+) -> ReindexWithContextResponse:
+    """Retroactively enrich chunks with contextual retrieval.
+
+    Runs as a background task. Only processes chunks without
+    has_context metadata. Guarded by CONTEXT_ENABLED env var.
+    Issue #1513.
+    """
+    if not ContextGeneratorCognifier._is_enabled():
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Contextual retrieval is disabled. "
+                "Set CONTEXT_ENABLED=true to enable."
+            ),
+        )
+
+    if _reindex_running:
+        raise HTTPException(
+            status_code=409,
+            detail="A reindex task is already running.",
+        )
+
+    col = request.collection_name or _REINDEX_DEFAULT_COLLECTION
+
+    background_tasks.add_task(
+        _reindex_with_context_task,
+        collection_name=col,
+        batch_size=request.batch_size,
+    )
+
+    return ReindexWithContextResponse(
+        status="accepted",
+        message=(
+            f"Reindex task started for collection '{col}' "
+            f"with batch_size={request.batch_size}"
+        ),
+    )
